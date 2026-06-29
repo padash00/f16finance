@@ -223,7 +223,7 @@ export default function StoreAbcPage({ embedded = false }: { embedded?: boolean 
         )
         const hdrToolbar = (
           <div className="flex flex-wrap items-center gap-2">
-            <div className="grid grid-cols-2 gap-1 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/[0.03] p-0.5">
+            <div className="grid grid-cols-2 gap-1 rounded-xl border border-border bg-slate-100 dark:bg-white/[0.03] p-0.5">
               <button
                 type="button"
                 onClick={() => setTab('sales')}
@@ -240,7 +240,7 @@ export default function StoreAbcPage({ embedded = false }: { embedded?: boolean 
               </button>
             </div>
             {tab === 'sales' ? (
-              <div className="inline-flex rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/[0.03] p-0.5">
+              <div className="inline-flex rounded-xl border border-border bg-slate-100 dark:bg-white/[0.03] p-0.5">
                 {PERIODS.map((p) => (
                   <button
                     key={p.value}
@@ -298,7 +298,7 @@ export default function StoreAbcPage({ embedded = false }: { embedded?: boolean 
 
       {/* Pareto-кривая */}
       {totalForBar > 0 ? (
-        <Card className="border-slate-200 dark:border-white/10 bg-card/70 p-4">
+        <Card className="border-border bg-card/70 p-4">
           <div className="mb-2 flex items-baseline justify-between text-xs">
             <span className="font-semibold uppercase tracking-wider text-muted-foreground">Структура {tab === 'sales' ? 'выручки' : 'запаса'}</span>
             <span className="text-muted-foreground">100% = {fmt(totalForBar)} ₸</span>
@@ -355,7 +355,7 @@ export default function StoreAbcPage({ embedded = false }: { embedded?: boolean 
 
       {/* Матрица ABC×XYZ */}
       {tab === 'sales' && summary.abc_xyz_matrix ? (
-        <Card className="border-slate-200 dark:border-white/10 bg-card/70 p-4">
+        <Card className="border-border bg-card/70 p-4">
           <div className="mb-3 flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-amber-700 dark:text-amber-300" />
             <h2 className="text-sm font-semibold text-foreground">Матрица ABC × XYZ</h2>
@@ -376,7 +376,7 @@ export default function StoreAbcPage({ embedded = false }: { embedded?: boolean 
                   return (
                     <div
                       key={`${abc}${xyz}`}
-                      className={`rounded-lg border px-3 py-2 text-center ${ideal ? 'border-emerald-500/40 bg-emerald-500/10' : dead ? 'border-rose-500/30 bg-rose-500/5' : 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03]'}`}
+                      className={`rounded-lg border px-3 py-2 text-center ${ideal ? 'border-emerald-500/40 bg-emerald-500/10' : dead ? 'border-rose-500/30 bg-rose-500/5' : 'border-border bg-slate-50 dark:bg-white/[0.03]'}`}
                       title={ideal ? 'Идеальные товары: всегда продаются' : dead ? 'Кандидаты на вывод из ассортимента' : ''}
                     >
                       <div className="text-base font-bold">{cell?.count || 0}</div>
@@ -394,7 +394,7 @@ export default function StoreAbcPage({ embedded = false }: { embedded?: boolean 
       ) : null}
 
       {/* Фильтры */}
-      <Card className="border-slate-200 dark:border-white/10 bg-card/70 p-3">
+      <Card className="border-border bg-card/70 p-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative min-w-0 flex-1 sm:max-w-xs">
             <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -405,7 +405,7 @@ export default function StoreAbcPage({ embedded = false }: { embedded?: boolean 
               className="h-9 pl-9 text-sm"
             />
           </div>
-          <div className="inline-flex rounded-lg border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/[0.03] p-0.5 text-xs">
+          <div className="inline-flex rounded-lg border border-border bg-slate-100 dark:bg-white/[0.03] p-0.5 text-xs">
             {(['all', 'A', 'B', 'C'] as const).map((c) => (
               <button
                 key={c}
@@ -420,7 +420,7 @@ export default function StoreAbcPage({ embedded = false }: { embedded?: boolean 
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
-            className="h-9 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] px-3 text-sm text-foreground outline-none"
+            className="h-9 rounded-lg border border-border bg-white dark:bg-white/[0.03] px-3 text-sm text-foreground outline-none"
           >
             <option value="all">Все категории</option>
             {categories.map((c) => (
@@ -434,7 +434,7 @@ export default function StoreAbcPage({ embedded = false }: { embedded?: boolean 
       </Card>
 
       {/* Таблица */}
-      <Card className="overflow-hidden border-slate-200 dark:border-white/10 bg-card/70 p-0">
+      <Card className="overflow-hidden border-border bg-card/70 p-0">
         {loading && rows.length === 0 ? (
           <div className="p-6 text-sm text-muted-foreground">Загрузка...</div>
         ) : filteredRows.length === 0 ? (

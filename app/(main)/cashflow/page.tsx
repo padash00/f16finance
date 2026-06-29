@@ -75,11 +75,11 @@ function CashTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
   return (
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-xs shadow-xl">
-      <p className="text-slate-500 dark:text-slate-400 mb-2 font-medium">{label}</p>
+      <p className="text-muted-foreground mb-2 font-medium">{label}</p>
       {payload.map((p: any) => (
         <div key={p.name} className="flex justify-between gap-4">
           <span style={{ color: p.color }}>{p.name}</span>
-          <span className="font-semibold text-slate-900 dark:text-white">{fmtMoney(p.value)}</span>
+          <span className="font-semibold text-foreground">{fmtMoney(p.value)}</span>
         </div>
       ))}
     </div>
@@ -317,7 +317,7 @@ export default function CashFlowPage() {
                         className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
                           active
                             ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/30'
-                            : 'bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700'
+                            : 'bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700'
                         }`}
                       >
                         {label}
@@ -354,21 +354,21 @@ export default function CashFlowPage() {
             <Card className="p-4 bg-white dark:bg-slate-900/80 border-emerald-500/20">
               <div className="flex items-center gap-2 mb-2">
                 <TrendingUp className="w-4 h-4 text-emerald-400" />
-                <p className="text-xs text-slate-500 dark:text-slate-400">Доходы</p>
+                <p className="text-xs text-muted-foreground">Доходы</p>
               </div>
               <p className="text-xl font-bold text-emerald-400">{fmtMoney(stats.totalIncome)}</p>
             </Card>
             <Card className="p-4 bg-white dark:bg-slate-900/80 border-red-500/20">
               <div className="flex items-center gap-2 mb-2">
                 <TrendingDown className="w-4 h-4 text-red-400" />
-                <p className="text-xs text-slate-500 dark:text-slate-400">Расходы</p>
+                <p className="text-xs text-muted-foreground">Расходы</p>
               </div>
               <p className="text-xl font-bold text-red-400">{fmtMoney(stats.totalExpenses)}</p>
             </Card>
             <Card className={`p-4 bg-white dark:bg-slate-900/80 ${stats.profit >= 0 ? 'border-amber-500/20' : 'border-red-500/30'}`}>
               <div className="flex items-center gap-2 mb-2">
                 <Wallet className="w-4 h-4 text-amber-400" />
-                <p className="text-xs text-slate-500 dark:text-slate-400">Прибыль</p>
+                <p className="text-xs text-muted-foreground">Прибыль</p>
               </div>
               <p className={`text-xl font-bold ${stats.profit >= 0 ? 'text-amber-400' : 'text-red-400'}`}>
                 {fmtMoney(stats.profit)}
@@ -377,7 +377,7 @@ export default function CashFlowPage() {
             <Card className="p-4 bg-white dark:bg-slate-900/80 border-slate-200 dark:border-slate-700">
               <div className="flex items-center gap-2 mb-2">
                 <Activity className="w-4 h-4 text-amber-400" />
-                <p className="text-xs text-slate-500 dark:text-slate-400">Маржа</p>
+                <p className="text-xs text-muted-foreground">Маржа</p>
               </div>
               <p className={`text-xl font-bold ${stats.margin >= 20 ? 'text-emerald-400' : stats.margin >= 10 ? 'text-amber-400' : 'text-red-400'}`}>
                 {stats.margin.toFixed(1)}%
@@ -395,7 +395,7 @@ export default function CashFlowPage() {
                 <div className="p-1.5 bg-amber-500/20 rounded-lg">
                   <Sparkles className="w-4 h-4 text-amber-400" />
                 </div>
-                <h2 className="text-sm font-semibold text-slate-900 dark:text-white">AI-анализ движения денег</h2>
+                <h2 className="text-sm font-semibold text-foreground">AI-анализ движения денег</h2>
                 {aiLoading && <Loader2 className="w-4 h-4 text-amber-400 animate-spin ml-1" />}
               </div>
 
@@ -418,7 +418,7 @@ export default function CashFlowPage() {
 
           {/* Chart */}
           <Card className="p-5 bg-white dark:bg-slate-900/80 border-slate-200 dark:border-slate-800">
-            <h2 className="text-sm font-semibold text-slate-900 dark:text-white mb-1">Доходы vs Расходы</h2>
+            <h2 className="text-sm font-semibold text-foreground mb-1">Доходы vs Расходы</h2>
             <p className="text-xs text-slate-500 mb-4">Синяя линия — баланс нарастающим итогом</p>
 
             {loading ? (
@@ -465,7 +465,7 @@ export default function CashFlowPage() {
           {/* Daily Table */}
           {dailyData.length > 0 && (
             <Card className="p-5 bg-white dark:bg-slate-900/80 border-slate-200 dark:border-slate-800">
-              <h2 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">Таблица по дням</h2>
+              <h2 className="text-sm font-semibold text-foreground mb-4">Таблица по дням</h2>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[640px] text-sm">
                   <thead>

@@ -604,7 +604,7 @@ export default function DebugPage() {
       <div>
         <button
           onClick={() => setShowDetails(!showDetails)}
-          className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+          className="flex items-center gap-2 text-xs text-muted-foreground hover:text-slate-900 dark:hover:text-white"
         >
           {showDetails ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
           Технические детали
@@ -724,7 +724,7 @@ function CronsCard({
 }) {
   return (
     <Card className="border-slate-200 dark:border-white/5 bg-white dark:bg-white/[0.02] p-4">
-      <div className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-900 dark:text-white">
+      <div className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground">
         <Clock className="h-4 w-4 text-cyan-400" />
         Cron jobs {crons && <span className="text-slate-500">• {crons.length}</span>}
       </div>
@@ -778,7 +778,7 @@ function MigrationsCard({
 }) {
   return (
     <Card className="border-slate-200 dark:border-white/5 bg-white dark:bg-white/[0.02] p-4">
-      <div className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-900 dark:text-white">
+      <div className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground">
         <Database className="h-4 w-4 text-violet-400" />
         Миграции
       </div>
@@ -794,7 +794,7 @@ function MigrationsCard({
       ) : migrations.error ? (
         <div className="space-y-2">
           <div className="text-xs text-slate-700 dark:text-slate-400">
-            Файлов миграций: <span className="text-slate-900 dark:text-white">{migrations.file_count}</span>
+            Файлов миграций: <span className="text-foreground">{migrations.file_count}</span>
           </div>
           <div className="rounded-md border border-amber-500/20 bg-amber-500/[0.05] p-2.5 text-[11px] leading-relaxed text-amber-700 dark:text-amber-200/80">
             {migrations.error}
@@ -805,11 +805,11 @@ function MigrationsCard({
           <div className="mb-3 grid grid-cols-2 gap-2 text-center text-xs">
             <div className="rounded-md border border-slate-200 dark:border-white/5 bg-white dark:bg-white/[0.02] p-2">
               <div className="text-[10px] uppercase text-slate-500">В файлах</div>
-              <div className="text-base font-bold text-slate-900 dark:text-white">{migrations.file_count}</div>
+              <div className="text-base font-bold text-foreground">{migrations.file_count}</div>
             </div>
             <div className="rounded-md border border-slate-200 dark:border-white/5 bg-white dark:bg-white/[0.02] p-2">
               <div className="text-[10px] uppercase text-slate-500">В БД</div>
-              <div className="text-base font-bold text-slate-900 dark:text-white">{migrations.applied_count}</div>
+              <div className="text-base font-bold text-foreground">{migrations.applied_count}</div>
             </div>
           </div>
           {migrations.pending.length === 0 && migrations.extra.length === 0 ? (
@@ -827,7 +827,7 @@ function MigrationsCard({
                       onClick={() =>
                         navigator.clipboard.writeText(migrations.pending.join('\n'))
                       }
-                      className="ml-auto rounded border border-slate-200 dark:border-white/10 px-1.5 py-0.5 text-[9px] normal-case text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"
+                      className="ml-auto rounded border border-border px-1.5 py-0.5 text-[9px] normal-case text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"
                     >
                       копировать список
                     </button>
@@ -858,7 +858,7 @@ function MigrationsCard({
                       onClick={() =>
                         navigator.clipboard.writeText(migrations.extra.join('\n'))
                       }
-                      className="ml-auto rounded border border-slate-200 dark:border-white/10 px-1.5 py-0.5 text-[9px] normal-case text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"
+                      className="ml-auto rounded border border-border px-1.5 py-0.5 text-[9px] normal-case text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"
                     >
                       копировать
                     </button>
@@ -917,12 +917,12 @@ function TablesSection({
   return (
     <Card className="border-slate-200 dark:border-white/5 bg-white dark:bg-white/[0.02] p-4">
       <div className="mb-3 flex flex-wrap items-center gap-3">
-        <h2 className="text-sm font-medium text-slate-900 dark:text-white">
+        <h2 className="text-sm font-medium text-foreground">
           Таблицы БД <span className="text-slate-500">• {stats.total}</span>
         </h2>
         <div className="text-xs text-slate-500">
           <span className="text-emerald-400">{stats.ok}</span> OK ·{' '}
-          <span className="text-slate-500 dark:text-slate-400">{stats.empty}</span> пусто ·{' '}
+          <span className="text-muted-foreground">{stats.empty}</span> пусто ·{' '}
           <span className="text-amber-400">{stats.missing}</span> нет ·{' '}
           <span className="text-rose-400">{stats.error}</span> ошибки
         </div>
@@ -933,7 +933,7 @@ function TablesSection({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Поиск…"
-              className="h-7 w-48 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] pl-6 pr-2 text-xs text-slate-700 dark:text-slate-200 outline-none placeholder:text-slate-500 focus:border-blue-500/40"
+              className="h-7 w-48 rounded-md border border-border bg-white dark:bg-white/[0.03] pl-6 pr-2 text-xs text-slate-700 dark:text-slate-200 outline-none placeholder:text-slate-500 focus:border-blue-500/40"
             />
           </div>
           <div className="flex gap-0.5 rounded-md bg-slate-100 dark:bg-white/5 p-0.5 text-[10px]">
@@ -951,8 +951,8 @@ function TablesSection({
                 onClick={() => setFilter(b.key)}
                 className={`px-2 py-1 rounded ${
                   filter === b.key
-                    ? 'bg-slate-200 dark:bg-white/10 text-slate-900 dark:text-white'
-                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    ? 'bg-slate-200 dark:bg-white/10 text-foreground'
+                    : 'text-muted-foreground hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
                 {b.label}
@@ -1075,7 +1075,7 @@ function TableRow({ row }: { row: TableResult }) {
           {row.status === 'missing' ? 'нет' : row.error}
         </span>
       ) : (
-        <span className="text-slate-500 dark:text-slate-400 tabular-nums">{fmtCount(row.count)}</span>
+        <span className="text-muted-foreground tabular-nums">{fmtCount(row.count)}</span>
       )}
     </div>
   )
@@ -1090,7 +1090,7 @@ function StorageCard({
 }) {
   return (
     <Card className="border-slate-200 dark:border-white/5 bg-white dark:bg-white/[0.02] p-4">
-      <div className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-900 dark:text-white">
+      <div className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground">
         <HardDrive className="h-4 w-4 text-orange-400" />
         Storage {buckets && <span className="text-slate-500">• {buckets.length}</span>}
       </div>
@@ -1128,19 +1128,19 @@ function EnvCard() {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
   return (
     <Card className="border-slate-200 dark:border-white/5 bg-white dark:bg-white/[0.02] p-4">
-      <div className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-900 dark:text-white">
+      <div className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground">
         <Key className="h-4 w-4 text-amber-400" />
         Env (client-side)
       </div>
       <div className="space-y-1 text-xs">
         <div className="flex items-center gap-2 rounded-md border border-slate-200 dark:border-white/5 bg-white dark:bg-white/[0.02] px-2.5 py-1.5">
-          <span className="font-mono text-slate-500 dark:text-slate-400 flex-1">NEXT_PUBLIC_SUPABASE_URL</span>
+          <span className="font-mono text-muted-foreground flex-1">NEXT_PUBLIC_SUPABASE_URL</span>
           <span className={url ? 'text-emerald-400' : 'text-rose-400'}>
             {url ? '✓' : '✗'}
           </span>
         </div>
         <div className="flex items-center gap-2 rounded-md border border-slate-200 dark:border-white/5 bg-white dark:bg-white/[0.02] px-2.5 py-1.5">
-          <span className="font-mono text-slate-500 dark:text-slate-400 flex-1">NEXT_PUBLIC_SUPABASE_ANON_KEY</span>
+          <span className="font-mono text-muted-foreground flex-1">NEXT_PUBLIC_SUPABASE_ANON_KEY</span>
           <span className={key ? 'text-emerald-400' : 'text-rose-400'}>
             {key ? '✓' : '✗'}
           </span>

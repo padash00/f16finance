@@ -240,7 +240,7 @@ const INSIGHT_STYLES: Record<InsightType, { bg: string; border: string; text: st
   warning: { bg: 'bg-amber-50 dark:bg-amber-500/5', border: 'border-amber-200 dark:border-amber-500/20', text: 'text-amber-600 dark:text-amber-400', icon: AlertTriangle },
   danger: { bg: 'bg-rose-50 dark:bg-rose-500/5', border: 'border-rose-200 dark:border-rose-500/20', text: 'text-rose-600 dark:text-rose-400', icon: AlertTriangle },
   opportunity: { bg: 'bg-blue-50 dark:bg-blue-500/5', border: 'border-blue-200 dark:border-blue-500/20', text: 'text-blue-600 dark:text-blue-400', icon: Lightbulb },
-  info: { bg: 'bg-slate-50 dark:bg-white/[0.03]', border: 'border-slate-200 dark:border-white/10', text: 'text-slate-500 dark:text-slate-400', icon: Activity },
+  info: { bg: 'bg-slate-50 dark:bg-white/[0.03]', border: 'border-border', text: 'text-muted-foreground', icon: Activity },
 }
 
 const SEVERITY_STYLES: Record<Severity, { bg: string; border: string; text: string }> = {
@@ -578,21 +578,21 @@ const StatCard = memo(({ title, value, subValue, icon: Icon, trend, color = 'blu
   return (
     <div
       onClick={onClick}
-      className={`group rounded-2xl bg-white dark:bg-[#111113] border border-slate-200 dark:border-white/10 p-5 transition-all hover:border-slate-300 dark:hover:border-white/20 hover:shadow-sm ${onClick ? 'cursor-pointer' : ''}`}
+      className={`group rounded-2xl bg-white dark:bg-[#111113] border border-border p-5 transition-all hover:border-slate-300 dark:hover:border-white/20 hover:shadow-sm ${onClick ? 'cursor-pointer' : ''}`}
     >
       <div className="flex items-center justify-between mb-4">
         <div className={`grid place-items-center h-9 w-9 rounded-xl ${iconTone[color]}`}>
           <Icon className="w-5 h-5" />
         </div>
         {trend !== undefined && (
-          <span className={`inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full ${trend > 0 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : trend < 0 ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' : 'bg-slate-500/10 text-slate-500 dark:text-slate-400'}`}>
+          <span className={`inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full ${trend > 0 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : trend < 0 ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' : 'bg-slate-500/10 text-muted-foreground'}`}>
             {trend > 0 ? '+' : ''}{trend}%
           </span>
         )}
       </div>
-      <p className="text-slate-500 dark:text-slate-400 text-xs font-medium">{title}</p>
-      <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900 dark:text-white">{value}</p>
-      {subValue && <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">{subValue}</p>}
+      <p className="text-muted-foreground text-xs font-medium">{title}</p>
+      <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{value}</p>
+      {subValue && <p className="mt-1.5 text-xs text-muted-foreground">{subValue}</p>}
     </div>
   )
 })
@@ -611,8 +611,8 @@ const InsightCard = memo(({ insight }: { insight: AIInsight }) => {
           <Icon className="w-4 h-4" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-slate-900 dark:text-white">{insight.title}</p>
-          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">{insight.description}</p>
+          <p className="text-sm font-semibold text-foreground">{insight.title}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2 leading-relaxed">{insight.description}</p>
           {insight.metric && (
             <p className={`text-lg font-bold tabular-nums mt-2 ${styles.text}`}>{insight.metric}</p>
           )}
@@ -637,7 +637,7 @@ const AnomalyCard = memo(({ anomaly }: { anomaly: Anomaly }) => {
         }
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm text-slate-900 dark:text-white font-medium">{anomaly.description}</p>
+        <p className="text-sm text-foreground font-medium">{anomaly.description}</p>
         <p className="text-xs text-slate-500 mt-1">{anomaly.date}</p>
       </div>
       <span className={`shrink-0 text-[11px] px-2.5 py-1 rounded-full font-semibold ${styles.bg.replace('/5', '/20').replace('/10', '/20')} ${styles.text}`}>
@@ -790,14 +790,14 @@ function DrillDownModal({
     <div className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center p-4 py-8" onClick={onClose}>
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
       <div
-        className="relative z-10 w-full max-w-5xl max-h-[90vh] flex flex-col rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-2xl my-auto"
+        className="relative z-10 w-full max-w-5xl max-h-[90vh] flex flex-col rounded-2xl bg-white dark:bg-slate-900 border border-border shadow-2xl my-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-white/10 flex-shrink-0">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">{DRILL_TITLES[type]}</h2>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border flex-shrink-0">
+          <h2 className="text-lg font-semibold text-foreground">{DRILL_TITLES[type]}</h2>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 transition-colors">
-            <X className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+            <X className="w-5 h-5 text-muted-foreground" />
           </button>
         </div>
 
@@ -807,7 +807,7 @@ function DrillDownModal({
           <select
             value={filterCompany}
             onChange={(e) => setFilterCompany(e.target.value)}
-            className="h-9 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 text-sm text-slate-900 dark:text-white px-3 focus:outline-none focus:ring-1 focus:ring-amber-500"
+            className="h-9 rounded-lg bg-white dark:bg-slate-800 border border-border text-sm text-foreground px-3 focus:outline-none focus:ring-1 focus:ring-amber-500"
           >
             <option value="all">Все компании</option>
             {companies.map((c) => (
@@ -822,7 +822,7 @@ function DrillDownModal({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Поиск по компании, категории…"
-              className="w-full h-9 pl-9 pr-3 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 text-sm text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+              className="w-full h-9 pl-9 pr-3 rounded-lg bg-white dark:bg-slate-800 border border-border text-sm text-foreground placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
             />
           </div>
 
@@ -847,7 +847,7 @@ function DrillDownModal({
         <div className="overflow-auto flex-1 min-h-0">
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm z-10">
-              <tr className="text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-white/5">
+              <tr className="text-muted-foreground border-b border-slate-200 dark:border-white/5">
                 <th
                   className="text-left px-4 py-3 font-medium cursor-pointer hover:text-slate-900 dark:hover:text-white select-none whitespace-nowrap"
                   onClick={() => toggleSort('date')}
@@ -890,7 +890,7 @@ function DrillDownModal({
                     <td className="px-4 py-2.5 text-slate-700 dark:text-slate-300 whitespace-nowrap">
                       {fromISO(row.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })}
                     </td>
-                    <td className="px-4 py-2.5 text-slate-900 dark:text-white font-medium">{row.companyName}</td>
+                    <td className="px-4 py-2.5 text-foreground font-medium">{row.companyName}</td>
                     {type === 'profit' && (
                       <td className="px-4 py-2.5">
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
@@ -902,7 +902,7 @@ function DrillDownModal({
                         </span>
                       </td>
                     )}
-                    <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400 max-w-[200px] truncate">{row.label}</td>
+                    <td className="px-4 py-2.5 text-muted-foreground max-w-[200px] truncate">{row.label}</td>
                     <td className="px-4 py-2.5 text-right text-slate-700 dark:text-slate-300">{row.cash > 0 ? formatMoneyCompact(row.cash) : '—'}</td>
                     <td className="px-4 py-2.5 text-right text-slate-700 dark:text-slate-300">{row.kaspi > 0 ? formatMoneyCompact(row.kaspi) : '—'}</td>
                     <td className={`px-4 py-2.5 text-right font-semibold ${
@@ -1874,9 +1874,9 @@ function ReportsContent() {
             <div className="w-16 h-16 rounded-2xl bg-rose-500/20 flex items-center justify-center mx-auto">
               <AlertTriangle className="w-8 h-8 text-rose-400" />
             </div>
-            <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Ошибка загрузки</h2>
-            <p className="text-slate-500 dark:text-slate-400 max-w-md">{error}</p>
-            <Button onClick={() => loadData(true)} variant="outline" className="border-slate-200 dark:border-white/10">
+            <h2 className="text-xl font-semibold text-foreground">Ошибка загрузки</h2>
+            <p className="text-muted-foreground max-w-md">{error}</p>
+            <Button onClick={() => loadData(true)} variant="outline" className="border-border">
               <RefreshCw className="w-4 h-4 mr-2" />
               Повторить
             </Button>
@@ -1900,7 +1900,7 @@ function ReportsContent() {
             <div className={`fixed top-5 right-5 z-50 px-4 py-3 rounded-2xl border backdrop-blur-xl shadow-xl animate-in slide-in-from-top-2 ${
               toast.type === 'success' ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400' :
               toast.type === 'error' ? 'bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400' :
-              'bg-white dark:bg-slate-900/80 border-slate-200 dark:border-white/10 text-slate-900 dark:text-white'
+              'bg-white dark:bg-slate-900/80 border-border text-foreground'
             }`}>
               <div className="text-sm font-medium">{toast.message}</div>
             </div>
@@ -1918,7 +1918,7 @@ function ReportsContent() {
                 <Button
                   variant="outline"
                   size="icon"
-                  className={`rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-[#111113] hover:bg-slate-100 dark:hover:bg-white/[0.06] ${comparisonMode ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/40' : ''}`}
+                  className={`rounded-xl border-border bg-white dark:bg-[#111113] hover:bg-slate-100 dark:hover:bg-white/[0.06] ${comparisonMode ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/40' : ''}`}
                   onClick={() => setComparisonMode(!comparisonMode)}
                   title="Режим сравнения"
                 >
@@ -1928,7 +1928,7 @@ function ReportsContent() {
                 <Button
                   variant="outline"
                   size="icon"
-                  className={`rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-[#111113] hover:bg-slate-100 dark:hover:bg-white/[0.06] ${refreshing ? 'animate-spin' : ''}`}
+                  className={`rounded-xl border-border bg-white dark:bg-[#111113] hover:bg-slate-100 dark:hover:bg-white/[0.06] ${refreshing ? 'animate-spin' : ''}`}
                   onClick={() => loadData(true)}
                   title="Обновить"
                 >
@@ -1939,13 +1939,13 @@ function ReportsContent() {
                   <div className="relative group">
                     <Button
                       variant="outline"
-                      className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-[#111113] hover:bg-slate-100 dark:hover:bg-white/[0.06]"
+                      className="rounded-xl border-border bg-white dark:bg-[#111113] hover:bg-slate-100 dark:hover:bg-white/[0.06]"
                     >
                       <Download className="w-4 h-4 mr-2" />
                       Экспорт
                       <ChevronDown className="w-4 h-4 ml-2" />
                     </Button>
-                    <div className="absolute right-0 top-full mt-2 w-56 py-2 bg-white dark:bg-[#111113] border border-slate-200 dark:border-white/10 rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                    <div className="absolute right-0 top-full mt-2 w-56 py-2 bg-white dark:bg-[#111113] border border-border rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
                       <button onClick={handleDownloadExcel} className="w-full px-4 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-white/5 flex items-center gap-2">
                         <FileSpreadsheet className="w-4 h-4" />
                         Скачать PDF
@@ -1957,7 +1957,7 @@ function ReportsContent() {
                 <Button
                   variant="outline"
                   size="icon"
-                  className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-[#111113] hover:bg-slate-100 dark:hover:bg-white/[0.06]"
+                  className="rounded-xl border-border bg-white dark:bg-[#111113] hover:bg-slate-100 dark:hover:bg-white/[0.06]"
                   onClick={handleShare}
                   title="Поделиться"
                 >
@@ -1967,13 +1967,13 @@ function ReportsContent() {
               </>
             }
             toolbar={
-              <div className="inline-flex w-fit items-center rounded-xl p-0.5 border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/[0.03]">
+              <div className="inline-flex w-fit items-center rounded-xl p-0.5 border border-border bg-slate-100 dark:bg-white/[0.03]">
                 {(['overview', 'analytics', 'details', 'companies'] as const).map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
                     className={`px-3 lg:px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                      activeTab === tab ? 'bg-amber-500 text-white shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      activeTab === tab ? 'bg-amber-500 text-white shadow-sm' : 'text-muted-foreground hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
                     {tab === 'overview' && 'Обзор'}
@@ -2063,24 +2063,24 @@ function ReportsContent() {
           />
 
           {/* Filters Bar (sticky) */}
-          <div className="sticky top-2 z-30 rounded-2xl bg-white/95 dark:bg-[#111113]/95 backdrop-blur-sm border border-slate-200 dark:border-white/10 p-4 space-y-4 shadow-sm">
+          <div className="sticky top-2 z-30 rounded-2xl bg-white/95 dark:bg-[#111113]/95 backdrop-blur-sm border border-border p-4 space-y-4 shadow-sm">
             <div className="flex flex-wrap items-center gap-2.5">
               <div className="flex items-center gap-2 mr-1">
-                <Filter className="w-4 h-4 text-slate-500 dark:text-slate-400" />
-                <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Фильтры</span>
+                <Filter className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm font-medium text-muted-foreground">Фильтры</span>
               </div>
 
               <select
                 value={datePreset}
                 onChange={(e) => handlePresetChange(e.target.value as DatePreset)}
-                className="cursor-pointer bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 text-sm font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-amber-500/40"
+                className="cursor-pointer bg-white dark:bg-white/[0.04] border border-border rounded-lg px-3 py-1.5 text-sm font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-amber-500/40"
               >
                 {Object.entries(PRESET_LABELS).map(([key, label]) => (
                   <option key={key} value={key}>{label}</option>
                 ))}
               </select>
 
-              <div className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] px-2 py-1">
+              <div className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white dark:bg-white/[0.04] px-2 py-1">
                 <DatePicker
                   value={dateFrom}
                   onChange={(v) => {
@@ -2101,7 +2101,7 @@ function ReportsContent() {
               <select
                 value={companyFilter}
                 onChange={(e) => setCompanyFilter(e.target.value)}
-                className="cursor-pointer bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 text-sm font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-amber-500/40"
+                className="cursor-pointer bg-white dark:bg-white/[0.04] border border-border rounded-lg px-3 py-1.5 text-sm font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-amber-500/40"
               >
                 <option value="all">Все компании</option>
                 {companies.map(c => (
@@ -2112,7 +2112,7 @@ function ReportsContent() {
               <select
                 value={groupMode}
                 onChange={(e) => setGroupMode(e.target.value as GroupMode)}
-                className="cursor-pointer bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 text-sm font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-amber-500/40"
+                className="cursor-pointer bg-white dark:bg-white/[0.04] border border-border rounded-lg px-3 py-1.5 text-sm font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-amber-500/40"
               >
                 <option value="day">По дням</option>
                 <option value="week">По неделям</option>
@@ -2122,7 +2122,7 @@ function ReportsContent() {
 
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors ${showFilters ? 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400' : 'bg-white dark:bg-white/[0.04] border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.06]'}`}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors ${showFilters ? 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400' : 'bg-white dark:bg-white/[0.04] border-border text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.06]'}`}
               >
                 <Filter className="w-4 h-4" />
                 Расширенные
@@ -2131,7 +2131,7 @@ function ReportsContent() {
 
               <button
                 onClick={resetFilters}
-                className="ml-auto p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
+                className="ml-auto p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 text-muted-foreground hover:text-slate-900 dark:hover:text-white transition-colors"
                 title="Сбросить фильтры"
               >
                 <X className="w-4 h-4" />
@@ -2139,13 +2139,13 @@ function ReportsContent() {
             </div>
 
             {showFilters && (
-              <div className="pt-4 border-t border-slate-200 dark:border-white/10 grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="pt-4 border-t border-border grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
-                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 block">Смена</label>
+                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Смена</label>
                   <select
                     value={shiftFilter}
                     onChange={(e) => setShiftFilter(e.target.value as 'all' | Shift)}
-                    className="w-full bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-amber-500/40"
+                    className="w-full bg-white dark:bg-white/[0.04] border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-amber-500/40"
                   >
                     <option value="all">Все смены</option>
                     <option value="day">День</option>
@@ -2154,24 +2154,24 @@ function ReportsContent() {
                 </div>
 
                 <div>
-                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 block">Сумма от</label>
+                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Сумма от</label>
                   <Input
                     type="number"
                     placeholder="0"
                     value={minAmountFilter}
                     onChange={(e) => setMinAmountFilter(e.target.value)}
-                    className="bg-white dark:bg-white/[0.04] border-slate-200 dark:border-white/10"
+                    className="bg-white dark:bg-white/[0.04] border-border"
                   />
                 </div>
 
                 <div>
-                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 block">Сумма до</label>
+                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Сумма до</label>
                   <Input
                     type="number"
                     placeholder="∞"
                     value={maxAmountFilter}
                     onChange={(e) => setMaxAmountFilter(e.target.value)}
-                    className="bg-white dark:bg-white/[0.04] border-slate-200 dark:border-white/10"
+                    className="bg-white dark:bg-white/[0.04] border-border"
                   />
                 </div>
 
@@ -2181,7 +2181,7 @@ function ReportsContent() {
                       type="checkbox"
                       checked={includeExtraInTotals}
                       onChange={(e) => setIncludeExtraInTotals(e.target.checked)}
-                      className="rounded border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800/50 text-amber-500 focus:ring-amber-500/20"
+                      className="rounded border-border bg-white dark:bg-slate-800/50 text-amber-500 focus:ring-amber-500/20"
                     />
                     <span className="text-sm text-slate-700 dark:text-slate-300">Включить F16 Extra</span>
                   </label>
@@ -2200,18 +2200,18 @@ function ReportsContent() {
                 <div>
                   <p className="text-sm font-medium text-amber-700 dark:text-amber-300">Прогноз на конец периода · точность {forecast.confidence.toFixed(0)}%</p>
                   <div className="flex flex-wrap items-center gap-x-6 gap-y-1 mt-1.5">
-                    <span className="text-lg font-semibold text-slate-900 dark:text-white">
+                    <span className="text-lg font-semibold text-foreground">
                       Выручка: <span className="tabular-nums text-emerald-600 dark:text-emerald-400">{formatMoneyFull(forecast.forecastIncome)}</span>
                     </span>
-                    <span className="text-lg font-semibold text-slate-900 dark:text-white">
+                    <span className="text-lg font-semibold text-foreground">
                       Прибыль: <span className={`tabular-nums ${forecast.forecastProfit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                         {formatMoneyFull(forecast.forecastProfit)}
                       </span>
                     </span>
-                    <span className="text-sm text-slate-500 dark:text-slate-400">Осталось {forecast.remainingDays} дн.</span>
+                    <span className="text-sm text-muted-foreground">Осталось {forecast.remainingDays} дн.</span>
                   </div>
                   {'note' in forecast && forecast.note ? (
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 max-w-3xl leading-relaxed">{forecast.note}</p>
+                    <p className="text-xs text-muted-foreground mt-2 max-w-3xl leading-relaxed">{forecast.note}</p>
                   ) : null}
                 </div>
               </div>
@@ -2267,19 +2267,19 @@ function ReportsContent() {
                   { label: 'Онлайн', value: totals.incomeOnline, color: 'text-amber-600 dark:text-amber-400' },
                   { label: 'Карта', value: totals.incomeCard, color: 'text-amber-600 dark:text-amber-400' },
                 ].map((item) => (
-                  <div key={item.label} className="rounded-2xl bg-white dark:bg-[#111113] border border-slate-200 dark:border-white/10 p-4">
-                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{item.label}</p>
+                  <div key={item.label} className="rounded-2xl bg-white dark:bg-[#111113] border border-border p-4">
+                    <p className="text-xs font-medium text-muted-foreground mb-1">{item.label}</p>
                     <p className={`text-xl font-bold tabular-nums ${item.color}`}>{formatMoneyFull(item.value)}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{totals.totalIncome > 0 ? ((item.value / totals.totalIncome) * 100).toFixed(1) : 0}%</p>
+                    <p className="text-xs text-muted-foreground mt-1">{totals.totalIncome > 0 ? ((item.value / totals.totalIncome) * 100).toFixed(1) : 0}%</p>
                   </div>
                 ))}
               </div>
 
               {/* Charts */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 rounded-2xl bg-white dark:bg-[#111113] border border-slate-200 dark:border-white/10 p-6">
+                <div className="lg:col-span-2 rounded-2xl bg-white dark:bg-[#111113] border border-border p-6">
                   <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-base font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                    <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
                       <Activity className="w-5 h-5 text-amber-500 dark:text-amber-400" />
                       Динамика финансовых показателей
                     </h3>
@@ -2305,8 +2305,8 @@ function ReportsContent() {
                 </div>
 
                 <div className="space-y-6">
-                  <div className="rounded-2xl bg-white dark:bg-[#111113] border border-slate-200 dark:border-white/10 p-6">
-                    <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
+                  <div className="rounded-2xl bg-white dark:bg-[#111113] border border-border p-6">
+                    <h3 className="text-base font-semibold text-foreground mb-6 flex items-center gap-2">
                       <PieChartIcon className="w-5 h-5 text-rose-500 dark:text-rose-400" />
                       Структура расходов
                     </h3>
@@ -2326,7 +2326,7 @@ function ReportsContent() {
                             <span className="text-slate-700 dark:text-slate-300 truncate max-w-[120px]">{cat.name}</span>
                           </div>
                           <div className="text-right">
-                            <span className="text-slate-900 dark:text-white font-medium">{formatMoneyCompact(cat.amount)}</span>
+                            <span className="text-foreground font-medium">{formatMoneyCompact(cat.amount)}</span>
                             <span className="text-slate-500 text-xs ml-2">{cat.percentage.toFixed(1)}%</span>
                           </div>
                         </div>
@@ -2338,8 +2338,8 @@ function ReportsContent() {
 
               {/* Bottom Charts */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="rounded-2xl bg-white dark:bg-[#111113] border border-slate-200 dark:border-white/10 p-6">
-                  <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
+                <div className="rounded-2xl bg-white dark:bg-[#111113] border border-border p-6">
+                  <h3 className="text-base font-semibold text-foreground mb-6 flex items-center gap-2">
                     <Store className="w-5 h-5 text-amber-500 dark:text-amber-400" />
                     Выручка по компаниям
                   </h3>
@@ -2349,8 +2349,8 @@ function ReportsContent() {
                   </ChartShell>
                 </div>
 
-                <div className="rounded-2xl bg-white dark:bg-[#111113] border border-slate-200 dark:border-white/10 p-6">
-                  <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
+                <div className="rounded-2xl bg-white dark:bg-[#111113] border border-border p-6">
+                  <h3 className="text-base font-semibold text-foreground mb-6 flex items-center gap-2">
                     <AlertTriangle className="w-5 h-5 text-amber-500 dark:text-amber-400" />
                     Аномалии и рекомендации
                   </h3>
@@ -2382,8 +2382,8 @@ function ReportsContent() {
           {activeTab === 'analytics' && (
             <div className="space-y-6">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="rounded-2xl bg-white dark:bg-[#111113] border border-slate-200 dark:border-white/10 p-6">
-                  <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-6">Сравнение периодов</h3>
+                <div className="rounded-2xl bg-white dark:bg-[#111113] border border-border p-6">
+                  <h3 className="text-base font-semibold text-foreground mb-6">Сравнение периодов</h3>
                   <div className="space-y-6">
                     {[
                       { label: 'Выручка', current: totals.totalIncome, previous: totalsPrev.totalIncome, color: 'bg-emerald-500' },
@@ -2396,28 +2396,28 @@ function ReportsContent() {
                       return (
                         <div key={item.label} className="space-y-2">
                           <div className="flex justify-between text-sm">
-                            <span className="text-slate-500 dark:text-slate-400">{item.label}</span>
+                            <span className="text-muted-foreground">{item.label}</span>
                             <div className="flex gap-4">
                               <span className="text-slate-500">Было: {formatMoneyFull(item.previous)}</span>
-                              <span className="text-slate-900 dark:text-white font-medium">Сейчас: {formatMoneyFull(item.current)}</span>
+                              <span className="text-foreground font-medium">Сейчас: {formatMoneyFull(item.current)}</span>
                             </div>
                           </div>
                           <div className="h-8 bg-slate-100 dark:bg-slate-800/50 rounded-lg overflow-hidden flex">
                             <div 
-                              className={`${item.color} opacity-60 flex items-center justify-end px-2 text-xs text-slate-900 dark:text-white font-medium transition-all duration-500`}
+                              className={`${item.color} opacity-60 flex items-center justify-end px-2 text-xs text-foreground font-medium transition-all duration-500`}
                               style={{ width: `${(item.previous / max) * 100}%` }}
                             >
                               {item.previous > max * 0.15 && formatMoneyCompact(item.previous)}
                             </div>
                             <div 
-                              className={`${item.color} flex items-center justify-end px-2 text-xs text-slate-900 dark:text-white font-medium transition-all duration-500`}
+                              className={`${item.color} flex items-center justify-end px-2 text-xs text-foreground font-medium transition-all duration-500`}
                               style={{ width: `${(item.current / max) * 100}%` }}
                             >
                               {formatMoneyCompact(item.current)}
                             </div>
                           </div>
                           <div className="flex justify-end">
-                            <span className={`text-sm font-semibold tabular-nums ${change > 0 ? 'text-emerald-600 dark:text-emerald-400' : change < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                            <span className={`text-sm font-semibold tabular-nums ${change > 0 ? 'text-emerald-600 dark:text-emerald-400' : change < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-muted-foreground'}`}>
                               {change > 0 ? '+' : ''}{change.toFixed(1)}%
                             </span>
                           </div>
@@ -2427,8 +2427,8 @@ function ReportsContent() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl bg-white dark:bg-[#111113] border border-slate-200 dark:border-white/10 p-6">
-                  <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-6">Распределение по типам платежей</h3>
+                <div className="rounded-2xl bg-white dark:bg-[#111113] border border-border p-6">
+                  <h3 className="text-base font-semibold text-foreground mb-6">Распределение по типам платежей</h3>
                   <div className="space-y-4">
                     {[
                       { label: 'Наличные', value: totals.incomeCash, color: 'bg-emerald-500' },
@@ -2441,7 +2441,7 @@ function ReportsContent() {
                         <div key={item.label} className="space-y-2">
                           <div className="flex justify-between text-sm">
                             <span className="text-slate-700 dark:text-slate-300">{item.label}</span>
-                            <span className="text-slate-900 dark:text-white font-medium">{formatMoneyFull(item.value)} ({pct.toFixed(1)}%)</span>
+                            <span className="text-foreground font-medium">{formatMoneyFull(item.value)} ({pct.toFixed(1)}%)</span>
                           </div>
                           <div className="h-3 bg-slate-100 dark:bg-slate-800/50 rounded-full overflow-hidden">
                             <div 
@@ -2456,8 +2456,8 @@ function ReportsContent() {
                 </div>
               </div>
 
-              <div className="rounded-2xl bg-white dark:bg-[#111113] border border-slate-200 dark:border-white/10 p-6">
-                <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-6">Тепловая карта активности</h3>
+              <div className="rounded-2xl bg-white dark:bg-[#111113] border border-border p-6">
+                <h3 className="text-base font-semibold text-foreground mb-6">Тепловая карта активности</h3>
                 <div className="grid grid-cols-7 gap-2">
                   {Array.from({ length: 35 }, (_, i) => {
                     const date = addDaysISO(dateFrom, i)
@@ -2513,7 +2513,7 @@ function ReportsContent() {
                       setSearchQuery(e.target.value)
                       setCurrentPage(1)
                     }}
-                    className="pl-10 bg-white dark:bg-slate-900/40 border-slate-200 dark:border-white/10"
+                    className="pl-10 bg-white dark:bg-slate-900/40 border-border"
                   />
                 </div>
                 
@@ -2525,7 +2525,7 @@ function ReportsContent() {
                       setItemsPerPage(Number(e.target.value))
                       setCurrentPage(1)
                     }}
-                    className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 text-sm"
+                    className="bg-white dark:bg-slate-900/40 border border-border rounded-lg px-3 py-1.5 text-sm"
                   >
                     <option value={10}>10</option>
                     <option value={25}>25</option>
@@ -2542,7 +2542,7 @@ function ReportsContent() {
                 </div>
               </div>
 
-              <div className="rounded-2xl bg-white dark:bg-[#111113] border border-slate-200 dark:border-white/10 overflow-hidden">
+              <div className="rounded-2xl bg-white dark:bg-[#111113] border border-border overflow-hidden">
                 <div className="overflow-x-auto" ref={tableContainerRef}>
                   <table className="w-full">
                     <thead>
@@ -2552,7 +2552,7 @@ function ReportsContent() {
                             type="checkbox"
                             checked={selectedRows.size === (useVirtualization ? filteredRows.length : paginatedRows.length) && (useVirtualization ? filteredRows.length : paginatedRows.length) > 0}
                             onChange={selectAllRows}
-                            className="rounded border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 text-amber-500"
+                            className="rounded border-border bg-white dark:bg-slate-800 text-amber-500"
                           />
                         </th>
                         {[
@@ -2565,7 +2565,7 @@ function ReportsContent() {
                         ].map((col) => (
                           <th 
                             key={col.key}
-                            className={`px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors ${col.align === 'right' ? 'text-right' : 'text-left'}`}
+                            className={`px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors ${col.align === 'right' ? 'text-right' : 'text-left'}`}
                             onClick={() => handleSort(col.key as SortField)}
                           >
                             <div className={`flex items-center gap-1 ${col.align === 'right' ? 'justify-end' : ''}`}>
@@ -2603,7 +2603,7 @@ function ReportsContent() {
                                       type="checkbox"
                                       checked={selectedRows.has(row.id)}
                                       onChange={() => toggleRowSelection(row.id)}
-                                      className="rounded border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 text-amber-500"
+                                      className="rounded border-border bg-white dark:bg-slate-800 text-amber-500"
                                     />
                                   </div>
                                   <div className="flex-1 px-4 text-sm text-slate-700 dark:text-slate-300 whitespace-nowrap">{row.date}</div>
@@ -2614,14 +2614,14 @@ function ReportsContent() {
                                       {row.type === 'income' ? 'Доход' : 'Расход'}
                                     </span>
                                   </div>
-                                  <div className="flex-1 px-4 text-sm text-slate-900 dark:text-white">{row.companyName}</div>
+                                  <div className="flex-1 px-4 text-sm text-foreground">{row.companyName}</div>
                                   <div className="flex-1 px-4 text-sm text-slate-700 dark:text-slate-300">{row.category || (row.shift ? SHIFT_LABELS[row.shift] : '—')}</div>
                                   <div className="flex-1 px-4 text-sm text-right">
                                     <div className={`font-semibold tabular-nums ${row.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                                       {row.type === 'income' ? '+' : '-'}{formatMoneyFull(row.amount)}
                                     </div>
                                   </div>
-                                  <div className="flex-1 px-4 text-sm text-slate-500 dark:text-slate-400 truncate">{row.zone || row.comment || '—'}</div>
+                                  <div className="flex-1 px-4 text-sm text-muted-foreground truncate">{row.zone || row.comment || '—'}</div>
                                 </div>
                               )
                             })}
@@ -2639,7 +2639,7 @@ function ReportsContent() {
                                 type="checkbox"
                                 checked={selectedRows.has(row.id)}
                                 onChange={() => toggleRowSelection(row.id)}
-                                className="rounded border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 text-amber-500"
+                                className="rounded border-border bg-white dark:bg-slate-800 text-amber-500"
                               />
                             </td>
                             <td className="px-4 py-3 text-sm text-slate-700 dark:text-slate-300 whitespace-nowrap">{row.date}</td>
@@ -2650,7 +2650,7 @@ function ReportsContent() {
                                 {row.type === 'income' ? 'Доход' : 'Расход'}
                               </span>
                             </td>
-                            <td className="px-4 py-3 text-sm text-slate-900 dark:text-white">{row.companyName}</td>
+                            <td className="px-4 py-3 text-sm text-foreground">{row.companyName}</td>
                             <td className="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">
                               {row.category || (row.shift ? SHIFT_LABELS[row.shift] : '—')}
                             </td>
@@ -2664,7 +2664,7 @@ function ReportsContent() {
                                 {row.cardAmount ? ` | Card: ${formatMoneyCompact(row.cardAmount)}` : ''}
                               </div>
                             </td>
-                            <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400 max-w-xs truncate">
+                            <td className="px-4 py-3 text-sm text-muted-foreground max-w-xs truncate">
                               {row.zone || row.comment || '—'}
                             </td>
                           </tr>
@@ -2696,7 +2696,7 @@ function ReportsContent() {
                       >
                         <ChevronLeft className="w-4 h-4" />
                       </button>
-                      <span className="text-sm text-slate-500 dark:text-slate-400">
+                      <span className="text-sm text-muted-foreground">
                         Страница {currentPage} из {totalPages}
                       </span>
                       <button
@@ -2739,7 +2739,7 @@ function ReportsContent() {
                     <Button 
                       variant="outline" 
                       size="sm"
-                      className="border-slate-200 dark:border-white/10"
+                      className="border-border"
                       onClick={() => setSelectedRows(new Set())}
                     >
                       Снять выделение
@@ -2757,7 +2757,7 @@ function ReportsContent() {
                 {companyComparisonData.map((company) => (
                   <div 
                     key={company.id} 
-                    className="rounded-2xl bg-white dark:bg-[#111113] border border-slate-200 dark:border-white/10 p-6 hover:border-slate-300 dark:hover:border-white/10 transition-all cursor-pointer group"
+                    className="rounded-2xl bg-white dark:bg-[#111113] border border-border p-6 hover:border-slate-300 dark:hover:border-white/10 transition-all cursor-pointer group"
                     onClick={() => {
                       setCompanyFilter(company.id)
                       setActiveTab('overview')
@@ -2765,7 +2765,7 @@ function ReportsContent() {
                   >
                     <div className="flex items-start justify-between mb-4">
                       <div>
-                        <h4 className="text-lg font-semibold text-slate-900 dark:text-white group-hover:text-amber-400 transition-colors">{company.name}</h4>
+                        <h4 className="text-lg font-semibold text-foreground group-hover:text-amber-400 transition-colors">{company.name}</h4>
                         <p className="text-sm text-slate-500">{company.transactions} операций</p>
                       </div>
                       <div className={`grid place-items-center h-9 w-9 rounded-lg ${
@@ -2777,22 +2777,22 @@ function ReportsContent() {
                     
                     <div className="space-y-3">
                       <div className="flex justify-between text-sm">
-                        <span className="text-slate-500 dark:text-slate-400">Выручка</span>
-                        <span className="text-slate-900 dark:text-white font-medium">{formatMoneyFull(company.income)}</span>
+                        <span className="text-muted-foreground">Выручка</span>
+                        <span className="text-foreground font-medium">{formatMoneyFull(company.income)}</span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-slate-500 dark:text-slate-400">Расходы</span>
+                        <span className="text-muted-foreground">Расходы</span>
                         <span className="tabular-nums text-rose-600 dark:text-rose-400">{formatMoneyFull(company.expense)}</span>
                       </div>
                       <div className="h-px bg-slate-200 dark:bg-white/5 my-3" />
                       <div className="flex justify-between items-center">
-                        <span className="text-slate-500 dark:text-slate-400">Прибыль</span>
+                        <span className="text-muted-foreground">Прибыль</span>
                         <span className={`text-lg font-bold tabular-nums ${company.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                           {formatMoneyFull(company.profit)}
                         </span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-slate-500 dark:text-slate-400">Маржа</span>
+                        <span className="text-muted-foreground">Маржа</span>
                         <span className={`font-semibold tabular-nums ${
                           company.margin >= 30 ? 'text-emerald-600 dark:text-emerald-400' :
                           company.margin >= 15 ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400'
@@ -2805,19 +2805,19 @@ function ReportsContent() {
                     <div className="mt-4 pt-4 border-t border-slate-200 dark:border-white/5 grid grid-cols-2 gap-4 text-xs">
                       <div>
                         <span className="text-slate-500 block">Наличные</span>
-                        <span className="text-slate-900 dark:text-white">+{formatMoneyCompact(company.cashIncome)} / -{formatMoneyCompact(company.cashExpense)}</span>
+                        <span className="text-foreground">+{formatMoneyCompact(company.cashIncome)} / -{formatMoneyCompact(company.cashExpense)}</span>
                       </div>
                       <div>
                         <span className="text-slate-500 block">Безналичные</span>
-                        <span className="text-slate-900 dark:text-white">+{formatMoneyCompact(company.kaspiIncome + company.onlineIncome + company.cardIncome)} / -{formatMoneyCompact(company.kaspiExpense)}</span>
+                        <span className="text-foreground">+{formatMoneyCompact(company.kaspiIncome + company.onlineIncome + company.cardIncome)} / -{formatMoneyCompact(company.kaspiExpense)}</span>
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
 
-              <div className="rounded-2xl bg-white dark:bg-[#111113] border border-slate-200 dark:border-white/10 p-6">
-                <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-6">Сравнительная таблица</h3>
+              <div className="rounded-2xl bg-white dark:bg-[#111113] border border-border p-6">
+                <h3 className="text-base font-semibold text-foreground mb-6">Сравнительная таблица</h3>
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
@@ -2835,7 +2835,7 @@ function ReportsContent() {
                     <tbody className="divide-y divide-slate-100 dark:divide-white/5">
                       {companyComparisonData.map((c) => (
                         <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-white/5">
-                          <td className="py-4 pl-4 font-medium text-slate-900 dark:text-white">{c.name}</td>
+                          <td className="py-4 pl-4 font-medium text-foreground">{c.name}</td>
                           <td className="py-4 text-right tabular-nums text-emerald-600 dark:text-emerald-400">{formatMoneyFull(c.income)}</td>
                           <td className="py-4 text-right tabular-nums text-rose-600 dark:text-rose-400">{formatMoneyFull(c.expense)}</td>
                           <td className={`py-4 text-right font-bold tabular-nums ${c.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
@@ -2856,7 +2856,7 @@ function ReportsContent() {
                           <td className="py-4 text-right text-slate-700 dark:text-slate-300">
                             {formatMoneyCompact((c.kaspiIncome + c.onlineIncome + c.cardIncome) - c.kaspiExpense)}
                           </td>
-                          <td className="py-4 text-center text-slate-500 dark:text-slate-400">{c.transactions}</td>
+                          <td className="py-4 text-center text-muted-foreground">{c.transactions}</td>
                         </tr>
                       ))}
                     </tbody>

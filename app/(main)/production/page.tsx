@@ -23,7 +23,7 @@ type Recipe = {
 type SaleItem = { id: string; name: string; sale_price: number | null }
 
 const money = (n: number) => Number(n || 0).toLocaleString('ru-RU') + ' ₸'
-const inputCls = 'rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-400/40'
+const inputCls = 'rounded-xl border border-border bg-white dark:bg-slate-900/60 px-3 py-2 text-sm text-foreground outline-none focus:border-emerald-400/40'
 
 export default function ProductionPage() {
   const [recipes, setRecipes] = useState<Recipe[]>([])
@@ -206,13 +206,13 @@ export default function ProductionPage() {
         backHref="/"
         actions={
           <div className="flex gap-2">
-            <button onClick={load} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10">
+            <button onClick={load} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-slate-100 dark:bg-white/5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10">
               {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Обновить
             </button>
-            <button onClick={() => setShowIng((v) => !v)} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10">
+            <button onClick={() => setShowIng((v) => !v)} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-slate-100 dark:bg-white/5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10">
               Ингредиенты ({ingredients.length})
             </button>
-            <button onClick={loadJournal} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10">
+            <button onClick={loadJournal} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-slate-100 dark:bg-white/5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10">
               Журнал
             </button>
             <button onClick={() => setShowForm((v) => !v)} className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-500">
@@ -225,10 +225,10 @@ export default function ProductionPage() {
       {err && <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-700 dark:text-rose-200">{err}</div>}
 
       {showIng && (
-        <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 p-5 shadow-lg shadow-black/20">
+        <div className="rounded-2xl border border-border bg-white dark:bg-slate-900/60 p-5 shadow-lg shadow-black/20">
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Ингредиенты (сырьё для техкарт)</h3>
-            <button onClick={() => setShowIng(false)} className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"><X className="h-4 w-4" /></button>
+            <h3 className="text-sm font-semibold text-foreground">Ингредиенты (сырьё для техкарт)</h3>
+            <button onClick={() => setShowIng(false)} className="text-muted-foreground hover:text-slate-900 dark:hover:text-white"><X className="h-4 w-4" /></button>
           </div>
           <p className="mb-3 text-xs text-slate-500">Мука, сыр, тесто — с ценой за базовую единицу (г/мл/шт). Из них собираются техкарты.</p>
           <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -242,16 +242,16 @@ export default function ProductionPage() {
           {ingredients.length === 0 ? (
             <p className="text-xs text-slate-500">Ингредиентов нет. Добавьте первый — потом из них соберёте техкарту.</p>
           ) : (
-            <div className="divide-y divide-slate-100 dark:divide-white/5 overflow-hidden rounded-xl border border-slate-200 dark:border-white/10">
+            <div className="divide-y divide-slate-100 dark:divide-white/5 overflow-hidden rounded-xl border border-border">
               {ingredients.map((ing) => (
                 <div key={ing.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-3 py-2 text-sm">
-                  <span className="text-slate-900 dark:text-white">{ing.name} <span className="text-[11px] text-slate-500">/ {ing.unit}</span></span>
+                  <span className="text-foreground">{ing.name} <span className="text-[11px] text-slate-500">/ {ing.unit}</span></span>
                   <div className="flex flex-wrap items-center gap-3">
-                    <span className="tabular-nums text-slate-500 dark:text-slate-400">{money(Number(ing.purchase_price || 0))}/{ing.unit}</span>
+                    <span className="tabular-nums text-muted-foreground">{money(Number(ing.purchase_price || 0))}/{ing.unit}</span>
                     <span className="text-[11px] text-slate-500">остаток</span>
-                    <span className={`tabular-nums ${Number(ing.stock_qty || 0) < 0 ? 'text-rose-600 dark:text-rose-300' : 'text-slate-900 dark:text-white'}`}>{Number(ing.stock_qty || 0)} {ing.unit}</span>
-                    <button onClick={() => receiptIng(ing)} className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 px-2 py-1 text-[11px] text-emerald-700 dark:text-emerald-300 hover:bg-slate-200 dark:hover:bg-white/10">+ приход</button>
-                    <button onClick={() => countIng(ing)} className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 px-2 py-1 text-[11px] text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10">ревизия</button>
+                    <span className={`tabular-nums ${Number(ing.stock_qty || 0) < 0 ? 'text-rose-600 dark:text-rose-300' : 'text-foreground'}`}>{Number(ing.stock_qty || 0)} {ing.unit}</span>
+                    <button onClick={() => receiptIng(ing)} className="rounded-lg border border-border bg-slate-100 dark:bg-white/5 px-2 py-1 text-[11px] text-emerald-700 dark:text-emerald-300 hover:bg-slate-200 dark:hover:bg-white/10">+ приход</button>
+                    <button onClick={() => countIng(ing)} className="rounded-lg border border-border bg-slate-100 dark:bg-white/5 px-2 py-1 text-[11px] text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10">ревизия</button>
                     <button onClick={() => deleteIngredient(ing.id, ing.name)} className="text-slate-500 hover:text-rose-600 dark:hover:text-rose-300"><Trash2 className="h-3.5 w-3.5" /></button>
                   </div>
                 </div>
@@ -262,29 +262,29 @@ export default function ProductionPage() {
       )}
 
       {showJournal && (
-        <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 p-5 shadow-lg shadow-black/20">
+        <div className="rounded-2xl border border-border bg-white dark:bg-slate-900/60 p-5 shadow-lg shadow-black/20">
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Журнал движений ингредиентов</h3>
-            <button onClick={() => setShowJournal(false)} className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"><X className="h-4 w-4" /></button>
+            <h3 className="text-sm font-semibold text-foreground">Журнал движений ингредиентов</h3>
+            <button onClick={() => setShowJournal(false)} className="text-muted-foreground hover:text-slate-900 dark:hover:text-white"><X className="h-4 w-4" /></button>
           </div>
           {movements.length === 0 ? (
             <p className="text-xs text-slate-500">Движений нет.</p>
           ) : (
-            <div className="divide-y divide-slate-100 dark:divide-white/5 overflow-hidden rounded-xl border border-slate-200 dark:border-white/10">
+            <div className="divide-y divide-slate-100 dark:divide-white/5 overflow-hidden rounded-xl border border-border">
               {movements.map((m) => {
                 const kindLabel = m.kind === 'receipt' ? 'приход' : m.kind === 'count' ? 'ревизия' : m.kind === 'sale_writeoff' ? 'списание (продажи)' : 'ручное'
                 return (
                   <div key={m.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-slate-900 dark:text-white">{m.ingredient_name}</span>
-                      <span className="rounded border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 px-1.5 py-0.5 text-[10px] text-slate-500 dark:text-slate-400">{kindLabel}</span>
+                      <span className="text-foreground">{m.ingredient_name}</span>
+                      <span className="rounded border border-border bg-slate-100 dark:bg-white/5 px-1.5 py-0.5 text-[10px] text-muted-foreground">{kindLabel}</span>
                       {m.period_from ? <span className="text-[11px] text-slate-500">{m.period_from}…{m.period_to}</span> : null}
                       <span className="text-[11px] text-slate-500">{new Date(m.created_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
                     <div className="flex items-center gap-4 text-xs">
                       <span className={`tabular-nums ${Number(m.qty_delta) < 0 ? 'text-rose-600 dark:text-rose-300' : 'text-emerald-700 dark:text-emerald-300'}`}>{Number(m.qty_delta) > 0 ? '+' : ''}{Number(m.qty_delta)} {m.ingredient_unit}</span>
                       {m.variance != null && Number(m.variance) !== 0 ? <span className={`tabular-nums ${Number(m.variance) < 0 ? 'text-rose-600 dark:text-rose-300' : 'text-amber-700 dark:text-amber-300'}`}>расхожд. {Number(m.variance) > 0 ? '+' : ''}{Number(m.variance)}</span> : null}
-                      <span className="tabular-nums text-slate-500 dark:text-slate-400">остаток {Number(m.balance_after)} {m.ingredient_unit}</span>
+                      <span className="tabular-nums text-muted-foreground">остаток {Number(m.balance_after)} {m.ingredient_unit}</span>
                     </div>
                   </div>
                 )
@@ -295,10 +295,10 @@ export default function ProductionPage() {
       )}
 
       {showForm && (
-        <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 p-5 shadow-lg shadow-black/20">
+        <div className="rounded-2xl border border-border bg-white dark:bg-slate-900/60 p-5 shadow-lg shadow-black/20">
           <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">{editingId ? 'Редактирование техкарты' : 'Новая техкарта'}</h3>
-            <button onClick={() => { setShowForm(false); resetForm() }} className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"><X className="h-4 w-4" /></button>
+            <h3 className="text-sm font-semibold text-foreground">{editingId ? 'Редактирование техкарты' : 'Новая техкарта'}</h3>
+            <button onClick={() => { setShowForm(false); resetForm() }} className="text-muted-foreground hover:text-slate-900 dark:hover:text-white"><X className="h-4 w-4" /></button>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <input className={inputCls} placeholder="Название (Пицца Маргарита)" value={name} onChange={(e) => setName(e.target.value)} />
@@ -311,7 +311,7 @@ export default function ProductionPage() {
           </div>
 
           <div className="mt-3">
-            <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Блюдо в продаже (для анализа продаж — что списывать при продаже)</label>
+            <label className="mb-1 block text-xs text-muted-foreground">Блюдо в продаже (для анализа продаж — что списывать при продаже)</label>
             <select className={`${inputCls} w-full`} value={saleItemId} onChange={(e) => setSaleItemId(e.target.value)}>
               <option value="">— не связано —</option>
               {saleItems.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -319,7 +319,7 @@ export default function ProductionPage() {
           </div>
 
           <div className="mt-4">
-            <div className="mb-2 text-xs font-medium text-slate-500 dark:text-slate-400">Состав (ингредиенты на весь выход)</div>
+            <div className="mb-2 text-xs font-medium text-muted-foreground">Состав (ингредиенты на весь выход)</div>
             <div className="space-y-2">
               {comps.map((c, i) => (
                 <div key={i} className="flex flex-wrap items-center gap-2">
@@ -341,7 +341,7 @@ export default function ProductionPage() {
           </div>
 
           <div className="mt-4 flex justify-end gap-2">
-            <button onClick={() => { setShowForm(false); resetForm() }} className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-white/10">Отмена</button>
+            <button onClick={() => { setShowForm(false); resetForm() }} className="rounded-xl border border-border bg-slate-100 dark:bg-white/5 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-white/10">Отмена</button>
             <button onClick={save} disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Сохранить
             </button>
@@ -350,9 +350,9 @@ export default function ProductionPage() {
       )}
 
       {/* Анализ продаж — теоретический food cost */}
-      <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 p-5 shadow-lg shadow-black/20">
+      <div className="rounded-2xl border border-border bg-white dark:bg-slate-900/60 p-5 shadow-lg shadow-black/20">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Анализ продаж · теоретический food cost</h3>
+          <h3 className="text-sm font-semibold text-foreground">Анализ продаж · теоретический food cost</h3>
           <div className="flex items-center gap-2">
             <DatePicker className={inputCls} value={anFrom} onChange={setAnFrom} />
             <span className="text-slate-500">—</span>
@@ -368,23 +368,23 @@ export default function ProductionPage() {
         {analysis ? (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <Kpi label="Продано блюд" value={String(analysis.totals.sold)} accent="text-slate-900 dark:text-white" />
-              <Kpi label="Выручка" value={money(analysis.totals.revenue)} accent="text-slate-900 dark:text-white" />
+              <Kpi label="Продано блюд" value={String(analysis.totals.sold)} accent="text-foreground" />
+              <Kpi label="Выручка" value={money(analysis.totals.revenue)} accent="text-foreground" />
               <Kpi label="Food cost (теор.)" value={money(analysis.totals.food_cost)} accent="text-amber-700 dark:text-amber-300" />
               <Kpi label="Food cost %" value={`${analysis.totals.food_cost_pct}%`} accent={analysis.totals.food_cost_pct > 35 ? 'text-rose-600 dark:text-rose-300' : 'text-emerald-700 dark:text-emerald-300'} />
             </div>
             {analysis.rows.length === 0 ? (
               <p className="text-xs text-slate-500">Нет продаж связанных блюд за период. Свяжи техкарты с блюдами в продаже (поле «Блюдо в продаже»).</p>
             ) : (
-              <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-white/10">
-                <div className="grid grid-cols-6 gap-2 border-b border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] px-3 py-2 text-[11px] uppercase tracking-wide text-slate-500">
+              <div className="overflow-hidden rounded-xl border border-border">
+                <div className="grid grid-cols-6 gap-2 border-b border-border bg-slate-50 dark:bg-white/[0.02] px-3 py-2 text-[11px] uppercase tracking-wide text-slate-500">
                   <span className="col-span-2">Блюдо</span><span className="text-right">Продано</span><span className="text-right">Себест.</span><span className="text-right">Food cost</span><span className="text-right">FC %</span>
                 </div>
                 {analysis.rows.map((r: any) => (
                   <div key={r.recipe_id} className="grid grid-cols-6 gap-2 px-3 py-2 text-sm">
-                    <span className="col-span-2 truncate text-slate-900 dark:text-white">{r.name}</span>
+                    <span className="col-span-2 truncate text-foreground">{r.name}</span>
                     <span className="text-right tabular-nums text-slate-700 dark:text-slate-300">{r.sold_qty}</span>
-                    <span className="text-right tabular-nums text-slate-500 dark:text-slate-400">{money(r.portion_cost)}</span>
+                    <span className="text-right tabular-nums text-muted-foreground">{money(r.portion_cost)}</span>
                     <span className="text-right tabular-nums text-amber-700 dark:text-amber-300">{money(r.food_cost)}</span>
                     <span className={`text-right tabular-nums ${r.food_cost_pct > 35 ? 'text-rose-600 dark:text-rose-300' : 'text-emerald-700 dark:text-emerald-300'}`}>{r.food_cost_pct}%</span>
                   </div>
@@ -393,10 +393,10 @@ export default function ProductionPage() {
             )}
             {analysis.ingredients.length > 0 && (
               <div>
-                <div className="mb-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">Теоретический расход ингредиентов</div>
+                <div className="mb-1.5 text-xs font-medium text-muted-foreground">Теоретический расход ингредиентов</div>
                 <div className="flex flex-wrap gap-2">
                   {analysis.ingredients.map((g: any) => (
-                    <span key={g.ingredient_id} className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] px-2.5 py-1 text-xs text-slate-700 dark:text-slate-300">{g.name}: <b className="text-slate-900 dark:text-white">{g.qty} {g.unit}</b> · {money(g.cost)}</span>
+                    <span key={g.ingredient_id} className="rounded-lg border border-border bg-slate-50 dark:bg-white/[0.03] px-2.5 py-1 text-xs text-slate-700 dark:text-slate-300">{g.name}: <b className="text-foreground">{g.qty} {g.unit}</b> · {money(g.cost)}</span>
                   ))}
                 </div>
               </div>
@@ -407,21 +407,21 @@ export default function ProductionPage() {
         )}
       </div>
 
-      <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 shadow-lg shadow-black/20 overflow-hidden">
-        <div className="flex items-center justify-between border-b border-slate-200 dark:border-white/10 px-4 py-3">
-          <span className="text-sm font-semibold text-slate-900 dark:text-white">Техкарты</span>
-          <span className="rounded-full border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 px-2 py-0.5 text-xs text-slate-500 dark:text-slate-400">{recipes.length}</span>
+      <div className="rounded-2xl border border-border bg-white dark:bg-slate-900/60 shadow-lg shadow-black/20 overflow-hidden">
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <span className="text-sm font-semibold text-foreground">Техкарты</span>
+          <span className="rounded-full border border-border bg-slate-100 dark:bg-white/5 px-2 py-0.5 text-xs text-muted-foreground">{recipes.length}</span>
         </div>
         {loading && recipes.length === 0 ? (
-          <div className="flex items-center justify-center gap-2 py-16 text-slate-500 dark:text-slate-400"><Loader2 className="h-5 w-5 animate-spin" /> Загрузка…</div>
+          <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Загрузка…</div>
         ) : recipes.length === 0 ? (
-          <div className="px-4 py-16 text-center text-sm text-slate-500 dark:text-slate-400">Техкарт нет. Создайте первую.</div>
+          <div className="px-4 py-16 text-center text-sm text-muted-foreground">Техкарт нет. Создайте первую.</div>
         ) : (
           <div className="divide-y divide-slate-100 dark:divide-white/5">
             {recipes.map((r) => (
               <div key={r.id} className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
                 <div className="min-w-[200px] flex-1">
-                  <div className="text-sm font-medium text-slate-900 dark:text-white">{r.name}{r.is_semi_finished ? <span className="ml-2 rounded border border-amber-400/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-700 dark:text-amber-300">полуфабрикат</span> : null}</div>
+                  <div className="text-sm font-medium text-foreground">{r.name}{r.is_semi_finished ? <span className="ml-2 rounded border border-amber-400/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-700 dark:text-amber-300">полуфабрикат</span> : null}</div>
                   <div className="text-[11px] text-slate-500">{r.category || '—'} · выход {r.output_qty} {r.output_unit} · {r.components.length} ингр.{r.yield_factor < 1 ? ` · потери ${Math.round((1 - r.yield_factor) * 100)}%` : ''}</div>
                 </div>
                 <div className="text-right">
@@ -441,7 +441,7 @@ export default function ProductionPage() {
 
 function Kpi({ label, value, accent }: { label: string; value: string; accent: string }) {
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3">
+    <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] p-3">
       <div className="text-[11px] uppercase tracking-wider text-slate-500">{label}</div>
       <div className={`mt-1 text-base font-bold tabular-nums ${accent}`}>{value}</div>
     </div>

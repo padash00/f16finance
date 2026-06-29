@@ -239,7 +239,7 @@ function CompanyAssignmentEditor({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-black/20 px-3 py-2 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-slate-50 dark:bg-black/20 px-3 py-2 text-xs text-muted-foreground">
         <span>
           В проекте: <b className="text-amber-700 dark:text-amber-200">{assignments.length}</b> из {allCompanies.length} точек
         </span>
@@ -264,7 +264,7 @@ function CompanyAssignmentEditor({
             className={`rounded-xl border transition ${
               selected
                 ? 'border-amber-500/30 bg-amber-500/5'
-                : 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-black/20'
+                : 'border-border bg-slate-50 dark:bg-black/20'
             }`}
           >
             <div className="flex flex-wrap items-center gap-2 px-3 py-2">
@@ -288,7 +288,7 @@ function CompanyAssignmentEditor({
                   <button
                     type="button"
                     onClick={() => setExpanded((prev) => ({ ...prev, [c.id]: !prev[c.id] }))}
-                    className="flex items-center gap-1 rounded-lg border border-slate-200 dark:border-white/10 px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground"
+                    className="flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground"
                   >
                     {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                     Настройки
@@ -309,7 +309,7 @@ function CompanyAssignmentEditor({
             </div>
 
             {selected && isExpanded && assignment && (
-              <div className="border-t border-slate-200 dark:border-white/10 px-3 pb-3 pt-2 space-y-3">
+              <div className="border-t border-border px-3 pb-3 pt-2 space-y-3">
                 <div className="text-[11px] text-muted-foreground">
                   Оставь «Наследовать» чтобы использовать настройки проекта
                 </div>
@@ -319,7 +319,7 @@ function CompanyAssignmentEditor({
                   <select
                     value={assignment.point_mode}
                     onChange={(e) => updateAssignment(c.id, { point_mode: e.target.value })}
-                    className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-background px-3 py-2 text-sm"
+                    className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
                   >
                     <option value="">Наследовать от проекта ({MODE_LABELS[projectMode] || projectMode})</option>
                     <option value="shift-report">Сменный отчёт</option>
@@ -336,7 +336,7 @@ function CompanyAssignmentEditor({
                       const projectDefault = projectFlags[key] === true
                       const val = assignment.feature_flags[key]
                       return (
-                        <div key={key} className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-black/20 p-2 text-xs">
+                        <div key={key} className="rounded-xl border border-border bg-slate-50 dark:bg-black/20 p-2 text-xs">
                           <div className="mb-1.5 font-medium text-foreground">{label}</div>
                           <p className="mb-2 min-h-8 text-[11px] leading-relaxed text-muted-foreground">{hint}</p>
                           <div className="flex flex-wrap gap-2">
@@ -352,7 +352,7 @@ function CompanyAssignmentEditor({
                                 className={`rounded-lg border px-2 py-1 transition ${
                                   val === v
                                     ? 'border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-200'
-                                    : 'border-slate-200 dark:border-white/10 text-muted-foreground hover:border-slate-300 dark:hover:border-white/20 hover:text-foreground'
+                                    : 'border-border text-muted-foreground hover:border-slate-300 dark:hover:border-white/20 hover:text-foreground'
                                 }`}
                               >
                                 {lbl}
@@ -403,7 +403,7 @@ function ProjectFormPanel({
           <input
             value={form.name}
             onChange={(e) => onChange({ ...form, name: e.target.value })}
-            className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-background px-3 py-2"
+            className="w-full rounded-xl border border-border bg-background px-3 py-2"
             placeholder="F16, Arena, Восток..."
           />
         </label>
@@ -413,7 +413,7 @@ function ProjectFormPanel({
           <select
             value={form.point_mode}
             onChange={(e) => onChange({ ...form, point_mode: e.target.value })}
-            className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-background px-3 py-2"
+            className="w-full rounded-xl border border-border bg-background px-3 py-2"
           >
             <option value="shift-report">Сменный отчёт</option>
             <option value="cash-desk">Кассовое место</option>
@@ -427,7 +427,7 @@ function ProjectFormPanel({
           <input
             value={form.notes}
             onChange={(e) => onChange({ ...form, notes: e.target.value })}
-            className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-background px-3 py-2"
+            className="w-full rounded-xl border border-border bg-background px-3 py-2"
             placeholder="Необязательно"
           />
         </label>
@@ -455,7 +455,7 @@ function ProjectFormPanel({
           {PROJECT_FLAG_OPTIONS.map(({ key, label, hint }) => (
           <label
             key={key}
-            className="flex flex-col gap-1.5 cursor-pointer rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-black/20 px-3 py-3 text-sm"
+            className="flex flex-col gap-1.5 cursor-pointer rounded-xl border border-border bg-slate-50 dark:bg-black/20 px-3 py-3 text-sm"
           >
             <div className="flex items-center gap-3">
               <input
@@ -467,7 +467,7 @@ function ProjectFormPanel({
                     feature_flags: { ...form.feature_flags, [key]: e.target.checked },
                   })
                 }
-                className="rounded border-slate-200 dark:border-white/10 bg-background"
+                className="rounded border-border bg-background"
               />
               <span className="font-medium">{label}</span>
             </div>
@@ -705,15 +705,15 @@ export default function PointDevicesPage() {
       />
 
       {/* Операторская программа — скачивание + инструкция */}
-      <Card className="border-slate-200 dark:border-white/10 bg-gradient-to-br from-blue-50 to-white dark:from-blue-500/[0.07] dark:to-transparent p-5">
+      <Card className="border-border bg-gradient-to-br from-blue-50 to-white dark:from-blue-500/[0.07] dark:to-transparent p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-start gap-3">
             <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-blue-400/30 bg-blue-500/15">
               <Monitor className="h-5 w-5 text-blue-600 dark:text-blue-300" />
             </span>
             <div>
-              <div className="text-base font-semibold text-slate-900 dark:text-white">Операторская программа</div>
-              <p className="mt-0.5 max-w-xl text-sm text-slate-500 dark:text-slate-400">
+              <div className="text-base font-semibold text-foreground">Операторская программа</div>
+              <p className="mt-0.5 max-w-xl text-sm text-muted-foreground">
                 Касса для операторов: смены, продажи, долги, чеки. Установите на компьютер точки и введите токен проекта (ниже).
               </p>
               <ol className="mt-2 list-decimal space-y-0.5 pl-4 text-xs text-slate-500">
@@ -800,7 +800,7 @@ export default function PointDevicesPage() {
                       <div className="space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
                           <h2 className="text-lg font-semibold text-foreground">{project.name}</h2>
-                          <span className="rounded-full border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 px-2 py-1 text-[11px] text-muted-foreground">
+                          <span className="rounded-full border border-border bg-slate-100 dark:bg-white/5 px-2 py-1 text-[11px] text-muted-foreground">
                             {MODE_LABELS[project.point_mode] || project.point_mode}
                           </span>
                           <span
@@ -814,10 +814,10 @@ export default function PointDevicesPage() {
                           </span>
                         </div>
                         <div className="flex flex-wrap gap-2 text-xs">
-                          <span className="rounded-lg border border-slate-200 dark:border-white/10 bg-background/70 px-2 py-1 text-muted-foreground">
+                          <span className="rounded-lg border border-border bg-background/70 px-2 py-1 text-muted-foreground">
                             Последняя связь: {formatDateTime(project.last_seen_at)}
                           </span>
-                          <span className="rounded-lg border border-slate-200 dark:border-white/10 bg-background/70 px-2 py-1 text-muted-foreground">
+                          <span className="rounded-lg border border-border bg-background/70 px-2 py-1 text-muted-foreground">
                             Создан: {formatDateTime(project.created_at)}
                           </span>
                         </div>
@@ -869,7 +869,7 @@ export default function PointDevicesPage() {
 
                     <div className="mt-4 grid gap-3 md:grid-cols-[1fr_1.4fr_1fr]">
                       {/* Companies */}
-                      <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-background/70 p-3">
+                      <div className="rounded-xl border border-border bg-background/70 p-3">
                         <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                           Точки ({project.companies.length})
                         </p>
@@ -908,7 +908,7 @@ export default function PointDevicesPage() {
                       </div>
 
                       {/* Token */}
-                      <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-background/70 p-3">
+                      <div className="rounded-xl border border-border bg-background/70 p-3">
                         <div className="mb-2 flex items-center justify-between">
                           <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                             Project token
@@ -956,7 +956,7 @@ export default function PointDevicesPage() {
                             className={`flex items-center justify-between rounded-xl border px-3 py-2 text-sm ${
                               project.feature_flags[key as keyof PointFeatureFlags]
                                 ? 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-200'
-                                : 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-muted-foreground line-through opacity-40'
+                                : 'border-border bg-slate-50 dark:bg-white/5 text-muted-foreground line-through opacity-40'
                             }`}
                           >
                             <span>{label}</span>

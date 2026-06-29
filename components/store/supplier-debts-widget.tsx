@@ -67,7 +67,7 @@ export function SupplierDebtsWidget() {
             <Wallet className="h-4 w-4" />
           </div>
           <div>
-            <div className="text-sm font-semibold text-slate-900 dark:text-white">Долги поставщикам</div>
+            <div className="text-sm font-semibold text-foreground">Долги поставщикам</div>
             <div className="text-xs text-muted-foreground">Открытые обязательства</div>
           </div>
         </div>

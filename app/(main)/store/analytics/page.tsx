@@ -272,7 +272,7 @@ export default function StoreAnalyticsPage({ embedded = false }: { embedded?: bo
           </DropdownMenu>
         )
         const hdrToolbar = (
-          <div className="grid grid-cols-2 gap-2 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-1">
+          <div className="grid grid-cols-2 gap-2 rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] p-1">
             <button
               type="button"
               onClick={() => setTab('showcase')}
@@ -313,7 +313,7 @@ export default function StoreAnalyticsPage({ embedded = false }: { embedded?: bo
 
       {tab === 'showcase' ? (
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_400px]">
-        <Card className="border-slate-200 dark:border-white/10 bg-card/70 p-5">
+        <Card className="border-border bg-card/70 p-5">
           <div className="flex items-center gap-2">
             <Boxes className="h-4 w-4 text-amber-700 dark:text-amber-300" />
             <h2 className="text-lg font-semibold text-foreground">Сводка по витринам</h2>
@@ -323,7 +323,7 @@ export default function StoreAnalyticsPage({ embedded = false }: { embedded?: bo
           <div className="mt-4 space-y-3">
             {loading && pointAnalytics.length === 0 ? (
               Array.from({ length: 3 }).map((_, idx) => (
-                <div key={idx} className="rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-4">
+                <div key={idx} className="rounded-2xl border border-border bg-slate-50 dark:bg-white/[0.03] p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="space-y-2">
                       <Skeleton className="h-4 w-40" />
@@ -333,7 +333,7 @@ export default function StoreAnalyticsPage({ embedded = false }: { embedded?: bo
                   </div>
                   <div className="mt-4 grid gap-2 md:grid-cols-4">
                     {Array.from({ length: 4 }).map((__, i) => (
-                      <div key={i} className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-black/20 px-3 py-2">
+                      <div key={i} className="rounded-xl border border-border bg-slate-100 dark:bg-black/20 px-3 py-2">
                         <Skeleton className="h-3 w-20" />
                         <Skeleton className="mt-2 h-4 w-16" />
                       </div>
@@ -342,50 +342,50 @@ export default function StoreAnalyticsPage({ embedded = false }: { embedded?: bo
                 </div>
               ))
             ) : pointAnalytics.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 dark:border-white/10 px-4 py-10 text-center text-sm text-muted-foreground">Витрины пока пустые, поэтому аналитика ещё не собралась.</div>
+              <div className="rounded-2xl border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">Витрины пока пустые, поэтому аналитика ещё не собралась.</div>
             ) : (
               pointAnalytics.map((point) => (
-                <div key={point.location.id} className="rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-4">
+                <div key={point.location.id} className="rounded-2xl border border-border bg-slate-50 dark:bg-white/[0.03] p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="font-medium text-foreground">{point.location.company?.name || point.location.name}</p>
                       <p className="text-xs text-muted-foreground">Последнее движение: {formatDateTime(point.lastMovementAt)}</p>
                     </div>
-                    <div className="rounded-full border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-black/20 px-3 py-1 text-xs text-muted-foreground">
+                    <div className="rounded-full border border-border bg-slate-100 dark:bg-black/20 px-3 py-1 text-xs text-muted-foreground">
                       {point.stockItems} SKU
                     </div>
                   </div>
                   <div className="mt-4 grid gap-2 md:grid-cols-4">
-                    <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-black/20 px-3 py-2">
+                    <div className="rounded-xl border border-border bg-slate-100 dark:bg-black/20 px-3 py-2">
                       <p className="text-xs text-muted-foreground">На витрине</p>
                       <p className="mt-1 font-semibold text-foreground">{formatQty(point.stockQty)}</p>
                     </div>
-                    <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-black/20 px-3 py-2">
+                    <div className="rounded-xl border border-border bg-slate-100 dark:bg-black/20 px-3 py-2">
                       <p className="text-xs text-muted-foreground">Пришло</p>
                       <p className="mt-1 font-semibold text-foreground">{formatQty(point.incomingQty)}</p>
                       <p className="text-xs text-muted-foreground">{formatMoney(point.incomingAmount)}</p>
                     </div>
-                    <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-black/20 px-3 py-2">
+                    <div className="rounded-xl border border-border bg-slate-100 dark:bg-black/20 px-3 py-2">
                       <p className="text-xs text-muted-foreground">Продано</p>
                       <p className="mt-1 font-semibold text-foreground">{formatQty(point.saleQty)}</p>
                       <p className="text-xs text-muted-foreground">{formatMoney(point.saleAmount)}</p>
                     </div>
-                    <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-black/20 px-3 py-2">
+                    <div className="rounded-xl border border-border bg-slate-100 dark:bg-black/20 px-3 py-2">
                       <p className="text-xs text-muted-foreground">В долг</p>
                       <p className="mt-1 font-semibold text-foreground">{formatQty(point.debtQty)}</p>
                       <p className="text-xs text-muted-foreground">{formatMoney(point.debtAmount)}</p>
                     </div>
                   </div>
                   <div className="mt-2 grid gap-2 md:grid-cols-3">
-                    <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-black/20 px-3 py-2">
+                    <div className="rounded-xl border border-border bg-slate-100 dark:bg-black/20 px-3 py-2">
                       <p className="text-xs text-muted-foreground">Возвраты</p>
                       <p className="mt-1 font-semibold text-foreground">{formatQty(point.returnQty)}</p>
                     </div>
-                    <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-black/20 px-3 py-2">
+                    <div className="rounded-xl border border-border bg-slate-100 dark:bg-black/20 px-3 py-2">
                       <p className="text-xs text-muted-foreground">Списания</p>
                       <p className="mt-1 font-semibold text-foreground">{formatQty(point.writeoffQty)}</p>
                     </div>
-                    <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-black/20 px-3 py-2">
+                    <div className="rounded-xl border border-border bg-slate-100 dark:bg-black/20 px-3 py-2">
                       <p className="text-xs text-muted-foreground">Корректировка</p>
                       <p className="mt-1 font-semibold text-foreground">{formatQty(point.adjustmentQty)}</p>
                     </div>
@@ -396,7 +396,7 @@ export default function StoreAnalyticsPage({ embedded = false }: { embedded?: bo
           </div>
         </Card>
 
-        <Card className="border-slate-200 dark:border-white/10 bg-card/70 p-5">
+        <Card className="border-border bg-card/70 p-5">
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-300" />
             <h2 className="text-lg font-semibold text-foreground">Риск по витринам</h2>
@@ -406,7 +406,7 @@ export default function StoreAnalyticsPage({ embedded = false }: { embedded?: bo
           <div className="mt-4 space-y-3">
             {loading && riskyBalances.length === 0 ? (
               Array.from({ length: 4 }).map((_, idx) => (
-                <div key={idx} className="rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] px-4 py-3">
+                <div key={idx} className="rounded-2xl border border-border bg-slate-50 dark:bg-white/[0.03] px-4 py-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="space-y-2">
                       <Skeleton className="h-4 w-40" />
@@ -420,7 +420,7 @@ export default function StoreAnalyticsPage({ embedded = false }: { embedded?: bo
                 </div>
               ))
             ) : riskyBalances.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 dark:border-white/10 px-4 py-8 text-center text-sm text-muted-foreground">Критичных остатков на витринах сейчас нет.</div>
+              <div className="rounded-2xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">Критичных остатков на витринах сейчас нет.</div>
             ) : (
               riskyBalances.map((balance) => (
                 <div key={`${balance.location_id}:${balance.item_id}`} className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3">
@@ -442,28 +442,28 @@ export default function StoreAnalyticsPage({ embedded = false }: { embedded?: bo
       </section>
       ) : (
         <section className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_400px]">
-          <Card className="border-slate-200 dark:border-white/10 bg-card/70 p-5">
+          <Card className="border-border bg-card/70 p-5">
             <div className="flex items-center gap-2">
               <Boxes className="h-4 w-4 text-amber-700 dark:text-amber-300" />
               <h2 className="text-lg font-semibold text-foreground">Складские запасы</h2>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">Общая картина по подсобке.</p>
             <div className="mt-4 grid gap-2 md:grid-cols-2">
-              <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-black/20 px-3 py-2">
+              <div className="rounded-xl border border-border bg-slate-100 dark:bg-black/20 px-3 py-2">
                 <p className="text-xs text-muted-foreground">Ед. товара</p>
                 <p className="mt-1 font-semibold text-foreground">{formatQty(warehouseAnalytics.totalStockQty)}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-black/20 px-3 py-2">
+              <div className="rounded-xl border border-border bg-slate-100 dark:bg-black/20 px-3 py-2">
                 <p className="text-xs text-muted-foreground">Стоимость запасов</p>
                 <p className="mt-1 font-semibold text-foreground">{formatMoney(warehouseAnalytics.totalStockValue)}</p>
               </div>
             </div>
           </Card>
-          <Card className="border-slate-200 dark:border-white/10 bg-card/70 p-5">
+          <Card className="border-border bg-card/70 p-5">
             <h2 className="text-lg font-semibold text-foreground">Топ по стоимости (склад)</h2>
             <div className="mt-4 space-y-2">
               {warehouseAnalytics.topByValue.map((row: any) => (
-                <div key={`${row.location_id}:${row.item_id}`} className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] px-3 py-2">
+                <div key={`${row.location_id}:${row.item_id}`} className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] px-3 py-2">
                   <div className="flex items-center justify-between gap-2">
                     <p className="truncate text-sm font-medium">{row.item?.name || 'Товар'}</p>
                     <p className="text-xs">{formatMoney(row.stockValue)}</p>

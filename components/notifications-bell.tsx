@@ -195,7 +195,7 @@ export function NotificationsBell() {
         }}
         className={cn(
           'relative flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white transition hover:border-amber-500/20 hover:text-slate-900 dark:border-white/10 dark:bg-slate-900/70 dark:hover:text-white',
-          open ? 'text-slate-900 border-amber-500/30 dark:text-white dark:border-amber-500/30' : 'text-slate-500 dark:text-slate-400',
+          open ? 'text-slate-900 border-amber-500/30 dark:text-white dark:border-amber-500/30' : 'text-muted-foreground',
         )}
         aria-label="Уведомления"
       >
@@ -211,7 +211,7 @@ export function NotificationsBell() {
         <div className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-[360px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/95">
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 dark:border-white/5">
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-slate-900 dark:text-white">Уведомления</p>
+              <p className="text-sm font-semibold text-foreground">Уведомления</p>
               <p className="text-[11px] text-slate-500">
                 {unreadTotal > 0
                   ? `${unreadTotal} новых · всего ${total}`
@@ -250,7 +250,7 @@ export function NotificationsBell() {
                     <div className="flex items-center justify-between px-3 py-1">
                       <div className="flex items-center gap-2">
                         <GroupIcon className="h-3.5 w-3.5 text-amber-500 dark:text-amber-300" />
-                        <span className="text-[11px] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">{group.label}</span>
+                        <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{group.label}</span>
                         <span className="rounded-md border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
                           {group.count}
                         </span>

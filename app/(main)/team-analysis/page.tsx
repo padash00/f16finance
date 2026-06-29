@@ -35,8 +35,8 @@ const money = (n: number) => Math.round(n || 0).toLocaleString('ru-RU') + ' ₸'
 const num = (n: number) => Math.round(n || 0).toLocaleString('ru-RU')
 
 const cardCls = 'rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900/40'
-const sub = 'text-slate-500 dark:text-slate-400'
-const thCls = 'px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400'
+const sub = 'text-muted-foreground'
+const thCls = 'px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground'
 const tdCls = 'px-3 py-2 text-sm text-slate-700 dark:text-slate-200 tabular-nums'
 
 const SEV: Record<Insight['severity'], { accent: string; chip: string; label: string; icon: React.ReactNode }> = {
@@ -126,7 +126,7 @@ export default function TeamAnalysisPage() {
   const insights = data?.insights || []
 
   return (
-    <div className="app-page-wide space-y-5 text-slate-900 dark:text-white">
+    <div className="app-page-wide space-y-5 text-foreground">
       <AdminPageHeader
         title="AI Разбор команды"
         description="Кто звезда, кто проседает, справедлива ли оплата"
@@ -204,7 +204,7 @@ export default function TeamAnalysisPage() {
       {error ? <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p> : null}
 
       {loading && !loaded ? (
-        <div className="flex flex-col items-center justify-center gap-3 py-24 text-slate-500 dark:text-slate-400">
+        <div className="flex flex-col items-center justify-center gap-3 py-24 text-muted-foreground">
           <Loader2 className="h-7 w-7 animate-spin text-violet-500" />
           <p className="text-sm">{custom ? 'ИИ анализирует команду за выбранный период…' : `ИИ анализирует команду за ${days} дней…`}</p>
         </div>
@@ -218,7 +218,7 @@ export default function TeamAnalysisPage() {
           {/* AI-сводка наверху */}
           {data.summary ? (
             <div className="rounded-2xl border border-violet-200 bg-violet-500/[0.06] p-5 dark:border-violet-500/20">
-              <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900 dark:text-white">
+              <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
                 <span aria-hidden>🧠</span> Главное по команде
                 <Sparkles className="h-4 w-4 text-violet-500" aria-hidden />
               </h2>
@@ -261,10 +261,10 @@ export default function TeamAnalysisPage() {
 
           {/* Таблица операторов */}
           <div className={cardCls}>
-            <h2 className="mb-3 flex items-center gap-2 text-base font-semibold text-slate-900 dark:text-white">
+            <h2 className="mb-3 flex items-center gap-2 text-base font-semibold text-foreground">
               <Users className="h-4 w-4 text-violet-500" /> Операторы за период
             </h2>
-            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-white/10">
+            <div className="overflow-x-auto rounded-xl border border-border">
               <table className="min-w-full">
                 <thead className="bg-slate-50 dark:bg-white/[0.03]">
                   <tr>

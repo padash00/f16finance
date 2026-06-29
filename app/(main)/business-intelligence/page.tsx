@@ -47,8 +47,8 @@ const money = (n: number) => Math.round(n || 0).toLocaleString('ru-RU') + ' ₸'
 const num = (n: number) => Math.round(n || 0).toLocaleString('ru-RU')
 
 const cardCls = 'rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900/40'
-const sub = 'text-slate-500 dark:text-slate-400'
-const thCls = 'px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400'
+const sub = 'text-muted-foreground'
+const thCls = 'px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground'
 const tdCls = 'px-3 py-2 text-sm text-slate-700 dark:text-slate-200 tabular-nums'
 
 function SectionCard({
@@ -76,7 +76,7 @@ function SectionCard({
     <div className={available ? cardCls : `${cardCls} opacity-60`}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900 dark:text-white">
+          <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
             <span aria-hidden>{emoji}</span> {title}
           </h2>
           <p className="mt-1">
@@ -115,7 +115,7 @@ function SectionCard({
 
 function Table({ children }: { children: React.ReactNode }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-white/10">
+    <div className="overflow-x-auto rounded-xl border border-border">
       <table className="min-w-full">{children}</table>
     </div>
   )
@@ -246,7 +246,7 @@ export default function BusinessIntelligencePage() {
     : `за ${days} дней`
 
   return (
-    <div className="app-page-wide space-y-5 text-slate-900 dark:text-white">
+    <div className="app-page-wide space-y-5 text-foreground">
       <AdminPageHeader
         title="Бизнес-аналитика"
         description="Формулы Amazon, Walmart, Six Sigma на твоих данных"
@@ -330,12 +330,12 @@ export default function BusinessIntelligencePage() {
           {/* AI-сводка */}
           {(aiLoading || aiActions) ? (
             <div className="lg:col-span-2 rounded-2xl border border-violet-300 bg-gradient-to-br from-violet-50 to-white p-5 dark:border-violet-400/30 dark:from-violet-500/10 dark:to-slate-900/40">
-              <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900 dark:text-white">
+              <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
                 <span aria-hidden>🧠</span> Главное сегодня
                 <Sparkles className="h-4 w-4 text-violet-500" aria-hidden />
               </h2>
               {aiLoading ? (
-                <div className="mt-3 flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin text-violet-500" /> ИИ анализирует…
                 </div>
               ) : aiActions && aiActions.length ? (
@@ -356,7 +356,7 @@ export default function BusinessIntelligencePage() {
           {/* Оценка здоровья */}
           {data && data.healthScore.factors.length > 0 ? (
             <div className={`${cardCls} ${aiLoading || aiActions ? '' : 'lg:col-span-3'}`}>
-              <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900 dark:text-white">
+              <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
                 <span aria-hidden>❤️‍🩹</span> Здоровье бизнеса
               </h2>
               <div className="mt-2 flex items-end gap-2">
@@ -378,7 +378,7 @@ export default function BusinessIntelligencePage() {
                   <div key={f.label}>
                     <div className="flex items-center justify-between text-xs">
                       <span className="font-medium text-slate-700 dark:text-slate-200">{f.label}</span>
-                      <span className="tabular-nums text-slate-500 dark:text-slate-400">{f.score0to100}</span>
+                      <span className="tabular-nums text-muted-foreground">{f.score0to100}</span>
                     </div>
                     <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
                       <div
@@ -400,7 +400,7 @@ export default function BusinessIntelligencePage() {
       ) : null}
 
       {loading && !loaded ? (
-        <div className="flex flex-col items-center justify-center gap-3 py-24 text-slate-500 dark:text-slate-400">
+        <div className="flex flex-col items-center justify-center gap-3 py-24 text-muted-foreground">
           <Loader2 className="h-7 w-7 animate-spin text-violet-500" />
           <p className="text-sm">Считаем формулы по данным {periodLabel}…</p>
         </div>
@@ -610,13 +610,13 @@ export default function BusinessIntelligencePage() {
               <div className="grid grid-cols-3 gap-3">
                 {data.abc.classes.map((c) => (
                   <div key={c.cls} className="rounded-xl border border-slate-200 p-3 dark:border-white/10">
-                    <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                    <p className="text-sm font-semibold text-foreground">
                       Класс {c.cls}
                       <span className={`ml-2 text-xs font-normal ${sub}`}>
                         {c.cls === 'A' ? 'жизненно важные' : c.cls === 'B' ? 'важные' : 'второстепенные'}
                       </span>
                     </p>
-                    <p className="mt-1 text-xl font-bold tabular-nums text-slate-900 dark:text-white">{c.itemCount} тов.</p>
+                    <p className="mt-1 text-xl font-bold tabular-nums text-foreground">{c.itemCount} тов.</p>
                     <p className={`text-xs ${sub} tabular-nums`}>
                       {c.itemSharePct}% позиций · {c.revenueSharePct}% выручки
                     </p>
@@ -704,7 +704,7 @@ export default function BusinessIntelligencePage() {
                 <div className="flex flex-wrap gap-2">
                   {data.rfm.segments.map((s) => (
                     <div key={s.segment} className="rounded-xl border border-slate-200 px-3 py-2 dark:border-white/10">
-                      <p className="text-sm font-semibold text-slate-900 dark:text-white">{s.segment}</p>
+                      <p className="text-sm font-semibold text-foreground">{s.segment}</p>
                       <p className={`text-xs ${sub} tabular-nums`}>
                         {s.count} клиентов · {money(s.monetary)}
                       </p>

@@ -271,7 +271,7 @@ export default function ScanRevisionPage() {
         <div className="font-mono text-lg font-semibold uppercase tracking-wide text-slate-900 dark:text-zinc-100">Ревизия проведена</div>
         <div className="font-mono text-sm text-slate-500 dark:text-zinc-400">Скорректировано позиций: {result.changed}</div>
         <div className="flex justify-center gap-2">
-          <Link href="/store/revisions" className="border border-slate-200 dark:border-white/10 px-4 py-2 font-mono text-[13px] uppercase tracking-wide text-slate-700 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-zinc-100">
+          <Link href="/store/revisions" className="border border-border px-4 py-2 font-mono text-[13px] uppercase tracking-wide text-slate-700 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-zinc-100">
             К ревизиям
           </Link>
           <button
@@ -302,7 +302,7 @@ export default function ScanRevisionPage() {
       {error ? <div className="border border-rose-500/40 bg-rose-500/[0.06] p-3 font-mono text-[12px] text-rose-300">{error}</div> : null}
 
       {loading ? (
-        <div className="flex items-center gap-3 border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] p-4 font-mono text-[13px] uppercase text-slate-500 dark:text-zinc-400">
+        <div className="flex items-center gap-3 border border-border bg-white dark:bg-white/[0.04] p-4 font-mono text-[13px] uppercase text-slate-500 dark:text-zinc-400">
           <Loader2 className="h-4 w-4 animate-spin" /> Загрузка…
         </div>
       ) : !locationId ? (
@@ -310,14 +310,14 @@ export default function ScanRevisionPage() {
         <div className="space-y-2">
           <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-zinc-500">Выберите, что считаем</div>
           {locations.length === 0 ? (
-            <div className="border border-dashed border-slate-200 dark:border-white/10 p-6 text-center font-mono text-[12px] uppercase text-zinc-500">Нет доступных локаций</div>
+            <div className="border border-dashed border-border p-6 text-center font-mono text-[12px] uppercase text-zinc-500">Нет доступных локаций</div>
           ) : (
             locations.map((l) => (
               <button
                 key={l.id}
                 type="button"
                 onClick={() => setLocationId(l.id)}
-                className="flex w-full items-center justify-between border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] p-4 text-left transition hover:border-amber-400/40"
+                className="flex w-full items-center justify-between border border-border bg-white dark:bg-white/[0.04] p-4 text-left transition hover:border-amber-400/40"
               >
                 <span className="font-mono text-[14px] uppercase tracking-wide text-slate-900 dark:text-zinc-100">{locLabel(l)}</span>
                 <span className="font-mono text-[10px] uppercase text-zinc-600">{l.location_type === 'point_display' ? 'витрина' : l.location_type === 'warehouse' ? 'склад' : ''}</span>
@@ -328,7 +328,7 @@ export default function ScanRevisionPage() {
       ) : (
         // ── Сканирование ───────────────────────────────────────────────────────
         <>
-          <div className="flex items-center justify-between border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] px-3 py-2">
+          <div className="flex items-center justify-between border border-border bg-white dark:bg-white/[0.04] px-3 py-2">
             <div className="min-w-0">
               <div className="truncate font-mono text-[13px] uppercase tracking-wide text-slate-900 dark:text-zinc-100">{selectedLoc ? locLabel(selectedLoc) : ''}</div>
               <div className="font-mono text-[10px] uppercase tracking-wide text-zinc-500 tabular-nums">посчитано {countedCount} из {totalItems}</div>
@@ -348,7 +348,7 @@ export default function ScanRevisionPage() {
           />
 
           {/* Поиск вручную (если штрихкода нет) */}
-          <div className="border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] p-2">
+          <div className="border border-border bg-white dark:bg-white/[0.04] p-2">
             <div className="flex items-center gap-2 px-1">
               <Search className="h-3.5 w-3.5 text-zinc-500" />
               <input
@@ -361,7 +361,7 @@ export default function ScanRevisionPage() {
             {manualResults.length > 0 ? (
               <div className="mt-1 max-h-52 space-y-1 overflow-y-auto">
                 {manualResults.map((it) => (
-                  <button key={it.id} type="button" onClick={() => addManual(it)} className="flex w-full items-center justify-between gap-2 border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-black/20 px-2.5 py-2 text-left">
+                  <button key={it.id} type="button" onClick={() => addManual(it)} className="flex w-full items-center justify-between gap-2 border border-border bg-slate-50 dark:bg-black/20 px-2.5 py-2 text-left">
                     <span className="truncate font-mono text-[12px] text-slate-700 dark:text-zinc-200">{it.name}</span>
                     <span className="font-mono text-[10px] text-zinc-500 tabular-nums">сист. {fmt(expectedByItem.get(it.id) ?? 0)}</span>
                   </button>
@@ -382,7 +382,7 @@ export default function ScanRevisionPage() {
                     const item = itemById.get(row.id)
                     if (item) addManual(item)
                   }}
-                  className="flex w-full items-center justify-between gap-3 border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-black/20 px-3 py-2 text-left"
+                  className="flex w-full items-center justify-between gap-3 border border-border bg-slate-50 dark:bg-black/20 px-3 py-2 text-left"
                 >
                   <div className="min-w-0">
                     <div className="truncate font-mono text-[12px] text-slate-900 dark:text-zinc-100">{row.name}</div>
@@ -401,7 +401,7 @@ export default function ScanRevisionPage() {
 
       {/* Кнопка провести */}
       {locationId && countedCount > 0 ? (
-        <div className="fixed inset-x-0 bottom-0 border-t border-slate-200 dark:border-white/10 bg-background/95 p-3 backdrop-blur" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom,0px))' }}>
+        <div className="fixed inset-x-0 bottom-0 border-t border-border bg-background/95 p-3 backdrop-blur" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom,0px))' }}>
           <div className="mx-auto max-w-md">
             <button
               type="button"
@@ -419,7 +419,7 @@ export default function ScanRevisionPage() {
       {/* Лист ввода количества */}
       {pending ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70" onClick={cancelQty}>
-          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto border-t border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] p-4" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto border-t border-border bg-white dark:bg-white/[0.04] p-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between gap-3">
               <div className="flex min-w-0 items-start gap-2">
                 <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center border border-amber-500/40 text-amber-700 dark:text-amber-300">
@@ -446,7 +446,7 @@ export default function ScanRevisionPage() {
                 }}
                 inputMode="decimal"
                 placeholder="0"
-                className="mt-1 w-full border border-slate-200 dark:border-white/10 bg-white dark:bg-black px-3 py-3 text-center font-mono text-3xl font-bold tabular-nums text-amber-400 focus:border-amber-400/50 focus:outline-none"
+                className="mt-1 w-full border border-border bg-white dark:bg-black px-3 py-3 text-center font-mono text-3xl font-bold tabular-nums text-amber-400 focus:border-amber-400/50 focus:outline-none"
               />
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {[1, 6, 12, 24, 96, 144].map((n) => (
@@ -454,12 +454,12 @@ export default function ScanRevisionPage() {
                     key={n}
                     type="button"
                     onClick={() => setQtyInput(fmt(parseQty(qtyInput) + n))}
-                    className="border border-slate-200 dark:border-white/10 px-3 py-1.5 font-mono text-[12px] tabular-nums text-slate-700 dark:text-zinc-300 hover:border-amber-400/40 hover:text-amber-300"
+                    className="border border-border px-3 py-1.5 font-mono text-[12px] tabular-nums text-slate-700 dark:text-zinc-300 hover:border-amber-400/40 hover:text-amber-300"
                   >
                     +{n}
                   </button>
                 ))}
-                <button type="button" onClick={() => setQtyInput('')} className="border border-slate-200 dark:border-white/10 px-3 py-1.5 font-mono text-[12px] text-zinc-500 hover:text-slate-900 dark:hover:text-zinc-200">сброс</button>
+                <button type="button" onClick={() => setQtyInput('')} className="border border-border px-3 py-1.5 font-mono text-[12px] text-zinc-500 hover:text-slate-900 dark:hover:text-zinc-200">сброс</button>
               </div>
             </div>
 

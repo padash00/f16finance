@@ -227,7 +227,7 @@ export default function ReceiptSettingsPage() {
       </div>
 
       {loading || !settings ? (
-        <Card className="border-slate-200 dark:border-white/10 bg-card/70 p-8">
+        <Card className="border-border bg-card/70 p-8">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
             Загружаем настройки…
@@ -236,7 +236,7 @@ export default function ReceiptSettingsPage() {
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
           {/* Налогоплательщик */}
-          <Card className="border-slate-200 dark:border-white/10 bg-card/70 p-5 space-y-4">
+          <Card className="border-border bg-card/70 p-5 space-y-4">
             <div className="flex items-center gap-2">
               <Building2 className="h-4 w-4 text-amber-600 dark:text-amber-300" />
               <h2 className="text-sm font-semibold">Налогоплательщик</h2>
@@ -271,7 +271,7 @@ export default function ReceiptSettingsPage() {
           </Card>
 
           {/* ККМ */}
-          <Card className="border-slate-200 dark:border-white/10 bg-card/70 p-5 space-y-4">
+          <Card className="border-border bg-card/70 p-5 space-y-4">
             <div className="flex items-center gap-2">
               <FileText className="h-4 w-4 text-amber-600 dark:text-amber-300" />
               <h2 className="text-sm font-semibold">Контрольно-кассовая машина</h2>
@@ -297,7 +297,7 @@ export default function ReceiptSettingsPage() {
           </Card>
 
           {/* НДС */}
-          <Card className="border-slate-200 dark:border-white/10 bg-card/70 p-5 space-y-4">
+          <Card className="border-border bg-card/70 p-5 space-y-4">
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-4 w-4 text-amber-600 dark:text-amber-300" />
               <h2 className="text-sm font-semibold">НДС</h2>
@@ -327,7 +327,7 @@ export default function ReceiptSettingsPage() {
           </Card>
 
           {/* ОФД */}
-          <Card className="border-slate-200 dark:border-white/10 bg-card/70 p-5 space-y-4">
+          <Card className="border-border bg-card/70 p-5 space-y-4">
             <div className="flex items-center gap-2">
               <FileText className="h-4 w-4 text-amber-600 dark:text-amber-300" />
               <h2 className="text-sm font-semibold">Оператор фискальных данных (ОФД)</h2>
@@ -353,7 +353,7 @@ export default function ReceiptSettingsPage() {
           </Card>
 
           {/* Языки и доп. */}
-          <Card className="border-slate-200 dark:border-white/10 bg-card/70 p-5 space-y-4 lg:col-span-2">
+          <Card className="border-border bg-card/70 p-5 space-y-4 lg:col-span-2">
             <div className="flex items-center gap-2">
               <FileText className="h-4 w-4 text-amber-600 dark:text-amber-300" />
               <h2 className="text-sm font-semibold">Параметры чека</h2>
@@ -375,7 +375,7 @@ export default function ReceiptSettingsPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] px-3 py-2">
+              <div className="flex items-center justify-between rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] px-3 py-2">
                 <div>
                   <Label className="cursor-pointer">Запрашивать ИИН покупателя</Label>
                   <p className="text-xs text-muted-foreground">По требованию (для юр.лиц)</p>
@@ -408,11 +408,11 @@ export default function ReceiptSettingsPage() {
               Поддержка появится отдельным релизом. Переключатели ниже зарезервированы — не включайте, пока не появится логика.
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] px-3 py-2 opacity-60">
+              <div className="flex items-center justify-between rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] px-3 py-2 opacity-60">
                 <Label>Печать маркировки на чеке</Label>
                 <Switch checked={settings.marking_enabled} onCheckedChange={(v) => patch('marking_enabled', v)} disabled />
               </div>
-              <div className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] px-3 py-2 opacity-60">
+              <div className="flex items-center justify-between rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] px-3 py-2 opacity-60">
                 <Label>Код товара по НКТ</Label>
                 <Switch checked={settings.nkt_enabled} onCheckedChange={(v) => patch('nkt_enabled', v)} disabled />
               </div>

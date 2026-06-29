@@ -73,7 +73,7 @@ export default function StoreExpiryPage({ embedded = false }: { embedded?: boole
             key={c.key}
             type="button"
             onClick={() => setFilter(c.key as any)}
-            className={`rounded-xl border p-3 text-left transition ${filter === c.key ? 'border-emerald-400/40 bg-emerald-500/[0.06]' : 'border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] hover:border-slate-300 dark:hover:border-white/20'}`}
+            className={`rounded-xl border p-3 text-left transition ${filter === c.key ? 'border-emerald-400/40 bg-emerald-500/[0.06]' : 'border-border bg-white dark:bg-white/[0.02] hover:border-slate-300 dark:hover:border-white/20'}`}
           >
             <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{c.label}</div>
             <div className={`mt-1 font-mono text-2xl font-semibold tabular-nums ${c.cls}`}>{c.value}</div>
@@ -83,7 +83,7 @@ export default function StoreExpiryPage({ embedded = false }: { embedded?: boole
 
       {error ? <Card className="border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-600 dark:text-rose-300">{error}</Card> : null}
 
-      <Card className="border-slate-200 dark:border-white/10 bg-card/70 p-0">
+      <Card className="border-border bg-card/70 p-0">
         <CardContent className="p-4 sm:p-5">
           {loading ? (
             <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Загрузка…</div>

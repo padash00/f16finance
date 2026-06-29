@@ -515,7 +515,7 @@ export default function OperatorsPage() {
                   onClick={() => void handleExportPdf()}
                   variant="outline"
                   size="sm"
-                  className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 hover:bg-slate-50 dark:hover:bg-white/10 gap-1.5"
+                  className="rounded-xl border-border bg-white dark:bg-white/5 hover:bg-slate-50 dark:hover:bg-white/10 gap-1.5"
                 >
                   <Download className="h-4 w-4" /> PDF
                 </Button>
@@ -523,7 +523,7 @@ export default function OperatorsPage() {
                   onClick={() => void load()}
                   variant="outline"
                   size="icon"
-                  className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 hover:bg-slate-50 dark:hover:bg-white/10"
+                  className="rounded-xl border-border bg-white dark:bg-white/5 hover:bg-slate-50 dark:hover:bg-white/10"
                   aria-label="Обновить"
                 >
                   <RefreshCw className="h-4 w-4" />
@@ -564,7 +564,7 @@ export default function OperatorsPage() {
                     <input
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      className="w-full bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50"
+                      className="w-full bg-white dark:bg-slate-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50"
                       placeholder="Например: Маржан"
                       required
                     />
@@ -577,7 +577,7 @@ export default function OperatorsPage() {
                     <input
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
-                      className="w-full bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50"
+                      className="w-full bg-white dark:bg-slate-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50"
                       placeholder="Например: Жумабекова Маржан Нурлановна"
                     />
                   </div>
@@ -589,7 +589,7 @@ export default function OperatorsPage() {
                     <input
                       value={shortName}
                       onChange={(e) => setShortName(e.target.value)}
-                      className="w-full bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50"
+                      className="w-full bg-white dark:bg-slate-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50"
                       placeholder="Напр.: Маржан (день)"
                     />
                   </div>
@@ -601,7 +601,7 @@ export default function OperatorsPage() {
                     <input
                       value={position}
                       onChange={(e) => setPosition(e.target.value)}
-                      className="w-full bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50"
+                      className="w-full bg-white dark:bg-slate-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50"
                       placeholder="Напр.: Старший оператор"
                     />
                   </div>
@@ -613,7 +613,7 @@ export default function OperatorsPage() {
                     <input
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
-                      className="w-full bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50"
+                      className="w-full bg-white dark:bg-slate-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50"
                       placeholder="+7 (777) 777-77-77"
                     />
                   </div>
@@ -626,7 +626,7 @@ export default function OperatorsPage() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       type="email"
-                      className="w-full bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50"
+                      className="w-full bg-white dark:bg-slate-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50"
                       placeholder="operator@example.com"
                     />
                   </div>
@@ -664,7 +664,7 @@ export default function OperatorsPage() {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Поиск по имени, должности, email..."
-                  className="w-full pl-9 pr-9 py-2 bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/50"
+                  className="w-full pl-9 pr-9 py-2 bg-white dark:bg-slate-800/50 border border-border rounded-lg text-sm text-foreground placeholder-slate-500 focus:outline-none focus:border-amber-500/50"
                 />
                 {search && (
                   <button
@@ -680,7 +680,7 @@ export default function OperatorsPage() {
                 type="button"
                 variant="outline"
                 onClick={() => setShowInactive((prev) => !prev)}
-                className={`rounded-lg border-slate-200 dark:border-white/10 ${
+                className={`rounded-lg border-border ${
                   showInactive
                     ? 'bg-amber-500/15 text-amber-700 dark:text-amber-200 hover:bg-amber-500/20'
                     : 'bg-white dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50'
@@ -711,7 +711,7 @@ export default function OperatorsPage() {
           <Card className="overflow-hidden bg-white dark:bg-slate-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5 p-0">
             <AdminTableViewport
               maxHeight="min(70vh, 40rem)"
-              className="rounded-none border-0 border-b border-slate-200 dark:border-white/10 bg-transparent"
+              className="rounded-none border-0 border-b border-border bg-transparent"
             >
               <table className="w-full min-w-[760px] text-sm">
                 <thead className={adminTableStickyTheadClass}>
@@ -722,7 +722,7 @@ export default function OperatorsPage() {
                           type="checkbox"
                           checked={selectAll}
                           onChange={(e) => setSelectAll(e.target.checked)}
-                          className="rounded border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800/50 text-amber-500 focus:ring-amber-500/20"
+                          className="rounded border-border bg-white dark:bg-slate-800/50 text-amber-500 focus:ring-amber-500/20"
                         />
                       ) : null}
                     </th>
@@ -783,7 +783,7 @@ export default function OperatorsPage() {
                                 setSelectedOperators(newSelected)
                                 setSelectAll(false)
                               }}
-                              className="rounded border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800/50 text-amber-500 focus:ring-amber-500/20"
+                              className="rounded border-border bg-white dark:bg-slate-800/50 text-amber-500 focus:ring-amber-500/20"
                             />
                           ) : null}
                         </td>
@@ -817,13 +817,13 @@ export default function OperatorsPage() {
                         <td className="py-3 px-4">
                           <div className="space-y-1">
                             {profile?.phone && (
-                              <p className="text-xs flex items-center gap-1 text-slate-500 dark:text-slate-400">
+                              <p className="text-xs flex items-center gap-1 text-muted-foreground">
                                 <Phone className="w-3 h-3 flex-shrink-0" />
                                 <span className="truncate">{profile.phone}</span>
                               </p>
                             )}
                             {profile?.email && (
-                              <p className="text-xs flex items-center gap-1 text-slate-500 dark:text-slate-400">
+                              <p className="text-xs flex items-center gap-1 text-muted-foreground">
                                 <Mail className="w-3 h-3 flex-shrink-0" />
                                 <span className="truncate">{profile.email}</span>
                               </p>
@@ -943,7 +943,7 @@ export default function OperatorsPage() {
             {/* Footer с итогами */}
             <div className="border-t border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/5 px-4 py-3">
               <div className="flex flex-wrap justify-between items-center gap-2 text-sm">
-                <span className="text-slate-500 dark:text-slate-400">
+                <span className="text-muted-foreground">
                   Всего: {filteredOperators.length} операторов
                   {filteredOperators.length !== operators.length && (
                     <span className="text-slate-600 ml-2">
@@ -952,10 +952,10 @@ export default function OperatorsPage() {
                   )}
                 </span>
                 <div className="flex items-center gap-4">
-                  <span className="text-slate-500 dark:text-slate-400">
+                  <span className="text-muted-foreground">
                     Активных: {operators.filter(o => o.is_active).length}
                   </span>
-                  <span className="text-slate-500 dark:text-slate-400">
+                  <span className="text-muted-foreground">
                     Неактивных: {operators.filter(o => !o.is_active).length}
                   </span>
                 </div>
@@ -1009,7 +1009,7 @@ export default function OperatorsPage() {
         title="Редактировать оператора"
         footer={
           <div className="flex justify-end gap-2">
-            <Button onClick={() => setShowEditModal(false)} variant="outline" className="border-slate-200 dark:border-white/10">Отмена</Button>
+            <Button onClick={() => setShowEditModal(false)} variant="outline" className="border-border">Отмена</Button>
             <Button
               onClick={saveEdit}
               disabled={saving || !editName.trim()}
@@ -1023,27 +1023,27 @@ export default function OperatorsPage() {
         <div className="space-y-4">
           <div>
             <label className="text-xs text-slate-500 mb-1 block">Имя оператора <span className="text-rose-400">*</span></label>
-            <input value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50" required />
+            <input value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full bg-white dark:bg-slate-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50" required />
           </div>
           <div>
             <label className="text-xs text-slate-500 mb-1 block">Полное ФИО</label>
-            <input value={editFullName} onChange={(e) => setEditFullName(e.target.value)} className="w-full bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50" />
+            <input value={editFullName} onChange={(e) => setEditFullName(e.target.value)} className="w-full bg-white dark:bg-slate-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50" />
           </div>
           <div>
             <label className="text-xs text-slate-500 mb-1 block">Краткое имя</label>
-            <input value={editShortName} onChange={(e) => setEditShortName(e.target.value)} className="w-full bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50" />
+            <input value={editShortName} onChange={(e) => setEditShortName(e.target.value)} className="w-full bg-white dark:bg-slate-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50" />
           </div>
           <div>
             <label className="text-xs text-slate-500 mb-1 block">Должность</label>
-            <input value={editPosition} onChange={(e) => setEditPosition(e.target.value)} className="w-full bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50" />
+            <input value={editPosition} onChange={(e) => setEditPosition(e.target.value)} className="w-full bg-white dark:bg-slate-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50" />
           </div>
           <div>
             <label className="text-xs text-slate-500 mb-1 block">Телефон</label>
-            <input value={editPhone} onChange={(e) => setEditPhone(e.target.value)} className="w-full bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50" />
+            <input value={editPhone} onChange={(e) => setEditPhone(e.target.value)} className="w-full bg-white dark:bg-slate-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50" />
           </div>
           <div>
             <label className="text-xs text-slate-500 mb-1 block">Email</label>
-            <input value={editEmail} onChange={(e) => setEditEmail(e.target.value)} type="email" className="w-full bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50" />
+            <input value={editEmail} onChange={(e) => setEditEmail(e.target.value)} type="email" className="w-full bg-white dark:bg-slate-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50" />
           </div>
         </div>
       </AppModal>

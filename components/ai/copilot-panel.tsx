@@ -135,7 +135,7 @@ export function CopilotPanel({ currentPath, className, suggestedPrompts = DEFAUL
             <Sparkles className="h-4 w-4 text-black" />
           </div>
           <div>
-            <div className="text-sm font-semibold text-slate-900 dark:text-white">AI Copilot</div>
+            <div className="text-sm font-semibold text-foreground">AI Copilot</div>
             <div className="text-[11px] text-slate-500">Действия, аналитика, диалог</div>
           </div>
         </div>
@@ -172,8 +172,8 @@ export function CopilotPanel({ currentPath, className, suggestedPrompts = DEFAUL
                   className={cn(
                     'max-w-[85%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap leading-relaxed',
                     msg.role === 'user'
-                      ? 'bg-gradient-to-r from-amber-500/15 to-orange-500/15 text-slate-900 dark:text-white border border-amber-500/20'
-                      : 'bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-white/10',
+                      ? 'bg-gradient-to-r from-amber-500/15 to-orange-500/15 text-foreground border border-amber-500/20'
+                      : 'bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-200 border border-border',
                   )}
                 >
                   {msg.text}
@@ -203,7 +203,7 @@ export function CopilotPanel({ currentPath, className, suggestedPrompts = DEFAUL
                             ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30'
                             : isDanger
                               ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30 hover:bg-rose-500/25'
-                              : 'bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10',
+                              : 'bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-200 border border-border hover:bg-slate-200 dark:hover:bg-white/10',
                         )}
                       >
                         {isPrimary && <Check className="inline h-3 w-3 mr-1" />}
@@ -242,7 +242,7 @@ export function CopilotPanel({ currentPath, className, suggestedPrompts = DEFAUL
             placeholder="Напиши что нужно сделать..."
             rows={1}
             disabled={busy}
-            className="resize-none bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-white/10 text-sm min-h-[40px]"
+            className="resize-none bg-slate-50 dark:bg-slate-900/50 border-border text-sm min-h-[40px]"
           />
           <Button
             type="button"
@@ -268,7 +268,7 @@ function EmptyState({ onPrompt, prompts }: { onPrompt: (text: string) => void; p
         <Sparkles className="h-7 w-7 text-amber-300" />
       </div>
       <div className="space-y-1 max-w-xs">
-        <div className="text-sm font-semibold text-slate-900 dark:text-white">AI Copilot</div>
+        <div className="text-sm font-semibold text-foreground">AI Copilot</div>
         <div className="text-xs text-slate-400">
           Я выполняю действия в системе и отвечаю на вопросы. Просто напиши что нужно — я подскажу следующий шаг.
         </div>

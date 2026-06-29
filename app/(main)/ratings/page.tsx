@@ -38,7 +38,7 @@ function RankBadge({ rank }: { rank: number }) {
   if (rank === 1) return <span className="text-xl">🥇</span>
   if (rank === 2) return <span className="text-xl">🥈</span>
   if (rank === 3) return <span className="text-xl">🥉</span>
-  return <span className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-xs text-slate-500 dark:text-slate-400 font-bold">{rank}</span>
+  return <span className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-xs text-muted-foreground font-bold">{rank}</span>
 }
 
 // ================== PAGE ==================
@@ -152,7 +152,7 @@ export default function RatingsPage() {
                   }} className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
                     activePreset === p
                       ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/30'
-                      : 'bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700'
+                      : 'bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700'
                   }`}>
                     {p === 'today' ? 'Сегодня' : p === 'week' ? '7 дней' : 'Месяц'}
                   </button>
@@ -191,23 +191,23 @@ export default function RatingsPage() {
             <Card className="p-4 bg-white dark:bg-slate-900/80 border-amber-500/20">
               <div className="flex items-center gap-2 mb-2">
                 <Users2 className="w-4 h-4 text-amber-400" />
-                <p className="text-xs text-slate-500 dark:text-slate-400">Операторов в рейтинге</p>
+                <p className="text-xs text-muted-foreground">Операторов в рейтинге</p>
               </div>
               <p className="text-xl font-bold text-amber-400">{leaderboard.length}</p>
             </Card>
             <Card className="p-4 bg-white dark:bg-slate-900/80 border-emerald-500/20">
               <div className="flex items-center gap-2 mb-2">
                 <TrendingUp className="w-4 h-4 text-emerald-400" />
-                <p className="text-xs text-slate-500 dark:text-slate-400">Суммарная выручка</p>
+                <p className="text-xs text-muted-foreground">Суммарная выручка</p>
               </div>
               <p className="text-xl font-bold text-emerald-400">{fmtMoney(totalRevenue)}</p>
             </Card>
             <Card className="p-4 bg-white dark:bg-slate-900/80 border-amber-500/20 col-span-2 md:col-span-1">
               <div className="flex items-center gap-2 mb-2">
                 <Medal className="w-4 h-4 text-amber-400" />
-                <p className="text-xs text-slate-500 dark:text-slate-400">Лидер периода</p>
+                <p className="text-xs text-muted-foreground">Лидер периода</p>
               </div>
-              <p className="text-xl font-bold text-slate-900 dark:text-white truncate">{leaderboard[0]?.name || '—'}</p>
+              <p className="text-xl font-bold text-foreground truncate">{leaderboard[0]?.name || '—'}</p>
               {leaderboard[0] && (
                 <p className="text-xs text-emerald-400 mt-1">{fmtMoney(leaderboard[0].revenue)}</p>
               )}
@@ -216,7 +216,7 @@ export default function RatingsPage() {
 
           {/* Leaderboard */}
           <Card className="p-5 bg-white dark:bg-slate-900/80 border-slate-200 dark:border-slate-800">
-            <h2 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">Таблица лидеров</h2>
+            <h2 className="text-sm font-semibold text-foreground mb-4">Таблица лидеров</h2>
 
             {/* Полный лоадер только при первой загрузке */}
             {loading && leaderboard.length === 0 ? (
@@ -257,7 +257,7 @@ export default function RatingsPage() {
                           </td>
                           <td className="py-3 pr-4">
                             <div>
-                              <p className={`font-medium ${rank === 1 && row.revenue > 0 ? 'text-amber-700 dark:text-amber-300' : rank === 2 && row.revenue > 0 ? 'text-slate-700 dark:text-slate-200' : rank === 3 && row.revenue > 0 ? 'text-orange-600 dark:text-orange-300' : 'text-slate-500 dark:text-slate-400'}`}>
+                              <p className={`font-medium ${rank === 1 && row.revenue > 0 ? 'text-amber-700 dark:text-amber-300' : rank === 2 && row.revenue > 0 ? 'text-slate-700 dark:text-slate-200' : rank === 3 && row.revenue > 0 ? 'text-orange-600 dark:text-orange-300' : 'text-muted-foreground'}`}>
                                 {row.name}
                               </p>
                               {row.revenue > 0 && (
@@ -307,7 +307,7 @@ export default function RatingsPage() {
           {/* Top 3 podium */}
           {leaderboard.filter(r => r.revenue > 0).length >= 3 && (
             <Card className="p-5 bg-white dark:bg-slate-900/80 border-amber-500/20">
-              <h2 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">Подиум</h2>
+              <h2 className="text-sm font-semibold text-foreground mb-4">Подиум</h2>
               <div className="flex items-end justify-center gap-3">
                 {/* 2nd */}
                 <div className="flex flex-col items-center gap-2">
@@ -316,7 +316,7 @@ export default function RatingsPage() {
                   </div>
                   <div className="w-24 h-16 bg-slate-100 dark:bg-slate-700/50 rounded-t-xl flex flex-col items-center justify-center gap-1">
                     <span className="text-xs text-slate-700 dark:text-slate-300 font-medium truncate w-full text-center px-1">{leaderboard.filter(r => r.revenue > 0)[1]?.name}</span>
-                    <span className="text-xs text-slate-500 dark:text-slate-400">{fmtMoney(leaderboard.filter(r => r.revenue > 0)[1]?.revenue ?? 0)}</span>
+                    <span className="text-xs text-muted-foreground">{fmtMoney(leaderboard.filter(r => r.revenue > 0)[1]?.revenue ?? 0)}</span>
                   </div>
                 </div>
                 {/* 1st */}
@@ -337,7 +337,7 @@ export default function RatingsPage() {
                   </div>
                   <div className="w-24 h-12 bg-orange-500/5 rounded-t-xl flex flex-col items-center justify-center gap-1">
                     <span className="text-xs text-orange-600 dark:text-orange-300 font-medium truncate w-full text-center px-1">{leaderboard.filter(r => r.revenue > 0)[2]?.name}</span>
-                    <span className="text-xs text-slate-500 dark:text-slate-400">{fmtMoney(leaderboard.filter(r => r.revenue > 0)[2]?.revenue ?? 0)}</span>
+                    <span className="text-xs text-muted-foreground">{fmtMoney(leaderboard.filter(r => r.revenue > 0)[2]?.revenue ?? 0)}</span>
                   </div>
                 </div>
               </div>

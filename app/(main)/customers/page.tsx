@@ -414,7 +414,7 @@ export default function CustomersPage({ embedded = false }: { embedded?: boolean
               <div ref={tableContainerRef} className="max-h-[min(70vh,40rem)] overflow-auto">
               <table className="w-full min-w-[820px] text-sm">
                 <thead className={adminTableStickyTheadClass}>
-                  <tr className="border-b border-slate-200 dark:border-white/10">
+                  <tr className="border-b border-border">
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Клиент</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Телефон</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Карта</th>
@@ -604,7 +604,7 @@ export default function CustomersPage({ embedded = false }: { embedded?: boolean
           </DialogHeader>
           {adjustCustomer && (
             <form onSubmit={handleAdjustPoints} className="space-y-4">
-              <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3 text-sm">
+              <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] p-3 text-sm">
                 <p className="font-medium">{adjustCustomer.name}</p>
                 <p className="text-muted-foreground">Текущий баланс: <span className="text-amber-600 dark:text-amber-400 font-semibold">{adjustCustomer.loyalty_points} баллов</span></p>
               </div>
@@ -661,7 +661,7 @@ export default function CustomersPage({ embedded = false }: { embedded?: boolean
                 if (sale.card_amount > 0) paymentParts.push(`Карта: ${formatMoney(sale.card_amount)}`)
                 if (sale.online_amount > 0) paymentParts.push(`Онлайн: ${formatMoney(sale.online_amount)}`)
                 return (
-                  <div key={sale.id} className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3 text-sm">
+                  <div key={sale.id} className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] p-3 text-sm">
                     <div className="flex items-center justify-between mb-2">
                       <span className="font-medium">{formatDate(sale.created_at)}</span>
                       <span className="font-bold text-emerald-600 dark:text-emerald-400">{formatMoney(sale.total_amount)}</span>
@@ -705,39 +705,39 @@ export default function CustomersPage({ embedded = false }: { embedded?: boolean
           {detailCustomer && (
             <div className="space-y-3 text-sm">
               <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3">
+                <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] p-3">
                   <p className="text-xs text-muted-foreground">Телефон</p>
                   <p className="mt-1 font-medium">{detailCustomer.phone || '—'}</p>
                 </div>
-                <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3">
+                <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] p-3">
                   <p className="text-xs text-muted-foreground">Карта</p>
                   <p className="mt-1 font-mono">{detailCustomer.card_number || '—'}</p>
                 </div>
-                <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3">
+                <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] p-3">
                   <p className="text-xs text-muted-foreground">Баллы</p>
                   <p className="mt-1 font-bold text-amber-600 dark:text-amber-400">{detailCustomer.loyalty_points.toLocaleString('ru-RU')}</p>
                 </div>
-                <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3">
+                <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] p-3">
                   <p className="text-xs text-muted-foreground">Потрачено</p>
                   <p className="mt-1 font-bold">{formatMoney(detailCustomer.total_spent)}</p>
                 </div>
-                <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3">
+                <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] p-3">
                   <p className="text-xs text-muted-foreground">Визиты</p>
                   <p className="mt-1 font-medium">{detailCustomer.visits_count}</p>
                 </div>
-                <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3">
+                <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] p-3">
                   <p className="text-xs text-muted-foreground">Добавлен</p>
                   <p className="mt-1 font-medium">{formatDate(detailCustomer.created_at)}</p>
                 </div>
               </div>
               {detailCustomer.email && (
-                <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3">
+                <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] p-3">
                   <p className="text-xs text-muted-foreground">Email</p>
                   <p className="mt-1">{detailCustomer.email}</p>
                 </div>
               )}
               {detailCustomer.notes && (
-                <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3">
+                <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] p-3">
                   <p className="text-xs text-muted-foreground">Заметки</p>
                   <p className="mt-1">{detailCustomer.notes}</p>
                 </div>

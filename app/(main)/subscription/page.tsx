@@ -63,7 +63,7 @@ export default function SubscriptionPage() {
   }
 
   return (
-    <div className="app-page-wide space-y-6 text-slate-900 dark:text-white">
+    <div className="app-page-wide space-y-6 text-foreground">
       <AdminPageHeader
         title="Подписка"
         description="Ваш тариф, модули и счета."
@@ -98,8 +98,8 @@ export default function SubscriptionPage() {
               </div>
             </div>
             <div className="mt-3 border-t border-slate-200 pt-3 text-sm dark:border-white/5">
-              <span className="text-slate-500 dark:text-slate-400">К оплате в месяц: </span>
-              <b className="text-slate-900 dark:text-white">{fmt(data.monthlyTotal)} ₸</b>
+              <span className="text-muted-foreground">К оплате в месяц: </span>
+              <b className="text-foreground">{fmt(data.monthlyTotal)} ₸</b>
             </div>
           </div>
 
@@ -115,7 +115,7 @@ export default function SubscriptionPage() {
                 {data.addons.map((a) => (
                   <div key={a.code} className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-white/5 dark:bg-white/[0.02]">
                     <span>{a.name}</span>
-                    <span className="text-slate-500 dark:text-slate-400">{fmt(a.priceKzt)} ₸</span>
+                    <span className="text-muted-foreground">{fmt(a.priceKzt)} ₸</span>
                   </div>
                 ))}
               </div>

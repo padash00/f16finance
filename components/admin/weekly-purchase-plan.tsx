@@ -107,7 +107,7 @@ type PlanItem = {
 const fmtMoney = (n: number) => new Intl.NumberFormat('ru-RU').format(Math.round(n || 0))
 
 const fieldInput =
-  'h-9 w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 text-sm text-slate-900 dark:text-white placeholder:text-slate-600'
+  'h-9 w-full rounded-lg border border-border bg-white dark:bg-slate-900/60 text-sm text-foreground placeholder:text-slate-600'
 
 // ── Комбобокс с поиском и добавлением нового значения ────────────────────
 function ComboBox({
@@ -135,7 +135,7 @@ function ComboBox({
           type="button"
           className={cn(fieldInput, 'flex items-center justify-between gap-2 px-3 text-left')}
         >
-          <span className={cn('truncate', value ? 'text-slate-900 dark:text-white' : 'text-slate-500')}>
+          <span className={cn('truncate', value ? 'text-foreground' : 'text-slate-500')}>
             {value || placeholder}
           </span>
           <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
@@ -155,7 +155,7 @@ function ComboBox({
                 <CommandItem
                   value="__clear__"
                   onSelect={() => { onChange(''); setOpen(false); setQuery('') }}
-                  className="text-slate-500 dark:text-slate-400"
+                  className="text-muted-foreground"
                 >
                   Очистить
                 </CommandItem>
@@ -375,7 +375,7 @@ export function WeeklyPurchasePlan({ reportEndDate }: { reportEndDate?: string }
             <ShoppingCart className="h-4 w-4" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">План закупок</h3>
+            <h3 className="text-sm font-semibold text-foreground">План закупок</h3>
             <p className="text-xs text-slate-500">На неделю после отчётной · войдёт отдельной страницей в PDF</p>
           </div>
         </div>
@@ -390,7 +390,7 @@ export function WeeklyPurchasePlan({ reportEndDate }: { reportEndDate?: string }
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <div className="min-w-[150px] px-1 text-center">
-            <div className="text-sm font-medium text-slate-900 dark:text-white">{planWeekLabel(weekStart)}</div>
+            <div className="text-sm font-medium text-foreground">{planWeekLabel(weekStart)}</div>
             {isPlanWeek ? <div className="text-[11px] text-violet-700 dark:text-violet-300/70">следующая неделя</div> : null}
           </div>
           <Button
@@ -536,13 +536,13 @@ export function WeeklyPurchasePlan({ reportEndDate }: { reportEndDate?: string }
                     >
                       <Check className="h-3.5 w-3.5" />
                     </button>
-                    <span className="shrink-0 rounded-md bg-slate-100 dark:bg-white/5 px-1.5 py-0.5 text-xs text-slate-500 dark:text-slate-400">
+                    <span className="shrink-0 rounded-md bg-slate-100 dark:bg-white/5 px-1.5 py-0.5 text-xs text-muted-foreground">
                       {companyName(it.company_id)}
                     </span>
                     <span
                       className={cn(
                         'flex-1 truncate',
-                        it.status === 'bought' ? 'text-slate-500 line-through' : 'text-slate-900 dark:text-white',
+                        it.status === 'bought' ? 'text-slate-500 line-through' : 'text-foreground',
                       )}
                     >
                       {it.title}
@@ -566,8 +566,8 @@ export function WeeklyPurchasePlan({ reportEndDate }: { reportEndDate?: string }
             </div>
           ))}
           <div className="flex justify-end border-t border-slate-200 dark:border-white/5 pt-3 text-sm">
-            <span className="text-slate-500 dark:text-slate-400">
-              Итого по плану: <b className="text-slate-900 dark:text-white">{fmtMoney(total)} ₸</b>
+            <span className="text-muted-foreground">
+              Итого по плану: <b className="text-foreground">{fmtMoney(total)} ₸</b>
             </span>
           </div>
         </div>

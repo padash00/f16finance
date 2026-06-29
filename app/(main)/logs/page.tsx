@@ -472,7 +472,7 @@ function PayloadRows({ item }: { item: LogItem }) {
       {rows.map((r) => (
         <div key={r.label} className="flex items-center gap-1.5 text-xs">
           <span className="text-slate-500">{r.label}:</span>
-          <span className={r.highlight ? 'font-semibold text-slate-900 dark:text-white' : 'text-slate-700 dark:text-slate-300'}>{r.value}</span>
+          <span className={r.highlight ? 'font-semibold text-foreground' : 'text-slate-700 dark:text-slate-300'}>{r.value}</span>
         </div>
       ))}
     </div>
@@ -735,7 +735,7 @@ export default function LogsPage() {
       />
 
       {/* Сводка по выборке */}
-      <Card className="border-slate-200 bg-white dark:border-white/10 dark:bg-slate-950/65 px-4 py-3 text-slate-900 dark:text-white">
+      <Card className="border-slate-200 bg-white dark:border-white/10 dark:bg-slate-950/65 px-4 py-3 text-foreground">
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
           <span className="text-xs text-slate-400">
             Сводка · показано {stats.shown}{stats.total > stats.shown ? ` из ${stats.total}` : ''}
@@ -753,7 +753,7 @@ export default function LogsPage() {
             <span key={s.label} className="inline-flex items-center gap-1.5">
               <span>{s.emoji}</span>
               <span className="font-semibold tabular-nums">{s.value}</span>
-              <span className="text-slate-500 dark:text-slate-400">{s.label}</span>
+              <span className="text-muted-foreground">{s.label}</span>
             </span>
           ))}
           <button
@@ -770,7 +770,7 @@ export default function LogsPage() {
       </Card>
 
       {/* Filters */}
-      <Card className="border-slate-200 bg-white dark:border-white/10 dark:bg-slate-950/65 p-5 text-slate-900 dark:text-white">
+      <Card className="border-slate-200 bg-white dark:border-white/10 dark:bg-slate-950/65 p-5 text-foreground">
         {/* Presets */}
         <div className="mb-4 flex flex-wrap gap-2">
           {PRESETS.map(p => (
@@ -791,7 +791,7 @@ export default function LogsPage() {
             <Input value={search} onChange={e => setSearch(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && loadLogs(true)}
               placeholder="Поиск по тексту..."
-              className="border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900/60 pl-10 text-slate-900 dark:text-white" />
+              className="border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900/60 pl-10 text-foreground" />
           </div>
           <select value={actor} onChange={e => setActor(e.target.value)}
             className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900 dark:border-white/10 dark:bg-slate-900/60 dark:text-white dark:[color-scheme:dark]">
@@ -822,8 +822,8 @@ export default function LogsPage() {
 
       {/* Log items */}
       {loading ? (
-        <Card className="border-slate-200 bg-white dark:border-white/10 dark:bg-slate-950/65 p-6 text-slate-900 dark:text-white">
-          <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400">
+        <Card className="border-slate-200 bg-white dark:border-white/10 dark:bg-slate-950/65 p-6 text-foreground">
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin text-sky-500 dark:text-sky-300" /> Загружаем журнал...
           </div>
         </Card>
@@ -840,7 +840,7 @@ export default function LogsPage() {
             const isNotif = item.kind === 'notification'
 
             return (
-              <Card key={item.id} className={`border-slate-200 bg-white dark:border-white/8 dark:bg-slate-950/60 p-4 text-slate-900 dark:text-white transition hover:bg-slate-50 dark:hover:bg-slate-900/60 ${isError ? 'border-red-500/20' : ''}`}>
+              <Card key={item.id} className={`border-slate-200 bg-white dark:border-white/8 dark:bg-slate-950/60 p-4 text-foreground transition hover:bg-slate-50 dark:hover:bg-slate-900/60 ${isError ? 'border-red-500/20' : ''}`}>
                 <div className="flex items-start gap-3">
                   <div className={`mt-0.5 shrink-0 rounded-xl p-2 ${bg}`}>
                     <Icon className={`h-4 w-4 ${color}`} />
@@ -973,7 +973,7 @@ export default function LogsPage() {
 
           {/* Pagination */}
           <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-            <p className="text-sm text-slate-500 dark:text-slate-400">
+            <p className="text-sm text-muted-foreground">
               Страница {data?.page || 1} • всего {data?.total || 0} событий
             </p>
             <div className="flex gap-2">

@@ -59,17 +59,17 @@ export default function StoreSettingsPage() {
       />
 
       <div className="rounded-2xl border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900/60 p-5 shadow-lg shadow-black/20">
-        <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
+        <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-foreground">
           <Store className="h-4 w-4 text-emerald-300" /> Точка магазина
         </div>
-        <p className="mb-4 text-xs text-slate-500 dark:text-slate-400">
+        <p className="mb-4 text-xs text-muted-foreground">
           Склад, витрина, ревизия, документы, аналитика и смены будут показываться только по этой точке.
         </p>
 
         {loading ? (
-          <div className="flex items-center gap-2 py-8 text-slate-500 dark:text-slate-400"><Loader2 className="h-5 w-5 animate-spin" /> Загрузка…</div>
+          <div className="flex items-center gap-2 py-8 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Загрузка…</div>
         ) : companies.length === 0 ? (
-          <div className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">Нет доступных точек</div>
+          <div className="py-8 text-center text-sm text-muted-foreground">Нет доступных точек</div>
         ) : (
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {companies.map((c) => {
@@ -85,7 +85,7 @@ export default function StoreSettingsPage() {
                   } ${!canManage ? 'cursor-not-allowed opacity-70' : ''}`}
                 >
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-medium text-slate-900 dark:text-white">{c.name}</div>
+                    <div className="truncate text-sm font-medium text-foreground">{c.name}</div>
                     {c.code ? <div className="text-xs text-slate-500">{c.code}</div> : null}
                   </div>
                   <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border ${active ? 'border-emerald-400/50 bg-emerald-500/20 text-emerald-700 dark:text-emerald-300' : 'border-slate-200 text-transparent dark:border-white/15'}`}>

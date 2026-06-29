@@ -654,7 +654,7 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
       {error ? <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-sm text-red-700 dark:text-red-200">{error}</div> : null}
       {success ? <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2.5 text-sm text-emerald-700 dark:text-emerald-200">{success}</div> : null}
       {refreshing ? (
-        <div className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2 rounded-lg border border-border bg-white/[0.04] px-3 py-2 text-xs text-muted-foreground">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
           Обновление списка…
         </div>
@@ -684,7 +684,7 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
         {loading && pendingRequests.length === 0 ? (
           <StorePanelSkeleton cards={3} />
         ) : pendingRequests.length === 0 ? (
-          <Card className="border-slate-200 dark:border-white/10 bg-card/70 p-6 text-sm text-muted-foreground">
+          <Card className="border-border bg-card/70 p-6 text-sm text-muted-foreground">
             В очереди нет новых заявок. Здесь будут появляться запросы кассиров на пополнение витрин.
           </Card>
         ) : (
@@ -693,7 +693,7 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
             const requestTotal = (request.items || []).reduce((sum, item) => sum + Number(item.requested_qty || 0), 0)
 
             return (
-              <Card key={request.id} className="overflow-hidden border-slate-200 dark:border-white/10 bg-card/70">
+              <Card key={request.id} className="overflow-hidden border-border bg-card/70">
                 <div className="border-b border-slate-200 dark:border-white/5 px-4 py-3">
                   <div className="flex flex-wrap items-center gap-3">
                     <input
@@ -839,7 +839,7 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
           Когда товар реально отдали с подсобки на точку, нажмите «Отметить выданной» — заявка перейдёт в статус «Выдана».
         </p>
         {readyToIssueRequests.length === 0 ? (
-          <Card className="border-slate-200 dark:border-white/10 bg-card/70 p-4 text-sm text-muted-foreground">
+          <Card className="border-border bg-card/70 p-4 text-sm text-muted-foreground">
             Нет заявок в ожидании выдачи. После одобрения они появятся здесь.
           </Card>
         ) : (
@@ -874,7 +874,7 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
                         type="button"
                         size="sm"
                         variant="secondary"
-                        className="gap-1.5 bg-amber-600/90 text-slate-900 dark:text-white hover:bg-amber-600"
+                        className="gap-1.5 bg-amber-600/90 text-foreground hover:bg-amber-600"
                         disabled={savingId === request.id}
                         onClick={() => void transitionStatus(request.id, 'issued')}
                       >
@@ -906,7 +906,7 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
           Когда витрина приняла товар, нажмите «Отметить полученной» — статус станет «Получена».
         </p>
         {issuedAwaitingReceiveRequests.length === 0 ? (
-          <Card className="border-slate-200 dark:border-white/10 bg-card/70 p-4 text-sm text-muted-foreground">
+          <Card className="border-border bg-card/70 p-4 text-sm text-muted-foreground">
             Нет заявок в статусе «Выдана».
           </Card>
         ) : (
@@ -928,7 +928,7 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
                         type="button"
                         size="sm"
                         variant="secondary"
-                        className="gap-1.5 bg-teal-600/90 text-slate-900 dark:text-white hover:bg-teal-600"
+                        className="gap-1.5 bg-teal-600/90 text-foreground hover:bg-teal-600"
                         disabled={savingId === request.id}
                         onClick={() => void transitionStatus(request.id, 'received')}
                       >

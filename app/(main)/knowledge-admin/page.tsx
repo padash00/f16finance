@@ -992,7 +992,7 @@ export default function KnowledgeAdminPage() {
             {tab === 'checklists' && (
               <div className="min-w-0">
                 <Panel title="Чек-листы для операторов" icon={ClipboardList}>
-                  <p className="mb-5 text-sm leading-6 text-slate-500 dark:text-slate-400">
+                  <p className="mb-5 text-sm leading-6 text-muted-foreground">
                     Чек-лист — это шаги, которые оператор должен пройти за смену. Например: проверить кассу, чистоту, технику. Создайте чек-лист, потом добавьте в него пункты.
                   </p>
 
@@ -1016,7 +1016,7 @@ export default function KnowledgeAdminPage() {
                               </div>
                               <h4 className="text-lg font-black text-slate-900 group-hover:text-amber-700 dark:text-slate-100 dark:group-hover:text-amber-100">{preset.title}</h4>
                             </div>
-                            <p className="text-sm leading-6 text-slate-500 dark:text-slate-400">{preset.description}</p>
+                            <p className="text-sm leading-6 text-muted-foreground">{preset.description}</p>
                             <span className="mt-2 inline-flex items-center gap-2 text-xs font-bold text-amber-700 opacity-0 transition group-hover:opacity-100 dark:text-amber-200">
                               <Plus className="h-3 w-3" /> Создать
                             </span>
@@ -1198,7 +1198,7 @@ export default function KnowledgeAdminPage() {
                               {Number(run.failed_count || 0) > 0 && <Badge>Проблем: {run.failed_count}</Badge>}
                             </div>
                             <h3 className="mt-3 break-words text-xl font-black text-slate-900 dark:text-slate-100">{run.template_title || 'Чек-лист'}</h3>
-                            <p className="mt-2 break-words text-sm leading-6 text-slate-500 dark:text-slate-400">
+                            <p className="mt-2 break-words text-sm leading-6 text-muted-foreground">
                               Проходил: <span className="font-semibold text-slate-700 dark:text-slate-200">{run.run_by_name || 'не указан'}</span>
                               {' · '}
                               Начало: {formatDateTime(run.started_at)}
@@ -1258,12 +1258,12 @@ export default function KnowledgeAdminPage() {
                                         </div>
                                         <div className="mt-2 break-words text-sm font-bold text-slate-900 dark:text-slate-100">{item.title}</div>
                                         {displayValue && (
-                                          <div className="mt-1 break-words text-xs leading-5 text-slate-500 dark:text-slate-400">
+                                          <div className="mt-1 break-words text-xs leading-5 text-muted-foreground">
                                             Ответ: {displayValue}
                                           </div>
                                         )}
                                         {item.note && (
-                                          <div className="mt-1 break-words text-xs leading-5 text-slate-500 dark:text-slate-400">
+                                          <div className="mt-1 break-words text-xs leading-5 text-muted-foreground">
                                             Комментарий: {item.note}
                                           </div>
                                         )}
@@ -1325,7 +1325,7 @@ export default function KnowledgeAdminPage() {
             {tab === 'categories' && (
               <div className="min-w-0">
                 <Panel title="Категории базы знаний" icon={Layers3}>
-                  <p className="mb-5 text-sm leading-6 text-slate-500 dark:text-slate-400">
+                  <p className="mb-5 text-sm leading-6 text-muted-foreground">
                     Категории группируют материалы: правила клуба, зарплата и премии, штрафы, FAQ, проблемы техники, магазин и касса.
                   </p>
                   <div className="mb-5 flex justify-end">
@@ -1350,7 +1350,7 @@ export default function KnowledgeAdminPage() {
                               <Badge>{category.company_id ? `Точка: ${companyById.get(category.company_id)?.name || ''}` : 'Все точки'}</Badge>
                               {!category.is_active && <Badge>черновик</Badge>}
                             </div>
-                            <h3 className="mt-3 break-words text-xl font-black text-slate-900 dark:text-white">{category.title}</h3>
+                            <h3 className="mt-3 break-words text-xl font-black text-foreground">{category.title}</h3>
                             {category.description ? (
                               <div
                                 className="mt-2 break-words text-sm leading-6 text-slate-400 [&_p]:my-1 [&_h1]:my-1.5 [&_h1]:text-base [&_h1]:font-black [&_h2]:my-1.5 [&_h2]:text-sm [&_h2]:font-black [&_h3]:my-1 [&_h3]:font-bold [&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5 [&_strong]:font-black [&_em]:italic [&_u]:underline [&_a]:text-amber-300 [&_a]:underline [&_blockquote]:my-1.5 [&_blockquote]:border-l-2 [&_blockquote]:border-amber-300/50 [&_blockquote]:pl-3 [&_blockquote]:italic [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-1 dark:[&_code]:bg-slate-800/80 [&_mark]:rounded [&_mark]:px-1 [&_img]:my-2 [&_img]:max-h-40 [&_img]:rounded [&_table]:my-2 [&_th]:border [&_th]:border-slate-200 [&_th]:bg-slate-100 [&_th]:px-2 [&_th]:py-1 dark:[&_th]:border-slate-700 dark:[&_th]:bg-slate-800 [&_td]:border [&_td]:border-slate-200 [&_td]:px-2 [&_td]:py-1 dark:[&_td]:border-slate-700"
@@ -1434,8 +1434,8 @@ export default function KnowledgeAdminPage() {
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[0.06]">
-      <div className="text-3xl font-black text-slate-900 dark:text-white">{value}</div>
-      <div className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">{label}</div>
+      <div className="text-3xl font-black text-foreground">{value}</div>
+      <div className="mt-1 text-xs uppercase tracking-[0.18em] text-muted-foreground">{label}</div>
     </div>
   )
 }
@@ -1451,7 +1451,7 @@ function MiniMetric({ label, value, tone = 'default' }: { label: string; value: 
   return (
     <div className={`min-w-0 rounded-3xl border p-4 ${toneClass}`}>
       <div className="break-words text-2xl font-black">{value}</div>
-      <div className="mt-1 break-words text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{label}</div>
+      <div className="mt-1 break-words text-xs uppercase tracking-[0.16em] text-muted-foreground">{label}</div>
     </div>
   )
 }
@@ -1495,7 +1495,7 @@ function WorkflowGuide() {
             Шаг {step.number}
           </div>
           <h3 className="break-words text-lg font-black text-slate-900 dark:text-slate-100">{step.title}</h3>
-          <p className="mt-2 break-words text-sm leading-6 text-slate-500 dark:text-slate-400">{step.text}</p>
+          <p className="mt-2 break-words text-sm leading-6 text-muted-foreground">{step.text}</p>
         </div>
       ))}
     </div>
@@ -1518,7 +1518,7 @@ function Panel({ title, icon: Icon, children }: { title: string; icon: React.Com
         <div className="grid h-10 w-10 place-items-center rounded-2xl bg-amber-300/10 text-amber-700 dark:text-amber-200">
           <Icon className="h-5 w-5" />
         </div>
-        <h2 className="min-w-0 break-words text-xl font-black text-slate-900 dark:text-white">{title}</h2>
+        <h2 className="min-w-0 break-words text-xl font-black text-foreground">{title}</h2>
       </div>
       {children}
     </section>
@@ -1557,8 +1557,8 @@ function ArticleCard({
               <Badge key={aud}>{AUDIENCE_OPTIONS.find((o) => o.value === aud)?.label || aud}</Badge>
             ))}
           </div>
-          <h3 className="mt-3 break-words text-xl font-black text-slate-900 dark:text-white">{article.title}</h3>
-          <p className="mt-2 break-words text-sm leading-6 text-slate-500 dark:text-slate-400">{article.summary || 'Без краткого описания'}</p>
+          <h3 className="mt-3 break-words text-xl font-black text-foreground">{article.title}</h3>
+          <p className="mt-2 break-words text-sm leading-6 text-muted-foreground">{article.summary || 'Без краткого описания'}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             {(article.tags ?? []).map((tag) => (
               <span key={tag} className="max-w-full break-words rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700 dark:bg-slate-800 dark:text-slate-300">
@@ -1635,8 +1635,8 @@ function ChecklistTemplateCard({
     <article className="min-w-0 rounded-3xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950/50">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <h3 className="break-words text-xl font-black text-slate-900 dark:text-white">{template.title}</h3>
-          <p className="mt-1 break-words text-sm leading-6 text-slate-500 dark:text-slate-400">{template.description || 'Описание пока не заполнено.'}</p>
+          <h3 className="break-words text-xl font-black text-foreground">{template.title}</h3>
+          <p className="mt-1 break-words text-sm leading-6 text-muted-foreground">{template.description || 'Описание пока не заполнено.'}</p>
           <div className="mt-3 flex flex-wrap gap-2 text-xs">
             <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700 dark:bg-slate-800 dark:text-slate-300">{companyName ? companyName : 'Все точки'}</span>
             <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700 dark:bg-slate-800 dark:text-slate-300">{SCHEDULE_TYPE_LABELS[template.schedule_type] || template.schedule_type}</span>

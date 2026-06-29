@@ -103,7 +103,7 @@ function movementTypeClass(type: string) {
   if (type === 'writeoff') return 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-200'
   if (type === 'posting') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
   if (type === 'migration_initial') return 'border-slate-500/30 bg-slate-500/10 text-slate-600 dark:text-slate-300'
-  return 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.05] text-muted-foreground'
+  return 'border-border bg-slate-50 dark:bg-white/[0.05] text-muted-foreground'
 }
 
 function StoreMovementsPageContent({ embedded = false }: { embedded?: boolean } = {}) {
@@ -250,7 +250,7 @@ function StoreMovementsPageContent({ embedded = false }: { embedded?: boolean } 
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-3">
+        <Card className="border-border bg-white dark:bg-white/[0.03] p-3">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Всего движений</p>
           {loading ? <Skeleton className="mt-1 h-7 w-12" /> : <p className="mt-1 text-xl font-semibold">{stats.count}</p>}
         </Card>
@@ -262,7 +262,7 @@ function StoreMovementsPageContent({ embedded = false }: { embedded?: boolean } 
           <p className="text-[10px] uppercase tracking-widest text-amber-700/70 dark:text-amber-300/70">Выдач на точку</p>
           {loading ? <Skeleton className="mt-1 h-7 w-10" /> : <p className="mt-1 text-xl font-semibold text-amber-700 dark:text-amber-200">{stats.transfers}</p>}
         </Card>
-        <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-3">
+        <Card className="border-border bg-white dark:bg-white/[0.03] p-3">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Сумма</p>
           {loading ? <Skeleton className="mt-1 h-7 w-24" /> : (
             <p className="mt-1 truncate text-xl font-semibold" title={formatMoney(stats.total)}>{formatMoney(stats.total)}</p>
@@ -305,7 +305,7 @@ function StoreMovementsPageContent({ embedded = false }: { embedded?: boolean } 
       </div>
 
       {/* Main table */}
-      <Card className="overflow-hidden border-slate-200 dark:border-white/10 bg-card/70 p-0">
+      <Card className="overflow-hidden border-border bg-card/70 p-0">
         {loading && filteredMovements.length === 0 ? (
           <StoreDataTableSkeleton columns={6} />
         ) : filteredMovements.length === 0 ? (
@@ -317,7 +317,7 @@ function StoreMovementsPageContent({ embedded = false }: { embedded?: boolean } 
           <div className="relative max-h-[calc(100vh-340px)] overflow-auto">
             {refreshing ? (
               <div className="absolute inset-0 z-20 flex items-start justify-center bg-background/35 pt-10 backdrop-blur-[0.5px]">
-                <div className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-white/10 bg-card/90 px-3 py-1.5 text-xs text-muted-foreground shadow-md">
+                <div className="flex items-center gap-2 rounded-lg border border-border bg-card/90 px-3 py-1.5 text-xs text-muted-foreground shadow-md">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   Обновление…
                 </div>

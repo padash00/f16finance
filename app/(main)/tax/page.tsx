@@ -543,7 +543,7 @@ export default function TaxPage() {
             {fmtCompact(grandTotal)}
           </div>
           <div className="mt-3 text-sm text-slate-700 dark:text-slate-300">
-            ИПН ({iknRate}% × {fmtCompact(revenue)}) = <b className="text-slate-900 dark:text-white">{fmt(calc.ipn)}</b>
+            ИПН ({iknRate}% × {fmtCompact(revenue)}) = <b className="text-foreground">{fmt(calc.ipn)}</b>
             {includeSelfSocial ? <> + соц «за себя» {fmt(calc.social)}</> : null}
             {includeEmployees && employees.length > 0 ? <> + за работников {fmt(employeeCalc.monthlyTaxFromEmployees * calc.monthsInPeriod)}</> : null}
           </div>
@@ -586,7 +586,7 @@ export default function TaxPage() {
       })()}
 
       {/* Tabs */}
-      <div className="sticky top-2 z-30 flex flex-wrap gap-1 rounded-2xl bg-slate-100 dark:bg-gray-900/85 backdrop-blur-xl border border-slate-200 dark:border-white/10 p-1.5 shadow-2xl shadow-black/40">
+      <div className="sticky top-2 z-30 flex flex-wrap gap-1 rounded-2xl bg-slate-100 dark:bg-gray-900/85 backdrop-blur-xl border border-border p-1.5 shadow-2xl shadow-black/40">
         {([
           ['calc', '💰 Расчёт'],
           ['employees', '👥 Сотрудники'],
@@ -602,7 +602,7 @@ export default function TaxPage() {
             className={`px-3 py-2 text-sm rounded-xl transition ${
               activeTab === k
                 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white'
+                : 'text-muted-foreground hover:bg-slate-200 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             {l}
@@ -615,8 +615,8 @@ export default function TaxPage() {
       <Card className="p-4 sm:p-6">
         <div className="flex flex-wrap items-end gap-6">
           <div>
-            <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Ставка ИПН (упрощёнка)</label>
-            <div className="flex gap-1 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/40 p-1">
+            <label className="text-xs text-muted-foreground mb-1 block">Ставка ИПН (упрощёнка)</label>
+            <div className="flex gap-1 rounded-xl border border-border bg-white dark:bg-slate-900/40 p-1">
               {[2, 3, 4, 5, 6].map((r) => (
                 <button
                   key={r}
@@ -625,7 +625,7 @@ export default function TaxPage() {
                   className={`px-3 py-1.5 text-sm rounded-lg transition ${
                     iknRate === r
                       ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      : 'text-muted-foreground hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
                   {r}%{r === 4 ? ' (баз.)' : ''}
@@ -636,7 +636,7 @@ export default function TaxPage() {
           </div>
 
           <div>
-            <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Оборот за период</div>
+            <div className="text-xs text-muted-foreground mb-1">Оборот за период</div>
             <div className="text-2xl font-bold text-emerald-300">
               {loading ? '…' : fmtCompact(revenue)}
             </div>
@@ -650,14 +650,14 @@ export default function TaxPage() {
       {activeTab === 'calc' && (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="p-5">
-          <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">ИПН ({iknRate}%)</div>
-          <div className="text-2xl font-bold text-slate-900 dark:text-white">{fmtCompact(calc.ipn)}</div>
+          <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">ИПН ({iknRate}%)</div>
+          <div className="text-2xl font-bold text-foreground">{fmtCompact(calc.ipn)}</div>
           <p className="mt-2 text-xs text-slate-500">Подоходный налог = оборот × {iknRate}%</p>
         </Card>
 
         <Card className="p-5">
-          <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Соцплатежи (за себя)</div>
-          <div className="text-2xl font-bold text-slate-900 dark:text-white">{fmtCompact(calc.social)}</div>
+          <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">Соцплатежи (за себя)</div>
+          <div className="text-2xl font-bold text-foreground">{fmtCompact(calc.social)}</div>
           <p className="mt-2 text-xs text-slate-500">{fmt(SOCIAL_FIXED_MONTHLY)}/мес × {calc.monthsInPeriod} мес</p>
         </Card>
 
@@ -674,14 +674,14 @@ export default function TaxPage() {
       {/* === ФИЛЬТР: что включать в налогооблагаемый оборот === */}
       {activeTab === 'sources' && companyBreakdown.length > 0 && (
         <Card className="p-5">
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-1 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-foreground mb-1 flex items-center gap-2">
             <Info className="w-4 h-4 text-blue-400" />
             Что включать в налогооблагаемый оборот
           </h3>
           <p className="text-[11px] text-slate-500 mb-3">
             Сними галочку чтобы исключить тип оплаты из расчёта (например, наличные на одной точке не учитывать).
-            <br />Полный оборот: <b className="text-slate-900 dark:text-white">{fmt(fullRevenue)}</b> · в налог пойдёт: <b className="text-emerald-300">{fmt(revenue)}</b>
-            <br />Из БД подтянуто компаний: <b className="text-slate-900 dark:text-white">{companies.length}</b>
+            <br />Полный оборот: <b className="text-foreground">{fmt(fullRevenue)}</b> · в налог пойдёт: <b className="text-emerald-300">{fmt(revenue)}</b>
+            <br />Из БД подтянуто компаний: <b className="text-foreground">{companies.length}</b>
             {companies.length < 3 ? (
               <span className="ml-1 text-amber-400">⚠️ Если у тебя больше — проверь /settings или RLS-политику на companies.</span>
             ) : null}
@@ -692,7 +692,7 @@ export default function TaxPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="text-left text-slate-500 dark:text-slate-400">
+                <tr className="text-left text-muted-foreground">
                   <th className="px-2 py-2">Компания</th>
                   <th className="px-2 py-2 text-center">Нал</th>
                   <th className="px-2 py-2 text-center">Безнал</th>
@@ -713,7 +713,7 @@ export default function TaxPage() {
                   ]
                   return (
                     <tr key={cid || 'no-co'} className="border-t border-slate-200 dark:border-white/5">
-                      <td className="px-2 py-2 text-slate-900 dark:text-white">
+                      <td className="px-2 py-2 text-foreground">
                         {c.name}
                         {(() => {
                           const co = companies.find((x) => x.id === c.id)
@@ -752,7 +752,7 @@ export default function TaxPage() {
       <Card className="p-5">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
           <div>
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
               <Calculator className="w-4 h-4 text-amber-400" />
               Сотрудники (налоги за работников)
             </h3>
@@ -762,19 +762,19 @@ export default function TaxPage() {
               {excludedIds.size > 0 ? <> · скрыто {excludedIds.size}</> : null}
             </p>
             <div className="mt-2 flex items-center gap-2">
-              <span className="text-[11px] text-slate-500 dark:text-slate-400">Оклады заданы как:</span>
-              <div className="flex rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/40 p-0.5 text-[11px]">
+              <span className="text-[11px] text-muted-foreground">Оклады заданы как:</span>
+              <div className="flex rounded-lg border border-border bg-white dark:bg-slate-900/40 p-0.5 text-[11px]">
                 <button
                   type="button"
                   onClick={() => changeSalaryMode('gross')}
-                  className={`px-2 py-0.5 rounded ${salaryMode === 'gross' ? 'bg-emerald-500/20 text-emerald-300' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
+                  className={`px-2 py-0.5 rounded ${salaryMode === 'gross' ? 'bg-emerald-500/20 text-emerald-300' : 'text-muted-foreground hover:text-slate-900 dark:hover:text-white'}`}
                 >
                   Брутто (договор)
                 </button>
                 <button
                   type="button"
                   onClick={() => changeSalaryMode('net')}
-                  className={`px-2 py-0.5 rounded ${salaryMode === 'net' ? 'bg-emerald-500/20 text-emerald-300' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
+                  className={`px-2 py-0.5 rounded ${salaryMode === 'net' ? 'bg-emerald-500/20 text-emerald-300' : 'text-muted-foreground hover:text-slate-900 dark:hover:text-white'}`}
                 >
                   На руки (нетто)
                 </button>
@@ -809,7 +809,7 @@ export default function TaxPage() {
         ) : (
           <div className="space-y-2">
             {employeeCalc.breakdowns.map((b) => (
-              <div key={b.id} className="rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/40 p-3">
+              <div key={b.id} className="rounded-xl border border-border bg-white dark:bg-slate-900/40 p-3">
                 <div className="flex flex-wrap items-end gap-3 mb-3">
                   <div className="flex-1 min-w-[180px]">
                     <label className="text-[10px] uppercase tracking-wider text-slate-500 flex items-center gap-2">
@@ -822,7 +822,7 @@ export default function TaxPage() {
                       value={b.name}
                       onChange={(e) => updateEmployee(b.id, { name: e.target.value })}
                       placeholder="Например: Айгерим (повар)"
-                      className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-400/50"
+                      className="w-full rounded-lg border border-border bg-white dark:bg-slate-900/60 px-3 py-2 text-sm text-foreground outline-none focus:border-emerald-400/50"
                     />
                   </div>
                   <div>
@@ -833,7 +833,7 @@ export default function TaxPage() {
                       type="number"
                       value={b.displayInput}
                       onChange={(e) => updateEmployee(b.id, { salary: Math.max(0, Number(e.target.value) || 0) })}
-                      className="w-36 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-400/50"
+                      className="w-36 rounded-lg border border-border bg-white dark:bg-slate-900/60 px-3 py-2 text-sm text-foreground outline-none focus:border-emerald-400/50"
                     />
                     {salaryMode === 'net' ? (
                       <span className="block mt-1 text-[10px] text-blue-300">
@@ -850,20 +850,20 @@ export default function TaxPage() {
                   </button>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                  <div className="rounded bg-slate-50 dark:bg-slate-900/40 p-2"><span className="text-slate-500 block">Удержано (с зп)</span><span className="text-slate-900 dark:text-white">{fmt(b.calc.withheld)}</span></div>
+                  <div className="rounded bg-slate-50 dark:bg-slate-900/40 p-2"><span className="text-slate-500 block">Удержано (с зп)</span><span className="text-foreground">{fmt(b.calc.withheld)}</span></div>
                   <div className="rounded bg-slate-50 dark:bg-slate-900/40 p-2"><span className="text-slate-500 block">На руки</span><span className="text-emerald-300">{fmt(b.calc.netSalary)}</span></div>
                   <div className="rounded bg-slate-50 dark:bg-slate-900/40 p-2"><span className="text-slate-500 block">Сверху работодатель</span><span className="text-amber-300">{fmt(b.calc.employerTop)}</span></div>
-                  <div className="rounded bg-slate-50 dark:bg-slate-900/40 p-2"><span className="text-slate-500 block">Расход бизнеса</span><span className="text-slate-900 dark:text-white font-semibold">{fmt(b.calc.totalCost)}</span></div>
+                  <div className="rounded bg-slate-50 dark:bg-slate-900/40 p-2"><span className="text-slate-500 block">Расход бизнеса</span><span className="text-foreground font-semibold">{fmt(b.calc.totalCost)}</span></div>
                 </div>
                 <details className="mt-2">
                   <summary className="text-[10px] text-slate-500 cursor-pointer hover:text-slate-700 dark:hover:text-slate-300">Детальная разбивка</summary>
                   <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px]">
-                    <div>ИПН (10%): <span className="text-slate-900 dark:text-white">{fmt(b.calc.ipn)}</span></div>
-                    <div>ОПВ (10%): <span className="text-slate-900 dark:text-white">{fmt(b.calc.opv)}</span></div>
-                    <div>ВОСМС работника (2%): <span className="text-slate-900 dark:text-white">{fmt(b.calc.vosmsEmp)}</span></div>
-                    <div>ОПВР работодателя (3.5%): <span className="text-slate-900 dark:text-white">{fmt(b.calc.opvr)}</span></div>
-                    <div>СО (3.5%): <span className="text-slate-900 dark:text-white">{fmt(b.calc.so)}</span></div>
-                    <div>ОСМС (3%): <span className="text-slate-900 dark:text-white">{fmt(b.calc.osms)}</span></div>
+                    <div>ИПН (10%): <span className="text-foreground">{fmt(b.calc.ipn)}</span></div>
+                    <div>ОПВ (10%): <span className="text-foreground">{fmt(b.calc.opv)}</span></div>
+                    <div>ВОСМС работника (2%): <span className="text-foreground">{fmt(b.calc.vosmsEmp)}</span></div>
+                    <div>ОПВР работодателя (3.5%): <span className="text-foreground">{fmt(b.calc.opvr)}</span></div>
+                    <div>СО (3.5%): <span className="text-foreground">{fmt(b.calc.so)}</span></div>
+                    <div>ОСМС (3%): <span className="text-foreground">{fmt(b.calc.osms)}</span></div>
                   </div>
                 </details>
               </div>
@@ -875,7 +875,7 @@ export default function TaxPage() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                 <div>
                   <div className="text-[10px] text-amber-700 dark:text-amber-100/70">ФОТ (брутто)</div>
-                  <div className="font-semibold text-slate-900 dark:text-white">{fmt(employeeCalc.totalGross)}</div>
+                  <div className="font-semibold text-foreground">{fmt(employeeCalc.totalGross)}</div>
                 </div>
                 <div>
                   <div className="text-[10px] text-amber-700 dark:text-amber-100/70">На руки сотрудникам</div>
@@ -887,7 +887,7 @@ export default function TaxPage() {
                 </div>
                 <div>
                   <div className="text-[10px] text-amber-700 dark:text-amber-100/70">Расход на ФОТ</div>
-                  <div className="font-bold text-slate-900 dark:text-white">{fmt(employeeCalc.totalCost)}</div>
+                  <div className="font-bold text-foreground">{fmt(employeeCalc.totalCost)}</div>
                 </div>
               </div>
               <p className="mt-3 text-[10px] text-amber-700 dark:text-amber-100/60">
@@ -906,12 +906,12 @@ export default function TaxPage() {
           ИТОГО ВСЕ НАЛОГИ за {calc.monthsInPeriod} мес
         </h3>
         <div className="space-y-2 text-sm">
-          <div className="flex justify-between"><span className="text-slate-700 dark:text-slate-300">ИПН ({iknRate}% от оборота)</span><span className="font-semibold text-slate-900 dark:text-white">{fmt(calc.ipn)}</span></div>
+          <div className="flex justify-between"><span className="text-slate-700 dark:text-slate-300">ИПН ({iknRate}% от оборота)</span><span className="font-semibold text-foreground">{fmt(calc.ipn)}</span></div>
           {includeSelfSocial ? (
-            <div className="flex justify-between"><span className="text-slate-700 dark:text-slate-300">Соцплатежи ИП "за себя"</span><span className="font-semibold text-slate-900 dark:text-white">{fmt(calc.social)}</span></div>
+            <div className="flex justify-between"><span className="text-slate-700 dark:text-slate-300">Соцплатежи ИП "за себя"</span><span className="font-semibold text-foreground">{fmt(calc.social)}</span></div>
           ) : null}
           {includeEmployees && employees.length > 0 ? (
-            <div className="flex justify-between"><span className="text-slate-700 dark:text-slate-300">Налоги за работников ({employees.length} чел)</span><span className="font-semibold text-slate-900 dark:text-white">{fmt(employeeCalc.monthlyTaxFromEmployees * calc.monthsInPeriod)}</span></div>
+            <div className="flex justify-between"><span className="text-slate-700 dark:text-slate-300">Налоги за работников ({employees.length} чел)</span><span className="font-semibold text-foreground">{fmt(employeeCalc.monthlyTaxFromEmployees * calc.monthsInPeriod)}</span></div>
           ) : null}
           <div className="border-t border-emerald-500/20 pt-2 mt-2">
             <div className="flex justify-between text-base">
@@ -964,7 +964,7 @@ export default function TaxPage() {
       {/* Помесячный график — на calc */}
       {activeTab === 'calc' && chartData.length > 0 && (
         <Card className="p-5">
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
             <Calculator className="w-4 h-4 text-emerald-400" />
             Налог по месяцам
           </h3>
@@ -992,26 +992,26 @@ export default function TaxPage() {
       {/* Расшифровка соцплатежей — на employees */}
       {activeTab === 'employees' && (
       <Card className="p-5">
-        <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+        <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
           <Info className="w-4 h-4 text-blue-400" />
           Соцплатежи за месяц (от 1 МЗП = {fmt(MZP_2026)})
         </h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
           <div className="rounded-lg bg-white dark:bg-slate-900/40 p-3 border border-slate-200 dark:border-white/5">
-            <div className="text-xs text-slate-500 dark:text-slate-400">ОПВ (10%)</div>
-            <div className="font-semibold text-slate-900 dark:text-white">{fmt(MZP_2026 * SOCIAL_RATES.OPV)}</div>
+            <div className="text-xs text-muted-foreground">ОПВ (10%)</div>
+            <div className="font-semibold text-foreground">{fmt(MZP_2026 * SOCIAL_RATES.OPV)}</div>
           </div>
           <div className="rounded-lg bg-white dark:bg-slate-900/40 p-3 border border-slate-200 dark:border-white/5">
-            <div className="text-xs text-slate-500 dark:text-slate-400">ОПВР (3.5%)</div>
-            <div className="font-semibold text-slate-900 dark:text-white">{fmt(MZP_2026 * SOCIAL_RATES.OPVR)}</div>
+            <div className="text-xs text-muted-foreground">ОПВР (3.5%)</div>
+            <div className="font-semibold text-foreground">{fmt(MZP_2026 * SOCIAL_RATES.OPVR)}</div>
           </div>
           <div className="rounded-lg bg-white dark:bg-slate-900/40 p-3 border border-slate-200 dark:border-white/5">
-            <div className="text-xs text-slate-500 dark:text-slate-400">СО (5%)</div>
-            <div className="font-semibold text-slate-900 dark:text-white">{fmt(MZP_2026 * SOCIAL_RATES.SO)}</div>
+            <div className="text-xs text-muted-foreground">СО (5%)</div>
+            <div className="font-semibold text-foreground">{fmt(MZP_2026 * SOCIAL_RATES.SO)}</div>
           </div>
           <div className="rounded-lg bg-white dark:bg-slate-900/40 p-3 border border-slate-200 dark:border-white/5">
-            <div className="text-xs text-slate-500 dark:text-slate-400">ВОСМС (7%)</div>
-            <div className="font-semibold text-slate-900 dark:text-white">{fmt(MZP_2026 * SOCIAL_RATES.VOSMS)}</div>
+            <div className="text-xs text-muted-foreground">ВОСМС (7%)</div>
+            <div className="font-semibold text-foreground">{fmt(MZP_2026 * SOCIAL_RATES.VOSMS)}</div>
           </div>
         </div>
         <p className="mt-3 text-xs text-slate-500">
@@ -1023,7 +1023,7 @@ export default function TaxPage() {
       {/* Контроль порогов — на thresholds */}
       {activeTab === 'thresholds' && (
       <Card className="p-5">
-        <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+        <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-amber-400" />
           Контроль порогов на 2026 год
         </h3>
@@ -1081,9 +1081,9 @@ export default function TaxPage() {
           </div>
 
           {!loading && yearForecast.currentYearRevenue > 0 ? (
-            <div className="rounded-lg bg-white dark:bg-slate-900/40 p-3 text-xs text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-transparent">
+            <div className="rounded-lg bg-white dark:bg-slate-900/40 p-3 text-xs text-muted-foreground border border-slate-200 dark:border-transparent">
               Прогноз годового оборота при текущем темпе:{' '}
-              <span className="text-slate-900 dark:text-white font-medium">{fmtCompact(yearForecast.projectedYear)}</span>
+              <span className="text-foreground font-medium">{fmtCompact(yearForecast.projectedYear)}</span>
             </div>
           ) : null}
         </div>
@@ -1098,59 +1098,59 @@ export default function TaxPage() {
       {/* Настройки бизнеса — на help */}
       {activeTab === 'help' && (
         <Card className="p-5">
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
             <Info className="w-4 h-4 text-emerald-400" />
             Настройки моего бизнеса
           </h3>
           <p className="text-[11px] text-slate-500 mb-4">Используется в шапке страницы и (в будущем) для автозаполнения формы 910.00. Сохраняется локально.</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <label className="space-y-1">
-              <span className="text-xs text-slate-500 dark:text-slate-400">ФИО ИП / название</span>
+              <span className="text-xs text-muted-foreground">ФИО ИП / название</span>
               <input
                 type="text"
                 value={bizSettings.companyFullName}
                 onChange={(e) => updateBizSettings({ companyFullName: e.target.value })}
                 placeholder="ИП Кенескан А.К."
-                className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-400/50"
+                className="w-full rounded-lg border border-border bg-white dark:bg-slate-900/60 px-3 py-2 text-sm text-foreground outline-none focus:border-emerald-400/50"
               />
             </label>
             <label className="space-y-1">
-              <span className="text-xs text-slate-500 dark:text-slate-400">ИИН / БИН</span>
+              <span className="text-xs text-muted-foreground">ИИН / БИН</span>
               <input
                 type="text"
                 value={bizSettings.bin}
                 onChange={(e) => updateBizSettings({ bin: e.target.value.replace(/\D/g, '').slice(0, 12) })}
                 placeholder="123456789012"
                 maxLength={12}
-                className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-400/50 font-mono"
+                className="w-full rounded-lg border border-border bg-white dark:bg-slate-900/60 px-3 py-2 text-sm text-foreground outline-none focus:border-emerald-400/50 font-mono"
               />
             </label>
             <label className="space-y-1">
-              <span className="text-xs text-slate-500 dark:text-slate-400">ОКЭД</span>
+              <span className="text-xs text-muted-foreground">ОКЭД</span>
               <input
                 type="text"
                 value={bizSettings.oked}
                 onChange={(e) => updateBizSettings({ oked: e.target.value.replace(/\D/g, '').slice(0, 5) })}
                 placeholder="93290"
                 maxLength={5}
-                className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 px-3 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-400/50 font-mono"
+                className="w-full rounded-lg border border-border bg-white dark:bg-slate-900/60 px-3 py-2 text-sm text-foreground outline-none focus:border-emerald-400/50 font-mono"
               />
               <p className="text-[10px] text-slate-500">93290 = «Прочая деятельность по организации отдыха и развлечений»</p>
             </label>
             <label className="space-y-1">
-              <span className="text-xs text-slate-500 dark:text-slate-400">Плательщик НДС</span>
-              <div className="flex rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/40 p-0.5">
+              <span className="text-xs text-muted-foreground">Плательщик НДС</span>
+              <div className="flex rounded-lg border border-border bg-white dark:bg-slate-900/40 p-0.5">
                 <button
                   type="button"
                   onClick={() => updateBizSettings({ vatPayer: false })}
-                  className={`flex-1 px-3 py-1.5 rounded text-sm ${!bizSettings.vatPayer ? 'bg-blue-500/20 text-blue-300' : 'text-slate-500 dark:text-slate-400'}`}
+                  className={`flex-1 px-3 py-1.5 rounded text-sm ${!bizSettings.vatPayer ? 'bg-blue-500/20 text-blue-300' : 'text-muted-foreground'}`}
                 >
                   Нет (упрощёнка)
                 </button>
                 <button
                   type="button"
                   onClick={() => updateBizSettings({ vatPayer: true })}
-                  className={`flex-1 px-3 py-1.5 rounded text-sm ${bizSettings.vatPayer ? 'bg-amber-500/20 text-amber-300' : 'text-slate-500 dark:text-slate-400'}`}
+                  className={`flex-1 px-3 py-1.5 rounded text-sm ${bizSettings.vatPayer ? 'bg-amber-500/20 text-amber-300' : 'text-muted-foreground'}`}
                 >
                   Да (16%)
                 </button>
@@ -1245,9 +1245,9 @@ function CalendarSection({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card className="p-5 border-amber-500/30 bg-amber-500/5">
           <div className="text-xs uppercase tracking-wider text-amber-300 mb-2">Ближайший ежемесячный платёж</div>
-          <div className="text-2xl font-bold text-slate-900 dark:text-white">25 {nextMonthly.toLocaleString('ru-RU', { month: 'long' })}</div>
+          <div className="text-2xl font-bold text-foreground">25 {nextMonthly.toLocaleString('ru-RU', { month: 'long' })}</div>
           <p className="mt-2 text-xs text-amber-700 dark:text-amber-200/80">через {daysToMonthly} {daysToMonthly === 1 ? 'день' : daysToMonthly < 5 ? 'дня' : 'дней'}</p>
-          <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">Соцплатежи: ОПВ + ОПВР + ВОСМС + ОСМС + СО за прошлый месяц + ИПН с зарплаты</p>
+          <p className="mt-3 text-xs text-muted-foreground">Соцплатежи: ОПВ + ОПВР + ВОСМС + ОСМС + СО за прошлый месяц + ИПН с зарплаты</p>
           <p className="mt-2 text-sm text-amber-300 font-semibold">
             ≈ {fmt((SOCIAL_FIXED_MONTHLY + (hasEmployees ? employeeCalc.monthlyTaxFromEmployees : 0)))}
           </p>
@@ -1255,20 +1255,20 @@ function CalendarSection({
 
         <Card className="p-5 border-emerald-500/30 bg-emerald-500/5">
           <div className="text-xs uppercase tracking-wider text-emerald-300 mb-2">Полугодовой ИПН (форма 910.00)</div>
-          <div className="text-2xl font-bold text-slate-900 dark:text-white">{halfYearDue.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+          <div className="text-2xl font-bold text-foreground">{halfYearDue.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
           <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-200/80">через {daysToHalfYear} {daysToHalfYear === 1 ? 'день' : 'дней'}</p>
-          <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">ИПН с упрощёнки {iknRate}% от полугодового оборота</p>
+          <p className="mt-3 text-xs text-muted-foreground">ИПН с упрощёнки {iknRate}% от полугодового оборота</p>
           <p className="mt-2 text-sm text-emerald-300 font-semibold">≈ {fmt(calc.ipn)}</p>
         </Card>
       </div>
 
       {/* Сколько откладывать */}
       <Card className="p-5">
-        <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
+        <h3 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
           <Calculator className="w-4 h-4 text-blue-400" />
           Сколько откладывать ежемесячно
         </h3>
-        <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+        <p className="text-xs text-muted-foreground mb-3">
           Чтобы налог не «съел» оборотные деньги, переводи на отдельный счёт ежемесячно:
         </p>
         <div className="rounded-2xl border border-blue-500/30 bg-blue-500/10 p-4">
@@ -1281,23 +1281,23 @@ function CalendarSection({
 
       {/* Реквизиты */}
       <Card className="p-5">
-        <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+        <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
           <Landmark className="w-4 h-4 text-emerald-400" />
           Реквизиты для оплаты (КБК и КНП)
         </h3>
         <p className="text-[11px] text-slate-500 mb-3">Скопируй в Halyk Business / Kaspi Business → Платежи в бюджет</p>
         <div className="space-y-2">
           {REQUISITES.map((r) => (
-            <div key={r.name + r.kbk + r.knp} className="rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/40 p-3 flex flex-wrap items-center gap-3">
+            <div key={r.name + r.kbk + r.knp} className="rounded-lg border border-border bg-white dark:bg-slate-900/40 p-3 flex flex-wrap items-center gap-3">
               <div className="flex-1 min-w-[200px]">
-                <div className="text-sm text-slate-900 dark:text-white">{r.name}</div>
+                <div className="text-sm text-foreground">{r.name}</div>
                 <div className="text-[10px] text-slate-500 mt-0.5">{r.deadline}</div>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={() => copy(r.kbk)} className="rounded-lg bg-slate-100 dark:bg-slate-900/80 border border-slate-200 dark:border-white/10 px-2 py-1 text-xs text-slate-700 dark:text-slate-200 hover:bg-emerald-500/20 hover:border-emerald-500/30">
+                <button onClick={() => copy(r.kbk)} className="rounded-lg bg-slate-100 dark:bg-slate-900/80 border border-border px-2 py-1 text-xs text-slate-700 dark:text-slate-200 hover:bg-emerald-500/20 hover:border-emerald-500/30">
                   КБК <span className="font-mono text-emerald-300">{r.kbk}</span>
                 </button>
-                <button onClick={() => copy(r.knp)} className="rounded-lg bg-slate-100 dark:bg-slate-900/80 border border-slate-200 dark:border-white/10 px-2 py-1 text-xs text-slate-700 dark:text-slate-200 hover:bg-emerald-500/20 hover:border-emerald-500/30">
+                <button onClick={() => copy(r.knp)} className="rounded-lg bg-slate-100 dark:bg-slate-900/80 border border-border px-2 py-1 text-xs text-slate-700 dark:text-slate-200 hover:bg-emerald-500/20 hover:border-emerald-500/30">
                   КНП <span className="font-mono text-emerald-300">{r.knp}</span>
                 </button>
               </div>

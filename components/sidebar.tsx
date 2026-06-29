@@ -79,7 +79,7 @@ function SidebarItem({
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className={cn('truncate text-sm font-medium', active ? 'text-slate-900 dark:text-white' : 'text-slate-600 group-hover:text-slate-900 dark:text-slate-300 dark:group-hover:text-white')}>
+          <span className={cn('truncate text-sm font-medium', active ? 'text-foreground' : 'text-slate-600 group-hover:text-slate-900 dark:text-slate-300 dark:group-hover:text-white')}>
             {item.label}
           </span>
           {item.badge ? (
@@ -94,7 +94,7 @@ function SidebarItem({
           ) : null}
         </div>
         {item.note ? (
-          <p className={cn('mt-0.5 text-xs', active ? 'text-slate-500 dark:text-slate-400' : 'text-slate-500 group-hover:text-slate-500 dark:group-hover:text-slate-400')}>
+          <p className={cn('mt-0.5 text-xs', active ? 'text-muted-foreground' : 'text-slate-500 group-hover:text-slate-500 dark:group-hover:text-slate-400')}>
             {item.note}
           </p>
         ) : null}
@@ -140,7 +140,7 @@ function SidebarSection({
 
           <div className="min-w-0 flex-1 text-left">
             <div className="flex items-center gap-2">
-              <p className="text-base font-semibold text-slate-900 dark:text-white">{section.title}</p>
+              <p className="text-base font-semibold text-foreground">{section.title}</p>
               {hasActiveItem ? (
                 <span className={cn('rounded-full border px-2 py-0.5 text-xs font-medium', style.bg, style.border, style.text)}>
                   active
@@ -197,7 +197,7 @@ function UserCard({
             </div>
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">{displayName || 'Панель управления'}</p>
+            <p className="truncate text-sm font-semibold text-foreground">{displayName || 'Панель управления'}</p>
             <p className="truncate text-xs text-slate-500">{email || 'admin@system.local'}</p>
           </div>
         </div>
@@ -208,7 +208,7 @@ function UserCard({
             <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">online</span>
           </div>
           <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 px-2 py-1 dark:border-white/5 dark:bg-slate-800">
-            <Shield className="h-3 w-3 text-slate-500 dark:text-slate-400" />
+            <Shield className="h-3 w-3 text-muted-foreground" />
             <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{roleLabel || 'control'}</span>
           </div>
         </div>
@@ -265,7 +265,7 @@ function OrganizationSwitcher({
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Организация</p>
-          <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">
+          <p className="truncate text-sm font-semibold text-foreground">
             {activeOrganization?.name || organizations[0]?.name || 'Не выбрана'}
           </p>
           <p className="truncate text-xs text-slate-500">
@@ -300,7 +300,7 @@ function OrganizationSwitcher({
                 >
                   <div className={cn('mt-0.5 h-2.5 w-2.5 rounded-full', isActive ? 'bg-emerald-400' : 'bg-slate-400 dark:bg-slate-600')} />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-slate-900 dark:text-white">{organization.name}</p>
+                    <p className="truncate text-sm font-medium text-foreground">{organization.name}</p>
                     <p className="truncate text-xs text-slate-500">
                       {organization.slug} · {organization.accessRole}
                     </p>
@@ -330,7 +330,7 @@ function ActiveOrganizationCard({
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Ваша организация</p>
-          <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">{activeOrganization.name}</p>
+          <p className="truncate text-sm font-semibold text-foreground">{activeOrganization.name}</p>
           <p className="truncate text-xs text-slate-500">
             {activeOrganization.slug} · {activeOrganization.accessRole}
           </p>
@@ -673,7 +673,7 @@ export function Sidebar({ desktopEnabled = true }: { desktopEnabled?: boolean } 
         <div className="flex items-center gap-3">
           <AppLogoMark />
           <div>
-            <p className="text-sm font-semibold text-slate-900 dark:text-white">{SITE_NAME}</p>
+            <p className="text-sm font-semibold text-foreground">{SITE_NAME}</p>
             <p className="text-xs text-slate-500">workspace</p>
           </div>
         </div>

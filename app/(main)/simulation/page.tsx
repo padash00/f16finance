@@ -229,7 +229,7 @@ export default function SimulationPage() {
             ) : null}
             <button
               onClick={() => void load(companyId)}
-              className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/[0.04] text-muted-foreground transition hover:bg-slate-200 dark:hover:bg-white/[0.08] hover:text-foreground"
+              className="grid h-10 w-10 place-items-center rounded-xl border border-border bg-slate-100 dark:bg-white/[0.04] text-muted-foreground transition hover:bg-slate-200 dark:hover:bg-white/[0.08] hover:text-foreground"
               title="Обновить"
             >
               <RefreshCw className="h-4 w-4" />
@@ -269,7 +269,7 @@ export default function SimulationPage() {
 
         {/* Обратный расчёт загрузки */}
         {calc.impliedOccupancy != null && calc.capacityRatePerHour > 0 ? (
-          <div className="mt-4 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-black/20 px-4 py-3 text-sm">
+          <div className="mt-4 rounded-xl border border-border bg-slate-50 dark:bg-black/20 px-4 py-3 text-sm">
             <span className="text-muted-foreground">Обратный расчёт: </span>
             чтобы выйти на текущую выручку, средняя загрузка должна быть{' '}
             <span className="font-bold text-blue-700 dark:text-blue-200">{calc.impliedOccupancy.toFixed(1)} ч/устройство в сутки</span>.
@@ -296,7 +296,7 @@ export default function SimulationPage() {
 
       {/* ── ПО ЗОНАМ ────────────────────────────────────────────────────────── */}
       {calc.perZone.length > 0 ? (
-        <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-5">
+        <Card className="border-border bg-white dark:bg-white/[0.02] p-5">
           <h2 className="text-sm font-semibold">Потенциал по зонам</h2>
           <div className="mt-3 h-52">
             <ResponsiveContainer width="100%" height="100%">
@@ -314,7 +314,7 @@ export default function SimulationPage() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <div className="mt-3 overflow-auto rounded-xl border border-slate-200 dark:border-white/10">
+          <div className="mt-3 overflow-auto rounded-xl border border-border">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 dark:bg-white/[0.03] text-xs text-muted-foreground">
                 <tr className="text-left">
@@ -351,7 +351,7 @@ export default function SimulationPage() {
       ) : null}
 
       {/* ── ТАРИФЫ ──────────────────────────────────────────────────────────── */}
-      <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-5">
+      <Card className="border-border bg-white dark:bg-white/[0.02] p-5">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-sm font-semibold">Тарифы</h2>
@@ -389,7 +389,7 @@ export default function SimulationPage() {
                 </div>
                 <div className="space-y-1">
                   {idx === 0 ? <Label className="text-[10px]">₸/час</Label> : null}
-                  <div className="grid h-10 place-items-center rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] text-sm tabular-nums">
+                  <div className="grid h-10 place-items-center rounded-lg border border-border bg-slate-50 dark:bg-white/[0.03] text-sm tabular-nums">
                     {formatMoney(Math.round(tariffRate(t)))}
                   </div>
                 </div>
@@ -403,7 +403,7 @@ export default function SimulationPage() {
       </Card>
 
       {/* ── ЗОНЫ ────────────────────────────────────────────────────────────── */}
-      <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-5">
+      <Card className="border-border bg-white dark:bg-white/[0.02] p-5">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-sm font-semibold">Зоны</h2>
@@ -422,7 +422,7 @@ export default function SimulationPage() {
         ) : (
           <div className="mt-3 space-y-3">
             {zones.map((z) => (
-              <div key={z.id} className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-3 space-y-3">
+              <div key={z.id} className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] p-3 space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1.4fr)_130px_100px_120px_auto] gap-2 items-end">
                   <div className="space-y-1">
                     <Label className="text-[10px]">Название зоны</Label>
@@ -495,7 +495,7 @@ export default function SimulationPage() {
         </Button>
       </div>
 
-      <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-4 text-[11px] leading-relaxed text-muted-foreground">
+      <Card className="border-border bg-white dark:bg-white/[0.02] p-4 text-[11px] leading-relaxed text-muted-foreground">
         <p className="font-medium text-foreground/80">Как это работает</p>
         <p className="mt-1">
           Ты задаёшь структуру (зоны, устройства, тарифы) и грубую загрузку — система считает потенциал выручки.

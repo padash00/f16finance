@@ -428,11 +428,11 @@ export default function ShiftReportDetailPage({
       )}
 
       {loading && !shift ? (
-        <Card className="border-slate-200 dark:border-white/10 p-6 text-center text-slate-400">
+        <Card className="border-border p-6 text-center text-slate-400">
           <Loader2 className="mx-auto h-5 w-5 animate-spin" />
         </Card>
       ) : !shift ? (
-        <Card className="border-slate-200 dark:border-white/10 p-6 text-center text-slate-400">
+        <Card className="border-border p-6 text-center text-slate-400">
           Смена не найдена
           <div className="mt-2">
             <Link
@@ -467,7 +467,7 @@ export default function ShiftReportDetailPage({
           )}
 
           {(shift.z_report_url || shift.x_report_url || shift.opening_notes || shift.closing_notes) && (
-            <Card className="border-slate-200 dark:border-white/10 p-4">
+            <Card className="border-border p-4">
               <div className="text-xs uppercase tracking-wide text-slate-400">Отчёты и заметки</div>
               <div className="mt-2 flex flex-wrap gap-3 text-sm">
                 {shift.z_report_url && (
@@ -507,8 +507,8 @@ export default function ShiftReportDetailPage({
           )}
 
           <div className="grid gap-4 md:grid-cols-2">
-          <Card className="overflow-hidden border-slate-200 dark:border-white/10">
-            <div className="border-b border-slate-100 dark:border-white/5 px-4 py-2 text-sm font-medium text-slate-900 dark:text-white">
+          <Card className="overflow-hidden border-border">
+            <div className="border-b border-slate-100 dark:border-white/5 px-4 py-2 text-sm font-medium text-foreground">
               Чек-листы • {runs.length}
             </div>
             <div className="divide-y divide-slate-100 dark:divide-white/5">
@@ -531,10 +531,10 @@ export default function ShiftReportDetailPage({
                         ) : (
                           <Circle className="h-4 w-4 text-amber-400" />
                         )}
-                        <span className="text-sm text-slate-900 dark:text-white">
+                        <span className="text-sm text-foreground">
                           {run.template?.title || 'Без названия'}
                         </span>
-                        <span className="rounded-full border border-slate-200 dark:border-white/10 px-2 py-0.5 text-[10px] uppercase text-slate-400">
+                        <span className="rounded-full border border-border px-2 py-0.5 text-[10px] uppercase text-slate-400">
                           {SCHEDULE_LABEL[run.template?.schedule_type || ''] ||
                             run.template?.schedule_type ||
                             ''}
@@ -579,8 +579,8 @@ export default function ShiftReportDetailPage({
             </div>
           </Card>
 
-          <Card className="overflow-hidden border-slate-200 dark:border-white/10">
-            <div className="flex items-center gap-2 border-b border-slate-100 dark:border-white/5 px-4 py-2 text-sm font-medium text-slate-900 dark:text-white">
+          <Card className="overflow-hidden border-border">
+            <div className="flex items-center gap-2 border-b border-slate-100 dark:border-white/5 px-4 py-2 text-sm font-medium text-foreground">
               <AlertTriangle className="h-4 w-4 text-amber-400" />
               <span>Инциденты • {incidents.length}</span>
               {incidentsSummary && incidentsSummary.fines_total > 0 && (
@@ -610,8 +610,8 @@ export default function ShiftReportDetailPage({
                       ) : (
                         <StickyNote className="h-4 w-4 text-slate-400" />
                       )}
-                      <span className="text-sm text-slate-900 dark:text-white">{inc.title}</span>
-                      <span className="rounded-full border border-slate-200 dark:border-white/10 px-2 py-0.5 text-[10px] uppercase text-slate-400">
+                      <span className="text-sm text-foreground">{inc.title}</span>
+                      <span className="rounded-full border border-border px-2 py-0.5 text-[10px] uppercase text-slate-400">
                         {inc.source}
                       </span>
                       {inc.status !== 'confirmed' && (
@@ -648,8 +648,8 @@ export default function ShiftReportDetailPage({
           </div>
 
           {topItems.length > 0 && (
-            <Card className="overflow-hidden border-slate-200 dark:border-white/10">
-              <div className="flex items-center gap-2 border-b border-slate-100 dark:border-white/5 px-4 py-2 text-sm font-medium text-slate-900 dark:text-white">
+            <Card className="overflow-hidden border-border">
+              <div className="flex items-center gap-2 border-b border-slate-100 dark:border-white/5 px-4 py-2 text-sm font-medium text-foreground">
                 <Package className="h-4 w-4 text-emerald-400" />
                 Топ товаров за смену
                 <span className="ml-auto text-xs text-slate-400">по выручке</span>
@@ -672,8 +672,8 @@ export default function ShiftReportDetailPage({
             </Card>
           )}
 
-          <Card className="overflow-hidden border-slate-200 dark:border-white/10">
-            <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 dark:border-white/5 px-4 py-2 text-sm font-medium text-slate-900 dark:text-white">
+          <Card className="overflow-hidden border-border">
+            <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 dark:border-white/5 px-4 py-2 text-sm font-medium text-foreground">
               <span>
                 Продажи • {filteredSales.length}
                 {filteredSales.length !== sales.length && (
@@ -686,7 +686,7 @@ export default function ShiftReportDetailPage({
                   value={salesSearch}
                   onChange={(e) => setSalesSearch(e.target.value)}
                   placeholder="Поиск по товару, клиенту, оператору…"
-                  className="h-8 w-72 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] pl-7 pr-2 text-xs text-slate-700 dark:text-slate-200 outline-none placeholder:text-slate-500 focus:border-emerald-500/40"
+                  className="h-8 w-72 rounded-md border border-border bg-white dark:bg-white/[0.03] pl-7 pr-2 text-xs text-slate-700 dark:text-slate-200 outline-none placeholder:text-slate-500 focus:border-emerald-500/40"
                 />
               </div>
             </div>
@@ -782,7 +782,7 @@ export default function ShiftReportDetailPage({
                             <tr className="bg-slate-50 dark:bg-white/[0.02]">
                               <td></td>
                               <td colSpan={10} className="px-4 py-3">
-                                <div className="rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/40 p-3">
+                                <div className="rounded-md border border-border bg-white dark:bg-slate-950/40 p-3">
                                   <div className="mb-2 text-[10px] uppercase tracking-wider text-slate-500">
                                     Позиции чека ({items.length})
                                   </div>
@@ -823,8 +823,8 @@ export default function ShiftReportDetailPage({
             </div>
           </Card>
 
-          <Card className="overflow-hidden border-slate-200 dark:border-white/10">
-            <div className="border-b border-slate-100 dark:border-white/5 px-4 py-2 text-sm font-medium text-slate-900 dark:text-white">
+          <Card className="overflow-hidden border-border">
+            <div className="border-b border-slate-100 dark:border-white/5 px-4 py-2 text-sm font-medium text-foreground">
               Возвраты • {returns.length}
             </div>
             <div className="overflow-x-auto">
@@ -1265,14 +1265,14 @@ function ZReport({
         ? 'border-amber-500/30 bg-gradient-to-br from-amber-50 via-white to-amber-50 dark:from-slate-950 dark:via-slate-950 dark:to-amber-950/10'
         : 'border-emerald-500/20 bg-gradient-to-br from-white via-white to-slate-50 dark:from-slate-950 dark:via-slate-950 dark:to-emerald-950/10'
     }`}>
-      <div className="flex items-start justify-between flex-wrap gap-4 mb-5 pb-4 border-b border-slate-200 dark:border-white/10">
+      <div className="flex items-start justify-between flex-wrap gap-4 mb-5 pb-4 border-b border-border">
         <div>
           <div className={`text-[11px] uppercase tracking-[0.2em] ${
             isOpen ? 'text-amber-700 dark:text-amber-300/80' : 'text-emerald-700 dark:text-emerald-300/70'
           }`}>
             {isOpen ? '📊 X-отчёт · СМЕНА ОТКРЫТА' : '✓ Z-отчёт смены'}
           </div>
-          <h2 className="text-2xl font-semibold text-slate-900 dark:text-white mt-1">
+          <h2 className="text-2xl font-semibold text-foreground mt-1">
             {shift.company?.name || '—'} · {SHIFT_TYPE_LABEL[shift.shift_type]}
           </h2>
           <div className="text-xs text-slate-400 mt-1">
@@ -1290,7 +1290,7 @@ function ZReport({
         <Button
           variant="outline"
           size="sm"
-          className="border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5"
+          className="border-border bg-slate-100 dark:bg-white/5"
           onClick={() => window.print()}
         >
           🖨 Печать
@@ -1301,18 +1301,18 @@ function ZReport({
         {/* Касса */}
         <div className="space-y-3">
           <div className="text-xs uppercase tracking-wider text-emerald-700 dark:text-emerald-300/80 font-semibold">📦 Касса (купюры)</div>
-          <div className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-4 space-y-1.5 text-sm">
+          <div className="rounded-lg border border-border bg-slate-50 dark:bg-white/[0.02] p-4 space-y-1.5 text-sm">
             <ZRow label="Старт смены" value={startCashFromMeta} />
             <ZRow label="Продаж за смену (нал)" value={salesCash} positive />
             <ZRow label="Возвратов (нал)" value={-returnsCash} negative={returnsCash > 0} />
             {debtsCash > 0 && <ZRow label="Долги получены (нал)" value={debtsCash} positive />}
             {wipon > 0 && <ZRow label="Выплаты wipon / прочее" value={-wipon} negative />}
-            <div className="border-t border-slate-200 dark:border-white/10 my-2" />
+            <div className="border-t border-border my-2" />
             <ZRow label={isOpen ? 'Должно быть в кассе сейчас' : 'Должно быть в кассе'} value={expectedCash} bold />
             {!isOpen && (
               <>
                 <ZRow label="Фактически в кассе" value={closingCash} bold />
-                <div className="border-t border-slate-200 dark:border-white/10 my-2" />
+                <div className="border-t border-border my-2" />
                 <div
                   className={`flex justify-between items-center py-1 px-2 rounded ${
                     Math.abs(cashDiff) < 1
@@ -1338,7 +1338,7 @@ function ZReport({
         {/* Безнал */}
         <div className="space-y-3">
           <div className="text-xs uppercase tracking-wider text-blue-700 dark:text-blue-300/80 font-semibold">💳 Безнал</div>
-          <div className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-4 space-y-1.5 text-sm">
+          <div className="rounded-lg border border-border bg-slate-50 dark:bg-white/[0.02] p-4 space-y-1.5 text-sm">
             <ZRow label="Продажи безнал (всего)" value={salesKaspi} positive />
             {Number(shift.closing_kaspi_before_midnight || 0) > 0 && (
               <ZRow label="  до 00:00" value={Number(shift.closing_kaspi_before_midnight || 0)} muted />
@@ -1347,7 +1347,7 @@ function ZReport({
               <ZRow label="  после 00:00" value={Number(shift.closing_kaspi_after_midnight || 0)} muted />
             )}
             <ZRow label="Возвраты безнал" value={-returnsKaspi} negative={returnsKaspi > 0} />
-            <div className="border-t border-slate-200 dark:border-white/10 my-2" />
+            <div className="border-t border-border my-2" />
             <ZRow label={isOpen ? 'Сейчас на безнале' : 'Должно быть'} value={expectedKaspi} bold />
             {!isOpen && (
               <>
@@ -1379,8 +1379,8 @@ function ZReport({
               <span className="font-bold text-lg">{fmtMoney(totalRevenue)}</span>
             </div>
             <div className="text-xs text-slate-400 mt-2 flex justify-between">
-              <span>Чеков: <span className="text-slate-900 dark:text-white font-semibold">{checkCount}</span></span>
-              <span>Средний: <span className="text-slate-900 dark:text-white font-semibold">{fmtMoney(avgCheck)}</span></span>
+              <span>Чеков: <span className="text-foreground font-semibold">{checkCount}</span></span>
+              <span>Средний: <span className="text-foreground font-semibold">{fmtMoney(avgCheck)}</span></span>
             </div>
             {!isOpen && income && (
               <Link
@@ -1398,7 +1398,7 @@ function ZReport({
       {clientDebts.length > 0 && (
         <div className="mt-4">
           <div className="text-xs uppercase tracking-wider text-rose-700 dark:text-rose-300/80 font-semibold mb-2">📋 Долги клиентов на смене ({clientDebts.length})</div>
-          <div className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-3 space-y-1 text-sm">
+          <div className="rounded-lg border border-border bg-slate-50 dark:bg-white/[0.02] p-3 space-y-1 text-sm">
             {clientDebts.slice(0, 10).map((d) => (
               <div key={d.id} className="flex justify-between items-center text-slate-700 dark:text-slate-300 text-xs">
                 <span className="truncate">
@@ -1419,10 +1419,10 @@ function ZReport({
       {incidentsSummary && incidentsSummary.count > 0 && (
         <div className="mt-4">
           <div className="text-xs uppercase tracking-wider text-amber-700 dark:text-amber-300/80 font-semibold mb-2">⚠ Инциденты</div>
-          <div className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-3 text-sm grid grid-cols-3 gap-3">
+          <div className="rounded-lg border border-border bg-slate-50 dark:bg-white/[0.02] p-3 text-sm grid grid-cols-3 gap-3">
             <div>
               <div className="text-[10px] text-slate-500 uppercase">Всего</div>
-              <div className="text-slate-900 dark:text-white font-semibold">{incidentsSummary.count}</div>
+              <div className="text-foreground font-semibold">{incidentsSummary.count}</div>
             </div>
             <div>
               <div className="text-[10px] text-slate-500 uppercase">Штрафы</div>
@@ -1440,13 +1440,13 @@ function ZReport({
       {(shift.opening_notes || shift.closing_notes) && (
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           {shift.opening_notes && (
-            <div className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-3 text-sm">
+            <div className="rounded-lg border border-border bg-slate-50 dark:bg-white/[0.02] p-3 text-sm">
               <div className="text-[10px] text-slate-500 uppercase mb-1">📝 При открытии</div>
               <div className="text-slate-700 dark:text-slate-300 italic">«{shift.opening_notes}»</div>
             </div>
           )}
           {shift.closing_notes && (
-            <div className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-3 text-sm">
+            <div className="rounded-lg border border-border bg-slate-50 dark:bg-white/[0.02] p-3 text-sm">
               <div className="text-[10px] text-slate-500 uppercase mb-1">📝 При закрытии</div>
               <div className="text-slate-700 dark:text-slate-300 italic">«{shift.closing_notes}»</div>
             </div>
@@ -1482,7 +1482,7 @@ function ZRow({
   return (
     <div className="flex justify-between items-center">
       <span className={`text-slate-400 ${muted ? 'text-xs' : ''}`}>{label}</span>
-      <span className={`${color} ${bold ? 'font-bold text-slate-900 dark:text-white' : ''} font-mono tabular-nums`}>
+      <span className={`${color} ${bold ? 'font-bold text-foreground' : ''} font-mono tabular-nums`}>
         {fmtMoney(value)}
       </span>
     </div>

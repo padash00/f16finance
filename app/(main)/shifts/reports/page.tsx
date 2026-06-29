@@ -117,7 +117,7 @@ export default function ShiftReportsPage() {
                 className={`rounded-full border px-3 py-1 text-xs transition ${
                   status === value
                     ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-700 dark:text-emerald-200'
-                    : 'border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    : 'border-border text-muted-foreground hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
                 {value === 'closed' ? 'Закрытые' : value === 'open' ? 'Открытые' : 'Все'}
@@ -133,7 +133,7 @@ export default function ShiftReportsPage() {
         </Card>
       )}
 
-      <Card className="overflow-hidden border-slate-200 dark:border-white/10">
+      <Card className="overflow-hidden border-border">
         <AdminTableViewport>
           <table className="w-full min-w-[1100px] text-sm">
             <thead className={adminTableStickyTheadClass}>
@@ -169,7 +169,7 @@ export default function ShiftReportsPage() {
                   const totals = (row.totals_json || {}) as Record<string, any>
                   return (
                     <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-white/5">
-                      <td className="px-3 py-2 text-slate-900 dark:text-white">{row.company?.name || '—'}</td>
+                      <td className="px-3 py-2 text-foreground">{row.company?.name || '—'}</td>
                       <td className="px-3 py-2 text-slate-700 dark:text-slate-200">
                         {row.operator?.short_name || row.operator?.full_name || '—'}
                       </td>
@@ -178,7 +178,7 @@ export default function ShiftReportsPage() {
                       </td>
                       <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{fmtDateTime(row.opened_at)}</td>
                       <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{fmtDateTime(row.closed_at)}</td>
-                      <td className="px-3 py-2 text-slate-500 dark:text-slate-400">
+                      <td className="px-3 py-2 text-muted-foreground">
                         {fmtDuration(row.opened_at, row.closed_at)}
                       </td>
                       <td className="px-3 py-2 text-right text-emerald-600 dark:text-emerald-300">

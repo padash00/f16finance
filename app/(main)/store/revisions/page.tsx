@@ -722,7 +722,7 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
       {(() => {
         const hdrActions = (
           <>
-            <div className="inline-flex rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-0.5 text-xs">
+            <div className="inline-flex rounded-lg border border-border bg-slate-50 dark:bg-white/[0.03] p-0.5 text-xs">
               {(['all', 'warehouse', 'showcase'] as const).map((s) => (
                 <button
                   key={s}
@@ -772,7 +772,7 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-3">
+        <Card className="border-border bg-white dark:bg-white/[0.03] p-3">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Актов</p>
           {loading ? <Skeleton className="mt-1 h-7 w-12" /> : <p className="mt-1 text-xl font-semibold">{revisionsStats.count}</p>}
         </Card>
@@ -807,7 +807,7 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
       </div>
 
       {/* Main table */}
-      <Card className="overflow-hidden border-slate-200 dark:border-white/10 bg-card/70 p-0">
+      <Card className="overflow-hidden border-border bg-card/70 p-0">
         {loading && filteredRevisions.length === 0 ? (
           <StoreDataTableSkeleton columns={10} />
         ) : filteredRevisions.length === 0 ? (
@@ -819,7 +819,7 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
           <div className="relative max-h-[calc(100vh-380px)] overflow-auto">
             {refreshing ? (
               <div className="absolute inset-0 z-20 flex items-start justify-center bg-background/35 pt-10 backdrop-blur-[0.5px]">
-                <div className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-white/10 bg-card/90 px-3 py-1.5 text-xs text-muted-foreground shadow-md">
+                <div className="flex items-center gap-2 rounded-lg border border-border bg-card/90 px-3 py-1.5 text-xs text-muted-foreground shadow-md">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   Обновление…
                 </div>
@@ -944,7 +944,7 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
         }}
       >
         <DialogContent className="flex h-[90vh] !w-[96vw] !max-w-[96vw] sm:!max-w-[1400px] flex-col gap-0 overflow-hidden p-0">
-          <DialogHeader className="border-b border-slate-200 dark:border-white/10 p-5 text-left">
+          <DialogHeader className="border-b border-border p-5 text-left">
             <DialogTitle className="flex items-center gap-2">
               <ClipboardCheck className="h-5 w-5 text-amber-600 dark:text-amber-300" />
               Новый акт ревизии
@@ -1000,7 +1000,7 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
               </div>
             )}
 
-            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] px-3 py-2 text-xs text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] px-3 py-2 text-xs text-muted-foreground">
               <span>
                 Локация: <span className="font-medium text-foreground">{selectedLocation?.company?.name || selectedLocation?.name || '—'}</span>
               </span>
@@ -1045,7 +1045,7 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
                     {Math.min(100, Math.round((lines.length / Math.max(1, selectedBalances.length)) * 100))}%
                   </span>
                 </div>
-                <div className="h-2 overflow-hidden rounded-full border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/[0.03]">
+                <div className="h-2 overflow-hidden rounded-full border border-border bg-slate-100 dark:bg-white/[0.03]">
                   <div
                     className="h-full bg-gradient-to-r from-amber-500 to-emerald-500 transition-all"
                     style={{
@@ -1058,7 +1058,7 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
 
             {/* Фильтры строк */}
             {lines.length > 0 && (
-              <div className="inline-flex rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-0.5 text-xs">
+              <div className="inline-flex rounded-lg border border-border bg-slate-50 dark:bg-white/[0.03] p-0.5 text-xs">
                 {(['all', 'mismatch'] as const).map((f) => (
                   <button
                     key={f}
@@ -1159,7 +1159,7 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
                               {after}
                             </div>
                           </div>
-                          <div className="shrink-0 rounded-md border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/[0.04] px-2 py-0.5 text-[11px] text-muted-foreground">
+                          <div className="shrink-0 rounded-md border border-border bg-slate-100 dark:bg-white/[0.04] px-2 py-0.5 text-[11px] text-muted-foreground">
                             остаток {formatQty(balance)}
                           </div>
                         </button>
@@ -1185,7 +1185,7 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
                   <div
                     key={`revision-${index}`}
                     className={`grid gap-3 rounded-2xl border p-3 transition md:grid-cols-[minmax(0,1.2fr)_160px_100px_100px_minmax(0,1fr)_110px_auto] ${
-                      isRecent ? 'border-emerald-500/40 bg-emerald-500/[0.05]' : 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02]'
+                      isRecent ? 'border-emerald-500/40 bg-emerald-500/[0.05]' : 'border-border bg-slate-50 dark:bg-white/[0.02]'
                     }`}
                   >
                     <div className="space-y-1.5">
@@ -1227,7 +1227,7 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
                         </Select>
                       ) : (
                         <div
-                          className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] px-3 py-2 text-sm text-foreground"
+                          className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] px-3 py-2 text-sm text-foreground"
                           title={`${lineItem?.name || 'Товар'}`}
                         >
                           <span className="block truncate">
@@ -1244,7 +1244,7 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
 
                     <div className="space-y-1.5">
                       <Label>Система</Label>
-                      <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] px-3 py-2 text-sm text-foreground">{formatQty(expectedQty)}</div>
+                      <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] px-3 py-2 text-sm text-foreground">{formatQty(expectedQty)}</div>
                     </div>
 
                     <div className="space-y-1.5">
@@ -1259,7 +1259,7 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
 
                     <div className="space-y-1.5">
                       <Label>Δ</Label>
-                      <div className={`rounded-xl border px-3 py-2 text-center text-sm ${deltaQty === 0 ? 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] text-muted-foreground' : deltaQty > 0 ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200' : 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-200'}`}>
+                      <div className={`rounded-xl border px-3 py-2 text-center text-sm ${deltaQty === 0 ? 'border-border bg-slate-50 dark:bg-white/[0.03] text-muted-foreground' : deltaQty > 0 ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200' : 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-200'}`}>
                         {deltaQty === 0 ? '—' : `${deltaQty > 0 ? '+' : ''}${formatQty(deltaQty)}`}
                       </div>
                     </div>
@@ -1272,7 +1272,7 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
                   </div>
                 )
               }) : (
-                <div className="rounded-2xl border border-dashed border-slate-200 dark:border-white/10 px-4 py-8 text-center text-sm text-muted-foreground">
+                <div className="rounded-2xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
                   Пока нет строк. Подтяни остатки системы или добавь строки вручную.
                 </div>
               )}
@@ -1299,7 +1299,7 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
 
       <Dialog open={revisionDetailsOpen} onOpenChange={setRevisionDetailsOpen}>
         <DialogContent className="flex h-[85vh] !w-[92vw] !max-w-[92vw] sm:!max-w-[1200px] flex-col gap-0 overflow-hidden p-0">
-          <DialogHeader className="flex flex-row items-start justify-between gap-3 border-b border-slate-200 dark:border-white/10 p-5 text-left">
+          <DialogHeader className="flex flex-row items-start justify-between gap-3 border-b border-border p-5 text-left">
             <div className="space-y-1">
               <DialogTitle>Детали ревизии</DialogTitle>
               <DialogDescription>
@@ -1330,7 +1330,7 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
                     <span> · Комментарий: <span className="text-foreground">{selectedRevision.comment}</span></span>
                   ) : null}
                 </div>
-                <div className="overflow-auto rounded-xl border border-slate-200 dark:border-white/10">
+                <div className="overflow-auto rounded-xl border border-border">
                   <table className="w-full table-fixed text-sm">
                     <thead className="bg-slate-50 dark:bg-white/[0.03]">
                       <tr className="text-left text-xs text-muted-foreground">

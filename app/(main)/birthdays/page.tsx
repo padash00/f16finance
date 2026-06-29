@@ -55,7 +55,7 @@ function formatUpcomingLabel(daysUntil: number) {
 function getUpcomingTone(daysUntil: number) {
   if (daysUntil === 0) return 'border-amber-400/30 bg-amber-500/10 text-amber-700 dark:text-amber-200'
   if (daysUntil <= 7) return 'border-emerald-400/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
-  return 'border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] text-slate-700 dark:text-slate-200'
+  return 'border-border bg-white dark:bg-white/[0.04] text-slate-700 dark:text-slate-200'
 }
 
 function getZodiacSign(value: string) {
@@ -136,7 +136,7 @@ export default function BirthdaysPage() {
             accent="blue"
             backHref="/"
             toolbar={
-              <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-black/20 px-4 py-3 text-sm text-slate-700 dark:text-slate-300">
+              <div className="rounded-2xl border border-border bg-white dark:bg-black/20 px-4 py-3 text-sm text-slate-700 dark:text-slate-300">
                 Сейчас учитываются даты рождения только операторов. Для staff можно расширить экран после добавления поля в их профиль.
               </div>
             }
@@ -151,7 +151,7 @@ export default function BirthdaysPage() {
             ].map((stat) => {
               const Icon = stat.icon
               return (
-                <Card key={stat.label} className="border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/65 p-5 text-slate-900 dark:text-white">
+                <Card key={stat.label} className="border-border bg-white dark:bg-slate-950/65 p-5 text-foreground">
                   <div className="flex items-center justify-between gap-4">
                     <div>
                       <p className="text-sm text-slate-400">{stat.label}</p>
@@ -168,7 +168,7 @@ export default function BirthdaysPage() {
 
           {/* Полноэкранный лоадер только при первой загрузке. При refetch контент остаётся. */}
           {loading && items.length === 0 ? (
-            <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/65 p-8 text-slate-900 dark:text-white">
+            <Card className="border-border bg-white dark:bg-slate-950/65 p-8 text-foreground">
               <div className="flex items-center gap-3 text-slate-700 dark:text-slate-300">
                 <Loader2 className="h-5 w-5 animate-spin text-amber-300" />
                 Загружаем ближайшие дни рождения...
@@ -179,13 +179,13 @@ export default function BirthdaysPage() {
           ) : (
             <>
               <section className="space-y-4">
-                <div className="flex items-center gap-2 text-slate-900 dark:text-white">
+                <div className="flex items-center gap-2 text-foreground">
                   <Gift className="h-5 w-5 text-amber-300" />
                   <h2 className="text-xl font-semibold">Сегодня и на этой неделе</h2>
                 </div>
 
                 <div className="grid gap-4 xl:grid-cols-2">
-                  <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/60 p-5 text-slate-900 dark:text-white">
+                  <Card className="border-border bg-white dark:bg-slate-950/60 p-5 text-foreground">
                     <div className="flex items-center gap-2">
                       <Sparkles className="h-5 w-5 text-amber-300" />
                       <h3 className="text-lg font-semibold">Сегодня</h3>
@@ -199,7 +199,7 @@ export default function BirthdaysPage() {
                               <>
                           <div className="flex items-start justify-between gap-3">
                             <div>
-                              <div className="text-base font-semibold text-slate-900 dark:text-white">{item.name}</div>
+                              <div className="text-base font-semibold text-foreground">{item.name}</div>
                               <div className="mt-1 text-sm text-amber-100/80">
                                 {item.company_name || 'Точка не назначена'}{item.position ? ` • ${item.position}` : ''}
                               </div>
@@ -226,7 +226,7 @@ export default function BirthdaysPage() {
                     </div>
                   </Card>
 
-                  <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/60 p-5 text-slate-900 dark:text-white">
+                  <Card className="border-border bg-white dark:bg-slate-950/60 p-5 text-foreground">
                     <div className="flex items-center gap-2">
                       <CalendarDays className="h-5 w-5 text-emerald-300" />
                       <h3 className="text-lg font-semibold">Ближайшие 7 дней</h3>
@@ -240,11 +240,11 @@ export default function BirthdaysPage() {
                               <>
                           <div className="flex items-start justify-between gap-3">
                             <div>
-                              <div className="text-base font-semibold text-slate-900 dark:text-white">{item.name}</div>
-                              <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                              <div className="text-base font-semibold text-foreground">{item.name}</div>
+                              <div className="mt-1 text-sm text-muted-foreground">
                                 {item.company_name || 'Точка не назначена'}{item.position ? ` • ${item.position}` : ''}
                               </div>
-                              <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] px-2.5 py-1 text-xs text-slate-700 dark:text-slate-200">
+                              <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-border bg-white dark:bg-white/[0.04] px-2.5 py-1 text-xs text-slate-700 dark:text-slate-200">
                                 <span>{zodiac.emoji}</span>
                                 <span>{zodiac.name}</span>
                               </div>
@@ -256,7 +256,7 @@ export default function BirthdaysPage() {
                           <div className="mt-3 text-sm text-slate-700 dark:text-slate-200">
                             {formatBirthdayDate(item.birth_date)}{item.age ? ` • исполнится ${item.age}` : ''}
                           </div>
-                          <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">{zodiac.joke}</div>
+                          <div className="mt-2 text-xs text-muted-foreground">{zodiac.joke}</div>
                               </>
                             )
                           })()}
@@ -270,25 +270,25 @@ export default function BirthdaysPage() {
               </section>
 
               <section className="space-y-4">
-                <div className="flex items-center gap-2 text-slate-900 dark:text-white">
+                <div className="flex items-center gap-2 text-foreground">
                   <CalendarRange className="h-5 w-5 text-cyan-300" />
                   <h2 className="text-xl font-semibold">Ближайшие 30 дней</h2>
                 </div>
 
                 <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
                   {monthItems.length > 0 ? monthItems.map((item) => (
-                    <Card key={`month-${item.id}`} className="border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/60 p-4 text-slate-900 dark:text-white">
+                    <Card key={`month-${item.id}`} className="border-border bg-white dark:bg-slate-950/60 p-4 text-foreground">
                       {(() => {
                         const zodiac = getZodiacSign(item.birth_date)
                         return (
                           <>
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <div className="text-base font-semibold text-slate-900 dark:text-white">{item.name}</div>
-                          <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                          <div className="text-base font-semibold text-foreground">{item.name}</div>
+                          <div className="mt-1 text-sm text-muted-foreground">
                             {item.company_name || 'Точка не назначена'}{item.assignment_count > 1 ? ` • ${item.assignment_count} точки` : ''}
                           </div>
-                          <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] px-2.5 py-1 text-xs text-slate-700 dark:text-slate-200">
+                          <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-border bg-white dark:bg-white/[0.04] px-2.5 py-1 text-xs text-slate-700 dark:text-slate-200">
                             <span>{zodiac.emoji}</span>
                             <span>{zodiac.name}</span>
                           </div>
@@ -307,13 +307,13 @@ export default function BirthdaysPage() {
                           <div className="mt-1 text-sm text-slate-700 dark:text-slate-200">{item.age ? `${item.age} лет` : 'Не указан'}</div>
                         </div>
                       </div>
-                      <div className="mt-3 text-xs text-slate-500 dark:text-slate-400">{zodiac.joke}</div>
+                      <div className="mt-3 text-xs text-muted-foreground">{zodiac.joke}</div>
                           </>
                         )
                       })()}
                     </Card>
                   )) : (
-                    <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/60 p-5 text-sm text-slate-500">
+                    <Card className="border-border bg-white dark:bg-slate-950/60 p-5 text-sm text-slate-500">
                       В ближайшие 30 дней дней рождения не найдено.
                     </Card>
                   )}
@@ -321,12 +321,12 @@ export default function BirthdaysPage() {
               </section>
 
               <section className="space-y-4">
-                <div className="flex items-center gap-2 text-slate-900 dark:text-white">
+                <div className="flex items-center gap-2 text-foreground">
                   <CalendarDays className="h-5 w-5 text-amber-300" />
                   <h2 className="text-xl font-semibold">Все ближайшие дни рождения по порядку</h2>
                 </div>
 
-                <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/60 p-0 text-slate-900 dark:text-white overflow-hidden">
+                <Card className="border-border bg-white dark:bg-slate-950/60 p-0 text-foreground overflow-hidden">
                   {items.length > 0 ? (
                     <div className="divide-y divide-slate-200 dark:divide-white/6">
                       {items.map((item, index) => (
@@ -339,19 +339,19 @@ export default function BirthdaysPage() {
                             return (
                               <>
                           <div className="flex items-start gap-4">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/[0.04] text-sm font-semibold text-slate-700 dark:text-slate-200">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-slate-100 dark:bg-white/[0.04] text-sm font-semibold text-slate-700 dark:text-slate-200">
                               {index + 1}
                             </div>
 
                             <div>
-                              <div className="text-base font-semibold text-slate-900 dark:text-white">{item.name}</div>
-                              <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                              <div className="text-base font-semibold text-foreground">{item.name}</div>
+                              <div className="mt-1 text-sm text-muted-foreground">
                                 {item.company_name || 'Точка не назначена'}
                                 {item.position ? ` • ${item.position}` : ''}
                                 {item.assignment_count > 1 ? ` • ${item.assignment_count} точки` : ''}
                               </div>
                               <div className="mt-2 flex flex-wrap items-center gap-2">
-                                <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] px-2.5 py-1 text-xs text-slate-700 dark:text-slate-200">
+                                <span className="inline-flex items-center gap-2 rounded-full border border-border bg-white dark:bg-white/[0.04] px-2.5 py-1 text-xs text-slate-700 dark:text-slate-200">
                                   <span>{zodiac.emoji}</span>
                                   <span>{zodiac.name}</span>
                                 </span>

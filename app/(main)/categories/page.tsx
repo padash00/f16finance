@@ -557,7 +557,7 @@ export default function CategoriesPage() {
                           {group.label}
                         </span>
                         {group.kind === 'off_chain' && (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-50 dark:bg-white/[0.04] text-muted-foreground border border-slate-200 dark:border-white/10">
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-50 dark:bg-white/[0.04] text-muted-foreground border border-border">
                             <Wallet className="w-2.5 h-2.5" />
                             Вне P&L
                           </span>
@@ -568,7 +568,7 @@ export default function CategoriesPage() {
                       {catsInGroup.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-1">
                           {catsInGroup.slice(0, 5).map(c => (
-                            <span key={c.id} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-slate-50 dark:bg-white/5 text-muted-foreground border border-slate-200 dark:border-white/10">
+                            <span key={c.id} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-slate-50 dark:bg-white/5 text-muted-foreground border border-border">
                               <Tag className="w-2.5 h-2.5" />
                               {c.name}
                             </span>

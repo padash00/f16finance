@@ -201,27 +201,27 @@ export function SalaryPreviewTab() {
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
             <Card className="border-cyan-500/20 bg-white dark:bg-gray-900/40 p-4">
               <p className="text-xs uppercase tracking-wider text-slate-500 dark:text-gray-400">Смен</p>
-              <p className="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{data.summary.shiftsCount}</p>
+              <p className="mt-2 text-2xl font-semibold text-foreground">{data.summary.shiftsCount}</p>
             </Card>
             <Card className="border-emerald-500/20 bg-white dark:bg-gray-900/40 p-4">
               <p className="text-xs uppercase tracking-wider text-slate-500 dark:text-gray-400">Начислено</p>
-              <p className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">{formatMoney(data.summary.grossAmount)}</p>
+              <p className="mt-2 text-xl font-semibold text-foreground">{formatMoney(data.summary.grossAmount)}</p>
             </Card>
             <Card className="border-violet-500/20 bg-white dark:bg-gray-900/40 p-4">
               <p className="text-xs uppercase tracking-wider text-slate-500 dark:text-gray-400">Авто-бонусы</p>
-              <p className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">{formatMoney(data.summary.autoBonusTotal)}</p>
+              <p className="mt-2 text-xl font-semibold text-foreground">{formatMoney(data.summary.autoBonusTotal)}</p>
             </Card>
             <Card className="border-cyan-500/20 bg-white dark:bg-gray-900/40 p-4">
               <p className="text-xs uppercase tracking-wider text-slate-500 dark:text-gray-400">Стаж</p>
-              <p className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">{formatMoney(data.summary.seniorityBonusTotal || 0)}</p>
+              <p className="mt-2 text-xl font-semibold text-foreground">{formatMoney(data.summary.seniorityBonusTotal || 0)}</p>
             </Card>
             <Card className="border-amber-500/20 bg-white dark:bg-gray-900/40 p-4">
               <p className="text-xs uppercase tracking-wider text-slate-500 dark:text-gray-400">Штрафы</p>
-              <p className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">{formatMoney(data.summary.fineAmount)}</p>
+              <p className="mt-2 text-xl font-semibold text-foreground">{formatMoney(data.summary.fineAmount)}</p>
             </Card>
             <Card className="border-rose-500/20 bg-white dark:bg-gray-900/40 p-4">
               <p className="text-xs uppercase tracking-wider text-slate-500 dark:text-gray-400">Долги+Аванс</p>
-              <p className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">
+              <p className="mt-2 text-xl font-semibold text-foreground">
                 {formatMoney(data.summary.debtAmount + data.summary.advanceAmount)}
               </p>
             </Card>
@@ -249,7 +249,7 @@ export function SalaryPreviewTab() {
 
             <div className="mt-4 space-y-3">
               {shiftsByDate.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-200 dark:border-white/10 p-6 text-center text-sm text-gray-500">
+                <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-gray-500">
                   За эту неделю нет смен у оператора.
                 </div>
               ) : (
@@ -266,7 +266,7 @@ export function SalaryPreviewTab() {
                             <ShiftIcon
                               className={`h-4 w-4 ${shift.shift === 'day' ? 'text-amber-400' : 'text-indigo-400'}`}
                             />
-                            <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                            <span className="text-sm font-semibold text-foreground">
                               {formatDate(shift.date)}, {shift.shift === 'day' ? 'дневная' : 'ночная'}
                             </span>
                             {shift.companyName ? (
@@ -312,7 +312,7 @@ export function SalaryPreviewTab() {
                             <span className="text-gray-500">Роль</span>
                             <span>{formatMoney(shift.roleBonus)}</span>
                           </div>
-                          <div className="mt-1 flex items-center justify-between gap-6 border-t border-slate-200 dark:border-white/10 pt-1 text-sm font-semibold text-slate-900 dark:text-white">
+                          <div className="mt-1 flex items-center justify-between gap-6 border-t border-border pt-1 text-sm font-semibold text-foreground">
                             <span>Итого</span>
                             <span>{formatMoney(shift.salary)}</span>
                           </div>
@@ -336,7 +336,7 @@ export function SalaryPreviewTab() {
                     key={alloc.companyId}
                     className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-lg border border-slate-200 bg-white dark:border-white/10 dark:bg-gray-950/60 p-3 md:grid-cols-[1.5fr_repeat(6,auto)]"
                   >
-                    <div className="text-sm font-medium text-slate-900 dark:text-white">
+                    <div className="text-sm font-medium text-foreground">
                       {alloc.companyName || '—'}
                     </div>
                     <div className="text-right text-xs">

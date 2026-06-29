@@ -1086,7 +1086,7 @@ function SalaryRulesContent() {
                 <Button
                   variant="outline"
                   size="icon"
-                  className={`rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 ${refreshing ? '[&_svg]:animate-spin' : ''}`}
+                  className={`rounded-xl border-border bg-white dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 ${refreshing ? '[&_svg]:animate-spin' : ''}`}
                   onClick={() => void loadAll(true)}
                   title="Обновить"
                   aria-label="Обновить"
@@ -1100,7 +1100,7 @@ function SalaryRulesContent() {
                     variant="outline"
                     onClick={() => void handleSaveAll()}
                     disabled={savingAll || dirtyIds.size === 0}
-                    className="gap-2 rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10"
+                    className="gap-2 rounded-xl border-border bg-white dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10"
                   >
                     <Save className="h-4 w-4" />
                     {savingAll ? 'Сохранение...' : `Сохранить (${dirtyIds.size})`}
@@ -1141,7 +1141,7 @@ function SalaryRulesContent() {
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             <Card className="p-4 bg-white dark:bg-gray-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
               <p className="text-xs text-gray-500">Всего правил</p>
-              <p className="text-2xl font-bold text-slate-900 dark:text-white">{stats.total}</p>
+              <p className="text-2xl font-bold text-foreground">{stats.total}</p>
             </Card>
             <Card className="p-4 bg-emerald-500/5 border-emerald-500/20">
               <p className="text-xs text-emerald-400">Активные</p>
@@ -1186,17 +1186,17 @@ function SalaryRulesContent() {
                 <Info className="w-5 h-5 text-violet-400 flex-shrink-0 mt-0.5" />
                 <div className="space-y-1 text-sm">
                   <p>
-                    <span className="text-slate-900 dark:text-white font-medium">Базовый оклад</span>{' '}
+                    <span className="text-foreground font-medium">Базовый оклад</span>{' '}
                     <span className="text-slate-700 dark:text-gray-400">— фиксированная сумма за смену.</span>
                   </p>
                   <p>
-                    <span className="text-slate-900 dark:text-white font-medium">Пороговые бонусы</span>{' '}
+                    <span className="text-foreground font-medium">Пороговые бонусы</span>{' '}
                     <span className="text-slate-700 dark:text-gray-400">
                       — если выручка ≥ порога, добавляется бонус.
                     </span>
                   </p>
                   <p>
-                    <span className="text-slate-900 dark:text-white font-medium">Старшие роли</span>{' '}
+                    <span className="text-foreground font-medium">Старшие роли</span>{' '}
                     <span className="text-slate-700 dark:text-gray-400">
                       — отдельная надбавка за старшего оператора и старшего кассира.
                     </span>
@@ -1213,17 +1213,17 @@ function SalaryRulesContent() {
               <div className="mt-3 space-y-3">
                 <div className="flex items-center justify-between rounded-2xl border border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.03] px-3 py-2">
                   <span className="text-sm text-slate-700 dark:text-gray-400">Средний оклад</span>
-                  <span className="text-base font-semibold text-slate-900 dark:text-white">{formatMoney(stats.avgBase)}</span>
+                  <span className="text-base font-semibold text-foreground">{formatMoney(stats.avgBase)}</span>
                 </div>
                 <div className="flex items-center justify-between rounded-2xl border border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.03] px-3 py-2">
                   <span className="text-sm text-slate-700 dark:text-gray-400">Последнее изменение</span>
-                  <span className="text-sm text-slate-900 dark:text-white">
+                  <span className="text-sm text-foreground">
                     {filteredHistory[0] ? formatDateTime(filteredHistory[0].created_at) : 'Пока нет'}
                   </span>
                 </div>
                 <div className="flex items-center justify-between rounded-2xl border border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.03] px-3 py-2">
                   <span className="text-sm text-slate-700 dark:text-gray-400">История по фильтру</span>
-                  <span className="text-base font-semibold text-slate-900 dark:text-white">{filteredHistory.length}</span>
+                  <span className="text-base font-semibold text-foreground">{filteredHistory.length}</span>
                 </div>
               </div>
             </Card>
@@ -1272,7 +1272,7 @@ function SalaryRulesContent() {
                     className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
                       active
                         ? `${style.bg} ${style.border} ${style.text}`
-                        : 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] text-slate-700 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white'
+                        : 'border-border bg-slate-50 dark:bg-white/[0.03] text-slate-700 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
                     {company.name}
@@ -1287,7 +1287,7 @@ function SalaryRulesContent() {
               <select
                 value={filterCompany}
                 onChange={(e) => setFilterCompany(e.target.value)}
-                className="px-3 py-1.5 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-xs text-slate-900 dark:text-white focus:outline-none focus:border-violet-500/50"
+                className="px-3 py-1.5 bg-white dark:bg-gray-800/50 border border-border rounded-lg text-xs text-foreground focus:outline-none focus:border-violet-500/50"
               >
                 <option value="all">Все компании</option>
                 {companyOptions.map(c => (
@@ -1298,7 +1298,7 @@ function SalaryRulesContent() {
               <select
                 value={filterShift}
                 onChange={(e) => setFilterShift(e.target.value as ShiftType | 'all')}
-                className="px-3 py-1.5 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-xs text-slate-900 dark:text-white focus:outline-none focus:border-violet-500/50"
+                className="px-3 py-1.5 bg-white dark:bg-gray-800/50 border border-border rounded-lg text-xs text-foreground focus:outline-none focus:border-violet-500/50"
               >
                 <option value="all">Все смены</option>
                 <option value="day">Дневные</option>
@@ -1310,7 +1310,7 @@ function SalaryRulesContent() {
                   type="checkbox"
                   checked={showInactive}
                   onChange={(e) => setShowInactive(e.target.checked)}
-                  className="rounded border-slate-200 dark:border-white/10 bg-white dark:bg-gray-800/50 text-violet-500 focus:ring-violet-500/20"
+                  className="rounded border-border bg-white dark:bg-gray-800/50 text-violet-500 focus:ring-violet-500/20"
                 />
                 <span className="text-xs text-slate-700 dark:text-gray-400">Показывать неактивные</span>
               </label>
@@ -1323,7 +1323,7 @@ function SalaryRulesContent() {
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Поиск по компании..."
-                  className="pl-8 pr-7 py-1.5 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-xs text-slate-900 dark:text-white placeholder-gray-500 focus:outline-none focus:border-violet-500/50"
+                  className="pl-8 pr-7 py-1.5 bg-white dark:bg-gray-800/50 border border-border rounded-lg text-xs text-foreground placeholder-gray-500 focus:outline-none focus:border-violet-500/50"
                 />
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
                 {searchTerm && (
@@ -1413,8 +1413,8 @@ function SalaryRulesContent() {
                               <select
                                 value={r.company_code}
                                 onChange={(e) => handleFieldChange(r.id, 'company_code', e.target.value)}
-                                className={`px-2 py-1 bg-white dark:bg-gray-800/50 border rounded-lg text-xs text-slate-900 dark:text-white ${
-                                  dup ? 'border-red-500/50' : 'border-slate-200 dark:border-white/10'
+                                className={`px-2 py-1 bg-white dark:bg-gray-800/50 border rounded-lg text-xs text-foreground ${
+                                  dup ? 'border-red-500/50' : 'border-border'
                                 }`}
                               >
                                 {companyOptions.map((c) => (
@@ -1439,7 +1439,7 @@ function SalaryRulesContent() {
                               <select
                                 value={r.shift_type}
                                 onChange={(e) => handleFieldChange(r.id, 'shift_type', e.target.value as ShiftType)}
-                                className="px-2 py-1 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-xs text-slate-900 dark:text-white"
+                                className="px-2 py-1 bg-white dark:bg-gray-800/50 border border-border rounded-lg text-xs text-foreground"
                               >
                                 <option value="day">День</option>
                                 <option value="night">Ночь</option>
@@ -1454,7 +1454,7 @@ function SalaryRulesContent() {
                                 type="number"
                                 value={r.base_per_shift ?? ''}
                                 onChange={(e) => handleNumberChange(r.id, 'base_per_shift', e.target.value)}
-                                className="w-24 px-2 py-1 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-xs text-right text-slate-900 dark:text-white"
+                                className="w-24 px-2 py-1 bg-white dark:bg-gray-800/50 border border-border rounded-lg text-xs text-right text-foreground"
                                 placeholder="8000"
                               />
                               <div className="flex items-center gap-1">
@@ -1486,7 +1486,7 @@ function SalaryRulesContent() {
                               type="number"
                               value={r.senior_operator_bonus ?? ''}
                               onChange={(e) => handleNumberChange(r.id, 'senior_operator_bonus', e.target.value)}
-                              className="w-24 px-2 py-1 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-xs text-right text-slate-900 dark:text-white"
+                              className="w-24 px-2 py-1 bg-white dark:bg-gray-800/50 border border-border rounded-lg text-xs text-right text-foreground"
                               placeholder="1500"
                             />
                           </td>
@@ -1496,7 +1496,7 @@ function SalaryRulesContent() {
                               type="number"
                               value={r.senior_cashier_bonus ?? ''}
                               onChange={(e) => handleNumberChange(r.id, 'senior_cashier_bonus', e.target.value)}
-                              className="w-24 px-2 py-1 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-xs text-right text-slate-900 dark:text-white"
+                              className="w-24 px-2 py-1 bg-white dark:bg-gray-800/50 border border-border rounded-lg text-xs text-right text-foreground"
                               placeholder="1500"
                             />
                           </td>
@@ -1507,7 +1507,7 @@ function SalaryRulesContent() {
                               type="number"
                               value={r.threshold1_turnover ?? ''}
                               onChange={(e) => handleNumberChange(r.id, 'threshold1_turnover', e.target.value)}
-                              className="w-24 px-2 py-1 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-xs text-right text-slate-900 dark:text-white"
+                              className="w-24 px-2 py-1 bg-white dark:bg-gray-800/50 border border-border rounded-lg text-xs text-right text-foreground"
                               placeholder="130000"
                             />
                           </td>
@@ -1516,7 +1516,7 @@ function SalaryRulesContent() {
                               type="number"
                               value={r.threshold1_bonus ?? ''}
                               onChange={(e) => handleNumberChange(r.id, 'threshold1_bonus', e.target.value)}
-                              className="w-20 px-2 py-1 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-xs text-right text-slate-900 dark:text-white"
+                              className="w-20 px-2 py-1 bg-white dark:bg-gray-800/50 border border-border rounded-lg text-xs text-right text-foreground"
                               placeholder="2000"
                             />
                           </td>
@@ -1527,7 +1527,7 @@ function SalaryRulesContent() {
                               type="number"
                               value={r.threshold2_turnover ?? ''}
                               onChange={(e) => handleNumberChange(r.id, 'threshold2_turnover', e.target.value)}
-                              className="w-24 px-2 py-1 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-xs text-right text-slate-900 dark:text-white"
+                              className="w-24 px-2 py-1 bg-white dark:bg-gray-800/50 border border-border rounded-lg text-xs text-right text-foreground"
                               placeholder="160000"
                             />
                           </td>
@@ -1536,7 +1536,7 @@ function SalaryRulesContent() {
                               type="number"
                               value={r.threshold2_bonus ?? ''}
                               onChange={(e) => handleNumberChange(r.id, 'threshold2_bonus', e.target.value)}
-                              className="w-20 px-2 py-1 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-xs text-right text-slate-900 dark:text-white"
+                              className="w-20 px-2 py-1 bg-white dark:bg-gray-800/50 border border-border rounded-lg text-xs text-right text-foreground"
                               placeholder="2000"
                             />
                           </td>
@@ -1550,7 +1550,7 @@ function SalaryRulesContent() {
                                   type="number"
                                   value={r.low_turnover_threshold ?? ''}
                                   onChange={(e) => handleNumberChange(r.id, 'low_turnover_threshold', e.target.value)}
-                                  className="w-24 px-1.5 py-0.5 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded text-[10px] text-right text-slate-900 dark:text-white"
+                                  className="w-24 px-1.5 py-0.5 bg-white dark:bg-gray-800/50 border border-border rounded text-[10px] text-right text-foreground"
                                   placeholder="—"
                                   title="Если выручка ниже этого значения — применить другой оклад"
                                 />
@@ -1561,7 +1561,7 @@ function SalaryRulesContent() {
                                   type="number"
                                   value={r.low_turnover_base ?? ''}
                                   onChange={(e) => handleNumberChange(r.id, 'low_turnover_base', e.target.value)}
-                                  className="w-24 px-1.5 py-0.5 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded text-[10px] text-right text-slate-900 dark:text-white"
+                                  className="w-24 px-1.5 py-0.5 bg-white dark:bg-gray-800/50 border border-border rounded text-[10px] text-right text-foreground"
                                   placeholder="—"
                                   title="Оклад при выручке ниже порога"
                                 />
@@ -1666,39 +1666,39 @@ function SalaryRulesContent() {
                                         </label>
                                         <label className="grid gap-1">
                                           <span className="text-slate-500 dark:text-gray-400">Оклад</span>
-                                          <input type="number" value={newVersionDraft.base_per_shift ?? ''} onChange={(e) => handleNewVersionFieldChange('base_per_shift', e.target.value)} className="h-8 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-gray-900 px-2 text-slate-900 dark:text-white" />
+                                          <input type="number" value={newVersionDraft.base_per_shift ?? ''} onChange={(e) => handleNewVersionFieldChange('base_per_shift', e.target.value)} className="h-8 rounded-lg border border-border bg-white dark:bg-gray-900 px-2 text-foreground" />
                                         </label>
                                         <label className="grid gap-1">
                                           <span className="text-slate-500 dark:text-gray-400">Старший оператор</span>
-                                          <input type="number" value={newVersionDraft.senior_operator_bonus ?? ''} onChange={(e) => handleNewVersionFieldChange('senior_operator_bonus', e.target.value)} className="h-8 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-gray-900 px-2 text-slate-900 dark:text-white" />
+                                          <input type="number" value={newVersionDraft.senior_operator_bonus ?? ''} onChange={(e) => handleNewVersionFieldChange('senior_operator_bonus', e.target.value)} className="h-8 rounded-lg border border-border bg-white dark:bg-gray-900 px-2 text-foreground" />
                                         </label>
                                         <label className="grid gap-1">
                                           <span className="text-slate-500 dark:text-gray-400">Старший кассир</span>
-                                          <input type="number" value={newVersionDraft.senior_cashier_bonus ?? ''} onChange={(e) => handleNewVersionFieldChange('senior_cashier_bonus', e.target.value)} className="h-8 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-gray-900 px-2 text-slate-900 dark:text-white" />
+                                          <input type="number" value={newVersionDraft.senior_cashier_bonus ?? ''} onChange={(e) => handleNewVersionFieldChange('senior_cashier_bonus', e.target.value)} className="h-8 rounded-lg border border-border bg-white dark:bg-gray-900 px-2 text-foreground" />
                                         </label>
                                         <label className="grid gap-1">
                                           <span className="text-slate-500 dark:text-gray-400">Порог 1</span>
-                                          <input type="number" value={newVersionDraft.threshold1_turnover ?? ''} onChange={(e) => handleNewVersionFieldChange('threshold1_turnover', e.target.value)} className="h-8 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-gray-900 px-2 text-slate-900 dark:text-white" />
+                                          <input type="number" value={newVersionDraft.threshold1_turnover ?? ''} onChange={(e) => handleNewVersionFieldChange('threshold1_turnover', e.target.value)} className="h-8 rounded-lg border border-border bg-white dark:bg-gray-900 px-2 text-foreground" />
                                         </label>
                                         <label className="grid gap-1">
                                           <span className="text-slate-500 dark:text-gray-400">Бонус 1</span>
-                                          <input type="number" value={newVersionDraft.threshold1_bonus ?? ''} onChange={(e) => handleNewVersionFieldChange('threshold1_bonus', e.target.value)} className="h-8 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-gray-900 px-2 text-slate-900 dark:text-white" />
+                                          <input type="number" value={newVersionDraft.threshold1_bonus ?? ''} onChange={(e) => handleNewVersionFieldChange('threshold1_bonus', e.target.value)} className="h-8 rounded-lg border border-border bg-white dark:bg-gray-900 px-2 text-foreground" />
                                         </label>
                                         <label className="grid gap-1">
                                           <span className="text-slate-500 dark:text-gray-400">Порог 2</span>
-                                          <input type="number" value={newVersionDraft.threshold2_turnover ?? ''} onChange={(e) => handleNewVersionFieldChange('threshold2_turnover', e.target.value)} className="h-8 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-gray-900 px-2 text-slate-900 dark:text-white" />
+                                          <input type="number" value={newVersionDraft.threshold2_turnover ?? ''} onChange={(e) => handleNewVersionFieldChange('threshold2_turnover', e.target.value)} className="h-8 rounded-lg border border-border bg-white dark:bg-gray-900 px-2 text-foreground" />
                                         </label>
                                         <label className="grid gap-1">
                                           <span className="text-slate-500 dark:text-gray-400">Бонус 2</span>
-                                          <input type="number" value={newVersionDraft.threshold2_bonus ?? ''} onChange={(e) => handleNewVersionFieldChange('threshold2_bonus', e.target.value)} className="h-8 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-gray-900 px-2 text-slate-900 dark:text-white" />
+                                          <input type="number" value={newVersionDraft.threshold2_bonus ?? ''} onChange={(e) => handleNewVersionFieldChange('threshold2_bonus', e.target.value)} className="h-8 rounded-lg border border-border bg-white dark:bg-gray-900 px-2 text-foreground" />
                                         </label>
                                         <label className="grid gap-1">
                                           <span className="text-slate-500 dark:text-gray-400">Порог усл. оклада</span>
-                                          <input type="number" value={newVersionDraft.low_turnover_threshold ?? ''} onChange={(e) => handleNewVersionFieldChange('low_turnover_threshold', e.target.value)} className="h-8 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-gray-900 px-2 text-slate-900 dark:text-white" />
+                                          <input type="number" value={newVersionDraft.low_turnover_threshold ?? ''} onChange={(e) => handleNewVersionFieldChange('low_turnover_threshold', e.target.value)} className="h-8 rounded-lg border border-border bg-white dark:bg-gray-900 px-2 text-foreground" />
                                         </label>
                                         <label className="grid gap-1">
                                           <span className="text-slate-500 dark:text-gray-400">Усл. оклад</span>
-                                          <input type="number" value={newVersionDraft.low_turnover_base ?? ''} onChange={(e) => handleNewVersionFieldChange('low_turnover_base', e.target.value)} className="h-8 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-gray-900 px-2 text-slate-900 dark:text-white" />
+                                          <input type="number" value={newVersionDraft.low_turnover_base ?? ''} onChange={(e) => handleNewVersionFieldChange('low_turnover_base', e.target.value)} className="h-8 rounded-lg border border-border bg-white dark:bg-gray-900 px-2 text-foreground" />
                                         </label>
                                       </div>
                                       <div className="mt-3 flex items-center gap-2">
@@ -1706,7 +1706,7 @@ function SalaryRulesContent() {
                                           <Save className="w-3 h-3 mr-1" />
                                           {savingNewVersion ? 'Сохранение...' : 'Сохранить версию'}
                                         </Button>
-                                        <Button size="xs" variant="outline" className="h-8 px-3 border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => { setNewVersionForRule(null); setNewVersionDraft({}) }}>
+                                        <Button size="xs" variant="outline" className="h-8 px-3 border-border bg-white dark:bg-white/5 text-slate-700 dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => { setNewVersionForRule(null); setNewVersionDraft({}) }}>
                                           Отмена
                                         </Button>
                                       </div>
@@ -1747,21 +1747,21 @@ function SalaryRulesContent() {
                                                 </td>
                                                 <td className="px-2 py-2 text-right">
                                                   {isEditing ? (
-                                                    <input type="number" value={display.base_per_shift ?? ''} onChange={(e) => handleVersionFieldChange(v.id, 'base_per_shift', e.target.value)} className="h-7 w-20 rounded border border-slate-200 dark:border-white/10 bg-white dark:bg-gray-900 px-1 text-right text-slate-900 dark:text-white text-[11px]" />
+                                                    <input type="number" value={display.base_per_shift ?? ''} onChange={(e) => handleVersionFieldChange(v.id, 'base_per_shift', e.target.value)} className="h-7 w-20 rounded border border-border bg-white dark:bg-gray-900 px-1 text-right text-foreground text-[11px]" />
                                                   ) : (
                                                     formatMoney(v.base_per_shift)
                                                   )}
                                                 </td>
                                                 <td className="px-2 py-2 text-right">
                                                   {isEditing ? (
-                                                    <input type="number" value={display.senior_operator_bonus ?? ''} onChange={(e) => handleVersionFieldChange(v.id, 'senior_operator_bonus', e.target.value)} className="h-7 w-20 rounded border border-slate-200 dark:border-white/10 bg-white dark:bg-gray-900 px-1 text-right text-slate-900 dark:text-white text-[11px]" />
+                                                    <input type="number" value={display.senior_operator_bonus ?? ''} onChange={(e) => handleVersionFieldChange(v.id, 'senior_operator_bonus', e.target.value)} className="h-7 w-20 rounded border border-border bg-white dark:bg-gray-900 px-1 text-right text-foreground text-[11px]" />
                                                   ) : (
                                                     formatMoney(v.senior_operator_bonus)
                                                   )}
                                                 </td>
                                                 <td className="px-2 py-2 text-right">
                                                   {isEditing ? (
-                                                    <input type="number" value={display.senior_cashier_bonus ?? ''} onChange={(e) => handleVersionFieldChange(v.id, 'senior_cashier_bonus', e.target.value)} className="h-7 w-20 rounded border border-slate-200 dark:border-white/10 bg-white dark:bg-gray-900 px-1 text-right text-slate-900 dark:text-white text-[11px]" />
+                                                    <input type="number" value={display.senior_cashier_bonus ?? ''} onChange={(e) => handleVersionFieldChange(v.id, 'senior_cashier_bonus', e.target.value)} className="h-7 w-20 rounded border border-border bg-white dark:bg-gray-900 px-1 text-right text-foreground text-[11px]" />
                                                   ) : (
                                                     formatMoney(v.senior_cashier_bonus)
                                                   )}
@@ -1769,9 +1769,9 @@ function SalaryRulesContent() {
                                                 <td className="px-2 py-2 text-right">
                                                   {isEditing ? (
                                                     <div className="flex items-center justify-end gap-1">
-                                                      <input type="number" value={display.threshold1_turnover ?? ''} onChange={(e) => handleVersionFieldChange(v.id, 'threshold1_turnover', e.target.value)} className="h-7 w-20 rounded border border-slate-200 dark:border-white/10 bg-white dark:bg-gray-900 px-1 text-right text-slate-900 dark:text-white text-[11px]" />
+                                                      <input type="number" value={display.threshold1_turnover ?? ''} onChange={(e) => handleVersionFieldChange(v.id, 'threshold1_turnover', e.target.value)} className="h-7 w-20 rounded border border-border bg-white dark:bg-gray-900 px-1 text-right text-foreground text-[11px]" />
                                                       <span className="text-gray-500">/</span>
-                                                      <input type="number" value={display.threshold1_bonus ?? ''} onChange={(e) => handleVersionFieldChange(v.id, 'threshold1_bonus', e.target.value)} className="h-7 w-16 rounded border border-slate-200 dark:border-white/10 bg-white dark:bg-gray-900 px-1 text-right text-slate-900 dark:text-white text-[11px]" />
+                                                      <input type="number" value={display.threshold1_bonus ?? ''} onChange={(e) => handleVersionFieldChange(v.id, 'threshold1_bonus', e.target.value)} className="h-7 w-16 rounded border border-border bg-white dark:bg-gray-900 px-1 text-right text-foreground text-[11px]" />
                                                     </div>
                                                   ) : (
                                                     <>{formatMoneyCompact(v.threshold1_turnover)} / {formatMoneyCompact(v.threshold1_bonus)}</>
@@ -1780,9 +1780,9 @@ function SalaryRulesContent() {
                                                 <td className="px-2 py-2 text-right">
                                                   {isEditing ? (
                                                     <div className="flex items-center justify-end gap-1">
-                                                      <input type="number" value={display.threshold2_turnover ?? ''} onChange={(e) => handleVersionFieldChange(v.id, 'threshold2_turnover', e.target.value)} className="h-7 w-20 rounded border border-slate-200 dark:border-white/10 bg-white dark:bg-gray-900 px-1 text-right text-slate-900 dark:text-white text-[11px]" />
+                                                      <input type="number" value={display.threshold2_turnover ?? ''} onChange={(e) => handleVersionFieldChange(v.id, 'threshold2_turnover', e.target.value)} className="h-7 w-20 rounded border border-border bg-white dark:bg-gray-900 px-1 text-right text-foreground text-[11px]" />
                                                       <span className="text-gray-500">/</span>
-                                                      <input type="number" value={display.threshold2_bonus ?? ''} onChange={(e) => handleVersionFieldChange(v.id, 'threshold2_bonus', e.target.value)} className="h-7 w-16 rounded border border-slate-200 dark:border-white/10 bg-white dark:bg-gray-900 px-1 text-right text-slate-900 dark:text-white text-[11px]" />
+                                                      <input type="number" value={display.threshold2_bonus ?? ''} onChange={(e) => handleVersionFieldChange(v.id, 'threshold2_bonus', e.target.value)} className="h-7 w-16 rounded border border-border bg-white dark:bg-gray-900 px-1 text-right text-foreground text-[11px]" />
                                                     </div>
                                                   ) : (
                                                     <>{formatMoneyCompact(v.threshold2_turnover)} / {formatMoneyCompact(v.threshold2_bonus)}</>
@@ -1791,9 +1791,9 @@ function SalaryRulesContent() {
                                                 <td className="px-2 py-2 text-right">
                                                   {isEditing ? (
                                                     <div className="flex items-center justify-end gap-1">
-                                                      <input type="number" value={display.low_turnover_threshold ?? ''} onChange={(e) => handleVersionFieldChange(v.id, 'low_turnover_threshold', e.target.value)} className="h-7 w-20 rounded border border-slate-200 dark:border-white/10 bg-white dark:bg-gray-900 px-1 text-right text-slate-900 dark:text-white text-[11px]" />
+                                                      <input type="number" value={display.low_turnover_threshold ?? ''} onChange={(e) => handleVersionFieldChange(v.id, 'low_turnover_threshold', e.target.value)} className="h-7 w-20 rounded border border-border bg-white dark:bg-gray-900 px-1 text-right text-foreground text-[11px]" />
                                                       <span className="text-gray-500">/</span>
-                                                      <input type="number" value={display.low_turnover_base ?? ''} onChange={(e) => handleVersionFieldChange(v.id, 'low_turnover_base', e.target.value)} className="h-7 w-16 rounded border border-slate-200 dark:border-white/10 bg-white dark:bg-gray-900 px-1 text-right text-slate-900 dark:text-white text-[11px]" />
+                                                      <input type="number" value={display.low_turnover_base ?? ''} onChange={(e) => handleVersionFieldChange(v.id, 'low_turnover_base', e.target.value)} className="h-7 w-16 rounded border border-border bg-white dark:bg-gray-900 px-1 text-right text-foreground text-[11px]" />
                                                     </div>
                                                   ) : (
                                                     <>{formatMoneyCompact(v.low_turnover_threshold)} / {formatMoneyCompact(v.low_turnover_base)}</>
@@ -1847,19 +1847,19 @@ function SalaryRulesContent() {
             <Card className="p-5 bg-white dark:bg-gray-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-lg font-semibold text-slate-900 dark:text-white">История изменений</h2>
+                  <h2 className="text-lg font-semibold text-foreground">История изменений</h2>
                   <p className="text-sm text-slate-700 dark:text-gray-400">
                     Красивый журнал по изменениям правил без технических полей базы.
                   </p>
                 </div>
-                <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] px-3 py-2 text-sm text-slate-700 dark:text-gray-300">
+                <div className="rounded-2xl border border-border bg-slate-50 dark:bg-white/[0.03] px-3 py-2 text-sm text-slate-700 dark:text-gray-300">
                   {filteredHistory.length} событий
                 </div>
               </div>
 
               <div className="mt-4 space-y-3">
                 {filteredHistory.length === 0 && (
-                  <div className="rounded-3xl border border-dashed border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] px-4 py-10 text-center text-sm text-gray-500">
+                  <div className="rounded-3xl border border-dashed border-border bg-slate-50 dark:bg-white/[0.02] px-4 py-10 text-center text-sm text-gray-500">
                     По текущим фильтрам пока нет истории изменений.
                   </div>
                 )}
@@ -1884,7 +1884,7 @@ function SalaryRulesContent() {
                     >
                       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                         <div>
-                          <p className="text-sm font-semibold text-slate-900 dark:text-white">{getActionLabel(entry.action)}</p>
+                          <p className="text-sm font-semibold text-foreground">{getActionLabel(entry.action)}</p>
                           <p className="mt-1 text-sm text-slate-700 dark:text-gray-300">
                             {companyName} · {formatShiftText(subject.shift_type)}
                           </p>
@@ -1896,12 +1896,12 @@ function SalaryRulesContent() {
                           {highlights.slice(0, 2).map((item) => (
                             <div
                               key={`${entry.id}-${item.label}`}
-                              className="rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-black/10 px-3 py-2 text-xs text-slate-700 dark:text-gray-200"
+                              className="rounded-2xl border border-border bg-slate-50 dark:bg-black/10 px-3 py-2 text-xs text-slate-700 dark:text-gray-200"
                             >
                               <span className="text-slate-500 dark:text-gray-400">{item.label}:</span>{' '}
                               <span className="font-medium">{item.before}</span>
                               <span className="mx-1 text-gray-500">→</span>
-                              <span className="font-medium text-slate-900 dark:text-white">{item.after}</span>
+                              <span className="font-medium text-foreground">{item.after}</span>
                             </div>
                           ))}
                         </div>
@@ -1912,12 +1912,12 @@ function SalaryRulesContent() {
                           {highlights.slice(2).map((item) => (
                             <div
                               key={`${entry.id}-${item.label}-extra`}
-                              className="rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-black/10 px-3 py-2 text-xs text-slate-700 dark:text-gray-200"
+                              className="rounded-2xl border border-border bg-slate-50 dark:bg-black/10 px-3 py-2 text-xs text-slate-700 dark:text-gray-200"
                             >
                               <span className="text-slate-500 dark:text-gray-400">{item.label}:</span>{' '}
                               <span className="font-medium">{item.before}</span>
                               <span className="mx-1 text-gray-500">→</span>
-                              <span className="font-medium text-slate-900 dark:text-white">{item.after}</span>
+                              <span className="font-medium text-foreground">{item.after}</span>
                             </div>
                           ))}
                         </div>
@@ -1929,22 +1929,22 @@ function SalaryRulesContent() {
             </Card>
 
             <Card className="p-5 bg-white dark:bg-gray-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
-              <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Как использовать раздел</h2>
+              <h2 className="text-lg font-semibold text-foreground">Как использовать раздел</h2>
               <div className="mt-4 space-y-3 text-sm">
                 <div className="rounded-3xl border border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.03] p-4">
-                  <p className="font-medium text-slate-900 dark:text-white">1. Сначала выбери точку</p>
+                  <p className="font-medium text-foreground">1. Сначала выбери точку</p>
                   <p className="mt-1 text-slate-700 dark:text-gray-400">
                     Через быстрые вкладки сверху можно быстро перейти на F16 Arena, Ramen или Extra.
                   </p>
                 </div>
                 <div className="rounded-3xl border border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.03] p-4">
-                  <p className="font-medium text-slate-900 dark:text-white">2. Настрой базу и бонусы</p>
+                  <p className="font-medium text-foreground">2. Настрой базу и бонусы</p>
                   <p className="mt-1 text-slate-700 dark:text-gray-400">
                     Для каждой смены отдельно задаются оклад, пороги выручки и надбавки для старших ролей.
                   </p>
                 </div>
                 <div className="rounded-3xl border border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.03] p-4">
-                  <p className="font-medium text-slate-900 dark:text-white">3. Смотри историю</p>
+                  <p className="font-medium text-foreground">3. Смотри историю</p>
                   <p className="mt-1 text-slate-700 dark:text-gray-400">
                     Ниже хранится понятный журнал: кто менял правило, на какой точке и что именно изменилось.
                   </p>
@@ -2004,7 +2004,7 @@ function SalaryRulesContent() {
               <Card className="border-slate-200 dark:border-white/5 bg-white dark:bg-gray-900/40 p-5 backdrop-blur-xl">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                   <div>
-                    <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Надбавка за стаж</h2>
+                    <h2 className="text-lg font-semibold text-foreground">Надбавка за стаж</h2>
                     <p className="mt-1 text-sm text-slate-700 dark:text-gray-400">
                       Стаж берётся из даты найма в профиле оператора. Надбавка считается от базового оклада смены.
                     </p>
@@ -2017,7 +2017,7 @@ function SalaryRulesContent() {
                         min={0}
                         value={newTierMonths}
                         onChange={(e) => setNewTierMonths(e.target.value)}
-                        className="h-10 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-gray-950 px-3 text-sm text-slate-900 dark:text-white outline-none focus:border-violet-500/60"
+                        className="h-10 rounded-xl border border-border bg-white dark:bg-gray-950 px-3 text-sm text-foreground outline-none focus:border-violet-500/60"
                       />
                     </label>
                     <label className="grid gap-1 text-xs text-slate-700 dark:text-gray-400">
@@ -2029,7 +2029,7 @@ function SalaryRulesContent() {
                         step={1}
                         value={newTierPercent}
                         onChange={(e) => setNewTierPercent(e.target.value)}
-                        className="h-10 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-gray-950 px-3 text-sm text-slate-900 dark:text-white outline-none focus:border-violet-500/60"
+                        className="h-10 rounded-xl border border-border bg-white dark:bg-gray-950 px-3 text-sm text-foreground outline-none focus:border-violet-500/60"
                       />
                     </label>
                     <label className="grid gap-1 text-xs text-slate-700 dark:text-gray-400">
@@ -2091,7 +2091,7 @@ function SalaryRulesContent() {
                                       min={0}
                                       value={tier.min_months ?? ''}
                                       onChange={(e) => handleTierFieldChange(tier.id, 'min_months', e.target.value)}
-                                      className="h-9 w-28 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-gray-950 px-3 text-right text-sm text-slate-900 dark:text-white outline-none focus:border-violet-500/60"
+                                      className="h-9 w-28 rounded-xl border border-border bg-white dark:bg-gray-950 px-3 text-right text-sm text-foreground outline-none focus:border-violet-500/60"
                                     />
                                     <span className="text-sm text-slate-500 dark:text-gray-400">мес.</span>
                                   </div>
@@ -2105,7 +2105,7 @@ function SalaryRulesContent() {
                                       step={1}
                                       value={tier.bonus_percent ?? ''}
                                       onChange={(e) => handleTierFieldChange(tier.id, 'bonus_percent', e.target.value)}
-                                      className="h-9 w-20 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-gray-950 px-3 text-right text-sm text-slate-900 dark:text-white outline-none focus:border-violet-500/60"
+                                      className="h-9 w-20 rounded-xl border border-border bg-white dark:bg-gray-950 px-3 text-right text-sm text-foreground outline-none focus:border-violet-500/60"
                                     />
                                     <span className="text-sm text-slate-500 dark:text-gray-400">%</span>
                                   </div>

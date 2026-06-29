@@ -119,10 +119,10 @@ function ReceiptDetailModal({ sale, onClose }: { sale: Sale; onClose: () => void
           </div>
 
           {/* Items */}
-          <div className="rounded-xl border border-slate-200 dark:border-white/10 overflow-hidden">
+          <div className="rounded-xl border border-border overflow-hidden">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03]">
+                <tr className="border-b border-border bg-slate-50 dark:bg-white/[0.03]">
                   <th className="px-3 py-2 text-left font-medium text-muted-foreground">Товар</th>
                   <th className="px-3 py-2 text-center font-medium text-muted-foreground">Кол.</th>
                   <th className="px-3 py-2 text-right font-medium text-muted-foreground">Цена</th>
@@ -156,7 +156,7 @@ function ReceiptDetailModal({ sale, onClose }: { sale: Sale; onClose: () => void
                 <span className="text-amber-400">−{fmt(sale.loyalty_discount_amount)} ₸</span>
               </div>
             )}
-            <div className="flex justify-between font-bold text-base border-t border-slate-200 dark:border-white/10 pt-2">
+            <div className="flex justify-between font-bold text-base border-t border-border pt-2">
               <span>Итого</span>
               <span className="text-emerald-400">{fmt(sale.total_amount)} ₸</span>
             </div>
@@ -164,7 +164,7 @@ function ReceiptDetailModal({ sale, onClose }: { sale: Sale; onClose: () => void
 
           {/* Payment breakdown */}
           {paymentBreakdown.length > 0 && (
-            <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3 space-y-1">
+            <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] p-3 space-y-1">
               <p className="text-xs font-medium text-muted-foreground mb-2">Оплата</p>
               {paymentBreakdown.map((p) => (
                 <div key={p.label} className="flex justify-between text-xs">
@@ -196,14 +196,14 @@ function ReceiptDetailModal({ sale, onClose }: { sale: Sale; onClose: () => void
 
           {/* Comment */}
           {sale.comment && (
-            <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3">
+            <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] p-3">
               <p className="text-xs text-muted-foreground">Комментарий</p>
               <p className="mt-1 text-sm">{sale.comment}</p>
             </div>
           )}
 
           {/* Footer */}
-          <div className="text-center text-xs text-muted-foreground pt-2 border-t border-slate-200 dark:border-white/10">
+          <div className="text-center text-xs text-muted-foreground pt-2 border-t border-border">
             ID: {sale.id}
           </div>
         </div>
@@ -457,7 +457,7 @@ function PosReceiptsPageContent({ embedded = false }: { embedded?: boolean }) {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-slate-200 dark:border-white/10">
+                    <tr className="border-b border-border">
                       <th className="px-4 py-3 text-left font-medium text-muted-foreground">Номер</th>
                       <th className="px-4 py-3 text-left font-medium text-muted-foreground">Дата</th>
                       <th className="px-4 py-3 text-left font-medium text-muted-foreground">Время</th>

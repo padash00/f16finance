@@ -1101,7 +1101,7 @@ export default function ProfitabilityPage() {
                             <div className="flex min-w-0 items-baseline gap-2">
                               <span className="shrink-0 text-xs text-muted-foreground">#{i + 1}</span>
                               <span className="truncate text-sm text-foreground">{cat.name}</span>
-                              <span className="shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] text-muted-foreground">{groupLabel}</span>
+                              <span className="shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium border border-border bg-slate-50 dark:bg-white/[0.03] text-muted-foreground">{groupLabel}</span>
                             </div>
                             <span className="shrink-0 text-sm font-medium text-foreground">{money(cat.total)}</span>
                           </div>

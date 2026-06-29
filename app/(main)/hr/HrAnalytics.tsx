@@ -157,7 +157,7 @@ export default function HrAnalytics() {
             <Card className="p-5 bg-white dark:bg-gray-900/60 border-slate-200 dark:border-gray-800">
               <div className="flex items-center gap-2 mb-3">
                 <TrendingUp className="w-4 h-4 text-indigo-700 dark:text-indigo-300" />
-                <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Текучка за период</h3>
+                <h3 className="text-sm font-semibold text-foreground">Текучка за период</h3>
                 <span className="text-xs text-gray-500 ml-auto">{data.turnover.period_days} дней</span>
               </div>
               <div className="grid grid-cols-3 gap-3">
@@ -185,7 +185,7 @@ export default function HrAnalytics() {
             <Card className="p-5 bg-white dark:bg-gray-900/60 border-slate-200 dark:border-gray-800">
               <div className="flex items-center gap-2 mb-3">
                 <Cake className="w-4 h-4 text-pink-700 dark:text-pink-300" />
-                <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Средний стаж</h3>
+                <h3 className="text-sm font-semibold text-foreground">Средний стаж</h3>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
@@ -205,7 +205,7 @@ export default function HrAnalytics() {
             <Card className="p-5 bg-white dark:bg-gray-900/60 border-slate-200 dark:border-gray-800">
               <div className="flex items-center gap-2 mb-3">
                 <Briefcase className="w-4 h-4 text-amber-700 dark:text-amber-300" />
-                <h3 className="text-sm font-semibold text-slate-900 dark:text-white">По должностям</h3>
+                <h3 className="text-sm font-semibold text-foreground">По должностям</h3>
               </div>
               <div className="space-y-2">
                 {data.byRole.length === 0 && <div className="text-xs text-gray-500">Нет данных</div>}
@@ -218,7 +218,7 @@ export default function HrAnalytics() {
             <Card className="p-5 bg-white dark:bg-gray-900/60 border-slate-200 dark:border-gray-800">
               <div className="flex items-center gap-2 mb-3">
                 <Building2 className="w-4 h-4 text-cyan-700 dark:text-cyan-300" />
-                <h3 className="text-sm font-semibold text-slate-900 dark:text-white">По точкам</h3>
+                <h3 className="text-sm font-semibold text-foreground">По точкам</h3>
               </div>
               <div className="space-y-2">
                 {data.byCompany.length === 0 && <div className="text-xs text-gray-500">Нет назначений</div>}
@@ -234,7 +234,7 @@ export default function HrAnalytics() {
             <Card className="p-5 bg-white dark:bg-gray-900/60 border-slate-200 dark:border-gray-800">
               <div className="flex items-center gap-2 mb-3">
                 <Cake className="w-4 h-4 text-pink-700 dark:text-pink-300" />
-                <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Скоро ДР</h3>
+                <h3 className="text-sm font-semibold text-foreground">Скоро ДР</h3>
                 <span className="ml-auto text-xs text-gray-500">{data.upcoming.birthdays.length}</span>
               </div>
               {data.upcoming.birthdays.length === 0 ? (
@@ -243,7 +243,7 @@ export default function HrAnalytics() {
                 <ul className="space-y-1.5">
                   {data.upcoming.birthdays.slice(0, 6).map((b, i) => (
                     <li key={i} className="text-sm flex items-center justify-between gap-2">
-                      <span className="text-slate-900 dark:text-white truncate">{b.name}</span>
+                      <span className="text-foreground truncate">{b.name}</span>
                       <span className="text-xs text-pink-700 dark:text-pink-300 shrink-0">{whenLabel(b.days_until)}</span>
                     </li>
                   ))}
@@ -254,7 +254,7 @@ export default function HrAnalytics() {
             <Card className="p-5 bg-white dark:bg-gray-900/60 border-slate-200 dark:border-gray-800">
               <div className="flex items-center gap-2 mb-3">
                 <Sparkles className="w-4 h-4 text-amber-700 dark:text-amber-300" />
-                <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Годовщины</h3>
+                <h3 className="text-sm font-semibold text-foreground">Годовщины</h3>
                 <span className="ml-auto text-xs text-gray-500">{data.upcoming.anniversaries.length}</span>
               </div>
               {data.upcoming.anniversaries.length === 0 ? (
@@ -263,7 +263,7 @@ export default function HrAnalytics() {
                 <ul className="space-y-1.5">
                   {data.upcoming.anniversaries.slice(0, 6).map((a, i) => (
                     <li key={i} className="text-sm flex items-center justify-between gap-2">
-                      <span className="text-slate-900 dark:text-white truncate">{a.name}</span>
+                      <span className="text-foreground truncate">{a.name}</span>
                       <span className="text-xs text-amber-700 dark:text-amber-300 shrink-0">
                         {a.years} {a.years === 1 ? 'год' : a.years < 5 ? 'года' : 'лет'} · {whenLabel(a.days_until)}
                       </span>
@@ -276,7 +276,7 @@ export default function HrAnalytics() {
             <Card className="p-5 bg-white dark:bg-gray-900/60 border-slate-200 dark:border-gray-800">
               <div className="flex items-center gap-2 mb-3">
                 <AlertTriangle className="w-4 h-4 text-orange-400" />
-                <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Без логина</h3>
+                <h3 className="text-sm font-semibold text-foreground">Без логина</h3>
                 <span className="ml-auto text-xs text-gray-500">{data.issues.no_login.length}</span>
               </div>
               {data.issues.no_login.length === 0 ? (
@@ -288,7 +288,7 @@ export default function HrAnalytics() {
                   {data.issues.no_login.slice(0, 6).map((p) => (
                     <li key={p.id} className="text-sm flex items-center gap-2">
                       <WifiOff className="w-3.5 h-3.5 text-orange-400 shrink-0" />
-                      <span className="text-slate-900 dark:text-white truncate">{p.name}</span>
+                      <span className="text-foreground truncate">{p.name}</span>
                     </li>
                   ))}
                 </ul>
@@ -326,7 +326,7 @@ function BigStat({
         {icon}
         <span className="text-[10px] uppercase tracking-wider opacity-90">{label}</span>
       </div>
-      <div className="text-2xl font-bold text-slate-900 dark:text-white mt-1">{value}</div>
+      <div className="text-2xl font-bold text-foreground mt-1">{value}</div>
       {hint && <div className="text-[10px] text-slate-500 dark:text-gray-400 mt-0.5">{hint}</div>}
     </Card>
   )
@@ -352,7 +352,7 @@ function SmallStat({
       <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider opacity-90">
         {icon} {label}
       </div>
-      <div className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">{value}</div>
+      <div className="text-lg font-bold text-foreground mt-0.5">{value}</div>
     </div>
   )
 }

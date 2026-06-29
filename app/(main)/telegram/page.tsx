@@ -92,9 +92,9 @@ function SectionToggle({
       >
         <div className="flex items-center gap-3">
           <div className="p-2 bg-white dark:bg-slate-800 rounded-lg">
-            <Icon className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+            <Icon className="w-4 h-4 text-muted-foreground" />
           </div>
-          <span className="text-sm font-semibold text-slate-900 dark:text-white">{title}</span>
+          <span className="text-sm font-semibold text-foreground">{title}</span>
           {badge && (
             <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400">
               {badge}
@@ -321,7 +321,7 @@ create table if not exists telegram_allowed_users (
               <button
                 onClick={() => { loadStatus(); loadUsers(); loadStaff() }}
                 disabled={statusLoading}
-                className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               >
                 <RefreshCw className={`w-4 h-4 ${statusLoading ? 'animate-spin' : ''}`} />
               </button>
@@ -347,7 +347,7 @@ create table if not exists telegram_allowed_users (
                   <div className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                     Бот:{' '}
-                    <span className="text-slate-900 dark:text-white font-medium">@{status.botInfo.username}</span>
+                    <span className="text-foreground font-medium">@{status.botInfo.username}</span>
                     <span className="text-slate-500">({status.botInfo.first_name})</span>
                   </div>
                 )}
@@ -368,7 +368,7 @@ create table if not exists telegram_allowed_users (
                 {!status?.hasToken && (
                   <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-xs text-slate-700 dark:text-slate-400 space-y-1">
                     <p className="text-amber-700 dark:text-amber-300 font-semibold text-sm mb-2">Как настроить:</p>
-                    <p>1. Создайте бота через <strong className="text-slate-900 dark:text-white">@BotFather</strong> → получите токен</p>
+                    <p>1. Создайте бота через <strong className="text-foreground">@BotFather</strong> → получите токен</p>
                     <p>2. Добавьте в Vercel env: <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded text-slate-700 dark:text-slate-300">TELEGRAM_BOT_TOKEN</code></p>
                     <p>3. Создайте канал/группу, добавьте бота как админа</p>
                     <p>4. Добавьте в Vercel env: <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded text-slate-700 dark:text-slate-300">TELEGRAM_CHAT_ID</code></p>
@@ -449,7 +449,7 @@ create table if not exists telegram_allowed_users (
                 <p className="text-xs text-red-600 dark:text-red-400">{addError}</p>
               )}
               <p className="text-xs text-slate-600">
-                Свой Telegram ID: напишите боту <span className="text-slate-500 dark:text-slate-400">@userinfobot</span> — он вернёт числовой ID
+                Свой Telegram ID: напишите боту <span className="text-muted-foreground">@userinfobot</span> — он вернёт числовой ID
               </p>
             </div>
             )}
@@ -479,7 +479,7 @@ create table if not exists telegram_allowed_users (
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-slate-900 dark:text-white font-medium truncate">
+                      <p className="text-sm text-foreground font-medium truncate">
                         {user.label || `ID: ${user.telegram_user_id}`}
                       </p>
                       <p className="text-xs text-slate-500 font-mono">{user.telegram_user_id}</p>
@@ -533,7 +533,7 @@ create table if not exists telegram_allowed_users (
           >
             <p className="text-xs text-slate-500 mb-4">
               Привяжите Telegram ID к каждому сотруднику чтобы они могли использовать финансовые команды бота по своей роли.
-              Узнать ID: написать <span className="text-slate-500 dark:text-slate-400">@userinfobot</span> в Telegram.
+              Узнать ID: написать <span className="text-muted-foreground">@userinfobot</span> в Telegram.
             </p>
 
             {staffLoading ? (
@@ -549,7 +549,7 @@ create table if not exists telegram_allowed_users (
                   return (
                     <div key={member.id} className="flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/50">
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-slate-900 dark:text-white font-medium truncate">{member.full_name}</p>
+                        <p className="text-sm text-foreground font-medium truncate">{member.full_name}</p>
                         <p className="text-xs text-slate-500">{getStaffRoleLabel(member.role)}</p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
@@ -732,7 +732,7 @@ create table if not exists telegram_allowed_users (
               </pre>
               <button
                 onClick={() => navigator.clipboard.writeText(SQL_TEXT)}
-                className="absolute top-3 right-3 p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
+                className="absolute top-3 right-3 p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-muted-foreground hover:text-slate-900 dark:hover:text-white transition-colors"
                 title="Скопировать"
               >
                 <Copy className="w-3.5 h-3.5" />

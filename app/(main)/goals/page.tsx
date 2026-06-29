@@ -535,7 +535,7 @@ export default function GoalsPage() {
           backHref="/"
           actions={
             <>
-              <div className="flex items-center gap-0.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] p-0.5">
+              <div className="flex items-center gap-0.5 rounded-xl border border-border bg-white dark:bg-white/[0.04] p-0.5">
                 <button onClick={() => setYear((y) => y - 1)} disabled={loading} className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/[0.06] hover:text-foreground disabled:opacity-50">
                   <ChevronLeft className="h-4 w-4" />
                 </button>
@@ -544,7 +544,7 @@ export default function GoalsPage() {
                   <ChevronRight className="h-4 w-4" />
                 </button>
               </div>
-              <button onClick={() => void load(undefined, { soft: true })} disabled={loading || refreshing} className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] text-muted-foreground transition hover:bg-slate-100 dark:hover:bg-white/[0.08] hover:text-foreground disabled:opacity-50" title="Обновить">
+              <button onClick={() => void load(undefined, { soft: true })} disabled={loading || refreshing} className="grid h-10 w-10 place-items-center rounded-xl border border-border bg-white dark:bg-white/[0.04] text-muted-foreground transition hover:bg-slate-100 dark:hover:bg-white/[0.08] hover:text-foreground disabled:opacity-50" title="Обновить">
                 <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
               </button>
               <button onClick={() => setDialogOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-600 to-amber-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-amber-500/30 transition hover:from-amber-700 hover:to-amber-700">
@@ -554,7 +554,7 @@ export default function GoalsPage() {
             </>
           }
           toolbar={
-            <div className="inline-flex items-center gap-1 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-1">
+            <div className="inline-flex items-center gap-1 rounded-2xl border border-border bg-white dark:bg-white/[0.03] p-1">
               {(['year', 'h1', 'h2', 'month'] as PeriodKind[]).map((p) => (
                 <button
                   key={p}
@@ -581,7 +581,7 @@ export default function GoalsPage() {
         ) : null}
 
         {loading && !data ? (
-          <div className="grid place-items-center rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-12 text-sm text-muted-foreground">
+          <div className="grid place-items-center rounded-2xl border border-border bg-white dark:bg-white/[0.02] p-12 text-sm text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin" />
             <span className="mt-2">Грузим данные за {year}…</span>
           </div>
@@ -664,7 +664,7 @@ export default function GoalsPage() {
                 ) : (
                   <div className="space-y-1.5">
                     <Label>Год</Label>
-                    <div className="grid h-10 place-items-center rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] text-sm tabular-nums">
+                    <div className="grid h-10 place-items-center rounded-lg border border-border bg-white dark:bg-white/[0.03] text-sm tabular-nums">
                       {year}
                     </div>
                   </div>
@@ -769,7 +769,7 @@ export default function GoalsPage() {
                           const shareRev = Math.round(rev * wRev[idx])
                           const shareProf = Math.round(prof * wProf[idx])
                           return (
-                            <div key={idx} className="rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] px-2 py-1.5 text-center">
+                            <div key={idx} className="rounded-lg border border-border bg-white dark:bg-white/[0.02] px-2 py-1.5 text-center">
                               <p className="text-[9px] uppercase text-muted-foreground">{mLabel}</p>
                               <p className="text-[11px] font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">{fmt(shareRev / 1000)}k</p>
                               <p className="text-[10px] tabular-nums text-amber-700 dark:text-amber-300">{fmt(shareProf / 1000)}k</p>
@@ -891,8 +891,8 @@ function MonthGrid({
               isCurrent
                 ? 'border-amber-500/40 bg-gradient-to-br from-amber-500/[0.08] to-amber-500/[0.04] hover:border-amber-500/60'
                 : isClosed
-                  ? 'border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] hover:border-slate-300 dark:hover:border-white/20 hover:bg-slate-50 dark:hover:bg-white/[0.04]'
-                  : 'border-dashed border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.01] hover:border-slate-300 dark:hover:border-white/20 hover:bg-slate-50 dark:hover:bg-white/[0.03]'
+                  ? 'border-border bg-white dark:bg-white/[0.02] hover:border-slate-300 dark:hover:border-white/20 hover:bg-slate-50 dark:hover:bg-white/[0.04]'
+                  : 'border-dashed border-border bg-white dark:bg-white/[0.01] hover:border-slate-300 dark:hover:border-white/20 hover:bg-slate-50 dark:hover:bg-white/[0.03]'
             }`}
           >
             <div className="flex items-center justify-between">
@@ -1081,7 +1081,7 @@ function PeriodView({
       </div>
 
       {/* Динамика выбранной метрики */}
-      <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-5">
+      <div className="rounded-2xl border border-border bg-white dark:bg-white/[0.02] p-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold">Динамика: {metricMeta(activeMetric).label}</h2>
           {activePlan ? (
@@ -1140,7 +1140,7 @@ function PeriodView({
             const share = shares.get(c.id) || 0
             const allocated = ct.value <= 0 && activeTarget.value > 0 ? Math.round(activeTarget.value * share) : 0
             return (
-              <div key={c.id} className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-4">
+              <div key={c.id} className="rounded-2xl border border-border bg-white dark:bg-white/[0.02] p-4">
                 <p className="text-sm font-semibold">{c.name}</p>
                 <p className="mt-2 text-2xl font-bold tabular-nums">
                   {fmt(f[activeMetric])}{' '}
@@ -1254,7 +1254,7 @@ function MonthDetailDialog({
         <DialogDescription className="sr-only">
           Факт и план по выбранному месяцу с разбивкой по точкам и динамикой по дням.
         </DialogDescription>
-        <div className="flex items-center justify-between border-b border-slate-200 dark:border-white/10 bg-gradient-to-r from-amber-500/[0.08] to-amber-500/[0.04] px-6 py-4">
+        <div className="flex items-center justify-between border-b border-border bg-gradient-to-r from-amber-500/[0.08] to-amber-500/[0.04] px-6 py-4">
           <div className="flex items-center gap-3">
             <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-lg shadow-amber-500/30">
               <CalendarDays className="h-5 w-5" />
@@ -1335,7 +1335,7 @@ function MonthDetailDialog({
           ) : null}
 
           {/* Chart */}
-          <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-5">
+          <div className="rounded-2xl border border-border bg-white dark:bg-white/[0.02] p-5">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-semibold">Динамика по дням: {metricMeta(activeMetric).label}</h2>
               {orgPlan ? (
@@ -1371,7 +1371,7 @@ function MonthDetailDialog({
                   const share = shares.get(c.id) || 0
                   const allocated = orgTarget > 0 ? Math.round(orgTarget * share) : 0
                   return (
-                    <div key={c.id} className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-4">
+                    <div key={c.id} className="rounded-2xl border border-border bg-white dark:bg-white/[0.02] p-4">
                       <p className="text-sm font-semibold">{c.name}</p>
                       <p className="mt-2 text-xl font-bold tabular-nums">
                         {fmt(f[activeMetric])} <span className="text-xs text-muted-foreground">{metricMeta(activeMetric).unit}</span>

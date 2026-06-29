@@ -182,7 +182,7 @@ export function ChecklistEditorDialog({
           <button
             type="button"
             onClick={() => onOpenChange(false)}
-            className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-500 hover:text-slate-900 dark:hover:text-slate-100"
+            className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 dark:border-slate-700 text-muted-foreground hover:border-slate-400 dark:hover:border-slate-500 hover:text-slate-900 dark:hover:text-slate-100"
           >
             <X className="h-4 w-4" />
           </button>
@@ -564,7 +564,7 @@ export function ChecklistEditorDialog({
                       <Badge>{ROLE_SCOPE_LABELS[templateValue.role_scope] || templateValue.role_scope}</Badge>
                       <Badge>{templateValue.blocks_shift ? 'Блокирует смену' : 'Не блокирует'}</Badge>
                     </div>
-                    <h3 className="mt-3 break-words text-2xl font-black text-slate-900 dark:text-white">{templateValue.title || 'Название чек-листа'}</h3>
+                    <h3 className="mt-3 break-words text-2xl font-black text-foreground">{templateValue.title || 'Название чек-листа'}</h3>
                     <p className="mt-2 break-words text-sm leading-6 text-slate-700 dark:text-slate-400">
                       {templateValue.description || 'Описание увидит оператор перед прохождением чек-листа.'}
                     </p>
@@ -648,7 +648,7 @@ function TabButton({ active, onClick, icon, children }: { active: boolean; onCli
       type="button"
       onClick={onClick}
       className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-bold transition ${
-        active ? 'border-amber-300/60 bg-amber-300/15 text-amber-700 dark:text-amber-100' : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/50 text-slate-500 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-600'
+        active ? 'border-amber-300/60 bg-amber-300/15 text-amber-700 dark:text-amber-100' : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/50 text-muted-foreground hover:border-slate-400 dark:hover:border-slate-600'
       }`}
     >
       {icon}

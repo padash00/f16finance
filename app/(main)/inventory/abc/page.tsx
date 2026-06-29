@@ -280,7 +280,7 @@ export function AbcAnalysisPageContent() {
           </>
         }
         toolbar={
-          <div className="flex items-center gap-1 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-1 self-start">
+          <div className="flex items-center gap-1 rounded-lg border border-border bg-white dark:bg-white/[0.03] p-1 self-start">
             {PERIOD_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
@@ -380,7 +380,7 @@ export function AbcAnalysisPageContent() {
             </div>
 
             {/* ABC class filter */}
-            <div className="flex items-center gap-1 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-1">
+            <div className="flex items-center gap-1 rounded-lg border border-border bg-white dark:bg-white/[0.03] p-1">
               {(['all', 'A', 'B', 'C'] as const).map((cls) => (
                 <button
                   key={cls}
@@ -407,7 +407,7 @@ export function AbcAnalysisPageContent() {
               <select
                 value={categoryFilter}
                 onChange={(e) => setCategoryFilter(e.target.value)}
-                className="rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                className="rounded-md border border-border bg-white dark:bg-white/[0.03] px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
               >
                 <option value="">Все категории</option>
                 {categories.map((cat) => (
@@ -454,7 +454,7 @@ export function AbcAnalysisPageContent() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 dark:border-white/10">
+                  <tr className="border-b border-border">
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground w-10">#</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground w-16">
                       ABC класс
@@ -616,7 +616,7 @@ export function AbcAnalysisPageContent() {
           </DialogHeader>
           {editItem && (
             <form onSubmit={(e) => void handleSavePrice(e)} className="space-y-4">
-              <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3 text-sm">
+              <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] p-3 text-sm">
                 <p className="font-medium">{editItem.name}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Текущая цена: <span className="text-foreground font-semibold">{formatMoney(editItem.sale_price)}</span>

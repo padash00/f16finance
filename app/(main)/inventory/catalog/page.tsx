@@ -352,7 +352,7 @@ function ItemForm({
             Такой штрихкод уже есть в каталоге: <span className="font-medium">{recog.data.name}</span>{recog.data.category_name ? ` · ${recog.data.category_name}` : ''}.
           </div>
         ) : recog.data?.found === 'none' ? (
-          <div className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] px-3 py-2 text-xs text-muted-foreground">
+          <div className="rounded-lg border border-border bg-slate-50 dark:bg-white/[0.03] px-3 py-2 text-xs text-muted-foreground">
             Не нашли в открытых базах{recog.data.country ? ` (код: ${recog.data.country})` : ''}. Заполните вручную — товар сохранится в каталоге.
           </div>
         ) : recog.data?.found === 'external' || recog.data?.found === 'applied' ? (
@@ -863,9 +863,9 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
       {!loading && items.length > 0 && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {/* Позиций */}
-          <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] px-4 py-3">
+          <div className="rounded-2xl border border-border bg-white dark:bg-white/[0.04] px-4 py-3">
             <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-              <Tag className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+              <Tag className="w-3.5 h-3.5 text-muted-foreground" />
               Позиций
             </div>
             <div className="text-xl font-bold text-foreground">{items.length.toLocaleString('ru-RU')}</div>
@@ -1054,7 +1054,7 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
                               title="Открыть карточку товара"
                             >
                               {item.image_url ? (
-                                <img src={item.image_url} alt="" className="h-8 w-8 shrink-0 rounded object-cover border border-slate-200 dark:border-white/10" />
+                                <img src={item.image_url} alt="" className="h-8 w-8 shrink-0 rounded object-cover border border-border" />
                               ) : (
                                 <span className="h-8 w-8 shrink-0 rounded bg-slate-100 dark:bg-white/[0.05]" />
                               )}

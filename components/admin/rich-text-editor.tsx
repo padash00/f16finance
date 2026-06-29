@@ -288,7 +288,7 @@ function ToolButton({
       className={`grid h-8 w-8 place-items-center rounded-md transition ${
         active
           ? 'bg-amber-300/20 text-amber-700 dark:text-amber-200'
-          : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 disabled:opacity-30 disabled:hover:bg-transparent'
+          : 'text-muted-foreground hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 disabled:opacity-30 disabled:hover:bg-transparent'
       }`}
     >
       {children}

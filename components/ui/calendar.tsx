@@ -31,12 +31,12 @@ export function Calendar({ className, classNames, showOutsideDays = true, ...pro
         dropdowns: 'flex items-center gap-1.5',
         dropdown_root: 'relative inline-flex items-center',
         dropdown:
-          'rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm font-medium px-2 py-1 cursor-pointer outline-none hover:border-amber-400 focus:border-amber-500 capitalize',
+          'rounded-lg border border-border bg-white dark:bg-slate-800 text-foreground text-sm font-medium px-2 py-1 cursor-pointer outline-none hover:border-amber-400 focus:border-amber-500 capitalize',
         nav: 'absolute inset-x-0 top-0 flex items-center justify-between px-1 z-10',
         button_previous:
-          'h-8 w-8 inline-flex items-center justify-center rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10 transition disabled:opacity-30 disabled:pointer-events-none cursor-pointer',
+          'h-8 w-8 inline-flex items-center justify-center rounded-lg text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/10 transition disabled:opacity-30 disabled:pointer-events-none cursor-pointer',
         button_next:
-          'h-8 w-8 inline-flex items-center justify-center rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10 transition disabled:opacity-30 disabled:pointer-events-none cursor-pointer',
+          'h-8 w-8 inline-flex items-center justify-center rounded-lg text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/10 transition disabled:opacity-30 disabled:pointer-events-none cursor-pointer',
         month_grid: 'w-full border-collapse',
         weekdays: 'flex',
         weekday: 'text-slate-400 dark:text-slate-500 w-9 font-medium text-[0.65rem] uppercase tracking-wide',

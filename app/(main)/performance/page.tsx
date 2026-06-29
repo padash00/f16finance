@@ -168,7 +168,7 @@ function rankBadge(rank: number) {
   if (rank === 1) return <Crown className="w-5 h-5 text-amber-600 dark:text-amber-300" />
   if (rank === 2) return <Trophy className="w-5 h-5 text-slate-700 dark:text-slate-300" />
   if (rank === 3) return <Medal className="w-5 h-5 text-orange-600 dark:text-orange-300" />
-  return <span className="text-xs font-mono text-slate-500 dark:text-slate-400">#{rank}</span>
+  return <span className="text-xs font-mono text-muted-foreground">#{rank}</span>
 }
 
 const WEEKDAY_NAMES = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']
@@ -198,7 +198,7 @@ function DeltaBadge({ pi, prev }: { pi: number; prev: number | undefined }) {
   const d = pi - prev
   if (Math.abs(d) < 0.005) {
     return (
-      <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-slate-500 dark:text-slate-400 tabular-nums">
+      <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-muted-foreground tabular-nums">
         <Minus className="w-3 h-3" />0.00
       </span>
     )
@@ -445,14 +445,14 @@ export default function PerformancePage() {
         backHref="/"
         actions={
           <>
-            <div className="flex items-center gap-1 bg-slate-100 dark:bg-zinc-900/50 p-1 rounded-xl border border-slate-200 dark:border-white/10">
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-zinc-900/50 p-1 rounded-xl border border-border">
               {(Object.keys(PERIOD_PRESETS) as PeriodPreset[]).map((p) => (
                 <button
                   key={p}
                   type="button"
                   onClick={() => setPeriod(p)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
-                    period === p ? 'bg-slate-200 dark:bg-white/10 text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    period === p ? 'bg-slate-200 dark:bg-white/10 text-foreground' : 'text-muted-foreground hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
                   {PERIOD_PRESETS[p].label}
@@ -464,7 +464,7 @@ export default function PerformancePage() {
               size="sm"
               onClick={() => load(true)}
               disabled={loading || refreshing}
-              className="rounded-xl border border-slate-200 dark:border-white/10"
+              className="rounded-xl border border-border"
               title="Обновить"
             >
               <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
@@ -477,7 +477,7 @@ export default function PerformancePage() {
               <select
                 value={companyId}
                 onChange={(e) => setCompanyId(e.target.value)}
-                className="bg-slate-100 dark:bg-zinc-900/50 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-1.5 text-xs font-medium text-slate-900 dark:text-white outline-none hover:bg-slate-200 dark:hover:bg-zinc-900/70 cursor-pointer"
+                className="bg-slate-100 dark:bg-zinc-900/50 border border-border rounded-xl px-3 py-1.5 text-xs font-medium text-foreground outline-none hover:bg-slate-200 dark:hover:bg-zinc-900/70 cursor-pointer"
               >
                 <option value="" className="bg-white dark:bg-zinc-900">📍 Все точки</option>
                 {companies.map((c) => (
@@ -486,14 +486,14 @@ export default function PerformancePage() {
                   </option>
                 ))}
               </select>
-              <div className="flex items-center gap-1 bg-slate-100 dark:bg-zinc-900/50 p-1 rounded-xl border border-slate-200 dark:border-white/10">
+              <div className="flex items-center gap-1 bg-slate-100 dark:bg-zinc-900/50 p-1 rounded-xl border border-border">
                 {(['all', 'day', 'night'] as ShiftFilter[]).map((s) => (
                   <button
                     key={s}
                     type="button"
                     onClick={() => setShiftFilter(s)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
-                      shiftFilter === s ? 'bg-slate-200 dark:bg-white/10 text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      shiftFilter === s ? 'bg-slate-200 dark:bg-white/10 text-foreground' : 'text-muted-foreground hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
                     {s === 'all' ? 'Все смены' : s === 'day' ? '☀️ День' : '🌙 Ночь'}
@@ -502,7 +502,7 @@ export default function PerformancePage() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-md border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 px-2.5 py-0.5 text-[11px] font-medium text-slate-700 dark:text-slate-300">
+              <span className="rounded-md border border-border bg-slate-100 dark:bg-white/5 px-2.5 py-0.5 text-[11px] font-medium text-slate-700 dark:text-slate-300">
                 {PERIOD_PRESETS[period].label}
               </span>
               {selectedCompany && (
@@ -525,21 +525,21 @@ export default function PerformancePage() {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Поиск оператора…"
-                  className="w-44 bg-slate-100 dark:bg-zinc-900/50 border border-slate-200 dark:border-white/10 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 outline-none focus:border-violet-400"
+                  className="w-44 bg-slate-100 dark:bg-zinc-900/50 border border-border rounded-xl pl-8 pr-3 py-1.5 text-xs text-foreground placeholder:text-slate-400 outline-none focus:border-violet-400"
                 />
               </div>
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-                className="bg-slate-100 dark:bg-zinc-900/50 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-1.5 text-xs font-medium text-slate-900 dark:text-white outline-none cursor-pointer"
+                className="bg-slate-100 dark:bg-zinc-900/50 border border-border rounded-xl px-3 py-1.5 text-xs font-medium text-foreground outline-none cursor-pointer"
               >
                 <option value="pi" className="bg-white dark:bg-zinc-900">Сортировка: PI</option>
                 <option value="aboveNorm" className="bg-white dark:bg-zinc-900">Сверх нормы ₸</option>
                 <option value="revenue" className="bg-white dark:bg-zinc-900">Выручка</option>
                 <option value="shifts" className="bg-white dark:bg-zinc-900">Смены</option>
               </select>
-              <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-zinc-900/50 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-1.5">
-                <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Бонус</span>
+              <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-zinc-900/50 border border-border rounded-xl px-3 py-1.5">
+                <span className="text-xs font-medium text-muted-foreground">Бонус</span>
                 <input
                   type="number"
                   min={0}
@@ -547,15 +547,15 @@ export default function PerformancePage() {
                   value={bonusPct || ''}
                   onChange={(e) => setBonusPct(Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
                   placeholder="0"
-                  className="w-12 bg-transparent text-xs font-semibold text-slate-900 dark:text-white outline-none text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  className="w-12 bg-transparent text-xs font-semibold text-foreground outline-none text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
-                <span className="text-xs font-medium text-slate-500 dark:text-slate-400">% сверх нормы</span>
+                <span className="text-xs font-medium text-muted-foreground">% сверх нормы</span>
               </div>
               <button
                 type="button"
                 onClick={() => exportCsv(viewQualifying, bonusPct)}
                 disabled={viewQualifying.length === 0}
-                className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-zinc-900/50 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-zinc-900/70 disabled:opacity-40"
+                className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-zinc-900/50 border border-border rounded-xl px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-zinc-900/70 disabled:opacity-40"
                 title="Скачать CSV (Excel)"
               >
                 <Download className="w-3.5 h-3.5" />Экспорт
@@ -618,7 +618,7 @@ export default function PerformancePage() {
         >
           <Info className="w-4 h-4 text-blue-400" />
           <span className="text-sm font-semibold text-blue-700 dark:text-blue-300">Как формируется рейтинг</span>
-          <span className="ml-2 text-xs font-normal text-slate-500 dark:text-slate-400">PI = факт ÷ ожидание по слоту (точка · день недели · день/ночь)</span>
+          <span className="ml-2 text-xs font-normal text-muted-foreground">PI = факт ÷ ожидание по слоту (точка · день недели · день/ночь)</span>
           <ChevronDown className={`ml-auto w-4 h-4 text-slate-400 transition-transform ${methodOpen ? 'rotate-180' : ''}`} />
         </button>
         {methodOpen && (
@@ -627,8 +627,8 @@ export default function PerformancePage() {
           <div className="flex gap-3">
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500/15 text-blue-700 dark:text-blue-300 text-xs font-semibold">1</div>
             <div className="flex-1">
-              <div className="font-semibold text-slate-900 dark:text-white mb-1">Считаем «ожидание» для каждой смены</div>
-              <p className="text-slate-500 dark:text-slate-400 leading-relaxed">
+              <div className="font-semibold text-foreground mb-1">Считаем «ожидание» для каждой смены</div>
+              <p className="text-muted-foreground leading-relaxed">
                 Берём <strong className="text-slate-700 dark:text-slate-200">всю историю проекта</strong>
                 {data?.baseline.from && (
                   <> с <strong className="text-slate-700 dark:text-slate-200">{data.baseline.from}</strong> ({data.config.baseline_days_actual} дн.)</>
@@ -639,12 +639,12 @@ export default function PerformancePage() {
                 Окно автоматически расширяется по мере накопления данных — мы не теряем ранние смены и точно знаем,
                 сколько в среднем делается в каждый понедельник, пятницу, ночь и т.д.
               </p>
-              <p className="text-slate-500 dark:text-slate-400 leading-relaxed mt-2">
+              <p className="text-muted-foreground leading-relaxed mt-2">
                 <strong className="text-amber-700 dark:text-amber-300">Важно (leave-one-out):</strong> когда мы считаем ожидание для смены оператора Х — его собственные прошлые смены <strong className="text-amber-700 dark:text-amber-300">не входят в медиану</strong>.
                 Это убирает «само-смещение»: если оператор работал почти все пятничные ночи, его прошлые результаты не должны формировать его же норму. Сравниваем его только с тем что делали <strong>другие</strong> в таком же слоте.
               </p>
-              <div className="mt-2 rounded-lg border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-black/20 p-3 text-xs text-slate-500 dark:text-slate-400">
-                Пример: «Arena × пятница × ночь» — за период базы было 24 таких смены. Когда считаем ожидание для Айгерим, исключаем её 6 смен → медиана из оставшихся 18 = <span className="text-slate-900 dark:text-white font-semibold">280 000 ₸</span>. Сравниваем её с этим значением.
+              <div className="mt-2 rounded-lg border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-black/20 p-3 text-xs text-muted-foreground">
+                Пример: «Arena × пятница × ночь» — за период базы было 24 таких смены. Когда считаем ожидание для Айгерим, исключаем её 6 смен → медиана из оставшихся 18 = <span className="text-foreground font-semibold">280 000 ₸</span>. Сравниваем её с этим значением.
               </div>
             </div>
           </div>
@@ -653,8 +653,8 @@ export default function PerformancePage() {
           <div className="flex gap-3">
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500/15 text-blue-700 dark:text-blue-300 text-xs font-semibold">2</div>
             <div className="flex-1">
-              <div className="font-semibold text-slate-900 dark:text-white mb-1">Считаем PI каждой смены оператора</div>
-              <p className="text-slate-500 dark:text-slate-400 leading-relaxed">
+              <div className="font-semibold text-foreground mb-1">Считаем PI каждой смены оператора</div>
+              <p className="text-muted-foreground leading-relaxed">
                 Для каждой смены берём фактическую выручку и делим на ожидание этого слота:
               </p>
               <div className="mt-2 rounded-lg border border-emerald-500/20 bg-emerald-500/[0.05] p-3 font-mono text-sm text-emerald-700 dark:text-emerald-200">
@@ -663,11 +663,11 @@ export default function PerformancePage() {
               <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                 <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.05] p-3">
                   <div className="text-emerald-700 dark:text-emerald-300 font-semibold">PI = 1.20</div>
-                  <div className="text-slate-500 dark:text-slate-400 mt-1">Сделал 336k вместо ожидаемых 280k. Это <strong className="text-emerald-700 dark:text-emerald-300">+20% к норме</strong>.</div>
+                  <div className="text-muted-foreground mt-1">Сделал 336k вместо ожидаемых 280k. Это <strong className="text-emerald-700 dark:text-emerald-300">+20% к норме</strong>.</div>
                 </div>
                 <div className="rounded-lg border border-rose-500/20 bg-rose-500/[0.05] p-3">
                   <div className="text-rose-700 dark:text-rose-300 font-semibold">PI = 0.85</div>
-                  <div className="text-slate-500 dark:text-slate-400 mt-1">Сделал 238k при ожидании 280k. <strong className="text-rose-700 dark:text-rose-300">−15% к норме</strong>.</div>
+                  <div className="text-muted-foreground mt-1">Сделал 238k при ожидании 280k. <strong className="text-rose-700 dark:text-rose-300">−15% к норме</strong>.</div>
                 </div>
               </div>
             </div>
@@ -677,12 +677,12 @@ export default function PerformancePage() {
           <div className="flex gap-3">
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500/15 text-blue-700 dark:text-blue-300 text-xs font-semibold">3</div>
             <div className="flex-1">
-              <div className="font-semibold text-slate-900 dark:text-white mb-1">Собираем балл — по деньгам, а не по «среднему процентов»</div>
-              <p className="text-slate-500 dark:text-slate-400 leading-relaxed">
+              <div className="font-semibold text-foreground mb-1">Собираем балл — по деньгам, а не по «среднему процентов»</div>
+              <p className="text-muted-foreground leading-relaxed">
                 Балл = <strong className="text-slate-700 dark:text-slate-200">вся выручка ÷ всё ожидание</strong> по сменам (денежный вес). Большая смена весит больше маленькой — как в жизни. Это честнее простого среднего: удачная «мёртвая» смена с маленькими суммами больше не задирает балл.
               </p>
-              <div className="mt-2 rounded-lg border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-black/20 p-3 text-xs text-slate-500 dark:text-slate-400">
-                <span className="text-slate-900 dark:text-white font-semibold">Айгерим:</span> Σфакт = 865к, Σожидание = 880к → балл = 865/880 = <span className="text-emerald-700 dark:text-emerald-300 font-semibold">0.98</span>. Копеечный удачный вторник почти не виден — он мал и в сумме не тянет.
+              <div className="mt-2 rounded-lg border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-black/20 p-3 text-xs text-muted-foreground">
+                <span className="text-foreground font-semibold">Айгерим:</span> Σфакт = 865к, Σожидание = 880к → балл = 865/880 = <span className="text-emerald-700 dark:text-emerald-300 font-semibold">0.98</span>. Копеечный удачный вторник почти не виден — он мал и в сумме не тянет.
               </div>
             </div>
           </div>
@@ -691,7 +691,7 @@ export default function PerformancePage() {
           <div className="flex gap-3">
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500/15 text-blue-700 dark:text-blue-300 text-xs font-semibold">4</div>
             <div className="flex-1">
-              <div className="font-semibold text-slate-900 dark:text-white mb-2">Цветовые метки</div>
+              <div className="font-semibold text-foreground mb-2">Цветовые метки</div>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
                 <div className="rounded-md border border-emerald-500/30 bg-emerald-500/15 px-2 py-1.5 text-center">
                   <div className="text-emerald-700 dark:text-emerald-300 font-bold">≥ 1.15</div>
@@ -721,8 +721,8 @@ export default function PerformancePage() {
           <div className="flex gap-3 pt-2 border-t border-slate-200 dark:border-white/5">
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 text-xs font-semibold">!</div>
             <div className="flex-1">
-              <div className="font-semibold text-slate-900 dark:text-white mb-1">Защита от случайных всплесков</div>
-              <ul className="text-slate-500 dark:text-slate-400 leading-relaxed space-y-1 list-disc pl-4">
+              <div className="font-semibold text-foreground mb-1">Защита от случайных всплесков</div>
+              <ul className="text-muted-foreground leading-relaxed space-y-1 list-disc pl-4">
                 <li>
                   <strong className="text-slate-700 dark:text-slate-200">Минимум 3 смены</strong> для попадания в основной рейтинг.
                   Меньше — оператор в секции «Накапливают данные».
@@ -755,11 +755,11 @@ export default function PerformancePage() {
       {/* Основной рейтинг */}
       <Card className="p-5 bg-white dark:bg-gray-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
         <div className="flex items-center justify-between mb-5">
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
             <Award className="w-4 h-4 text-emerald-400" />
             Основной рейтинг ({q ? `${viewQualifying.length} из ${qualifying.length}` : qualifying.length})
           </h3>
-          {refreshing && <RefreshCw className="w-3.5 h-3.5 animate-spin text-slate-500 dark:text-slate-400" />}
+          {refreshing && <RefreshCw className="w-3.5 h-3.5 animate-spin text-muted-foreground" />}
         </div>
 
         {loading && !data ? (
@@ -788,23 +788,23 @@ export default function PerformancePage() {
                   className={`w-full text-left rounded-xl border p-4 transition hover:bg-slate-100 dark:hover:bg-gray-900/80 ${
                     isCandidate
                       ? 'border-emerald-400/50 bg-emerald-500/[0.04] dark:bg-emerald-500/[0.06] ring-1 ring-emerald-400/30'
-                      : 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-gray-900/60 hover:border-emerald-400/30'
+                      : 'border-border bg-slate-50 dark:bg-gray-900/60 hover:border-emerald-400/30'
                   }`}
                 >
                   <div className="flex items-center gap-4">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center">
-                      {sortBy === 'pi' && !q ? rankBadge(i + 1) : <span className="text-xs font-mono text-slate-500 dark:text-slate-400">#{i + 1}</span>}
+                      {sortBy === 'pi' && !q ? rankBadge(i + 1) : <span className="text-xs font-mono text-muted-foreground">#{i + 1}</span>}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-slate-900 dark:text-white">{op.operator_short_name || op.operator_name}</span>
+                        <span className="font-semibold text-foreground">{op.operator_short_name || op.operator_name}</span>
                         {isCandidate && (
                           <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
                             <Gift className="w-3 h-3" />кандидат
                           </span>
                         )}
                       </div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-3 flex-wrap">
+                      <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-3 flex-wrap">
                         <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3" />{op.shifts} смен</span>
                         <span className="inline-flex items-center gap-1"><TrendingUp className="w-3 h-3" />{moneyShort(op.total_revenue)}</span>
                         <span className="text-slate-400 dark:text-slate-500">норма {moneyShort(expectedTotal(op))}</span>
@@ -842,7 +842,7 @@ export default function PerformancePage() {
       {/* Cold start */}
       {coldStart.length > 0 && (
         <Card className="p-5 bg-white dark:bg-gray-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
             <Clock className="w-4 h-4 text-amber-400" />
             Накапливают данные ({coldStart.length})
             <span className="text-xs font-normal text-slate-500">— меньше {data?.config.min_qualifying_shifts || 3} смен</span>
@@ -874,23 +874,23 @@ export default function PerformancePage() {
       {/* Проблемные слоты — где факт систематически ниже нормы (сигнал владельцу) */}
       {problemSlots.length > 0 && (
         <Card className="p-5 bg-white dark:bg-gray-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-1 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-foreground mb-1 flex items-center gap-2">
             <TrendingDown className="w-4 h-4 text-rose-400" />
             Проблемные слоты ({problemSlots.length})
           </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Где факт ниже нормы за период — смотреть расписание/процесс, а не одного человека.</p>
+          <p className="text-xs text-muted-foreground mb-4">Где факт ниже нормы за период — смотреть расписание/процесс, а не одного человека.</p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
             {problemSlots.map((s) => {
               const pct = Math.round((s.ratio - 1) * 100)
               return (
                 <div key={s.key} className="rounded-xl border border-rose-500/20 bg-rose-500/[0.04] p-3">
                   <div className="flex items-center justify-between gap-2">
-                    <div className="text-sm font-medium text-slate-900 dark:text-white truncate">
+                    <div className="text-sm font-medium text-foreground truncate">
                       {companyName(s.company)} · {WEEKDAY_NAMES[s.weekday]} · {s.shift === 'night' ? '🌙 ночь' : '☀️ день'}
                     </div>
                     <span className="text-sm font-bold text-rose-600 dark:text-rose-400 tabular-nums shrink-0">{pct}%</span>
                   </div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  <div className="text-xs text-muted-foreground mt-1">
                     факт {moneyShort(s.actual)} / норма {moneyShort(s.expected)} · {s.count} смен
                   </div>
                 </div>
@@ -948,16 +948,16 @@ function OperatorDetailModal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-white/10 rounded-2xl w-full max-w-3xl my-8 animate-in fade-in zoom-in duration-200"
+        className="bg-white dark:bg-gray-900 border border-border rounded-2xl w-full max-w-3xl my-8 animate-in fade-in zoom-in duration-200"
       >
         {/* Header */}
         <div className="sticky top-0 bg-white dark:bg-gray-900 border-b border-slate-200 dark:border-white/5 rounded-t-2xl z-10 p-5">
           <div className="flex items-center gap-4">
             <div className="min-w-0 flex-1">
-              <div className="text-lg font-semibold text-slate-900 dark:text-white truncate">
+              <div className="text-lg font-semibold text-foreground truncate">
                 {item.operator_short_name || item.operator_name}
               </div>
-              <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2 mt-1">
+              <div className="text-xs text-muted-foreground flex items-center gap-2 mt-1">
                 <Calendar className="h-3.5 w-3.5" />
                 {periodLabel}
               </div>
@@ -969,7 +969,7 @@ function OperatorDetailModal({
             <button
               onClick={onClose}
               type="button"
-              className="rounded-lg p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"
+              className="rounded-lg p-2 text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"
               aria-label="Закрыть"
             >
               <X className="h-5 w-5" />
@@ -983,7 +983,7 @@ function OperatorDetailModal({
             <Stat label={bonus > 0 ? `Бонус (${bonusPct}%)` : 'Смен'} value={bonus > 0 ? moneyFmt(bonus) : String(item.shifts)} />
           </div>
           {weeklyPi.length >= 2 && (
-            <div className="mt-3 flex items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
+            <div className="mt-3 flex items-center gap-2 text-[10px] text-muted-foreground">
               <span>PI по неделям</span>
               <PiSparkline values={weeklyPi} />
             </div>
@@ -993,11 +993,11 @@ function OperatorDetailModal({
         {/* Shift table */}
         <div className="p-5">
           <div className="mb-3 flex items-center justify-between gap-3">
-            <h4 className="text-xs uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400 font-semibold">
+            <h4 className="text-xs uppercase tracking-[0.14em] text-muted-foreground font-semibold">
               Разбор по сменам
             </h4>
             {item.shift_details.length >= 2 && (
-              <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
+              <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
                 <span>динамика PI</span>
                 <PiSparkline values={[...item.shift_details].sort((a, b) => a.date.localeCompare(b.date)).map((s) => s.pi)} />
               </div>
@@ -1006,7 +1006,7 @@ function OperatorDetailModal({
           <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-white/8">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-white/[0.03] text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                <tr className="border-b border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-white/[0.03] text-[11px] uppercase tracking-wide text-muted-foreground">
                   <th className="px-3 py-2 text-left font-medium">Дата</th>
                   <th className="px-3 py-2 text-left font-medium">Смена</th>
                   <th className="px-3 py-2 text-right font-medium">Ожидалось</th>
@@ -1025,11 +1025,11 @@ function OperatorDetailModal({
                       <td className="px-3 py-2 text-slate-700 dark:text-slate-300 whitespace-nowrap">
                         {anomaly && <Zap className="inline w-3 h-3 mr-1 text-amber-500" />}{sh.date}
                       </td>
-                      <td className="px-3 py-2 text-slate-500 dark:text-slate-400">
+                      <td className="px-3 py-2 text-muted-foreground">
                         {sh.shift === 'night' ? '🌙 ночь' : '☀️ день'}
                       </td>
-                      <td className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 tabular-nums">{moneyShort(sh.expected)}</td>
-                      <td className="px-3 py-2 text-right text-slate-900 dark:text-white tabular-nums">
+                      <td className="px-3 py-2 text-right text-muted-foreground tabular-nums">{moneyShort(sh.expected)}</td>
+                      <td className="px-3 py-2 text-right text-foreground tabular-nums">
                         {moneyShort(sh.actual)}
                         <span className={`ml-2 text-[10px] ${diff >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                           {diff >= 0 ? <TrendingUp className="inline w-3 h-3" /> : <TrendingDown className="inline w-3 h-3" />}
@@ -1050,7 +1050,7 @@ function OperatorDetailModal({
         </div>
 
         <div className="sticky bottom-0 bg-white dark:bg-gray-900 border-t border-slate-200 dark:border-white/5 rounded-b-2xl p-4 flex justify-end">
-          <Button variant="outline" size="sm" onClick={onClose} className="border-slate-200 dark:border-white/10">
+          <Button variant="outline" size="sm" onClick={onClose} className="border-border">
             Закрыть
           </Button>
         </div>
@@ -1062,9 +1062,9 @@ function OperatorDetailModal({
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] px-3 py-2">
+    <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] px-3 py-2">
       <div className="text-[10px] uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{value}</div>
+      <div className="mt-1 text-sm font-semibold text-foreground">{value}</div>
     </div>
   )
 }
@@ -1073,7 +1073,7 @@ const SUMMARY_TONE: Record<'emerald' | 'rose' | 'amber' | 'slate', { icon: strin
   emerald: { icon: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300', val: 'text-emerald-700 dark:text-emerald-300' },
   rose: { icon: 'bg-rose-500/15 text-rose-600 dark:text-rose-300', val: 'text-rose-700 dark:text-rose-300' },
   amber: { icon: 'bg-amber-500/15 text-amber-600 dark:text-amber-300', val: 'text-amber-700 dark:text-amber-300' },
-  slate: { icon: 'bg-slate-500/15 text-slate-600 dark:text-slate-300', val: 'text-slate-900 dark:text-white' },
+  slate: { icon: 'bg-slate-500/15 text-slate-600 dark:text-slate-300', val: 'text-foreground' },
 }
 
 function SummaryCard({
@@ -1084,10 +1084,10 @@ function SummaryCard({
     <Card className="p-4 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/8">
       <div className="flex items-center gap-2">
         <div className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg ${t.icon}`}>{icon}</div>
-        <div className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400 leading-tight">{label}</div>
+        <div className="text-[11px] uppercase tracking-wide text-muted-foreground leading-tight">{label}</div>
       </div>
       <div className={`mt-2 font-bold tabular-nums ${t.val} ${small ? 'text-base truncate' : 'text-2xl'}`}>{value}</div>
-      <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">{hint}</div>
+      <div className="mt-0.5 text-[11px] text-muted-foreground">{hint}</div>
     </Card>
   )
 }

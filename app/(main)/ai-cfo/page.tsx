@@ -160,7 +160,7 @@ export default function AiCfoPage() {
         toolbar={
           <div className="flex flex-wrap items-center gap-3">
             {/* Сегментированные пресеты */}
-            <div className="inline-flex items-center rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/[0.03] p-0.5">
+            <div className="inline-flex items-center rounded-xl border border-border bg-slate-100 dark:bg-white/[0.03] p-0.5">
               {[7, 30, 90, 365].map((d) => (
                 <button key={d} onClick={() => { setShowCustom(false); run({ days: d }, `d${d}`) }} disabled={loading}
                   className={`rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:opacity-50 ${sel === `d${d}` ? 'bg-violet-500 text-white shadow-sm' : `${C.sub} hover:text-slate-900 dark:hover:text-white`}`}>
@@ -335,7 +335,7 @@ export default function AiCfoPage() {
                       <div key={i} className="flex items-center justify-between gap-3 text-sm">
                         <span className="text-slate-700 dark:text-slate-300 truncate">{c.label}</span>
                         <span className="flex items-center gap-2 shrink-0">
-                          <span className="tabular-nums text-slate-900 dark:text-white">{money(c.current)}</span>
+                          <span className="tabular-nums text-foreground">{money(c.current)}</span>
                           <Delta value={c.deltaPct} goodWhenUp={false} />
                         </span>
                       </div>
@@ -392,7 +392,7 @@ export default function AiCfoPage() {
                       <p className="text-sm font-semibold">{c.name}</p>
                       <span className={`text-xs ${C.sub}`}>{c.profitShare.toFixed(0)}% прибыли</span>
                     </div>
-                    <p className={`mt-1 text-xl font-bold tabular-nums ${c.profit >= 0 ? 'text-slate-900 dark:text-white' : 'text-rose-600 dark:text-rose-400'}`}>{money(c.profit)}</p>
+                    <p className={`mt-1 text-xl font-bold tabular-nums ${c.profit >= 0 ? 'text-foreground' : 'text-rose-600 dark:text-rose-400'}`}>{money(c.profit)}</p>
                     <div className="mt-1"><Delta value={c.profitDeltaPct} /></div>
                     <div className={`mt-2 flex items-center justify-between text-xs ${C.sub}`}>
                       <span>Выручка {fmt(c.revenue)}</span>
@@ -481,7 +481,7 @@ function Cell({ label, value, tone }: { label: string; value: string; tone?: 'em
   return (
     <div>
       <p className={`text-xs ${C.sub}`}>{label}</p>
-      <p className={`mt-0.5 font-semibold tabular-nums ${tone === 'emerald' ? 'text-emerald-600 dark:text-emerald-400' : tone === 'rose' ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>{value}</p>
+      <p className={`mt-0.5 font-semibold tabular-nums ${tone === 'emerald' ? 'text-emerald-600 dark:text-emerald-400' : tone === 'rose' ? 'text-rose-600 dark:text-rose-400' : 'text-foreground'}`}>{value}</p>
     </div>
   )
 }
@@ -506,7 +506,7 @@ function ForecastCell({ label, value, tone }: { label: string; value?: string; t
   return (
     <div className="rounded-lg border border-slate-200 dark:border-white/8 py-2">
       <p className={`text-[11px] ${C.sub}`}>{label}</p>
-      <p className={`text-sm font-bold tabular-nums ${tone === 'rose' ? 'text-rose-600 dark:text-rose-400' : tone === 'emerald' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-white'}`}>{value ? clean(value) : '—'}</p>
+      <p className={`text-sm font-bold tabular-nums ${tone === 'rose' ? 'text-rose-600 dark:text-rose-400' : tone === 'emerald' ? 'text-emerald-600 dark:text-emerald-400' : 'text-foreground'}`}>{value ? clean(value) : '—'}</p>
     </div>
   )
 }

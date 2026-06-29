@@ -150,7 +150,7 @@ export function WeeklyActPrint({
             <button
               onClick={() => window.print()}
               disabled={loading || !!error}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-white dark:bg-slate-900 px-3 py-1.5 text-sm text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-transparent disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-white dark:bg-slate-900 px-3 py-1.5 text-sm text-foreground hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-transparent disabled:opacity-50"
             >
               <Printer className="h-4 w-4" /> Печать
             </button>

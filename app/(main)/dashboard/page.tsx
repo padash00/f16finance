@@ -924,7 +924,7 @@ export default function SmartDashboardPage() {
             <div className="animate-spin rounded-full h-16 w-16 border-4 border-amber-500/30 border-t-amber-500 mx-auto mb-6" />
             <Brain className="w-8 h-8 text-amber-400 absolute top-4 left-1/2 -translate-x-1/2" />
           </div>
-          <p className="text-slate-500 dark:text-slate-400">Грузы считаю. Не мешай калькулятору думать 😄</p>
+          <p className="text-muted-foreground">Грузы считаю. Не мешай калькулятору думать 😄</p>
         </div>
       </div>
     )
@@ -1019,7 +1019,7 @@ export default function SmartDashboardPage() {
               <div className="relative z-10">
                 <div className="flex items-center gap-2 mb-4">
                   <Activity className="w-5 h-5 text-amber-400" />
-                  <h2 className="text-sm font-semibold text-slate-900 dark:text-white uppercase tracking-wider">Пульс бизнеса сегодня</h2>
+                  <h2 className="text-sm font-semibold text-foreground uppercase tracking-wider">Пульс бизнеса сегодня</h2>
                   {todayStats.txCount === 0 ? (
                     <span className="ml-auto text-xs text-slate-500">📊 Данных за сегодня нет</span>
                   ) : (todayStats.income - todayStats.expense) > 0 ? (
@@ -1031,21 +1031,21 @@ export default function SmartDashboardPage() {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-3">
                     <p className="text-[11px] text-emerald-400 uppercase tracking-wider">Выручка</p>
-                    <p className="text-lg font-bold text-slate-900 dark:text-white mt-1">{Formatters.moneyDetailed(todayStats.income)}</p>
+                    <p className="text-lg font-bold text-foreground mt-1">{Formatters.moneyDetailed(todayStats.income)}</p>
                   </div>
                   <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-3">
                     <p className="text-[11px] text-red-400 uppercase tracking-wider">Расходы</p>
-                    <p className="text-lg font-bold text-slate-900 dark:text-white mt-1">{Formatters.moneyDetailed(todayStats.expense)}</p>
+                    <p className="text-lg font-bold text-foreground mt-1">{Formatters.moneyDetailed(todayStats.expense)}</p>
                   </div>
                   <div className={`rounded-xl p-3 border ${(todayStats.income - todayStats.expense) >= 0 ? 'bg-amber-500/10 border-amber-500/20' : 'bg-rose-500/10 border-rose-500/20'}`}>
                     <p className="text-[11px] text-amber-400 uppercase tracking-wider">Прибыль</p>
-                    <p className={`text-lg font-bold mt-1 ${(todayStats.income - todayStats.expense) >= 0 ? 'text-slate-900 dark:text-white' : 'text-red-500 dark:text-red-400'}`}>
+                    <p className={`text-lg font-bold mt-1 ${(todayStats.income - todayStats.expense) >= 0 ? 'text-foreground' : 'text-red-500 dark:text-red-400'}`}>
                       {Formatters.moneyDetailed(todayStats.income - todayStats.expense)}
                     </p>
                   </div>
                   <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-3">
                     <p className="text-[11px] text-amber-400 uppercase tracking-wider">Транзакций</p>
-                    <p className="text-lg font-bold text-slate-900 dark:text-white mt-1">{todayStats.txCount}</p>
+                    <p className="text-lg font-bold text-foreground mt-1">{todayStats.txCount}</p>
                   </div>
                 </div>
                 {analytics.insight.anomalies.length > 0 && (
@@ -1069,9 +1069,9 @@ export default function SmartDashboardPage() {
                 { label: 'Неоплач. долги', value: widgetData.kpis.unpaidDebts, href: '/point-debts', attn: widgetData.kpis.unpaidDebts > 0, tone: 'amber' },
                 { label: 'Операторы', value: widgetData.kpis.activeOperators, href: '/operators', attn: false, tone: 'slate' },
               ].map((k) => (
-                <Link key={k.label} href={k.href} className="rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-gray-900/40 p-3 transition hover:border-amber-400/40 hover:bg-slate-50 dark:hover:bg-gray-900/60">
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400 uppercase tracking-wide truncate">{k.label}</div>
-                  <div className={`mt-1 text-2xl font-bold tabular-nums ${k.attn && k.tone === 'amber' ? 'text-amber-600 dark:text-amber-400' : k.attn && k.tone === 'rose' ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>{k.value}</div>
+                <Link key={k.label} href={k.href} className="rounded-xl border border-border bg-white dark:bg-gray-900/40 p-3 transition hover:border-amber-400/40 hover:bg-slate-50 dark:hover:bg-gray-900/60">
+                  <div className="text-[11px] text-muted-foreground uppercase tracking-wide truncate">{k.label}</div>
+                  <div className={`mt-1 text-2xl font-bold tabular-nums ${k.attn && k.tone === 'amber' ? 'text-amber-600 dark:text-amber-400' : k.attn && k.tone === 'rose' ? 'text-rose-600 dark:text-rose-400' : 'text-foreground'}`}>{k.value}</div>
                 </Link>
               ))}
             </div>
@@ -1080,7 +1080,7 @@ export default function SmartDashboardPage() {
           {/* План месяца vs факт */}
           {monthPlans && (monthPlans.revenue || monthPlans.profit) && (
             <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
                 <Target className="w-4 h-4 text-amber-400" />
                 План месяца
                 <Link href="/goals" className="ml-auto text-xs font-normal text-amber-600 dark:text-amber-400 hover:underline">все цели →</Link>
@@ -1089,10 +1089,10 @@ export default function SmartDashboardPage() {
                 {([['Выручка', monthPlans.revenue], ['Прибыль', monthPlans.profit]] as const).map(([label, p]) => p ? (
                   <div key={label}>
                     <div className="flex items-baseline justify-between gap-2">
-                      <span className="text-xs text-slate-500 dark:text-slate-400">{label}</span>
-                      <span className="text-xs font-semibold tabular-nums text-slate-900 dark:text-white">{Math.round(p.pct)}%</span>
+                      <span className="text-xs text-muted-foreground">{label}</span>
+                      <span className="text-xs font-semibold tabular-nums text-foreground">{Math.round(p.pct)}%</span>
                     </div>
-                    <div className="mt-1 text-sm font-bold text-slate-900 dark:text-white tabular-nums">
+                    <div className="mt-1 text-sm font-bold text-foreground tabular-nums">
                       {Formatters.moneyDetailed(p.fact)} <span className="text-xs font-normal text-slate-400">/ {Formatters.moneyDetailed(p.target)}</span>
                     </div>
                     <div className="mt-1.5 h-2 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden">
@@ -1107,14 +1107,14 @@ export default function SmartDashboardPage() {
           {/* Сравнение точек */}
           {companyBreakdown.length > 1 && (
             <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
                 <BarChart2 className="w-4 h-4 text-emerald-400" />
                 Сравнение точек
               </h3>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-white/8">
+                    <tr className="text-[11px] uppercase tracking-wide text-muted-foreground border-b border-slate-200 dark:border-white/8">
                       <th className="px-2 py-2 text-left font-medium">Точка</th>
                       <th className="px-2 py-2 text-right font-medium">Выручка</th>
                       <th className="px-2 py-2 text-right font-medium">Прибыль</th>
@@ -1124,7 +1124,7 @@ export default function SmartDashboardPage() {
                   <tbody>
                     {companyBreakdown.map((c) => (
                       <tr key={c.id} className="border-b border-slate-100 dark:border-white/5 last:border-0">
-                        <td className="px-2 py-2 font-medium text-slate-900 dark:text-white truncate max-w-[160px]">{c.name}</td>
+                        <td className="px-2 py-2 font-medium text-foreground truncate max-w-[160px]">{c.name}</td>
                         <td className="px-2 py-2 text-right tabular-nums text-slate-700 dark:text-slate-300">{Formatters.moneyDetailed(c.revenue)}</td>
                         <td className={`px-2 py-2 text-right tabular-nums font-semibold ${c.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{Formatters.moneyDetailed(c.profit)}</td>
                         <td className={`px-2 py-2 text-right tabular-nums ${c.margin >= 20 ? 'text-emerald-600 dark:text-emerald-400' : c.margin >= 0 ? 'text-slate-600 dark:text-slate-300' : 'text-rose-600 dark:text-rose-400'}`}>{c.margin.toFixed(1)}%</td>
@@ -1139,14 +1139,14 @@ export default function SmartDashboardPage() {
           {/* Дни рождения */}
           {widgetData?.birthdays && widgetData.birthdays.length > 0 && (
             <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
                 🎂 Дни рождения
               </h3>
               <div className="flex flex-wrap gap-2">
                 {widgetData.birthdays.map((b) => (
                   <div key={b.id} className="rounded-lg border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-white/[0.02] px-3 py-1.5">
-                    <span className="text-sm font-medium text-slate-900 dark:text-white">{b.title}</span>
-                    {b.subtitle && <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">{b.subtitle}</span>}
+                    <span className="text-sm font-medium text-foreground">{b.title}</span>
+                    {b.subtitle && <span className="ml-2 text-xs text-muted-foreground">{b.subtitle}</span>}
                   </div>
                 ))}
               </div>
@@ -1425,7 +1425,7 @@ function AICard({ insight }: { insight: AIInsight }) {
       </div>
 
       <div className="mb-3">
-        <div className="text-4xl font-bold text-slate-900 dark:text-white">{insight.score}</div>
+        <div className="text-4xl font-bold text-foreground">{insight.score}</div>
         <div className="text-xs text-slate-500">из 100</div>
       </div>
 
@@ -1451,7 +1451,7 @@ function AICard({ insight }: { insight: AIInsight }) {
         </div>
 
         <div className="pt-3 border-t border-slate-200 dark:border-slate-800">
-          <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">{insight.summary}</p>
+          <p className="text-xs text-muted-foreground mb-2">{insight.summary}</p>
           <p className="text-sm text-slate-700 dark:text-slate-200">{insight.recommendation}</p>
         </div>
       </div>
@@ -1478,7 +1478,7 @@ function MetricCard(props: {
         <span className="text-sm text-slate-400">{props.label}</span>
         <div className={`p-2 rounded-xl bg-gradient-to-br ${props.color} bg-opacity-20`}>{props.icon}</div>
       </div>
-      <div className="text-2xl font-bold text-slate-900 dark:text-white mb-2 break-all">{Formatters.moneyDetailed(props.value)}</div>
+      <div className="text-2xl font-bold text-foreground mb-2 break-all">{Formatters.moneyDetailed(props.value)}</div>
       <div className="flex items-center gap-2 text-xs">
         <span className={ch.positive ? 'text-green-600 dark:text-green-300' : 'text-red-600 dark:text-red-300'}>{ch.text}</span>
         <span className="text-slate-500">к прошлому периоду</span>
@@ -1509,7 +1509,7 @@ function ChartCard(props: {
             <LineChart className="w-5 h-5 text-amber-600 dark:text-amber-300" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Динамика: {metricName}</h3>
+            <h3 className="text-sm font-semibold text-foreground">Динамика: {metricName}</h3>
             <p className="text-xs text-slate-500">
               {props.data.length ? `с ${DateUtils.formatShort(props.data[0].date)} по ${DateUtils.formatShort(props.data[props.data.length - 1].date)}` : 'Нет данных'}
             </p>
@@ -1589,7 +1589,7 @@ function CategoryPie(props: { title: string; data: CategoryData[]; total: number
     <Card className="p-6 border border-slate-200 bg-white dark:border-0 dark:bg-slate-800/50 backdrop-blur-sm">
       <div className="flex items-center gap-3 mb-4">
         <div className="p-2 bg-slate-100 dark:bg-slate-700/40 rounded-xl">{props.icon}</div>
-        <h3 className="text-sm font-semibold text-slate-900 dark:text-white">{props.title}</h3>
+        <h3 className="text-sm font-semibold text-foreground">{props.title}</h3>
       </div>
 
       {!props.data.length ? (
@@ -1622,7 +1622,7 @@ function CategoryPie(props: { title: string; data: CategoryData[]; total: number
                   <span className="text-slate-600 dark:text-slate-300 truncate max-w-[120px]">{x.name}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-slate-900 dark:text-white font-medium">{Formatters.moneyDetailed(x.value)}</span>
+                  <span className="text-foreground font-medium">{Formatters.moneyDetailed(x.value)}</span>
                   <span className="text-slate-500">({x.percentage.toFixed(1)}%)</span>
                 </div>
               </div>
@@ -1631,8 +1631,8 @@ function CategoryPie(props: { title: string; data: CategoryData[]; total: number
 
           <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
             <div className="flex justify-between text-xs">
-              <span className="text-slate-500 dark:text-slate-400">Всего</span>
-              <span className="text-slate-900 dark:text-white font-medium">{Formatters.moneyDetailed(props.total)}</span>
+              <span className="text-muted-foreground">Всего</span>
+              <span className="text-foreground font-medium">{Formatters.moneyDetailed(props.total)}</span>
             </div>
           </div>
         </div>
@@ -1654,7 +1654,7 @@ function AnomaliesCard({ anomalies }: { anomalies: AIInsight['anomalies'] }) {
         <div className="p-2 bg-yellow-500/20 rounded-xl">
           <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-300" />
         </div>
-        <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Аномалии</h3>
+        <h3 className="text-sm font-semibold text-foreground">Аномалии</h3>
         {!!anomalies.length && <span className="px-2 py-0.5 bg-red-500/20 text-red-700 dark:text-red-200 text-xs rounded-full">{anomalies.length}</span>}
       </div>
 
@@ -1697,7 +1697,7 @@ function FeedCard(props: {
             <Activity className="w-5 h-5 text-amber-600 dark:text-amber-300" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Лента</h3>
+            <h3 className="text-sm font-semibold text-foreground">Лента</h3>
             <p className="text-xs text-slate-500">Последние операции</p>
           </div>
           {!!props.feed.length && (
@@ -1720,7 +1720,7 @@ function FeedCard(props: {
               }`}
             >
               <div className="min-w-0">
-                <div className="text-xs font-medium text-slate-900 dark:text-white truncate">{it.title}</div>
+                <div className="text-xs font-medium text-foreground truncate">{it.title}</div>
                 <div className="text-[10px] text-slate-500 truncate">
                   {props.companyName(it.company_id)} • {DateUtils.formatShort(it.date)}
                 </div>
@@ -1755,9 +1755,9 @@ function PredictionWide({ insight, currentProfit }: { insight: AIInsight; curren
         <div>
           <div className="flex items-center gap-2 mb-2">
             <Sparkles className="w-5 h-5 text-amber-500 dark:text-amber-300" />
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Прогноз на 30 дней (прибыль)</h3>
+            <h3 className="text-sm font-semibold text-foreground">Прогноз на 30 дней (прибыль)</h3>
           </div>
-          <div className="text-3xl font-bold text-slate-900 dark:text-white">{Formatters.moneyDetailed(insight.predictions.nextMonthProfit)}</div>
+          <div className="text-3xl font-bold text-foreground">{Formatters.moneyDetailed(insight.predictions.nextMonthProfit)}</div>
           <div className="text-xs text-slate-400 mt-1">
             Достоверность: <span className="text-amber-600 dark:text-amber-300 font-medium">{insight.predictions.confidence}%</span> • {insight.predictions.recommendation}
           </div>
@@ -1803,7 +1803,7 @@ function Details(props: {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="p-6 border border-slate-200 bg-white dark:border-0 dark:bg-slate-800/50 backdrop-blur-sm">
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">Способы оплаты</h3>
+          <h3 className="text-sm font-semibold text-foreground mb-4">Способы оплаты</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={paymentStats}>
@@ -1827,7 +1827,7 @@ function Details(props: {
         </Card>
 
         <Card className="p-6 border border-slate-200 bg-white dark:border-0 dark:bg-slate-800/50 backdrop-blur-sm">
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">Баланс</h3>
+          <h3 className="text-sm font-semibold text-foreground mb-4">Баланс</h3>
           <div className="space-y-4">
             <BalanceRow icon={<Wallet className="w-4 h-4" />} label="Net Cash" value={props.current.netCash} />
             <BalanceRow icon={<Globe className="w-4 h-4" />} label="Net Безнал" value={props.current.netKaspi} />
@@ -1850,9 +1850,9 @@ function MiniStat(props: { label: string; value: number; prev: number; icon: Rea
     <Card className="p-4 border border-slate-200 bg-white dark:border-0 dark:bg-slate-800/50 backdrop-blur-sm">
       <div className="flex items-center gap-2 mb-3">
         <div className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700/40">{props.icon}</div>
-        <span className="text-xs text-slate-500 dark:text-slate-400">{props.label}</span>
+        <span className="text-xs text-muted-foreground">{props.label}</span>
       </div>
-      <div className="text-xl font-bold text-slate-900 dark:text-white">
+      <div className="text-xl font-bold text-foreground">
         {props.money ? Formatters.moneyDetailed(props.value) : props.value.toLocaleString('ru-RU')}
       </div>
       <div className="flex items-center gap-2 text-xs mt-1">
@@ -1870,7 +1870,7 @@ function BalanceRow({ icon, label, value }: { icon: ReactNode; label: string; va
         {icon}
         {label}
       </div>
-      <div className="text-sm font-bold text-slate-900 dark:text-white">{Formatters.moneyDetailed(value)}</div>
+      <div className="text-sm font-bold text-foreground">{Formatters.moneyDetailed(value)}</div>
     </div>
   )
 }
@@ -1883,7 +1883,7 @@ function Forecast({ insight }: { insight: AIInsight }) {
       <Card className="p-6 border border-slate-200 bg-white dark:border-0 dark:bg-slate-800/50 backdrop-blur-sm">
         <div className="flex items-center gap-2 mb-2">
           <Sparkles className="w-5 h-5 text-amber-600 dark:text-amber-300" />
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Что делать дальше</h3>
+          <h3 className="text-sm font-semibold text-foreground">Что делать дальше</h3>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
@@ -1924,7 +1924,7 @@ function Advice({ title, text, icon }: { title: string; text: string; icon: Reac
     <div className="p-4 bg-slate-50 dark:bg-slate-700/20 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-amber-500/30 transition-colors">
       <div className="flex items-center gap-2 mb-2">
         <div className="p-1.5 bg-amber-500/15 rounded-lg">{icon}</div>
-        <div className="text-sm font-medium text-slate-900 dark:text-white">{title}</div>
+        <div className="text-sm font-medium text-foreground">{title}</div>
       </div>
       <div className="text-xs text-slate-600 dark:text-slate-300">{text}</div>
     </div>

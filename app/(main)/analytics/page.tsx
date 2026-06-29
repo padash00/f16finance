@@ -187,7 +187,7 @@ export default function AnalyticsPage() {
         backHref="/"
         actions={
           <>
-            <div className="flex items-center gap-0.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-0.5">
+            <div className="flex items-center gap-0.5 rounded-lg border border-border bg-white dark:bg-white/[0.03] p-0.5">
               <Button
                 size="sm"
                 variant="ghost"
@@ -227,7 +227,7 @@ export default function AnalyticsPage() {
       ) : null}
 
       {loading && !data ? (
-        <Card className="border-slate-200 dark:border-white/10 bg-card/70 p-8">
+        <Card className="border-border bg-card/70 p-8">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
             Грузим данные за {year}…
@@ -237,7 +237,7 @@ export default function AnalyticsPage() {
         <>
           {/* KPI */}
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-            <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-3">
+            <Card className="border-border bg-white dark:bg-white/[0.03] p-3">
               <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Выручка</p>
               <p className="mt-1 text-xl font-semibold tabular-nums text-emerald-700 dark:text-emerald-200">{fmt(totals.revenue)} ₸</p>
               {totals.prevTotal > 0 ? (
@@ -246,18 +246,18 @@ export default function AnalyticsPage() {
                 </p>
               ) : null}
             </Card>
-            <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-3">
+            <Card className="border-border bg-white dark:bg-white/[0.03] p-3">
               <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Расходы</p>
               <p className="mt-1 text-xl font-semibold tabular-nums text-rose-700 dark:text-rose-200">{fmt(totals.expenses)} ₸</p>
             </Card>
-            <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-3">
+            <Card className="border-border bg-white dark:bg-white/[0.03] p-3">
               <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Прибыль</p>
               <p className={`mt-1 text-xl font-semibold tabular-nums ${totals.profit >= 0 ? 'text-emerald-700 dark:text-emerald-200' : 'text-rose-700 dark:text-rose-200'}`}>
                 {fmt(totals.profit)} ₸
               </p>
               <p className="mt-1 text-xs text-muted-foreground">Маржа {totals.margin.toFixed(1)}%</p>
             </Card>
-            <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-3">
+            <Card className="border-border bg-white dark:bg-white/[0.03] p-3">
               <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Чеков</p>
               <p className="mt-1 text-xl font-semibold tabular-nums">{fmt(totals.checks)}</p>
               <p className="mt-1 text-xs text-muted-foreground">Средний {fmt(totals.avgCheck)} ₸</p>
@@ -275,7 +275,7 @@ export default function AnalyticsPage() {
           </div>
 
           {/* Чарт: выручка по месяцам + прошлый год */}
-          <Card className="border-slate-200 dark:border-white/10 bg-card/70 p-5">
+          <Card className="border-border bg-card/70 p-5">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-semibold">Выручка по месяцам</h2>
               <span className="text-xs text-muted-foreground">Сравнение с {year - 1}</span>
@@ -300,7 +300,7 @@ export default function AnalyticsPage() {
 
           {/* Чарт: способы оплаты + прибыль */}
           <div className="grid gap-4 lg:grid-cols-2">
-            <Card className="border-slate-200 dark:border-white/10 bg-card/70 p-5">
+            <Card className="border-border bg-card/70 p-5">
               <h2 className="mb-3 text-sm font-semibold">Способы оплаты по месяцам</h2>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
@@ -320,7 +320,7 @@ export default function AnalyticsPage() {
               </div>
             </Card>
 
-            <Card className="border-slate-200 dark:border-white/10 bg-card/70 p-5">
+            <Card className="border-border bg-card/70 p-5">
               <h2 className="mb-3 text-sm font-semibold">Прибыль и расходы</h2>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
@@ -342,8 +342,8 @@ export default function AnalyticsPage() {
           </div>
 
           {/* Таблица месяц × точка */}
-          <Card className="border-slate-200 dark:border-white/10 bg-card/70 overflow-hidden p-0">
-            <div className="border-b border-slate-200 dark:border-white/10 px-5 py-3">
+          <Card className="border-border bg-card/70 overflow-hidden p-0">
+            <div className="border-b border-border px-5 py-3">
               <h2 className="text-sm font-semibold">Выручка по точкам · {year}</h2>
             </div>
             <div className="overflow-auto">
@@ -406,7 +406,7 @@ export default function AnalyticsPage() {
           </Card>
 
           {/* Маржа по месяцам */}
-          <Card className="border-slate-200 dark:border-white/10 bg-card/70 p-5">
+          <Card className="border-border bg-card/70 p-5">
             <h2 className="mb-3 text-sm font-semibold">Маржа по месяцам</h2>
             <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
               {months.map((m) => {

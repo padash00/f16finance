@@ -336,9 +336,9 @@ export default function StoreAuditPage() {
 
           <div className="space-y-1.5">
             <Label>Режим подсчёта</Label>
-            <div className="flex border border-slate-200 dark:border-white/10">
+            <div className="flex border border-border">
               <button type="button" onClick={() => setMode('single')} className={`flex-1 px-3 py-2 text-xs transition ${mode === 'single' ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300' : 'text-muted-foreground hover:text-foreground'}`}>Обычный</button>
-              <button type="button" onClick={() => setMode('double')} className={`flex-1 border-l border-slate-200 dark:border-white/10 px-3 py-2 text-xs transition ${mode === 'double' ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300' : 'text-muted-foreground hover:text-foreground'}`}>Двойной слепой</button>
+              <button type="button" onClick={() => setMode('double')} className={`flex-1 border-l border-border px-3 py-2 text-xs transition ${mode === 'double' ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300' : 'text-muted-foreground hover:text-foreground'}`}>Двойной слепой</button>
             </div>
             <p className="text-[11px] text-muted-foreground">{mode === 'double' ? 'Назначь 2 операторов на ОДНУ секцию — посчитают независимо, расхождение между ними пойдёт на пересчёт.' : 'Можно несколько операторов на одну секцию (считают вместе, видят друг друга) или каждому свою секцию.'}</p>
           </div>
@@ -444,7 +444,7 @@ export default function StoreAuditPage() {
             ) : (
               <div className="flex flex-wrap gap-2">
                 {detail.assignments.map((a) => (
-                  <span key={a.id} className="inline-flex items-center gap-1 rounded-md border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] px-2.5 py-1 text-xs text-muted-foreground">
+                  <span key={a.id} className="inline-flex items-center gap-1 rounded-md border border-border bg-slate-50 dark:bg-white/[0.03] px-2.5 py-1 text-xs text-muted-foreground">
                     <Users className="h-3 w-3" /> {a.operatorName} · {a.categoryName || 'Вся локация'}
                   </span>
                 ))}
@@ -474,7 +474,7 @@ export default function StoreAuditPage() {
                   type="button"
                   onClick={() => void cancelAct()}
                   disabled={canceling}
-                  className="flex w-full items-center justify-center gap-2 rounded-md border border-slate-200 dark:border-white/10 px-3 py-2 text-xs text-muted-foreground transition hover:border-rose-500/40 hover:text-rose-700 dark:hover:text-rose-300 disabled:opacity-50"
+                  className="flex w-full items-center justify-center gap-2 rounded-md border border-border px-3 py-2 text-xs text-muted-foreground transition hover:border-rose-500/40 hover:text-rose-700 dark:hover:text-rose-300 disabled:opacity-50"
                 >
                   {canceling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Undo2 className="h-3.5 w-3.5" />}
                   Отменить акт (вернуть как было)
@@ -608,7 +608,7 @@ export default function StoreAuditPage() {
                           </div>
                           <div className="mt-1.5 flex flex-wrap items-center gap-2">
                             {(r.counts || []).map((c: any, i: number) => (
-                              <button key={i} type="button" onClick={() => void resolveItem(r.item_id, c.qty)} title="Принять это значение" className="rounded border border-slate-200 dark:border-white/10 px-2 py-1 text-xs tabular-nums text-foreground transition hover:border-amber-400/40 hover:text-amber-700 dark:hover:text-amber-300">
+                              <button key={i} type="button" onClick={() => void resolveItem(r.item_id, c.qty)} title="Принять это значение" className="rounded border border-border px-2 py-1 text-xs tabular-nums text-foreground transition hover:border-amber-400/40 hover:text-amber-700 dark:hover:text-amber-300">
                                 {c.by || 'счёт'}: {fmt(c.qty)}
                               </button>
                             ))}

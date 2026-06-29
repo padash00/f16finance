@@ -436,7 +436,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
       {(() => {
         const hdrActions = (
           <>
-            <div className="inline-flex rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-0.5 text-xs">
+            <div className="inline-flex rounded-lg border border-border bg-slate-50 dark:bg-white/[0.03] p-0.5 text-xs">
               {(['all', 'warehouse', 'showcase'] as const).map((s) => (
                 <button
                   key={s}
@@ -474,7 +474,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-        <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-3">
+        <Card className="border-border bg-white dark:bg-white/[0.03] p-3">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Документов</p>
           {loading ? <Skeleton className="mt-1 h-7 w-12" /> : <p className="mt-1 text-xl font-semibold">{(data?.writeoffs || []).length}</p>}
         </Card>
@@ -484,7 +484,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
             <p className="mt-1 truncate text-xl font-semibold text-rose-700 dark:text-rose-200" title={formatMoney(totalWriteoffsAmount)}>{formatMoney(totalWriteoffsAmount)}</p>
           )}
         </Card>
-        <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-3">
+        <Card className="border-border bg-white dark:bg-white/[0.03] p-3">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Причин</p>
           {loading ? <Skeleton className="mt-1 h-7 w-10" /> : (
             <p className="mt-1 text-xl font-semibold">{new Set((data?.writeoffs || []).map((w) => w.reason).filter(Boolean)).size}</p>
@@ -535,7 +535,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
       </div>
 
       {/* Main table */}
-      <Card className="overflow-hidden border-slate-200 dark:border-white/10 bg-card/70 p-0">
+      <Card className="overflow-hidden border-border bg-card/70 p-0">
         {loading && filteredWriteoffs.length === 0 ? (
           <StoreDataTableSkeleton columns={6} />
         ) : filteredWriteoffs.length === 0 ? (
@@ -547,7 +547,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
           <div className="relative max-h-[calc(100vh-380px)] overflow-auto">
             {refreshing ? (
               <div className="absolute inset-0 z-20 flex items-start justify-center bg-background/35 pt-10 backdrop-blur-[0.5px]">
-                <div className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-white/10 bg-card/90 px-3 py-1.5 text-xs text-muted-foreground shadow-md">
+                <div className="flex items-center gap-2 rounded-lg border border-border bg-card/90 px-3 py-1.5 text-xs text-muted-foreground shadow-md">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   Обновление…
                 </div>
@@ -629,7 +629,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
       {/* Create writeoff dialog */}
       <Dialog open={formSheetOpen} onOpenChange={setFormSheetOpen}>
         <DialogContent className="flex h-[90vh] !w-[96vw] !max-w-[96vw] sm:!max-w-[1300px] flex-col gap-0 overflow-hidden p-0">
-          <DialogHeader className="border-b border-slate-200 dark:border-white/10 p-5 text-left">
+          <DialogHeader className="border-b border-border p-5 text-left">
             <DialogTitle className="flex items-center gap-2">
               <ArchiveX className="h-5 w-5 text-rose-700 dark:text-rose-300" />
               Новый документ списания
@@ -675,7 +675,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
                         setQuickError(null)
                         quickInputRef.current?.focus()
                       }}
-                      className="rounded-full border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/[0.04] px-3 py-1 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-white/[0.08]"
+                      className="rounded-full border border-border bg-slate-100 dark:bg-white/[0.04] px-3 py-1 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-white/[0.08]"
                       title={`${balance.item?.name || 'Товар'} · ${balance.item?.barcode || '—'} · ${formatQty(Number(balance.quantity || 0))}`}
                     >
                       <span className="block max-w-[340px] truncate">
@@ -687,8 +687,8 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
               )}
             </div>
 
-            <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-3">
-              <p className="mb-2 text-xs uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Шаблоны и экспорт</p>
+            <div className="rounded-2xl border border-border bg-white dark:bg-white/[0.02] p-3">
+              <p className="mb-2 text-xs uppercase tracking-[0.14em] text-muted-foreground">Шаблоны и экспорт</p>
               <div className="flex flex-wrap gap-2">
                 <Input value={templateName} onChange={(e) => setTemplateName(e.target.value)} placeholder="Название шаблона" className="min-w-[220px] flex-1" />
                 <Button type="button" variant="outline" onClick={saveTemplate}>Сохранить</Button>
@@ -697,7 +697,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
               {savedTemplates.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-2">
                   {savedTemplates.map((tpl) => (
-                    <div key={tpl.name} className="inline-flex items-center gap-1 rounded-full border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/[0.04] px-3 py-1 text-xs">
+                    <div key={tpl.name} className="inline-flex items-center gap-1 rounded-full border border-border bg-slate-100 dark:bg-white/[0.04] px-3 py-1 text-xs">
                       <button type="button" onClick={() => applyTemplate(tpl.name)} className="text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white">{tpl.name}</button>
                       <button type="button" onClick={() => deleteTemplate(tpl.name)} className="text-rose-600 dark:text-rose-300 hover:text-rose-700 dark:hover:text-rose-200">×</button>
                     </div>
@@ -737,7 +737,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
               </div>
             </div>
 
-            <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] px-3 py-2 text-xs text-muted-foreground">
+            <div className="rounded-xl border border-border bg-white dark:bg-white/[0.03] px-3 py-2 text-xs text-muted-foreground">
               Доступно в локации: <span className="font-medium text-foreground">{selectedLocation?.company?.name || selectedLocation?.name || '—'}</span>
               {' · '}
               {selectedBalances.length} товарных позиций
@@ -747,7 +747,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
               {lines.map((line, index) => {
                 const selectedBalance = selectedBalances.find((balance) => balance.item_id === line.item_id)
                 return (
-                <div key={`writeoff-${index}`} className="grid gap-3 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-3 md:grid-cols-[minmax(0,1.3fr)_180px_120px_minmax(0,1fr)_auto]">
+                <div key={`writeoff-${index}`} className="grid gap-3 rounded-2xl border border-border bg-white dark:bg-white/[0.02] p-3 md:grid-cols-[minmax(0,1.3fr)_180px_120px_minmax(0,1fr)_auto]">
                   <div className="space-y-1.5">
                     <Label>Товар</Label>
                     <Select
@@ -818,7 +818,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
 
       <Dialog open={writeoffDetailsOpen} onOpenChange={setWriteoffDetailsOpen}>
         <DialogContent className="flex h-[85vh] !w-[92vw] !max-w-[92vw] sm:!max-w-[1200px] flex-col gap-0 overflow-hidden p-0">
-          <DialogHeader className="border-b border-slate-200 dark:border-white/10 p-5 text-left">
+          <DialogHeader className="border-b border-border p-5 text-left">
             <DialogTitle>Детали списания</DialogTitle>
             <DialogDescription>
               {selectedWriteoff
@@ -845,7 +845,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
                   ) : null}
                   <span> · Сумма: <span className="text-foreground">{formatMoney(Number(selectedWriteoff.total_amount || 0))}</span></span>
                 </div>
-                <div className="overflow-auto rounded-xl border border-slate-200 dark:border-white/10">
+                <div className="overflow-auto rounded-xl border border-border">
                   <table className="w-full table-fixed text-sm">
                     <thead className="bg-slate-50 dark:bg-white/[0.03]">
                       <tr className="text-left text-xs text-muted-foreground">

@@ -139,11 +139,11 @@ function ForecastTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
   return (
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-xs shadow-xl">
-      <p className="text-slate-500 dark:text-slate-400 mb-2 font-medium">{label}</p>
+      <p className="text-muted-foreground mb-2 font-medium">{label}</p>
       {payload.map((p: any) => (
         <div key={p.name} className="flex justify-between gap-4">
           <span style={{ color: p.color }}>{p.name}</span>
-          <span className="font-semibold text-slate-900 dark:text-white">{fmtMoney(p.value)}</span>
+          <span className="font-semibold text-foreground">{fmtMoney(p.value)}</span>
         </div>
       ))}
     </div>
@@ -360,7 +360,7 @@ export default function ForecastPage() {
                 {loading && can('forecast.cancel_generation') ? (
                   <button
                     onClick={handleCancel}
-                    className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10"
+                    className="px-4 py-2.5 rounded-xl border border-border bg-slate-50 dark:bg-white/5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10"
                   >
                     Отменить
                   </button>
@@ -380,7 +380,7 @@ export default function ForecastPage() {
           {!result && !loading && !error && (
             <Card className="p-12 bg-white dark:bg-slate-900/80 border-slate-200 dark:border-slate-800 text-center">
               <BrainCircuit className="w-12 h-12 text-amber-500/40 mx-auto mb-4" />
-              <p className="text-slate-500 dark:text-slate-400 text-sm mb-2">
+              <p className="text-muted-foreground text-sm mb-2">
                 Нажмите «Сгенерировать прогноз» для анализа данных за последние 90 дней
               </p>
               <p className="text-slate-600 text-xs">ИИ проанализирует тренды и даст прогноз на 30, 60 и 90 дней вперёд</p>
@@ -412,8 +412,8 @@ export default function ForecastPage() {
                   <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-amber-500/10 mb-3">
                     <BarChart2 className="w-6 h-6 text-amber-400" />
                   </div>
-                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">Нет данных за последние 90 дней</h3>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto">
+                  <h3 className="text-lg font-semibold text-foreground mb-2">Нет данных за последние 90 дней</h3>
+                  <p className="text-sm text-muted-foreground max-w-md mx-auto">
                     {companyId !== 'all'
                       ? 'У выбранной точки нет операций за этот период. Попробуй выбрать другую точку или добавь несколько доходов/расходов.'
                       : 'В системе пока нет операций. Добавь несколько доходов и расходов, чтобы AI мог построить прогноз.'}
@@ -488,28 +488,28 @@ export default function ForecastPage() {
                     <Card key={label} className="p-5 bg-white dark:bg-slate-900/80 border-slate-200 dark:border-slate-700">
                       <div className="flex items-center justify-between mb-3">
                         <div>
-                          <p className="text-sm text-slate-900 dark:text-white font-semibold capitalize">{label}</p>
+                          <p className="text-sm text-foreground font-semibold capitalize">{label}</p>
                           {sublabel && <p className="text-[10px] text-slate-500 mt-0.5">{sublabel}</p>}
                         </div>
                         <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">AI</span>
                       </div>
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                             <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
                             Выручка
                           </div>
                           <span className="text-sm font-bold text-emerald-400">{fmtMoney(income)}</span>
                         </div>
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                             <TrendingDown className="w-3.5 h-3.5 text-red-400" />
                             Расходы
                           </div>
                           <span className="text-sm font-bold text-red-400">{fmtMoney(expense)}</span>
                         </div>
                         <div className="border-t border-slate-200 dark:border-slate-800 pt-2 flex items-center justify-between">
-                          <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                             <Wallet className="w-3.5 h-3.5 text-amber-400" />
                             Прибыль
                           </div>
@@ -535,7 +535,7 @@ export default function ForecastPage() {
               {/* ─── Сравнение периодов (умная аналитика) ─── */}
               {result.comparison && (
                 <Card className="p-5 bg-white dark:bg-slate-900/80 border-slate-200 dark:border-slate-800">
-                  <h2 className="text-sm font-semibold text-slate-900 dark:text-white mb-1">📊 Что изменилось за месяц</h2>
+                  <h2 className="text-sm font-semibold text-foreground mb-1">📊 Что изменилось за месяц</h2>
                   <p className="text-xs text-slate-500 mb-4">Последние 30 дней vs предыдущие 30 дней</p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {[
@@ -546,7 +546,7 @@ export default function ForecastPage() {
                       const pos = m.invert ? m.momentum < 0 : m.momentum >= 0
                       return (
                         <div key={m.label} className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 p-4">
-                          <p className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">{m.label}</p>
+                          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">{m.label}</p>
                           <p className={`text-2xl font-bold text-${m.color}-400 mb-1`}>{fmtMoney(m.value)}</p>
                           <div className="flex items-center gap-2 text-xs">
                             <span className={pos ? 'text-emerald-400' : 'text-red-400'}>
@@ -558,9 +558,9 @@ export default function ForecastPage() {
                       )
                     })}
                   </div>
-                  <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+                  <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center gap-3 text-xs text-muted-foreground">
                     <span>Маржа:</span>
-                    <span className="font-semibold text-slate-900 dark:text-white">{result.comparison.last30.margin.toFixed(1)}%</span>
+                    <span className="font-semibold text-foreground">{result.comparison.last30.margin.toFixed(1)}%</span>
                     <span className="text-slate-500">(было {result.comparison.prev30.margin.toFixed(1)}%)</span>
                   </div>
                 </Card>
@@ -569,7 +569,7 @@ export default function ForecastPage() {
               {/* ─── Топ категорий расходов с трендами ─── */}
               {result.categories && result.categories.length > 0 && (
                 <Card className="p-5 bg-white dark:bg-slate-900/80 border-slate-200 dark:border-slate-800">
-                  <h2 className="text-sm font-semibold text-slate-900 dark:text-white mb-1">💰 Топ категорий расходов</h2>
+                  <h2 className="text-sm font-semibold text-foreground mb-1">💰 Топ категорий расходов</h2>
                   <p className="text-xs text-slate-500 mb-4">Тренд: последние 30 дней vs предыдущие 30 дней</p>
                   <div className="space-y-2">
                     {result.categories.map((c) => {
@@ -584,8 +584,8 @@ export default function ForecastPage() {
                       return (
                         <div key={c.category} className="space-y-1">
                           <div className="flex items-center justify-between text-xs">
-                            <span className="text-slate-900 dark:text-white font-medium truncate">{c.category}</span>
-                            <span className="font-bold text-slate-900 dark:text-white whitespace-nowrap ml-2">{fmtMoney(c.total)}</span>
+                            <span className="text-foreground font-medium truncate">{c.category}</span>
+                            <span className="font-bold text-foreground whitespace-nowrap ml-2">{fmtMoney(c.total)}</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <div className="flex-1 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
@@ -594,7 +594,7 @@ export default function ForecastPage() {
                                 style={{ width: `${barWidth}%` }}
                               />
                             </div>
-                            <span className="text-xs text-slate-500 dark:text-slate-400 w-12 text-right">{c.share.toFixed(0)}%</span>
+                            <span className="text-xs text-muted-foreground w-12 text-right">{c.share.toFixed(0)}%</span>
                             {showTrend ? (
                               <span className={`text-xs font-medium w-16 text-right ${arrowColor}`}>
                                 {Math.abs(trend) < 10 ? '→' : trend > 0 ? '↑' : '↓'}
@@ -617,7 +617,7 @@ export default function ForecastPage() {
               {/* ─── Сезонность по дням недели ─── */}
               {result.seasonality && result.seasonality.byDay.some((d) => d.avg > 0) && (
                 <Card className="p-5 bg-white dark:bg-slate-900/80 border-slate-200 dark:border-slate-800">
-                  <h2 className="text-sm font-semibold text-slate-900 dark:text-white mb-1">📅 Сезонность по дням недели</h2>
+                  <h2 className="text-sm font-semibold text-foreground mb-1">📅 Сезонность по дням недели</h2>
                   <p className="text-xs text-slate-500 mb-4">Средняя выручка в каждый день недели</p>
                   <div className="grid grid-cols-7 gap-2">
                     {[1, 2, 3, 4, 5, 6, 0].map((dayIdx) => {
@@ -640,7 +640,7 @@ export default function ForecastPage() {
                               title={fmtMoney(day.avg)}
                             />
                           </div>
-                          <p className={`text-xs font-medium ${isBest ? 'text-emerald-400' : isWorst ? 'text-red-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                          <p className={`text-xs font-medium ${isBest ? 'text-emerald-400' : isWorst ? 'text-red-400' : 'text-muted-foreground'}`}>
                             {day.name}
                           </p>
                           <p className="text-[10px] text-slate-500">{fmtMoney(day.avg)}</p>
@@ -658,14 +658,14 @@ export default function ForecastPage() {
               {/* ─── Выбросы (нерегулярные крупные расходы) ─── */}
               {result.outliers && result.outliers.length > 0 && (
                 <Card className="p-5 bg-white dark:bg-slate-900/80 border-slate-200 dark:border-slate-800">
-                  <h2 className="text-sm font-semibold text-slate-900 dark:text-white mb-1">⚡ Крупные нерегулярные расходы</h2>
+                  <h2 className="text-sm font-semibold text-foreground mb-1">⚡ Крупные нерегулярные расходы</h2>
                   <p className="text-xs text-slate-500 mb-4">Выше median + 2σ — обычно одноразовые траты, не повторятся</p>
                   <div className="space-y-2">
                     {result.outliers.map((o, i) => (
                       <div key={`${o.date}-${i}`} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-800">
                         <div className="w-1 h-10 bg-amber-500 rounded-full" />
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{o.category}</p>
+                          <p className="text-sm font-medium text-foreground truncate">{o.category}</p>
                           <p className="text-xs text-slate-500">{o.date}{o.comment ? ` · ${o.comment}` : ''}</p>
                         </div>
                         <span className="text-sm font-bold text-amber-400 whitespace-nowrap">{fmtMoney(o.amount)}</span>
@@ -678,10 +678,10 @@ export default function ForecastPage() {
               {/* ─── KPI план vs факт (если есть план) ─── */}
               {result.kpi && (
                 <Card className="p-5 bg-white dark:bg-slate-900/80 border-slate-200 dark:border-slate-800">
-                  <h2 className="text-sm font-semibold text-slate-900 dark:text-white mb-1">🎯 KPI план на месяц</h2>
+                  <h2 className="text-sm font-semibold text-foreground mb-1">🎯 KPI план на месяц</h2>
                   <div className="flex items-baseline gap-3 mb-3">
-                    <span className="text-2xl font-bold text-slate-900 dark:text-white">{fmtMoney(result.kpi.actual)}</span>
-                    <span className="text-sm text-slate-500 dark:text-slate-400">из {fmtMoney(result.kpi.plan)}</span>
+                    <span className="text-2xl font-bold text-foreground">{fmtMoney(result.kpi.actual)}</span>
+                    <span className="text-sm text-muted-foreground">из {fmtMoney(result.kpi.plan)}</span>
                     <span className={`text-sm font-bold ${result.kpi.progress >= 80 ? 'text-emerald-400' : result.kpi.progress >= 50 ? 'text-amber-400' : 'text-red-400'}`}>
                       {result.kpi.progress.toFixed(0)}%
                     </span>
@@ -697,7 +697,7 @@ export default function ForecastPage() {
 
               {/* Chart */}
               <Card className="p-5 bg-white dark:bg-slate-900/80 border-slate-200 dark:border-slate-800">
-                <h2 className="text-sm font-semibold text-slate-900 dark:text-white mb-1">История + Прогноз</h2>
+                <h2 className="text-sm font-semibold text-foreground mb-1">История + Прогноз</h2>
                 <p className="text-xs text-slate-500 mb-4">
                   Первые 13 столбцов — исторические данные по неделям. Последние 3 (+30д, +60д, +90д) — прогнозируемые средние значения.
                 </p>
@@ -739,7 +739,7 @@ export default function ForecastPage() {
                   <div className="p-1.5 bg-amber-500/20 rounded-lg">
                     <Sparkles className="w-4 h-4 text-amber-400" />
                   </div>
-                  <h2 className="text-sm font-semibold text-slate-900 dark:text-white">AI-анализ и прогноз</h2>
+                  <h2 className="text-sm font-semibold text-foreground">AI-анализ и прогноз</h2>
                   {loading ? <span className="text-xs text-amber-700 dark:text-amber-300">печатает...</span> : null}
                   <span className="text-xs text-slate-500 ml-auto">{result.dateFrom} — {result.dateTo}</span>
                 </div>

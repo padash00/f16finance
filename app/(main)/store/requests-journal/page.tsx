@@ -544,9 +544,9 @@ function StoreRequestsJournalPageContent({ embedded = false }: { embedded?: bool
                               <div className="font-semibold">{pointName}</div>
                               <div className="text-muted-foreground">Источник: {request.source_location?.name || '—'}</div>
                               <div className="text-muted-foreground">Витрина: {request.target_location?.name || '—'}</div>
-                              {request.comment ? <div className="mt-1 border-t border-slate-200 dark:border-white/10 pt-1">Заявка: {request.comment}</div> : null}
+                              {request.comment ? <div className="mt-1 border-t border-border pt-1">Заявка: {request.comment}</div> : null}
                               {request.decision_comment ? <div>Решение: {request.decision_comment}</div> : null}
-                              <div className="mt-1 border-t border-slate-200 dark:border-white/10 pt-1 space-y-0.5">
+                              <div className="mt-1 border-t border-border pt-1 space-y-0.5">
                                 {timeline.map((step) => (
                                   <div key={step.key} className="flex justify-between gap-3">
                                     <span className="text-muted-foreground">{step.label}:</span>
@@ -631,7 +631,7 @@ function StoreRequestsJournalPageContent({ embedded = false }: { embedded?: bool
         }}
       >
         <DialogContent className="flex h-[85vh] !w-[92vw] !max-w-[92vw] sm:!max-w-[1200px] flex-col gap-0 overflow-hidden p-0">
-          <DialogHeader className="border-b border-slate-200 dark:border-white/10 p-5 text-left">
+          <DialogHeader className="border-b border-border p-5 text-left">
             <DialogTitle className="flex items-center gap-2">
               <ClipboardList className="h-5 w-5 text-amber-600 dark:text-amber-300" />
               Детали заявки
@@ -691,7 +691,7 @@ function StoreRequestsJournalPageContent({ embedded = false }: { embedded?: bool
                   </div>
                 ) : null}
 
-                <div className="rounded-lg border border-slate-200 dark:border-white/10 p-3">
+                <div className="rounded-lg border border-border p-3">
                   <p className="text-xs uppercase tracking-wider text-muted-foreground">Хронология</p>
                   <ul className="mt-2 space-y-1.5 text-sm">
                     {requestTimeline(selectedRequest).map((step) => (
@@ -707,7 +707,7 @@ function StoreRequestsJournalPageContent({ embedded = false }: { embedded?: bool
 
                 <div>
                   <p className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">Состав заявки (что запрошено и одобрено)</p>
-                  <div className="overflow-auto rounded-xl border border-slate-200 dark:border-white/10">
+                  <div className="overflow-auto rounded-xl border border-border">
                     <table className="w-full min-w-[640px] table-fixed text-sm">
                       <thead className="bg-slate-50 dark:bg-white/[0.03]">
                         <tr className="text-left text-xs text-muted-foreground">

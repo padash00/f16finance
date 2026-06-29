@@ -994,7 +994,7 @@ export default function IncomePage() {
                       className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-colors ${
                         includeExtraInTotals
                           ? 'bg-yellow-500/20 border-yellow-500/30 text-yellow-400'
-                          : 'bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400'
+                          : 'bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-muted-foreground'
                       }`}
                     >
                       <span className={`w-2 h-2 rounded-full ${includeExtraInTotals ? 'bg-yellow-400' : 'bg-slate-500'}`} />
@@ -1032,7 +1032,7 @@ export default function IncomePage() {
                         className={`px-4 py-2 text-sm font-medium rounded-xl transition-all ${
                           activePreset === p
                             ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/25'
-                            : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700'
+                            : 'bg-white dark:bg-slate-800 text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700'
                         }`}
                       >
                         {p === 'today' ? 'Сегодня' : p === 'week' ? 'Неделя' : p === 'month' ? 'Месяц' : 'Все время'}
@@ -1064,7 +1064,7 @@ export default function IncomePage() {
               {showFilters && (
                 <div className="mt-4 p-4 bg-white dark:bg-slate-900/95 backdrop-blur-xl border border-amber-500/20 rounded-2xl">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-medium text-slate-900 dark:text-white flex items-center gap-2">
+                    <h3 className="text-sm font-medium text-foreground flex items-center gap-2">
                       <Filter className="w-4 h-4 text-amber-400" />
                       Фильтры данных
                     </h3>
@@ -1080,7 +1080,7 @@ export default function IncomePage() {
                       )}
                       <button
                         onClick={() => setShowFilters(false)}
-                        className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                        className="text-muted-foreground hover:text-slate-900 dark:hover:text-white"
                       >
                         <X className="w-5 h-5" />
                       </button>
@@ -1097,7 +1097,7 @@ export default function IncomePage() {
                       <select
                         value={companyFilter}
                         onChange={(e) => setCompanyFilter(e.target.value)}
-                        className="w-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none text-sm"
+                        className="w-full bg-white dark:bg-slate-800 text-foreground px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none text-sm"
                       >
                         <option value="all">Все компании</option>
                         {companies.map(c => (
@@ -1115,7 +1115,7 @@ export default function IncomePage() {
                       <select
                         value={operatorFilter}
                         onChange={(e) => setOperatorFilter(e.target.value as OperatorFilter)}
-                        className="w-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none text-sm"
+                        className="w-full bg-white dark:bg-slate-800 text-foreground px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none text-sm"
                       >
                         <option value="all">Все операторы</option>
                         <option value="none">Без оператора</option>
@@ -1134,7 +1134,7 @@ export default function IncomePage() {
                       <select
                         value={shiftFilter}
                         onChange={(e) => setShiftFilter(e.target.value as ShiftFilter)}
-                        className="w-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none text-sm"
+                        className="w-full bg-white dark:bg-slate-800 text-foreground px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none text-sm"
                       >
                         <option value="all">Все смены</option>
                         <option value="day">День (утро)</option>
@@ -1151,7 +1151,7 @@ export default function IncomePage() {
                       <select
                         value={payFilter}
                         onChange={(e) => setPayFilter(e.target.value as PayFilter)}
-                        className="w-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none text-sm"
+                        className="w-full bg-white dark:bg-slate-800 text-foreground px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none text-sm"
                       >
                         <option value="all">Любая оплата</option>
                         <option value="cash">Наличные 💵</option>
@@ -1175,7 +1175,7 @@ export default function IncomePage() {
                           placeholder="Введите текст для поиска..."
                           value={searchTerm}
                           onChange={(e) => setSearchTerm(e.target.value)}
-                          className="w-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white pl-10 pr-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none text-sm"
+                          className="w-full bg-white dark:bg-slate-800 text-foreground pl-10 pr-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none text-sm"
                         />
                         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-500" />
                         {searchTerm && (
@@ -1196,7 +1196,7 @@ export default function IncomePage() {
                           className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border transition-colors w-full md:w-auto ${
                             hideExtraRows
                               ? 'bg-yellow-500/20 border-yellow-500/30 text-yellow-400'
-                              : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                              : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-muted-foreground hover:text-slate-700 dark:hover:text-slate-300'
                           }`}
                         >
                           {hideExtraRows ? <Check className="w-4 h-4" /> : <div className="w-4 h-4 border border-slate-500 rounded" />}
@@ -1254,14 +1254,14 @@ export default function IncomePage() {
                     className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
                       activePreset === p
                         ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/30'
-                        : 'bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700'
+                        : 'bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700'
                     }`}
                   >
                     {p === 'today' ? 'Сегодня' : p === 'week' ? '7 дней' : p === 'month' ? 'Месяц' : 'Все время'}
                   </button>
                 ))}
                 {activePreset !== 'today' && activePreset !== 'week' && activePreset !== 'month' && activePreset !== 'all' && (
-                  <span className="px-3 py-1.5 text-xs text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700/50 rounded-lg">
+                  <span className="px-3 py-1.5 text-xs text-muted-foreground border border-slate-200 dark:border-slate-700/50 rounded-lg">
                     {dateFrom && dateTo ? `${DateUtils.formatDate(dateFrom)} — ${DateUtils.formatDate(dateTo)}` : 'Весь период'}
                   </span>
                 )}
@@ -1327,11 +1327,11 @@ export default function IncomePage() {
           {editingIncome && typeof window !== 'undefined' && createPortal(
             <div className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center bg-black/70 p-4 py-8 backdrop-blur-sm overflow-y-auto"
               onClick={(e) => { if (e.target === e.currentTarget) closeIncomeEditor() }}>
-              <Card className="w-full max-w-2xl border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 p-5 my-auto">
+              <Card className="w-full max-w-2xl border-border bg-white dark:bg-slate-900 p-5 my-auto">
                 <div className="mb-4 flex items-center justify-between">
                   <div>
-                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Редактирование дохода</h3>
-                    <p className="text-sm text-slate-500 dark:text-slate-400">Эту операцию может выполнить только владелец или супер-админ</p>
+                    <h3 className="text-lg font-semibold text-foreground">Редактирование дохода</h3>
+                    <p className="text-sm text-muted-foreground">Эту операцию может выполнить только владелец или супер-админ</p>
                   </div>
                   <Button variant="ghost" size="icon" onClick={closeIncomeEditor}>
                     <X className="h-4 w-4" />
@@ -1353,7 +1353,7 @@ export default function IncomePage() {
                     <select
                       value={editIncomeOperatorId}
                       onChange={(e) => setEditIncomeOperatorId(e.target.value)}
-                      className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-white outline-none focus:border-amber-500/40"
+                      className="w-full rounded-lg border border-border bg-white dark:bg-slate-800 px-3 py-2 text-foreground outline-none focus:border-amber-500/40"
                     >
                       <option value="none">Без оператора</option>
                       {operators.map((operator) => (
@@ -1366,12 +1366,12 @@ export default function IncomePage() {
 
                   <label className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
                     <span>Наличные</span>
-                    <input value={editCashDraft} onChange={(e) => setEditCashDraft(e.target.value)} className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-white outline-none focus:border-amber-500/40" />
+                    <input value={editCashDraft} onChange={(e) => setEditCashDraft(e.target.value)} className="w-full rounded-lg border border-border bg-white dark:bg-slate-800 px-3 py-2 text-foreground outline-none focus:border-amber-500/40" />
                   </label>
 
                   <label className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
                     <span>{cashLabels.pos}</span>
-                    <input value={editKaspiDraft} onChange={(e) => setEditKaspiDraft(e.target.value)} className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-white outline-none focus:border-amber-500/40" />
+                    <input value={editKaspiDraft} onChange={(e) => setEditKaspiDraft(e.target.value)} className="w-full rounded-lg border border-border bg-white dark:bg-slate-800 px-3 py-2 text-foreground outline-none focus:border-amber-500/40" />
                   </label>
 
                   {editingIncome?.shift === 'night' && (
@@ -1384,20 +1384,20 @@ export default function IncomePage() {
                         value={editKaspiBeforeMidnightDraft}
                         onChange={(e) => setEditKaspiBeforeMidnightDraft(e.target.value)}
                         placeholder={`Из кабинета ${cashLabels.providerName} — сколько ${cashLabels.providerName} пришло до полуночи`}
-                        className="w-full rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500/40"
+                        className="w-full rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2 text-foreground outline-none focus:border-blue-500/40"
                       />
-                      <p className="text-xs text-slate-500 dark:text-slate-400">Нужно для точного суточного расчёта в ОПиУ. Если не знаете — оставьте пустым.</p>
+                      <p className="text-xs text-muted-foreground">Нужно для точного суточного расчёта в ОПиУ. Если не знаете — оставьте пустым.</p>
                     </label>
                   )}
 
                   <label className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
                     <span>Онлайн</span>
-                    <input value={editOnlineDraft} onChange={(e) => setEditOnlineDraft(e.target.value)} className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-white outline-none focus:border-amber-500/40" />
+                    <input value={editOnlineDraft} onChange={(e) => setEditOnlineDraft(e.target.value)} className="w-full rounded-lg border border-border bg-white dark:bg-slate-800 px-3 py-2 text-foreground outline-none focus:border-amber-500/40" />
                   </label>
 
                   <label className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
                     <span>Карта</span>
-                    <input value={editCardDraft} onChange={(e) => setEditCardDraft(e.target.value)} className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-white outline-none focus:border-amber-500/40" />
+                    <input value={editCardDraft} onChange={(e) => setEditCardDraft(e.target.value)} className="w-full rounded-lg border border-border bg-white dark:bg-slate-800 px-3 py-2 text-foreground outline-none focus:border-amber-500/40" />
                   </label>
 
                   <label className="space-y-2 text-sm text-slate-700 dark:text-slate-300 md:col-span-2">
@@ -1406,7 +1406,7 @@ export default function IncomePage() {
                       rows={3}
                       value={editCommentDraft}
                       onChange={(e) => setEditCommentDraft(e.target.value)}
-                      className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-white outline-none focus:border-amber-500/40"
+                      className="w-full rounded-lg border border-border bg-white dark:bg-slate-800 px-3 py-2 text-foreground outline-none focus:border-amber-500/40"
                     />
                   </label>
                 </div>
@@ -1428,11 +1428,11 @@ export default function IncomePage() {
               onClick={() => { setShowAddIncomeModal(false); setIncomeModalLoading(false) }}
             >
               <div
-                className="w-full max-w-[1280px] h-[92vh] rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 overflow-hidden shadow-2xl"
+                className="w-full max-w-[1280px] h-[92vh] rounded-2xl border border-border bg-white dark:bg-slate-950 overflow-hidden shadow-2xl"
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="h-12 border-b border-slate-200 dark:border-white/10 flex items-center justify-between px-3">
-                  <div className="text-sm text-slate-900 dark:text-white">Добавление дохода</div>
+                <div className="h-12 border-b border-border flex items-center justify-between px-3">
+                  <div className="text-sm text-foreground">Добавление дохода</div>
                   <button
                     onClick={() => { setShowAddIncomeModal(false); setIncomeModalLoading(false) }}
                     className="rounded-md p-1.5 text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10"
@@ -1474,7 +1474,7 @@ function TabButton({ active, onClick, icon, label }: { active: boolean; onClick:
       className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
         active
           ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/25'
-          : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700/50'
+          : 'text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700/50'
       }`}
     >
       {icon}
@@ -1502,7 +1502,7 @@ function OverviewTab(props: any) {
   } = props
   const trendIcon = analytics.trend === 'up' ? <TrendingUp className="w-4 h-4 text-green-400" /> :
                    analytics.trend === 'down' ? <TrendingDown className="w-4 h-4 text-red-400" /> : 
-                   <MinusIcon className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+                   <MinusIcon className="w-4 h-4 text-muted-foreground" />
 
   return (
     <div className="space-y-6">
@@ -1547,13 +1547,13 @@ function OverviewTab(props: any) {
                 <LineChart className="w-5 h-5 text-amber-400" />
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Динамика доходов</h3>
+                <h3 className="text-sm font-semibold text-foreground">Динамика доходов</h3>
                 <p className="text-xs text-slate-500">По дням с скользящим средним</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               {trendIcon}
-              <span className={`text-xs ${analytics.trend === 'up' ? 'text-green-400' : analytics.trend === 'down' ? 'text-red-400' : 'text-slate-500 dark:text-slate-400'}`}>
+              <span className={`text-xs ${analytics.trend === 'up' ? 'text-green-400' : analytics.trend === 'down' ? 'text-red-400' : 'text-muted-foreground'}`}>
                 {analytics.trend === 'up' ? 'Рост' : analytics.trend === 'down' ? 'Снижение' : 'Стабильно'}
               </span>
             </div>
@@ -1584,7 +1584,7 @@ function OverviewTab(props: any) {
             <div className="p-2 bg-amber-500/20 rounded-xl">
               <BarChart2 className="w-5 h-5 text-amber-400" />
             </div>
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Структура оплат</h3>
+            <h3 className="text-sm font-semibold text-foreground">Структура оплат</h3>
           </div>
           
           <div className="h-48 mb-4">
@@ -1613,10 +1613,10 @@ function OverviewTab(props: any) {
               <div key={p.name} className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
-                  <span className="text-slate-500 dark:text-slate-400">{p.name}</span>
+                  <span className="text-muted-foreground">{p.name}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-slate-900 dark:text-white font-medium">{Formatters.moneyDetailed(p.value)}</span>
+                  <span className="text-foreground font-medium">{Formatters.moneyDetailed(p.value)}</span>
                   <span className="text-slate-500">({p.percentage.toFixed(1)}%)</span>
                 </div>
               </div>
@@ -1632,11 +1632,11 @@ function OverviewTab(props: any) {
             <div className="p-2 bg-amber-500/20 rounded-xl">
               <Sparkles className="w-5 h-5 text-amber-400" />
             </div>
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">AI Прогноз</h3>
+            <h3 className="text-sm font-semibold text-foreground">AI Прогноз</h3>
           </div>
 
           <div className="mb-4">
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Ожидается в следующем месяце</p>
+            <p className="text-xs text-muted-foreground mb-1">Ожидается в следующем месяце</p>
             <p className="text-2xl font-bold bg-gradient-to-r from-amber-400 to-amber-400 bg-clip-text text-transparent">
               {Formatters.moneyDetailed(analytics.prediction.value)}
             </p>
@@ -1645,7 +1645,7 @@ function OverviewTab(props: any) {
           <div className="space-y-3">
             <div>
               <div className="flex justify-between text-xs mb-1">
-                <span className="text-slate-500 dark:text-slate-400">Достоверность</span>
+                <span className="text-muted-foreground">Достоверность</span>
                 <span className={analytics.prediction.confidence > 70 ? 'text-green-400' : 'text-yellow-400'}>
                   {analytics.prediction.confidence}%
                 </span>
@@ -1662,9 +1662,9 @@ function OverviewTab(props: any) {
             <div className="p-2 bg-amber-500/20 rounded-xl">
               <Trophy className="w-5 h-5 text-amber-400" />
             </div>
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Топ оператор</h3>
+            <h3 className="text-sm font-semibold text-foreground">Топ оператор</h3>
           </div>
-          <div className="text-lg font-bold text-slate-900 dark:text-white mb-1">{analytics.topOperator[0]}</div>
+          <div className="text-lg font-bold text-foreground mb-1">{analytics.topOperator[0]}</div>
           <div className="text-2xl font-bold text-amber-400">{Formatters.moneyDetailed(analytics.topOperator[1])}</div>
           <p className="text-xs text-slate-500 mt-2">Лучший результат за период</p>
         </Card>
@@ -1674,9 +1674,9 @@ function OverviewTab(props: any) {
             <div className="p-2 bg-amber-500/20 rounded-xl">
               <MapPin className="w-5 h-5 text-amber-400" />
             </div>
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Топ зона</h3>
+            <h3 className="text-sm font-semibold text-foreground">Топ зона</h3>
           </div>
-          <div className="text-lg font-bold text-slate-900 dark:text-white mb-1">{analytics.topZone[0]}</div>
+          <div className="text-lg font-bold text-foreground mb-1">{analytics.topZone[0]}</div>
           <div className="text-2xl font-bold text-amber-400">{Formatters.moneyDetailed(analytics.topZone[1])}</div>
           <p className="text-xs text-slate-500 mt-2">Самая прибыльная локация</p>
         </Card>
@@ -1689,7 +1689,7 @@ function OverviewTab(props: any) {
             <div className="p-2 bg-green-500/20 rounded-xl">
               <Clock className="w-5 h-5 text-green-400" />
             </div>
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Последние операции</h3>
+            <h3 className="text-sm font-semibold text-foreground">Последние операции</h3>
           </div>
         </div>
         
@@ -1721,17 +1721,17 @@ function MetricCard({ label, value, icon, color, trend, percentage }: any) {
   return (
     <Card className="p-4 border-0 bg-white dark:bg-slate-800/50 backdrop-blur-sm hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-colors">
       <div className="flex items-center justify-between mb-3">
-        <span className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">{label}</span>
+        <span className="text-xs text-muted-foreground uppercase tracking-wide">{label}</span>
         <div className={`p-2 rounded-xl bg-gradient-to-br ${color} bg-opacity-20`}>
           {icon}
         </div>
       </div>
-      <div className="text-xl font-bold text-slate-900 dark:text-white mb-1">{Formatters.moneyDetailed(value)}</div>
+      <div className="text-xl font-bold text-foreground mb-1">{Formatters.moneyDetailed(value)}</div>
       {percentage !== undefined && (
         <div className="text-xs text-slate-500">{percentage.toFixed(1)}% от общего</div>
       )}
       {trend && (
-        <div className={`text-xs flex items-center gap-1 ${trend === 'up' ? 'text-green-400' : trend === 'down' ? 'text-red-400' : 'text-slate-500 dark:text-slate-400'}`}>
+        <div className={`text-xs flex items-center gap-1 ${trend === 'up' ? 'text-green-400' : trend === 'down' ? 'text-red-400' : 'text-muted-foreground'}`}>
           {trend === 'up' ? '↗ Рост' : trend === 'down' ? '↘ Снижение' : '→ Стабильно'}
         </div>
       )}
@@ -1762,7 +1762,7 @@ function IncomeRowCompact({
       <div className="flex items-center gap-3 flex-1 min-w-0">
         <div className={`w-2 h-2 rounded-full ${row.shift === 'day' ? 'bg-amber-400' : 'bg-blue-400'}`} />
         <div className="flex flex-col min-w-0">
-          <span className="text-sm font-medium text-slate-900 dark:text-white truncate flex items-center gap-2">
+          <span className="text-sm font-medium text-foreground truncate flex items-center gap-2">
             {companyName}
             {isExtra && <span className="text-[9px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded">ДОП</span>}
           </span>
@@ -1811,7 +1811,7 @@ function IncomeRowCompact({
                 setOnlineDraft('')
                 saveOnlineAmount(row, val)
               }}
-              className="w-20 h-6 text-right px-1 rounded border border-pink-500 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs outline-none"
+              className="w-20 h-6 text-right px-1 rounded border border-pink-500 bg-white dark:bg-slate-900 text-foreground text-xs outline-none"
             />
           </div>
         ) : (
@@ -1826,7 +1826,7 @@ function IncomeRowCompact({
           </button>
         )}
 
-        <span className="text-sm font-bold text-slate-900 dark:text-white font-mono min-w-[80px] text-right">{Formatters.moneyDetailed(total)}</span>
+        <span className="text-sm font-bold text-foreground font-mono min-w-[80px] text-right">{Formatters.moneyDetailed(total)}</span>
       </div>
     </div>
   )
@@ -1837,7 +1837,7 @@ function AnalyticsTab({ analytics, dateFrom, dateTo }: any) {
     <div className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="p-6 border-0 bg-white dark:bg-slate-800/50 backdrop-blur-sm">
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">По способам оплаты</h3>
+          <h3 className="text-sm font-semibold text-foreground mb-4">По способам оплаты</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={analytics.paymentData}>
@@ -1856,12 +1856,12 @@ function AnalyticsTab({ analytics, dateFrom, dateTo }: any) {
         </Card>
 
         <Card className="p-6 border-0 bg-white dark:bg-slate-800/50 backdrop-blur-sm">
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">Распределение по сменам</h3>
+          <h3 className="text-sm font-semibold text-foreground mb-4">Распределение по сменам</h3>
           <div className="space-y-4">
             <div>
               <div className="flex justify-between text-sm mb-2">
-                <span className="text-slate-500 dark:text-slate-400 flex items-center gap-2"><Sun className="w-4 h-4 text-amber-400" /> День</span>
-                <span className="text-slate-900 dark:text-white font-medium">{Formatters.moneyDetailed(analytics.dayTotal)}</span>
+                <span className="text-muted-foreground flex items-center gap-2"><Sun className="w-4 h-4 text-amber-400" /> День</span>
+                <span className="text-foreground font-medium">{Formatters.moneyDetailed(analytics.dayTotal)}</span>
               </div>
               <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                 <div className="h-full bg-amber-400 rounded-full" style={{ width: `${analytics.total ? (analytics.dayTotal / analytics.total) * 100 : 0}%` }} />
@@ -1869,8 +1869,8 @@ function AnalyticsTab({ analytics, dateFrom, dateTo }: any) {
             </div>
             <div>
               <div className="flex justify-between text-sm mb-2">
-                <span className="text-slate-500 dark:text-slate-400 flex items-center gap-2"><Moon className="w-4 h-4 text-blue-400" /> Ночь</span>
-                <span className="text-slate-900 dark:text-white font-medium">{Formatters.moneyDetailed(analytics.nightTotal)}</span>
+                <span className="text-muted-foreground flex items-center gap-2"><Moon className="w-4 h-4 text-blue-400" /> Ночь</span>
+                <span className="text-foreground font-medium">{Formatters.moneyDetailed(analytics.nightTotal)}</span>
               </div>
               <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                 <div className="h-full bg-blue-400 rounded-full" style={{ width: `${analytics.total ? (analytics.nightTotal / analytics.total) * 100 : 0}%` }} />
@@ -1880,8 +1880,8 @@ function AnalyticsTab({ analytics, dateFrom, dateTo }: any) {
           
           <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
             <div className="flex justify-between text-sm">
-              <span className="text-slate-500 dark:text-slate-400">Средний чек</span>
-              <span className="text-slate-900 dark:text-white font-medium">{Formatters.moneyDetailed(analytics.avgCheck)}</span>
+              <span className="text-muted-foreground">Средний чек</span>
+              <span className="text-foreground font-medium">{Formatters.moneyDetailed(analytics.avgCheck)}</span>
             </div>
           </div>
         </Card>
@@ -1891,12 +1891,12 @@ function AnalyticsTab({ analytics, dateFrom, dateTo }: any) {
         <Card className="p-6 border-0 bg-yellow-500/10 border-yellow-500/20 backdrop-blur-sm">
           <div className="flex items-center gap-3 mb-4">
             <AlertTriangle className="w-5 h-5 text-yellow-400" />
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Обнаружены аномалии</h3>
+            <h3 className="text-sm font-semibold text-foreground">Обнаружены аномалии</h3>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {analytics.anomalies.map((a: any, i: number) => (
               <div key={i} className="p-3 bg-white dark:bg-slate-800/50 rounded-xl">
-                <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">{DateUtils.formatDate(a.date)}</div>
+                <div className="text-xs text-muted-foreground mb-1">{DateUtils.formatDate(a.date)}</div>
                 <div className={`text-sm font-medium ${a.type === 'spike' ? 'text-green-400' : 'text-red-400'}`}>
                   {a.type === 'spike' ? '↗ Всплеск' : '↘ Падение'}: {Formatters.moneyDetailed(a.amount)}
                 </div>
@@ -1929,7 +1929,7 @@ function FeedTab({
   return (
     <Card className="p-0 border-0 bg-white dark:bg-slate-800/50 backdrop-blur-sm overflow-hidden">
       <div className="p-4 border-b border-slate-200 dark:border-slate-700">
-        <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Все операции ({displayRows.length})</h3>
+        <h3 className="text-sm font-semibold text-foreground">Все операции ({displayRows.length})</h3>
       </div>
       <div className="divide-y divide-slate-100 dark:divide-slate-800">
         {displayRows.length === 0 ? (
@@ -1996,7 +1996,7 @@ function IncomeRowFull({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-medium text-slate-900 dark:text-white">{companyName}</span>
+              <span className="font-medium text-foreground">{companyName}</span>
               {isExtra && <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded-full">ДОП</span>}
             </div>
             <div className="text-xs text-slate-500 flex items-center gap-2 mt-1">
@@ -2068,7 +2068,7 @@ function IncomeRowFull({
                     setOnlineDraft('')
                     saveOnlineAmount(row, val)
                   }}
-                  className="w-24 h-7 text-right px-2 rounded border border-pink-500 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm outline-none"
+                  className="w-24 h-7 text-right px-2 rounded border border-pink-500 bg-white dark:bg-slate-900 text-foreground text-sm outline-none"
                 />
               ) : (
                 <button
@@ -2086,7 +2086,7 @@ function IncomeRowFull({
 
             <div className="text-right min-w-[100px]">
               <div className="text-[10px] text-slate-500">Итого</div>
-              <div className="text-lg font-bold text-slate-900 dark:text-white font-mono">{Formatters.moneyDetailed(total)}</div>
+              <div className="text-lg font-bold text-foreground font-mono">{Formatters.moneyDetailed(total)}</div>
             </div>
 
             {canManageIncome && !String(row.id).startsWith('extra-') ? (

@@ -159,16 +159,16 @@ export function UserOverridesPanel({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 shadow-2xl shadow-black/40"
+        className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border bg-white dark:bg-slate-900 shadow-2xl shadow-black/40"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Заголовок */}
-        <div className="relative overflow-hidden border-b border-slate-200 dark:border-white/10 px-5 py-4">
+        <div className="relative overflow-hidden border-b border-border px-5 py-4">
           <div className="pointer-events-none absolute -left-10 -top-12 h-32 w-32 rounded-full bg-violet-500/15 blur-3xl" />
           <div className="relative flex items-center justify-between">
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">Индивидуальные права — {staffName}</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+              <p className="truncate text-sm font-semibold text-foreground">Индивидуальные права — {staffName}</p>
+              <p className="text-xs text-muted-foreground">
                 Роль: <span className="text-slate-700 dark:text-slate-200">{roleLabel(role)}</span> · исключения поверх роли
               </p>
             </div>
@@ -179,14 +179,14 @@ export function UserOverridesPanel({
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center gap-2 p-10 text-slate-500 dark:text-slate-400">
+          <div className="flex items-center justify-center gap-2 p-10 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" /> Загружаем…
           </div>
         ) : error ? (
           <div className="p-6 text-sm text-rose-300">Не удалось загрузить: {error}</div>
         ) : (
           <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4">
-            <p className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] px-3 py-2.5 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+            <p className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
               <span className="text-emerald-700 dark:text-emerald-300">Разрешить</span> — выдать право лично этому сотруднику, даже если роль его не даёт.{' '}
               <span className="text-rose-700 dark:text-rose-300">Запретить</span> — отнять право, даже если роль его даёт.{' '}
               <span className="text-slate-700 dark:text-slate-200">По роли</span> — убрать исключение.
@@ -204,7 +204,7 @@ export function UserOverridesPanel({
                   {exceptions.map(({ cap, id, granted }) => (
                     <div
                       key={id}
-                      className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] px-3 py-2.5"
+                      className="flex items-center justify-between gap-2 rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] px-3 py-2.5"
                     >
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5">
@@ -230,7 +230,7 @@ export function UserOverridesPanel({
                         <button
                           onClick={() => setOverride(id, 'reset')}
                           disabled={saving === id}
-                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 px-2 py-1 text-[11px] text-slate-700 dark:text-slate-300 transition-colors hover:bg-slate-200 dark:hover:bg-white/10 disabled:opacity-50"
+                          className="inline-flex items-center gap-1 rounded-lg border border-border bg-slate-100 dark:bg-white/5 px-2 py-1 text-[11px] text-slate-700 dark:text-slate-300 transition-colors hover:bg-slate-200 dark:hover:bg-white/10 disabled:opacity-50"
                           title="Вернуть к роли"
                         >
                           {saving === id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
@@ -254,7 +254,7 @@ export function UserOverridesPanel({
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Найти право или страницу…"
-                  className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/50 py-2.5 pl-10 pr-3 text-sm text-slate-900 dark:text-white placeholder-slate-500 transition focus:border-emerald-400/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/15"
+                  className="w-full rounded-xl border border-border bg-white dark:bg-slate-950/50 py-2.5 pl-10 pr-3 text-sm text-foreground placeholder-slate-500 transition focus:border-emerald-400/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/15"
                 />
               </div>
 
@@ -289,7 +289,7 @@ export function UserOverridesPanel({
                               className={`rounded-lg border px-2.5 py-1 text-[11px] transition disabled:opacity-50 ${
                                 ov === true
                                   ? 'border-emerald-400/50 bg-emerald-500/20 text-emerald-700 dark:text-emerald-200'
-                                  : 'border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-300 hover:bg-emerald-500/10'
+                                  : 'border-border bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-300 hover:bg-emerald-500/10'
                               }`}
                             >
                               разрешить
@@ -300,7 +300,7 @@ export function UserOverridesPanel({
                               className={`rounded-lg border px-2.5 py-1 text-[11px] transition disabled:opacity-50 ${
                                 ov === false
                                   ? 'border-rose-400/50 bg-rose-500/20 text-rose-700 dark:text-rose-200'
-                                  : 'border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-300 hover:bg-rose-500/10'
+                                  : 'border-border bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-300 hover:bg-rose-500/10'
                               }`}
                             >
                               запретить
@@ -309,7 +309,7 @@ export function UserOverridesPanel({
                               <button
                                 onClick={() => setOverride(c.id, 'reset')}
                                 disabled={saving === c.id}
-                                className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 px-2 py-1 text-[11px] text-slate-500 dark:text-slate-400 transition-colors hover:bg-slate-200 dark:hover:bg-white/10 disabled:opacity-50"
+                                className="rounded-lg border border-border bg-slate-100 dark:bg-white/5 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-slate-200 dark:hover:bg-white/10 disabled:opacity-50"
                                 title="Вернуть к роли"
                               >
                                 <RotateCcw className="h-3 w-3" />

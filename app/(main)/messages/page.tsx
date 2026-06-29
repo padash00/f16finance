@@ -181,7 +181,7 @@ export default function MessagesPage() {
                           {t.lastFromMe ? 'Вы: ' : ''}{t.lastMessage}
                         </span>
                         {t.unreadCount > 0 && (
-                          <span className="text-[10px] font-bold text-slate-900 dark:text-white bg-amber-500 rounded-full px-1.5 min-w-[18px] text-center">
+                          <span className="text-[10px] font-bold text-foreground bg-amber-500 rounded-full px-1.5 min-w-[18px] text-center">
                             {t.unreadCount}
                           </span>
                         )}
@@ -227,7 +227,7 @@ export default function MessagesPage() {
                     return (
                       <div key={m.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
                         <div className={`max-w-[70%] px-3 py-2 rounded-2xl ${
-                          isMine ? 'bg-amber-500 text-slate-900 dark:text-white' : 'bg-slate-100 dark:bg-white/[0.06] text-foreground'
+                          isMine ? 'bg-amber-500 text-foreground' : 'bg-slate-100 dark:bg-white/[0.06] text-foreground'
                         }`}>
                           <div className="text-sm whitespace-pre-wrap break-words">{m.message}</div>
                           <div className={`text-[10px] mt-1 ${isMine ? 'text-slate-700 dark:text-white/70' : 'text-muted-foreground'}`}>

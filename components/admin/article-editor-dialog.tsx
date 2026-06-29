@@ -74,7 +74,7 @@ export function ArticleEditorDialog({
           <button
             type="button"
             onClick={() => onOpenChange(false)}
-            className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-500 hover:text-slate-900 dark:hover:text-slate-100"
+            className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 dark:border-slate-700 text-muted-foreground hover:border-slate-400 dark:hover:border-slate-500 hover:text-slate-900 dark:hover:text-slate-100"
           >
             <X className="h-4 w-4" />
           </button>
@@ -164,7 +164,7 @@ export function ArticleEditorDialog({
                     className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
                       checked
                         ? 'border-amber-300/70 bg-amber-300/15 text-amber-700 dark:text-amber-100'
-                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/70 text-slate-500 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-500'
+                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/70 text-muted-foreground hover:border-slate-400 dark:hover:border-slate-500'
                     }`}
                   >
                     {opt.label}

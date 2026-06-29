@@ -243,10 +243,10 @@ export default function PurchasePlanPage() {
       />
 
       {/* Панель управления */}
-      <Card className="p-4 bg-white dark:bg-slate-900/40 border-slate-200 dark:border-white/10">
+      <Card className="p-4 bg-white dark:bg-slate-900/40 border-border">
         <div className="flex flex-wrap items-end gap-3">
           <div className="min-w-[220px] flex-1 space-y-1.5">
-            <label className="text-xs font-medium text-slate-500 dark:text-slate-400">Точка</label>
+            <label className="text-xs font-medium text-muted-foreground">Точка</label>
             <Select value={companyId || undefined} onValueChange={(v) => setCompanyId(v)}>
               <SelectTrigger><SelectValue placeholder="Выберите точку" /></SelectTrigger>
               <SelectContent>
@@ -273,7 +273,7 @@ export default function PurchasePlanPage() {
             </>
           ) : null}
         </div>
-        <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+        <p className="mt-3 text-xs text-muted-foreground">
           Спрос — средние продажи за 4 недели. Цель — запас на 2 недели. К закупу = цель − остаток (округление вверх). Цена — из последней приёмки товара.
         </p>
       </Card>
@@ -303,23 +303,23 @@ export default function PurchasePlanPage() {
 
       {plan && computed ? (
         plan.bySupplier.length === 0 ? (
-          <Card className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">
+          <Card className="p-8 text-center text-sm text-muted-foreground">
             На следующую неделю докупать нечего — остатков хватает либо нет продаж за последние 4 недели.
           </Card>
         ) : (
           <div className="space-y-5">
             {/* Итоговая плашка */}
-            <Card className="p-4 bg-white dark:bg-slate-900/60 border-slate-200 dark:border-white/10">
+            <Card className="p-4 bg-white dark:bg-slate-900/60 border-border">
               <div className="flex flex-wrap items-end justify-between gap-4">
                 <div>
-                  <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">
                     Неделя с {fmtDate(plan.weekStart)} · поставщиков {computed.groups.length} · позиций {computed.positions}
                   </div>
-                  <div className="mt-1 text-3xl font-bold tabular-nums text-slate-900 dark:text-white">{money(computed.total)}</div>
+                  <div className="mt-1 text-3xl font-bold tabular-nums text-foreground">{money(computed.total)}</div>
                 </div>
                 {plan.revenue4wPerWeek > 0 ? (
                   <div className="text-right">
-                    <div className="text-xs text-slate-500 dark:text-slate-400">Выручка точки за 7 дней</div>
+                    <div className="text-xs text-muted-foreground">Выручка точки за 7 дней</div>
                     <div className="text-sm font-semibold tabular-nums text-slate-700 dark:text-slate-200">{money(plan.revenue4wPerWeek)}</div>
                   </div>
                 ) : null}
@@ -328,15 +328,15 @@ export default function PurchasePlanPage() {
 
             {/* По поставщикам */}
             {computed.groups.map((g) => (
-              <Card key={g.supplier} className="overflow-hidden bg-white dark:bg-slate-900/40 border-slate-200 dark:border-white/10">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-white/10 px-4 py-3">
-                  <div className="text-sm font-semibold text-slate-900 dark:text-white">{g.supplier}</div>
+              <Card key={g.supplier} className="overflow-hidden bg-white dark:bg-slate-900/40 border-border">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
+                  <div className="text-sm font-semibold text-foreground">{g.supplier}</div>
                   <div className="text-sm font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">{money(g.total)}</div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-white/10">
+                      <tr className="text-xs uppercase tracking-wide text-muted-foreground border-b border-border">
                         <th className="text-left font-medium px-4 py-2">Товар</th>
                         <th className="text-right font-medium px-3 py-2">~ в нед.</th>
                         <th className="text-right font-medium px-3 py-2">В наличии</th>
@@ -351,7 +351,7 @@ export default function PurchasePlanPage() {
                         <tr key={it.item_id} className="border-b border-slate-100 dark:border-white/5 last:border-0">
                           <td className="px-4 py-2">
                             <div className="flex items-center gap-1.5">
-                              <span className="font-medium text-slate-900 dark:text-white">{it.name}</span>
+                              <span className="font-medium text-foreground">{it.name}</span>
                               {it.wasOutOfStock ? <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300" title="Сейчас в нуле — реальный спрос мог быть выше">был в нуле</span> : null}
                             </div>
                             {it.barcode ? <div className="text-[11px] text-slate-400 tabular-nums">{it.barcode}</div> : null}
@@ -386,9 +386,9 @@ export default function PurchasePlanPage() {
                                 min={1}
                                 value={String(it._packSize)}
                                 onChange={(e) => savePackSize(it.item_id, e.target.value)}
-                                className="w-9 rounded border border-slate-200 dark:border-white/10 bg-transparent px-1 py-0.5 text-right tabular-nums"
+                                className="w-9 rounded border border-border bg-transparent px-1 py-0.5 text-right tabular-nums"
                               />
-                              {it._packSize > 1 ? <span className="text-slate-500 dark:text-slate-400">= {it._packs} кор</span> : null}
+                              {it._packSize > 1 ? <span className="text-muted-foreground">= {it._packs} кор</span> : null}
                             </div>
                           </td>
                           <td className="px-3 py-2 text-right tabular-nums text-slate-700 dark:text-slate-200">{money(it.unitCost)}</td>
@@ -397,7 +397,7 @@ export default function PurchasePlanPage() {
                               <span className={it.marginPct >= 25 ? 'text-emerald-600 dark:text-emerald-400' : it.marginPct >= 10 ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400'}>{Math.round(it.marginPct)}%</span>
                             ) : <span className="text-slate-400">—</span>}
                           </td>
-                          <td className="px-4 py-2 text-right tabular-nums font-medium text-slate-900 dark:text-white">{money(it._amount)}</td>
+                          <td className="px-4 py-2 text-right tabular-nums font-medium text-foreground">{money(it._amount)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -408,17 +408,17 @@ export default function PurchasePlanPage() {
 
             {/* Не бери — затоваренные позиции (остатка хватит надолго) */}
             {plan.doNotBuy && plan.doNotBuy.length > 0 ? (
-              <Card className="overflow-hidden bg-white dark:bg-slate-900/40 border-slate-200 dark:border-white/10">
-                <div className="border-b border-slate-200 dark:border-white/10 px-4 py-3">
-                  <div className="text-sm font-semibold text-slate-900 dark:text-white">🧊 Не бери — затоварено ({plan.doNotBuy.length})</div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400">Остатка хватит надолго — деньги заморожены, лучше распродать.</div>
+              <Card className="overflow-hidden bg-white dark:bg-slate-900/40 border-border">
+                <div className="border-b border-border px-4 py-3">
+                  <div className="text-sm font-semibold text-foreground">🧊 Не бери — затоварено ({plan.doNotBuy.length})</div>
+                  <div className="text-[11px] text-muted-foreground">Остатка хватит надолго — деньги заморожены, лучше распродать.</div>
                 </div>
                 <div className="divide-y divide-slate-100 dark:divide-white/5">
                   {plan.doNotBuy.map((s) => (
                     <div key={s.item_id} className="flex items-center justify-between gap-3 px-4 py-2 text-sm">
                       <span className="min-w-0 truncate text-slate-700 dark:text-slate-200">{s.name}</span>
                       <div className="flex shrink-0 items-center gap-4 tabular-nums text-xs">
-                        <span className="text-slate-500 dark:text-slate-400">в наличии {num(s.stock)} · ~{num(s.weeklyDemand)}/нед</span>
+                        <span className="text-muted-foreground">в наличии {num(s.stock)} · ~{num(s.weeklyDemand)}/нед</span>
                         <span className="font-medium text-sky-600 dark:text-sky-400">хватит на {s.coverageWeeks >= 99 ? '∞' : `~${num(s.coverageWeeks)} нед`}</span>
                       </div>
                     </div>

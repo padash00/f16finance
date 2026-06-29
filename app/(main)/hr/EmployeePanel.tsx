@@ -59,7 +59,7 @@ type Props = {
 }
 
 const inputClass =
-  'h-10 w-full rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800/60 px-3 text-sm text-slate-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:border-indigo-500/60 focus:ring-1 focus:ring-indigo-500/30 transition-colors'
+  'h-10 w-full rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800/60 px-3 text-sm text-foreground placeholder:text-gray-500 focus:outline-none focus:border-indigo-500/60 focus:ring-1 focus:ring-indigo-500/30 transition-colors'
 
 export default function EmployeePanel({ employee, onClose, onUpdated }: Props) {
   const open = !!employee
@@ -253,7 +253,7 @@ export default function EmployeePanel({ employee, onClose, onUpdated }: Props) {
                 <User className="w-6 h-6 text-indigo-300" />
               </div>
               <div className="min-w-0">
-                <h2 className="text-base font-bold text-slate-900 dark:text-white truncate">{employee.full_name}</h2>
+                <h2 className="text-base font-bold text-foreground truncate">{employee.full_name}</h2>
                 <div className="flex items-center gap-2 mt-1">
                   <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium uppercase tracking-wider border bg-gradient-to-r ${typeColor}`}>
                     {typeLabel}
@@ -317,7 +317,7 @@ export default function EmployeePanel({ employee, onClose, onUpdated }: Props) {
                       {activity.events.slice(0, 10).map((e: any) => (
                         <div key={e.id} className="px-3 py-2 rounded-md border border-slate-200 dark:border-gray-800 bg-white dark:bg-gray-900/40 text-xs">
                           <div className="flex items-center justify-between gap-2">
-                            <span className="text-slate-900 dark:text-white capitalize">{actionRu(e.action)}</span>
+                            <span className="text-foreground capitalize">{actionRu(e.action)}</span>
                             <span className="text-gray-500">{new Date(e.created_at).toLocaleString('ru-RU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
                           </div>
                           {e.actor_name && <div className="text-gray-500 mt-0.5">от {e.actor_name}</div>}
@@ -335,7 +335,7 @@ export default function EmployeePanel({ employee, onClose, onUpdated }: Props) {
                     <div className="space-y-1">
                       {activity.shifts.slice(0, 10).map((s: any) => (
                         <div key={s.id} className="px-3 py-1.5 rounded-md bg-white dark:bg-gray-900/40 border border-slate-200 dark:border-gray-800 text-xs flex items-center justify-between">
-                          <span className="text-slate-900 dark:text-white">{new Date(s.date).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' })}</span>
+                          <span className="text-foreground">{new Date(s.date).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' })}</span>
                           <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded ${s.shift_type === 'night' ? 'bg-indigo-500/15 text-indigo-300' : 'bg-amber-500/15 text-amber-300'}`}>
                             {s.shift_type === 'night' ? 'Ночь' : 'День'}
                           </span>
@@ -463,7 +463,7 @@ export default function EmployeePanel({ employee, onClose, onUpdated }: Props) {
                       }
                       className={`px-3 py-2 rounded-lg border text-left text-sm transition flex items-center gap-2 ${
                         checked
-                          ? 'border-indigo-500/50 bg-indigo-500/10 text-slate-900 dark:text-white'
+                          ? 'border-indigo-500/50 bg-indigo-500/10 text-foreground'
                           : 'border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800/40 text-slate-500 dark:text-gray-400 hover:border-slate-300 dark:hover:border-gray-600'
                       }`}
                     >

@@ -23,8 +23,8 @@ function MessageBubble({ message }: { message: AssistantChatMessage }) {
         className={cn(
           'max-w-[88%] rounded-2xl px-3 py-2 text-xs whitespace-pre-wrap leading-relaxed',
           isUser
-            ? 'bg-gradient-to-r from-amber-500/25 to-orange-500/20 text-slate-900 dark:text-white border border-amber-500/20'
-            : 'bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-white/10',
+            ? 'bg-gradient-to-r from-amber-500/25 to-orange-500/20 text-foreground border border-amber-500/20'
+            : 'bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-200 border border-border',
         )}
       >
         {message.content}
@@ -100,21 +100,21 @@ export function FloatingAssistant({
     <>
       {/* Chat panel */}
       {open && (
-        <div className="fixed bottom-20 right-5 z-50 flex w-[380px] max-w-[calc(100vw-2rem)] flex-col rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/95 shadow-2xl backdrop-blur-md"
+        <div className="fixed bottom-20 right-5 z-50 flex w-[380px] max-w-[calc(100vw-2rem)] flex-col rounded-2xl border border-border bg-white dark:bg-slate-950/95 shadow-2xl backdrop-blur-md"
           style={{ maxHeight: '72vh' }}
         >
           {/* Header */}
-          <div className="flex items-center gap-2 border-b border-slate-200 dark:border-white/10 px-4 py-3">
+          <div className="flex items-center gap-2 border-b border-border px-4 py-3">
             <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-1.5">
               <Bot className="h-4 w-4 text-amber-300" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{title}</p>
+              <p className="text-sm font-semibold text-foreground truncate">{title}</p>
               <p className="text-[10px] text-slate-500">AI-консультант по этой странице</p>
             </div>
             <button
               onClick={() => setOpen(false)}
-              className="rounded-lg p-1.5 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white transition-colors"
+              className="rounded-lg p-1.5 text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white transition-colors"
             >
               <ChevronDown className="h-4 w-4" />
             </button>
@@ -127,7 +127,7 @@ export function FloatingAssistant({
             style={{ minHeight: 160, maxHeight: 'calc(72vh - 180px)' }}
           >
             {messages.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3">
+              <div className="rounded-xl border border-dashed border-border bg-slate-50 dark:bg-white/[0.03] p-3">
                 <div className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300 mb-1.5">
                   <Sparkles className="h-3.5 w-3.5 text-amber-300" />
                   Готов к анализу
@@ -141,7 +141,7 @@ export function FloatingAssistant({
             )}
 
             {loading && (
-              <div className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] px-3 py-2 text-xs text-slate-500 dark:text-slate-400">
+              <div className="flex items-center gap-2 rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] px-3 py-2 text-xs text-muted-foreground">
                 <Loader2 className="h-3 w-3 animate-spin text-amber-300" />
                 Анализирую данные...
               </div>
@@ -157,7 +157,7 @@ export function FloatingAssistant({
                   type="button"
                   onClick={() => void sendPrompt(p)}
                   disabled={loading}
-                  className="rounded-full border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 px-2.5 py-1 text-[10px] text-slate-500 dark:text-slate-400 hover:border-amber-500/30 hover:bg-amber-500/10 hover:text-slate-900 dark:hover:text-white transition-colors disabled:opacity-40"
+                  className="rounded-full border border-border bg-slate-50 dark:bg-white/5 px-2.5 py-1 text-[10px] text-muted-foreground hover:border-amber-500/30 hover:bg-amber-500/10 hover:text-slate-900 dark:hover:text-white transition-colors disabled:opacity-40"
                 >
                   {p}
                 </button>
@@ -173,13 +173,13 @@ export function FloatingAssistant({
           )}
 
           {/* Input */}
-          <div className="border-t border-slate-200 dark:border-white/10 p-3 space-y-2">
+          <div className="border-t border-border p-3 space-y-2">
             <Textarea
               ref={textareaRef}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               placeholder="Спроси про данные этой страницы..."
-              className="min-h-[60px] max-h-[120px] resize-none border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.04] text-slate-900 dark:text-white text-xs placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:border-amber-500/30"
+              className="min-h-[60px] max-h-[120px] resize-none border-border bg-slate-50 dark:bg-white/[0.04] text-foreground text-xs placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:border-amber-500/30"
               onKeyDown={(e) => {
                 if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
                   e.preventDefault()
@@ -210,7 +210,7 @@ export function FloatingAssistant({
         className={cn(
           'fixed bottom-5 right-5 z-50 flex h-13 w-13 items-center justify-center rounded-2xl shadow-2xl transition-all duration-200',
           open
-            ? 'bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10 text-amber-500 dark:text-amber-300'
+            ? 'bg-slate-100 dark:bg-slate-800 border border-border text-amber-500 dark:text-amber-300'
             : 'bg-gradient-to-br from-amber-500 to-orange-500 text-black hover:scale-105 hover:shadow-amber-500/30',
         )}
         style={{ height: 52, width: 52 }}

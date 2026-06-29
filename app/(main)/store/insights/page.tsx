@@ -40,8 +40,8 @@ const PERIODS = [
 
 const C = {
   card: 'bg-white dark:bg-slate-900/60',
-  border: 'border-slate-200 dark:border-white/10',
-  sub: 'text-slate-500 dark:text-slate-400',
+  border: 'border-border',
+  sub: 'text-muted-foreground',
 }
 
 function Kpi({ label, value, icon, tone }: { label: string; value: string; icon: React.ReactNode; tone: string }) {
@@ -51,7 +51,7 @@ function Kpi({ label, value, icon, tone }: { label: string; value: string; icon:
         <p className={`text-xs ${C.sub}`}>{label}</p>
         <span className={`grid h-7 w-7 place-items-center rounded-lg ${tone}`}>{icon}</span>
       </div>
-      <p className="mt-2 text-2xl font-bold tabular-nums text-slate-900 dark:text-white">{value}</p>
+      <p className="mt-2 text-2xl font-bold tabular-nums text-foreground">{value}</p>
     </div>
   )
 }
@@ -61,7 +61,7 @@ function Section({ title, icon, hint, children, count }: { title: string; icon: 
     <div className={`rounded-2xl border ${C.border} ${C.card} overflow-hidden`}>
       <div className={`flex items-center justify-between gap-3 border-b ${C.border} px-4 py-3`}>
         <div className="min-w-0">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <span aria-hidden>{icon}</span> {title}
             {typeof count === 'number' ? <span className={`text-xs font-normal ${C.sub}`}>· {count}</span> : null}
           </h2>
@@ -82,11 +82,11 @@ function trendColor(pct: number) {
   return pct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
 }
 
-const thCls = 'px-4 py-2 text-left text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400'
+const thCls = 'px-4 py-2 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground'
 const thR = thCls + ' text-right'
 const tdCls = 'px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200'
 const tdR = 'px-4 py-2.5 text-right text-sm tabular-nums text-slate-700 dark:text-slate-200'
-const nameCls = 'px-4 py-2.5 text-sm font-medium text-slate-900 dark:text-white max-w-[18rem] truncate'
+const nameCls = 'px-4 py-2.5 text-sm font-medium text-foreground max-w-[18rem] truncate'
 
 function EmptyRow({ cols, text }: { cols: number; text: string }) {
   return (

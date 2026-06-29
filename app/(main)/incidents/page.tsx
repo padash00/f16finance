@@ -156,7 +156,7 @@ export default function IncidentsPage() {
                   className={`rounded-full border px-3 py-1 text-xs transition ${
                     kind === value
                       ? 'border-amber-400/50 bg-amber-500/15 text-amber-700 dark:text-amber-200'
-                      : 'border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      : 'border-border text-muted-foreground hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
                   {value === 'all' ? 'Все' : KIND_LABEL[value]}
@@ -172,7 +172,7 @@ export default function IncidentsPage() {
                   className={`rounded-full border px-3 py-1 text-xs transition ${
                     status === value
                       ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-700 dark:text-emerald-200'
-                      : 'border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      : 'border-border text-muted-foreground hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
                   {value === 'all' ? 'Все статусы' : STATUS_LABEL[value]}
@@ -194,11 +194,11 @@ export default function IncidentsPage() {
           <div className="mt-1 text-xl font-semibold text-emerald-700 dark:text-emerald-200">{fmtMoney(summary.bonuses)}</div>
           <div className="text-xs text-slate-400">{summary.bonusCount} бонусов</div>
         </Card>
-        <Card className="border-slate-200 dark:border-white/10 p-4">
+        <Card className="border-border p-4">
           <div className="text-xs text-slate-400">Всего записей</div>
-          <div className="mt-1 text-xl font-semibold text-slate-900 dark:text-white">{rows.length}</div>
+          <div className="mt-1 text-xl font-semibold text-foreground">{rows.length}</div>
         </Card>
-        <Card className="border-slate-200 dark:border-white/10 p-4">
+        <Card className="border-border p-4">
           <div className="text-xs text-slate-400">Чистый эффект</div>
           <div
             className={`mt-1 text-xl font-semibold ${
@@ -214,7 +214,7 @@ export default function IncidentsPage() {
         <Card className="border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-700 dark:text-rose-200">{error}</Card>
       )}
 
-      <Card className="overflow-hidden border-slate-200 dark:border-white/10">
+      <Card className="overflow-hidden border-border">
         <AdminTableViewport>
           <table className="w-full text-sm">
             <thead className={adminTableStickyTheadClass}>
@@ -255,7 +255,7 @@ export default function IncidentsPage() {
                         {kindIcon(row.kind)} {KIND_LABEL[row.kind]}
                       </span>
                     </td>
-                    <td className="px-3 py-2 text-slate-900 dark:text-white">
+                    <td className="px-3 py-2 text-foreground">
                       <div className="font-medium">{row.title}</div>
                       {row.description && (
                         <div className="text-xs text-slate-400">{row.description}</div>

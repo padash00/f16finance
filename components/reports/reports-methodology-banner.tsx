@@ -36,7 +36,7 @@ export function ReportsMethodologyBanner({
       >
         {open ? <ChevronDown className="w-4 h-4 shrink-0 text-violet-400" /> : <ChevronRight className="w-4 h-4 shrink-0 text-violet-400" />}
         <Info className="w-4 h-4 shrink-0 text-violet-400" />
-        <span className="font-medium text-slate-900 dark:text-white">Как формируется отчёт</span>
+        <span className="font-medium text-foreground">Как формируется отчёт</span>
         {impreciseNightKaspiCount > 0 && (
           <span className="ml-auto text-xs text-amber-400 whitespace-nowrap">
             Ночных смен без «Безналичный до 00:00»: {impreciseNightKaspiCount}

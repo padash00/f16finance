@@ -110,7 +110,7 @@ export default function PositionsOverview() {
               <Briefcase className="w-5 h-5 text-blue-700 dark:text-blue-300" />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-slate-900 dark:text-white">Должности компании</h2>
+              <h2 className="text-base font-semibold text-foreground">Должности компании</h2>
               <p className="text-xs text-slate-500 dark:text-gray-400 mt-0.5">
                 {positions.length} ролей · {totalActivePeople} активных сотрудников
               </p>
@@ -181,7 +181,7 @@ function RoleCard({ position, active, total }: { position: Position; active: num
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-2 flex-wrap">
-            <h3 className="font-semibold text-slate-900 dark:text-white text-sm truncate">{position.label || position.name}</h3>
+            <h3 className="font-semibold text-foreground text-sm truncate">{position.label || position.name}</h3>
             <span className="text-[10px] text-gray-500 font-mono">{position.name}</span>
           </div>
           {position.description && (

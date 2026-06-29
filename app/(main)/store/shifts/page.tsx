@@ -104,14 +104,14 @@ export default function StoreShiftsPage() {
         accent="emerald"
         backHref="/store"
         actions={
-          <button onClick={load} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 transition-colors hover:bg-slate-50 dark:hover:bg-white/10">
+          <button onClick={load} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-white dark:bg-white/5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 transition-colors hover:bg-slate-50 dark:hover:bg-white/10">
             {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Обновить
           </button>
         }
         toolbar={
-          <div className="inline-flex flex-wrap gap-1 rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-950/50 p-1">
+          <div className="inline-flex flex-wrap gap-1 rounded-2xl border border-border bg-slate-50 dark:bg-slate-950/50 p-1">
             {STATUS.map(({ key, label }) => (
-              <button key={key} onClick={() => setStatus(key)} className={`rounded-xl px-4 py-2 text-sm font-medium transition-all ${status === key ? 'bg-white dark:bg-white/10 text-slate-900 dark:text-white shadow-sm ring-1 ring-slate-200 dark:ring-white/10' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}>{label}</button>
+              <button key={key} onClick={() => setStatus(key)} className={`rounded-xl px-4 py-2 text-sm font-medium transition-all ${status === key ? 'bg-white dark:bg-white/10 text-foreground shadow-sm ring-1 ring-slate-200 dark:ring-white/10' : 'text-muted-foreground hover:text-slate-900 dark:hover:text-white'}`}>{label}</button>
             ))}
           </div>
         }
@@ -119,10 +119,10 @@ export default function StoreShiftsPage() {
 
       {err && <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-700 dark:text-rose-200">{err}</div>}
 
-      <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 shadow-lg shadow-black/20 overflow-hidden">
-        <div className="flex items-center justify-between border-b border-slate-200 dark:border-white/10 px-4 py-3">
-          <span className="text-sm font-semibold text-slate-900 dark:text-white">Смены</span>
-          <span className="rounded-full border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 px-2 py-0.5 text-xs text-slate-500 dark:text-slate-400">{shifts.length}</span>
+      <div className="rounded-2xl border border-border bg-white dark:bg-slate-900/60 shadow-lg shadow-black/20 overflow-hidden">
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <span className="text-sm font-semibold text-foreground">Смены</span>
+          <span className="rounded-full border border-border bg-slate-50 dark:bg-white/5 px-2 py-0.5 text-xs text-muted-foreground">{shifts.length}</span>
         </div>
         {loading && shifts.length === 0 ? (
           <div className="flex items-center justify-center gap-2 py-16 text-slate-400"><Loader2 className="h-5 w-5 animate-spin" /> Загрузка…</div>
@@ -138,20 +138,20 @@ export default function StoreShiftsPage() {
               return (
                 <button key={s.id} onClick={() => setDetailId(s.id)} className="flex w-full flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 text-left transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.03]">
                   <div className="flex min-w-[180px] items-center gap-2">
-                    <span className="grid h-8 w-8 place-items-center rounded-lg bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-400"><User className="h-4 w-4" /></span>
+                    <span className="grid h-8 w-8 place-items-center rounded-lg bg-slate-100 dark:bg-white/5 text-muted-foreground"><User className="h-4 w-4" /></span>
                     <div>
-                      <div className="text-sm font-medium text-slate-900 dark:text-white">{s.operator?.full_name || s.operator?.short_name || '—'}</div>
+                      <div className="text-sm font-medium text-foreground">{s.operator?.full_name || s.operator?.short_name || '—'}</div>
                       <div className="text-[11px] text-slate-500">{dt(s.opened_at)} → {dt(s.closed_at)}</div>
                     </div>
                   </div>
-                  <span className={`rounded-md border px-2 py-0.5 text-[11px] font-medium ${open ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-500 dark:text-slate-400'}`}>
+                  <span className={`rounded-md border px-2 py-0.5 text-[11px] font-medium ${open ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-border bg-slate-50 dark:bg-white/5 text-muted-foreground'}`}>
                     {open ? 'Открыта' : 'Закрыта'}
                   </span>
                   <div className="ml-auto flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
                     {sales != null && (
                       <div className="text-right"><div className="text-[11px] text-slate-500">Продажи</div><div className="font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">{fmt(sales)} ₸</div></div>
                     )}
-                    <div className="text-right"><div className="flex items-center justify-end gap-1 text-[11px] text-slate-500"><Wallet className="h-3 w-3" /> Касса</div><div className="font-medium tabular-nums text-slate-900 dark:text-white">{fmt(cash)} ₸</div></div>
+                    <div className="text-right"><div className="flex items-center justify-end gap-1 text-[11px] text-slate-500"><Wallet className="h-3 w-3" /> Касса</div><div className="font-medium tabular-nums text-foreground">{fmt(cash)} ₸</div></div>
                     <div className="text-right"><div className="flex items-center justify-end gap-1 text-[11px] text-slate-500"><CreditCard className="h-3 w-3" /> Безнал</div><div className="font-medium tabular-nums text-sky-700 dark:text-sky-300">{fmt(kaspi)} ₸</div></div>
                     <ChevronRight className="h-4 w-4 text-slate-600" />
                   </div>
@@ -207,20 +207,20 @@ function ShiftDetail({ id, onClose, onChanged }: { id: string; onClose: () => vo
   return createPortal(
     <div className="fixed inset-0 z-[200] flex items-stretch justify-end">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} aria-hidden />
-      <div className="relative z-10 flex h-full w-full max-w-2xl flex-col border-l border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 shadow-2xl">
+      <div className="relative z-10 flex h-full w-full max-w-2xl flex-col border-l border-border bg-white dark:bg-slate-900 shadow-2xl">
         {/* Шапка */}
-        <div className="flex items-center justify-between border-b border-slate-200 dark:border-white/10 px-5 py-4">
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div className="flex items-center gap-3">
             <span className="grid h-10 w-10 place-items-center rounded-xl border border-emerald-400/30 bg-emerald-500/15"><Clock className="h-5 w-5 text-emerald-700 dark:text-emerald-300" /></span>
             <div>
-              <div className="flex items-center gap-2 text-base font-semibold text-slate-900 dark:text-white">
+              <div className="flex items-center gap-2 text-base font-semibold text-foreground">
                 {shift?.operator?.full_name || shift?.operator?.short_name || 'Смена'}
-                <span className={`rounded-md border px-2 py-0.5 text-[11px] font-medium ${open ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-500 dark:text-slate-400'}`}>{open ? 'Открыта' : 'Закрыта'}</span>
+                <span className={`rounded-md border px-2 py-0.5 text-[11px] font-medium ${open ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-border bg-slate-50 dark:bg-white/5 text-muted-foreground'}`}>{open ? 'Открыта' : 'Закрыта'}</span>
               </div>
               <div className="text-xs text-slate-500">{dt(shift?.opened_at)} → {dt(shift?.closed_at)}</div>
             </div>
           </div>
-          <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-slate-500 dark:text-slate-400 transition-colors hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"><X className="h-4 w-4" /></button>
+          <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"><X className="h-4 w-4" /></button>
         </div>
 
         {loading ? (
@@ -232,9 +232,9 @@ function ShiftDetail({ id, onClose, onChanged }: { id: string; onClose: () => vo
             {/* KPI */}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <Kpi label="Продажи" value={`${fmt(salesTotal)} ₸`} accent="text-emerald-700 dark:text-emerald-300" icon={<TrendingUp className="h-4 w-4" />} />
-              <Kpi label="Касса" value={`${fmt(open ? cashTotal : (shift?.closing_cash ?? cashTotal))} ₸`} accent="text-slate-900 dark:text-white" icon={<Wallet className="h-4 w-4" />} />
+              <Kpi label="Касса" value={`${fmt(open ? cashTotal : (shift?.closing_cash ?? cashTotal))} ₸`} accent="text-foreground" icon={<Wallet className="h-4 w-4" />} />
               <Kpi label="Безнал" value={`${fmt(open ? kaspiTotal : (shift?.closing_kaspi ?? kaspiTotal))} ₸`} accent="text-sky-700 dark:text-sky-300" icon={<CreditCard className="h-4 w-4" />} />
-              <Kpi label="Возвраты" value={`${fmt(returnsTotal)} ₸`} accent={returnsTotal > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-slate-500 dark:text-slate-400'} icon={<RotateCcw className="h-4 w-4" />} />
+              <Kpi label="Возвраты" value={`${fmt(returnsTotal)} ₸`} accent={returnsTotal > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-muted-foreground'} icon={<RotateCcw className="h-4 w-4" />} />
             </div>
             {open && (
               <div className="mt-3 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] px-3 py-2 text-xs text-emerald-700 dark:text-emerald-200">
@@ -244,26 +244,26 @@ function ShiftDetail({ id, onClose, onChanged }: { id: string; onClose: () => vo
 
             {/* Продажи */}
             <div className="mt-5 mb-2 flex items-center justify-between">
-              <span className="text-sm font-semibold text-slate-900 dark:text-white">Продажи</span>
-              <span className="rounded-full border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 px-2 py-0.5 text-xs text-slate-500 dark:text-slate-400">{sales.length}</span>
+              <span className="text-sm font-semibold text-foreground">Продажи</span>
+              <span className="rounded-full border border-border bg-slate-50 dark:bg-white/5 px-2 py-0.5 text-xs text-muted-foreground">{sales.length}</span>
             </div>
             {sales.length === 0 ? (
-              <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">Продаж нет</div>
+              <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-4 py-8 text-center text-sm text-muted-foreground">Продаж нет</div>
             ) : (
-              <div className="divide-y divide-slate-100 dark:divide-white/5 overflow-hidden rounded-xl border border-slate-200 dark:border-white/10">
+              <div className="divide-y divide-slate-100 dark:divide-white/5 overflow-hidden rounded-xl border border-border">
                 {sales.map((s) => {
                   const chip = PAY_CHIP[s.payment_method] || PAY_CHIP.mixed
                   const items = (s.items || []) as any[]
                   const names = items.map((it) => (it.item?.name || it.universal_name)).filter(Boolean)
                   return (
                     <div key={s.id} className="flex items-center gap-3 px-3 py-2.5">
-                      <div className="w-10 shrink-0 text-xs tabular-nums text-slate-500 dark:text-slate-400">{tm(s.sold_at)}</div>
+                      <div className="w-10 shrink-0 text-xs tabular-nums text-muted-foreground">{tm(s.sold_at)}</div>
                       <span className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[11px] font-medium ${chip}`}>{PAY_LABEL[s.payment_method] || s.payment_method}</span>
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm text-slate-900 dark:text-white">{names.length > 0 ? names.join(', ') : `${items.length} позиц.`}</div>
+                        <div className="truncate text-sm text-foreground">{names.length > 0 ? names.join(', ') : `${items.length} позиц.`}</div>
                         {s.operator?.full_name || s.operator?.short_name ? <div className="text-[11px] text-slate-500">{s.operator?.full_name || s.operator?.short_name}</div> : null}
                       </div>
-                      <div className="shrink-0 text-sm font-semibold tabular-nums text-slate-900 dark:text-white">{fmt(s.total_amount)} ₸</div>
+                      <div className="shrink-0 text-sm font-semibold tabular-nums text-foreground">{fmt(s.total_amount)} ₸</div>
                     </div>
                   )
                 })}
@@ -273,11 +273,11 @@ function ShiftDetail({ id, onClose, onChanged }: { id: string; onClose: () => vo
             {/* Возвраты */}
             {returns.length > 0 && (
               <>
-                <div className="mt-5 mb-2 text-sm font-semibold text-slate-900 dark:text-white">Возвраты</div>
+                <div className="mt-5 mb-2 text-sm font-semibold text-foreground">Возвраты</div>
                 <div className="divide-y divide-slate-100 dark:divide-white/5 overflow-hidden rounded-xl border border-rose-500/20">
                   {returns.map((r) => (
                     <div key={r.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
-                      <div className="text-xs text-slate-500 dark:text-slate-400">{tm(r.returned_at)} · {PAY_LABEL[r.payment_method] || r.payment_method}{r.comment ? ` · ${r.comment}` : ''}</div>
+                      <div className="text-xs text-muted-foreground">{tm(r.returned_at)} · {PAY_LABEL[r.payment_method] || r.payment_method}{r.comment ? ` · ${r.comment}` : ''}</div>
                       <div className="shrink-0 text-sm font-semibold tabular-nums text-rose-700 dark:text-rose-300">−{fmt(r.total_amount)} ₸</div>
                     </div>
                   ))}
@@ -294,8 +294,8 @@ function ShiftDetail({ id, onClose, onChanged }: { id: string; onClose: () => vo
 
 function Kpi({ label, value, accent, icon }: { label: string; value: string; accent: string; icon: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3">
-      <div className="flex items-center justify-between text-[11px] uppercase tracking-wider text-slate-500"><span>{label}</span><span className="text-slate-500 dark:text-slate-400">{icon}</span></div>
+    <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] p-3">
+      <div className="flex items-center justify-between text-[11px] uppercase tracking-wider text-slate-500"><span>{label}</span><span className="text-muted-foreground">{icon}</span></div>
       <div className={`mt-1 text-base font-bold tabular-nums ${accent}`}>{value}</div>
     </div>
   )

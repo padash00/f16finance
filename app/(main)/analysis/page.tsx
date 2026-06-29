@@ -120,12 +120,12 @@ export default function AnalysisPage() {
             <select
               value={companyId}
               onChange={(e) => setCompanyId(e.target.value)}
-              className="bg-slate-100 dark:bg-zinc-900/50 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-1.5 text-xs font-medium text-slate-900 dark:text-white outline-none cursor-pointer"
+              className="bg-slate-100 dark:bg-zinc-900/50 border border-border rounded-xl px-3 py-1.5 text-xs font-medium text-foreground outline-none cursor-pointer"
             >
               <option value="" className="bg-white dark:bg-zinc-900">📍 Все точки</option>
               {companies.map((c) => <option key={c.id} value={c.id} className="bg-white dark:bg-zinc-900">📍 {c.name}</option>)}
             </select>
-            <Button variant="ghost" size="sm" onClick={load} disabled={loading} className="rounded-xl border border-slate-200 dark:border-white/10" title="Обновить">
+            <Button variant="ghost" size="sm" onClick={load} disabled={loading} className="rounded-xl border border-border" title="Обновить">
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </Button>
           </>
@@ -145,10 +145,10 @@ export default function AnalysisPage() {
       ) : data ? (
         <>
           {/* Вердикт */}
-          <Card className="p-6 bg-gradient-to-br from-violet-50 via-white to-white dark:from-violet-900/20 dark:via-gray-900/40 dark:to-gray-900/40 border-slate-200 dark:border-white/10">
+          <Card className="p-6 bg-gradient-to-br from-violet-50 via-white to-white dark:from-violet-900/20 dark:via-gray-900/40 dark:to-gray-900/40 border-border">
             <div className="flex items-center gap-2 mb-4">
               <Sparkles className="w-4 h-4 text-violet-500" />
-              <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Прогноз на {data.targetMonthLabel}</h2>
+              <h2 className="text-sm font-semibold text-foreground">Прогноз на {data.targetMonthLabel}</h2>
               <span className="ml-auto inline-flex items-center gap-1 rounded-md border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[11px] font-medium text-violet-700 dark:text-violet-300">
                 уверенность {data.confidence.score}/100
               </span>
@@ -160,9 +160,9 @@ export default function AnalysisPage() {
             </div>
             <div className="mt-4 grid grid-cols-3 gap-2 text-center">
               {([['Худший', data.scenarios.worst, 'rose'], ['Ожидаемый', data.scenarios.expected, 'slate'], ['Лучший', data.scenarios.best, 'emerald']] as const).map(([l, v, t]) => (
-                <div key={l} className="rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/[0.02] py-2">
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400">{l}</div>
-                  <div className={`text-sm font-bold tabular-nums ${t === 'rose' ? 'text-rose-600 dark:text-rose-400' : t === 'emerald' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-white'}`}>{money(v)}</div>
+                <div key={l} className="rounded-xl border border-border bg-white/60 dark:bg-white/[0.02] py-2">
+                  <div className="text-[11px] text-muted-foreground">{l}</div>
+                  <div className={`text-sm font-bold tabular-nums ${t === 'rose' ? 'text-rose-600 dark:text-rose-400' : t === 'emerald' ? 'text-emerald-600 dark:text-emerald-400' : 'text-foreground'}`}>{money(v)}</div>
                 </div>
               ))}
             </div>
@@ -170,10 +170,10 @@ export default function AnalysisPage() {
 
           {/* Почему такой прогноз */}
           <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2"><Info className="w-4 h-4 text-blue-400" />Почему такой прогноз</h3>
+            <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2"><Info className="w-4 h-4 text-blue-400" />Почему такой прогноз</h3>
             <ul className="space-y-1.5">
               {data.explanation.map((e, i) => (
-                <li key={i} className={`text-sm leading-relaxed flex gap-2 ${e.startsWith('→') ? 'font-semibold text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-300'}`}>
+                <li key={i} className={`text-sm leading-relaxed flex gap-2 ${e.startsWith('→') ? 'font-semibold text-foreground' : 'text-slate-600 dark:text-slate-300'}`}>
                   {!e.startsWith('→') && <span className="text-slate-300 dark:text-slate-600 mt-1.5 w-1 h-1 rounded-full bg-current shrink-0" />}
                   <span>{e}</span>
                 </li>
@@ -185,35 +185,35 @@ export default function AnalysisPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {data.current && (
               <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
-                <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Текущий месяц (день {data.current.dayOfMonth}/{data.current.daysInMonth})</div>
-                <div className="text-xl font-bold text-slate-900 dark:text-white tabular-nums">{money(data.current.factToDate)}</div>
-                <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">факт на сегодня</div>
+                <div className="text-xs text-muted-foreground mb-1">Текущий месяц (день {data.current.dayOfMonth}/{data.current.daysInMonth})</div>
+                <div className="text-xl font-bold text-foreground tabular-nums">{money(data.current.factToDate)}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">факт на сегодня</div>
                 {data.current.projected !== null && (
                   <div className="mt-2 text-sm text-emerald-600 dark:text-emerald-400">→ к концу ~{money(data.current.projected)} <span className="text-slate-400">(run-rate)</span></div>
                 )}
               </Card>
             )}
             <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
-              <div className="text-xs text-slate-500 dark:text-slate-400 mb-1 flex items-center gap-1"><TrendingUp className="w-3.5 h-3.5" />Точка безубыточности</div>
-              <div className="text-xl font-bold text-slate-900 dark:text-white tabular-nums">{money(data.breakeven.revenue)}</div>
+              <div className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><TrendingUp className="w-3.5 h-3.5" />Точка безубыточности</div>
+              <div className="text-xl font-bold text-foreground tabular-nums">{money(data.breakeven.revenue)}</div>
               <div className={`text-xs mt-0.5 ${data.breakeven.safetyMarginPct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                 запас прочности {data.breakeven.safetyMarginPct >= 0 ? '+' : ''}{data.breakeven.safetyMarginPct.toFixed(0)}%
               </div>
             </Card>
             {data.backtest && (
               <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
-                <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Точность (backtest, {monthLabelFull(data.backtest.month).split(' ')[0]})</div>
+                <div className="text-xs text-muted-foreground mb-1">Точность (backtest, {monthLabelFull(data.backtest.month).split(' ')[0]})</div>
                 <div className={`text-xl font-bold tabular-nums ${data.backtest.incomeErrorPct <= 15 ? 'text-emerald-600 dark:text-emerald-400' : data.backtest.incomeErrorPct <= 30 ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400'}`}>
                   ошибка {data.backtest.incomeErrorPct.toFixed(0)}%
                 </div>
-                <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">прогноз {moneyShort(data.backtest.predictedIncome)} / факт {moneyShort(data.backtest.actualIncome)}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">прогноз {moneyShort(data.backtest.predictedIncome)} / факт {moneyShort(data.backtest.actualIncome)}</div>
               </Card>
             )}
           </div>
 
           {/* История по месяцам */}
           <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">История по месяцам</h3>
+            <h3 className="text-sm font-semibold text-foreground mb-4">История по месяцам</h3>
             {chartData.length === 0 ? (
               <div className="text-sm text-slate-500 py-8 text-center">Нет данных</div>
             ) : (
@@ -240,11 +240,11 @@ export default function AnalysisPage() {
           {/* Таблица по месяцам */}
           {data.months.length > 0 && (
             <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">Детали по месяцам</h3>
+              <h3 className="text-sm font-semibold text-foreground mb-4">Детали по месяцам</h3>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-white/8">
+                    <tr className="text-[11px] uppercase tracking-wide text-muted-foreground border-b border-slate-200 dark:border-white/8">
                       <th className="px-2 py-2 text-left font-medium">Месяц</th>
                       <th className="px-2 py-2 text-right font-medium">Доход</th>
                       <th className="px-2 py-2 text-right font-medium">Постоянные</th>
@@ -257,10 +257,10 @@ export default function AnalysisPage() {
                   <tbody>
                     {[...data.months].reverse().map((m) => (
                       <tr key={m.month} className="border-b border-slate-100 dark:border-white/5 last:border-0">
-                        <td className="px-2 py-2 text-slate-900 dark:text-white whitespace-nowrap">{monthLabelFull(m.month)}{m.isPartial && <span className="ml-1 text-[10px] text-amber-600 dark:text-amber-400">тек.</span>}</td>
+                        <td className="px-2 py-2 text-foreground whitespace-nowrap">{monthLabelFull(m.month)}{m.isPartial && <span className="ml-1 text-[10px] text-amber-600 dark:text-amber-400">тек.</span>}</td>
                         <td className="px-2 py-2 text-right tabular-nums text-slate-700 dark:text-slate-300">{money(m.income)}</td>
-                        <td className="px-2 py-2 text-right tabular-nums text-slate-500 dark:text-slate-400">{money(m.fixed)}</td>
-                        <td className="px-2 py-2 text-right tabular-nums text-slate-500 dark:text-slate-400">{money(m.variable)}</td>
+                        <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">{money(m.fixed)}</td>
+                        <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">{money(m.variable)}</td>
                         <td className="px-2 py-2 text-right tabular-nums text-slate-400 dark:text-slate-500">{m.oneOff > 0 ? money(m.oneOff) : '—'}</td>
                         <td className={`px-2 py-2 text-right tabular-nums font-semibold ${m.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{money(m.profit)}</td>
                         <td className={`px-2 py-2 text-right tabular-nums ${m.marginPct >= 20 ? 'text-emerald-600 dark:text-emerald-400' : m.marginPct >= 0 ? 'text-slate-600 dark:text-slate-300' : 'text-rose-600 dark:text-rose-400'}`}>{m.marginPct.toFixed(0)}%</td>
@@ -275,27 +275,27 @@ export default function AnalysisPage() {
           {/* Как собран прогноз */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2"><Info className="w-4 h-4 text-blue-400" />Как собран ДОХОД</h3>
+              <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2"><Info className="w-4 h-4 text-blue-400" />Как собран ДОХОД</h3>
               <div className="space-y-2 text-sm">
                 <Row label="Средний за последние месяцы" value={money(data.income.recentAvg)} />
                 <Row label="Тренд по месяцам" value={`${data.income.momGrowthPct >= 0 ? '+' : ''}${data.income.momGrowthPct.toFixed(1)}% / мес`} tone={data.income.momGrowthPct >= 0 ? 'emerald' : 'rose'} />
                 <Row label="Сезонность месяца" value={data.confidence.seasonalityAvailable ? `×${data.income.seasonalIndex.toFixed(2)}` : 'нет данных (<13 мес)'} muted={!data.confidence.seasonalityAvailable} />
                 {data.income.runRate !== null && <Row label="Run-rate текущего месяца" value={money(data.income.runRate)} />}
                 <div className="pt-2 border-t border-slate-200 dark:border-white/8 flex items-center justify-between">
-                  <span className="font-semibold text-slate-900 dark:text-white">Прогноз дохода</span>
+                  <span className="font-semibold text-foreground">Прогноз дохода</span>
                   <span className="font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{money(data.income.expected)}</span>
                 </div>
               </div>
             </Card>
 
             <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2"><Info className="w-4 h-4 text-blue-400" />Как собран РАСХОД</h3>
+              <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2"><Info className="w-4 h-4 text-blue-400" />Как собран РАСХОД</h3>
               <div className="space-y-2 text-sm">
                 <Row label="Постоянные (аренда, ФОТ, налоги)" value={money(data.expense.fixed)} />
                 <Row label={`Переменные (${data.expense.variableRatePct.toFixed(0)}% от дохода)`} value={money(data.expense.variable)} />
                 <Row label="Разовые (CAPEX, штрафы) — вне прогноза" value={`~${money(data.expense.oneOffAvg)} / мес`} muted />
                 <div className="pt-2 border-t border-slate-200 dark:border-white/8 flex items-center justify-between">
-                  <span className="font-semibold text-slate-900 dark:text-white">Прогноз расхода</span>
+                  <span className="font-semibold text-foreground">Прогноз расхода</span>
                   <span className="font-bold text-rose-600 dark:text-rose-400 tabular-nums">{money(data.expense.expected)}</span>
                 </div>
               </div>
@@ -305,7 +305,7 @@ export default function AnalysisPage() {
           {/* Расход по категориям */}
           {data.expenseByGroup.length > 0 && (
             <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">Расход по категориям (в среднем за месяц)</h3>
+              <h3 className="text-sm font-semibold text-foreground mb-4">Расход по категориям (в среднем за месяц)</h3>
               <div className="space-y-2">
                 {data.expenseByGroup.slice(0, 8).map((g) => {
                   const max = data.expenseByGroup[0].amount || 1
@@ -315,7 +315,7 @@ export default function AnalysisPage() {
                       <div className="flex-1 h-2 rounded-full bg-slate-100 dark:bg-white/10 overflow-hidden">
                         <div className={`h-full rounded-full ${g.bucket === 'variable' ? 'bg-amber-500' : 'bg-violet-500'}`} style={{ width: `${Math.min(100, g.amount / max * 100)}%` }} />
                       </div>
-                      <div className="w-24 shrink-0 text-right text-xs font-semibold tabular-nums text-slate-900 dark:text-white">{money(g.amount)}</div>
+                      <div className="w-24 shrink-0 text-right text-xs font-semibold tabular-nums text-foreground">{money(g.amount)}</div>
                     </div>
                   )
                 })}
@@ -329,14 +329,14 @@ export default function AnalysisPage() {
 
           {/* Прогноз дохода по каналам */}
           <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">Прогноз дохода по каналам</h3>
+            <h3 className="text-sm font-semibold text-foreground mb-4">Прогноз дохода по каналам</h3>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {([['Наличные', data.channels.cash], ['Безнал (Kaspi)', data.channels.kaspi], ['Карта', data.channels.card], ['Онлайн', data.channels.online]] as const).map(([l, v]) => {
                 const pct = data.income.expected > 0 ? v / data.income.expected * 100 : 0
                 return (
-                  <div key={l} className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-3">
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400">{l}</div>
-                    <div className="mt-1 text-sm font-bold text-slate-900 dark:text-white tabular-nums">{money(v)}</div>
+                  <div key={l} className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] p-3">
+                    <div className="text-[11px] text-muted-foreground">{l}</div>
+                    <div className="mt-1 text-sm font-bold text-foreground tabular-nums">{money(v)}</div>
                     <div className="text-[11px] text-slate-400">{pct.toFixed(0)}%</div>
                   </div>
                 )
@@ -347,11 +347,11 @@ export default function AnalysisPage() {
           {/* Прогноз по точкам */}
           {byCompany && byCompany.length > 0 && (
             <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">Прогноз по точкам ({data.targetMonthLabel})</h3>
+              <h3 className="text-sm font-semibold text-foreground mb-4">Прогноз по точкам ({data.targetMonthLabel})</h3>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-white/8">
+                    <tr className="text-[11px] uppercase tracking-wide text-muted-foreground border-b border-slate-200 dark:border-white/8">
                       <th className="px-2 py-2 text-left font-medium">Точка</th>
                       <th className="px-2 py-2 text-right font-medium">Доход</th>
                       <th className="px-2 py-2 text-right font-medium">Расход</th>
@@ -362,9 +362,9 @@ export default function AnalysisPage() {
                   <tbody>
                     {byCompany.map((c) => (
                       <tr key={c.id} className="border-b border-slate-100 dark:border-white/5 last:border-0">
-                        <td className="px-2 py-2 font-medium text-slate-900 dark:text-white truncate max-w-[160px]">{c.name}</td>
+                        <td className="px-2 py-2 font-medium text-foreground truncate max-w-[160px]">{c.name}</td>
                         <td className="px-2 py-2 text-right tabular-nums text-slate-700 dark:text-slate-300">{money(c.income)}</td>
-                        <td className="px-2 py-2 text-right tabular-nums text-slate-500 dark:text-slate-400">{money(c.expense)}</td>
+                        <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">{money(c.expense)}</td>
                         <td className={`px-2 py-2 text-right tabular-nums font-semibold ${c.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{money(c.profit)}</td>
                         <td className={`px-2 py-2 text-right tabular-nums ${c.marginPct >= 20 ? 'text-emerald-600 dark:text-emerald-400' : c.marginPct >= 0 ? 'text-slate-600 dark:text-slate-300' : 'text-rose-600 dark:text-rose-400'}`}>{c.marginPct.toFixed(0)}%</td>
                       </tr>
@@ -378,7 +378,7 @@ export default function AnalysisPage() {
           {/* AI-вывод */}
           <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
             <div className="flex items-center justify-between gap-2 mb-3">
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2"><Sparkles className="w-4 h-4 text-violet-500" />AI-вывод</h3>
+              <h3 className="text-sm font-semibold text-foreground flex items-center gap-2"><Sparkles className="w-4 h-4 text-violet-500" />AI-вывод</h3>
               <Button size="sm" variant="outline" onClick={askAi} disabled={aiLoading} className="rounded-xl">
                 {aiLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : 'Получить вывод'}
               </Button>
@@ -386,19 +386,19 @@ export default function AnalysisPage() {
             {ai ? (
               <p className="whitespace-pre-line text-sm leading-relaxed text-slate-700 dark:text-slate-300">{ai}</p>
             ) : (
-              <p className="text-sm text-slate-500 dark:text-slate-400">Нажми «Получить вывод» — AI прокомментирует прогноз и подскажет действия.</p>
+              <p className="text-sm text-muted-foreground">Нажми «Получить вывод» — AI прокомментирует прогноз и подскажет действия.</p>
             )}
           </Card>
 
           {/* Честность */}
           <Card className="p-4 bg-slate-50 dark:bg-white/[0.02] border-slate-200 dark:border-white/8">
-            <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 flex-wrap">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
               <Info className="w-3.5 h-3.5 shrink-0" />
               <span>Месяцев данных: <strong className="text-slate-700 dark:text-slate-300">{data.confidence.monthsOfData}</strong></span>
               <span>· Волатильность: <strong className="text-slate-700 dark:text-slate-300">{data.confidence.volatilityPct.toFixed(0)}%</strong></span>
             </div>
             {data.confidence.notes.length > 0 && (
-              <ul className="mt-2 space-y-1 text-xs text-slate-500 dark:text-slate-400 list-disc pl-4">
+              <ul className="mt-2 space-y-1 text-xs text-muted-foreground list-disc pl-4">
                 {data.confidence.notes.map((n, i) => <li key={i}>{n}</li>)}
               </ul>
             )}
@@ -412,8 +412,8 @@ export default function AnalysisPage() {
 function Verdict({ label, value, range, tone, icon }: { label: string; value: number; range?: [number, number]; tone: 'emerald' | 'rose' | 'violet'; icon: React.ReactNode }) {
   const col = tone === 'emerald' ? 'text-emerald-600 dark:text-emerald-400' : tone === 'rose' ? 'text-rose-600 dark:text-rose-400' : 'text-violet-600 dark:text-violet-400'
   return (
-    <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-4">
-      <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">{icon}{label}</div>
+    <div className="rounded-2xl border border-border bg-white dark:bg-white/[0.02] p-4">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">{icon}{label}</div>
       <div className={`mt-1.5 text-2xl font-bold tabular-nums ${col}`}>{money(value)}</div>
       {range && <div className="mt-1 text-[11px] text-slate-400 dark:text-slate-500 tabular-nums">{money(range[0])} … {money(range[1])}</div>}
     </div>
@@ -424,7 +424,7 @@ function Row({ label, value, tone, muted }: { label: string; value: string; tone
   return (
     <div className="flex items-center justify-between gap-2">
       <span className={`text-xs ${muted ? 'text-slate-400 dark:text-slate-500' : 'text-slate-600 dark:text-slate-400'}`}>{label}</span>
-      <span className={`text-sm font-medium tabular-nums ${tone === 'emerald' ? 'text-emerald-600 dark:text-emerald-400' : tone === 'rose' ? 'text-rose-600 dark:text-rose-400' : muted ? 'text-slate-400 dark:text-slate-500' : 'text-slate-900 dark:text-white'}`}>{value}</span>
+      <span className={`text-sm font-medium tabular-nums ${tone === 'emerald' ? 'text-emerald-600 dark:text-emerald-400' : tone === 'rose' ? 'text-rose-600 dark:text-rose-400' : muted ? 'text-slate-400 dark:text-slate-500' : 'text-foreground'}`}>{value}</span>
     </div>
   )
 }

@@ -125,7 +125,7 @@ export default function DocumentList({ documents, onVerify, onDelete, formatDate
               <div className="flex items-center gap-2">
                 <FileText className="w-4 h-4 text-blue-400" />
                 <div>
-                  <span className="font-medium text-slate-900 dark:text-white">{doc.document_name}</span>
+                  <span className="font-medium text-foreground">{doc.document_name}</span>
                   <p className="text-xs text-gray-500">
                     {DOCUMENT_TYPE_LABELS[doc.document_type] || doc.document_type}
                   </p>
@@ -168,7 +168,7 @@ export default function DocumentList({ documents, onVerify, onDelete, formatDate
                 size="sm"
                 variant="outline"
                 onClick={() => handleView(doc.document_url)}
-                className="border-slate-200 dark:border-white/10 text-xs h-7"
+                className="border-border text-xs h-7"
               >
                 <Eye className="w-3 h-3 mr-1" />
                 Просмотр
@@ -177,7 +177,7 @@ export default function DocumentList({ documents, onVerify, onDelete, formatDate
                 size="sm"
                 variant="outline"
                 onClick={() => handleDownload(doc.document_url, doc.document_name)}
-                className="border-slate-200 dark:border-white/10 text-xs h-7"
+                className="border-border text-xs h-7"
               >
                 <Download className="w-3 h-3 mr-1" />
                 Скачать

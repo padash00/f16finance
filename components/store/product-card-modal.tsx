@@ -337,7 +337,7 @@ export default function ProductCardModal({
               {/* ── Шапка: название / штрихкод / категория / бренд ── */}
               <div className="space-y-3">
                 <div>
-                  <div className="text-lg font-semibold text-slate-900 dark:text-white">{data.name}</div>
+                  <div className="text-lg font-semibold text-foreground">{data.name}</div>
                   <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                     <span className="font-mono">{data.barcode || '—'}</span>
                     {data.category && <span>· {data.category}</span>}
@@ -351,11 +351,11 @@ export default function ProductCardModal({
                 <div className="grid grid-cols-3 gap-2">
                   <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-white/10 dark:bg-white/[0.02]">
                     <div className="text-[11px] text-muted-foreground">Продажа</div>
-                    <div className="text-sm font-semibold text-slate-900 dark:text-white">{fmtMoney(data.sale_price)}</div>
+                    <div className="text-sm font-semibold text-foreground">{fmtMoney(data.sale_price)}</div>
                   </div>
                   <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-white/10 dark:bg-white/[0.02]">
                     <div className="text-[11px] text-muted-foreground">Закуп</div>
-                    <div className="text-sm font-semibold text-slate-900 dark:text-white">{fmtMoney(data.purchase_price)}</div>
+                    <div className="text-sm font-semibold text-foreground">{fmtMoney(data.purchase_price)}</div>
                   </div>
                   <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-white/10 dark:bg-white/[0.02]">
                     <div className="text-[11px] text-muted-foreground">Маржа</div>
@@ -371,14 +371,14 @@ export default function ProductCardModal({
                   <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-white/10 dark:bg-white/[0.02]">
                     <TrendingUp className="h-4 w-4 shrink-0 text-emerald-500" />
                     <div>
-                      <div className="text-sm font-semibold text-slate-900 dark:text-white">{fmt(data.sold_30d)} {data.unit}</div>
+                      <div className="text-sm font-semibold text-foreground">{fmt(data.sold_30d)} {data.unit}</div>
                       <div className="text-[11px] text-muted-foreground">продано за 30 дней</div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-white/10 dark:bg-white/[0.02]">
                     <Boxes className="h-4 w-4 shrink-0 text-sky-500" />
                     <div>
-                      <div className="text-sm font-semibold text-slate-900 dark:text-white">~{data.velocity_per_week} {data.unit}/нед</div>
+                      <div className="text-sm font-semibold text-foreground">~{data.velocity_per_week} {data.unit}/нед</div>
                       <div className="text-[11px] text-muted-foreground">скорость продаж</div>
                     </div>
                   </div>
@@ -405,12 +405,12 @@ export default function ProductCardModal({
                         className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm dark:border-white/10 dark:bg-white/[0.02]"
                       >
                         <div className="min-w-0">
-                          <span className="font-medium text-slate-900 dark:text-white">{s.location}</span>
+                          <span className="font-medium text-foreground">{s.location}</span>
                           {s.company && <span className="ml-1 text-xs text-muted-foreground">· {s.company}</span>}
                           {s.location_type === 'warehouse' && <span className="ml-1 text-[10px] text-blue-500">склад</span>}
                           {s.location_type === 'point_display' && <span className="ml-1 text-[10px] text-amber-500">витрина</span>}
                         </div>
-                        <div className={`shrink-0 font-semibold ${low ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>
+                        <div className={`shrink-0 font-semibold ${low ? 'text-rose-600 dark:text-rose-400' : 'text-foreground'}`}>
                           {fmt(s.quantity)} {data.unit}
                           {low && <span className="ml-1 text-[10px]">низкий</span>}
                         </div>
@@ -427,7 +427,7 @@ export default function ProductCardModal({
               <div className="min-w-0 flex-1">
                 <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Последний поставщик</div>
                 {data.last_supplier ? (
-                  <div className="mt-0.5 text-sm text-slate-900 dark:text-white">
+                  <div className="mt-0.5 text-sm text-foreground">
                     {data.last_supplier}
                     {data.last_purchase_price != null && (
                       <span className="ml-2 text-muted-foreground">· {fmtMoney(data.last_purchase_price)}</span>

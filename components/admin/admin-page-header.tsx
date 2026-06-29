@@ -65,13 +65,13 @@ export function AdminPageHeader(props: {
           >
             <ArrowLeft className="h-4 w-4" />
           </Link>
-          <div className={cn('grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-slate-200 dark:border-white/10 bg-gradient-to-br', a.chip)}>
+          <div className={cn('grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-border bg-gradient-to-br', a.chip)}>
             {props.icon}
           </div>
           <div className="min-w-0">
-            <h1 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-white">{props.title}</h1>
+            <h1 className="text-xl font-semibold tracking-tight text-foreground">{props.title}</h1>
             {props.description ? (
-              <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{props.description}</p>
+              <p className="mt-0.5 text-sm text-muted-foreground">{props.description}</p>
             ) : null}
           </div>
         </div>

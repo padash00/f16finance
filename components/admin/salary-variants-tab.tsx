@@ -312,7 +312,7 @@ export function SalaryVariantsTab({ companies }: { companies: CompanyRow[] }) {
         <div className="flex items-start gap-3">
           <Info className="w-5 h-5 text-violet-400 flex-shrink-0 mt-0.5" />
           <div className="space-y-1 text-sm">
-            <p className="text-slate-900 dark:text-white font-medium">Варианты оклада по выручке</p>
+            <p className="text-foreground font-medium">Варианты оклада по выручке</p>
             <p className="text-slate-500 dark:text-gray-400">
               Несколько правил для одной точки и смены с разными диапазонами выручки. Напр.: «если выручка ≥ 500к → оклад 8000», «если &lt; 500к → оклад 5000». Выполняются по приоритету. <b>Stop</b> останавливает проверку следующих.
             </p>
@@ -337,7 +337,7 @@ export function SalaryVariantsTab({ companies }: { companies: CompanyRow[] }) {
 
       <div className="flex items-center justify-between gap-2">
         <div className="text-sm text-slate-500 dark:text-gray-400">
-          Всего вариантов: <span className="text-slate-900 dark:text-white font-semibold">{rules.length}</span>
+          Всего вариантов: <span className="text-foreground font-semibold">{rules.length}</span>
         </div>
         <Button
           size="sm"
@@ -349,14 +349,14 @@ export function SalaryVariantsTab({ companies }: { companies: CompanyRow[] }) {
       </div>
 
       {showForm && (
-        <Card className="p-5 bg-white dark:bg-gray-900/60 border-slate-200 dark:border-white/10 space-y-4">
+        <Card className="p-5 bg-white dark:bg-gray-900/60 border-border space-y-4">
           <div className="grid gap-3 md:grid-cols-2">
             <div>
               <label className="text-xs text-slate-500 dark:text-gray-400 block mb-1">Компания</label>
               <select
                 value={form.company_id || ''}
                 onChange={(e) => setForm((f) => ({ ...f, company_id: e.target.value || null }))}
-                className="w-full px-3 py-2 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-900 dark:text-white"
+                className="w-full px-3 py-2 bg-white dark:bg-gray-800/50 border border-border rounded-lg text-sm text-foreground"
               >
                 <option value="">Все точки (глобально)</option>
                 {companies.map((c) => (
@@ -369,7 +369,7 @@ export function SalaryVariantsTab({ companies }: { companies: CompanyRow[] }) {
               <select
                 value={form.shift_type}
                 onChange={(e) => setForm((f) => ({ ...f, shift_type: e.target.value as ShiftType }))}
-                className="w-full px-3 py-2 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-900 dark:text-white"
+                className="w-full px-3 py-2 bg-white dark:bg-gray-800/50 border border-border rounded-lg text-sm text-foreground"
               >
                 <option value="day">Дневная</option>
                 <option value="night">Ночная</option>
@@ -382,7 +382,7 @@ export function SalaryVariantsTab({ companies }: { companies: CompanyRow[] }) {
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                 placeholder="Напр.: День <500к → 5000"
-                className="w-full px-3 py-2 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-900 dark:text-white"
+                className="w-full px-3 py-2 bg-white dark:bg-gray-800/50 border border-border rounded-lg text-sm text-foreground"
               />
             </div>
           </div>
@@ -397,7 +397,7 @@ export function SalaryVariantsTab({ companies }: { companies: CompanyRow[] }) {
                   value={form.turnover_gte}
                   onChange={(e) => setForm((f) => ({ ...f, turnover_gte: e.target.value }))}
                   placeholder="500000"
-                  className="w-full px-3 py-2 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-900 dark:text-white"
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-800/50 border border-border rounded-lg text-sm text-foreground"
                 />
               </div>
               <div>
@@ -407,7 +407,7 @@ export function SalaryVariantsTab({ companies }: { companies: CompanyRow[] }) {
                   value={form.turnover_lt}
                   onChange={(e) => setForm((f) => ({ ...f, turnover_lt: e.target.value }))}
                   placeholder="1000000"
-                  className="w-full px-3 py-2 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-900 dark:text-white"
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-800/50 border border-border rounded-lg text-sm text-foreground"
                 />
               </div>
             </div>
@@ -423,7 +423,7 @@ export function SalaryVariantsTab({ companies }: { companies: CompanyRow[] }) {
                   value={form.base_per_shift}
                   onChange={(e) => setForm((f) => ({ ...f, base_per_shift: e.target.value }))}
                   placeholder="8000"
-                  className="w-full px-3 py-2 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-900 dark:text-white"
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-800/50 border border-border rounded-lg text-sm text-foreground"
                 />
               </div>
               <div>
@@ -433,7 +433,7 @@ export function SalaryVariantsTab({ companies }: { companies: CompanyRow[] }) {
                   value={form.threshold_bonus}
                   onChange={(e) => setForm((f) => ({ ...f, threshold_bonus: e.target.value }))}
                   placeholder="0"
-                  className="w-full px-3 py-2 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-900 dark:text-white"
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-800/50 border border-border rounded-lg text-sm text-foreground"
                 />
               </div>
               <div>
@@ -443,7 +443,7 @@ export function SalaryVariantsTab({ companies }: { companies: CompanyRow[] }) {
                   value={form.senior_operator_bonus}
                   onChange={(e) => setForm((f) => ({ ...f, senior_operator_bonus: e.target.value }))}
                   placeholder=""
-                  className="w-full px-3 py-2 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-900 dark:text-white"
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-800/50 border border-border rounded-lg text-sm text-foreground"
                 />
               </div>
               <div>
@@ -453,7 +453,7 @@ export function SalaryVariantsTab({ companies }: { companies: CompanyRow[] }) {
                   value={form.senior_cashier_bonus}
                   onChange={(e) => setForm((f) => ({ ...f, senior_cashier_bonus: e.target.value }))}
                   placeholder=""
-                  className="w-full px-3 py-2 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-900 dark:text-white"
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-800/50 border border-border rounded-lg text-sm text-foreground"
                 />
               </div>
             </div>
@@ -466,7 +466,7 @@ export function SalaryVariantsTab({ companies }: { companies: CompanyRow[] }) {
                 type="number"
                 value={form.priority}
                 onChange={(e) => setForm((f) => ({ ...f, priority: Number(e.target.value) || 100 }))}
-                className="w-full px-3 py-2 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-900 dark:text-white"
+                className="w-full px-3 py-2 bg-white dark:bg-gray-800/50 border border-border rounded-lg text-sm text-foreground"
               />
             </div>
             <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-gray-300 cursor-pointer">
@@ -495,13 +495,13 @@ export function SalaryVariantsTab({ companies }: { companies: CompanyRow[] }) {
                 value={testTurnover}
                 onChange={(e) => setTestTurnover(e.target.value)}
                 placeholder="Введите выручку для симуляции"
-                className="flex-1 px-3 py-2 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-900 dark:text-white"
+                className="flex-1 px-3 py-2 bg-white dark:bg-gray-800/50 border border-border rounded-lg text-sm text-foreground"
               />
               <Button
                 size="sm"
                 variant="outline"
                 onClick={() => void handleTest()}
-                className="gap-2 rounded-xl border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10"
+                className="gap-2 rounded-xl border-border bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10"
               >
                 <FlaskConical className="h-4 w-4" /> Проверить
               </Button>
@@ -514,7 +514,7 @@ export function SalaryVariantsTab({ companies }: { companies: CompanyRow[] }) {
           </div>
 
           <div className="flex items-center justify-end gap-2 border-t border-slate-200 dark:border-white/5 pt-4">
-            <Button variant="outline" size="sm" onClick={() => setShowForm(false)} className="rounded-xl border-slate-200 dark:border-white/10">
+            <Button variant="outline" size="sm" onClick={() => setShowForm(false)} className="rounded-xl border-border">
               Отмена
             </Button>
             <Button
@@ -532,7 +532,7 @@ export function SalaryVariantsTab({ companies }: { companies: CompanyRow[] }) {
       {loading && <div className="text-center text-gray-500 py-8">Загрузка...</div>}
 
       {!loading && rules.length === 0 && !showForm && (
-        <Card className="p-8 text-center border-dashed border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02]">
+        <Card className="p-8 text-center border-dashed border-border bg-slate-50 dark:bg-white/[0.02]">
           <p className="text-slate-500 dark:text-gray-400 text-sm">
             Вариантов пока нет. Базовые правила работают без тиров по выручке. Нажмите «Добавить вариант» чтобы создать гибкое правило.
           </p>
@@ -551,7 +551,7 @@ export function SalaryVariantsTab({ companies }: { companies: CompanyRow[] }) {
             <Card key={key} className="p-4 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
               <div className="flex items-center gap-2 mb-3">
                 <ShiftIcon className={`w-4 h-4 ${p.shiftType === 'night' ? 'text-indigo-400' : 'text-amber-400'}`} />
-                <span className="text-sm font-medium text-slate-900 dark:text-white">{companyName}</span>
+                <span className="text-sm font-medium text-foreground">{companyName}</span>
                 <span className="text-xs text-gray-500">·</span>
                 <span className="text-xs text-slate-500 dark:text-gray-400">
                   {p.shiftType === 'night' ? 'Ночная' : p.shiftType === 'day' ? 'Дневная' : 'Любая'} смена
@@ -573,12 +573,12 @@ export function SalaryVariantsTab({ companies }: { companies: CompanyRow[] }) {
                     <div
                       key={rule.id}
                       className={`flex items-center gap-3 rounded-lg border px-3 py-2 ${
-                        rule.is_active ? 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03]' : 'border-slate-100 dark:border-white/5 bg-white dark:bg-white/[0.01] opacity-60'
+                        rule.is_active ? 'border-border bg-slate-50 dark:bg-white/[0.03]' : 'border-slate-100 dark:border-white/5 bg-white dark:bg-white/[0.01] opacity-60'
                       }`}
                     >
                       <span className="text-xs font-mono text-gray-500 w-10">#{rule.priority}</span>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-slate-900 dark:text-white truncate">{rule.name}</p>
+                        <p className="text-sm text-foreground truncate">{rule.name}</p>
                         <p className="text-xs text-gray-500 mt-0.5">
                           {range}
                           {rp.basePerShift != null && <> · оклад <b className="text-violet-600 dark:text-violet-300">{formatMoney(rp.basePerShift)}</b></>}

@@ -154,16 +154,16 @@ export function LabelPrintDialog({ items, onClose }: Props) {
       <div className="relative z-10 flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-black/40 dark:border-white/10 dark:bg-slate-900">
         {/* Шапка */}
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-white/10">
-          <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900 dark:text-white"><Printer className="h-4 w-4 text-amber-300" /> Печать ценников</h2>
+          <h2 className="flex items-center gap-2 text-base font-semibold text-foreground"><Printer className="h-4 w-4 text-amber-300" /> Печать ценников</h2>
           <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-white"><X className="h-4 w-4" /></button>
         </div>
 
         {/* Копии */}
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3 dark:border-white/10">
-          <span className="text-sm text-slate-500 dark:text-slate-400">Копий каждого ценника</span>
+          <span className="text-sm text-muted-foreground">Копий каждого ценника</span>
           <div className="flex items-center gap-2">
             <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => setCopies((c) => Math.max(1, c - 1))} disabled={copies <= 1}><Minus className="h-3 w-3" /></Button>
-            <span className="w-6 text-center text-sm font-semibold text-slate-900 dark:text-white">{copies}</span>
+            <span className="w-6 text-center text-sm font-semibold text-foreground">{copies}</span>
             <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => setCopies((c) => Math.min(20, c + 1))} disabled={copies >= 20}><Plus className="h-3 w-3" /></Button>
           </div>
         </div>
@@ -188,10 +188,10 @@ export function LabelPrintDialog({ items, onClose }: Props) {
           {items.map((item) => (
             <div key={item.item_id} className="flex items-center gap-3 px-5 py-2">
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-slate-900 dark:text-white">{item.name}</p>
+                <p className="truncate text-sm font-medium text-foreground">{item.name}</p>
                 <p className="truncate text-xs text-slate-500">{item.barcode}</p>
               </div>
-              <span className="shrink-0 text-sm font-semibold text-slate-900 dark:text-white">{formatPrice(item.sale_price)}</span>
+              <span className="shrink-0 text-sm font-semibold text-foreground">{formatPrice(item.sale_price)}</span>
             </div>
           ))}
         </div>

@@ -27,7 +27,7 @@ type AuditTimelineEntry = {
 }
 type SearchResult = { type: string; title: string; subtitle: string; href: string; score: number }
 
-const card = 'rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 shadow-lg shadow-black/20'
+const card = 'rounded-2xl border border-border bg-white dark:bg-slate-900/60 shadow-lg shadow-black/20'
 
 const HUBS = [
   { href: '/store/stock', label: 'Склад', note: 'Остатки, витрина, движения, каталог', icon: Warehouse, color: 'text-emerald-600 dark:text-emerald-300' },
@@ -119,10 +119,10 @@ export default function StoreOverviewPage() {
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Поиск по магазину: товар, штрихкод, заявка, приёмка…"
-              className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/50 py-2.5 pl-10 pr-3 text-sm text-slate-900 dark:text-white placeholder-slate-500 focus:border-emerald-400/50 focus:outline-none"
+              className="w-full rounded-xl border border-border bg-white dark:bg-slate-950/50 py-2.5 pl-10 pr-3 text-sm text-foreground placeholder-slate-500 focus:border-emerald-400/50 focus:outline-none"
             />
             {(searching || searchResults.length > 0) && q.trim() && (
-              <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/95 shadow-2xl backdrop-blur">
+              <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-xl border border-border bg-white dark:bg-slate-950/95 shadow-2xl backdrop-blur">
                 <div className="px-3 py-2 text-[11px] text-slate-500">{searching ? 'Ищу…' : `Найдено: ${searchResults.length}`}</div>
                 <div className="max-h-72 overflow-y-auto">
                   {searchResults.slice(0, 10).map((row, idx) => (
@@ -155,7 +155,7 @@ export default function StoreOverviewPage() {
       {topLowStock.length > 0 && (
         <div className={`${card} p-4`}>
           <div className="mb-3 flex items-center justify-between gap-3">
-            <span className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white"><AlertTriangle className="h-4 w-4 text-amber-500 dark:text-amber-300" /> Скоро закончится</span>
+            <span className="flex items-center gap-2 text-sm font-semibold text-foreground"><AlertTriangle className="h-4 w-4 text-amber-500 dark:text-amber-300" /> Скоро закончится</span>
             <Link href="/store/sales" className="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-300 hover:text-amber-700 dark:hover:text-amber-200">Прогноз <ArrowRight className="h-3.5 w-3.5" /></Link>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -176,10 +176,10 @@ export default function StoreOverviewPage() {
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {HUBS.map((h) => (
             <Link key={h.href} href={h.href} className={`${card} group flex items-start gap-3 p-4 transition-colors hover:border-slate-300 dark:hover:border-white/20 hover:bg-slate-50 dark:hover:bg-slate-900/80`}>
-              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5"><h.icon className={`h-5 w-5 ${h.color}`} /></div>
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-border bg-slate-100 dark:bg-white/5"><h.icon className={`h-5 w-5 ${h.color}`} /></div>
               <div className="min-w-0">
-                <div className="flex items-center gap-1 text-sm font-medium text-slate-900 dark:text-white">{h.label}<ArrowRight className="h-3.5 w-3.5 text-slate-400 dark:text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-slate-600 dark:group-hover:text-slate-300" /></div>
-                <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{h.note}</div>
+                <div className="flex items-center gap-1 text-sm font-medium text-foreground">{h.label}<ArrowRight className="h-3.5 w-3.5 text-slate-400 dark:text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-slate-600 dark:group-hover:text-slate-300" /></div>
+                <div className="mt-0.5 text-xs text-muted-foreground">{h.note}</div>
               </div>
             </Link>
           ))}
@@ -188,7 +188,7 @@ export default function StoreOverviewPage() {
 
       {/* Последние действия */}
       <div className={`${card} overflow-hidden`}>
-        <div className="flex items-center gap-2 border-b border-slate-200 dark:border-white/10 px-4 py-3 text-sm font-semibold text-slate-900 dark:text-white">
+        <div className="flex items-center gap-2 border-b border-border px-4 py-3 text-sm font-semibold text-foreground">
           <History className="h-4 w-4 text-violet-500 dark:text-violet-300" /> Последние действия
         </div>
         {!loaded ? (
@@ -248,13 +248,13 @@ const ACTION_FALLBACK: Record<string, string> = {
   apply: 'проведено', close: 'закрыто', open: 'открыто',
 }
 function activityMeta(entity: string, action: string): { phrase: string; icon: any; color: string } {
-  const meta = ENTITY_META[entity] || { label: String(entity || '').replace(/[-_]/g, ' '), icon: History, color: 'text-slate-500 dark:text-slate-400' }
+  const meta = ENTITY_META[entity] || { label: String(entity || '').replace(/[-_]/g, ' '), icon: History, color: 'text-muted-foreground' }
   const phrase = ACTIVITY_PHRASE[`${entity}:${action}`] || `${meta.label} · ${ACTION_FALLBACK[action] || action}`
   return { phrase, icon: meta.icon, color: meta.color }
 }
 
 function Kpi({ label, value, hint, tone, loaded, href }: { label: string; value: number; hint: string; tone: 'normal' | 'amber' | 'rose'; loaded: boolean; href?: string }) {
-  const valueColor = tone === 'rose' ? 'text-rose-600 dark:text-rose-300' : tone === 'amber' ? 'text-amber-600 dark:text-amber-300' : 'text-slate-900 dark:text-white'
+  const valueColor = tone === 'rose' ? 'text-rose-600 dark:text-rose-300' : tone === 'amber' ? 'text-amber-600 dark:text-amber-300' : 'text-foreground'
   const body = (
     <div className={`${card} p-4 ${href ? 'transition-colors hover:border-slate-300 dark:hover:border-white/20' : ''}`}>
       <p className="text-[11px] uppercase tracking-wider text-slate-500">{label}</p>

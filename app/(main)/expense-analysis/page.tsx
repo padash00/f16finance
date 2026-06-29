@@ -20,7 +20,7 @@ type Company = { id: string; name: string }
 const money = (v: number) => Math.round(v || 0).toLocaleString('ru-RU') + ' ₸'
 
 const cardCls = 'rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900/40'
-const sub = 'text-slate-500 dark:text-slate-400'
+const sub = 'text-muted-foreground'
 
 // Цвет акцента карточки insight по важности (high=rose, medium=amber, low=emerald).
 const SEVERITY: Record<string, { accent: string; tag: string; label: string }> = {
@@ -113,7 +113,7 @@ export default function ExpenseAnalysisPage() {
     'rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-white/10 dark:bg-slate-900/40 dark:text-slate-200 dark:hover:bg-white/[0.04]'
 
   return (
-    <div className="app-page-wide space-y-5 text-slate-900 dark:text-white">
+    <div className="app-page-wide space-y-5 text-foreground">
       <AdminPageHeader
         title="AI Разбор расходов"
         description="Где утекают деньги и что урезать"
@@ -161,7 +161,7 @@ export default function ExpenseAnalysisPage() {
       {error ? <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p> : null}
 
       {loading && !loaded ? (
-        <div className="flex flex-col items-center justify-center gap-3 py-24 text-slate-500 dark:text-slate-400">
+        <div className="flex flex-col items-center justify-center gap-3 py-24 text-muted-foreground">
           <Loader2 className="h-7 w-7 animate-spin text-violet-500" />
           <p className="text-sm">ИИ анализирует расходы…</p>
         </div>
@@ -169,13 +169,13 @@ export default function ExpenseAnalysisPage() {
         <div className={loading ? 'space-y-5 opacity-50 transition-opacity' : 'space-y-5'}>
           {/* AI-сводка сверху */}
           <div className="rounded-2xl border border-violet-200 bg-violet-500/[0.06] p-5 dark:border-violet-500/20">
-            <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900 dark:text-white">
+            <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
               <span aria-hidden>🧠</span> Главное по расходам
             </h2>
             <div className="mt-3 flex flex-wrap items-center gap-5">
               <div className="shrink-0">
                 <p className={`text-xs ${sub}`}>Расходы за период</p>
-                <p className="text-3xl font-bold tabular-nums text-slate-900 dark:text-white">{money(metrics?.total || 0)}</p>
+                <p className="text-3xl font-bold tabular-nums text-foreground">{money(metrics?.total || 0)}</p>
                 <div className="mt-1"><ChangeBadge value={metrics?.totalPrevPct || 0} /></div>
               </div>
               <p className="min-w-[240px] flex-1 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
@@ -197,7 +197,7 @@ export default function ExpenseAnalysisPage() {
                   <div key={i} className={`relative overflow-hidden ${cardCls}`}>
                     <span className={`absolute inset-y-0 left-0 w-1 ${sv.accent}`} aria-hidden />
                     <div className="flex items-start justify-between gap-3">
-                      <p className="text-base font-semibold leading-snug text-slate-900 dark:text-white">{it.verdict || '—'}</p>
+                      <p className="text-base font-semibold leading-snug text-foreground">{it.verdict || '—'}</p>
                       <span className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium ${sv.tag}`}>{sv.label}</span>
                     </div>
                     {it.reason ? <p className={`mt-2 text-sm leading-relaxed ${sub}`}>{it.reason}</p> : null}
@@ -220,24 +220,24 @@ export default function ExpenseAnalysisPage() {
           {/* Таблица категорий */}
           {categories.length ? (
             <div className={cardCls}>
-              <h3 className="mb-4 flex items-center gap-2 text-base font-semibold text-slate-900 dark:text-white">
+              <h3 className="mb-4 flex items-center gap-2 text-base font-semibold text-foreground">
                 <TrendingDown className="h-4 w-4 text-violet-500" /> Расходы по категориям
               </h3>
-              <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-white/10">
+              <div className="overflow-x-auto rounded-xl border border-border">
                 <table className="min-w-full">
                   <thead className="bg-slate-50 dark:bg-white/[0.03]">
                     <tr>
-                      <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Категория</th>
-                      <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Сумма</th>
-                      <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Доля</th>
-                      <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Изменение</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Категория</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Сумма</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Доля</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Изменение</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-white/5">
                     {categories.map((c, i) => (
                       <tr key={i}>
                         <td className="px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200">{c.category}</td>
-                        <td className="px-3 py-2 text-right text-sm font-medium tabular-nums text-slate-900 dark:text-white">{money(c.amount)}</td>
+                        <td className="px-3 py-2 text-right text-sm font-medium tabular-nums text-foreground">{money(c.amount)}</td>
                         <td className={`px-3 py-2 text-right text-sm tabular-nums ${sub}`}>{c.sharePct.toFixed(1)}%</td>
                         <td className="px-3 py-2 text-right"><ChangeBadge value={c.changePct} /></td>
                       </tr>

@@ -61,7 +61,7 @@ export function RowMenu({ actions, busy }: { actions: MenuAction[]; busy?: boole
         ref={btnRef}
         onClick={handleToggle}
         disabled={busy}
-        className={`p-1.5 rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 hover:bg-slate-100 dark:hover:bg-gray-700 hover:border-slate-300 dark:hover:border-gray-600 text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white transition disabled:opacity-50 ${open ? 'bg-slate-100 dark:bg-gray-700 text-slate-900 dark:text-white border-slate-300 dark:border-gray-600' : ''}`}
+        className={`p-1.5 rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 hover:bg-slate-100 dark:hover:bg-gray-700 hover:border-slate-300 dark:hover:border-gray-600 text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white transition disabled:opacity-50 ${open ? 'bg-slate-100 dark:bg-gray-700 text-foreground border-slate-300 dark:border-gray-600' : ''}`}
         title="Действия"
       >
         {busy ? (

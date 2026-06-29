@@ -291,14 +291,14 @@ function AccountInfo({ account, onCopyUsername, onCopyPassword, onClose }: {
             <div>
               <label className="text-xs text-gray-500 mb-1 block">Логин</label>
               <div className="flex items-center gap-2">
-                <code className="flex-1 p-2 bg-slate-100 dark:bg-gray-800 rounded-lg text-sm font-mono text-slate-900 dark:text-white">{account.username}</code>
+                <code className="flex-1 p-2 bg-slate-100 dark:bg-gray-800 rounded-lg text-sm font-mono text-foreground">{account.username}</code>
                 <button onClick={onCopyUsername} className="p-2 bg-slate-100 dark:bg-gray-800 hover:bg-slate-200 dark:hover:bg-gray-700 rounded-lg transition-colors" title="Копировать логин"><Copy className="w-4 h-4 text-slate-500 dark:text-gray-400" /></button>
               </div>
             </div>
             <div>
               <label className="text-xs text-gray-500 mb-1 block">Пароль</label>
               <div className="flex items-center gap-2">
-                <code className="flex-1 p-2 bg-slate-100 dark:bg-gray-800 rounded-lg text-sm font-mono text-slate-900 dark:text-white">{account.password}</code>
+                <code className="flex-1 p-2 bg-slate-100 dark:bg-gray-800 rounded-lg text-sm font-mono text-foreground">{account.password}</code>
                 <button onClick={onCopyPassword} className="p-2 bg-slate-100 dark:bg-gray-800 hover:bg-slate-200 dark:hover:bg-gray-700 rounded-lg transition-colors" title="Копировать пароль"><Copy className="w-4 h-4 text-slate-500 dark:text-gray-400" /></button>
               </div>
             </div>
@@ -307,7 +307,7 @@ function AccountInfo({ account, onCopyUsername, onCopyPassword, onClose }: {
         <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4">
           <p className="text-sm text-blue-400 mb-2">Ссылка для входа:</p>
           <div className="flex items-center gap-2">
-            <code className="flex-1 p-2 bg-slate-100 dark:bg-gray-800 rounded-lg text-xs text-slate-900 dark:text-white truncate">{`${publicAppUrl}/operator-login`}</code>
+            <code className="flex-1 p-2 bg-slate-100 dark:bg-gray-800 rounded-lg text-xs text-foreground truncate">{`${publicAppUrl}/operator-login`}</code>
             <button
               onClick={() => { if (typeof window !== 'undefined') navigator.clipboard.writeText(`${publicAppUrl}/operator-login`) }}
               className="p-2 bg-slate-100 dark:bg-gray-800 hover:bg-slate-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
@@ -599,7 +599,7 @@ function DocumentUpload({
           <select
             value={documentType}
             onChange={(e) => setDocumentType(e.target.value)}
-            className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+            className="w-full bg-white dark:bg-gray-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
           >
             <option value="">Выберите тип</option>
             {DOCUMENT_TYPES.map(type => (
@@ -621,7 +621,7 @@ function DocumentUpload({
             />
             <label
               htmlFor="file-upload"
-              className="flex-1 px-3 py-2 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-sm cursor-pointer hover:bg-slate-50 dark:hover:bg-gray-700/50 transition-colors truncate"
+              className="flex-1 px-3 py-2 bg-white dark:bg-gray-800/50 border border-border rounded-lg text-sm cursor-pointer hover:bg-slate-50 dark:hover:bg-gray-700/50 transition-colors truncate"
             >
               {selectedFile ? selectedFile.name : 'Выберите файл'}
             </label>
@@ -634,7 +634,7 @@ function DocumentUpload({
             type="text"
             value={documentNumber}
             onChange={(e) => setDocumentNumber(e.target.value)}
-            className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+            className="w-full bg-white dark:bg-gray-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
             placeholder="Например: N 123456"
           />
         </div>
@@ -655,7 +655,7 @@ function DocumentUpload({
             size="sm"
             onClick={() => setShowForm(false)}
             variant="outline"
-            className="border-slate-200 dark:border-white/10"
+            className="border-border"
           >
             Отмена
           </Button>
@@ -783,7 +783,7 @@ function DocumentList({
               <div className="flex items-center gap-2 min-w-0">
                 <FileText className="w-4 h-4 text-blue-400 flex-shrink-0" />
                 <div className="min-w-0">
-                  <span className="font-medium text-slate-900 dark:text-white block truncate">{doc.document_name}</span>
+                  <span className="font-medium text-foreground block truncate">{doc.document_name}</span>
                   <p className="text-xs text-gray-500 truncate">
                     {getDocumentTypeLabel(doc.document_type)}
                   </p>
@@ -826,7 +826,7 @@ function DocumentList({
                 size="sm"
                 variant="outline"
                 onClick={() => handleView(doc.document_url)}
-                className="border-slate-200 dark:border-white/10 text-xs h-7"
+                className="border-border text-xs h-7"
               >
                 <Eye className="w-3 h-3 mr-1" />
                 Просмотр
@@ -835,7 +835,7 @@ function DocumentList({
                 size="sm"
                 variant="outline"
                 onClick={() => handleDownload(doc.document_url, doc.document_name)}
-                className="border-slate-200 dark:border-white/10 text-xs h-7"
+                className="border-border text-xs h-7"
               >
                 <Download className="w-3 h-3 mr-1" />
                 Скачать
@@ -1648,9 +1648,9 @@ export default function OperatorProfilePage() {
             <div className="w-16 h-16 rounded-2xl bg-rose-500/20 flex items-center justify-center mx-auto">
               <AlertTriangle className="w-8 h-8 text-rose-400" />
             </div>
-            <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Ошибка</h2>
+            <h2 className="text-xl font-semibold text-foreground">Ошибка</h2>
             <p className="text-slate-500 dark:text-gray-400 max-w-md">{error || 'Оператор не найден'}</p>
-            <Button onClick={() => router.back()} variant="outline" className="border-slate-200 dark:border-white/10">
+            <Button onClick={() => router.back()} variant="outline" className="border-border">
               <ArrowLeft className="w-4 h-4 mr-2" />
               Вернуться назад
             </Button>
@@ -1769,7 +1769,7 @@ export default function OperatorProfilePage() {
                         setEditedTelegramChatId(operator?.telegram_chat_id || '')
                       }}
                       variant="outline"
-                      className="border-slate-200 dark:border-white/10"
+                      className="border-border"
                     >
                       <X className="w-4 h-4 mr-2" />
                       Отмена
@@ -1943,7 +1943,7 @@ export default function OperatorProfilePage() {
                         value={editedProfile.full_name || ''}
                         onChange={(e) => setEditedProfile({ ...editedProfile, full_name: e.target.value })}
                         placeholder="Фамилия Имя Отчество"
-                        className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                        className="w-full bg-white dark:bg-gray-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
                       />
                     ) : (
                       <p className="text-sm">{profile?.full_name || operator.name || 'Не указано'}</p>
@@ -1979,7 +1979,7 @@ export default function OperatorProfilePage() {
                         value={editedProfile.phone || ''}
                         onChange={(e) => setEditedProfile({ ...editedProfile, phone: e.target.value })}
                         placeholder="+7 (XXX) XXX-XX-XX"
-                        className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                        className="w-full bg-white dark:bg-gray-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
                       />
                     ) : (
                       <p className="text-sm">{profile?.phone || 'Не указано'}</p>
@@ -1998,7 +1998,7 @@ export default function OperatorProfilePage() {
                         value={editedProfile.email || ''}
                         onChange={(e) => setEditedProfile({ ...editedProfile, email: e.target.value })}
                         placeholder="email@example.com"
-                        className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                        className="w-full bg-white dark:bg-gray-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
                       />
                     ) : (
                       <p className="text-sm">{profile?.email || 'Не указано'}</p>
@@ -2017,7 +2017,7 @@ export default function OperatorProfilePage() {
                         value={editedTelegramChatId}
                         onChange={(e) => setEditedTelegramChatId(e.target.value)}
                         placeholder="-1001234567890"
-                        className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                        className="w-full bg-white dark:bg-gray-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
                       />
                     ) : (
                       <p className="text-sm font-mono">{operator?.telegram_chat_id || 'Не указано'}</p>
@@ -2036,7 +2036,7 @@ export default function OperatorProfilePage() {
                         value={editedProfile.address || ''}
                         onChange={(e) => setEditedProfile({ ...editedProfile, address: e.target.value })}
                         placeholder="Город, улица, дом"
-                        className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                        className="w-full bg-white dark:bg-gray-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
                       />
                     ) : (
                       <p className="text-sm">{profile?.address || 'Не указано'}</p>
@@ -2072,7 +2072,7 @@ export default function OperatorProfilePage() {
                         value={editedProfile.position || ''}
                         onChange={(e) => setEditedProfile({ ...editedProfile, position: e.target.value })}
                         placeholder="Должность"
-                        className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                        className="w-full bg-white dark:bg-gray-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
                       />
                     ) : (
                       <p className="text-sm">{profile?.position || 'Не указано'}</p>
@@ -2093,7 +2093,7 @@ export default function OperatorProfilePage() {
                         type="text"
                         value={editedProfile.emergency_contact_name || ''}
                         onChange={(e) => setEditedProfile({ ...editedProfile, emergency_contact_name: e.target.value })}
-                        className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                        className="w-full bg-white dark:bg-gray-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
                       />
                     ) : (
                       <p className="text-sm">{profile?.emergency_contact_name || 'Не указано'}</p>
@@ -2107,7 +2107,7 @@ export default function OperatorProfilePage() {
                         type="tel"
                         value={editedProfile.emergency_contact_phone || ''}
                         onChange={(e) => setEditedProfile({ ...editedProfile, emergency_contact_phone: e.target.value })}
-                        className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                        className="w-full bg-white dark:bg-gray-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
                       />
                     ) : (
                       <p className="text-sm">{profile?.emergency_contact_phone || 'Не указано'}</p>
@@ -2122,7 +2122,7 @@ export default function OperatorProfilePage() {
                         value={editedProfile.emergency_contact_relation || ''}
                         onChange={(e) => setEditedProfile({ ...editedProfile, emergency_contact_relation: e.target.value })}
                         placeholder="Супруг(а), родитель, друг"
-                        className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                        className="w-full bg-white dark:bg-gray-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
                       />
                     ) : (
                       <p className="text-sm">{profile?.emergency_contact_relation || 'Не указано'}</p>
@@ -2147,7 +2147,7 @@ export default function OperatorProfilePage() {
                         type="text"
                         value={editedProfile.tax_number || ''}
                         onChange={(e) => setEditedProfile({ ...editedProfile, tax_number: e.target.value })}
-                        className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                        className="w-full bg-white dark:bg-gray-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
                       />
                     ) : (
                       <p className="text-sm font-mono">{profile?.tax_number || 'Не указано'}</p>
@@ -2162,7 +2162,7 @@ export default function OperatorProfilePage() {
                         type="text"
                         value={editedProfile.id_number || ''}
                         onChange={(e) => setEditedProfile({ ...editedProfile, id_number: e.target.value })}
-                        className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                        className="w-full bg-white dark:bg-gray-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
                       />
                     ) : (
                       <p className="text-sm">{profile?.id_number || 'Не указано'}</p>
@@ -2193,7 +2193,7 @@ export default function OperatorProfilePage() {
                       <select
                         value={editedProfile.blood_type || ''}
                         onChange={(e) => setEditedProfile({ ...editedProfile, blood_type: e.target.value })}
-                        className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                        className="w-full bg-white dark:bg-gray-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
                       >
                         <option value="">Не указано</option>
                         <option value="A+">A+</option>
@@ -2221,7 +2221,7 @@ export default function OperatorProfilePage() {
                         value={editedProfile.allergies || ''}
                         onChange={(e) => setEditedProfile({ ...editedProfile, allergies: e.target.value })}
                         rows={2}
-                        className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                        className="w-full bg-white dark:bg-gray-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
                         placeholder="Нет аллергий"
                       />
                     ) : (
@@ -2240,7 +2240,7 @@ export default function OperatorProfilePage() {
                         value={editedProfile.medical_conditions || ''}
                         onChange={(e) => setEditedProfile({ ...editedProfile, medical_conditions: e.target.value })}
                         rows={2}
-                        className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                        className="w-full bg-white dark:bg-gray-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
                         placeholder="Нет противопоказаний"
                       />
                     ) : (
@@ -2259,7 +2259,7 @@ export default function OperatorProfilePage() {
                         value={editedProfile.education || ''}
                         onChange={(e) => setEditedProfile({ ...editedProfile, education: e.target.value })}
                         rows={2}
-                        className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                        className="w-full bg-white dark:bg-gray-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
                         placeholder="Высшее, Среднее специальное..."
                       />
                     ) : (
@@ -2305,7 +2305,7 @@ export default function OperatorProfilePage() {
                       <select
                         value={newWork.company_id}
                         onChange={(e) => setNewWork({ ...newWork, company_id: e.target.value })}
-                        className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                        className="w-full bg-white dark:bg-gray-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
                       >
                         <option value="">Выберите компанию</option>
                         {companies.map(company => (
@@ -2322,7 +2322,7 @@ export default function OperatorProfilePage() {
                         type="text"
                         value={newWork.position}
                         onChange={(e) => setNewWork({ ...newWork, position: e.target.value })}
-                        className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                        className="w-full bg-white dark:bg-gray-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
                         required
                       />
                     </div>
@@ -2352,7 +2352,7 @@ export default function OperatorProfilePage() {
                         checked={newWork.is_current}
                         onChange={(e) => setNewWork({ ...newWork, is_current: e.target.checked })}
                         id="is_current"
-                        className="rounded border-slate-200 dark:border-white/10 bg-white dark:bg-gray-800/50 text-violet-500 focus:ring-violet-500/20"
+                        className="rounded border-border bg-white dark:bg-gray-800/50 text-violet-500 focus:ring-violet-500/20"
                       />
                       <label htmlFor="is_current" className="text-sm text-slate-500 dark:text-gray-400">
                         Текущее место работы
@@ -2367,7 +2367,7 @@ export default function OperatorProfilePage() {
                         inputMode="decimal"
                         value={newWork.salary}
                         onChange={(e) => setNewWork({ ...newWork, salary: e.target.value })}
-                        className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                        className="w-full bg-white dark:bg-gray-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
                         placeholder="0"
                       />
                     </div>
@@ -2377,7 +2377,7 @@ export default function OperatorProfilePage() {
                       <select
                         value={newWork.salary_type}
                         onChange={(e) => setNewWork({ ...newWork, salary_type: e.target.value })}
-                        className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                        className="w-full bg-white dark:bg-gray-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
                       >
                         <option value="monthly">В месяц</option>
                         <option value="hourly">Почасово</option>
@@ -2391,7 +2391,7 @@ export default function OperatorProfilePage() {
                         value={newWork.responsibilities}
                         onChange={(e) => setNewWork({ ...newWork, responsibilities: e.target.value })}
                         rows={2}
-                        className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                        className="w-full bg-white dark:bg-gray-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
                       />
                     </div>
 
@@ -2401,7 +2401,7 @@ export default function OperatorProfilePage() {
                         value={newWork.achievements}
                         onChange={(e) => setNewWork({ ...newWork, achievements: e.target.value })}
                         rows={2}
-                        className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                        className="w-full bg-white dark:bg-gray-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
                       />
                     </div>
                   </div>
@@ -2411,7 +2411,7 @@ export default function OperatorProfilePage() {
                       size="sm"
                       onClick={() => setShowWorkForm(false)}
                       variant="outline"
-                      className="border-slate-200 dark:border-white/10"
+                      className="border-border"
                     >
                       Отмена
                     </Button>
@@ -2444,7 +2444,7 @@ export default function OperatorProfilePage() {
                         <div className="bg-white dark:bg-gray-800/30 rounded-xl p-4 border border-slate-100 dark:border-transparent">
                           <div className="flex flex-wrap justify-between items-start gap-2 mb-2">
                             <div>
-                              <h4 className="font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                              <h4 className="font-semibold text-foreground flex items-center gap-2">
                                 {work.position}
                                 {work.company_name && (
                                   <span className="text-sm font-normal text-slate-500 dark:text-gray-400">
@@ -2570,14 +2570,14 @@ export default function OperatorProfilePage() {
                   onChange={(e) => setNewNote(e.target.value)}
                   placeholder="Напишите заметку..."
                   rows={3}
-                  className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50 mb-3"
+                  className="w-full bg-white dark:bg-gray-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50 mb-3"
                 />
                 
                 <div className="flex flex-wrap gap-2">
                   <select
                     value={newNoteType}
                     onChange={(e) => setNewNoteType(e.target.value)}
-                    className="bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                    className="bg-white dark:bg-gray-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
                   >
                     <option value="general">Обычная</option>
                     <option value="warning">Важное</option>
@@ -2674,7 +2674,7 @@ export default function OperatorProfilePage() {
                       value={editedProfile.bank_name || ''}
                       onChange={(e) => setEditedProfile({ ...editedProfile, bank_name: e.target.value })}
                       placeholder="Название банка"
-                      className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                      className="w-full bg-white dark:bg-gray-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
                     />
                   ) : (
                     <p className="text-sm">{profile?.bank_name || 'Не указано'}</p>
@@ -2689,7 +2689,7 @@ export default function OperatorProfilePage() {
                       value={editedProfile.bank_account || ''}
                       onChange={(e) => setEditedProfile({ ...editedProfile, bank_account: e.target.value })}
                       placeholder="Номер счета"
-                      className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                      className="w-full bg-white dark:bg-gray-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
                     />
                   ) : (
                     <p className="text-sm font-mono">{profile?.bank_account || 'Не указано'}</p>
@@ -2704,7 +2704,7 @@ export default function OperatorProfilePage() {
                       value={editedProfile.bank_card_number || ''}
                       onChange={(e) => setEditedProfile({ ...editedProfile, bank_card_number: e.target.value })}
                       placeholder="XXXX XXXX XXXX XXXX"
-                      className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                      className="w-full bg-white dark:bg-gray-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
                     />
                   ) : (
                     <p className="text-sm font-mono">

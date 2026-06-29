@@ -1178,7 +1178,7 @@ function ShiftsPageContent() {
                     ? 'rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-700 dark:text-emerald-300'
                     : actionNotice.tone === 'error'
                       ? 'rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-red-700 dark:text-red-300'
-                      : 'rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.04] p-4 text-foreground'
+                      : 'rounded-lg border border-border bg-slate-50 dark:bg-white/[0.04] p-4 text-foreground'
                 }
               >
                 {actionNotice.text}

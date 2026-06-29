@@ -98,7 +98,7 @@ export default function ExpenseWhitelistPage() {
     }
   }
 
-  const inputCls = 'h-10 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/50 px-3 text-sm text-slate-900 dark:text-white placeholder-slate-500 focus:border-emerald-400/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/15'
+  const inputCls = 'h-10 rounded-xl border border-border bg-white dark:bg-slate-950/50 px-3 text-sm text-foreground placeholder-slate-500 focus:border-emerald-400/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/15'
 
   return (
     <div className="app-page-wide space-y-5">
@@ -115,8 +115,8 @@ export default function ExpenseWhitelistPage() {
         <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
         <div>
           <span className="font-semibold text-emerald-700 dark:text-emerald-200">Что это.</span> Поставщики и получатели,
-          которым можно платить <span className="font-semibold text-slate-900 dark:text-white">без чека</span>. Когда добавляешь расход
-          и выбираешь такого — фото чека <span className="font-semibold text-slate-900 dark:text-white">не требуется</span>.
+          которым можно платить <span className="font-semibold text-foreground">без чека</span>. Когда добавляешь расход
+          и выбираешь такого — фото чека <span className="font-semibold text-foreground">не требуется</span>.
           Удобно для зарплат, аренды, уборки, разовых выплат и регулярных услуг.
           <div className="mt-1 text-xs text-emerald-100/50">
             «Все точки» — действует на всех; можно ограничить конкретной точкой. Категория подставится в расход автоматически.
@@ -132,8 +132,8 @@ export default function ExpenseWhitelistPage() {
       )}
 
       {can('expense-whitelist.create') && (
-        <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 p-4 shadow-lg shadow-black/20 space-y-3">
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
+        <div className="rounded-2xl border border-border bg-white dark:bg-slate-900/60 p-4 shadow-lg shadow-black/20 space-y-3">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <span className="grid h-7 w-7 place-items-center rounded-lg bg-emerald-500/15 text-emerald-300"><Plus className="h-4 w-4" /></span>
             Добавить вендора
           </h3>
@@ -180,10 +180,10 @@ export default function ExpenseWhitelistPage() {
       )}
 
       {/* Список */}
-      <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 shadow-lg shadow-black/20">
-        <div className="flex items-center justify-between border-b border-slate-200 dark:border-white/10 px-4 py-3">
-          <span className="text-sm font-semibold text-slate-900 dark:text-white">Список</span>
-          <span className="rounded-full border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 px-2 py-0.5 text-xs text-slate-500 dark:text-slate-400">{items.length}</span>
+      <div className="overflow-hidden rounded-2xl border border-border bg-white dark:bg-slate-900/60 shadow-lg shadow-black/20">
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <span className="text-sm font-semibold text-foreground">Список</span>
+          <span className="rounded-full border border-border bg-slate-50 dark:bg-white/5 px-2 py-0.5 text-xs text-muted-foreground">{items.length}</span>
         </div>
 
         {loading && items.length === 0 ? (
@@ -206,8 +206,8 @@ export default function ExpenseWhitelistPage() {
                       <ShieldCheck className="h-4 w-4" />
                     </div>
                     <div className="min-w-0">
-                      <div className="truncate text-sm font-medium text-slate-900 dark:text-white">{v.vendor_name}</div>
-                      <div className="flex flex-wrap items-center gap-x-1.5 text-xs text-slate-500 dark:text-slate-400">
+                      <div className="truncate text-sm font-medium text-foreground">{v.vendor_name}</div>
+                      <div className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
                         <span className={v.company_id ? 'text-sky-600 dark:text-sky-300' : ''}>{companyName}</span>
                         {categoryName && <><span className="text-slate-600">·</span><span>{categoryName}</span></>}
                         {v.notes && <><span className="text-slate-600">·</span><span className="italic text-slate-500">{v.notes}</span></>}

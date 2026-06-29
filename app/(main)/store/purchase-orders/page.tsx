@@ -337,7 +337,7 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
       {createOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => { if (!saving) setCreateOpen(false) }}>
           <div
-            className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/95 p-6 text-slate-900 dark:text-white shadow-2xl"
+            className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl border border-border bg-white dark:bg-slate-950/95 p-6 text-foreground shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between">
@@ -420,7 +420,7 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
       {detail ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => { if (!statusBusy) setDetail(null) }}>
           <div
-            className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/95 p-6 text-slate-900 dark:text-white shadow-2xl"
+            className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl border border-border bg-white dark:bg-slate-950/95 p-6 text-foreground shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between">
@@ -454,7 +454,7 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
               <p className="mt-2 text-sm text-rose-600 dark:text-rose-300">Причина отмены: {detail.cancel_reason}</p>
             ) : null}
 
-            <div className="mt-4 overflow-auto rounded-xl border border-slate-200 dark:border-white/10">
+            <div className="mt-4 overflow-auto rounded-xl border border-border">
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 dark:bg-white/[0.03] text-xs text-muted-foreground">
                   <tr className="text-left">

@@ -607,7 +607,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
             <button
               type="button"
               onClick={() => { setSearchQuery(''); setDateFrom(''); setDateTo(''); setCompanyFilter('') }}
-              className="rounded-md border border-slate-200 dark:border-white/10 px-3 py-2 text-xs text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:bg-white/5"
+              className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:bg-white/5"
             >
               Сбросить фильтры
             </button>
@@ -801,7 +801,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
             <div className="space-y-4">
               {groupedReceipts.map(({ date, items }) => (
                 <div key={date} className="space-y-2">
-                  <div className="text-xs uppercase tracking-wide text-muted-foreground border-b border-slate-200 dark:border-white/10 pb-1">
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground border-b border-border pb-1">
                     {fmtDate(date)} · накладных: {items.length}
                   </div>
                   {items.map((r) => (
@@ -843,7 +843,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
         <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={closePay}>
           <div
-            className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/95 p-6 text-slate-900 dark:text-white shadow-2xl"
+            className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl border border-border bg-white dark:bg-slate-950/95 p-6 text-foreground shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-start justify-between gap-4">
@@ -853,7 +853,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
                   {payDebt.supplier?.organization_name || payDebt.supplier?.name || '—'} · {formatMoney(payDebt.total_amount)} ₸
                 </p>
               </div>
-              <button onClick={closePay} className="rounded-xl border border-slate-200 dark:border-white/10 p-2 text-muted-foreground hover:text-slate-900 dark:hover:text-white">
+              <button onClick={closePay} className="rounded-xl border border-border p-2 text-muted-foreground hover:text-slate-900 dark:hover:text-white">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -935,7 +935,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
         <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={() => !writingOff && setWriteOffDebt(null)}>
           <div
-            className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/95 p-6 text-slate-900 dark:text-white shadow-2xl"
+            className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border border-border bg-white dark:bg-slate-950/95 p-6 text-foreground shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-start justify-between gap-4">
@@ -945,7 +945,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
                   {writeOffDebt.supplier?.organization_name || writeOffDebt.supplier?.name || '—'} · {formatMoney(writeOffDebt.total_amount)} ₸
                 </p>
               </div>
-              <button onClick={() => !writingOff && setWriteOffDebt(null)} className="rounded-xl border border-slate-200 dark:border-white/10 p-2 text-muted-foreground hover:text-slate-900 dark:hover:text-white">
+              <button onClick={() => !writingOff && setWriteOffDebt(null)} className="rounded-xl border border-border p-2 text-muted-foreground hover:text-slate-900 dark:hover:text-white">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -978,7 +978,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
         <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={() => !bulkPaying && setBulkPayOpen(false)}>
           <div
-            className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/95 p-6 text-slate-900 dark:text-white shadow-2xl"
+            className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl border border-border bg-white dark:bg-slate-950/95 p-6 text-foreground shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-start justify-between gap-4">
@@ -988,7 +988,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
                   Будет закрыто {selectedIds.size} долгов на сумму {formatMoney(selectedSum)} ₸ одним чеком.
                 </p>
               </div>
-              <button onClick={() => !bulkPaying && setBulkPayOpen(false)} className="rounded-xl border border-slate-200 dark:border-white/10 p-2 text-muted-foreground hover:text-slate-900 dark:hover:text-white">
+              <button onClick={() => !bulkPaying && setBulkPayOpen(false)} className="rounded-xl border border-border p-2 text-muted-foreground hover:text-slate-900 dark:hover:text-white">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -1045,7 +1045,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
         <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={() => !rescheduling && setReschedDebt(null)}>
           <div
-            className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/95 p-6 text-slate-900 dark:text-white shadow-2xl"
+            className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border border-border bg-white dark:bg-slate-950/95 p-6 text-foreground shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-start justify-between gap-4">
@@ -1058,7 +1058,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
                   <p className="text-xs text-muted-foreground mt-1">Текущий срок: {fmtDate(reschedDebt.due_date)}</p>
                 ) : null}
               </div>
-              <button onClick={() => !rescheduling && setReschedDebt(null)} className="rounded-xl border border-slate-200 dark:border-white/10 p-2 text-muted-foreground hover:text-slate-900 dark:hover:text-white">
+              <button onClick={() => !rescheduling && setReschedDebt(null)} className="rounded-xl border border-border p-2 text-muted-foreground hover:text-slate-900 dark:hover:text-white">
                 <X className="w-4 h-4" />
               </button>
             </div>

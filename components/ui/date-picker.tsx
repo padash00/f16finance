@@ -64,7 +64,7 @@ export function DatePicker({
           type="button"
           disabled={disabled}
           className={cn(
-            'flex w-full items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-left text-sm text-slate-900 dark:text-white transition hover:border-amber-400 focus:border-amber-500 outline-none disabled:opacity-50',
+            'flex w-full items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-left text-sm text-foreground transition hover:border-amber-400 focus:border-amber-500 outline-none disabled:opacity-50',
             className,
           )}
         >
@@ -76,7 +76,7 @@ export function DatePicker({
       </PopoverTrigger>
       <PopoverContent
         align={align}
-        className="w-auto rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 p-0 shadow-2xl"
+        className="w-auto rounded-2xl border border-border bg-white dark:bg-slate-900 p-0 shadow-2xl"
       >
         <Calendar
           mode="single"

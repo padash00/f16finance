@@ -235,7 +235,7 @@ function EventRow({ event }: { event: Event }) {
       </div>
       <div className="rounded-lg border border-slate-200 dark:border-gray-800 bg-white dark:bg-gray-900/40 px-3 py-2 hover:border-slate-300 dark:hover:border-gray-700 transition">
         <div className="flex items-baseline gap-2 flex-wrap">
-          <span className="font-medium text-slate-900 dark:text-white text-sm">{event.target_name || '—'}</span>
+          <span className="font-medium text-foreground text-sm">{event.target_name || '—'}</span>
           <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded border ${event.kind === 'operator' ? 'border-blue-500/40 text-blue-400 bg-blue-500/10' : 'border-amber-500/40 text-amber-400 bg-amber-500/10'}`}>
             {event.kind === 'operator' ? 'Operator' : 'Staff'}
           </span>

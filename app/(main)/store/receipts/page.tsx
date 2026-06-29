@@ -958,7 +958,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
           </>
         )
         const hdrToolbar = (
-          <div className="inline-flex w-fit rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-0.5 text-xs">
+          <div className="inline-flex w-fit rounded-lg border border-border bg-white dark:bg-white/[0.03] p-0.5 text-xs">
             {(['all', 'warehouse', 'showcase'] as const).map((s) => (
               <button
                 key={s}
@@ -991,7 +991,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-        <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-3">
+        <Card className="border-border bg-white dark:bg-white/[0.03] p-3">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Документов</p>
           {loading ? <Skeleton className="mt-1 h-7 w-14" /> : (
             <p className="mt-1 text-xl font-semibold">{(data?.receipts || []).length}</p>
@@ -1075,7 +1075,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
       ) : null}
 
       {/* Main table */}
-      <Card className="overflow-hidden border-slate-200 dark:border-white/10 bg-card/70 p-0">
+      <Card className="overflow-hidden border-border bg-card/70 p-0">
         {loading && filteredReceipts.length === 0 ? (
           <StoreDataTableSkeleton columns={7} />
         ) : filteredReceipts.length === 0 ? (
@@ -1087,7 +1087,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
           <div className="relative max-h-[calc(100vh-380px)] overflow-auto">
             {refreshing ? (
               <div className="absolute inset-0 z-20 flex items-start justify-center bg-background/35 pt-10 backdrop-blur-[0.5px]">
-                <div className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-white/10 bg-card/90 px-3 py-1.5 text-xs text-muted-foreground shadow-md">
+                <div className="flex items-center gap-2 rounded-lg border border-border bg-card/90 px-3 py-1.5 text-xs text-muted-foreground shadow-md">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   Обновление…
                 </div>
@@ -1201,7 +1201,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
       {/* Create receipt dialog */}
       <Dialog open={formSheetOpen} onOpenChange={setFormSheetOpen}>
         <DialogContent className="flex h-[90vh] !w-[96vw] !max-w-[96vw] sm:!max-w-[1400px] flex-col gap-0 overflow-hidden p-0">
-          <DialogHeader className="border-b border-slate-200 dark:border-white/10 p-5 text-left">
+          <DialogHeader className="border-b border-border p-5 text-left">
             <DialogTitle className="flex items-center gap-2">
               <PackagePlus className="h-5 w-5 text-emerald-600 dark:text-emerald-300" />
               Новый документ приёмки
@@ -1247,7 +1247,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                         setQuickError(null)
                         quickInputRef.current?.focus()
                       }}
-                      className="rounded-full border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.04] px-3 py-1 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/[0.08]"
+                      className="rounded-full border border-border bg-slate-50 dark:bg-white/[0.04] px-3 py-1 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/[0.08]"
                       title={`${item.name} · ${item.barcode}`}
                     >
                       <span className="block max-w-[340px] truncate">{item.name} · {item.barcode}</span>
@@ -1257,13 +1257,13 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
               )}
             </div>
 
-            <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-3">
+            <div className="rounded-2xl border border-border bg-slate-50 dark:bg-white/[0.02] p-3">
               <button
                 type="button"
                 onClick={() => setShowBulkTools((v) => !v)}
                 className="flex w-full items-center justify-between"
               >
-                <p className="text-xs uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Массовые операции по строкам</p>
+                <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Массовые операции по строкам</p>
                 <ChevronDown className={`h-4 w-4 text-slate-400 transition ${showBulkTools ? 'rotate-180' : ''}`} />
               </button>
               {showBulkTools ? (
@@ -1280,13 +1280,13 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
               ) : null}
             </div>
 
-            <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-3">
+            <div className="rounded-2xl border border-border bg-slate-50 dark:bg-white/[0.02] p-3">
               <button
                 type="button"
                 onClick={() => setShowTemplatesTools((v) => !v)}
                 className="flex w-full items-center justify-between"
               >
-                <p className="text-xs uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Шаблоны приемки</p>
+                <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Шаблоны приемки</p>
                 <ChevronDown className={`h-4 w-4 text-slate-400 transition ${showTemplatesTools ? 'rotate-180' : ''}`} />
               </button>
               {showTemplatesTools ? (
@@ -1303,7 +1303,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                   {savedTemplates.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-2">
                       {savedTemplates.map((tpl) => (
-                        <div key={tpl.name} className="inline-flex items-center gap-1 rounded-full border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.04] px-3 py-1 text-xs">
+                        <div key={tpl.name} className="inline-flex items-center gap-1 rounded-full border border-border bg-slate-50 dark:bg-white/[0.04] px-3 py-1 text-xs">
                           <button type="button" onClick={() => applyTemplate(tpl.name)} className="text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white">{tpl.name}</button>
                           <button type="button" onClick={() => deleteTemplate(tpl.name)} className="text-rose-700 dark:text-rose-300 hover:text-rose-900 dark:hover:text-rose-200">×</button>
                         </div>
@@ -1331,7 +1331,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
 
               <div className="space-y-2">
                 <Label>Поставщик (обязательно)</Label>
-                <div className="inline-flex rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-0.5 text-xs">
+                <div className="inline-flex rounded-lg border border-border bg-white dark:bg-white/[0.03] p-0.5 text-xs">
                   <button
                     type="button"
                     onClick={() => setSupplierMode('existing')}
@@ -1403,14 +1403,14 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                   <button
                     type="button"
                     onClick={() => setPaymentMode('now')}
-                    className={`px-3 py-1.5 rounded-lg text-xs border ${paymentMode === 'now' ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-700 dark:text-emerald-200' : 'border-slate-200 dark:border-white/10 text-muted-foreground hover:bg-slate-50 dark:hover:bg-white/5'}`}
+                    className={`px-3 py-1.5 rounded-lg text-xs border ${paymentMode === 'now' ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-700 dark:text-emerald-200' : 'border-border text-muted-foreground hover:bg-slate-50 dark:hover:bg-white/5'}`}
                   >
                     Сразу
                   </button>
                   <button
                     type="button"
                     onClick={() => setPaymentMode('deferred')}
-                    className={`px-3 py-1.5 rounded-lg text-xs border ${paymentMode === 'deferred' ? 'bg-amber-500/15 border-amber-500/40 text-amber-700 dark:text-amber-200' : 'border-slate-200 dark:border-white/10 text-muted-foreground hover:bg-slate-50 dark:hover:bg-white/5'}`}
+                    className={`px-3 py-1.5 rounded-lg text-xs border ${paymentMode === 'deferred' ? 'bg-amber-500/15 border-amber-500/40 text-amber-700 dark:text-amber-200' : 'border-border text-muted-foreground hover:bg-slate-50 dark:hover:bg-white/5'}`}
                   >
                     В долг / Под реализацию
                   </button>
@@ -1651,7 +1651,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
               <Button type="button" variant="outline" onClick={addLine}>
                 Добавить строку
               </Button>
-              <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-black/20 px-4 py-3 text-right">
+              <div className="rounded-2xl border border-border bg-slate-50 dark:bg-black/20 px-4 py-3 text-right">
                 {returnTotal > 0 ? (
                   <>
                     <div className="flex justify-end gap-4 text-xs text-muted-foreground">
@@ -1680,7 +1680,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
 
       <Dialog open={receiptDetailsOpen} onOpenChange={setReceiptDetailsOpen}>
         <DialogContent className="flex h-[85vh] !w-[92vw] !max-w-[92vw] sm:!max-w-[1200px] flex-col gap-0 overflow-hidden p-0">
-          <DialogHeader className="border-b border-slate-200 dark:border-white/10 p-5 text-left">
+          <DialogHeader className="border-b border-border p-5 text-left">
             <DialogTitle>Детали приёмки</DialogTitle>
             <DialogDescription>
               {selectedReceipt
@@ -1730,7 +1730,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                     Причина отмены: {selectedReceipt.cancel_reason}
                   </div>
                 ) : null}
-                <div className="overflow-auto rounded-xl border border-slate-200 dark:border-white/10">
+                <div className="overflow-auto rounded-xl border border-border">
                   <table className="w-full min-w-[560px] table-fixed text-sm">
                     <thead className="bg-slate-50 dark:bg-white/[0.03]">
                       <tr className="text-left text-xs text-muted-foreground">

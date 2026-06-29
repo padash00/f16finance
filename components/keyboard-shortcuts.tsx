@@ -117,14 +117,14 @@ export function KeyboardShortcuts() {
   return (
     <div className="fixed inset-0 z-[70] flex items-start justify-center bg-slate-950/70 p-6 pt-[12vh] backdrop-blur-sm">
       <div className="absolute inset-0" onClick={() => setHelpOpen(false)} aria-hidden />
-      <div className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/95 shadow-2xl">
-        <div className="border-b border-slate-200 dark:border-white/10 px-4 py-3">
-          <p className="text-sm font-semibold text-slate-900 dark:text-white">Горячие клавиши навигации</p>
-          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Нажмите `g`, затем вторую клавишу за 1.5 сек</p>
+      <div className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-border bg-white dark:bg-slate-950/95 shadow-2xl">
+        <div className="border-b border-border px-4 py-3">
+          <p className="text-sm font-semibold text-foreground">Горячие клавиши навигации</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">Нажмите `g`, затем вторую клавишу за 1.5 сек</p>
         </div>
         <div className="grid grid-cols-1 gap-2 p-3 sm:grid-cols-2">
           {shortcuts.map((item) => (
-            <div key={item.keys} className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] px-3 py-2">
+            <div key={item.keys} className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-3 py-2">
               <p className="text-xs text-slate-500">{item.label}</p>
               <p className="mt-0.5 text-sm font-medium text-amber-600 dark:text-amber-300">{item.keys}</p>
             </div>

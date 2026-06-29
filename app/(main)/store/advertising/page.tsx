@@ -217,7 +217,7 @@ export default function AdvertisingPage({ embedded = false }: { embedded?: boole
               <select
                 value={companyId}
                 onChange={(e) => setCompanyId(e.target.value)}
-                className="h-9 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] px-3 text-sm text-slate-700 dark:text-slate-200 outline-none focus:border-amber-500/40"
+                className="h-9 rounded-md border border-border bg-white dark:bg-white/[0.03] px-3 text-sm text-slate-700 dark:text-slate-200 outline-none focus:border-amber-500/40"
               >
                 {companies.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -262,20 +262,20 @@ export default function AdvertisingPage({ embedded = false }: { embedded?: boole
         <Card className="border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-700 dark:text-rose-200">{error}</Card>
       )}
 
-      <Card className="border-slate-200 dark:border-white/10 p-4">
+      <Card className="border-border p-4">
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-700 dark:text-slate-300">
             Плейлист • {ads.length}{' '}
             <span className="text-slate-500">({activeCount} активных)</span>
           </span>
-          {loading && <Loader2 className="h-4 w-4 animate-spin text-slate-500 dark:text-slate-400" />}
+          {loading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
         </div>
       </Card>
 
       {ads.length === 0 && !loading ? (
         <Card className="border-dashed border-slate-200 dark:border-white/15 p-10 text-center">
           <Clapperboard className="mx-auto mb-3 h-10 w-10 text-slate-600" />
-          <p className="text-sm text-slate-500 dark:text-slate-400">
+          <p className="text-sm text-muted-foreground">
             Пусто. Загрузи видео (MP4, WEBM, MOV) или картинки (JPG, PNG, WEBP, GIF) — до 200 МБ.
           </p>
           <p className="mt-1 text-xs text-slate-500">
@@ -291,7 +291,7 @@ export default function AdvertisingPage({ embedded = false }: { embedded?: boole
               onDragStart={() => setDragIndex(index)}
               onDragOver={(e) => e.preventDefault()}
               onDrop={() => onDrop(index)}
-              className={`overflow-hidden border-slate-200 dark:border-white/10 transition ${
+              className={`overflow-hidden border-border transition ${
                 dragIndex === index ? 'opacity-50' : ''
               } ${ad.is_active ? '' : 'opacity-60'}`}
             >
@@ -335,7 +335,7 @@ export default function AdvertisingPage({ embedded = false }: { embedded?: boole
 
                 <div className="flex items-center justify-between gap-2">
                   {ad.media_type === 'image' ? (
-                    <label className="flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400">
+                    <label className="flex items-center gap-1 text-[11px] text-muted-foreground">
                       Показ:
                       <input
                         type="number"
@@ -343,7 +343,7 @@ export default function AdvertisingPage({ embedded = false }: { embedded?: boole
                         max={120}
                         value={ad.duration_sec || 8}
                         onChange={(e) => updateDuration(ad, Math.max(2, Number(e.target.value) || 8))}
-                        className="h-7 w-16 rounded border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] px-2 text-xs text-slate-700 dark:text-slate-200 outline-none focus:border-amber-500/40"
+                        className="h-7 w-16 rounded border border-border bg-white dark:bg-white/[0.03] px-2 text-xs text-slate-700 dark:text-slate-200 outline-none focus:border-amber-500/40"
                       />
                       сек
                     </label>
@@ -357,7 +357,7 @@ export default function AdvertisingPage({ embedded = false }: { embedded?: boole
                       className={`rounded-md px-2 py-1 text-[11px] ${
                         ad.is_active
                           ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                          : 'bg-slate-500/15 text-slate-500 dark:text-slate-400'
+                          : 'bg-slate-500/15 text-muted-foreground'
                       }`}
                     >
                       {ad.is_active ? 'Активно' : 'Выключено'}

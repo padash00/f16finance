@@ -150,7 +150,7 @@ export default function SuppliersListPage({ embedded = false }: { embedded?: boo
       ) : filtered.length === 0 ? (
         <Card className="p-6 text-sm text-muted-foreground text-center">Поставщиков нет.</Card>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-white/10">
+        <div className="overflow-x-auto rounded-xl border border-border">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 dark:bg-white/[0.04] text-left text-xs text-muted-foreground">
               <tr>
@@ -203,8 +203,8 @@ export default function SuppliersListPage({ embedded = false }: { embedded?: boo
 
       {addOpen ? (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={(e) => { if (e.target === e.currentTarget && !saving) setAddOpen(false) }}>
-          <Card className="w-full max-w-md max-h-[calc(100vh-2rem)] overflow-y-auto border-slate-200 dark:border-white/10 bg-white dark:bg-gray-900 p-5">
-            <div className="mb-4 text-base font-semibold text-slate-900 dark:text-white">Новый поставщик</div>
+          <Card className="w-full max-w-md max-h-[calc(100vh-2rem)] overflow-y-auto border-border bg-white dark:bg-gray-900 p-5">
+            <div className="mb-4 text-base font-semibold text-foreground">Новый поставщик</div>
             <div className="space-y-3">
               <div>
                 <Label className="mb-1 block text-xs">Название *</Label>

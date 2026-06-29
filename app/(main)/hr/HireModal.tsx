@@ -217,7 +217,7 @@ export default function HireModal({ open, onClose, onCreated }: Props) {
             <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mb-4 ring-4 ring-emerald-500/10">
               <CheckCircle2 className="w-9 h-9 text-emerald-400" />
             </div>
-            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-1">Сотрудник создан</h2>
+            <h2 className="text-xl font-bold text-foreground mb-1">Сотрудник создан</h2>
             <p className="text-sm text-gray-400 mb-5">{success.full_name}</p>
 
             {success.username && success.password && (
@@ -265,7 +265,7 @@ export default function HireModal({ open, onClose, onCreated }: Props) {
                 <UserPlus className="w-5 h-5 text-indigo-300" />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-slate-900 dark:text-white">Нанять сотрудника</h2>
+                <h2 className="text-lg font-bold text-foreground">Нанять сотрудника</h2>
                 <p className="text-xs text-gray-400">Один экран — профиль, логин, должность</p>
               </div>
             </div>
@@ -450,7 +450,7 @@ export default function HireModal({ open, onClose, onCreated }: Props) {
                       }
                       className={`px-3 py-2.5 rounded-lg border text-left text-sm transition ${
                         checked
-                          ? 'border-indigo-500/50 bg-indigo-500/10 text-slate-900 dark:text-white'
+                          ? 'border-indigo-500/50 bg-indigo-500/10 text-foreground'
                           : 'border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800/40 text-slate-500 dark:text-gray-400 hover:border-slate-300 dark:hover:border-gray-600 hover:text-slate-900 dark:hover:text-white'
                       }`}
                     >
@@ -529,7 +529,7 @@ export default function HireModal({ open, onClose, onCreated }: Props) {
 // ============ Helpers UI ============
 
 const inputClass =
-  'h-10 w-full rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800/60 px-3 text-sm text-slate-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:border-indigo-500/60 focus:ring-1 focus:ring-indigo-500/30 transition-colors'
+  'h-10 w-full rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800/60 px-3 text-sm text-foreground placeholder:text-gray-500 focus:outline-none focus:border-indigo-500/60 focus:ring-1 focus:ring-indigo-500/30 transition-colors'
 
 function SectionLabel({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -583,7 +583,7 @@ function TypeCard({
       <div className="flex items-start gap-3">
         <div className="text-2xl">{icon}</div>
         <div className="flex-1">
-          <div className={`font-semibold text-sm ${active ? 'text-slate-900 dark:text-white' : 'text-slate-700 dark:text-gray-300'}`}>{title}</div>
+          <div className={`font-semibold text-sm ${active ? 'text-foreground' : 'text-slate-700 dark:text-gray-300'}`}>{title}</div>
           <div className="text-xs text-gray-500 mt-0.5">{desc}</div>
         </div>
         {active && (
@@ -608,7 +608,7 @@ function CredField({ label, value, mono = false }: { label: string; value: strin
     <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-slate-50 dark:bg-gray-900/60 border border-slate-200 dark:border-gray-800">
       <div className="flex-1 min-w-0 text-left">
         <div className="text-[10px] uppercase tracking-wider text-gray-500">{label}</div>
-        <div className={`text-sm text-slate-900 dark:text-white truncate ${mono ? 'font-mono' : ''}`}>{value}</div>
+        <div className={`text-sm text-foreground truncate ${mono ? 'font-mono' : ''}`}>{value}</div>
       </div>
       <button
         onClick={copy}

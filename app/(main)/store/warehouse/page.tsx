@@ -739,7 +739,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
                 <select
                   value={selectedCompanyId || ''}
                   onChange={(e) => { setSelectedCompanyId(e.target.value); void load(e.target.value) }}
-                  className="h-9 appearance-none rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] pl-3 pr-8 text-sm text-foreground outline-none focus:border-amber-400/50"
+                  className="h-9 appearance-none rounded-lg border border-border bg-white dark:bg-white/[0.04] pl-3 pr-8 text-sm text-foreground outline-none focus:border-amber-400/50"
                 >
                   {companies.map((c) => (
                     <option key={c.id} value={c.id}>{c.name}</option>
@@ -782,7 +782,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
 
       {/* Stats strip */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-3">
+        <Card className="border-border bg-white dark:bg-white/[0.03] p-3">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Позиций</p>
           <p className="mt-1 text-xl font-semibold">{balances.length}</p>
         </Card>
@@ -862,7 +862,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
       </div>
 
       {/* Main table */}
-      <Card className="overflow-hidden border-slate-200 dark:border-white/10 bg-card/70 p-0">
+      <Card className="overflow-hidden border-border bg-card/70 p-0">
         {loading && balances.length === 0 ? (
           <div className="p-4">
             <TableSkeleton rows={8} cols={5} />
@@ -998,7 +998,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
       {/* Add Sheet */}
       <Sheet open={addSheetOpen} onOpenChange={setAddSheetOpen}>
         <SheetContent className="w-full sm:max-w-xl flex flex-col gap-0 p-0">
-          <SheetHeader className="border-b border-slate-200 dark:border-white/10 p-5">
+          <SheetHeader className="border-b border-border p-5">
             <SheetTitle className="flex items-center gap-2">
               <PackagePlus className="h-5 w-5 text-emerald-600 dark:text-emerald-300" />
               Добавить товары в подсобку
@@ -1008,7 +1008,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
             </SheetDescription>
           </SheetHeader>
           <div className="flex-1 space-y-4 overflow-y-auto p-5">
-            <div className="grid grid-cols-3 gap-1 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-1 text-xs">
+            <div className="grid grid-cols-3 gap-1 rounded-xl border border-border bg-white dark:bg-white/[0.03] p-1 text-xs">
               {([
                 ['barcode', 'Штрихкод', Barcode],
                 ['items', 'Каталог', Search],
@@ -1122,7 +1122,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
                     </select>
                   )}
                 </div>
-                <div className="max-h-52 overflow-y-auto space-y-1 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-black/20 p-1">
+                <div className="max-h-52 overflow-y-auto space-y-1 rounded-xl border border-border bg-slate-50 dark:bg-black/20 p-1">
                   {itemSearchLoading ? (
                     <div className="flex h-20 items-center justify-center"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>
                   ) : itemSearchResults.length === 0 ? (
@@ -1162,10 +1162,10 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
             )}
 
             {pendingLines.length > 0 && (
-              <div className="space-y-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-2 max-h-64 overflow-y-auto">
+              <div className="space-y-2 rounded-xl border border-border bg-white dark:bg-white/[0.02] p-2 max-h-64 overflow-y-auto">
                 <p className="text-[10px] uppercase tracking-widest text-muted-foreground px-1">К добавлению ({pendingLines.length})</p>
                 {pendingLines.map((line) => (
-                  <div key={line.key} className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] px-2.5 py-2">
+                  <div key={line.key} className="flex items-center gap-2 rounded-lg border border-border bg-slate-50 dark:bg-white/[0.03] px-2.5 py-2">
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-xs font-medium">{line.name || line.barcode}</p>
                       {line.barcode && <p className="text-[10px] text-muted-foreground font-mono">{line.barcode}</p>}
@@ -1196,20 +1196,20 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
 
             {pendingLines.length > 0 && (
               <div className="space-y-2">
-                <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-2.5 space-y-1.5">
+                <div className="rounded-xl border border-border bg-white dark:bg-white/[0.03] p-2.5 space-y-1.5">
                   <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Режим сохранения</p>
                   <div className="grid grid-cols-2 gap-1.5">
                     <button
                       type="button"
                       onClick={() => setStockMode('add')}
-                      className={`rounded-lg px-2 py-1.5 text-xs font-medium transition ${stockMode === 'add' ? 'bg-amber-500/20 border border-amber-500/40 text-amber-700 dark:text-amber-300' : 'border border-slate-200 dark:border-white/10 text-muted-foreground hover:bg-slate-50 dark:hover:bg-white/[0.04]'}`}
+                      className={`rounded-lg px-2 py-1.5 text-xs font-medium transition ${stockMode === 'add' ? 'bg-amber-500/20 border border-amber-500/40 text-amber-700 dark:text-amber-300' : 'border border-border text-muted-foreground hover:bg-slate-50 dark:hover:bg-white/[0.04]'}`}
                     >
                       + Добавить к остатку
                     </button>
                     <button
                       type="button"
                       onClick={() => setStockMode('set')}
-                      className={`rounded-lg px-2 py-1.5 text-xs font-medium transition ${stockMode === 'set' ? 'bg-amber-500/20 border border-amber-500/40 text-amber-700 dark:text-amber-300' : 'border border-slate-200 dark:border-white/10 text-muted-foreground hover:bg-slate-50 dark:hover:bg-white/[0.04]'}`}
+                      className={`rounded-lg px-2 py-1.5 text-xs font-medium transition ${stockMode === 'set' ? 'bg-amber-500/20 border border-amber-500/40 text-amber-700 dark:text-amber-300' : 'border border-border text-muted-foreground hover:bg-slate-50 dark:hover:bg-white/[0.04]'}`}
                     >
                       = Установить остаток
                     </button>
@@ -1245,7 +1245,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
       {/* Backroom file Sheet */}
       <Sheet open={backroomSheetOpen} onOpenChange={(o) => { setBackroomSheetOpen(o); if (!o) resetBackroom() }}>
         <SheetContent className="w-full sm:max-w-2xl flex flex-col gap-0 p-0">
-          <SheetHeader className="border-b border-slate-200 dark:border-white/10 p-5">
+          <SheetHeader className="border-b border-border p-5">
             <SheetTitle className="flex items-center gap-2">
               <Boxes className="h-5 w-5 text-amber-600 dark:text-amber-300" />
               Загрузка файла подсобки
@@ -1389,7 +1389,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
       {deleteConfirm && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm overflow-y-auto"
           onClick={(e) => { if (e.target === e.currentTarget) setDeleteConfirm(null) }}>
-          <div className="w-full max-w-sm max-h-[calc(100vh-2rem)] overflow-y-auto rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111827] p-6 shadow-2xl space-y-4">
+          <div className="w-full max-w-sm max-h-[calc(100vh-2rem)] overflow-y-auto rounded-2xl border border-border bg-white dark:bg-[#111827] p-6 shadow-2xl space-y-4">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-rose-500/15">
                 <Trash2 className="h-5 w-5 text-rose-400" />

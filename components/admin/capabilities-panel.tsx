@@ -14,7 +14,7 @@ import { useCapabilities } from '@/lib/client/use-capabilities'
 type RoleCapability = { role: string; capability: string; granted: boolean }
 
 // Soft modern: тёмный, плавные закругления, мягкие тени, изумруд/синий акценты.
-const card = 'rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 shadow-lg shadow-black/20'
+const card = 'rounded-2xl border border-border bg-white dark:bg-slate-900/60 shadow-lg shadow-black/20'
 
 const ROLE_LABELS: Record<string, string> = {
   owner: 'Владелец',
@@ -245,7 +245,7 @@ export function CapabilitiesPanel() {
   if (loading) {
     return (
       <div className={`${card} p-6`}>
-        <div className="flex items-center gap-3 text-slate-500 dark:text-slate-400">
+        <div className="flex items-center gap-3 text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" /> Загружаем права…
         </div>
       </div>
@@ -272,11 +272,11 @@ export function CapabilitiesPanel() {
             return (
               <span
                 key={role}
-                className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 px-2.5 py-1 text-slate-700 dark:text-slate-300"
+                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-slate-100 dark:bg-white/5 px-2.5 py-1 text-slate-700 dark:text-slate-300"
                 title={`${s.granted} из ${s.total} прав включено`}
               >
-                <span className="font-medium text-slate-900 dark:text-white">{roleLabel(role)}</span>
-                <span className="text-slate-500 dark:text-slate-400">{s.granted}/{s.total}</span>
+                <span className="font-medium text-foreground">{roleLabel(role)}</span>
+                <span className="text-muted-foreground">{s.granted}/{s.total}</span>
                 <span className={pct === 100 ? 'text-emerald-400' : pct > 50 ? 'text-amber-400' : 'text-rose-400'}>
                   {pct}%
                 </span>
@@ -294,10 +294,10 @@ export function CapabilitiesPanel() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Поиск по правам и страницам…"
-            className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/50 pl-10 text-sm text-slate-900 dark:text-white"
+            className="rounded-xl border-border bg-white dark:bg-slate-950/50 pl-10 text-sm text-foreground"
           />
         </div>
-        <button onClick={load} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 px-3.5 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 transition-colors hover:bg-slate-200 dark:hover:bg-white/10">
+        <button onClick={load} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-slate-100 dark:bg-white/5 px-3.5 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 transition-colors hover:bg-slate-200 dark:hover:bg-white/10">
           <RotateCcw className="h-3.5 w-3.5" />
           Обновить
         </button>
@@ -316,7 +316,7 @@ export function CapabilitiesPanel() {
               >
                 <div className="flex items-center gap-2">
                   {groupCollapsed ? <ChevronRight className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-emerald-300" />}
-                  <span className="font-semibold text-slate-900 dark:text-white">{group.label}</span>
+                  <span className="font-semibold text-foreground">{group.label}</span>
                   <span className="text-xs text-slate-500">
                     ({group.pages.length} стр., {group.pages.reduce((acc, p) => acc + p.capabilities.length, 0)} прав)
                   </span>
@@ -324,7 +324,7 @@ export function CapabilitiesPanel() {
               </button>
 
               {!groupCollapsed && (
-                <div className="border-t border-slate-200 dark:border-white/10">
+                <div className="border-t border-border">
                   {group.pages.map((page) => (
                     <PageRow
                       key={page.id}
@@ -352,8 +352,8 @@ export function CapabilitiesPanel() {
       {can('access.reset_to_defaults') && (
       <div className={`${card} space-y-4 p-4`}>
         <div>
-          <div className="mb-2 text-sm font-semibold text-slate-900 dark:text-white">Умное управление правами</div>
-          <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
+          <div className="mb-2 text-sm font-semibold text-foreground">Умное управление правами</div>
+          <p className="mb-3 text-xs text-muted-foreground">
             При включении любого действия (например <span className="text-emerald-300">expenses.create</span>)
             автоматически включаются зависимости (страница <span className="text-emerald-300">expenses.view</span>),
             чтобы не было ошибки «Нет доступа к странице».
@@ -363,8 +363,8 @@ export function CapabilitiesPanel() {
         {roles.filter((r) => r !== 'super_admin').map((role) => {
           const otherRoles = roles.filter((r) => r !== role && r !== 'super_admin')
           return (
-            <div key={role} className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3">
-              <div className="mb-2 text-sm font-medium text-slate-900 dark:text-white">{roleLabel(role)}</div>
+            <div key={role} className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] p-3">
+              <div className="mb-2 text-sm font-medium text-foreground">{roleLabel(role)}</div>
               <div className="flex flex-wrap gap-2 text-xs">
                 <button
                   className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-emerald-700 dark:text-emerald-200 transition-colors hover:bg-emerald-500/20 disabled:opacity-50"
@@ -453,7 +453,7 @@ function PageRow({
   const hasViewCap = page.capabilities.some((c) => c.id === viewCapId)
 
   return (
-    <div className="border-b border-slate-200 dark:border-white/10 last:border-b-0">
+    <div className="border-b border-border last:border-b-0">
       <div className="flex w-full items-center justify-between gap-2 px-5 py-2.5">
         <button
           onClick={onToggleCollapse}
@@ -479,7 +479,7 @@ function PageRow({
                   className={`rounded-full border px-2 py-0.5 text-[11px] transition disabled:opacity-50 ${
                     visible
                       ? 'border-emerald-400/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-200 hover:bg-emerald-500/25'
-                      : 'border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 text-slate-500 line-through hover:bg-slate-200 dark:hover:bg-white/10'
+                      : 'border-border bg-slate-100 dark:bg-white/5 text-slate-500 line-through hover:bg-slate-200 dark:hover:bg-white/10'
                   }`}
                   title={visible ? `${roleLabel(role)}: страница видна — клик чтобы скрыть` : `${roleLabel(role)}: страница скрыта — клик чтобы показать`}
                 >
@@ -495,7 +495,7 @@ function PageRow({
         <div className="px-5 pb-3">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-xs font-medium text-slate-500 dark:text-slate-400">
+              <tr className="text-left text-xs font-medium text-muted-foreground">
                 <th className="w-1/3 py-1 pr-3">Действие</th>
                 {roles.map((role) => (
                   <th key={role} className="px-2 py-1 text-center text-[11px]">
@@ -556,7 +556,7 @@ function PageRow({
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <span className="text-xs text-slate-500">Пакетно по роли:</span>
               {roles.map((role) => (
-                <div key={role} className="inline-flex items-center gap-1 rounded-full border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 px-2 py-0.5">
+                <div key={role} className="inline-flex items-center gap-1 rounded-full border border-border bg-slate-100 dark:bg-white/5 px-2 py-0.5">
                   <span className="text-[11px] text-slate-700 dark:text-slate-300">{roleLabel(role)}:</span>
                   <button
                     onClick={() => onBulkSet(role, allCapIds, true)}

@@ -273,7 +273,7 @@ export function InventoryForecastPageContent({ embedded = false }: { embedded?: 
             onClick={() => setFilterStatus(btn.key)}
             className={`rounded-full px-3 py-1 text-sm font-medium transition-colors ${
               filterStatus === btn.key
-                ? 'bg-slate-200 dark:bg-white/20 text-slate-900 dark:text-white'
+                ? 'bg-slate-200 dark:bg-white/20 text-foreground'
                 : 'bg-slate-100 dark:bg-white/5 text-muted-foreground hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
@@ -299,7 +299,7 @@ export function InventoryForecastPageContent({ embedded = false }: { embedded?: 
       )}
 
       {/* Table */}
-      <Card className="border-slate-200 dark:border-white/10 bg-card/70">
+      <Card className="border-border bg-card/70">
         <CardContent className="p-0">
           {loading ? (
             <div className="space-y-0">
@@ -323,7 +323,7 @@ export function InventoryForecastPageContent({ embedded = false }: { embedded?: 
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 dark:border-white/10">
+                  <tr className="border-b border-border">
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Наименование</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Категория</th>
                     <th className="px-4 py-3 text-right font-medium text-muted-foreground">Остаток</th>

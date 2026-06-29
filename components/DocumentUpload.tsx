@@ -154,7 +154,7 @@ export default function DocumentUpload({ operatorId, onUploadComplete, onError }
           <select
             value={documentType}
             onChange={(e) => setDocumentType(e.target.value)}
-            className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+            className="w-full bg-white dark:bg-gray-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
           >
             <option value="">Выберите тип</option>
             {DOCUMENT_TYPES.map(type => (
@@ -191,7 +191,7 @@ export default function DocumentUpload({ operatorId, onUploadComplete, onError }
             type="text"
             value={documentNumber}
             onChange={(e) => setDocumentNumber(e.target.value)}
-            className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+            className="w-full bg-white dark:bg-gray-800/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
             placeholder="Например: N 123456"
           />
         </div>
@@ -222,7 +222,7 @@ export default function DocumentUpload({ operatorId, onUploadComplete, onError }
             size="sm"
             onClick={() => setShowForm(false)}
             variant="outline"
-            className="border-slate-200 dark:border-white/10"
+            className="border-border"
           >
             Отмена
           </Button>

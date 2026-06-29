@@ -465,7 +465,7 @@ export default function AccessPage() {
                   <Button
                     onClick={copyAllData}
                     variant="outline"
-                    className="border-slate-200 dark:border-white/10 bg-transparent dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10"
+                    className="border-border bg-transparent dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10"
                   >
                     <Copy className="w-4 h-4 mr-2" />
                     Копировать все данные
@@ -476,7 +476,7 @@ export default function AccessPage() {
                   <Button
                     onClick={exportToCSV}
                     variant="outline"
-                    className="border-slate-200 dark:border-white/10 bg-transparent dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10"
+                    className="border-border bg-transparent dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10"
                   >
                     <Download className="w-4 h-4 mr-2" />
                     Скачать PDF
@@ -501,7 +501,7 @@ export default function AccessPage() {
                 <Button
                   onClick={loadOperators}
                   variant="outline"
-                  className="border-slate-200 dark:border-white/10 bg-transparent dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10"
+                  className="border-border bg-transparent dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10"
                 >
                   <RefreshCw className="w-4 h-4 mr-2" />
                   Обновить
@@ -519,7 +519,7 @@ export default function AccessPage() {
                 </div>
                 <p className="text-xs text-gray-500 uppercase">Всего активных</p>
               </div>
-              <p className="text-2xl font-bold text-slate-900 dark:text-white">{operators.length}</p>
+              <p className="text-2xl font-bold text-foreground">{operators.length}</p>
             </Card>
 
             <Card className="p-5 bg-white dark:bg-gray-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
@@ -579,13 +579,13 @@ export default function AccessPage() {
                                   className="object-cover w-full h-full"
                                 />
                               ) : (
-                                <div className="w-full h-full flex items-center justify-center text-slate-900 dark:text-white text-xs font-bold">
+                                <div className="w-full h-full flex items-center justify-center text-foreground text-xs font-bold">
                                   {op.name.charAt(0).toUpperCase()}
                                 </div>
                               )}
                             </div>
                             <div>
-                              <span className="font-medium text-slate-900 dark:text-white block">
+                              <span className="font-medium text-foreground block">
                                 {op.short_name || op.name}
                               </span>
                               <span className="text-xs text-gray-500">{op.role}</span>
@@ -609,7 +609,7 @@ export default function AccessPage() {
                                 value={editingLoginValue}
                                 onChange={e => setEditingLoginValue(e.target.value)}
                                 onKeyDown={e => { if (e.key === 'Enter') saveLogin(op.id); if (e.key === 'Escape') setEditingLoginId(null) }}
-                                className="font-mono text-sm bg-white dark:bg-gray-800 border border-slate-300 dark:border-gray-600 rounded-lg px-2 py-1 text-slate-900 dark:text-white w-36 focus:outline-none focus:border-blue-500"
+                                className="font-mono text-sm bg-white dark:bg-gray-800 border border-slate-300 dark:border-gray-600 rounded-lg px-2 py-1 text-foreground w-36 focus:outline-none focus:border-blue-500"
                               />
                               <button
                                 onClick={() => saveLogin(op.id)}
@@ -712,7 +712,7 @@ export default function AccessPage() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="h-8 px-2 border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/10"
+                                className="h-8 px-2 border-border hover:bg-slate-100 dark:hover:bg-white/10"
                                 onClick={() => copyOperatorData(op)}
                                 disabled={!newPassword}
                               >
@@ -750,7 +750,7 @@ export default function AccessPage() {
                 <FileText className="w-5 h-5 text-blue-400" />
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-2">Как пользоваться:</h3>
+                <h3 className="text-sm font-semibold text-foreground mb-2">Как пользоваться:</h3>
                 <ul className="text-sm text-slate-700 dark:text-gray-400 space-y-1 list-disc list-inside">
                   <li>Показываются только активные операторы</li>
                   <li>Нажмите "Сгенерировать всем пароли" для массовой смены паролей</li>

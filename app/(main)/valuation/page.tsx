@@ -129,7 +129,7 @@ export default function ValuationPage() {
         actions={
           <button
             onClick={() => void load()}
-            className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.04] text-muted-foreground transition hover:bg-slate-100 dark:hover:bg-white/[0.08] hover:text-foreground"
+            className="grid h-10 w-10 place-items-center rounded-xl border border-border bg-slate-50 dark:bg-white/[0.04] text-muted-foreground transition hover:bg-slate-100 dark:hover:bg-white/[0.08] hover:text-foreground"
             title="Обновить"
           >
             <RefreshCw className="h-4 w-4" />
@@ -160,14 +160,14 @@ export default function ValuationPage() {
 
       {/* KPI ряд */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-4">
+        <Card className="border-border bg-white dark:bg-white/[0.02] p-4">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">EBITDA за 12 мес</p>
           <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-300">{formatMoney(data.ebitda_12mo)} ₸</p>
           <p className="mt-1 text-[11px] text-muted-foreground">
             Выручка {formatMoney(data.revenue_12mo)} ₸ · чистая прибыль {formatMoney(data.net_profit_12mo)} ₸
           </p>
         </Card>
-        <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-4">
+        <Card className="border-border bg-white dark:bg-white/[0.02] p-4">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">EBITDA-маржа</p>
           <p className="mt-1 text-2xl font-bold tabular-nums text-violet-600 dark:text-violet-300">{data.ebitda_margin}%</p>
           <p className="mt-1 text-[11px] text-muted-foreground">
@@ -176,7 +176,7 @@ export default function ValuationPage() {
               : 'Стабильность: мало данных'}
           </p>
         </Card>
-        <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-4">
+        <Card className="border-border bg-white dark:bg-white/[0.02] p-4">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Тренд год к году</p>
           {data.trend_pct == null ? (
             <p className="mt-1 flex items-center gap-1.5 text-2xl font-bold text-muted-foreground">
@@ -195,7 +195,7 @@ export default function ValuationPage() {
       </div>
 
       {/* Как сложился мультипликатор */}
-      <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-5">
+      <Card className="border-border bg-white dark:bg-white/[0.02] p-5">
         <h2 className="text-sm font-semibold">Как сложился мультипликатор</h2>
         <p className="mt-0.5 text-xs text-muted-foreground">
           Базовый мультипликатор {data.multiple.base}× корректируется по факторам ниже → итог {data.multiple.mid}×
@@ -229,7 +229,7 @@ export default function ValuationPage() {
       </Card>
 
       {/* График EBITDA по месяцам */}
-      <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-5">
+      <Card className="border-border bg-white dark:bg-white/[0.02] p-5">
         <h2 className="text-sm font-semibold">EBITDA по месяцам (12 мес)</h2>
         <div className="mt-3 h-64">
           <ResponsiveContainer width="100%" height="100%">
@@ -252,7 +252,7 @@ export default function ValuationPage() {
       </Card>
 
       {/* Дисклеймер */}
-      <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-4 text-[11px] leading-relaxed text-muted-foreground">
+      <Card className="border-border bg-white dark:bg-white/[0.02] p-4 text-[11px] leading-relaxed text-muted-foreground">
         <p className="font-medium text-foreground/80">Как читать эту оценку</p>
         <p className="mt-1">
           Это ориентир, а не официальная оценка. Реальная цена всегда обсуждается с покупателем и зависит от вещей,

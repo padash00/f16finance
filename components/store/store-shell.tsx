@@ -92,7 +92,7 @@ export function StoreShell({ children }: { children: React.ReactNode }) {
               <Store className="h-4 w-4 text-emerald-300" />
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-slate-900 dark:text-white">Orda</span>
+              <span className="text-sm font-semibold text-foreground">Orda</span>
               <span className="hidden text-slate-600 sm:inline">·</span>
               <span className="hidden text-sm font-semibold text-emerald-600 dark:text-emerald-300 sm:inline">Магазин</span>
               <span className="ml-1 hidden rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-emerald-700/90 dark:text-emerald-300/90 lg:inline">модуль</span>
@@ -136,7 +136,7 @@ export function StoreShell({ children }: { children: React.ReactNode }) {
             <div className="flex h-14 items-center justify-between border-b border-slate-200 px-4 dark:border-white/10">
               <div className="flex items-center gap-2">
                 <div className="grid h-8 w-8 place-items-center rounded-xl border border-emerald-400/30 bg-emerald-500/15"><Store className="h-4 w-4 text-emerald-300" /></div>
-                <span className="text-sm font-semibold text-slate-900 dark:text-white">Магазин</span>
+                <span className="text-sm font-semibold text-foreground">Магазин</span>
               </div>
               <button onClick={() => setMobileOpen(false)} className="grid h-8 w-8 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-white"><X className="h-4 w-4" /></button>
             </div>

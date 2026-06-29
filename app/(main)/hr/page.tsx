@@ -531,7 +531,7 @@ export default function HrPage() {
               className={`px-4 py-2 rounded-lg text-sm border transition ${
                 tab === 'active'
                   ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40'
-                  : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500'
+                  : 'border-slate-200 dark:border-slate-700 text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500'
               }`}
             >
               Активные · <span className="font-bold">{counts.active}</span>
@@ -541,7 +541,7 @@ export default function HrPage() {
               className={`px-4 py-2 rounded-lg text-sm border transition ${
                 tab === 'dismissed'
                   ? 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/40'
-                  : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500'
+                  : 'border-slate-200 dark:border-slate-700 text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500'
               }`}
             >
               Уволенные · <span className="font-bold">{counts.dismissed}</span>
@@ -551,7 +551,7 @@ export default function HrPage() {
               className={`px-4 py-2 rounded-lg text-sm border transition ${
                 tab === 'career'
                   ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/40'
-                  : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500'
+                  : 'border-slate-200 dark:border-slate-700 text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500'
               }`}
             >
               Карьера
@@ -561,7 +561,7 @@ export default function HrPage() {
               className={`px-4 py-2 rounded-lg text-sm border transition ${
                 tab === 'positions'
                   ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/40'
-                  : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500'
+                  : 'border-slate-200 dark:border-slate-700 text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500'
               }`}
             >
               Должности
@@ -571,7 +571,7 @@ export default function HrPage() {
               className={`px-4 py-2 rounded-lg text-sm border transition ${
                 tab === 'analytics'
                   ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/40'
-                  : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500'
+                  : 'border-slate-200 dark:border-slate-700 text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500'
               }`}
             >
               Аналитика
@@ -675,7 +675,7 @@ export default function HrPage() {
           <div className="p-3 rounded-xl bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 flex flex-row flex-wrap items-center gap-2">
             <button
               onClick={selectedIds.size === filtered.length ? clearSelection : selectAllVisible}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+              className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs text-muted-foreground hover:text-slate-900 dark:hover:text-white"
             >
               {selectedIds.size === filtered.length && filtered.length > 0 ? (
                 <CheckSquare className="w-3.5 h-3.5" />
@@ -738,7 +738,7 @@ export default function HrPage() {
         </div>
       )}
       <div className="flex items-center justify-between px-1">
-        <div className="text-sm text-slate-500 dark:text-slate-400">
+        <div className="text-sm text-muted-foreground">
           {tab === 'active' ? 'Список активных сотрудников' : 'Список уволенных сотрудников'}
         </div>
         {!loading && filtered.length > 0 ? (
@@ -796,7 +796,7 @@ export default function HrPage() {
                             status={emp.kind === 'operator' ? (emp.has_login === false ? 'no-login' : null) : null}
                           />
                           <div className="min-w-0">
-                            <div className="font-medium text-slate-900 dark:text-white truncate max-w-[200px]">{emp.full_name || '—'}</div>
+                            <div className="font-medium text-foreground truncate max-w-[200px]">{emp.full_name || '—'}</div>
                             {emp.short_name && <div className="text-[10px] text-slate-500 truncate">{emp.short_name}</div>}
                           </div>
                         </div>
@@ -967,7 +967,7 @@ export default function HrPage() {
                       <button
                         type="button"
                         onClick={() => toggleHistory(emp)}
-                        className="inline-flex items-center gap-1 rounded-md border border-slate-200 dark:border-slate-700 px-2 py-1 text-[11px] text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500 transition"
+                        className="inline-flex items-center gap-1 rounded-md border border-slate-200 dark:border-slate-700 px-2 py-1 text-[11px] text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500 transition"
                       >
                         {historyOpen[`${emp.kind}-${emp.id}`] ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
                         История действий
@@ -983,7 +983,7 @@ export default function HrPage() {
                         <div className="text-slate-500 italic">Нет записей</div>
                       ) : (
                         (historyData[`${emp.kind}-${emp.id}`] || []).map((h) => (
-                          <div key={h.id} className="text-slate-500 dark:text-slate-400">
+                          <div key={h.id} className="text-muted-foreground">
                             <span className="text-slate-700 dark:text-slate-300">{ACTION_LABEL[h.action] || h.action}</span>
                             <span className="text-slate-500"> · {new Date(h.created_at).toLocaleString('ru-RU')}</span>
                             {h.actor_name && <span className="text-slate-500"> · {h.actor_name}</span>}
@@ -1041,18 +1041,18 @@ export default function HrPage() {
 
       {dismissTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={() => setDismissTarget(null)}>
-          <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-2xl p-5 w-full max-w-md max-h-[calc(100vh-2rem)] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold mb-1 text-slate-900 dark:text-white">Уволить сотрудника</h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+          <div className="bg-white dark:bg-slate-950 border border-border rounded-2xl p-5 w-full max-w-md max-h-[calc(100vh-2rem)] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold mb-1 text-foreground">Уволить сотрудника</h3>
+            <p className="text-sm text-muted-foreground mb-4">
               {dismissTarget.full_name} ({dismissTarget.kind === 'operator' ? 'оператор' : 'админ'})
             </p>
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div>
-                <label className="block text-sm font-medium mb-1 text-slate-900 dark:text-white">Дата увольнения</label>
+                <label className="block text-sm font-medium mb-1 text-foreground">Дата увольнения</label>
                 <DatePicker value={dismissDate} onChange={setDismissDate} />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1 text-slate-900 dark:text-white">Тип</label>
+                <label className="block text-sm font-medium mb-1 text-foreground">Тип</label>
                 <select
                   value={dismissType}
                   onChange={(e) => setDismissType(e.target.value as DismissalType)}
@@ -1064,7 +1064,7 @@ export default function HrPage() {
                 </select>
               </div>
             </div>
-            <label className="block text-sm font-medium mb-1 text-slate-900 dark:text-white">Причина увольнения</label>
+            <label className="block text-sm font-medium mb-1 text-foreground">Причина увольнения</label>
             <textarea
               value={dismissReason}
               onChange={(e) => setDismissReason(e.target.value)}
@@ -1083,7 +1083,7 @@ export default function HrPage() {
                   onChange={(e) => setCascadeDismiss(e.target.checked)}
                 />
                 <span>
-                  <span className="font-semibold text-slate-900 dark:text-white">
+                  <span className="font-semibold text-foreground">
                     У сотрудника также есть запись «{pairedRecord.name}»
                     {' '}({pairedRecord.kind === 'operator' ? 'оператор' : 'админ'}).
                   </span>
@@ -1128,12 +1128,12 @@ function MiniStat({
     emerald: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
     blue: 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300',
     orange: 'border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-300',
-    gray: 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 text-slate-500 dark:text-slate-400',
+    gray: 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 text-muted-foreground',
   }
   return (
     <div className={`px-3 py-2 rounded-lg border ${toneMap[tone]}`}>
       <div className="text-[10px] uppercase tracking-wider opacity-90">{label}</div>
-      <div className="text-base font-bold text-slate-900 dark:text-white mt-0.5 truncate">{value}</div>
+      <div className="text-base font-bold text-foreground mt-0.5 truncate">{value}</div>
     </div>
   )
 }
@@ -1160,7 +1160,7 @@ function Chip({
     <button
       onClick={onClick}
       className={`px-3 py-1.5 rounded-full text-xs font-medium border transition flex items-center gap-1.5 ${
-        active ? toneMap[tone] + ' ring-1 ring-current/20' : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500'
+        active ? toneMap[tone] + ' ring-1 ring-current/20' : 'border-slate-200 dark:border-slate-700 text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500'
       }`}
     >
       <span>{children}</span>

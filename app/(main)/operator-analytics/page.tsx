@@ -201,7 +201,7 @@ const INSIGHT_STYLES: Record<InsightType, { bg: string; border: string; text: st
   warning: { bg: 'bg-amber-500/5', border: 'border-amber-500/20', text: 'text-amber-400', icon: AlertTriangle },
   danger: { bg: 'bg-rose-500/5', border: 'border-rose-500/20', text: 'text-rose-400', icon: AlertCircle },
   opportunity: { bg: 'bg-blue-500/5', border: 'border-blue-500/20', text: 'text-blue-400', icon: Zap },
-  info: { bg: 'bg-slate-50 dark:bg-slate-800/30', border: 'border-slate-200 dark:border-white/5', text: 'text-slate-500 dark:text-slate-400', icon: Info },
+  info: { bg: 'bg-slate-50 dark:bg-slate-800/30', border: 'border-slate-200 dark:border-white/5', text: 'text-muted-foreground', icon: Info },
 }
 
 const DATE_PRESETS: Record<DatePreset, { label: string; getRange: () => { from: string; to: string } }> = {
@@ -483,7 +483,7 @@ const StatCard = memo(({ title, value, subValue, icon: Icon, trend, color = 'blu
       <div className="relative z-10">
         <div className="flex items-center justify-between mb-3">
           <div className={`p-2 rounded-xl bg-gradient-to-br ${colors[color]} bg-opacity-20`}>
-            <Icon className="w-4 h-4 text-slate-900 dark:text-white" />
+            <Icon className="w-4 h-4 text-foreground" />
           </div>
           {trend !== undefined && (
             <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
@@ -495,8 +495,8 @@ const StatCard = memo(({ title, value, subValue, icon: Icon, trend, color = 'blu
             </span>
           )}
         </div>
-        <p className="text-slate-500 dark:text-slate-400 text-xs mb-1">{title}</p>
-        <p className="text-xl font-bold text-slate-900 dark:text-white mb-1">{value}</p>
+        <p className="text-muted-foreground text-xs mb-1">{title}</p>
+        <p className="text-xl font-bold text-foreground mb-1">{value}</p>
         {subValue && <p className="text-xs text-slate-500">{subValue}</p>}
       </div>
     </div>
@@ -517,7 +517,7 @@ const InsightCard = memo(({ insight, index }: { insight: AIInsight; index: numbe
           <Icon className="w-3.5 h-3.5" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-medium text-slate-900 dark:text-white mb-0.5">{insight.title}</p>
+          <p className="text-xs font-medium text-foreground mb-0.5">{insight.title}</p>
           <p className="text-[11px] text-slate-700 dark:text-slate-400 line-clamp-2">{insight.description}</p>
           {insight.metric && (
             <p className={`text-sm font-bold mt-1 ${styles.text}`}>{insight.metric}</p>
@@ -594,7 +594,7 @@ const OperatorDetailsModal = memo(({
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 overflow-y-auto">
       <div
         ref={modalRef}
-        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl w-full max-w-4xl my-8 animate-in fade-in zoom-in duration-200"
+        className="bg-white dark:bg-slate-900 border border-border rounded-2xl w-full max-w-4xl my-8 animate-in fade-in zoom-in duration-200"
       >
         <div className="sticky top-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/5 rounded-t-2xl z-10">
           <div className="p-6 flex justify-between items-center">
@@ -615,7 +615,7 @@ const OperatorDetailsModal = memo(({
                 )}
               </div>
               <div>
-                <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
+                <h2 className="text-2xl font-bold text-foreground">
                   {operator.operatorName}
                 </h2>
                 <div className="flex items-center gap-3 mt-1">
@@ -723,7 +723,7 @@ const OperatorDetailsModal = memo(({
 
               {operator.dailyData.length > 0 && (
                 <div className="space-y-3">
-                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Динамика выручки по дням</h3>
+                  <h3 className="text-sm font-semibold text-foreground">Динамика выручки по дням</h3>
                   <div className="h-48 bg-slate-50 dark:bg-slate-800/30 rounded-xl p-4 border border-slate-200 dark:border-white/5">
                     <OperatorDailyChart data={operator.dailyData} />
                   </div>
@@ -751,19 +751,19 @@ const OperatorDetailsModal = memo(({
               <div className="grid grid-cols-2 gap-3">
                 <div className="p-3 bg-slate-50 dark:bg-slate-800/30 rounded-lg">
                   <p className="text-xs text-slate-500 mb-1">Всего смен</p>
-                  <p className="text-lg font-semibold text-slate-900 dark:text-white">{operator.shifts}</p>
+                  <p className="text-lg font-semibold text-foreground">{operator.shifts}</p>
                 </div>
                 <div className="p-3 bg-slate-50 dark:bg-slate-800/30 rounded-lg">
                   <p className="text-xs text-slate-500 mb-1">Рабочих дней</p>
-                  <p className="text-lg font-semibold text-slate-900 dark:text-white">{operator.days}</p>
+                  <p className="text-lg font-semibold text-foreground">{operator.days}</p>
                 </div>
                 <div className="p-3 bg-slate-50 dark:bg-slate-800/30 rounded-lg">
                   <p className="text-xs text-slate-500 mb-1">Смен в день</p>
-                  <p className="text-lg font-semibold text-slate-900 dark:text-white">{shiftsPerDay}</p>
+                  <p className="text-lg font-semibold text-foreground">{shiftsPerDay}</p>
                 </div>
                 <div className="p-3 bg-slate-50 dark:bg-slate-800/30 rounded-lg">
                   <p className="text-xs text-slate-500 mb-1">Доля в выручке</p>
-                  <p className="text-lg font-semibold text-slate-900 dark:text-white">{(operator.share * 100).toFixed(1)}%</p>
+                  <p className="text-lg font-semibold text-foreground">{(operator.share * 100).toFixed(1)}%</p>
                 </div>
               </div>
             </div>
@@ -860,7 +860,7 @@ const OperatorDetailsModal = memo(({
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div>
                     <p className="text-sm text-slate-700 dark:text-slate-400 mb-2">Итоговый баланс за период</p>
-                    <p className="text-3xl font-bold text-slate-900 dark:text-white">{formatMoneyFull(finalBalance)}</p>
+                    <p className="text-3xl font-bold text-foreground">{formatMoneyFull(finalBalance)}</p>
                     <div className="flex flex-wrap gap-4 mt-3 text-xs">
                       <span className="text-slate-500">Выручка: {formatMoneyCompact(operator.totalTurnover)}</span>
                       <span className="text-slate-500">Премии: +{formatMoneyCompact(operator.manualPlus)}</span>
@@ -1712,9 +1712,9 @@ function OperatorAnalyticsContent() {
             <div className="w-16 h-16 rounded-2xl bg-rose-500/20 flex items-center justify-center mx-auto">
               <AlertTriangle className="w-8 h-8 text-rose-400" />
             </div>
-            <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Ошибка загрузки</h2>
+            <h2 className="text-xl font-semibold text-foreground">Ошибка загрузки</h2>
             <p className="text-slate-700 dark:text-slate-400 max-w-md">{error}</p>
-            <Button onClick={handleRefresh} variant="outline" className="border-slate-200 dark:border-white/10">
+            <Button onClick={handleRefresh} variant="outline" className="border-border">
               <RefreshCw className="w-4 h-4 mr-2" />
               Повторить
             </Button>
@@ -1732,7 +1732,7 @@ function OperatorAnalyticsContent() {
             <div className={`fixed top-5 right-5 z-50 px-4 py-3 rounded-2xl border backdrop-blur-xl shadow-xl animate-in slide-in-from-top-2 ${
               toast.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
               toast.type === 'error' ? 'bg-rose-500/10 border-rose-500/20 text-rose-400' :
-              'bg-white dark:bg-slate-900/80 border-slate-200 dark:border-white/10 text-slate-900 dark:text-white'
+              'bg-white dark:bg-slate-900/80 border-border text-foreground'
             }`}>
               <div className="text-sm font-medium">{toast.message}</div>
             </div>
@@ -1747,13 +1747,13 @@ function OperatorAnalyticsContent() {
             backHref="/dashboard"
             actions={
               <>
-                <div className="flex bg-white dark:bg-slate-900/50 backdrop-blur-xl rounded-xl p-1 border border-slate-200 dark:border-white/10">
+                <div className="flex bg-white dark:bg-slate-900/50 backdrop-blur-xl rounded-xl p-1 border border-border">
                   {(['thisWeek', 'lastWeek', 'thisMonth'] as DatePreset[]).map((preset) => (
                     <button
                       key={preset}
                       onClick={() => handlePresetChange(preset)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                        datePreset === preset ? 'bg-slate-100 dark:bg-white/10 text-slate-900 dark:text-white' : 'text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                        datePreset === preset ? 'bg-slate-100 dark:bg-white/10 text-foreground' : 'text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                       }`}
                     >
                       {DATE_PRESETS[preset].label}
@@ -1764,7 +1764,7 @@ function OperatorAnalyticsContent() {
                 <Button
                   variant="outline"
                   size="icon"
-                  className={`rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/50 backdrop-blur-xl hover:bg-slate-100 dark:hover:bg-white/10 ${refreshing ? 'animate-spin' : ''}`}
+                  className={`rounded-xl border-border bg-white dark:bg-slate-900/50 backdrop-blur-xl hover:bg-slate-100 dark:hover:bg-white/10 ${refreshing ? 'animate-spin' : ''}`}
                   onClick={handleRefresh}
                   title="Обновить"
                 >
@@ -1774,7 +1774,7 @@ function OperatorAnalyticsContent() {
                 <Button
                   variant="outline"
                   size="icon"
-                  className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/50 backdrop-blur-xl hover:bg-slate-100 dark:hover:bg-white/10"
+                  className="rounded-xl border-border bg-white dark:bg-slate-900/50 backdrop-blur-xl hover:bg-slate-100 dark:hover:bg-white/10"
                   onClick={handleDownloadCSV}
                   title="Скачать CSV"
                 >
@@ -1803,7 +1803,7 @@ function OperatorAnalyticsContent() {
           <div className="rounded-2xl bg-white dark:bg-slate-900/40 backdrop-blur-xl border border-slate-200 dark:border-white/5 p-4 space-y-4">
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2">
-                <Filter className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+                <Filter className="w-4 h-4 text-muted-foreground" />
                 <span className="text-sm text-slate-700 dark:text-slate-400">Фильтры:</span>
               </div>
 
@@ -1812,7 +1812,7 @@ function OperatorAnalyticsContent() {
                 className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
                   includeArena
                     ? 'border-emerald-500/50 text-emerald-700 dark:text-emerald-300 bg-emerald-500/10'
-                    : 'border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5'
+                    : 'border-border text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5'
                 }`}
               >
                 Arena
@@ -1823,7 +1823,7 @@ function OperatorAnalyticsContent() {
                 className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
                   includeRamen
                     ? 'border-amber-500/50 text-amber-700 dark:text-amber-300 bg-amber-500/10'
-                    : 'border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5'
+                    : 'border-border text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5'
                 }`}
               >
                 Ramen
@@ -1834,7 +1834,7 @@ function OperatorAnalyticsContent() {
                 className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
                   includeExtra
                     ? 'border-amber-500/50 text-amber-700 dark:text-amber-300 bg-amber-500/10'
-                    : 'border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5'
+                    : 'border-border text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5'
                 }`}
               >
                 Extra
@@ -1847,14 +1847,14 @@ function OperatorAnalyticsContent() {
                   type="checkbox"
                   checked={showInactive}
                   onChange={(e) => setShowInactive(e.target.checked)}
-                  className="rounded border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800/50 text-amber-500 focus:ring-amber-500/20"
+                  className="rounded border-border bg-white dark:bg-slate-800/50 text-amber-500 focus:ring-amber-500/20"
                 />
                 <span className="text-xs text-slate-700 dark:text-slate-400">Показывать неактивных</span>
               </label>
 
               <button
                 onClick={() => setShowCharts(!showCharts)}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 text-xs hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800/50 border border-border text-xs hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
               >
                 <BarChart3 className="w-3.5 h-3.5" />
                 {showCharts ? 'Скрыть графики' : 'Показать графики'}
@@ -1868,7 +1868,7 @@ function OperatorAnalyticsContent() {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Поиск оператора..."
-                  className="h-8 w-48 pl-8 pr-7 bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-xs text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/50"
+                  className="h-8 w-48 pl-8 pr-7 bg-white dark:bg-slate-800/50 border border-border rounded-lg text-xs text-foreground placeholder-slate-500 focus:outline-none focus:border-amber-500/50"
                 />
                 {search && (
                   <button
@@ -2167,7 +2167,7 @@ function OperatorAnalyticsContent() {
                       <td className="py-3 px-2 text-right font-semibold text-amber-400">
                         {formatMoneyCompact(analytics.totalsFiltered.advances)}
                       </td>
-                      <td className="py-3 px-2 text-right font-semibold text-slate-900 dark:text-white">
+                      <td className="py-3 px-2 text-right font-semibold text-foreground">
                         {formatMoneyCompact(analytics.totalsFiltered.netEffect)}
                       </td>
                     </tr>

@@ -422,7 +422,7 @@ export default function AddIncomePage() {
               </div>
               <Sparkles className="w-6 h-6 text-yellow-400 absolute top-0 right-1/3 animate-bounce" />
             </div>
-            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Успешно сохранено!</h2>
+            <h2 className="text-2xl font-bold text-foreground mb-2">Успешно сохранено!</h2>
             <p className="text-slate-500 dark:text-gray-400">Перенаправляем в журнал доходов...</p>
           </div>
       </>
@@ -464,7 +464,7 @@ export default function AddIncomePage() {
                 <div className="p-2 bg-blue-500/20 rounded-xl">
                   <Calendar className="w-5 h-5 text-blue-400" />
                 </div>
-                <h3 className="text-sm font-semibold text-slate-900 dark:text-white uppercase tracking-wider">Настройки смены</h3>
+                <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Настройки смены</h3>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -559,7 +559,7 @@ export default function AddIncomePage() {
                   {isExtra ? <Gamepad2 className="w-5 h-5 text-pink-400" /> : <Wallet className="w-5 h-5 text-green-400" />}
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white uppercase tracking-wider">
+                  <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">
                     {isExtra ? 'Выручка по зонам (Extra)' : 'Суммы выручки'}
                   </h3>
                   {previewTotal > 0 && (
@@ -578,7 +578,7 @@ export default function AddIncomePage() {
                       <div className="p-2 bg-purple-500/20 rounded-xl">
                         <Gamepad2 className="w-5 h-5 text-purple-400" />
                       </div>
-                      <span className="font-semibold text-slate-900 dark:text-white">PlayStation 5</span>
+                      <span className="font-semibold text-foreground">PlayStation 5</span>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -594,7 +594,7 @@ export default function AddIncomePage() {
                             min="0"
                             value={ps5Cash}
                             onChange={(e) => setPs5Cash(e.target.value)}
-                            className="w-full text-lg bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-4 px-4 text-slate-900 dark:text-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
+                            className="w-full text-lg bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-4 px-4 text-foreground focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
                           />
                           <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₸</span>
                         </div>
@@ -612,7 +612,7 @@ export default function AddIncomePage() {
                             min="0"
                             value={ps5Безналичный}
                             onChange={(e) => setPs5Безналичный(e.target.value)}
-                            className="w-full text-lg bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-4 px-4 text-slate-900 dark:text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                            className="w-full text-lg bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-4 px-4 text-foreground focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                           />
                           <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₸</span>
                         </div>
@@ -626,7 +626,7 @@ export default function AddIncomePage() {
                       <div className="p-2 bg-cyan-500/20 rounded-xl">
                         <Eye className="w-5 h-5 text-cyan-400" />
                       </div>
-                      <span className="font-semibold text-slate-900 dark:text-white">VR Зона</span>
+                      <span className="font-semibold text-foreground">VR Зона</span>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -642,7 +642,7 @@ export default function AddIncomePage() {
                             min="0"
                             value={vrCash}
                             onChange={(e) => setVrCash(e.target.value)}
-                            className="w-full text-lg bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-4 px-4 text-slate-900 dark:text-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
+                            className="w-full text-lg bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-4 px-4 text-foreground focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
                           />
                           <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₸</span>
                         </div>
@@ -660,7 +660,7 @@ export default function AddIncomePage() {
                             min="0"
                             value={vrKaspi}
                             onChange={(e) => setVrKaspi(e.target.value)}
-                            className="w-full text-lg bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-4 px-4 text-slate-900 dark:text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                            className="w-full text-lg bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-4 px-4 text-foreground focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                           />
                           <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₸</span>
                         </div>
@@ -682,7 +682,7 @@ export default function AddIncomePage() {
                         min="0"
                         value={cash}
                         onChange={(e) => setCash(e.target.value)}
-                        className="w-full text-lg bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-4 px-4 text-slate-900 dark:text-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
+                        className="w-full text-lg bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-4 px-4 text-foreground focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
                       />
                       <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₸</span>
                     </div>
@@ -700,7 +700,7 @@ export default function AddIncomePage() {
                         min="0"
                         value={kaspi}
                         onChange={(e) => setKaspi(e.target.value)}
-                        className="w-full text-lg bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-4 px-4 text-slate-900 dark:text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                        className="w-full text-lg bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-4 px-4 text-foreground focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                       />
                       <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₸</span>
                     </div>
@@ -719,7 +719,7 @@ export default function AddIncomePage() {
                           min="0"
                           value={online}
                           onChange={(e) => setOnline(e.target.value)}
-                          className="w-full text-lg bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-4 px-4 text-slate-900 dark:text-white focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 outline-none transition-all"
+                          className="w-full text-lg bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-4 px-4 text-foreground focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 outline-none transition-all"
                         />
                         <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₸</span>
                       </div>
@@ -738,7 +738,7 @@ export default function AddIncomePage() {
                         min="0"
                         value={card}
                         onChange={(e) => setCard(e.target.value)}
-                        className="w-full bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-3 px-4 text-slate-900 dark:text-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none transition-all"
+                        className="w-full bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-3 px-4 text-foreground focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none transition-all"
                       />
                       <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₸</span>
                     </div>
@@ -753,7 +753,7 @@ export default function AddIncomePage() {
                   rows={3}
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
-                  className="w-full bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-3 px-4 text-slate-900 dark:text-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none transition-all resize-none"
+                  className="w-full bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-3 px-4 text-foreground focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none transition-all resize-none"
                   placeholder="Например: предоплата за бронь, акция, скидка..."
                 />
               </div>

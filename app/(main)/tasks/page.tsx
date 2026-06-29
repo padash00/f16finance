@@ -151,12 +151,12 @@ type CreateTaskModalProps = {
 // CONSTANTS
 // =====================
 const STATUS_CONFIG: Record<TaskStatus, { title: string; color: string; icon: any }> = {
-  backlog: { title: 'Бэклог', color: 'bg-slate-500/10 text-slate-500 dark:text-slate-400 border-slate-500/20', icon: Clock },
+  backlog: { title: 'Бэклог', color: 'bg-slate-500/10 text-muted-foreground border-slate-500/20', icon: Clock },
   todo: { title: 'К выполнению', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20', icon: CheckCircle2 },
   in_progress: { title: 'В работе', color: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20', icon: Briefcase },
   review: { title: 'На проверке', color: 'bg-purple-500/10 text-purple-400 border-purple-500/20', icon: Eye },
   done: { title: 'Готово', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20', icon: CheckCircle2 },
-  archived: { title: 'Архив', color: 'bg-slate-500/10 text-slate-500 dark:text-slate-400 border-slate-500/20', icon: EyeOff }
+  archived: { title: 'Архив', color: 'bg-slate-500/10 text-muted-foreground border-slate-500/20', icon: EyeOff }
 }
 
 const PRIORITY_CONFIG: Record<TaskPriority, { icon: string; color: string; label: string }> = {
@@ -244,8 +244,8 @@ const getDaysUntilDue = (dueDate: string | null) => {
 }
 
 const getCompanyStyle = (code: string | null) => {
-  if (!code) return 'border-slate-500/30 bg-slate-500/5 text-slate-500 dark:text-slate-400'
-  return COMPANY_COLORS[code.toLowerCase()] || 'border-slate-500/30 bg-slate-500/5 text-slate-500 dark:text-slate-400'
+  if (!code) return 'border-slate-500/30 bg-slate-500/5 text-muted-foreground'
+  return COMPANY_COLORS[code.toLowerCase()] || 'border-slate-500/30 bg-slate-500/5 text-muted-foreground'
 }
 
 const createEmptyTaskForm = (): TaskFormState => ({
@@ -301,7 +301,7 @@ function TasksLoading() {
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center animate-pulse">
             <Kanban className="w-8 h-8 text-white" />
           </div>
-          <p className="text-slate-500 dark:text-slate-400">Загрузка задач...</p>
+          <p className="text-muted-foreground">Загрузка задач...</p>
         </div>
     </>
   )
@@ -704,19 +704,19 @@ function TasksContent() {
                 <Button
                   variant="outline"
                   size="icon"
-                  className={`rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/50 backdrop-blur-xl hover:bg-slate-100 dark:hover:bg-white/10 ${refreshing ? 'animate-spin' : ''}`}
+                  className={`rounded-xl border-border bg-white dark:bg-slate-900/50 backdrop-blur-xl hover:bg-slate-100 dark:hover:bg-white/10 ${refreshing ? 'animate-spin' : ''}`}
                   onClick={() => loadData(true)}
                   title="Обновить"
                 >
                   <RefreshCw className="w-4 h-4" />
                 </Button>
 
-                <div className="flex bg-white dark:bg-slate-900/50 backdrop-blur-xl rounded-xl p-1 border border-slate-200 dark:border-white/10">
+                <div className="flex bg-white dark:bg-slate-900/50 backdrop-blur-xl rounded-xl p-1 border border-border">
                   <button
                     onClick={() => setViewMode('kanban')}
                     className={cn(
                       "p-2 rounded-lg transition-colors",
-                      viewMode === 'kanban' ? 'bg-slate-100 dark:bg-white/10 text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      viewMode === 'kanban' ? 'bg-slate-100 dark:bg-white/10 text-foreground' : 'text-muted-foreground hover:text-slate-900 dark:hover:text-white'
                     )}
                   >
                     <LayoutGrid className="w-4 h-4" />
@@ -725,7 +725,7 @@ function TasksContent() {
                     onClick={() => setViewMode('list')}
                     className={cn(
                       "p-2 rounded-lg transition-colors",
-                      viewMode === 'list' ? 'bg-slate-100 dark:bg-white/10 text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      viewMode === 'list' ? 'bg-slate-100 dark:bg-white/10 text-foreground' : 'text-muted-foreground hover:text-slate-900 dark:hover:text-white'
                     )}
                   >
                     <LayoutList className="w-4 h-4" />
@@ -749,7 +749,7 @@ function TasksContent() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card className="p-4 bg-white dark:bg-slate-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
               <p className="text-xs text-slate-500">Всего задач</p>
-              <p className="text-2xl font-bold text-slate-900 dark:text-white">{stats.total}</p>
+              <p className="text-2xl font-bold text-foreground">{stats.total}</p>
             </Card>
             <Card className="p-4 bg-red-500/5 border-red-500/20">
               <p className="text-xs text-red-400">Просрочено</p>
@@ -774,7 +774,7 @@ function TasksContent() {
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Поиск задач..."
-                  className="w-full pl-9 pr-8 py-2 bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:border-violet-500/50"
+                  className="w-full pl-9 pr-8 py-2 bg-white dark:bg-slate-800/50 border border-border rounded-lg text-sm text-foreground placeholder-slate-500 focus:outline-none focus:border-violet-500/50"
                 />
                 {searchTerm && (
                   <button
@@ -790,7 +790,7 @@ function TasksContent() {
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="px-3 py-2 bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-900 dark:text-white focus:outline-none focus:border-violet-500/50"
+                className="px-3 py-2 bg-white dark:bg-slate-800/50 border border-border rounded-lg text-sm text-foreground focus:outline-none focus:border-violet-500/50"
               >
                 <option value="all">Все статусы</option>
                 {Object.entries(STATUS_CONFIG).map(([key, config]) => (
@@ -802,7 +802,7 @@ function TasksContent() {
               <select
                 value={filterPriority}
                 onChange={(e) => setFilterPriority(e.target.value)}
-                className="px-3 py-2 bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-900 dark:text-white focus:outline-none focus:border-violet-500/50"
+                className="px-3 py-2 bg-white dark:bg-slate-800/50 border border-border rounded-lg text-sm text-foreground focus:outline-none focus:border-violet-500/50"
               >
                 <option value="all">Все приоритеты</option>
                 {Object.entries(PRIORITY_CONFIG).map(([key, config]) => (
@@ -814,7 +814,7 @@ function TasksContent() {
               <select
                 value={filterOperator}
                 onChange={(e) => setFilterOperator(e.target.value)}
-                className="px-3 py-2 bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-900 dark:text-white focus:outline-none focus:border-violet-500/50"
+                className="px-3 py-2 bg-white dark:bg-slate-800/50 border border-border rounded-lg text-sm text-foreground focus:outline-none focus:border-violet-500/50"
               >
                 <option value="all">Все операторы</option>
                 {operators.map(op => (
@@ -828,7 +828,7 @@ function TasksContent() {
               <select
                 value={filterCompany}
                 onChange={(e) => setFilterCompany(e.target.value)}
-                className="px-3 py-2 bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-900 dark:text-white focus:outline-none focus:border-violet-500/50"
+                className="px-3 py-2 bg-white dark:bg-slate-800/50 border border-border rounded-lg text-sm text-foreground focus:outline-none focus:border-violet-500/50"
               >
                 <option value="all">Все компании</option>
                 {companies.map(company => (
@@ -843,7 +843,7 @@ function TasksContent() {
                   "px-3 py-2 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5",
                   filterStatus === 'overdue'
                     ? 'bg-red-500/20 border-red-500/40 text-red-300'
-                    : 'bg-white dark:bg-slate-800/50 border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:text-red-300 hover:border-red-500/30'
+                    : 'bg-white dark:bg-slate-800/50 border-border text-muted-foreground hover:text-red-300 hover:border-red-500/30'
                 )}
               >
                 <AlertCircle className="w-3.5 h-3.5" />
@@ -891,10 +891,10 @@ function TasksContent() {
                       >
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="text-xs text-red-400 font-mono shrink-0">#{task.task_number}</span>
-                          <span className="text-sm text-slate-900 dark:text-white truncate">{task.title}</span>
+                          <span className="text-sm text-foreground truncate">{task.title}</span>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-xs text-slate-500 dark:text-slate-400">{formatDate(task.due_date)}</span>
+                          <span className="text-xs text-muted-foreground">{formatDate(task.due_date)}</span>
                           {days !== null && days < 0 && (
                             <span className="text-xs text-red-400 font-medium">
                               просрочено на {Math.abs(days)} дн.
@@ -1032,7 +1032,7 @@ function TasksContent() {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 text-xs"
+                      className="border-border text-muted-foreground hover:bg-slate-50 dark:hover:bg-white/5 text-xs"
                       onClick={() => setSelectedTaskIds(new Set())}
                     >
                       Снять выбор
@@ -1044,7 +1044,7 @@ function TasksContent() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-slate-900/50">
-                      <th className="py-3 px-4 text-left text-xs font-medium text-slate-500 dark:text-slate-400 w-10">
+                      <th className="py-3 px-4 text-left text-xs font-medium text-muted-foreground w-10">
                         <Checkbox
                           checked={filteredTasks.length > 0 && filteredTasks.every(t => selectedTaskIds.has(t.id))}
                           onCheckedChange={(checked) => {
@@ -1057,13 +1057,13 @@ function TasksContent() {
                           className="border-white/20"
                         />
                       </th>
-                      <th className="py-3 px-4 text-left text-xs font-medium text-slate-500 dark:text-slate-400">#</th>
-                      <th className="py-3 px-4 text-left text-xs font-medium text-slate-500 dark:text-slate-400">Задача</th>
-                      <th className="py-3 px-4 text-left text-xs font-medium text-slate-500 dark:text-slate-400">Статус</th>
-                      <th className="py-3 px-4 text-left text-xs font-medium text-slate-500 dark:text-slate-400">Приоритет</th>
-                      <th className="py-3 px-4 text-left text-xs font-medium text-slate-500 dark:text-slate-400">Оператор</th>
-                      <th className="py-3 px-4 text-left text-xs font-medium text-slate-500 dark:text-slate-400">Дедлайн</th>
-                      <th className="py-3 px-4 text-left text-xs font-medium text-slate-500 dark:text-slate-400">Компания</th>
+                      <th className="py-3 px-4 text-left text-xs font-medium text-muted-foreground">#</th>
+                      <th className="py-3 px-4 text-left text-xs font-medium text-muted-foreground">Задача</th>
+                      <th className="py-3 px-4 text-left text-xs font-medium text-muted-foreground">Статус</th>
+                      <th className="py-3 px-4 text-left text-xs font-medium text-muted-foreground">Приоритет</th>
+                      <th className="py-3 px-4 text-left text-xs font-medium text-muted-foreground">Оператор</th>
+                      <th className="py-3 px-4 text-left text-xs font-medium text-muted-foreground">Дедлайн</th>
+                      <th className="py-3 px-4 text-left text-xs font-medium text-muted-foreground">Компания</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-white/5">
@@ -1089,9 +1089,9 @@ function TasksContent() {
                             className="border-slate-300 dark:border-white/20"
                           />
                         </td>
-                        <td className="py-3 px-4 text-sm text-slate-500 dark:text-slate-400">#{task.task_number}</td>
+                        <td className="py-3 px-4 text-sm text-muted-foreground">#{task.task_number}</td>
                         <td className="py-3 px-4">
-                          <span className="text-sm text-slate-900 dark:text-white line-clamp-1">{task.title}</span>
+                          <span className="text-sm text-foreground line-clamp-1">{task.title}</span>
                         </td>
                         <td className="py-3 px-4">
                           <span className={cn(
@@ -1257,7 +1257,7 @@ function TaskCard({ task, onClick, onStatusChange, onNotify, onDragStart, onDrag
         </button>
         
         {showMenu && (
-          <div className="absolute right-0 mt-6 w-40 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-lg shadow-xl z-10">
+          <div className="absolute right-0 mt-6 w-40 bg-white dark:bg-slate-800 border border-border rounded-lg shadow-xl z-10">
             {Object.entries(STATUS_CONFIG).map(([status, config]) => {
               if (status === task.status || status === 'archived') return null
               return (
@@ -1296,7 +1296,7 @@ function TaskCard({ task, onClick, onStatusChange, onNotify, onDragStart, onDrag
 
       {/* Оператор и компания */}
       <div className="flex items-center justify-between text-xs mb-2">
-        <div className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
+        <div className="flex items-center gap-1 text-muted-foreground">
           <div className="w-5 h-5 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-[8px] font-bold">
             {task.operator_short_name?.[0] || task.operator_name?.[0] || '?'}
           </div>
@@ -1529,7 +1529,7 @@ function TaskDetailModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 text-slate-900 dark:text-white max-w-2xl max-h-[90vh] overflow-auto">
+      <DialogContent className="bg-white dark:bg-slate-900 border-border text-foreground max-w-2xl max-h-[90vh] overflow-auto">
         <DialogHeader>
           <div className="flex items-start justify-between">
             <div>
@@ -1537,7 +1537,7 @@ function TaskDetailModal({
                 <span className="text-slate-500">#{task.task_number}</span>
                 <span>{task.title}</span>
               </DialogTitle>
-              <DialogDescription className="text-slate-500 dark:text-slate-400 mt-1">
+              <DialogDescription className="text-muted-foreground mt-1">
                 Создано {formatDateTime(task.created_at)}
               </DialogDescription>
             </div>
@@ -1547,7 +1547,7 @@ function TaskDetailModal({
                   size="sm"
                   variant="outline"
                   onClick={onNotify}
-                  className="gap-2 border-slate-200 dark:border-white/10"
+                  className="gap-2 border-border"
                 >
                   <Send className="w-4 h-4" />
                   Уведомить
@@ -1571,21 +1571,21 @@ function TaskDetailModal({
 
         <div className="space-y-4 py-4">
           {can('tasks.edit') && (
-          <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-4">
-            <div className="mb-3 text-sm font-medium text-slate-900 dark:text-white">Редактирование задачи</div>
+          <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] p-4">
+            <div className="mb-3 text-sm font-medium text-foreground">Редактирование задачи</div>
 
             <div className="space-y-3">
               <Input
                 value={editForm.title}
                 onChange={(e) => setEditForm((prev) => ({ ...prev, title: e.target.value }))}
-                className="bg-white dark:bg-slate-800/50 border-slate-200 dark:border-white/10"
+                className="bg-white dark:bg-slate-800/50 border-border"
                 placeholder="Название задачи"
               />
 
               <textarea
                 value={editForm.description}
                 onChange={(e) => setEditForm((prev) => ({ ...prev, description: e.target.value }))}
-                className="min-h-24 w-full resize-none rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800/50 p-3 text-sm text-slate-900 dark:text-white"
+                className="min-h-24 w-full resize-none rounded-lg border border-border bg-white dark:bg-slate-800/50 p-3 text-sm text-foreground"
                 placeholder="Описание задачи"
               />
 
@@ -1593,7 +1593,7 @@ function TaskDetailModal({
                 <select
                   value={editForm.operator_id}
                   onChange={(e) => setEditForm((prev) => ({ ...prev, operator_id: e.target.value }))}
-                  className="h-10 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800/50 px-3 text-sm text-slate-900 dark:text-white"
+                  className="h-10 rounded-lg border border-border bg-white dark:bg-slate-800/50 px-3 text-sm text-foreground"
                 >
                   <option value="">Без оператора</option>
                   {operators.map((operator) => (
@@ -1606,7 +1606,7 @@ function TaskDetailModal({
                 <select
                   value={editForm.company_id}
                   onChange={(e) => setEditForm((prev) => ({ ...prev, company_id: e.target.value }))}
-                  className="h-10 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800/50 px-3 text-sm text-slate-900 dark:text-white"
+                  className="h-10 rounded-lg border border-border bg-white dark:bg-slate-800/50 px-3 text-sm text-foreground"
                 >
                   <option value="">Без компании</option>
                   {companies.map((company) => (
@@ -1621,7 +1621,7 @@ function TaskDetailModal({
                 <select
                   value={editForm.status}
                   onChange={(e) => setEditForm((prev) => ({ ...prev, status: e.target.value as TaskStatus }))}
-                  className="h-10 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800/50 px-3 text-sm text-slate-900 dark:text-white"
+                  className="h-10 rounded-lg border border-border bg-white dark:bg-slate-800/50 px-3 text-sm text-foreground"
                 >
                   {Object.entries(STATUS_CONFIG).map(([status, config]) => (
                     <option key={status} value={status}>
@@ -1633,7 +1633,7 @@ function TaskDetailModal({
                 <select
                   value={editForm.priority}
                   onChange={(e) => setEditForm((prev) => ({ ...prev, priority: e.target.value as TaskPriority }))}
-                  className="h-10 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800/50 px-3 text-sm text-slate-900 dark:text-white"
+                  className="h-10 rounded-lg border border-border bg-white dark:bg-slate-800/50 px-3 text-sm text-foreground"
                 >
                   {Object.entries(PRIORITY_CONFIG).map(([priority, config]) => (
                     <option key={priority} value={priority}>
@@ -1651,7 +1651,7 @@ function TaskDetailModal({
               <Input
                 value={editForm.tags}
                 onChange={(e) => setEditForm((prev) => ({ ...prev, tags: e.target.value }))}
-                className="bg-white dark:bg-slate-800/50 border-slate-200 dark:border-white/10"
+                className="bg-white dark:bg-slate-800/50 border-border"
                 placeholder="Теги через запятую"
               />
 
@@ -1733,7 +1733,7 @@ function TaskDetailModal({
           {/* Описание */}
           {task.description && (
             <div>
-              <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-2">Описание</h3>
+              <h3 className="text-sm font-medium text-muted-foreground mb-2">Описание</h3>
               <div className="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/5 rounded-lg p-3">
                 <p className="text-sm whitespace-pre-wrap">{task.description}</p>
               </div>
@@ -1741,12 +1741,12 @@ function TaskDetailModal({
           )}
 
           {can('tasks.respond') && (
-          <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-4">
+          <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] p-4">
             <div className="mb-2 flex items-center gap-2">
               <MessageSquare className="h-4 w-4 text-violet-300" />
-              <h3 className="text-sm font-medium text-slate-900 dark:text-white">Быстрый ответ по задаче</h3>
+              <h3 className="text-sm font-medium text-foreground">Быстрый ответ по задаче</h3>
             </div>
-            <p className="mb-3 text-xs leading-5 text-slate-500 dark:text-slate-400">
+            <p className="mb-3 text-xs leading-5 text-muted-foreground">
               Используй быстрый ответ, если задачу приняли в работу, нужна помощь или нужно сразу отправить её на проверку.
             </p>
 
@@ -1754,7 +1754,7 @@ function TaskDetailModal({
               value={responseNote}
               onChange={(e) => setResponseNote(e.target.value)}
               placeholder="Короткий комментарий для истории задачи и уведомления..."
-              className="mb-3 min-h-20 w-full resize-none rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800/50 p-3 text-sm text-slate-900 dark:text-white"
+              className="mb-3 min-h-20 w-full resize-none rounded-lg border border-border bg-white dark:bg-slate-800/50 p-3 text-sm text-foreground"
             />
 
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
@@ -1783,7 +1783,7 @@ function TaskDetailModal({
           {/* Теги */}
           {task.tags && task.tags.length > 0 && (
             <div>
-              <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-2">Теги</h3>
+              <h3 className="text-sm font-medium text-muted-foreground mb-2">Теги</h3>
               <div className="flex flex-wrap gap-2">
                 {task.tags.map((tag: string) => (
                   <span
@@ -1799,7 +1799,7 @@ function TaskDetailModal({
 
           {/* Комментарии */}
           <div>
-            <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-2">Комментарии</h3>
+            <h3 className="text-sm font-medium text-muted-foreground mb-2">Комментарии</h3>
             
             {/* Форма комментария */}
             <div className="flex gap-2 mb-4">
@@ -1807,7 +1807,7 @@ function TaskDetailModal({
                 value={newComment}
                 onChange={(e) => setNewComment(e.target.value)}
                 placeholder="Напишите комментарий..."
-                className="flex-1 bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-lg p-2 text-sm resize-none text-slate-900 dark:text-white"
+                className="flex-1 bg-white dark:bg-slate-800/50 border border-border rounded-lg p-2 text-sm resize-none text-foreground"
                 rows={2}
               />
               <Button
@@ -1940,10 +1940,10 @@ function CreateTaskModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 text-slate-900 dark:text-white sm:max-w-md">
+      <DialogContent className="bg-white dark:bg-slate-900 border-border text-foreground sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Новая задача</DialogTitle>
-          <DialogDescription className="text-slate-500 dark:text-slate-400">
+          <DialogDescription className="text-muted-foreground">
             Создайте задачу для оператора
           </DialogDescription>
         </DialogHeader>
@@ -1959,7 +1959,7 @@ function CreateTaskModal({
             placeholder="Название задачи *"
             value={form.title}
             onChange={(e) => setForm({...form, title: e.target.value})}
-            className="bg-white dark:bg-slate-800/50 border-slate-200 dark:border-white/10"
+            className="bg-white dark:bg-slate-800/50 border-border"
             required
           />
 
@@ -1967,14 +1967,14 @@ function CreateTaskModal({
             placeholder="Описание"
             value={form.description}
             onChange={(e) => setForm({...form, description: e.target.value})}
-            className="w-full h-24 bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-lg p-2 text-sm resize-none text-slate-900 dark:text-white"
+            className="w-full h-24 bg-white dark:bg-slate-800/50 border border-border rounded-lg p-2 text-sm resize-none text-foreground"
           />
 
           <div className="grid grid-cols-2 gap-3">
             <select
               value={form.operator_id}
               onChange={(e) => setForm({...form, operator_id: e.target.value})}
-              className="h-9 bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 text-sm text-slate-900 dark:text-white"
+              className="h-9 bg-white dark:bg-slate-800/50 border border-border rounded-lg px-3 text-sm text-foreground"
             >
               <option value="">Выберите оператора</option>
               {operators.map((op: Operator) => (
@@ -1987,7 +1987,7 @@ function CreateTaskModal({
             <select
               value={form.company_id}
               onChange={(e) => setForm({...form, company_id: e.target.value})}
-              className="h-9 bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 text-sm text-slate-900 dark:text-white"
+              className="h-9 bg-white dark:bg-slate-800/50 border border-border rounded-lg px-3 text-sm text-foreground"
             >
               <option value="">Выберите компанию</option>
               {companies.map((company: Company) => (
@@ -2000,7 +2000,7 @@ function CreateTaskModal({
             <select
               value={form.priority}
               onChange={(e) => setForm({...form, priority: e.target.value as TaskPriority})}
-              className="h-9 bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 text-sm text-slate-900 dark:text-white"
+              className="h-9 bg-white dark:bg-slate-800/50 border border-border rounded-lg px-3 text-sm text-foreground"
             >
               <option value="low">💧 Низкий</option>
               <option value="medium">📌 Средний</option>
@@ -2018,7 +2018,7 @@ function CreateTaskModal({
             placeholder="Теги (через запятую)"
             value={form.tags}
             onChange={(e) => setForm({...form, tags: e.target.value})}
-            className="bg-white dark:bg-slate-800/50 border-slate-200 dark:border-white/10"
+            className="bg-white dark:bg-slate-800/50 border-border"
           />
 
           <DialogFooter className="pt-4">

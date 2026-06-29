@@ -445,7 +445,7 @@ export default function SupplierCardPage() {
             </div>
           </div>
 
-          <div className="border-t border-slate-200 dark:border-white/10 pt-4 space-y-3">
+          <div className="border-t border-border pt-4 space-y-3">
             <p className="text-[11px] uppercase tracking-wider text-emerald-700 dark:text-emerald-300/80 font-medium">Торговый представитель</p>
             <div className="grid sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -462,7 +462,7 @@ export default function SupplierCardPage() {
             </p>
           </div>
 
-          <div className="border-t border-slate-200 dark:border-white/10 pt-4 grid sm:grid-cols-2 gap-3">
+          <div className="border-t border-border pt-4 grid sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Контактное лицо (общее)</Label>
               <Input value={editForm.contact_name} onChange={(e) => setEditForm((f) => ({ ...f, contact_name: e.target.value }))} placeholder="Бухгалтер, менеджер..." />
@@ -492,7 +492,7 @@ export default function SupplierCardPage() {
           </Card>
         ) : (
           <Card className="bg-white dark:bg-gray-900/60 border-slate-200 dark:border-gray-800 overflow-hidden">
-            <div className="flex flex-wrap items-center justify-between gap-2 p-3 border-b border-slate-200 dark:border-white/10 text-xs text-muted-foreground">
+            <div className="flex flex-wrap items-center justify-between gap-2 p-3 border-b border-border text-xs text-muted-foreground">
               <span>
                 Умный порог = расход/день × срок поставки ({supplier.lead_time_days ?? 3} дн) × 1.5.
                 {stats && stats.reorderCount > 0 ? (
@@ -664,7 +664,7 @@ export default function SupplierCardPage() {
           {aliases.length === 0 ? (
             <Card className="p-6 text-sm text-muted-foreground text-center">Алиасов нет — заведутся после первой приёмки от этого поставщика.</Card>
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-white/10">
+            <div className="overflow-x-auto rounded-xl border border-border">
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 dark:bg-white/[0.04] text-left text-xs text-muted-foreground">
                   <tr>
@@ -710,7 +710,7 @@ export default function SupplierCardPage() {
       {addAliasOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={() => !savingAlias && setAddAliasOpen(false)}>
           <div
-            className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/95 p-6 text-slate-900 dark:text-white shadow-2xl"
+            className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border border-border bg-white dark:bg-slate-950/95 p-6 text-foreground shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-lg font-semibold">Добавить алиас вручную</h2>
@@ -759,8 +759,8 @@ export default function SupplierCardPage() {
 
       {transferOpen ? (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={(e) => { if (e.target === e.currentTarget && !transferring) setTransferOpen(false) }}>
-          <Card className="w-full max-w-md max-h-[calc(100vh-2rem)] overflow-y-auto border-slate-200 dark:border-white/10 bg-white dark:bg-gray-900 p-5">
-            <div className="mb-1 text-base font-semibold text-slate-900 dark:text-white">Перенести к другому поставщику</div>
+          <Card className="w-full max-w-md max-h-[calc(100vh-2rem)] overflow-y-auto border-border bg-white dark:bg-gray-900 p-5">
+            <div className="mb-1 text-base font-semibold text-foreground">Перенести к другому поставщику</div>
             <p className="mb-4 text-xs text-muted-foreground">
               {transferMode === 'receipt'
                 ? <>Накладная <span className="text-foreground">{transferReceiptLabel}</span> и её товары перейдут выбранному поставщику.</>

@@ -296,7 +296,7 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
         </CardContent>
       </Card>
 
-      <Card className="border-slate-200 dark:border-white/10 bg-card/70 p-0">
+      <Card className="border-border bg-card/70 p-0">
         <CardContent className="p-4 sm:p-5 space-y-4">
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="space-y-1.5">
@@ -359,7 +359,7 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
               {lines.map((line) => {
                 const it = itemById.get(line.item_id)
                 return (
-                  <div key={line.key} className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-3 space-y-2">
+                  <div key={line.key} className="rounded-lg border border-border bg-slate-50 dark:bg-white/[0.02] p-3 space-y-2">
                     <div className="grid gap-2 sm:grid-cols-12">
                       <div className="sm:col-span-6">
                         <Input
@@ -373,7 +373,7 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
                           }}
                         />
                         {!line.item_id && (search[line.key] || '').length > 0 && (
-                          <div className="mt-1 max-h-44 overflow-auto rounded-md border border-slate-200 dark:border-white/10 bg-background">
+                          <div className="mt-1 max-h-44 overflow-auto rounded-md border border-border bg-background">
                             {filteredItemsFor(line.key).map((opt) => (
                               <button
                                 key={opt.id}
@@ -512,7 +512,7 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
         </div>
       )}
 
-      <Card className="border-slate-200 dark:border-white/10 bg-card/70 p-0">
+      <Card className="border-border bg-card/70 p-0">
         <CardContent className="p-4 sm:p-5">
           <div className="mb-2 flex items-center gap-2 text-sm font-medium">
             <Package className="h-4 w-4 text-emerald-700 dark:text-emerald-300" /> Последние оприходования
