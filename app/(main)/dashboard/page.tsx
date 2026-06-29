@@ -1,6 +1,7 @@
 ﻿'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { DatePicker } from '@/components/ui/date-picker'
 import { useCashlessLabels } from '@/lib/client/use-cashless-labels'
 import { splitIncomeKaspiByCalendarDay } from '@/lib/reports/income-calendar-kaspi'
 import type { ReactNode } from 'react'
@@ -1307,22 +1308,11 @@ function HeaderBlock(props: {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-xs text-slate-500 uppercase tracking-wider">Начало</label>
-                <input
-                  type="date"
-                  value={props.dateFrom}
-                  onChange={e => props.onDateFromChange(e.target.value)}
-                  className="w-full bg-white text-slate-900 dark:bg-slate-800 dark:text-white px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 focus:border-amber-500 outline-none"
-                />
+                <DatePicker value={props.dateFrom} onChange={props.onDateFromChange} />
               </div>
               <div className="space-y-2">
                 <label className="text-xs text-slate-500 uppercase tracking-wider">Конец</label>
-                <input
-                  type="date"
-                  value={props.dateTo}
-                  min={props.dateFrom}
-                  onChange={e => props.onDateToChange(e.target.value)}
-                  className="w-full bg-white text-slate-900 dark:bg-slate-800 dark:text-white px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 focus:border-amber-500 outline-none"
-                />
+                <DatePicker value={props.dateTo} onChange={props.onDateToChange} min={props.dateFrom} align="end" />
               </div>
             </div>
 
