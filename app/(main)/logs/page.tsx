@@ -580,6 +580,25 @@ export default function LogsPage() {
     }
   }
 
+  // Копировать/скачать одну запись лога в JSON (для отправки разработчику).
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+  const copyJson = (item: any) => {
+    const text = JSON.stringify(item, null, 2)
+    navigator.clipboard?.writeText(text).then(
+      () => { setCopiedId(item.id); setTimeout(() => setCopiedId((c) => (c === item.id ? null : c)), 1500) },
+      () => {},
+    )
+  }
+  const downloadJson = (item: any) => {
+    const blob = new Blob([JSON.stringify(item, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `log-${String(item.id).slice(0, 8)}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   const exportLogs = () => {
     const params = new URLSearchParams()
     params.set('format', 'csv')
@@ -782,6 +801,24 @@ export default function LogsPage() {
                       <span className="ml-auto text-xs text-slate-500" title={new Date(item.createdAt).toLocaleString('ru-RU')}>
                         {relativeTime(item.createdAt)}
                       </span>
+
+                      {/* JSON: копировать / скачать всю запись (для разработчика) */}
+                      <button
+                        type="button"
+                        onClick={() => copyJson(item)}
+                        title="Скопировать запись в JSON (для отправки разработчику)"
+                        className="rounded-md border border-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 transition hover:bg-slate-100 dark:border-white/10 dark:text-slate-400 dark:hover:bg-white/10"
+                      >
+                        {copiedId === item.id ? '✓ скопировано' : '⧉ JSON'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => downloadJson(item)}
+                        title="Скачать запись как .json"
+                        className="rounded-md border border-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 transition hover:bg-slate-100 dark:border-white/10 dark:text-slate-400 dark:hover:bg-white/10"
+                      >
+                        ↓
+                      </button>
                     </div>
 
                     {/* Main title */}
