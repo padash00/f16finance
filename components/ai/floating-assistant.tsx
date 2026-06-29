@@ -110,7 +110,7 @@ export function FloatingAssistant({
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{title}</p>
-              <p className="text-[10px] text-slate-500">AI-консультант • {page}</p>
+              <p className="text-[10px] text-slate-500">AI-консультант по этой странице</p>
             </div>
             <button
               onClick={() => setOpen(false)}
