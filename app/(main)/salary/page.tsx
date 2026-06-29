@@ -324,11 +324,11 @@ type SalaryData = { weekStart: string; weekEnd: string; companies: CompanyOption
 type AdjustmentKind = 'bonus' | 'fine' | 'debt'
 
 const input = 'h-11 w-full rounded-xl border border-border bg-white dark:bg-white/5 px-3 text-sm text-foreground placeholder:text-slate-500 focus:border-emerald-400/40 focus:outline-none'
-const selectCls = 'h-11 w-full rounded-xl border border-border bg-white dark:bg-slate-900 px-3 text-sm text-foreground focus:border-emerald-400/40 focus:outline-none [color-scheme:light] dark:[color-scheme:dark]'
+const selectCls = 'h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:border-emerald-400/40 focus:outline-none [color-scheme:light] dark:[color-scheme:dark]'
 const textarea = 'min-h-[96px] w-full rounded-2xl border border-border bg-white dark:bg-white/5 px-3 py-3 text-sm text-foreground placeholder:text-slate-500 focus:border-emerald-400/40 focus:outline-none'
 const money = formatMoney
 const parseMoney = (v: string) => { const n = Number(v.replace(',', '.').replace(/\s/g, '')); return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0 }
-const statusMeta = (s: WeeklyOperator['week']['status']) => s === 'paid' ? { label: 'Выплачено', className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' } : s === 'partial' ? { label: 'Частично', className: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300' } : { label: 'Не выплачено', className: 'border-slate-500/30 bg-slate-500/10 text-slate-700 dark:text-slate-300' }
+const statusMeta = (s: WeeklyOperator['week']['status']) => s === 'paid' ? { label: 'Выплачено', className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' } : s === 'partial' ? { label: 'Частично', className: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300' } : { label: 'Не выплачено', className: 'border-slate-500/30 bg-slate-500/10 text-body' }
 
 function Modal(props: { title: string; subtitle?: string; onClose: () => void; children: React.ReactNode }) {
   useModalEscape(true, props.onClose)
@@ -344,7 +344,7 @@ function Modal(props: { title: string; subtitle?: string; onClose: () => void; c
             <h3 className="text-xl font-semibold text-foreground">{props.title}</h3>
             {props.subtitle ? <p className="mt-1 text-sm text-muted-foreground">{props.subtitle}</p> : null}
           </div>
-          <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10" onClick={props.onClose}>Закрыть</Button>
+          <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover" onClick={props.onClose}>Закрыть</Button>
         </div>
         {props.children}
       </div>
@@ -1076,7 +1076,7 @@ export default function SalaryPage() {
                     variant="outline"
                     onClick={downloadSalaryCSV}
                     disabled={loading || !data}
-                    className="h-8 gap-1.5 rounded-xl border-border bg-white dark:bg-white/5 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10"
+                    className="h-8 gap-1.5 rounded-xl border-border bg-white dark:bg-white/5 text-xs text-body hover:bg-surface-hover"
                   >
                     <Download className="h-3.5 w-3.5" />
                     PDF
@@ -1092,7 +1092,7 @@ export default function SalaryPage() {
                     <button
                       type="button"
                       onClick={() => setWeekStart(currentWeek)}
-                      className="rounded-lg px-2.5 py-1.5 text-slate-700 dark:text-slate-300 transition hover:text-slate-900 dark:hover:text-white"
+                      className="rounded-lg px-2.5 py-1.5 text-body transition hover:text-slate-900 dark:hover:text-white"
                     >
                       Сейчас
                     </button>
@@ -1107,7 +1107,7 @@ export default function SalaryPage() {
                   <Button
                     type="button"
                     variant="outline"
-                    className="h-8 w-8 rounded-xl border-border bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10"
+                    className="h-8 w-8 rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover"
                     onClick={() => void load()}
                     aria-label="Обновить"
                   >
@@ -1118,7 +1118,7 @@ export default function SalaryPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-8 w-8 rounded-xl border-border bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10"
+                  className="h-8 w-8 rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover"
                   onClick={() => void loadStaffSalary()}
                   aria-label="Обновить"
                 >
@@ -1207,7 +1207,7 @@ export default function SalaryPage() {
             <Card className="border-border bg-white dark:bg-white/[0.04] p-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-red-500/15 p-2 text-red-700 dark:text-red-300"><TrendingDown className="h-4 w-4" /></div><div><div className="text-[11px] uppercase tracking-wide text-slate-500">Остаток</div><div className="mt-0.5 text-xl font-semibold text-foreground">{data ? money(data.totals.remainingAmount) : '—'}</div></div></div></Card>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-white dark:bg-white/[0.04] px-4 py-3 text-sm text-slate-700 dark:text-slate-300">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-white dark:bg-white/[0.04] px-4 py-3 text-sm text-body">
             <div className="min-w-0 flex-1 text-xs">{summaryText}</div>
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex rounded-xl border border-border bg-slate-100 dark:bg-black/20 p-0.5 text-xs">
@@ -1217,7 +1217,7 @@ export default function SalaryPage() {
                   </button>
                 ))}
               </div>
-              <Button type="button" variant="outline" className="h-8 rounded-xl border-border bg-white dark:bg-white/5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setShowZero((v) => !v)}>{showZero ? 'Скрыть пустые' : 'Все строки'}</Button>
+              <Button type="button" variant="outline" className="h-8 rounded-xl border-border bg-white dark:bg-white/5 text-xs text-body hover:bg-surface-hover" onClick={() => setShowZero((v) => !v)}>{showZero ? 'Скрыть пустые' : 'Все строки'}</Button>
             </div>
           </div>
 
@@ -1276,7 +1276,7 @@ export default function SalaryPage() {
                         <tr key={item.operator.id} className="border-t border-slate-200 dark:border-white/5 align-top">
                           <td className="px-4 py-4">
                             <div className="flex items-start gap-3">
-                              <button type="button" className="mt-1 rounded-lg border border-border bg-white dark:bg-white/5 p-1.5 text-slate-700 dark:text-slate-300 transition hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setExpanded((p) => ({ ...p, [item.operator.id]: !p[item.operator.id] }))}>
+                              <button type="button" className="mt-1 rounded-lg border border-border bg-white dark:bg-white/5 p-1.5 text-body transition hover:bg-surface-hover" onClick={() => setExpanded((p) => ({ ...p, [item.operator.id]: !p[item.operator.id] }))}>
                                 {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                               </button>
                               <Link href={`/operators/${item.operator.id}/profile`} className="flex min-w-0 items-start gap-3">
@@ -1319,12 +1319,12 @@ export default function SalaryPage() {
                           <td className="px-4 py-4 text-right text-sky-700 dark:text-sky-300">{money(item.week.paidAmount)}</td>
                           <td className="px-4 py-4 text-right text-lg font-semibold text-foreground">{money(item.week.remainingAmount)}</td>
                           <td className="px-4 py-4 text-center"><span className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${st.className}`}>{st.label}</span></td>
-                          <td className="px-4 py-4"><div className="flex flex-wrap items-center justify-center gap-2">{canCreateAdvance && <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setAdvanceTarget(item)}><Plus className="mr-2 h-4 w-4" />Аванс</Button>}{canCreatePayment && <Button type="button" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400 disabled:opacity-50" disabled={!canPay} onClick={() => setPayTarget(item)}><Wallet className="mr-2 h-4 w-4" />Выплатить</Button>}<Link href={`/salary/${item.operator.id}?weekStart=${weekStart}`} className="inline-flex h-10 items-center justify-center rounded-xl border border-border bg-white dark:bg-white/5 px-4 text-sm text-slate-700 dark:text-slate-200 transition hover:bg-slate-100 dark:hover:bg-white/10">Детали</Link></div></td>
-                          <td className="px-4 py-4"><div className="flex flex-col items-center gap-2"><div className="flex items-center gap-2">{canUpdateChatId && <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setChatTarget(item)}><Pencil className="h-4 w-4" /></Button>}<Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 disabled:opacity-50" disabled={!hasChat || sendingId === item.operator.id || broadcastSending} onClick={() => void sendOne(item.operator.id)}>{sendingId === item.operator.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}</Button></div>{item.operator.telegram_chat_id ? <div className="max-w-[140px] truncate text-center text-[11px] text-emerald-700 dark:text-emerald-300/70">{item.operator.telegram_chat_id}</div> : <div className="text-[11px] text-slate-500">нет chat_id</div>}</div></td>
+                          <td className="px-4 py-4"><div className="flex flex-wrap items-center justify-center gap-2">{canCreateAdvance && <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover" onClick={() => setAdvanceTarget(item)}><Plus className="mr-2 h-4 w-4" />Аванс</Button>}{canCreatePayment && <Button type="button" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400 disabled:opacity-50" disabled={!canPay} onClick={() => setPayTarget(item)}><Wallet className="mr-2 h-4 w-4" />Выплатить</Button>}<Link href={`/salary/${item.operator.id}?weekStart=${weekStart}`} className="inline-flex h-10 items-center justify-center rounded-xl border border-border bg-white dark:bg-white/5 px-4 text-sm text-body transition hover:bg-surface-hover">Детали</Link></div></td>
+                          <td className="px-4 py-4"><div className="flex flex-col items-center gap-2"><div className="flex items-center gap-2">{canUpdateChatId && <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover" onClick={() => setChatTarget(item)}><Pencil className="h-4 w-4" /></Button>}<Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover disabled:opacity-50" disabled={!hasChat || sendingId === item.operator.id || broadcastSending} onClick={() => void sendOne(item.operator.id)}>{sendingId === item.operator.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}</Button></div>{item.operator.telegram_chat_id ? <div className="max-w-[140px] truncate text-center text-[11px] text-emerald-700 dark:text-emerald-300/70">{item.operator.telegram_chat_id}</div> : <div className="text-[11px] text-slate-500">нет chat_id</div>}</div></td>
                         </tr>
                         {open ? <tr className="border-t border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-slate-950/30"><td colSpan={13} className="px-4 py-5"><div className="grid gap-4 xl:grid-cols-[1fr_1fr_1fr]">
-                          <Card className="border-border bg-white dark:bg-white/[0.03] p-4"><div className="mb-4 flex items-center gap-2 text-sm font-medium text-foreground"><Building2 className="h-4 w-4 text-emerald-700 dark:text-emerald-300" />Разбивка по компаниям</div><div className="overflow-x-auto"><table className="min-w-[680px] text-xs"><thead className="text-slate-500"><tr><th className="pb-3 text-left font-medium">Компания</th><th className="pb-3 text-right font-medium">Начислено</th><th className="pb-3 text-right font-medium">Бонусы</th><th className="pb-3 text-right font-medium">Штрафы</th><th className="pb-3 text-right font-medium">Долги</th><th className="pb-3 text-right font-medium">Аванс</th><th className="pb-3 text-right font-medium">К выплате</th></tr></thead><tbody>{item.week.companyAllocations.map((a) => <tr key={a.companyId} className="border-t border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-200"><td className="py-3 pr-3"><div className="font-medium text-foreground">{a.companyName || a.companyCode || a.companyId}</div><div className="text-[11px] text-slate-500">Доля: {(a.shareRatio * 100).toFixed(1)}%</div></td><td className="py-3 text-right">{money(a.accruedAmount)}</td><td className="py-3 text-right text-emerald-700 dark:text-emerald-300">{money(a.bonusAmount)}</td><td className="py-3 text-right text-rose-700 dark:text-rose-300">{money(a.fineAmount)}</td><td className="py-3 text-right text-rose-700 dark:text-rose-300">{money(a.debtAmount)}</td><td className="py-3 text-right text-amber-700 dark:text-amber-300">{money(a.advanceAmount)}</td><td className="py-3 text-right font-medium text-foreground">{money(a.netAmount)}</td></tr>)}</tbody></table></div></Card>
-                          <Card className="border-border bg-white dark:bg-white/[0.03] p-4"><div className="mb-4 flex items-center justify-between gap-2 text-sm font-medium text-foreground"><span>Смены ({item.week.shiftsCount})</span><span className="text-xs text-muted-foreground">{item.week.seniorityBonusTotal ? `Стаж: ${money(item.week.seniorityBonusTotal)}` : item.week.autoBonusTotal > 0 ? `Авто-бонус: ${money(item.week.autoBonusTotal)}` : ''}</span></div>{item.week.shifts.length === 0 ? <div className="rounded-2xl border border-dashed border-border bg-slate-50 dark:bg-white/[0.02] p-6 text-sm text-muted-foreground">Смен за эту неделю нет.</div> : <div className="overflow-x-auto"><table className="min-w-[680px] text-xs"><thead className="text-slate-500"><tr><th className="pb-3 text-left font-medium">Дата</th><th className="pb-3 text-left font-medium">Смена</th><th className="pb-3 text-left font-medium">Точка</th><th className="pb-3 text-right font-medium">Выручка</th><th className="pb-3 text-right font-medium">База</th><th className="pb-3 text-right font-medium">Стаж</th><th className="pb-3 text-right font-medium">Авто</th><th className="pb-3 text-right font-medium">Роль</th><th className="pb-3 text-right font-medium">Итого</th></tr></thead><tbody>{item.week.shifts.map((s) => <tr key={s.id} className="border-t border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-200"><td className="py-2 pr-3 text-slate-700 dark:text-slate-300">{formatRuDate(s.date)}</td><td className="py-2 pr-3"><span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${s.shift === 'day' ? 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300' : 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300'}`}>{s.shift === 'day' ? 'день' : 'ночь'}</span></td><td className="py-2 pr-3 text-muted-foreground">{s.companyName || s.companyCode || '—'}</td><td className="py-2 text-right">{money(s.totalIncome)}</td><td className="py-2 text-right">{money(s.baseSalary)}</td><td className="py-2 text-right text-cyan-700 dark:text-cyan-300">{(s.seniorityBonus || 0) > 0 ? money(s.seniorityBonus || 0) : <span className="text-slate-600">—</span>}</td><td className="py-2 text-right text-violet-700 dark:text-violet-300">{s.autoBonus > 0 ? money(s.autoBonus) : <span className="text-slate-600">—</span>}</td><td className="py-2 text-right text-cyan-700 dark:text-cyan-300">{s.roleBonus > 0 ? money(s.roleBonus) : <span className="text-slate-600">—</span>}</td><td className="py-2 text-right font-medium text-foreground">{money(s.salary)}</td></tr>)}</tbody></table></div>}</Card>
+                          <Card className="border-border bg-white dark:bg-white/[0.03] p-4"><div className="mb-4 flex items-center gap-2 text-sm font-medium text-foreground"><Building2 className="h-4 w-4 text-emerald-700 dark:text-emerald-300" />Разбивка по компаниям</div><div className="overflow-x-auto"><table className="min-w-[680px] text-xs"><thead className="text-slate-500"><tr><th className="pb-3 text-left font-medium">Компания</th><th className="pb-3 text-right font-medium">Начислено</th><th className="pb-3 text-right font-medium">Бонусы</th><th className="pb-3 text-right font-medium">Штрафы</th><th className="pb-3 text-right font-medium">Долги</th><th className="pb-3 text-right font-medium">Аванс</th><th className="pb-3 text-right font-medium">К выплате</th></tr></thead><tbody>{item.week.companyAllocations.map((a) => <tr key={a.companyId} className="border-t border-slate-200 dark:border-white/5 text-body"><td className="py-3 pr-3"><div className="font-medium text-foreground">{a.companyName || a.companyCode || a.companyId}</div><div className="text-[11px] text-slate-500">Доля: {(a.shareRatio * 100).toFixed(1)}%</div></td><td className="py-3 text-right">{money(a.accruedAmount)}</td><td className="py-3 text-right text-emerald-700 dark:text-emerald-300">{money(a.bonusAmount)}</td><td className="py-3 text-right text-rose-700 dark:text-rose-300">{money(a.fineAmount)}</td><td className="py-3 text-right text-rose-700 dark:text-rose-300">{money(a.debtAmount)}</td><td className="py-3 text-right text-amber-700 dark:text-amber-300">{money(a.advanceAmount)}</td><td className="py-3 text-right font-medium text-foreground">{money(a.netAmount)}</td></tr>)}</tbody></table></div></Card>
+                          <Card className="border-border bg-white dark:bg-white/[0.03] p-4"><div className="mb-4 flex items-center justify-between gap-2 text-sm font-medium text-foreground"><span>Смены ({item.week.shiftsCount})</span><span className="text-xs text-muted-foreground">{item.week.seniorityBonusTotal ? `Стаж: ${money(item.week.seniorityBonusTotal)}` : item.week.autoBonusTotal > 0 ? `Авто-бонус: ${money(item.week.autoBonusTotal)}` : ''}</span></div>{item.week.shifts.length === 0 ? <div className="rounded-2xl border border-dashed border-border bg-slate-50 dark:bg-white/[0.02] p-6 text-sm text-muted-foreground">Смен за эту неделю нет.</div> : <div className="overflow-x-auto"><table className="min-w-[680px] text-xs"><thead className="text-slate-500"><tr><th className="pb-3 text-left font-medium">Дата</th><th className="pb-3 text-left font-medium">Смена</th><th className="pb-3 text-left font-medium">Точка</th><th className="pb-3 text-right font-medium">Выручка</th><th className="pb-3 text-right font-medium">База</th><th className="pb-3 text-right font-medium">Стаж</th><th className="pb-3 text-right font-medium">Авто</th><th className="pb-3 text-right font-medium">Роль</th><th className="pb-3 text-right font-medium">Итого</th></tr></thead><tbody>{item.week.shifts.map((s) => <tr key={s.id} className="border-t border-slate-200 dark:border-white/5 text-body"><td className="py-2 pr-3 text-body">{formatRuDate(s.date)}</td><td className="py-2 pr-3"><span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${s.shift === 'day' ? 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300' : 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300'}`}>{s.shift === 'day' ? 'день' : 'ночь'}</span></td><td className="py-2 pr-3 text-muted-foreground">{s.companyName || s.companyCode || '—'}</td><td className="py-2 text-right">{money(s.totalIncome)}</td><td className="py-2 text-right">{money(s.baseSalary)}</td><td className="py-2 text-right text-cyan-700 dark:text-cyan-300">{(s.seniorityBonus || 0) > 0 ? money(s.seniorityBonus || 0) : <span className="text-slate-600">—</span>}</td><td className="py-2 text-right text-violet-700 dark:text-violet-300">{s.autoBonus > 0 ? money(s.autoBonus) : <span className="text-slate-600">—</span>}</td><td className="py-2 text-right text-cyan-700 dark:text-cyan-300">{s.roleBonus > 0 ? money(s.roleBonus) : <span className="text-slate-600">—</span>}</td><td className="py-2 text-right font-medium text-foreground">{money(s.salary)}</td></tr>)}</tbody></table></div>}</Card>
                           <Card className="border-border bg-white dark:bg-white/[0.03] p-4"><div className="mb-4 flex items-center gap-2 text-sm font-medium text-foreground">Платежи недели</div>{item.week.payments.length === 0 ? <div className="rounded-2xl border border-dashed border-border bg-slate-50 dark:bg-white/[0.02] p-6 text-sm text-muted-foreground">По этой неделе ещё нет платежей.</div> : <div className="space-y-3">{item.week.payments.map((p) => <div key={p.id} className="rounded-2xl border border-border bg-white dark:bg-white/[0.03] p-3"><div className="flex items-center justify-between gap-3"><div><div className="text-sm font-medium text-foreground">{formatRuDate(p.payment_date)}</div><div className="mt-1 text-xs text-muted-foreground">Нал: {money(p.cash_amount)} • {cashLabels.providerName}: {money(p.kaspi_amount)}</div></div><div className="text-right"><div className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">{money(p.total_amount)}</div><div className="text-[11px] text-slate-500">{p.status === 'voided' ? 'аннулировано' : 'активно'}</div></div></div>{p.comment ? <div className="mt-2 text-xs text-muted-foreground">{p.comment}</div> : null}<div className="mt-3 flex justify-end">{p.status === 'voided' ? <span className="rounded-full border border-slate-500/30 bg-slate-500/10 px-3 py-1 text-[11px] text-slate-400">Уже аннулировано</span> : <Button type="button" variant="outline" className="rounded-xl border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-200 hover:bg-red-500/20 disabled:opacity-50" disabled={voidingPaymentId === p.id} onClick={() => void voidPayment(item, p)}>{voidingPaymentId === p.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Аннулировать</Button>}</div></div>)}</div>}</Card>
                           </div></td></tr> : null}
                       </Fragment>
@@ -1422,7 +1422,7 @@ export default function SalaryPage() {
                   <DatePicker className="h-11" placeholder="С даты" value={operatorEventsDateFrom} onChange={setOperatorEventsDateFrom} />
                   <DatePicker className="h-11" placeholder="По дату" value={operatorEventsDateTo} onChange={setOperatorEventsDateTo} />
                 </div>
-                <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-slate-700 dark:text-slate-300">
+                <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-body">
                   <span className="rounded-full border border-border bg-white dark:bg-white/[0.03] px-3 py-1">
                     Событий: <span className="font-semibold text-foreground">{operatorEventsSummary.total}</span>
                   </span>
@@ -1434,7 +1434,7 @@ export default function SalaryPage() {
                   </span>
                   <button
                     type="button"
-                    className="rounded-full border border-border bg-white dark:bg-white/[0.03] px-3 py-1 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.08]"
+                    className="rounded-full border border-border bg-white dark:bg-white/[0.03] px-3 py-1 text-body hover:bg-slate-100 dark:hover:bg-white/[0.08]"
                     onClick={() => {
                       setOperatorEventsQuery('')
                       setOperatorEventsOperatorId('all')
@@ -1456,7 +1456,7 @@ export default function SalaryPage() {
                           <div className="truncate text-sm font-medium text-foreground">{row.operatorName}</div>
                           <button
                             type="button"
-                            className="rounded-full border border-border bg-white dark:bg-white/[0.04] px-2 py-0.5 text-[10px] text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.08]"
+                            className="rounded-full border border-border bg-white dark:bg-white/[0.04] px-2 py-0.5 text-[10px] text-body hover:bg-slate-100 dark:hover:bg-white/[0.08]"
                             onClick={() => setOperatorEventsOperatorId(row.operatorId)}
                           >
                             Показать
@@ -1485,7 +1485,7 @@ export default function SalaryPage() {
                     ))}
                   </div>
                 ) : filteredOperatorGlobalTimeline.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-border bg-slate-50 dark:bg-white/[0.03] p-8 text-center text-sm text-slate-500">
+                  <div className="rounded-2xl border border-dashed border-border bg-surface-muted p-8 text-center text-sm text-slate-500">
                     За выбранную неделю нет событий по фильтрам.
                   </div>
                 ) : (
@@ -1535,7 +1535,7 @@ export default function SalaryPage() {
                               <div className="flex items-center justify-between gap-3">
                                 <div className="flex min-w-0 items-center gap-2">
                                   <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${tone}`}>{label}</span>
-                                  <span className="text-slate-700 dark:text-slate-300">{ev.operator_name}</span>
+                                  <span className="text-body">{ev.operator_name}</span>
                                   {ev.status === 'voided' ? <span className="text-slate-500">(аннулировано)</span> : null}
                                 </div>
                                 <span className="ml-3 shrink-0 font-medium text-foreground">{money(ev.amount)}</span>
@@ -1556,7 +1556,7 @@ export default function SalaryPage() {
                         <Button
                           type="button"
                           variant="outline"
-                          className="rounded-xl border-border bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10"
+                          className="rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover"
                           onClick={() => setOperatorEventsLimit((prev) => prev + 100)}
                         >
                           Показать ещё
@@ -1595,14 +1595,14 @@ export default function SalaryPage() {
                   variant="outline"
                   className={
                     'rounded-xl border-border text-xs ' +
-                    (showStaffArchived ? 'bg-amber-400/20 text-amber-700 dark:text-amber-100 hover:bg-amber-400/30' : 'bg-white dark:bg-white/5 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10')
+                    (showStaffArchived ? 'bg-amber-400/20 text-amber-700 dark:text-amber-100 hover:bg-amber-400/30' : 'bg-white dark:bg-white/5 text-body hover:bg-surface-hover')
                   }
                   onClick={() => setShowStaffArchived((v) => !v)}
                   title={showStaffArchived ? 'Скрыть уволенных' : 'Показать архив'}
                 >
                   {showStaffArchived ? 'Архив открыт' : 'Архив'}
                 </Button>
-                <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => void loadStaffSalary()}><RefreshCw className="h-4 w-4" /></Button>
+                <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover" onClick={() => void loadStaffSalary()}><RefreshCw className="h-4 w-4" /></Button>
               </div>
             </div>
             {staffSalaryLoading ? (
@@ -1628,7 +1628,7 @@ export default function SalaryPage() {
                 ))}
               </div>
             ) : !staffSalary || staffSalary.staff.length === 0 ? (
-              <div className="p-10 text-center text-sm text-slate-500">Нет административных сотрудников. Добавьте записи в таблицу <code className="rounded bg-slate-100 dark:bg-white/10 px-1">staff</code>.</div>
+              <div className="p-10 text-center text-sm text-slate-500">Нет административных сотрудников. Добавьте записи в таблицу <code className="rounded bg-surface-hover px-1">staff</code>.</div>
             ) : (
               <div className="divide-y divide-slate-200 dark:divide-white/5">
                 {staffSalary.staff.map((s) => {
@@ -1696,10 +1696,10 @@ export default function SalaryPage() {
                         </div>
                         <div className="flex flex-wrap gap-2">
                           {!isDismissed && canStaffAddAdjustment && (
-                            <Button type="button" disabled={!canEditStaffSalary || isOperatorBased} variant="outline" className="h-9 rounded-xl border-border bg-white dark:bg-white/5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffAdjModal(s); setStaffAdjKind('fine'); setStaffAdjCompanyId(data?.companies?.[0]?.id || ''); setStaffAdjAmount(''); setStaffAdjDate(todayISO()); setStaffAdjComment('') }}><Plus className="mr-1.5 h-3.5 w-3.5" />Корректировка</Button>
+                            <Button type="button" disabled={!canEditStaffSalary || isOperatorBased} variant="outline" className="h-9 rounded-xl border-border bg-white dark:bg-white/5 text-xs text-body hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffAdjModal(s); setStaffAdjKind('fine'); setStaffAdjCompanyId(data?.companies?.[0]?.id || ''); setStaffAdjAmount(''); setStaffAdjDate(todayISO()); setStaffAdjComment('') }}><Plus className="mr-1.5 h-3.5 w-3.5" />Корректировка</Button>
                           )}
                           {!isDismissed && canStaffAddExtraDay && (
-                            <Button type="button" disabled={!canEditStaffSalary || isOperatorBased} variant="outline" className="h-9 rounded-xl border-border bg-white dark:bg-white/5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => void submitStaffExtraDay(s.id)}><CalendarDays className="mr-1.5 h-3.5 w-3.5" />Доп. выход</Button>
+                            <Button type="button" disabled={!canEditStaffSalary || isOperatorBased} variant="outline" className="h-9 rounded-xl border-border bg-white dark:bg-white/5 text-xs text-body hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50" onClick={() => void submitStaffExtraDay(s.id)}><CalendarDays className="mr-1.5 h-3.5 w-3.5" />Доп. выход</Button>
                           )}
                           {!isDismissed && !isOperatorBased && canEditStaffSalary && calc.debts > 0 && (
                             <Button type="button" variant="outline" className="h-9 rounded-xl border-rose-400/30 bg-rose-500/10 text-xs text-rose-700 dark:text-rose-200 hover:bg-rose-500/20" onClick={() => openPayDebt(s, calc.debts)}>
@@ -1777,7 +1777,7 @@ export default function SalaryPage() {
                           <div className="mb-1 text-xs text-slate-500">Последние выплаты:</div>
                           <div className="flex flex-wrap gap-2">
                             {recentPaymentDetails.map(({ payment, closedAdjustments, generatedAdjustments, closingWindow }) => (
-                              <div key={payment.id} className="min-w-[260px] rounded-xl border border-border bg-white dark:bg-white/[0.03] px-3 py-2 text-xs text-slate-700 dark:text-slate-300">
+                              <div key={payment.id} className="min-w-[260px] rounded-xl border border-border bg-white dark:bg-white/[0.03] px-3 py-2 text-xs text-body">
                                 <div className="flex items-center justify-between gap-2">
                                   <span>{payment.pay_date} · {money(payment.amount)} · {staffPaymentSlotLabel(payment.slot)}</span>
                                   {canEditStaffSalary ? (
@@ -1879,7 +1879,7 @@ export default function SalaryPage() {
                   <DatePicker className="h-11" placeholder="С даты" value={eventsDateFrom} onChange={setEventsDateFrom} />
                   <DatePicker className="h-11" placeholder="По дату" value={eventsDateTo} onChange={setEventsDateTo} />
                 </div>
-                <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-slate-700 dark:text-slate-300">
+                <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-body">
                   <span className="rounded-full border border-border bg-white dark:bg-white/[0.03] px-3 py-1">
                     Событий: <span className="font-semibold text-foreground">{eventsSummary.total}</span>
                   </span>
@@ -1891,7 +1891,7 @@ export default function SalaryPage() {
                   </span>
                   <button
                     type="button"
-                    className="rounded-full border border-border bg-white dark:bg-white/[0.03] px-3 py-1 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.08]"
+                    className="rounded-full border border-border bg-white dark:bg-white/[0.03] px-3 py-1 text-body hover:bg-slate-100 dark:hover:bg-white/[0.08]"
                     onClick={() => {
                       setEventsQuery('')
                       setEventsStaffId('all')
@@ -1912,7 +1912,7 @@ export default function SalaryPage() {
                     ))}
                   </div>
                 ) : filteredStaffGlobalTimeline.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-border bg-slate-50 dark:bg-white/[0.03] p-8 text-center text-sm text-slate-500">
+                  <div className="rounded-2xl border border-dashed border-border bg-surface-muted p-8 text-center text-sm text-slate-500">
                     Пока нет событий для отображения.
                   </div>
                 ) : (
@@ -1944,7 +1944,7 @@ export default function SalaryPage() {
                             <div key={ev.id} className="flex items-center justify-between rounded-xl border border-border bg-white dark:bg-white/[0.03] px-3 py-2 text-xs">
                               <div className="flex min-w-0 items-center gap-2">
                                 <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${tone}`}>{label}</span>
-                                <span className="text-slate-700 dark:text-slate-300">{ev.staff_name}</span>
+                                <span className="text-body">{ev.staff_name}</span>
                                 {ev.status === 'paid' ? <span className="text-sky-600 dark:text-sky-400">(закрыто выплатой)</span> : null}
                                 {ev.status === 'voided' ? <span className="text-slate-500">(аннулировано)</span> : null}
                                 {ev.comment ? <span className="truncate text-muted-foreground">{ev.comment}</span> : null}
@@ -1960,7 +1960,7 @@ export default function SalaryPage() {
                         <Button
                           type="button"
                           variant="outline"
-                          className="rounded-xl border-border bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10"
+                          className="rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover"
                           onClick={() => setEventsLimit((prev) => prev + 100)}
                         >
                           Показать ещё
@@ -1980,28 +1980,28 @@ export default function SalaryPage() {
           <form className="space-y-4" onSubmit={submitAdvance}>
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Точка</label>
+                <label className="mb-2 block text-sm text-body">Точка</label>
                 <select className={selectCls} value={advanceCompanyId} onChange={(e) => setAdvanceCompanyId(e.target.value)}>
                   {(data?.companies || []).map((c) => <option key={c.id} value={c.id}>{c.name || c.code || c.id}</option>)}
                 </select>
               </div>
               <div>
-                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Дата выплаты</label>
+                <label className="mb-2 block text-sm text-body">Дата выплаты</label>
                 <DatePicker className="h-11" value={advanceDate} onChange={setAdvanceDate} />
               </div>
               <div>
-                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Наличные</label>
+                <label className="mb-2 block text-sm text-body">Наличные</label>
                 <input className={input} type="text" value={advanceCash} onChange={(e) => setAdvanceCash(e.target.value)} placeholder="0" />
               </div>
               <div>
-                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">{cashLabels.providerName}</label>
+                <label className="mb-2 block text-sm text-body">{cashLabels.providerName}</label>
                 <input className={input} type="text" value={advanceKaspi} onChange={(e) => setAdvanceKaspi(e.target.value)} placeholder="0" />
               </div>
             </div>
             <textarea className={textarea} value={advanceComment} onChange={(e) => setAdvanceComment(e.target.value)} placeholder="Комментарий" />
-            <div className="rounded-2xl border border-border bg-white dark:bg-white/[0.03] p-4 text-sm text-slate-700 dark:text-slate-300">Итого аванс: <span className="font-semibold text-foreground">{money(parseMoney(advanceCash) + parseMoney(advanceKaspi))}</span></div>
+            <div className="rounded-2xl border border-border bg-white dark:bg-white/[0.03] p-4 text-sm text-body">Итого аванс: <span className="font-semibold text-foreground">{money(parseMoney(advanceCash) + parseMoney(advanceKaspi))}</span></div>
             <div className="flex justify-end gap-3">
-              <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setAdvanceTarget(null)}>Отмена</Button>
+              <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover" onClick={() => setAdvanceTarget(null)}>Отмена</Button>
               <Button type="submit" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400">{advanceSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Выдать аванс'}</Button>
             </div>
           </form>
@@ -2013,16 +2013,16 @@ export default function SalaryPage() {
           <form className="space-y-4" onSubmit={submitPayment}>
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Дата выплаты</label>
+                <label className="mb-2 block text-sm text-body">Дата выплаты</label>
                 <DatePicker className="h-11" value={payDate} onChange={setPayDate} />
               </div>
-              <div className="rounded-2xl border border-border bg-white dark:bg-white/[0.03] p-4 text-sm text-slate-700 dark:text-slate-300">Эта выплата автоматически разложится по компаниям по фактическому начислению.</div>
+              <div className="rounded-2xl border border-border bg-white dark:bg-white/[0.03] p-4 text-sm text-body">Эта выплата автоматически разложится по компаниям по фактическому начислению.</div>
               <div>
-                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Наличные</label>
+                <label className="mb-2 block text-sm text-body">Наличные</label>
                 <input className={input} type="text" value={payCash} onChange={(e) => setPayCash(e.target.value)} placeholder="0" />
               </div>
               <div>
-                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">{cashLabels.providerName}</label>
+                <label className="mb-2 block text-sm text-body">{cashLabels.providerName}</label>
                 <input className={input} type="text" value={payKaspi} onChange={(e) => setPayKaspi(e.target.value)} placeholder="0" />
               </div>
             </div>
@@ -2048,7 +2048,7 @@ export default function SalaryPage() {
                       </span>
                     </span>
                   </label>
-                  <div className="rounded-2xl border border-border bg-white dark:bg-white/[0.03] p-4 text-sm text-slate-700 dark:text-slate-300">
+                  <div className="rounded-2xl border border-border bg-white dark:bg-white/[0.03] p-4 text-sm text-body">
                     <div className="flex justify-between">
                       <span>Выплата сейчас:</span>
                       <span className="font-semibold text-foreground">{money(total)}</span>
@@ -2068,7 +2068,7 @@ export default function SalaryPage() {
               )
             })()}
             <div className="flex justify-end gap-3">
-              <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setPayTarget(null)}>Отмена</Button>
+              <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover" onClick={() => setPayTarget(null)}>Отмена</Button>
               <Button type="submit" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400">{paySaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Провести выплату'}</Button>
             </div>
           </form>
@@ -2080,7 +2080,7 @@ export default function SalaryPage() {
           <form className="space-y-4" onSubmit={saveChatId}>
             <input className={input} type="text" value={chatValue} onChange={(e) => setChatValue(e.target.value)} placeholder="Например: -1001234567890" />
             <div className="flex justify-end gap-3">
-              <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setChatTarget(null)}>Отмена</Button>
+              <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover" onClick={() => setChatTarget(null)}>Отмена</Button>
               <Button type="submit" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400">{chatSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Сохранить'}</Button>
             </div>
           </form>
@@ -2098,11 +2098,11 @@ export default function SalaryPage() {
               Долг будет помечен оплаченным и убран из вычета зарплаты. Запись появится в «Оплаченные долги» — её можно аннулировать (долг вернётся активным).
             </p>
             <div>
-              <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Комментарий (необязательно)</label>
+              <label className="mb-2 block text-sm text-body">Комментарий (необязательно)</label>
               <textarea className={textarea} placeholder="Например: вернул наличными" value={payDebtComment} onChange={(e) => setPayDebtComment(e.target.value)} />
             </div>
             <div className="flex justify-end gap-3">
-              <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setPayDebtModal(null)}>Отмена</Button>
+              <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover" onClick={() => setPayDebtModal(null)}>Отмена</Button>
               <Button type="button" onClick={() => void confirmPayStaffDebt()} disabled={payDebtSaving} className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400 disabled:opacity-50">
                 {payDebtSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Wallet className="mr-1.5 h-4 w-4" />Оплатить долг</>}
               </Button>
@@ -2116,7 +2116,7 @@ export default function SalaryPage() {
           <form className="space-y-4" onSubmit={submitStaffAdjustment}>
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Тип</label>
+                <label className="mb-2 block text-sm text-body">Тип</label>
                 <select className={selectCls} value={staffAdjKind} onChange={e => setStaffAdjKind(e.target.value as any)}>
                   <option value="fine">Штраф</option>
                   <option value="debt">Долг</option>
@@ -2125,12 +2125,12 @@ export default function SalaryPage() {
                 </select>
               </div>
               <div>
-                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Дата</label>
+                <label className="mb-2 block text-sm text-body">Дата</label>
                 <DatePicker className="h-11" value={staffAdjDate} onChange={setStaffAdjDate} />
               </div>
               {staffAdjKind === 'advance' ? (
                 <div className="md:col-span-2">
-                  <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Компания (расход по авансу)</label>
+                  <label className="mb-2 block text-sm text-body">Компания (расход по авансу)</label>
                   <select className={selectCls} value={staffAdjCompanyId} onChange={e => setStaffAdjCompanyId(e.target.value)}>
                     <option value="">Выберите компанию</option>
                     {(data?.companies || []).map((c) => (
@@ -2140,13 +2140,13 @@ export default function SalaryPage() {
                 </div>
               ) : null}
               <div className="md:col-span-2">
-                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Сумма</label>
+                <label className="mb-2 block text-sm text-body">Сумма</label>
                 <input className={input} type="text" placeholder="0" value={staffAdjAmount} onChange={e => setStaffAdjAmount(e.target.value)} />
               </div>
             </div>
             <textarea className={textarea} placeholder="Комментарий" value={staffAdjComment} onChange={e => setStaffAdjComment(e.target.value)} />
             <div className="flex justify-end gap-3">
-              <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setStaffAdjModal(null)}>Отмена</Button>
+              <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover" onClick={() => setStaffAdjModal(null)}>Отмена</Button>
               <Button type="submit" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400">{staffAdjSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Сохранить'}</Button>
             </div>
           </form>
@@ -2158,18 +2158,18 @@ export default function SalaryPage() {
           <form className="space-y-4" onSubmit={submitStaffPayment}>
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Слот</label>
+                <label className="mb-2 block text-sm text-body">Слот</label>
                 <select className={selectCls} value={staffPaySlot} onChange={e => setStaffPaySlot(e.target.value as 'first' | 'second')}>
                   <option value="first">Выплата 1-го числа</option>
                   <option value="second">Выплата 15-го числа</option>
                 </select>
               </div>
               <div>
-                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Дата выплаты</label>
+                <label className="mb-2 block text-sm text-body">Дата выплаты</label>
                 <DatePicker className="h-11" value={staffPayDate} onChange={setStaffPayDate} />
               </div>
               <div>
-                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Компания (расход)</label>
+                <label className="mb-2 block text-sm text-body">Компания (расход)</label>
                 <select className={selectCls} value={staffPayCompanyId} onChange={e => setStaffPayCompanyId(e.target.value)}>
                   <option value="">Выберите компанию</option>
                   {(data?.companies || []).map((c) => (
@@ -2178,16 +2178,16 @@ export default function SalaryPage() {
                 </select>
               </div>
               <div>
-                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Наличные</label>
+                <label className="mb-2 block text-sm text-body">Наличные</label>
                 <input className={input} type="text" placeholder="0" value={staffPayCash} onChange={e => setStaffPayCash(e.target.value)} />
               </div>
               <div>
-                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">{cashLabels.providerName}</label>
+                <label className="mb-2 block text-sm text-body">{cashLabels.providerName}</label>
                 <input className={input} type="text" placeholder="0" value={staffPayKaspi} onChange={e => setStaffPayKaspi(e.target.value)} />
               </div>
             </div>
             {staffPayPreview ? (
-              <div className="rounded-2xl border border-border bg-white dark:bg-white/[0.03] p-4 text-xs text-slate-700 dark:text-slate-300">
+              <div className="rounded-2xl border border-border bg-white dark:bg-white/[0.03] p-4 text-xs text-body">
                 <div className="mb-2 text-sm font-medium text-foreground">Предпросмотр проводки</div>
                 <div className="grid gap-2 md:grid-cols-2">
                   <div>Период закрытия: <span className="text-foreground">{staffPayPreview.closingWindow.label}</span></div>
@@ -2211,9 +2211,9 @@ export default function SalaryPage() {
               </div>
             ) : null}
             <textarea className={textarea} placeholder="Комментарий" value={staffPayComment} onChange={e => setStaffPayComment(e.target.value)} />
-            <div className="rounded-2xl border border-border bg-white dark:bg-white/[0.03] p-4 text-sm text-slate-700 dark:text-slate-300">Итого: <span className="font-semibold text-foreground">{money(parseMoney(staffPayCash) + parseMoney(staffPayKaspi))}</span></div>
+            <div className="rounded-2xl border border-border bg-white dark:bg-white/[0.03] p-4 text-sm text-body">Итого: <span className="font-semibold text-foreground">{money(parseMoney(staffPayCash) + parseMoney(staffPayKaspi))}</span></div>
             <div className="flex justify-end gap-3">
-              <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setStaffPayModal(null)}>Отмена</Button>
+              <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover" onClick={() => setStaffPayModal(null)}>Отмена</Button>
               <Button type="submit" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400">{staffPaySaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Провести выплату'}</Button>
             </div>
           </form>
@@ -2223,9 +2223,9 @@ export default function SalaryPage() {
       {broadcastConfirm ? (
         <Modal title="Отправить расчёт всем?" subtitle={`Рассылка Telegram для ${broadcastTargets.length} операторов с активным chat_id`} onClose={() => setBroadcastConfirm(false)}>
           <div className="space-y-4">
-            <p className="text-sm text-slate-700 dark:text-slate-300">Каждый оператор получит сообщение со своим расчётом за неделю {formatRuDate(weekStart)} — {formatRuDate(weekEnd)}.</p>
+            <p className="text-sm text-body">Каждый оператор получит сообщение со своим расчётом за неделю {formatRuDate(weekStart)} — {formatRuDate(weekEnd)}.</p>
             <div className="flex justify-end gap-3">
-              <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setBroadcastConfirm(false)}>Отмена</Button>
+              <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover" onClick={() => setBroadcastConfirm(false)}>Отмена</Button>
               <Button type="button" className="rounded-xl bg-blue-500 text-white hover:bg-blue-400" onClick={() => { setBroadcastConfirm(false); void sendAll() }}><Send className="mr-2 h-4 w-4" />Отправить</Button>
             </div>
           </div>

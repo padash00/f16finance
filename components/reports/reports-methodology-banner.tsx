@@ -32,7 +32,7 @@ export function ReportsMethodologyBanner({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm text-slate-600 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
+        className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm text-slate-600 dark:text-gray-300 hover:bg-surface-muted transition-colors"
       >
         {open ? <ChevronDown className="w-4 h-4 shrink-0 text-violet-400" /> : <ChevronRight className="w-4 h-4 shrink-0 text-violet-400" />}
         <Info className="w-4 h-4 shrink-0 text-violet-400" />

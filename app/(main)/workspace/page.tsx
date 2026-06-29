@@ -49,7 +49,7 @@ export default async function WorkspacePage() {
         accent="blue"
         backHref="/"
         actions={
-          <div className="rounded-full border border-border bg-white dark:bg-black/20 px-4 py-1.5 text-sm text-slate-700 dark:text-slate-300">
+          <div className="rounded-full border border-border bg-white dark:bg-black/20 px-4 py-1.5 text-sm text-body">
             {normalizedHost || hostOrg?.slug || 'tenant'}
           </div>
         }

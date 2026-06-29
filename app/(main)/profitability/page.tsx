@@ -1101,7 +1101,7 @@ export default function ProfitabilityPage() {
                             <div className="flex min-w-0 items-baseline gap-2">
                               <span className="shrink-0 text-xs text-muted-foreground">#{i + 1}</span>
                               <span className="truncate text-sm text-foreground">{cat.name}</span>
-                              <span className="shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium border border-border bg-slate-50 dark:bg-white/[0.03] text-muted-foreground">{groupLabel}</span>
+                              <span className="shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium border border-border bg-surface-muted text-muted-foreground">{groupLabel}</span>
                             </div>
                             <span className="shrink-0 text-sm font-medium text-foreground">{money(cat.total)}</span>
                           </div>
@@ -1186,7 +1186,7 @@ export default function ProfitabilityPage() {
 
           {/* ═══ DETAILED P&L TABLE (collapsed by default) ═══ */}
           <details className="group">
-            <summary className="flex cursor-pointer items-center justify-between rounded-xl border border-border bg-card px-5 py-3 text-sm font-medium text-foreground hover:bg-slate-50 dark:hover:bg-white/5">
+            <summary className="flex cursor-pointer items-center justify-between rounded-xl border border-border bg-card px-5 py-3 text-sm font-medium text-foreground hover:bg-surface-muted">
               <span className="flex items-center gap-2">
                 <BarChart2 className="h-4 w-4 text-emerald-400" />
                 Детальная ОПиУ цепочка
@@ -1652,7 +1652,7 @@ export default function ProfitabilityPage() {
                 const fcf = c.netProfit - (c.capex || 0) - (c.profitDistribution || 0)
                 return (
                   <details key={c.company_id || 'none'} className="group">
-                    <summary className="flex cursor-pointer items-center justify-between rounded-xl border border-border bg-card px-5 py-3 text-sm font-medium text-foreground hover:bg-slate-50 dark:hover:bg-white/5">
+                    <summary className="flex cursor-pointer items-center justify-between rounded-xl border border-border bg-card px-5 py-3 text-sm font-medium text-foreground hover:bg-surface-muted">
                       <span className="flex items-center gap-2">
                         <Landmark className="h-4 w-4 text-amber-400" />
                         {c.name}
@@ -1917,7 +1917,7 @@ function Waterfall({ selected, cashLabels }: { selected: SelectedRow; cashLabels
               : 'text-foreground'
         const rowBg =
           item.kind === 'final' ? 'bg-emerald-500/[0.06] border border-emerald-500/20 rounded-lg px-3 py-2'
-            : item.kind === 'subtotal' ? 'bg-slate-50 dark:bg-white/[0.03] rounded-lg px-3 py-2'
+            : item.kind === 'subtotal' ? 'bg-surface-muted rounded-lg px-3 py-2'
               : 'px-3 py-1.5'
         return (
           <div key={item.label} className={rowBg}>

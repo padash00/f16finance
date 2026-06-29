@@ -152,7 +152,7 @@ export default function RatingsPage() {
                   }} className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
                     activePreset === p
                       ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/30'
-                      : 'bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700'
+                      : 'bg-white dark:bg-slate-800/50 border border-border text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700'
                   }`}>
                     {p === 'today' ? 'Сегодня' : p === 'week' ? '7 дней' : 'Месяц'}
                   </button>
@@ -174,7 +174,7 @@ export default function RatingsPage() {
                   <select
                     value={companyId}
                     onChange={(e) => setCompanyId(e.target.value)}
-                    className="px-3 py-2 bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-700 dark:text-slate-200 outline-none"
+                    className="px-3 py-2 bg-white dark:bg-slate-800/50 border border-border rounded-xl text-sm text-body outline-none"
                   >
                     <option value="">Все компании</option>
                     {companies.map((c) => (
@@ -257,7 +257,7 @@ export default function RatingsPage() {
                           </td>
                           <td className="py-3 pr-4">
                             <div>
-                              <p className={`font-medium ${rank === 1 && row.revenue > 0 ? 'text-amber-700 dark:text-amber-300' : rank === 2 && row.revenue > 0 ? 'text-slate-700 dark:text-slate-200' : rank === 3 && row.revenue > 0 ? 'text-orange-600 dark:text-orange-300' : 'text-muted-foreground'}`}>
+                              <p className={`font-medium ${rank === 1 && row.revenue > 0 ? 'text-amber-700 dark:text-amber-300' : rank === 2 && row.revenue > 0 ? 'text-body' : rank === 3 && row.revenue > 0 ? 'text-orange-600 dark:text-orange-300' : 'text-muted-foreground'}`}>
                                 {row.name}
                               </p>
                               {row.revenue > 0 && (
@@ -279,8 +279,8 @@ export default function RatingsPage() {
                               : <span className="text-slate-600 text-xs">нет данных</span>
                             }
                           </td>
-                          <td className="py-3 pr-4 text-right text-slate-700 dark:text-slate-300">{row.shifts || '—'}</td>
-                          <td className="py-3 pr-4 text-right text-slate-700 dark:text-slate-300">{row.days || '—'}</td>
+                          <td className="py-3 pr-4 text-right text-body">{row.shifts || '—'}</td>
+                          <td className="py-3 pr-4 text-right text-body">{row.days || '—'}</td>
                           <td className="py-3 pr-4 text-right text-amber-400 font-medium">
                             {row.avgCheck > 0 ? fmtMoney(row.avgCheck) : '—'}
                           </td>
@@ -311,11 +311,11 @@ export default function RatingsPage() {
               <div className="flex items-end justify-center gap-3">
                 {/* 2nd */}
                 <div className="flex flex-col items-center gap-2">
-                  <div className="w-20 h-20 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center">
+                  <div className="w-20 h-20 rounded-2xl bg-card border border-border flex items-center justify-center">
                     <span className="text-3xl">🥈</span>
                   </div>
                   <div className="w-24 h-16 bg-slate-100 dark:bg-slate-700/50 rounded-t-xl flex flex-col items-center justify-center gap-1">
-                    <span className="text-xs text-slate-700 dark:text-slate-300 font-medium truncate w-full text-center px-1">{leaderboard.filter(r => r.revenue > 0)[1]?.name}</span>
+                    <span className="text-xs text-body font-medium truncate w-full text-center px-1">{leaderboard.filter(r => r.revenue > 0)[1]?.name}</span>
                     <span className="text-xs text-muted-foreground">{fmtMoney(leaderboard.filter(r => r.revenue > 0)[1]?.revenue ?? 0)}</span>
                   </div>
                 </div>

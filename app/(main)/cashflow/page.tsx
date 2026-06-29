@@ -74,7 +74,7 @@ type DayRow = {
 function CashTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-xs shadow-xl">
+    <div className="bg-card border border-border rounded-xl p-3 text-xs shadow-xl">
       <p className="text-muted-foreground mb-2 font-medium">{label}</p>
       {payload.map((p: any) => (
         <div key={p.name} className="flex justify-between gap-4">
@@ -293,7 +293,7 @@ export default function CashFlowPage() {
                 <button
                   onClick={downloadCSV}
                   disabled={dailyData.length === 0}
-                  className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-700/50 disabled:opacity-40 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-700 dark:text-slate-200 transition-colors"
+                  className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-700/50 disabled:opacity-40 border border-border rounded-xl text-sm text-body transition-colors"
                 >
                   <Download className="w-4 h-4 text-emerald-400" />
                   PDF
@@ -317,7 +317,7 @@ export default function CashFlowPage() {
                         className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
                           active
                             ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/30'
-                            : 'bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700'
+                            : 'bg-white dark:bg-slate-800/50 border border-border text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700'
                         }`}
                       >
                         {label}
@@ -325,7 +325,7 @@ export default function CashFlowPage() {
                     )
                   })}
                 </div>
-                <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
+                <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-800/50 rounded-xl border border-border">
                   <CalendarDays className="w-4 h-4 text-emerald-400 shrink-0" />
                   <DatePicker value={dateFrom} onChange={setDateFrom} className="w-[120px]" />
                   <span className="text-slate-500">—</span>
@@ -335,7 +335,7 @@ export default function CashFlowPage() {
                   <select
                     value={companyId}
                     onChange={(e) => setCompanyId(e.target.value)}
-                    className="px-3 py-2 bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-700 dark:text-slate-200 outline-none"
+                    className="px-3 py-2 bg-white dark:bg-slate-800/50 border border-border rounded-xl text-sm text-body outline-none"
                   >
                     <option value="">Все компании</option>
                     {companies.map((c) => (
@@ -374,7 +374,7 @@ export default function CashFlowPage() {
                 {fmtMoney(stats.profit)}
               </p>
             </Card>
-            <Card className="p-4 bg-white dark:bg-slate-900/80 border-slate-200 dark:border-slate-700">
+            <Card className="p-4 bg-white dark:bg-slate-900/80 border-border">
               <div className="flex items-center gap-2 mb-2">
                 <Activity className="w-4 h-4 text-amber-400" />
                 <p className="text-xs text-muted-foreground">Маржа</p>
@@ -408,7 +408,7 @@ export default function CashFlowPage() {
                 </div>
               )}
               {!aiLoading && aiText && (
-                <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">{aiText}</p>
+                <p className="text-sm text-body whitespace-pre-wrap leading-relaxed">{aiText}</p>
               )}
               {!aiLoading && !aiText && dailyData.length === 0 && !loading && (
                 <p className="text-sm text-slate-500">Нет данных за выбранный период</p>
@@ -485,7 +485,7 @@ export default function CashFlowPage() {
                           row.profit < 0 ? 'bg-red-500/5' : ''
                         }`}
                       >
-                        <td className="py-2 pr-4 text-slate-700 dark:text-slate-300 whitespace-nowrap">{row.label}</td>
+                        <td className="py-2 pr-4 text-body whitespace-nowrap">{row.label}</td>
                         <td className="py-2 pr-4 text-right text-emerald-400 font-medium">
                           {row.income > 0 ? fmtMoney(row.income) : <span className="text-slate-600">—</span>}
                         </td>

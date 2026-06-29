@@ -64,7 +64,7 @@ type CatalogItem = { id: string; name: string; barcode: string; unit?: string | 
 type DraftLine = { item_id: string; qty: string }
 
 const STATUS_META: Record<OrderStatus, { label: string; cls: string }> = {
-  draft: { label: 'Черновик', cls: 'bg-slate-500/15 text-slate-700 dark:text-slate-200 border-slate-500/30' },
+  draft: { label: 'Черновик', cls: 'bg-slate-500/15 text-body border-slate-500/30' },
   sent: { label: 'Отправлена', cls: 'bg-sky-500/15 text-sky-700 dark:text-sky-200 border-sky-500/30' },
   received: { label: 'Получена', cls: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-200 border-emerald-500/30' },
   cancelled: { label: 'Отменена', cls: 'bg-rose-500/15 text-rose-700 dark:text-rose-200 border-rose-500/30' },
@@ -259,7 +259,7 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
           </Button>
         )
         const hdrToolbar = (
-          <div className="flex flex-wrap gap-2 p-1 bg-white dark:bg-slate-800/50 rounded-xl w-fit border border-slate-200 dark:border-slate-700">
+          <div className="flex flex-wrap gap-2 p-1 bg-white dark:bg-slate-800/50 rounded-xl w-fit border border-border">
             {(['all', 'draft', 'sent', 'received', 'cancelled'] as const).map((s) => (
               <button
                 key={s}
@@ -456,7 +456,7 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
 
             <div className="mt-4 overflow-auto rounded-xl border border-border">
               <table className="w-full text-sm">
-                <thead className="bg-slate-50 dark:bg-white/[0.03] text-xs text-muted-foreground">
+                <thead className="bg-surface-muted text-xs text-muted-foreground">
                   <tr className="text-left">
                     <th className="px-3 py-2 font-normal">Товар</th>
                     <th className="px-3 py-2 text-right font-normal">Остаток был</th>

@@ -477,7 +477,7 @@ export default function ProductCardModal({
                   </div>
                 </div>
               ) : (
-                <div className="text-sm text-slate-700 dark:text-slate-300">
+                <div className="text-sm text-body">
                   {data.description || <span className="text-muted-foreground">—</span>}
                 </div>
               )}

@@ -581,7 +581,7 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
         </div>
 
         {localZones.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-slate-50 dark:bg-white/[0.03] px-2 py-2">
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface-muted px-2 py-2">
             <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground shrink-0">Цвета зон</span>
             {localZones.map(z => (
               <span
@@ -797,7 +797,7 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
                 <button
                   key={d.type}
                   onClick={() => setNewDecoType(d.type)}
-                  className={`flex flex-col items-center gap-0.5 rounded-lg border px-2 py-1.5 text-xs transition ${newDecoType === d.type ? 'border-primary bg-primary/10' : 'border-border bg-slate-50 dark:bg-white/5 hover:border-slate-300 dark:hover:border-white/20'}`}
+                  className={`flex flex-col items-center gap-0.5 rounded-lg border px-2 py-1.5 text-xs transition ${newDecoType === d.type ? 'border-primary bg-primary/10' : 'border-border bg-surface-muted hover:border-slate-300 dark:hover:border-white/20'}`}
                 >
                   <span className="text-base">{d.emoji}</span>
                   <span className="text-muted-foreground">{d.label}</span>
@@ -861,7 +861,7 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
               const onMap = zone.grid_x != null
               const color = zone.color ?? '#3b82f6'
               return (
-                <div key={zone.id} className="flex items-center justify-between rounded-lg border border-border bg-slate-50 dark:bg-white/5 px-2 py-1.5 text-xs">
+                <div key={zone.id} className="flex items-center justify-between rounded-lg border border-border bg-surface-muted px-2 py-1.5 text-xs">
                   <span className="flex items-center gap-1.5 truncate">
                     <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: color }} />
                     <span className="truncate">{zone.name}</span>
@@ -896,7 +896,7 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
                   key={st.id}
                   draggable
                   onDragStart={e => handleDragStart(e, 'station', st.id, 0, 0)}
-                  className="flex cursor-grab items-center justify-between rounded border border-border bg-slate-50 dark:bg-white/5 px-2 py-1 text-xs"
+                  className="flex cursor-grab items-center justify-between rounded border border-border bg-surface-muted px-2 py-1 text-xs"
                 >
                   <span className="flex items-center gap-1 truncate">
                     <Monitor className="h-3 w-3 shrink-0 text-indigo-400" />
@@ -934,7 +934,7 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
             <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">На карте</p>
             <div className="space-y-1">
               {stationsOnMap.map(st => (
-                <div key={st.id} className="flex items-center justify-between rounded border border-border bg-slate-50 dark:bg-white/5 px-2 py-1 text-xs">
+                <div key={st.id} className="flex items-center justify-between rounded border border-border bg-surface-muted px-2 py-1 text-xs">
                   <span className="flex items-center gap-1 truncate">
                     <Monitor className="h-3 w-3 shrink-0 text-indigo-400" />
                     <span className="truncate">{st.name}</span>
@@ -1928,14 +1928,14 @@ function StationsPageContent() {
                     <button
                       type="button"
                       onClick={() => setCollapsedZones({})}
-                      className="rounded-lg border border-border bg-slate-50 dark:bg-white/5 px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/10 hover:text-foreground"
+                      className="rounded-lg border border-border bg-surface-muted px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-surface-hover hover:text-foreground"
                     >
                       Развернуть все
                     </button>
                     <button
                       type="button"
                       onClick={() => setCollapsedZones(Object.fromEntries(zones.map(z => [z.id, true])))}
-                      className="rounded-lg border border-border bg-slate-50 dark:bg-white/5 px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/10 hover:text-foreground"
+                      className="rounded-lg border border-border bg-surface-muted px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-surface-hover hover:text-foreground"
                     >
                       Свернуть все
                     </button>
@@ -2003,11 +2003,11 @@ function StationsPageContent() {
               const zColor = zone.color ?? '#3b82f6'
               return (
                 <div key={zone.id} className="rounded-xl border border-border bg-card overflow-hidden">
-                  <div className="flex items-center gap-1 border-b border-border bg-slate-50 dark:bg-white/5 px-2 py-2 sm:px-3">
+                  <div className="flex items-center gap-1 border-b border-border bg-surface-muted px-2 py-2 sm:px-3">
                     <button
                       type="button"
                       onClick={() => setCollapsedZones(p => ({ ...p, [zone.id]: !p[zone.id] }))}
-                      className="rounded-lg p-1.5 text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/10 hover:text-foreground"
+                      className="rounded-lg p-1.5 text-muted-foreground hover:bg-surface-hover hover:text-foreground"
                       title={collapsed ? 'Развернуть зону' : 'Свернуть зону'}
                       aria-expanded={!collapsed}
                     >
@@ -2048,7 +2048,7 @@ function StationsPageContent() {
                               <button
                                 type="button"
                                 onClick={() => setEditingZoneId(null)}
-                                className="rounded bg-slate-100 dark:bg-white/10 px-2 py-1 text-xs"
+                                className="rounded bg-surface-hover px-2 py-1 text-xs"
                               >
                                 Отмена
                               </button>
@@ -2089,7 +2089,7 @@ function StationsPageContent() {
                               )
                             }
                           }}
-                          className="rounded p-1.5 text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/10 hover:text-foreground"
+                          className="rounded p-1.5 text-muted-foreground hover:bg-surface-hover hover:text-foreground"
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
@@ -2121,7 +2121,7 @@ function StationsPageContent() {
                         <div className="space-y-1">
                           {zoneStations.length === 0 && <p className="py-2 text-xs text-muted-foreground">Нет станций</p>}
                           {zoneStations.map(st => (
-                            <div key={st.id} className="group rounded-lg px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-white/5">
+                            <div key={st.id} className="group rounded-lg px-2 py-1.5 hover:bg-surface-muted">
                               {editingStationId === st.id ? (
                                 <div className="space-y-1.5 rounded-lg border border-primary/30 bg-primary/5 p-2">
                                   <input
@@ -2162,7 +2162,7 @@ function StationsPageContent() {
                                     <button
                                       type="button"
                                       onClick={() => setEditingStationId(null)}
-                                      className="rounded bg-slate-100 dark:bg-white/10 px-2 py-1 text-xs"
+                                      className="rounded bg-surface-hover px-2 py-1 text-xs"
                                     >
                                       Отмена
                                     </button>
@@ -2263,7 +2263,7 @@ function StationsPageContent() {
                                           setBindArgs('')
                                           setCrudDialog({ kind: 'stationGames', stationId: st.id, stationLabel: st.name })
                                         }}
-                                        className="rounded p-1 text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/10 hover:text-foreground"
+                                        className="rounded p-1 text-muted-foreground hover:bg-surface-hover hover:text-foreground"
                                         title="Игры станции"
                                       >
                                         <Monitor className="h-3 w-3" />
@@ -2273,14 +2273,14 @@ function StationsPageContent() {
                                       <button
                                         type="button"
                                         onClick={() => openKioskTheme(st as any)}
-                                        className="rounded p-1 text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/10 hover:text-foreground"
+                                        className="rounded p-1 text-muted-foreground hover:bg-surface-hover hover:text-foreground"
                                         title="Тема киоска"
                                       >
                                         <Paintbrush className="h-3 w-3" />
                                       </button>
                                     )}
                                     {can('stations.edit_station') && (
-                                      <button type="button" onClick={() => startEditStation(st)} className="rounded p-1 text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/10 hover:text-foreground"><Pencil className="h-3 w-3" /></button>
+                                      <button type="button" onClick={() => startEditStation(st)} className="rounded p-1 text-muted-foreground hover:bg-surface-hover hover:text-foreground"><Pencil className="h-3 w-3" /></button>
                                     )}
                                     {can('stations.delete_station') && (
                                       <button type="button" onClick={() => handleDeleteStation(st.id)} className="rounded p-1 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
@@ -2339,7 +2339,7 @@ function StationsPageContent() {
                                     <button
                                       type="button"
                                       onClick={() => setKioskThemeStationId(null)}
-                                      className="rounded bg-slate-100 dark:bg-white/10 px-2 py-1 text-xs"
+                                      className="rounded bg-surface-hover px-2 py-1 text-xs"
                                     >
                                       Отмена
                                     </button>
@@ -2419,11 +2419,11 @@ function StationsPageContent() {
                                   )}
                                   <div className="flex gap-1">
                                     <button type="button" onClick={handleUpdateTariff} className="flex-1 rounded bg-primary py-1 text-xs text-primary-foreground">Сохранить</button>
-                                    <button type="button" onClick={() => setEditingTariff(null)} className="rounded bg-slate-100 dark:bg-white/10 px-2 py-1 text-xs">Отмена</button>
+                                    <button type="button" onClick={() => setEditingTariff(null)} className="rounded bg-surface-hover px-2 py-1 text-xs">Отмена</button>
                                   </div>
                                 </div>
                               ) : (
-                                <div className="flex items-center justify-between rounded-lg px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-white/5">
+                                <div className="flex items-center justify-between rounded-lg px-2 py-1.5 hover:bg-surface-muted">
                                   <div className="min-w-0">
                                     <span className="text-sm">{t.name}</span>
                                     <span className="ml-2 text-xs text-muted-foreground">
@@ -2438,7 +2438,7 @@ function StationsPageContent() {
                                   </div>
                                   <div className="hidden shrink-0 items-center gap-1 group-hover:flex">
                                     {can('stations.edit_tariff') && (
-                                      <button type="button" onClick={() => setEditingTariff(t)} className="rounded p-1 text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/10 hover:text-foreground"><Pencil className="h-3 w-3" /></button>
+                                      <button type="button" onClick={() => setEditingTariff(t)} className="rounded p-1 text-muted-foreground hover:bg-surface-hover hover:text-foreground"><Pencil className="h-3 w-3" /></button>
                                     )}
                                     {can('stations.delete_tariff') && (
                                       <button type="button" onClick={() => handleDeleteTariff(t.id)} className="rounded p-1 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
@@ -2488,7 +2488,7 @@ function StationsPageContent() {
                       <div
                         key={r.id}
                         onClick={() => setBalanceTargetId(r.id)}
-                        className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm cursor-pointer transition-colors ${balanceTargetId === r.id ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-border bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/[0.08]'}`}
+                        className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm cursor-pointer transition-colors ${balanceTargetId === r.id ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-border bg-surface-muted hover:bg-slate-100 dark:hover:bg-white/[0.08]'}`}
                       >
                         <div>
                           <p className="font-medium">{r.name || '—'}</p>
@@ -2542,7 +2542,7 @@ function StationsPageContent() {
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Новая игра</p>
                   <div className="flex gap-3 items-start">
                     {newGameLogo && (
-                      <img src={newGameLogo} alt="" className="h-14 w-14 rounded-lg object-cover bg-slate-100 dark:bg-white/10 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                      <img src={newGameLogo} alt="" className="h-14 w-14 rounded-lg object-cover bg-surface-hover shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
                     )}
                     <div className="flex-1 grid grid-cols-1 gap-2 sm:grid-cols-3">
                       <input value={newGameTitle} onChange={(e) => setNewGameTitle(e.target.value)} placeholder="Название игры" className="rounded-lg border border-border bg-background px-3 py-2 text-sm" />
@@ -2568,7 +2568,7 @@ function StationsPageContent() {
                   <p className="text-xs text-blue-400 font-semibold uppercase tracking-wide">Редактировать игру</p>
                   <div className="flex gap-3 items-start">
                     {editGameLogo && (
-                      <img src={editGameLogo} alt="" className="h-14 w-14 rounded-lg object-cover bg-slate-100 dark:bg-white/10 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                      <img src={editGameLogo} alt="" className="h-14 w-14 rounded-lg object-cover bg-surface-hover shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
                     )}
                     <div className="flex-1 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
                       <input value={editGameTitle} onChange={(e) => setEditGameTitle(e.target.value)} placeholder="Название" className="rounded-lg border border-border bg-background px-3 py-2 text-sm" />
@@ -2588,7 +2588,7 @@ function StationsPageContent() {
                     <button type="button" onClick={() => void handleUpdateGame()} disabled={saving || !editGameTitle.trim()} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 flex items-center gap-1.5">
                       {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Сохранить
                     </button>
-                    <button type="button" onClick={() => setEditingGame(null)} className="rounded-lg border border-border bg-slate-50 dark:bg-white/5 px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Отмена</button>
+                    <button type="button" onClick={() => setEditingGame(null)} className="rounded-lg border border-border bg-surface-muted px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Отмена</button>
                   </div>
                 </div>
               )}
@@ -2602,10 +2602,10 @@ function StationsPageContent() {
                   </div>
                 )}
                 {gamesCatalog.map((g) => (
-                  <div key={g.id} className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 group transition-colors ${g.is_active ? 'border-slate-200 dark:border-white/8 bg-white dark:bg-white/3 hover:bg-slate-50 dark:hover:bg-white/5' : 'border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-white/2 opacity-50'}`}>
+                  <div key={g.id} className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 group transition-colors ${g.is_active ? 'border-border bg-white dark:bg-white/3 hover:bg-surface-muted' : 'border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-white/2 opacity-50'}`}>
                     {g.logo_url
-                      ? <img src={g.logo_url} alt="" className="h-9 w-9 rounded-md object-cover bg-slate-100 dark:bg-white/10 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
-                      : <div className="h-9 w-9 rounded-md bg-slate-100 dark:bg-white/10 shrink-0 flex items-center justify-center"><Gamepad2 className="h-4 w-4 text-slate-400 dark:text-white/20" /></div>
+                      ? <img src={g.logo_url} alt="" className="h-9 w-9 rounded-md object-cover bg-surface-hover shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                      : <div className="h-9 w-9 rounded-md bg-surface-hover shrink-0 flex items-center justify-center"><Gamepad2 className="h-4 w-4 text-slate-400 dark:text-white/20" /></div>
                     }
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{g.title}</p>
@@ -2613,7 +2613,7 @@ function StationsPageContent() {
                     </div>
                     <div className="hidden group-hover:flex items-center gap-1 shrink-0">
                       {can('stations.edit_game_catalog') && (
-                        <button type="button" onClick={() => startEditGame(g)} className="rounded-lg p-1.5 hover:bg-slate-100 dark:hover:bg-white/10 text-muted-foreground hover:text-slate-900 dark:hover:text-white transition-colors"><Pencil className="h-3.5 w-3.5" /></button>
+                        <button type="button" onClick={() => startEditGame(g)} className="rounded-lg p-1.5 hover:bg-surface-hover text-muted-foreground hover:text-slate-900 dark:hover:text-white transition-colors"><Pencil className="h-3.5 w-3.5" /></button>
                       )}
                       {can('stations.delete_game_catalog') && (
                         <button type="button" onClick={() => void handleDeleteGame(g.id)} className="rounded-lg p-1.5 hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>
@@ -2649,8 +2649,8 @@ function StationsPageContent() {
                   {gamesCatalog.filter(g => g.is_active).map(g => (
                     <div key={g.id} className="flex items-center gap-3">
                       {g.logo_url
-                        ? <img src={g.logo_url} alt="" className="h-7 w-7 rounded object-cover bg-slate-100 dark:bg-white/10 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
-                        : <div className="h-7 w-7 rounded bg-slate-100 dark:bg-white/10 shrink-0" />
+                        ? <img src={g.logo_url} alt="" className="h-7 w-7 rounded object-cover bg-surface-hover shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                        : <div className="h-7 w-7 rounded bg-surface-hover shrink-0" />
                       }
                       <span className="w-32 text-sm shrink-0 truncate">{g.title}</span>
                       <input
@@ -2722,7 +2722,7 @@ function StationsPageContent() {
                 type="button"
                 onClick={exportAnalyticsCsv}
                 disabled={analyticsLoading || sessions.length === 0}
-                className="flex items-center gap-1.5 rounded-lg border border-border bg-slate-50 dark:bg-white/5 px-3 py-1.5 text-sm text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/10 hover:text-foreground disabled:opacity-40"
+                className="flex items-center gap-1.5 rounded-lg border border-border bg-surface-muted px-3 py-1.5 text-sm text-muted-foreground hover:bg-surface-hover hover:text-foreground disabled:opacity-40"
                 title="Экспорт всех загруженных сессий за период (CSV, UTF-8)"
               >
                 <Download className="h-4 w-4" /> CSV
@@ -2734,11 +2734,11 @@ function StationsPageContent() {
               <div className="space-y-4 animate-pulse">
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                   {[1, 2, 3, 4, 5].map(i => (
-                    <div key={i} className="h-24 rounded-xl border border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-white/5" />
+                    <div key={i} className="h-24 rounded-xl border border-slate-100 dark:border-white/5 bg-surface-muted" />
                   ))}
                 </div>
-                <div className="h-32 rounded-xl border border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-white/5" />
-                <div className="h-40 rounded-xl border border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-white/5" />
+                <div className="h-32 rounded-xl border border-slate-100 dark:border-white/5 bg-surface-muted" />
+                <div className="h-40 rounded-xl border border-slate-100 dark:border-white/5 bg-surface-muted" />
                 <p className="flex items-center justify-center gap-2 text-center text-xs text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" /> Загружаем сессии…
                 </p>
@@ -3056,7 +3056,7 @@ function StationsPageContent() {
                             key={t}
                             type="button"
                             onClick={() => setKioskBgType(t)}
-                            className={`rounded-lg px-2 py-1.5 text-xs font-medium border transition-colors ${kioskBgType === t ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-slate-50 dark:bg-white/5 text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/10'}`}
+                            className={`rounded-lg px-2 py-1.5 text-xs font-medium border transition-colors ${kioskBgType === t ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-surface-muted text-muted-foreground hover:bg-surface-hover'}`}
                           >
                             {t === 'color' ? 'Цвет' : t === 'gradient' ? 'Градиент' : t === 'image' ? 'Картинка' : 'Видео'}
                           </button>
@@ -3162,7 +3162,7 @@ function StationsPageContent() {
                   <button
                     type="button"
                     onClick={() => setProvisioningKeyVisible(v => !v)}
-                    className="rounded-lg border border-border bg-slate-50 dark:bg-white/5 px-3 py-2 text-xs text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/10 hover:text-foreground"
+                    className="rounded-lg border border-border bg-surface-muted px-3 py-2 text-xs text-muted-foreground hover:bg-surface-hover hover:text-foreground"
                   >
                     {provisioningKeyVisible ? 'Скрыть' : 'Показать'}
                   </button>
@@ -3172,7 +3172,7 @@ function StationsPageContent() {
                       void navigator.clipboard?.writeText(provisioningKey).catch(() => null)
                       showFlash('ok', 'Ключ скопирован')
                     }}
-                    className="rounded-lg border border-border bg-slate-50 dark:bg-white/5 px-3 py-2 text-xs text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/10 hover:text-foreground"
+                    className="rounded-lg border border-border bg-surface-muted px-3 py-2 text-xs text-muted-foreground hover:bg-surface-hover hover:text-foreground"
                   >
                     Копировать
                   </button>
@@ -3218,7 +3218,7 @@ function StationsPageContent() {
                 <button
                   type="button"
                   onClick={() => setCrudDialog(null)}
-                  className="rounded-lg border border-border bg-slate-50 dark:bg-white/5 px-4 py-2 text-sm text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/10"
+                  className="rounded-lg border border-border bg-surface-muted px-4 py-2 text-sm text-muted-foreground hover:bg-surface-hover"
                 >
                   Отмена
                 </button>
@@ -3277,7 +3277,7 @@ function StationsPageContent() {
                 </select>
 
                 {newTariff.tariff_type === 'fixed' && (
-                  <p className="rounded-lg border border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-white/[0.03] px-3 py-2 text-xs text-muted-foreground">
+                  <p className="rounded-lg border border-slate-100 dark:border-white/5 bg-surface-muted px-3 py-2 text-xs text-muted-foreground">
                     На точке оператор сможет начать сеанс в любой момент. Длительность = поле «Минуты» (например 60, 180, 300).
                   </p>
                 )}
@@ -3297,7 +3297,7 @@ function StationsPageContent() {
                           window_end_time: '16:00',
                           name: p.name.trim() ? p.name : 'День пакет',
                         }))}
-                        className="rounded-lg border border-slate-200 dark:border-white/15 bg-slate-100 dark:bg-white/10 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-slate-200 dark:hover:bg-white/15"
+                        className="rounded-lg border border-slate-200 dark:border-white/15 bg-surface-hover px-3 py-1.5 text-xs font-medium text-foreground hover:bg-slate-200 dark:hover:bg-white/15"
                       >
                         День 10:00–16:00
                       </button>
@@ -3310,7 +3310,7 @@ function StationsPageContent() {
                           window_end_time: '10:00',
                           name: p.name.trim() ? p.name : 'Ночь пакет',
                         }))}
-                        className="rounded-lg border border-slate-200 dark:border-white/15 bg-slate-100 dark:bg-white/10 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-slate-200 dark:hover:bg-white/15"
+                        className="rounded-lg border border-slate-200 dark:border-white/15 bg-surface-hover px-3 py-1.5 text-xs font-medium text-foreground hover:bg-slate-200 dark:hover:bg-white/15"
                       >
                         Ночь 22:00–10:00
                       </button>
@@ -3342,7 +3342,7 @@ function StationsPageContent() {
                 )}
               </div>
               <DialogFooter className="gap-2 sm:gap-0">
-                <button type="button" onClick={() => setCrudDialog(null)} className="rounded-lg border border-border bg-slate-50 dark:bg-white/5 px-4 py-2 text-sm text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/10">
+                <button type="button" onClick={() => setCrudDialog(null)} className="rounded-lg border border-border bg-surface-muted px-4 py-2 text-sm text-muted-foreground hover:bg-surface-hover">
                   Отмена
                 </button>
                 <button
@@ -3373,7 +3373,7 @@ function StationsPageContent() {
                     <div className="space-y-2">
                       <div className="flex gap-2">
                         {newGameLogo && (
-                          <img src={newGameLogo} alt="" className="h-10 w-10 rounded object-cover bg-slate-100 dark:bg-white/10 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                          <img src={newGameLogo} alt="" className="h-10 w-10 rounded object-cover bg-surface-hover shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
                         )}
                         <div className="flex-1 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                           <input value={newGameTitle} onChange={(e) => setNewGameTitle(e.target.value)} placeholder="Название" className="rounded border border-border bg-background px-2 py-1.5 text-xs" />
@@ -3397,7 +3397,7 @@ function StationsPageContent() {
                       <p className="text-xs text-blue-400 font-medium">Редактировать игру</p>
                       <div className="flex gap-2">
                         {editGameLogo && (
-                          <img src={editGameLogo} alt="" className="h-10 w-10 rounded object-cover bg-slate-100 dark:bg-white/10 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                          <img src={editGameLogo} alt="" className="h-10 w-10 rounded object-cover bg-surface-hover shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
                         )}
                         <div className="flex-1 grid grid-cols-2 gap-1.5">
                           <input value={editGameTitle} onChange={(e) => setEditGameTitle(e.target.value)} placeholder="Название" className="rounded border border-border bg-background px-2 py-1.5 text-xs" />
@@ -3415,7 +3415,7 @@ function StationsPageContent() {
                       </div>
                       <div className="flex gap-1">
                         <button type="button" onClick={() => void handleUpdateGame()} disabled={saving || !editGameTitle.trim()} className="rounded bg-blue-600 px-2 py-1 text-xs text-white disabled:opacity-50">Сохранить</button>
-                        <button type="button" onClick={() => setEditingGame(null)} className="rounded bg-slate-100 dark:bg-white/10 px-2 py-1 text-xs">Отмена</button>
+                        <button type="button" onClick={() => setEditingGame(null)} className="rounded bg-surface-hover px-2 py-1 text-xs">Отмена</button>
                       </div>
                     </div>
                   )}
@@ -3423,10 +3423,10 @@ function StationsPageContent() {
                   {/* Список игр */}
                   <div className="max-h-40 overflow-auto space-y-1">
                     {gamesCatalog.map((g) => (
-                      <div key={g.id} className="flex items-center gap-2 rounded bg-slate-50 dark:bg-white/5 px-2 py-1 text-xs group">
+                      <div key={g.id} className="flex items-center gap-2 rounded bg-surface-muted px-2 py-1 text-xs group">
                         {g.logo_url
-                          ? <img src={g.logo_url} alt="" className="h-6 w-6 rounded object-cover bg-slate-100 dark:bg-white/10 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
-                          : <div className="h-6 w-6 rounded bg-slate-100 dark:bg-white/10 shrink-0" />
+                          ? <img src={g.logo_url} alt="" className="h-6 w-6 rounded object-cover bg-surface-hover shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                          : <div className="h-6 w-6 rounded bg-surface-hover shrink-0" />
                         }
                         <span className="flex-1 truncate">{g.title}</span>
                         <span className="text-muted-foreground/50 shrink-0">{g.category === 'game' ? 'Игра' : g.category === 'browser' ? 'Браузер' : 'Прог.'}</span>
@@ -3478,7 +3478,7 @@ function StationsPageContent() {
                   {stationGames.filter((x) => x.station_id === crudDialog.stationId).map((x) => {
                     const game = gamesCatalog.find((g) => g.id === x.game_id)
                     return (
-                      <div key={x.id} className="rounded border border-border bg-slate-50 dark:bg-white/5 p-2 text-xs">
+                      <div key={x.id} className="rounded border border-border bg-surface-muted p-2 text-xs">
                         <p className="font-medium">{game?.title || x.game_id}</p>
                         <p className="text-muted-foreground truncate">{x.exe_path}</p>
                         {x.launch_args ? <p className="text-muted-foreground truncate">args: {x.launch_args}</p> : null}
@@ -3501,7 +3501,7 @@ function StationsPageContent() {
                 <button
                   type="button"
                   onClick={() => setCrudDialog(null)}
-                  className="rounded-lg border border-border bg-slate-50 dark:bg-white/5 px-4 py-2 text-sm text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/10"
+                  className="rounded-lg border border-border bg-surface-muted px-4 py-2 text-sm text-muted-foreground hover:bg-surface-hover"
                 >
                   Закрыть
                 </button>

@@ -465,7 +465,7 @@ export default function AccessPage() {
                   <Button
                     onClick={copyAllData}
                     variant="outline"
-                    className="border-border bg-transparent dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10"
+                    className="border-border bg-transparent dark:bg-white/5 hover:bg-surface-hover"
                   >
                     <Copy className="w-4 h-4 mr-2" />
                     Копировать все данные
@@ -476,7 +476,7 @@ export default function AccessPage() {
                   <Button
                     onClick={exportToCSV}
                     variant="outline"
-                    className="border-border bg-transparent dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10"
+                    className="border-border bg-transparent dark:bg-white/5 hover:bg-surface-hover"
                   >
                     <Download className="w-4 h-4 mr-2" />
                     Скачать PDF
@@ -501,7 +501,7 @@ export default function AccessPage() {
                 <Button
                   onClick={loadOperators}
                   variant="outline"
-                  className="border-border bg-transparent dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10"
+                  className="border-border bg-transparent dark:bg-white/5 hover:bg-surface-hover"
                 >
                   <RefreshCw className="w-4 h-4 mr-2" />
                   Обновить
@@ -552,7 +552,7 @@ export default function AccessPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/5">
+                  <tr className="border-b border-slate-200 dark:border-white/5 bg-surface-muted">
                     <th className="py-4 px-4 text-left font-medium text-gray-400">Оператор</th>
                     <th className="py-4 px-4 text-left font-medium text-gray-400">Логин</th>
                     <th className="py-4 px-4 text-left font-medium text-gray-400">Новый пароль</th>
@@ -566,7 +566,7 @@ export default function AccessPage() {
                     const newPassword = newPasswords[op.id]
                     
                     return (
-                      <tr key={op.id} className="border-b border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+                      <tr key={op.id} className="border-b border-slate-200 dark:border-white/5 hover:bg-surface-muted transition-colors">
                         <td className="py-4 px-4">
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-lg overflow-hidden bg-gradient-to-br from-violet-500 to-fuchsia-500 flex-shrink-0">
@@ -647,7 +647,7 @@ export default function AccessPage() {
                                   ...prev,
                                   [op.id]: !prev[op.id]
                                 }))}
-                                className="p-1 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-colors"
+                                className="p-1 hover:bg-surface-hover rounded-lg transition-colors"
                               >
                                 {showPasswords[op.id] ? (
                                   <EyeOff className="w-4 h-4 text-gray-400" />
@@ -660,7 +660,7 @@ export default function AccessPage() {
                                   onClick={() => sendToTelegram(op, newPassword)}
                                   disabled={sendingTgId === op.id || !op.telegram_chat_id}
                                   title={op.telegram_chat_id ? 'Отправить в Telegram' : 'Telegram ID не указан'}
-                                  className="p-1 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-colors disabled:opacity-40"
+                                  className="p-1 hover:bg-surface-hover rounded-lg transition-colors disabled:opacity-40"
                                 >
                                   {sendingTgId === op.id ? (
                                     <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
@@ -712,7 +712,7 @@ export default function AccessPage() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="h-8 px-2 border-border hover:bg-slate-100 dark:hover:bg-white/10"
+                                className="h-8 px-2 border-border hover:bg-surface-hover"
                                 onClick={() => copyOperatorData(op)}
                                 disabled={!newPassword}
                               >

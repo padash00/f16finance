@@ -594,9 +594,9 @@ const OperatorDetailsModal = memo(({
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 overflow-y-auto">
       <div
         ref={modalRef}
-        className="bg-white dark:bg-slate-900 border border-border rounded-2xl w-full max-w-4xl my-8 animate-in fade-in zoom-in duration-200"
+        className="bg-card border border-border rounded-2xl w-full max-w-4xl my-8 animate-in fade-in zoom-in duration-200"
       >
-        <div className="sticky top-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/5 rounded-t-2xl z-10">
+        <div className="sticky top-0 bg-card border-b border-slate-200 dark:border-white/5 rounded-t-2xl z-10">
           <div className="p-6 flex justify-between items-center">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-xl overflow-hidden bg-gradient-to-br from-amber-500 to-amber-600">
@@ -640,7 +640,7 @@ const OperatorDetailsModal = memo(({
             </div>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-xl transition-colors"
+              className="p-2 hover:bg-surface-hover rounded-xl transition-colors"
             >
               <X className="w-5 h-5 text-slate-400" />
             </button>
@@ -883,7 +883,7 @@ const OperatorDetailsModal = memo(({
           )}
         </div>
 
-        <div className="sticky bottom-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-white/5 rounded-b-2xl p-4 flex justify-end gap-2">
+        <div className="sticky bottom-0 bg-card border-t border-slate-200 dark:border-white/5 rounded-b-2xl p-4 flex justify-end gap-2">
           <button
             onClick={onClose}
             className="px-4 py-2 text-sm bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 rounded-lg transition-colors"
@@ -1753,7 +1753,7 @@ function OperatorAnalyticsContent() {
                       key={preset}
                       onClick={() => handlePresetChange(preset)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                        datePreset === preset ? 'bg-slate-100 dark:bg-white/10 text-foreground' : 'text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                        datePreset === preset ? 'bg-surface-hover text-foreground' : 'text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                       }`}
                     >
                       {DATE_PRESETS[preset].label}
@@ -1764,7 +1764,7 @@ function OperatorAnalyticsContent() {
                 <Button
                   variant="outline"
                   size="icon"
-                  className={`rounded-xl border-border bg-white dark:bg-slate-900/50 backdrop-blur-xl hover:bg-slate-100 dark:hover:bg-white/10 ${refreshing ? 'animate-spin' : ''}`}
+                  className={`rounded-xl border-border bg-white dark:bg-slate-900/50 backdrop-blur-xl hover:bg-surface-hover ${refreshing ? 'animate-spin' : ''}`}
                   onClick={handleRefresh}
                   title="Обновить"
                 >
@@ -1774,7 +1774,7 @@ function OperatorAnalyticsContent() {
                 <Button
                   variant="outline"
                   size="icon"
-                  className="rounded-xl border-border bg-white dark:bg-slate-900/50 backdrop-blur-xl hover:bg-slate-100 dark:hover:bg-white/10"
+                  className="rounded-xl border-border bg-white dark:bg-slate-900/50 backdrop-blur-xl hover:bg-surface-hover"
                   onClick={handleDownloadCSV}
                   title="Скачать CSV"
                 >
@@ -2035,7 +2035,7 @@ function OperatorAnalyticsContent() {
                       <tr
                         key={op.operatorId}
                         onClick={() => setSelectedOperator(op)}
-                        className="border-t border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                        className="border-t border-slate-100 dark:border-white/5 hover:bg-surface-muted transition-colors cursor-pointer"
                       >
                         <td className="py-2 px-2">
                           <Link 
@@ -2133,7 +2133,7 @@ function OperatorAnalyticsContent() {
                 </tbody>
 
                 {analytics.rows.length > 0 && (
-                  <tfoot className="border-t border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/5">
+                  <tfoot className="border-t border-slate-200 dark:border-white/5 bg-surface-muted">
                     <tr>
                       <td className="py-3 px-2 font-semibold" colSpan={3}>Итого</td>
                       <td className="py-3 px-2 text-center font-semibold">{analytics.totalsFiltered.shifts}</td>

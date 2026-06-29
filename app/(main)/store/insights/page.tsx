@@ -84,8 +84,8 @@ function trendColor(pct: number) {
 
 const thCls = 'px-4 py-2 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground'
 const thR = thCls + ' text-right'
-const tdCls = 'px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200'
-const tdR = 'px-4 py-2.5 text-right text-sm tabular-nums text-slate-700 dark:text-slate-200'
+const tdCls = 'px-4 py-2.5 text-sm text-body'
+const tdR = 'px-4 py-2.5 text-right text-sm tabular-nums text-body'
 const nameCls = 'px-4 py-2.5 text-sm font-medium text-foreground max-w-[18rem] truncate'
 
 function EmptyRow({ cols, text }: { cols: number; text: string }) {
@@ -191,7 +191,7 @@ export default function StoreInsightsPage() {
                 <Loader2 className="h-4 w-4 animate-spin" /> Анализирую…
               </div>
             ) : data?.aiText ? (
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700 dark:text-slate-200">{data.aiText}</p>
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-body">{data.aiText}</p>
             ) : (
               <p className={`text-sm ${C.sub}`}>
                 AI-вердикт недоступен (нет ключа OpenAI или сервис не ответил). Цифры ниже посчитаны и точны.

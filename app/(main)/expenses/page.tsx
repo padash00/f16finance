@@ -1483,7 +1483,7 @@ export default function ExpensesPage() {
                 <select
                   value={editExpenseCompanyId || ''}
                   onChange={(e) => setEditExpenseCompanyId(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-border bg-white dark:bg-slate-900 px-3 text-sm text-foreground outline-none focus:border-red-500/50"
+                  className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-red-500/50"
                 >
                   <option value="">— выберите компанию —</option>
                   {companies.map((company) => (
@@ -1498,7 +1498,7 @@ export default function ExpensesPage() {
                 <select
                   value={editExpenseOperatorId}
                   onChange={(e) => setEditExpenseOperatorId(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-border bg-white dark:bg-slate-900 px-3 text-sm text-foreground outline-none focus:border-red-500/50"
+                  className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-red-500/50"
                 >
                   <option value="none">Без оператора</option>
                   {operators.map((operator) => (
@@ -1513,7 +1513,7 @@ export default function ExpensesPage() {
                 <select
                   value={editExpenseCategory}
                   onChange={(e) => setEditExpenseCategory(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-border bg-white dark:bg-slate-900 px-3 text-sm text-foreground outline-none focus:border-red-500/50 dark:[color-scheme:dark]"
+                  className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-red-500/50 dark:[color-scheme:dark]"
                 >
                   <option value="">— Без категории —</option>
                   {allCategories.map((c) => (
@@ -1527,7 +1527,7 @@ export default function ExpensesPage() {
                   inputMode="numeric"
                   value={editExpenseCashDraft}
                   onChange={(e) => setEditExpenseCashDraft(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-border bg-white dark:bg-slate-900 px-3 text-sm text-foreground outline-none focus:border-red-500/50"
+                  className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-red-500/50"
                   placeholder="0"
                 />
               </div>
@@ -1537,7 +1537,7 @@ export default function ExpensesPage() {
                   inputMode="numeric"
                   value={editExpenseKaspiDraft}
                   onChange={(e) => setEditExpenseKaspiDraft(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-border bg-white dark:bg-slate-900 px-3 text-sm text-foreground outline-none focus:border-red-500/50"
+                  className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-red-500/50"
                   placeholder="0"
                 />
               </div>
@@ -1549,7 +1549,7 @@ export default function ExpensesPage() {
                 value={editExpenseCommentDraft}
                 onChange={(e) => setEditExpenseCommentDraft(e.target.value)}
                 rows={3}
-                className="w-full rounded-2xl border border-border bg-white dark:bg-slate-900 px-3 py-3 text-sm text-foreground outline-none focus:border-red-500/50"
+                className="w-full rounded-2xl border border-border bg-card px-3 py-3 text-sm text-foreground outline-none focus:border-red-500/50"
                 placeholder="Комментарий к расходу"
               />
             </div>
@@ -1622,7 +1622,7 @@ export default function ExpensesPage() {
           }}
         >
           <div
-            className="w-full max-w-[1280px] h-[92vh] rounded-2xl border border-border bg-white dark:bg-slate-950 overflow-hidden shadow-2xl transition-all"
+            className="w-full max-w-[1280px] h-[92vh] rounded-2xl border border-border bg-card overflow-hidden shadow-2xl transition-all"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="h-12 border-b border-border flex items-center justify-between px-3">
@@ -1632,7 +1632,7 @@ export default function ExpensesPage() {
                   setShowAddExpenseModal(false)
                   setExpenseModalLoading(false)
                 }}
-                className="rounded-md p-1.5 text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10"
+                className="rounded-md p-1.5 text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-surface-hover"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1648,7 +1648,7 @@ export default function ExpensesPage() {
               ) : null}
               <iframe
                 src="/expenses-embed/new?embedded=1"
-                className="w-full h-full bg-white dark:bg-slate-950"
+                className="w-full h-full bg-card"
                 title="Добавление расхода"
                 onLoad={() => setExpenseModalLoading(false)}
               />
@@ -1685,7 +1685,7 @@ export default function ExpensesPage() {
                 </a>
                 <button
                   onClick={() => setPreviewUrl(null)}
-                  className="p-1 rounded-lg text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+                  className="p-1 rounded-lg text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-surface-hover transition-colors"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -2182,7 +2182,7 @@ function ListTab({
               return (
                 <tr
                   key={row.id}
-                  className={`border-b border-slate-100 dark:border-gray-800/50 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors ${
+                  className={`border-b border-slate-100 dark:border-gray-800/50 hover:bg-surface-muted transition-colors ${
                     idx % 2 === 0 ? 'bg-transparent' : 'bg-slate-50/50 dark:bg-gray-900/20'
                   } ${isExtra ? 'bg-yellow-500/5 border-l-2 border-l-yellow-500/30' : ''}`}
                 >

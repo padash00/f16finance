@@ -546,7 +546,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
           ) : null
         )
         const hdrToolbar = (
-          <div className="flex gap-2 p-1 bg-white dark:bg-slate-800/50 rounded-xl w-fit border border-slate-200 dark:border-slate-700">
+          <div className="flex gap-2 p-1 bg-white dark:bg-slate-800/50 rounded-xl w-fit border border-border">
             <button
               onClick={() => setActiveTab('debts')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${activeTab === 'debts' ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-200' : 'text-muted-foreground hover:text-slate-900 dark:hover:text-white'}`}
@@ -705,7 +705,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
                               ? 'bg-amber-500/15 text-amber-700 dark:text-amber-200 border-amber-500/30'
                               : debt.status === 'paid'
                               ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-200 border-emerald-500/30'
-                              : 'bg-slate-500/15 text-slate-700 dark:text-slate-200 border-slate-500/30'
+                              : 'bg-slate-500/15 text-body border-slate-500/30'
                           }`}
                         >
                           {debt.status === 'open' ? 'Открыт' : debt.status === 'paid' ? 'Оплачен' : 'Списан'}

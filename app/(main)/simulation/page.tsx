@@ -316,7 +316,7 @@ export default function SimulationPage() {
           </div>
           <div className="mt-3 overflow-auto rounded-xl border border-border">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 dark:bg-white/[0.03] text-xs text-muted-foreground">
+              <thead className="bg-surface-muted text-xs text-muted-foreground">
                 <tr className="text-left">
                   <th className="px-3 py-2 font-normal">Зона</th>
                   <th className="px-3 py-2 text-right font-normal">Устройств</th>
@@ -389,7 +389,7 @@ export default function SimulationPage() {
                 </div>
                 <div className="space-y-1">
                   {idx === 0 ? <Label className="text-[10px]">₸/час</Label> : null}
-                  <div className="grid h-10 place-items-center rounded-lg border border-border bg-slate-50 dark:bg-white/[0.03] text-sm tabular-nums">
+                  <div className="grid h-10 place-items-center rounded-lg border border-border bg-surface-muted text-sm tabular-nums">
                     {formatMoney(Math.round(tariffRate(t)))}
                   </div>
                 </div>

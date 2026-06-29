@@ -168,16 +168,16 @@ export default function ShiftReportsPage() {
                 rows.map((row) => {
                   const totals = (row.totals_json || {}) as Record<string, any>
                   return (
-                    <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-white/5">
+                    <tr key={row.id} className="hover:bg-surface-muted">
                       <td className="px-3 py-2 text-foreground">{row.company?.name || '—'}</td>
-                      <td className="px-3 py-2 text-slate-700 dark:text-slate-200">
+                      <td className="px-3 py-2 text-body">
                         {row.operator?.short_name || row.operator?.full_name || '—'}
                       </td>
-                      <td className="px-3 py-2 text-slate-700 dark:text-slate-300">
+                      <td className="px-3 py-2 text-body">
                         {SHIFT_TYPE_LABEL[row.shift_type] || row.shift_type}
                       </td>
-                      <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{fmtDateTime(row.opened_at)}</td>
-                      <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{fmtDateTime(row.closed_at)}</td>
+                      <td className="px-3 py-2 text-body">{fmtDateTime(row.opened_at)}</td>
+                      <td className="px-3 py-2 text-body">{fmtDateTime(row.closed_at)}</td>
                       <td className="px-3 py-2 text-muted-foreground">
                         {fmtDuration(row.opened_at, row.closed_at)}
                       </td>
@@ -187,7 +187,7 @@ export default function ShiftReportsPage() {
                       <td className="px-3 py-2 text-right text-rose-600 dark:text-rose-300">
                         {fmtMoney(Number(totals.returns_total || 0))}
                       </td>
-                      <td className="px-3 py-2 text-right text-slate-700 dark:text-slate-200">
+                      <td className="px-3 py-2 text-right text-body">
                         {fmtMoney(Number(row.closing_cash || 0))}
                       </td>
                       <td className="px-3 py-2">
@@ -197,7 +197,7 @@ export default function ShiftReportsPage() {
                               ? 'bg-amber-500/15 text-amber-700 dark:text-amber-200'
                               : row.status === 'closed'
                                 ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-200'
-                                : 'bg-slate-500/15 text-slate-600 dark:text-slate-300'
+                                : 'bg-slate-500/15 text-body'
                           }`}
                         >
                           {STATUS_LABEL[row.status] || row.status}

@@ -718,7 +718,7 @@ export default function PointDevicesPage() {
               </p>
               <ol className="mt-2 list-decimal space-y-0.5 pl-4 text-xs text-slate-500">
                 <li>Скачайте и установите программу на ПК точки.</li>
-                <li>При первом запуске введите <b className="text-slate-700 dark:text-slate-300">токен проекта</b> (кнопка «глаз» у проекта ниже).</li>
+                <li>При первом запуске введите <b className="text-body">токен проекта</b> (кнопка «глаз» у проекта ниже).</li>
                 <li>Выберите точку — и можно работать.</li>
               </ol>
             </div>
@@ -736,7 +736,7 @@ export default function PointDevicesPage() {
               href={process.env.NEXT_PUBLIC_KIOSK_DOWNLOAD_URL || 'https://github.com/padash00/f16finance/releases/latest'}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-white/15 bg-slate-100 dark:bg-white/5 px-4 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 transition hover:bg-slate-200 dark:hover:bg-white/10"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-white/15 bg-slate-100 dark:bg-white/5 px-4 py-2.5 text-sm font-medium text-body transition hover:bg-slate-200 dark:hover:bg-white/10"
             >
               <Monitor className="h-4 w-4" /> Киоск (станции)
             </a>
@@ -956,7 +956,7 @@ export default function PointDevicesPage() {
                             className={`flex items-center justify-between rounded-xl border px-3 py-2 text-sm ${
                               project.feature_flags[key as keyof PointFeatureFlags]
                                 ? 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-200'
-                                : 'border-border bg-slate-50 dark:bg-white/5 text-muted-foreground line-through opacity-40'
+                                : 'border-border bg-surface-muted text-muted-foreground line-through opacity-40'
                             }`}
                           >
                             <span>{label}</span>

@@ -315,38 +315,38 @@ export default function PosReturnsPage({ embedded = false }: { embedded?: boolea
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 text-sm mb-4">
-                <div className="rounded-lg border border-border bg-slate-50 dark:bg-white/[0.03] p-3">
+                <div className="rounded-lg border border-border bg-surface-muted p-3">
                   <p className="text-xs text-muted-foreground">Дата</p>
                   <p className="mt-1 font-medium">
                     {formatDate(sale.sold_at || sale.sale_date)}
                   </p>
                 </div>
-                <div className="rounded-lg border border-border bg-slate-50 dark:bg-white/[0.03] p-3">
+                <div className="rounded-lg border border-border bg-surface-muted p-3">
                   <p className="text-xs text-muted-foreground">Сумма чека</p>
                   <p className="mt-1 font-bold text-emerald-400">
                     {formatMoney(sale.total_amount)}
                   </p>
                 </div>
                 {sale.cash_amount > 0 && (
-                  <div className="rounded-lg border border-border bg-slate-50 dark:bg-white/[0.03] p-3">
+                  <div className="rounded-lg border border-border bg-surface-muted p-3">
                     <p className="text-xs text-muted-foreground">Наличные</p>
                     <p className="mt-1 font-medium">{formatMoney(sale.cash_amount)}</p>
                   </div>
                 )}
                 {sale.kaspi_amount > 0 && (
-                  <div className="rounded-lg border border-border bg-slate-50 dark:bg-white/[0.03] p-3">
+                  <div className="rounded-lg border border-border bg-surface-muted p-3">
                     <p className="text-xs text-muted-foreground">Безналичный</p>
                     <p className="mt-1 font-medium">{formatMoney(sale.kaspi_amount)}</p>
                   </div>
                 )}
                 {sale.card_amount > 0 && (
-                  <div className="rounded-lg border border-border bg-slate-50 dark:bg-white/[0.03] p-3">
+                  <div className="rounded-lg border border-border bg-surface-muted p-3">
                     <p className="text-xs text-muted-foreground">Карта</p>
                     <p className="mt-1 font-medium">{formatMoney(sale.card_amount)}</p>
                   </div>
                 )}
                 {sale.online_amount > 0 && (
-                  <div className="rounded-lg border border-border bg-slate-50 dark:bg-white/[0.03] p-3">
+                  <div className="rounded-lg border border-border bg-surface-muted p-3">
                     <p className="text-xs text-muted-foreground">Онлайн</p>
                     <p className="mt-1 font-medium">{formatMoney(sale.online_amount)}</p>
                   </div>

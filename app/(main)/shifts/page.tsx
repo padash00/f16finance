@@ -1405,7 +1405,7 @@ function ShiftsPageContent() {
                                     : request.status === 'resolved'
                                       ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
                                       : request.status === 'dismissed'
-                                        ? 'bg-slate-100 dark:bg-white/10 text-muted-foreground'
+                                        ? 'bg-surface-hover text-muted-foreground'
                                         : 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
                                 }`}
                               >
@@ -1758,7 +1758,7 @@ function EditableShiftCell({
     if (isConflict) return 'bg-amber-500/15 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.25)]'
     if (workflowState?.kind === 'issue') return 'bg-amber-500/10 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.25)]'
     if (workflowState?.kind === 'resolved') return 'bg-amber-500/10 shadow-[inset_0_0_0_1px_rgba(56,189,248,0.22)]'
-    if (workflowState?.kind === 'dismissed') return 'bg-slate-50 dark:bg-white/[0.03] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]'
+    if (workflowState?.kind === 'dismissed') return 'bg-surface-muted shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]'
     if (workflowState?.kind === 'confirmed') return 'bg-emerald-500/10 shadow-[inset_0_0_0_1px_rgba(16,185,129,0.24)]'
     if (isSelectedOperator) return 'bg-emerald-500/12 shadow-[inset_0_0_0_1px_rgba(16,185,129,0.28)]'
     return 'hover:bg-slate-100 dark:hover:bg-white/5'
@@ -1834,7 +1834,7 @@ function EditableShiftCell({
                 ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
                 : workflowState.kind === 'resolved'
                   ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
-                  : 'bg-slate-100 dark:bg-white/10 text-muted-foreground'
+                  : 'bg-surface-hover text-muted-foreground'
           }`}
         >
           {workflowState.kind === 'confirmed'

@@ -376,13 +376,13 @@ function UserMenu({
             </div>
             <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 dark:border-white/5 dark:bg-slate-800 px-2 py-1">
               <Shield className="h-3 w-3 text-muted-foreground" />
-              <span className="text-xs font-medium text-slate-600 dark:text-slate-300">{roleLabel || 'control'}</span>
+              <span className="text-xs font-medium text-body">{roleLabel || 'control'}</span>
             </div>
           </div>
           <Link
             href="/profile"
             onClick={() => setOpen(false)}
-            className="mt-3 flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 dark:border-white/5 dark:bg-slate-800/50 px-3 py-2 text-sm text-slate-600 dark:text-slate-300 transition-all duration-300 hover:border-violet-500/20 hover:bg-violet-500/10 hover:text-violet-600 dark:hover:text-violet-300"
+            className="mt-3 flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 dark:border-white/5 dark:bg-slate-800/50 px-3 py-2 text-sm text-body transition-all duration-300 hover:border-violet-500/20 hover:bg-violet-500/10 hover:text-violet-600 dark:hover:text-violet-300"
           >
             <User className="h-4 w-4" />
             Мой профиль
@@ -394,7 +394,7 @@ function UserMenu({
               setOpen(false)
               await onLogout()
             }}
-            className="mt-2 w-full justify-between rounded-xl border border-slate-200 bg-slate-50 dark:border-white/5 dark:bg-slate-800/50 px-3 py-2 text-slate-600 dark:text-slate-300 transition-all duration-300 hover:border-red-500/20 hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
+            className="mt-2 w-full justify-between rounded-xl border border-slate-200 bg-slate-50 dark:border-white/5 dark:bg-slate-800/50 px-3 py-2 text-body transition-all duration-300 hover:border-red-500/20 hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
           >
             <span className="flex items-center gap-2 text-sm">
               <LogOut className="h-4 w-4" />
@@ -472,7 +472,7 @@ function SearchPalette({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Поиск страниц..."
-            className="flex-1 bg-transparent text-sm text-slate-700 dark:text-slate-200 placeholder:text-slate-500 outline-none"
+            className="flex-1 bg-transparent text-sm text-body placeholder:text-slate-500 outline-none"
           />
           <kbd className="rounded-md border border-slate-200 bg-slate-100 text-slate-500 dark:border-white/5 dark:bg-slate-800 dark:text-slate-400 px-1.5 py-0.5 text-[10px]">ESC</kbd>
         </div>

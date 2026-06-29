@@ -375,7 +375,7 @@ export default function ReceiptSettingsPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex items-center justify-between rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] px-3 py-2">
+              <div className="flex items-center justify-between rounded-xl border border-border bg-surface-muted px-3 py-2">
                 <div>
                   <Label className="cursor-pointer">Запрашивать ИИН покупателя</Label>
                   <p className="text-xs text-muted-foreground">По требованию (для юр.лиц)</p>
@@ -408,11 +408,11 @@ export default function ReceiptSettingsPage() {
               Поддержка появится отдельным релизом. Переключатели ниже зарезервированы — не включайте, пока не появится логика.
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="flex items-center justify-between rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] px-3 py-2 opacity-60">
+              <div className="flex items-center justify-between rounded-xl border border-border bg-surface-muted px-3 py-2 opacity-60">
                 <Label>Печать маркировки на чеке</Label>
                 <Switch checked={settings.marking_enabled} onCheckedChange={(v) => patch('marking_enabled', v)} disabled />
               </div>
-              <div className="flex items-center justify-between rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] px-3 py-2 opacity-60">
+              <div className="flex items-center justify-between rounded-xl border border-border bg-surface-muted px-3 py-2 opacity-60">
                 <Label>Код товара по НКТ</Label>
                 <Switch checked={settings.nkt_enabled} onCheckedChange={(v) => patch('nkt_enabled', v)} disabled />
               </div>

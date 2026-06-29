@@ -1166,7 +1166,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                           return <span className="inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-700 dark:text-emerald-200">Оплачен</span>
                         }
                         if (debt.status === 'written_off') {
-                          return <span className="inline-flex items-center rounded-full border border-slate-500/30 bg-slate-500/15 px-2 py-0.5 text-[10px] text-slate-700 dark:text-slate-200">Списан</span>
+                          return <span className="inline-flex items-center rounded-full border border-slate-500/30 bg-slate-500/15 px-2 py-0.5 text-[10px] text-body">Списан</span>
                         }
                         const overdue = debt.due_date ? new Date(debt.due_date).getTime() < Date.now() : false
                         return (
@@ -1247,7 +1247,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                         setQuickError(null)
                         quickInputRef.current?.focus()
                       }}
-                      className="rounded-full border border-border bg-slate-50 dark:bg-white/[0.04] px-3 py-1 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/[0.08]"
+                      className="rounded-full border border-border bg-slate-50 dark:bg-white/[0.04] px-3 py-1 text-xs text-body hover:bg-slate-100 dark:hover:bg-white/[0.08]"
                       title={`${item.name} · ${item.barcode}`}
                     >
                       <span className="block max-w-[340px] truncate">{item.name} · {item.barcode}</span>
@@ -1304,7 +1304,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                     <div className="mt-2 flex flex-wrap gap-2">
                       {savedTemplates.map((tpl) => (
                         <div key={tpl.name} className="inline-flex items-center gap-1 rounded-full border border-border bg-slate-50 dark:bg-white/[0.04] px-3 py-1 text-xs">
-                          <button type="button" onClick={() => applyTemplate(tpl.name)} className="text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white">{tpl.name}</button>
+                          <button type="button" onClick={() => applyTemplate(tpl.name)} className="text-body hover:text-slate-900 dark:hover:text-white">{tpl.name}</button>
                           <button type="button" onClick={() => deleteTemplate(tpl.name)} className="text-rose-700 dark:text-rose-300 hover:text-rose-900 dark:hover:text-rose-200">×</button>
                         </div>
                       ))}
@@ -1403,14 +1403,14 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                   <button
                     type="button"
                     onClick={() => setPaymentMode('now')}
-                    className={`px-3 py-1.5 rounded-lg text-xs border ${paymentMode === 'now' ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-700 dark:text-emerald-200' : 'border-border text-muted-foreground hover:bg-slate-50 dark:hover:bg-white/5'}`}
+                    className={`px-3 py-1.5 rounded-lg text-xs border ${paymentMode === 'now' ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-700 dark:text-emerald-200' : 'border-border text-muted-foreground hover:bg-surface-muted'}`}
                   >
                     Сразу
                   </button>
                   <button
                     type="button"
                     onClick={() => setPaymentMode('deferred')}
-                    className={`px-3 py-1.5 rounded-lg text-xs border ${paymentMode === 'deferred' ? 'bg-amber-500/15 border-amber-500/40 text-amber-700 dark:text-amber-200' : 'border-border text-muted-foreground hover:bg-slate-50 dark:hover:bg-white/5'}`}
+                    className={`px-3 py-1.5 rounded-lg text-xs border ${paymentMode === 'deferred' ? 'bg-amber-500/15 border-amber-500/40 text-amber-700 dark:text-amber-200' : 'border-border text-muted-foreground hover:bg-surface-muted'}`}
                   >
                     В долг / Под реализацию
                   </button>
@@ -1732,7 +1732,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                 ) : null}
                 <div className="overflow-auto rounded-xl border border-border">
                   <table className="w-full min-w-[560px] table-fixed text-sm">
-                    <thead className="bg-slate-50 dark:bg-white/[0.03]">
+                    <thead className="bg-surface-muted">
                       <tr className="text-left text-xs text-muted-foreground">
                         <th className="px-3 py-2 font-normal">Товар</th>
                         <th className="px-3 py-2 font-normal">Штрихкод</th>

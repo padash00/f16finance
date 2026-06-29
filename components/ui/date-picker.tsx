@@ -64,19 +64,19 @@ export function DatePicker({
           type="button"
           disabled={disabled}
           className={cn(
-            'flex w-full items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-left text-sm text-foreground transition hover:border-amber-400 focus:border-amber-500 outline-none disabled:opacity-50',
+            'flex w-full items-center gap-2 rounded-xl border border-border bg-card px-4 py-3 text-left text-sm text-foreground transition hover:border-amber-400 focus:border-amber-500 outline-none disabled:opacity-50',
             className,
           )}
         >
-          <CalendarDays className="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
-          <span className={cn(!selected && 'text-slate-400 dark:text-slate-500')}>
+          <CalendarDays className="h-4 w-4 shrink-0 text-faint" />
+          <span className={cn(!selected && 'text-faint')}>
             {selected ? format(selected, 'd MMMM yyyy', { locale: ru }) : placeholder}
           </span>
         </button>
       </PopoverTrigger>
       <PopoverContent
         align={align}
-        className="w-auto rounded-2xl border border-border bg-white dark:bg-slate-900 p-0 shadow-2xl"
+        className="w-auto rounded-2xl border border-border bg-card p-0 shadow-2xl"
       >
         <Calendar
           mode="single"

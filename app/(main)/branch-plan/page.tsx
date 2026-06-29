@@ -851,7 +851,7 @@ export default function BranchPlanPage() {
         </div>
         <div className="mt-3 overflow-auto rounded-xl border border-border">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 dark:bg-white/[0.03] text-xs text-muted-foreground">
+            <thead className="bg-surface-muted text-xs text-muted-foreground">
               <tr className="text-left">
                 <th className="px-3 py-2 font-normal"></th>
                 <th className="px-3 py-2 text-center font-normal text-emerald-700 dark:text-emerald-300/80">Лучший</th>
@@ -1007,7 +1007,7 @@ export default function BranchPlanPage() {
                   </div>
                   <div className="space-y-1">
                     <Label className="text-[10px]">Цена 1 ПК</Label>
-                    <div className="grid h-10 place-items-center rounded-lg border border-border bg-slate-50 dark:bg-white/[0.03] text-sm tabular-nums">{formatMoney(Math.round(unit))} ₸</div>
+                    <div className="grid h-10 place-items-center rounded-lg border border-border bg-surface-muted text-sm tabular-nums">{formatMoney(Math.round(unit))} ₸</div>
                   </div>
                   <div className="space-y-1">
                     <Label className="text-[10px]">Подитог</Label>
@@ -1147,7 +1147,7 @@ export default function BranchPlanPage() {
               </div>
               <div className="space-y-1">
                 {idx === 0 ? <Label className="text-[10px]">Подитог</Label> : null}
-                <div className="grid h-10 place-items-center rounded-lg border border-border bg-slate-50 dark:bg-white/[0.03] text-sm tabular-nums">
+                <div className="grid h-10 place-items-center rounded-lg border border-border bg-surface-muted text-sm tabular-nums">
                   {formatMoney(Math.round(num(r.unit_price) * num(r.quantity)))} ₸
                 </div>
               </div>
@@ -1195,7 +1195,7 @@ export default function BranchPlanPage() {
               </div>
               <div className="space-y-1">
                 {idx === 0 ? <Label className="text-[10px]">₸/час</Label> : null}
-                <div className="grid h-10 place-items-center rounded-lg border border-border bg-slate-50 dark:bg-white/[0.03] text-sm tabular-nums">
+                <div className="grid h-10 place-items-center rounded-lg border border-border bg-surface-muted text-sm tabular-nums">
                   {formatMoney(Math.round(tariffRate(t)))}
                 </div>
               </div>
@@ -1329,7 +1329,7 @@ export default function BranchPlanPage() {
               </div>
               <div className="space-y-1">
                 {idx === 0 ? <Label className="text-[10px]">В месяц</Label> : null}
-                <div className="grid h-10 place-items-center rounded-lg border border-border bg-slate-50 dark:bg-white/[0.03] text-sm tabular-nums">
+                <div className="grid h-10 place-items-center rounded-lg border border-border bg-surface-muted text-sm tabular-nums">
                   {r.kind === 'percent_of_revenue'
                     ? formatMoney(Math.round((num(r.amount) / 100) * calc.baseScenario.revenue))
                     : formatMoney(Math.round(num(r.amount)))} ₸

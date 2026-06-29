@@ -47,7 +47,7 @@ const GROUP_STYLE: Record<string, { text: string; bg: string; border: string }> 
   capex: { text: 'text-amber-700 dark:text-amber-300', bg: 'bg-amber-500/10', border: 'border-amber-500/25' },
   profit_distribution: { text: 'text-purple-700 dark:text-purple-300', bg: 'bg-purple-500/10', border: 'border-purple-500/25' },
 }
-const groupStyle = (g: string | null) => GROUP_STYLE[g || 'operating'] || { text: 'text-slate-600 dark:text-slate-300', bg: 'bg-slate-500/10', border: 'border-slate-500/20' }
+const groupStyle = (g: string | null) => GROUP_STYLE[g || 'operating'] || { text: 'text-body', bg: 'bg-slate-500/10', border: 'border-slate-500/20' }
 
 type Category = {
   id: string
@@ -568,7 +568,7 @@ export default function CategoriesPage() {
                       {catsInGroup.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-1">
                           {catsInGroup.slice(0, 5).map(c => (
-                            <span key={c.id} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-slate-50 dark:bg-white/5 text-muted-foreground border border-border">
+                            <span key={c.id} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-surface-muted text-muted-foreground border border-border">
                               <Tag className="w-2.5 h-2.5" />
                               {c.name}
                             </span>

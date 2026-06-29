@@ -188,7 +188,7 @@ function StaffNode({ member, tone }: { member: StaffMember; tone: 'owner' | 'man
         </div>
       </div>
 
-      <div className="mt-4 space-y-2 text-sm text-slate-700 dark:text-slate-300">
+      <div className="mt-4 space-y-2 text-sm text-body">
         {member.phone ? (
           <div className="flex items-center gap-2">
             <Phone className="h-3.5 w-3.5 text-slate-500" />
@@ -203,7 +203,7 @@ function StaffNode({ member, tone }: { member: StaffMember; tone: 'owner' | 'man
         ) : null}
       </div>
 
-      <div className="mt-4 rounded-2xl border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-black/15 px-3 py-2 text-xs text-muted-foreground">
+      <div className="mt-4 rounded-2xl border border-border bg-slate-50 dark:bg-black/15 px-3 py-2 text-xs text-muted-foreground">
         Оклад: <span className="font-medium text-foreground">{formatMoney(member.monthly_salary)}</span>
       </div>
     </Card>
@@ -227,7 +227,7 @@ function OperatorChip({
     full_name: profile?.full_name || null,
   })
   return (
-    <div className="rounded-2xl border border-slate-200 dark:border-white/8 bg-white dark:bg-white/[0.03] p-3">
+    <div className="rounded-2xl border border-border bg-white dark:bg-white/[0.03] p-3">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-2.5 min-w-0">
           <Avatar name={displayName} photoUrl={profile?.photo_url || null} size="sm" />
@@ -598,7 +598,7 @@ function OrgChart({
                       />
                     ))}
                   </div>
-                  <div className="mt-3 rounded-xl border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-white/[0.03] px-3 py-2 text-center max-w-[140px]">
+                  <div className="mt-3 rounded-xl border border-border bg-surface-muted px-3 py-2 text-center max-w-[140px]">
                     <div className="text-[9px] text-slate-600 uppercase tracking-widest mb-1">Зона ответственности</div>
                     <div className="text-[10px] text-muted-foreground leading-relaxed">Задачи и маркетинг</div>
                   </div>
@@ -812,7 +812,7 @@ export default function StructurePage() {
             accent="amber"
             backHref="/"
             toolbar={
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 rounded-3xl border border-border bg-slate-50 dark:bg-black/20 p-4 text-sm text-slate-700 dark:text-slate-300">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 rounded-3xl border border-border bg-slate-50 dark:bg-black/20 p-4 text-sm text-body">
                 <div>
                   <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Команда</div>
                   <div className="mt-1 text-2xl font-semibold text-foreground">{operators.length + staff.length}</div>
@@ -843,7 +843,7 @@ export default function StructurePage() {
 
           {loading && staff.length === 0 ? (
             <Card className="border-border bg-white dark:bg-slate-950/65 p-8 text-foreground">
-              <div className="flex items-center gap-3 text-slate-700 dark:text-slate-300">
+              <div className="flex items-center gap-3 text-body">
                 <Loader2 className="h-5 w-5 animate-spin text-amber-600 dark:text-amber-300" />
                 Загружаем оргструктуру...
               </div>
@@ -1063,7 +1063,7 @@ export default function StructurePage() {
                       <div className="mt-4 space-y-3">
                         {leadRoster.length > 0 ? (
                           leadRoster.map(({ assignment, operator, company }) => (
-                            <div key={assignment.id} className="rounded-2xl border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-black/20 p-4">
+                            <div key={assignment.id} className="rounded-2xl border border-border bg-slate-50 dark:bg-black/20 p-4">
                               <div className="flex items-start justify-between gap-3">
                                 <div>
                                   <div className="text-base font-semibold text-foreground">
@@ -1083,15 +1083,15 @@ export default function StructurePage() {
                                 ) : null}
                               </div>
                               <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                                <div className="rounded-xl border border-slate-200 dark:border-white/8 bg-white dark:bg-white/[0.03] px-3 py-2">
+                                <div className="rounded-xl border border-border bg-white dark:bg-white/[0.03] px-3 py-2">
                                   <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Должность</div>
-                                  <div className="mt-1 text-sm text-slate-700 dark:text-slate-200">
+                                  <div className="mt-1 text-sm text-body">
                                     {operator?.operator_profiles?.[0]?.position || 'Оператор точки'}
                                   </div>
                                 </div>
-                                <div className="rounded-xl border border-slate-200 dark:border-white/8 bg-white dark:bg-white/[0.03] px-3 py-2">
+                                <div className="rounded-xl border border-border bg-white dark:bg-white/[0.03] px-3 py-2">
                                   <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Стаж</div>
-                                  <div className="mt-1 text-sm text-slate-700 dark:text-slate-200">
+                                  <div className="mt-1 text-sm text-body">
                                     {formatTenure(operator?.operator_profiles?.[0]?.hire_date || null)}
                                   </div>
                                 </div>
@@ -1112,7 +1112,7 @@ export default function StructurePage() {
                       <div className="mt-4 space-y-3">
                         {careerLinks.length > 0 ? (
                           careerLinks.map((link) => (
-                            <div key={link.id} className="rounded-2xl border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-black/20 p-4">
+                            <div key={link.id} className="rounded-2xl border border-border bg-slate-50 dark:bg-black/20 p-4">
                               <div className="text-base font-semibold text-foreground">
                                 {getOperatorDisplayName({
                                   id: link.operator?.id || '',
@@ -1125,15 +1125,15 @@ export default function StructurePage() {
                                 Переведён в staff как {getStaffRoleLabel(link.assigned_role)}
                               </div>
                               <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                                <div className="rounded-xl border border-slate-200 dark:border-white/8 bg-white dark:bg-white/[0.03] px-3 py-2">
+                                <div className="rounded-xl border border-border bg-white dark:bg-white/[0.03] px-3 py-2">
                                   <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Дата повышения</div>
-                                  <div className="mt-1 text-sm text-slate-700 dark:text-slate-200">
+                                  <div className="mt-1 text-sm text-body">
                                     {new Date(link.updated_at || link.assigned_at).toLocaleDateString('ru-RU')}
                                   </div>
                                 </div>
-                                <div className="rounded-xl border border-slate-200 dark:border-white/8 bg-white dark:bg-white/[0.03] px-3 py-2">
+                                <div className="rounded-xl border border-border bg-white dark:bg-white/[0.03] px-3 py-2">
                                   <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Оклад staff</div>
-                                  <div className="mt-1 text-sm text-slate-700 dark:text-slate-200">{formatMoney(link.staff?.monthly_salary)}</div>
+                                  <div className="mt-1 text-sm text-body">{formatMoney(link.staff?.monthly_salary)}</div>
                                 </div>
                               </div>
                             </div>
@@ -1175,7 +1175,7 @@ export default function StructurePage() {
 
             <div className="mt-6 space-y-4">
               {editorRows.map((row, index) => (
-                <div key={`${row.id || 'new'}-${index}`} className="rounded-2xl border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-white/[0.03] p-4">
+                <div key={`${row.id || 'new'}-${index}`} className="rounded-2xl border border-border bg-surface-muted p-4">
                   <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                     <div>
                       <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-slate-500">Точка</label>
@@ -1218,7 +1218,7 @@ export default function StructurePage() {
                       </select>
                     </div>
 
-                    <label className="flex items-center gap-3 rounded-xl border border-border bg-white dark:bg-slate-900/70 px-3 text-sm text-slate-700 dark:text-slate-200">
+                    <label className="flex items-center gap-3 rounded-xl border border-border bg-white dark:bg-slate-900/70 px-3 text-sm text-body">
                       <input
                         type="checkbox"
                         checked={row.is_primary}

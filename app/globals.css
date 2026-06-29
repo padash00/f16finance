@@ -56,6 +56,12 @@
      <Card> и .orda-panel по проекту. */
   --card-shadow: 0 2px 8px rgba(15, 23, 42, 0.06), 0 16px 40px rgba(15, 23, 42, 0.10);
   --card-shadow-hover: 0 6px 18px rgba(15, 23, 42, 0.08), 0 28px 60px rgba(15, 23, 42, 0.16);
+
+  /* Доп. семантические токены (свет). Меняешь тут → меняется по всему проекту. */
+  --body: #334155;          /* основной текст (был text-slate-700) */
+  --faint: #94a3b8;         /* едва заметный текст (был text-slate-400) */
+  --surface-muted: #f8fafc; /* приглушённая поверхность (был bg-slate-50) */
+  --surface-hover: #f1f5f9; /* фон на ховере (был bg-slate-100) */
 }
 
 .dark {
@@ -88,6 +94,12 @@
      «вау» в тёмной теме. */
   --card-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.08), 0 2px 10px rgba(0, 0, 0, 0.4), 0 22px 50px rgba(0, 0, 0, 0.55);
   --card-shadow-hover: inset 0 1px 0 0 rgba(255, 255, 255, 0.12), 0 8px 24px rgba(0, 0, 0, 0.45), 0 34px 70px rgba(0, 0, 0, 0.62);
+
+  /* Доп. семантические токены (тёмная). */
+  --body: #cbd5e1;                       /* основной текст (был text-slate-300) */
+  --faint: #64748b;                      /* едва заметный (был text-slate-500) */
+  --surface-muted: rgba(255, 255, 255, 0.04); /* приглушённая поверхность */
+  --surface-hover: rgba(255, 255, 255, 0.08); /* фон на ховере */
 }
 
 @theme inline {
@@ -123,6 +135,10 @@
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  --color-body: var(--body);
+  --color-faint: var(--faint);
+  --color-surface-muted: var(--surface-muted);
+  --color-surface-hover: var(--surface-hover);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);

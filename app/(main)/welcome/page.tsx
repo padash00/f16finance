@@ -168,7 +168,7 @@ export default function WelcomePage() {
     return (
       <div className="app-page flex min-h-[60vh] items-center justify-center">
         <Card className="w-full max-w-xl border-border bg-white dark:bg-slate-950/70 p-6 text-foreground">
-          <div className="flex items-center gap-3 rounded-2xl border border-border bg-slate-50 dark:bg-black/20 px-4 py-4 text-sm text-slate-700 dark:text-slate-300">
+          <div className="flex items-center gap-3 rounded-2xl border border-border bg-slate-50 dark:bg-black/20 px-4 py-4 text-sm text-body">
             <Loader2 className="h-4 w-4 animate-spin text-violet-400" />
             Подготавливаем ваш рабочий раздел…
           </div>
@@ -211,7 +211,7 @@ export default function WelcomePage() {
                 {roleLabel || (isSuperAdmin ? 'Супер-админ' : 'Рабочий контур')}
               </span>
               {displayName ? (
-                <span className="rounded-full border border-border bg-slate-100 dark:bg-white/6 px-3 py-1 text-[11px] font-medium text-slate-700 dark:text-slate-300">
+                <span className="rounded-full border border-border bg-slate-100 dark:bg-white/6 px-3 py-1 text-[11px] font-medium text-body">
                   {displayName}
                 </span>
               ) : null}
@@ -220,14 +220,14 @@ export default function WelcomePage() {
               <HeaderIcon className={`h-7 w-7 ${isSuperAdmin || staffRole === 'owner' ? 'text-amber-300' : 'text-violet-300'}`} />
             </div>
             <h1 className="text-3xl font-semibold tracking-[-0.03em] text-foreground sm:text-4xl">{greeting}</h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-700 dark:text-slate-300">
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-body">
               Здесь — только те разделы, к которым у вас сейчас есть доступ.
               Если нужно открыть что-то ещё — попросите владельца настроить
               право в разделе «Управление доступом».
             </p>
           </div>
 
-          <div className="rounded-3xl border border-border bg-slate-50 dark:bg-black/20 px-5 py-4 text-sm text-slate-700 dark:text-slate-300">
+          <div className="rounded-3xl border border-border bg-slate-50 dark:bg-black/20 px-5 py-4 text-sm text-body">
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-amber-300" />
               <span className="font-semibold text-foreground">{totalAccessible}</span>
@@ -280,7 +280,7 @@ export default function WelcomePage() {
                   <Link
                     key={page.id}
                     href={page.path}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.03] px-3 py-2 text-sm text-slate-700 dark:text-slate-200 transition hover:bg-slate-100 dark:hover:bg-white/[0.07] hover:text-slate-900 dark:hover:text-white"
+                    className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 dark:border-white/5 bg-surface-muted px-3 py-2 text-sm text-body transition hover:bg-slate-100 dark:hover:bg-white/[0.07] hover:text-slate-900 dark:hover:text-white"
                   >
                     <span className="truncate">{page.label}</span>
                     <ArrowRight className="h-3.5 w-3.5 shrink-0 text-slate-400 transition group-hover:translate-x-0.5" />
@@ -299,7 +299,7 @@ export default function WelcomePage() {
 
       {/* Подсказка владельцу */}
       {(isSuperAdmin || staffRole === 'owner') && (
-        <Card className="border-border bg-white dark:bg-slate-950/50 p-5 text-sm text-slate-700 dark:text-slate-300">
+        <Card className="border-border bg-white dark:bg-slate-950/50 p-5 text-sm text-body">
           <div className="flex items-start gap-3">
             <Wallet className="h-5 w-5 text-amber-300 shrink-0" />
             <div>

@@ -159,7 +159,7 @@ export function UserOverridesPanel({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border bg-white dark:bg-slate-900 shadow-2xl shadow-black/40"
+        className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl shadow-black/40"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Заголовок */}
@@ -169,7 +169,7 @@ export function UserOverridesPanel({
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-foreground">Индивидуальные права — {staffName}</p>
               <p className="text-xs text-muted-foreground">
-                Роль: <span className="text-slate-700 dark:text-slate-200">{roleLabel(role)}</span> · исключения поверх роли
+                Роль: <span className="text-body">{roleLabel(role)}</span> · исключения поверх роли
               </p>
             </div>
             <button onClick={onClose} className="text-slate-500 transition-colors hover:text-slate-900 dark:hover:text-white">
@@ -186,10 +186,10 @@ export function UserOverridesPanel({
           <div className="p-6 text-sm text-rose-300">Не удалось загрузить: {error}</div>
         ) : (
           <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4">
-            <p className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
+            <p className="rounded-xl border border-border bg-surface-muted px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
               <span className="text-emerald-700 dark:text-emerald-300">Разрешить</span> — выдать право лично этому сотруднику, даже если роль его не даёт.{' '}
               <span className="text-rose-700 dark:text-rose-300">Запретить</span> — отнять право, даже если роль его даёт.{' '}
-              <span className="text-slate-700 dark:text-slate-200">По роли</span> — убрать исключение.
+              <span className="text-body">По роли</span> — убрать исключение.
             </p>
 
             {/* Текущие исключения */}
@@ -204,7 +204,7 @@ export function UserOverridesPanel({
                   {exceptions.map(({ cap, id, granted }) => (
                     <div
                       key={id}
-                      className="flex items-center justify-between gap-2 rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] px-3 py-2.5"
+                      className="flex items-center justify-between gap-2 rounded-xl border border-border bg-surface-muted px-3 py-2.5"
                     >
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5">
@@ -213,7 +213,7 @@ export function UserOverridesPanel({
                           ) : (
                             <ShieldX className="h-3.5 w-3.5 shrink-0 text-rose-400" />
                           )}
-                          <span className="truncate text-sm text-slate-700 dark:text-slate-200">{cap!.label}</span>
+                          <span className="truncate text-sm text-body">{cap!.label}</span>
                         </div>
                         <div className="text-[11px] text-slate-500">
                           {cap!.groupLabel} · {cap!.pageLabel} · по роли: {roleGrants(id) ? 'вкл' : 'выкл'}
@@ -230,7 +230,7 @@ export function UserOverridesPanel({
                         <button
                           onClick={() => setOverride(id, 'reset')}
                           disabled={saving === id}
-                          className="inline-flex items-center gap-1 rounded-lg border border-border bg-slate-100 dark:bg-white/5 px-2 py-1 text-[11px] text-slate-700 dark:text-slate-300 transition-colors hover:bg-slate-200 dark:hover:bg-white/10 disabled:opacity-50"
+                          className="inline-flex items-center gap-1 rounded-lg border border-border bg-slate-100 dark:bg-white/5 px-2 py-1 text-[11px] text-body transition-colors hover:bg-slate-200 dark:hover:bg-white/10 disabled:opacity-50"
                           title="Вернуть к роли"
                         >
                           {saving === id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
@@ -272,7 +272,7 @@ export function UserOverridesPanel({
                           className="flex items-center justify-between gap-2 rounded-xl px-2.5 py-1.5 hover:bg-slate-100 dark:hover:bg-white/5"
                         >
                           <div className="min-w-0">
-                            <div className="truncate text-sm text-slate-700 dark:text-slate-200">{c.label}</div>
+                            <div className="truncate text-sm text-body">{c.label}</div>
                             <div className="text-[11px] text-slate-500">
                               {c.pageLabel} · по роли: {baseline ? 'вкл' : 'выкл'}
                               {ov !== undefined && (
@@ -289,7 +289,7 @@ export function UserOverridesPanel({
                               className={`rounded-lg border px-2.5 py-1 text-[11px] transition disabled:opacity-50 ${
                                 ov === true
                                   ? 'border-emerald-400/50 bg-emerald-500/20 text-emerald-700 dark:text-emerald-200'
-                                  : 'border-border bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-300 hover:bg-emerald-500/10'
+                                  : 'border-border bg-slate-100 dark:bg-white/5 text-body hover:bg-emerald-500/10'
                               }`}
                             >
                               разрешить
@@ -300,7 +300,7 @@ export function UserOverridesPanel({
                               className={`rounded-lg border px-2.5 py-1 text-[11px] transition disabled:opacity-50 ${
                                 ov === false
                                   ? 'border-rose-400/50 bg-rose-500/20 text-rose-700 dark:text-rose-200'
-                                  : 'border-border bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-300 hover:bg-rose-500/10'
+                                  : 'border-border bg-slate-100 dark:bg-white/5 text-body hover:bg-rose-500/10'
                               }`}
                             >
                               запретить

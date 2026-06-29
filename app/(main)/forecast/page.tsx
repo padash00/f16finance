@@ -138,7 +138,7 @@ function parseSseEvent(raw: string) {
 function ForecastTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-xs shadow-xl">
+    <div className="bg-card border border-border rounded-xl p-3 text-xs shadow-xl">
       <p className="text-muted-foreground mb-2 font-medium">{label}</p>
       {payload.map((p: any) => (
         <div key={p.name} className="flex justify-between gap-4">
@@ -329,7 +329,7 @@ export default function ForecastPage() {
                 <select
                   value={companyId}
                   onChange={(e) => setCompanyId(e.target.value)}
-                  className="px-3 py-2 bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-700 dark:text-slate-200 min-w-[210px]"
+                  className="px-3 py-2 bg-white dark:bg-slate-800/80 border border-border rounded-xl text-sm text-body min-w-[210px]"
                 >
                   <option value="all">Все компании</option>
                   {companies.map((c) => (
@@ -360,7 +360,7 @@ export default function ForecastPage() {
                 {loading && can('forecast.cancel_generation') ? (
                   <button
                     onClick={handleCancel}
-                    className="px-4 py-2.5 rounded-xl border border-border bg-slate-50 dark:bg-white/5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10"
+                    className="px-4 py-2.5 rounded-xl border border-border bg-surface-muted text-sm text-body hover:bg-surface-hover"
                   >
                     Отменить
                   </button>
@@ -392,7 +392,7 @@ export default function ForecastPage() {
             <Card className="p-8 bg-white dark:bg-slate-900/80 border-amber-500/20">
               <div className="flex items-center gap-3 mb-4">
                 <Loader2 className="w-5 h-5 text-amber-400 animate-spin" />
-                <span className="text-sm text-slate-700 dark:text-slate-300 font-medium">ИИ анализирует 90 дней данных...</span>
+                <span className="text-sm text-body font-medium">ИИ анализирует 90 дней данных...</span>
               </div>
               <div className="space-y-2.5">
                 <div className="h-3 bg-slate-100 dark:bg-slate-800 rounded-full animate-pulse w-3/4" />
@@ -423,7 +423,7 @@ export default function ForecastPage() {
 
               {/* Scenario selector */}
               {result?.scenarios && (
-                <div className="flex items-center gap-2 p-1 bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 rounded-xl w-fit">
+                <div className="flex items-center gap-2 p-1 bg-white dark:bg-slate-900/80 border border-border rounded-xl w-fit">
                   {(['pessimistic', 'realistic', 'optimistic'] as const).map((s) => (
                     <button
                       key={s}
@@ -485,7 +485,7 @@ export default function ForecastPage() {
                 })().map(({ label, sublabel, income, expense, fact }: any) => {
                   const profit = income - expense
                   return (
-                    <Card key={label} className="p-5 bg-white dark:bg-slate-900/80 border-slate-200 dark:border-slate-700">
+                    <Card key={label} className="p-5 bg-white dark:bg-slate-900/80 border-border">
                       <div className="flex items-center justify-between mb-3">
                         <div>
                           <p className="text-sm text-foreground font-semibold capitalize">{label}</p>
@@ -743,7 +743,7 @@ export default function ForecastPage() {
                   {loading ? <span className="text-xs text-amber-700 dark:text-amber-300">печатает...</span> : null}
                   <span className="text-xs text-slate-500 ml-auto">{result.dateFrom} — {result.dateTo}</span>
                 </div>
-                <div className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
+                <div className="text-sm text-body whitespace-pre-wrap leading-relaxed">
                   {result.text}
                 </div>
               </Card>

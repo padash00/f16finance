@@ -272,7 +272,7 @@ export default function StoreAnalyticsPage({ embedded = false }: { embedded?: bo
           </DropdownMenu>
         )
         const hdrToolbar = (
-          <div className="grid grid-cols-2 gap-2 rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] p-1">
+          <div className="grid grid-cols-2 gap-2 rounded-xl border border-border bg-surface-muted p-1">
             <button
               type="button"
               onClick={() => setTab('showcase')}
@@ -323,7 +323,7 @@ export default function StoreAnalyticsPage({ embedded = false }: { embedded?: bo
           <div className="mt-4 space-y-3">
             {loading && pointAnalytics.length === 0 ? (
               Array.from({ length: 3 }).map((_, idx) => (
-                <div key={idx} className="rounded-2xl border border-border bg-slate-50 dark:bg-white/[0.03] p-4">
+                <div key={idx} className="rounded-2xl border border-border bg-surface-muted p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="space-y-2">
                       <Skeleton className="h-4 w-40" />
@@ -345,7 +345,7 @@ export default function StoreAnalyticsPage({ embedded = false }: { embedded?: bo
               <div className="rounded-2xl border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">Витрины пока пустые, поэтому аналитика ещё не собралась.</div>
             ) : (
               pointAnalytics.map((point) => (
-                <div key={point.location.id} className="rounded-2xl border border-border bg-slate-50 dark:bg-white/[0.03] p-4">
+                <div key={point.location.id} className="rounded-2xl border border-border bg-surface-muted p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="font-medium text-foreground">{point.location.company?.name || point.location.name}</p>
@@ -406,7 +406,7 @@ export default function StoreAnalyticsPage({ embedded = false }: { embedded?: bo
           <div className="mt-4 space-y-3">
             {loading && riskyBalances.length === 0 ? (
               Array.from({ length: 4 }).map((_, idx) => (
-                <div key={idx} className="rounded-2xl border border-border bg-slate-50 dark:bg-white/[0.03] px-4 py-3">
+                <div key={idx} className="rounded-2xl border border-border bg-surface-muted px-4 py-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="space-y-2">
                       <Skeleton className="h-4 w-40" />
@@ -463,7 +463,7 @@ export default function StoreAnalyticsPage({ embedded = false }: { embedded?: bo
             <h2 className="text-lg font-semibold text-foreground">Топ по стоимости (склад)</h2>
             <div className="mt-4 space-y-2">
               {warehouseAnalytics.topByValue.map((row: any) => (
-                <div key={`${row.location_id}:${row.item_id}`} className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] px-3 py-2">
+                <div key={`${row.location_id}:${row.item_id}`} className="rounded-xl border border-border bg-surface-muted px-3 py-2">
                   <div className="flex items-center justify-between gap-2">
                     <p className="truncate text-sm font-medium">{row.item?.name || 'Товар'}</p>
                     <p className="text-xs">{formatMoney(row.stockValue)}</p>

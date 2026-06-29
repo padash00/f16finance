@@ -59,7 +59,7 @@ on conflict (name) do nothing;`
 // Тёмный, но тёплый: плавные закругления, мягкие тени, изумруд/синий акценты.
 const card = 'rounded-2xl border border-border bg-white dark:bg-slate-900/60 shadow-lg shadow-black/20'
 const btnPrimary = 'inline-flex items-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-2 text-sm font-medium text-emerald-700 dark:text-emerald-200 transition-colors hover:bg-emerald-500/25 disabled:opacity-40'
-const btnNeutral = 'inline-flex items-center gap-1.5 rounded-xl border border-border bg-slate-100 dark:bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 transition-colors hover:bg-slate-200 dark:hover:bg-white/10 disabled:opacity-50'
+const btnNeutral = 'inline-flex items-center gap-1.5 rounded-xl border border-border bg-slate-100 dark:bg-white/5 px-3 py-1.5 text-xs font-medium text-body transition-colors hover:bg-slate-200 dark:hover:bg-white/10 disabled:opacity-50'
 const inputCls = 'rounded-xl border border-border bg-white dark:bg-slate-950/50 px-3.5 py-2.5 text-sm text-foreground placeholder-slate-500 transition focus:border-emerald-400/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/15'
 
 // ==================== HELPERS ====================
@@ -356,7 +356,7 @@ export default function AccessPage() {
               <p className="mt-0.5 text-sm text-slate-400">Должности, права на страницы и аккаунты сотрудников</p>
             </div>
           </div>
-          <Link href="/" className="rounded-xl border border-border bg-slate-100 dark:bg-white/5 px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 transition-colors hover:bg-slate-200 dark:hover:bg-white/10">
+          <Link href="/" className="rounded-xl border border-border bg-slate-100 dark:bg-white/5 px-3 py-1.5 text-xs text-body transition-colors hover:bg-slate-200 dark:hover:bg-white/10">
             ← На главную
           </Link>
         </div>
@@ -398,10 +398,10 @@ export default function AccessPage() {
                 <h2 className="text-sm font-semibold text-amber-800 dark:text-amber-200">Требуются таблицы в Supabase</h2>
               </div>
               <div className="relative">
-                <pre className="overflow-x-auto rounded-xl border border-border bg-slate-50 dark:bg-slate-950/70 p-4 text-xs leading-relaxed text-slate-700 dark:text-slate-300">{SQL_POSITIONS}</pre>
+                <pre className="overflow-x-auto rounded-xl border border-border bg-slate-50 dark:bg-slate-950/70 p-4 text-xs leading-relaxed text-body">{SQL_POSITIONS}</pre>
                 <button
                   onClick={() => { navigator.clipboard.writeText(SQL_POSITIONS); setPosCopied(true); setTimeout(() => setPosCopied(false), 2000) }}
-                  className="absolute right-2 top-2 rounded-lg border border-border bg-white dark:bg-slate-800 px-2 py-1 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+                  className="absolute right-2 top-2 rounded-lg border border-border bg-card px-2 py-1 text-xs text-body hover:bg-slate-100 dark:hover:bg-slate-700"
                 >
                   {posCopied ? '✓ Скопировано' : 'Копировать'}
                 </button>
@@ -581,7 +581,7 @@ export default function AccessPage() {
                   <div key={s.id} className={`${card} p-4 transition-colors hover:border-slate-300 dark:hover:border-white/20`}>
                     <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
                       <div className="flex min-w-0 items-center gap-3">
-                        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800 text-sm font-bold text-slate-700 dark:text-slate-200">
+                        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800 text-sm font-bold text-body">
                           {(s.full_name || '?').charAt(0).toUpperCase()}
                         </div>
                         <div className="min-w-0">
@@ -607,14 +607,14 @@ export default function AccessPage() {
                             ) : can('access.change_email') ? (
                               <button
                                 onClick={() => { setEditingEmailId(s.id); setEditingEmailValue(s.email || '') }}
-                                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-slate-100 dark:bg-white/5 px-2.5 py-1 text-xs text-slate-700 dark:text-slate-300 transition-colors hover:bg-slate-200 dark:hover:bg-white/10"
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-slate-100 dark:bg-white/5 px-2.5 py-1 text-xs text-body transition-colors hover:bg-slate-200 dark:hover:bg-white/10"
                                 title="Изменить логин"
                               >
                                 <Pencil className="h-3 w-3" />
                                 {s.email || 'нет email'}
                               </button>
                             ) : (
-                              <span className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-slate-100 dark:bg-white/5 px-2.5 py-1 text-xs text-slate-700 dark:text-slate-300">
+                              <span className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-slate-100 dark:bg-white/5 px-2.5 py-1 text-xs text-body">
                                 {s.email || 'нет email'}
                               </span>
                             )}
@@ -640,14 +640,14 @@ export default function AccessPage() {
                             ) : can('access.manage_staff_roles') ? (
                               <button
                                 onClick={() => setChangingRoleId(s.id)}
-                                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-slate-100 dark:bg-white/5 px-2.5 py-1 text-xs text-slate-700 dark:text-slate-300 transition-colors hover:bg-slate-200 dark:hover:bg-white/10"
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-slate-100 dark:bg-white/5 px-2.5 py-1 text-xs text-body transition-colors hover:bg-slate-200 dark:hover:bg-white/10"
                                 title="Изменить должность"
                               >
                                 <Briefcase className="h-3 w-3" />
                                 {s.role ? (BUILTIN_LABELS[s.role] ?? s.role) : 'нет должности'}
                               </button>
                             ) : (
-                              <span className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-slate-100 dark:bg-white/5 px-2.5 py-1 text-xs text-slate-700 dark:text-slate-300">
+                              <span className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-slate-100 dark:bg-white/5 px-2.5 py-1 text-xs text-body">
                                 <Briefcase className="h-3 w-3" />
                                 {s.role ? (BUILTIN_LABELS[s.role] ?? s.role) : 'нет должности'}
                               </span>
@@ -727,7 +727,7 @@ export default function AccessPage() {
                           </button>
                         </div>
                         <p className="mt-1.5 text-xs text-muted-foreground">
-                          Аккаунт: <span className="text-slate-700 dark:text-slate-300">{genPwd.email}</span> · скопируй и передай пользователю.
+                          Аккаунт: <span className="text-body">{genPwd.email}</span> · скопируй и передай пользователю.
                         </p>
                       </div>
                     )}

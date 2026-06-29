@@ -501,7 +501,7 @@ export function SalaryVariantsTab({ companies }: { companies: CompanyRow[] }) {
                 size="sm"
                 variant="outline"
                 onClick={() => void handleTest()}
-                className="gap-2 rounded-xl border-border bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10"
+                className="gap-2 rounded-xl border-border bg-surface-muted hover:bg-surface-hover"
               >
                 <FlaskConical className="h-4 w-4" /> Проверить
               </Button>
@@ -573,7 +573,7 @@ export function SalaryVariantsTab({ companies }: { companies: CompanyRow[] }) {
                     <div
                       key={rule.id}
                       className={`flex items-center gap-3 rounded-lg border px-3 py-2 ${
-                        rule.is_active ? 'border-border bg-slate-50 dark:bg-white/[0.03]' : 'border-slate-100 dark:border-white/5 bg-white dark:bg-white/[0.01] opacity-60'
+                        rule.is_active ? 'border-border bg-surface-muted' : 'border-slate-100 dark:border-white/5 bg-white dark:bg-white/[0.01] opacity-60'
                       }`}
                     >
                       <span className="text-xs font-mono text-gray-500 w-10">#{rule.priority}</span>

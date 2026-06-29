@@ -217,7 +217,7 @@ export default function AdvertisingPage({ embedded = false }: { embedded?: boole
               <select
                 value={companyId}
                 onChange={(e) => setCompanyId(e.target.value)}
-                className="h-9 rounded-md border border-border bg-white dark:bg-white/[0.03] px-3 text-sm text-slate-700 dark:text-slate-200 outline-none focus:border-amber-500/40"
+                className="h-9 rounded-md border border-border bg-white dark:bg-white/[0.03] px-3 text-sm text-body outline-none focus:border-amber-500/40"
               >
                 {companies.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -264,7 +264,7 @@ export default function AdvertisingPage({ embedded = false }: { embedded?: boole
 
       <Card className="border-border p-4">
         <div className="flex items-center justify-between text-sm">
-          <span className="text-slate-700 dark:text-slate-300">
+          <span className="text-body">
             Плейлист • {ads.length}{' '}
             <span className="text-slate-500">({activeCount} активных)</span>
           </span>
@@ -295,7 +295,7 @@ export default function AdvertisingPage({ embedded = false }: { embedded?: boole
                 dragIndex === index ? 'opacity-50' : ''
               } ${ad.is_active ? '' : 'opacity-60'}`}
             >
-              <div className="relative aspect-video bg-white dark:bg-slate-950">
+              <div className="relative aspect-video bg-card">
                 {ad.media_type === 'video' ? (
                   <video
                     src={ad.url}
@@ -329,7 +329,7 @@ export default function AdvertisingPage({ embedded = false }: { embedded?: boole
               </div>
 
               <div className="space-y-2 p-3">
-                <div className="truncate text-xs text-slate-700 dark:text-slate-300" title={ad.title || ''}>
+                <div className="truncate text-xs text-body" title={ad.title || ''}>
                   {ad.title || 'Без названия'}
                 </div>
 
@@ -343,7 +343,7 @@ export default function AdvertisingPage({ embedded = false }: { embedded?: boole
                         max={120}
                         value={ad.duration_sec || 8}
                         onChange={(e) => updateDuration(ad, Math.max(2, Number(e.target.value) || 8))}
-                        className="h-7 w-16 rounded border border-border bg-white dark:bg-white/[0.03] px-2 text-xs text-slate-700 dark:text-slate-200 outline-none focus:border-amber-500/40"
+                        className="h-7 w-16 rounded border border-border bg-white dark:bg-white/[0.03] px-2 text-xs text-body outline-none focus:border-amber-500/40"
                       />
                       сек
                     </label>

@@ -55,7 +55,7 @@ function formatUpcomingLabel(daysUntil: number) {
 function getUpcomingTone(daysUntil: number) {
   if (daysUntil === 0) return 'border-amber-400/30 bg-amber-500/10 text-amber-700 dark:text-amber-200'
   if (daysUntil <= 7) return 'border-emerald-400/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
-  return 'border-border bg-white dark:bg-white/[0.04] text-slate-700 dark:text-slate-200'
+  return 'border-border bg-white dark:bg-white/[0.04] text-body'
 }
 
 function getZodiacSign(value: string) {
@@ -136,7 +136,7 @@ export default function BirthdaysPage() {
             accent="blue"
             backHref="/"
             toolbar={
-              <div className="rounded-2xl border border-border bg-white dark:bg-black/20 px-4 py-3 text-sm text-slate-700 dark:text-slate-300">
+              <div className="rounded-2xl border border-border bg-white dark:bg-black/20 px-4 py-3 text-sm text-body">
                 Сейчас учитываются даты рождения только операторов. Для staff можно расширить экран после добавления поля в их профиль.
               </div>
             }
@@ -169,7 +169,7 @@ export default function BirthdaysPage() {
           {/* Полноэкранный лоадер только при первой загрузке. При refetch контент остаётся. */}
           {loading && items.length === 0 ? (
             <Card className="border-border bg-white dark:bg-slate-950/65 p-8 text-foreground">
-              <div className="flex items-center gap-3 text-slate-700 dark:text-slate-300">
+              <div className="flex items-center gap-3 text-body">
                 <Loader2 className="h-5 w-5 animate-spin text-amber-300" />
                 Загружаем ближайшие дни рождения...
               </div>
@@ -212,7 +212,7 @@ export default function BirthdaysPage() {
                               сегодня
                             </span>
                           </div>
-                          <div className="mt-3 text-sm text-slate-700 dark:text-slate-200">
+                          <div className="mt-3 text-sm text-body">
                             {formatBirthdayDate(item.birth_date)}{item.age ? ` • ${item.age} лет` : ''}
                           </div>
                           <div className="mt-2 text-xs text-amber-100/75">{zodiac.joke}</div>
@@ -233,7 +233,7 @@ export default function BirthdaysPage() {
                     </div>
                     <div className="mt-4 space-y-3">
                       {weekItems.length > 0 ? weekItems.map((item) => (
-                        <div key={item.id} className="rounded-2xl border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-black/20 p-4">
+                        <div key={item.id} className="rounded-2xl border border-border bg-slate-50 dark:bg-black/20 p-4">
                           {(() => {
                             const zodiac = getZodiacSign(item.birth_date)
                             return (
@@ -244,7 +244,7 @@ export default function BirthdaysPage() {
                               <div className="mt-1 text-sm text-muted-foreground">
                                 {item.company_name || 'Точка не назначена'}{item.position ? ` • ${item.position}` : ''}
                               </div>
-                              <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-border bg-white dark:bg-white/[0.04] px-2.5 py-1 text-xs text-slate-700 dark:text-slate-200">
+                              <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-border bg-white dark:bg-white/[0.04] px-2.5 py-1 text-xs text-body">
                                 <span>{zodiac.emoji}</span>
                                 <span>{zodiac.name}</span>
                               </div>
@@ -253,7 +253,7 @@ export default function BirthdaysPage() {
                               {formatUpcomingLabel(item.daysUntil)}
                             </span>
                           </div>
-                          <div className="mt-3 text-sm text-slate-700 dark:text-slate-200">
+                          <div className="mt-3 text-sm text-body">
                             {formatBirthdayDate(item.birth_date)}{item.age ? ` • исполнится ${item.age}` : ''}
                           </div>
                           <div className="mt-2 text-xs text-muted-foreground">{zodiac.joke}</div>
@@ -288,7 +288,7 @@ export default function BirthdaysPage() {
                           <div className="mt-1 text-sm text-muted-foreground">
                             {item.company_name || 'Точка не назначена'}{item.assignment_count > 1 ? ` • ${item.assignment_count} точки` : ''}
                           </div>
-                          <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-border bg-white dark:bg-white/[0.04] px-2.5 py-1 text-xs text-slate-700 dark:text-slate-200">
+                          <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-border bg-white dark:bg-white/[0.04] px-2.5 py-1 text-xs text-body">
                             <span>{zodiac.emoji}</span>
                             <span>{zodiac.name}</span>
                           </div>
@@ -298,13 +298,13 @@ export default function BirthdaysPage() {
                         </span>
                       </div>
                       <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                        <div className="rounded-xl border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-white/[0.03] px-3 py-2">
+                        <div className="rounded-xl border border-border bg-surface-muted px-3 py-2">
                           <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Дата</div>
-                          <div className="mt-1 text-sm text-slate-700 dark:text-slate-200">{formatBirthdayDate(item.birth_date)}</div>
+                          <div className="mt-1 text-sm text-body">{formatBirthdayDate(item.birth_date)}</div>
                         </div>
-                        <div className="rounded-xl border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-white/[0.03] px-3 py-2">
+                        <div className="rounded-xl border border-border bg-surface-muted px-3 py-2">
                           <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Возраст</div>
-                          <div className="mt-1 text-sm text-slate-700 dark:text-slate-200">{item.age ? `${item.age} лет` : 'Не указан'}</div>
+                          <div className="mt-1 text-sm text-body">{item.age ? `${item.age} лет` : 'Не указан'}</div>
                         </div>
                       </div>
                       <div className="mt-3 text-xs text-muted-foreground">{zodiac.joke}</div>
@@ -339,7 +339,7 @@ export default function BirthdaysPage() {
                             return (
                               <>
                           <div className="flex items-start gap-4">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-slate-100 dark:bg-white/[0.04] text-sm font-semibold text-slate-700 dark:text-slate-200">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-slate-100 dark:bg-white/[0.04] text-sm font-semibold text-body">
                               {index + 1}
                             </div>
 
@@ -351,7 +351,7 @@ export default function BirthdaysPage() {
                                 {item.assignment_count > 1 ? ` • ${item.assignment_count} точки` : ''}
                               </div>
                               <div className="mt-2 flex flex-wrap items-center gap-2">
-                                <span className="inline-flex items-center gap-2 rounded-full border border-border bg-white dark:bg-white/[0.04] px-2.5 py-1 text-xs text-slate-700 dark:text-slate-200">
+                                <span className="inline-flex items-center gap-2 rounded-full border border-border bg-white dark:bg-white/[0.04] px-2.5 py-1 text-xs text-body">
                                   <span>{zodiac.emoji}</span>
                                   <span>{zodiac.name}</span>
                                 </span>
@@ -361,17 +361,17 @@ export default function BirthdaysPage() {
                           </div>
 
                           <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[520px]">
-                            <div className="rounded-xl border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-white/[0.03] px-3 py-2">
+                            <div className="rounded-xl border border-border bg-surface-muted px-3 py-2">
                               <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Когда</div>
-                              <div className="mt-1 text-sm text-slate-700 dark:text-slate-200">{formatBirthdayDate(item.birth_date)}</div>
+                              <div className="mt-1 text-sm text-body">{formatBirthdayDate(item.birth_date)}</div>
                             </div>
-                            <div className="rounded-xl border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-white/[0.03] px-3 py-2">
+                            <div className="rounded-xl border border-border bg-surface-muted px-3 py-2">
                               <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Скоро</div>
-                              <div className="mt-1 text-sm text-slate-700 dark:text-slate-200">{formatUpcomingLabel(item.daysUntil)}</div>
+                              <div className="mt-1 text-sm text-body">{formatUpcomingLabel(item.daysUntil)}</div>
                             </div>
-                            <div className="rounded-xl border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-white/[0.03] px-3 py-2">
+                            <div className="rounded-xl border border-border bg-surface-muted px-3 py-2">
                               <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Возраст</div>
-                              <div className="mt-1 text-sm text-slate-700 dark:text-slate-200">{item.age ? `${item.age} лет` : 'Не указан'}</div>
+                              <div className="mt-1 text-sm text-body">{item.age ? `${item.age} лет` : 'Не указан'}</div>
                             </div>
                           </div>
                               </>

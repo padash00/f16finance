@@ -542,7 +542,7 @@ export default function TaxPage() {
           <div className="text-5xl sm:text-6xl font-bold bg-gradient-to-r from-emerald-300 to-teal-300 bg-clip-text text-transparent leading-none">
             {fmtCompact(grandTotal)}
           </div>
-          <div className="mt-3 text-sm text-slate-700 dark:text-slate-300">
+          <div className="mt-3 text-sm text-body">
             ИПН ({iknRate}% × {fmtCompact(revenue)}) = <b className="text-foreground">{fmt(calc.ipn)}</b>
             {includeSelfSocial ? <> + соц «за себя» {fmt(calc.social)}</> : null}
             {includeEmployees && employees.length > 0 ? <> + за работников {fmt(employeeCalc.monthlyTaxFromEmployees * calc.monthsInPeriod)}</> : null}
@@ -551,7 +551,7 @@ export default function TaxPage() {
             Эффективная нагрузка: {revenue > 0 ? ((grandTotal / revenue) * 100).toFixed(2) : '0'}% от оборота
           </div>
           <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs">
-            <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white">
+            <label className="flex items-center gap-2 cursor-pointer text-body hover:text-slate-900 dark:hover:text-white">
               <input
                 type="checkbox"
                 checked={includeSelfSocial}
@@ -560,7 +560,7 @@ export default function TaxPage() {
               />
               Учитывать соцплатежи «за себя» ({fmt(SOCIAL_FIXED_MONTHLY)}/мес)
             </label>
-            <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white">
+            <label className="flex items-center gap-2 cursor-pointer text-body hover:text-slate-900 dark:hover:text-white">
               <input
                 type="checkbox"
                 checked={includeEmployees}
@@ -570,7 +570,7 @@ export default function TaxPage() {
               Учитывать налоги за работников
             </label>
             {extraCompanyId ? (
-              <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white">
+              <label className="flex items-center gap-2 cursor-pointer text-body hover:text-slate-900 dark:hover:text-white">
                 <input
                   type="checkbox"
                   checked={includeExtra}
@@ -737,7 +737,7 @@ export default function TaxPage() {
                           </label>
                         </td>
                       ))}
-                      <td className="px-2 py-2 text-right text-slate-700 dark:text-slate-300">{fmt(c.total)}</td>
+                      <td className="px-2 py-2 text-right text-body">{fmt(c.total)}</td>
                     </tr>
                   )
                 })}
@@ -816,7 +816,7 @@ export default function TaxPage() {
                       ФИО / должность
                       {b.id.startsWith('db:') ? <span className="rounded bg-blue-500/20 px-1.5 py-0.5 text-[9px] text-blue-300">из БД</span>
                        : b.id.startsWith('override:') ? <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[9px] text-amber-300">переопределено</span>
-                       : <span className="rounded bg-slate-500/20 px-1.5 py-0.5 text-[9px] text-slate-700 dark:text-slate-300">вручную</span>}
+                       : <span className="rounded bg-slate-500/20 px-1.5 py-0.5 text-[9px] text-body">вручную</span>}
                     </label>
                     <input
                       value={b.name}
@@ -906,12 +906,12 @@ export default function TaxPage() {
           ИТОГО ВСЕ НАЛОГИ за {calc.monthsInPeriod} мес
         </h3>
         <div className="space-y-2 text-sm">
-          <div className="flex justify-between"><span className="text-slate-700 dark:text-slate-300">ИПН ({iknRate}% от оборота)</span><span className="font-semibold text-foreground">{fmt(calc.ipn)}</span></div>
+          <div className="flex justify-between"><span className="text-body">ИПН ({iknRate}% от оборота)</span><span className="font-semibold text-foreground">{fmt(calc.ipn)}</span></div>
           {includeSelfSocial ? (
-            <div className="flex justify-between"><span className="text-slate-700 dark:text-slate-300">Соцплатежи ИП "за себя"</span><span className="font-semibold text-foreground">{fmt(calc.social)}</span></div>
+            <div className="flex justify-between"><span className="text-body">Соцплатежи ИП "за себя"</span><span className="font-semibold text-foreground">{fmt(calc.social)}</span></div>
           ) : null}
           {includeEmployees && employees.length > 0 ? (
-            <div className="flex justify-between"><span className="text-slate-700 dark:text-slate-300">Налоги за работников ({employees.length} чел)</span><span className="font-semibold text-foreground">{fmt(employeeCalc.monthlyTaxFromEmployees * calc.monthsInPeriod)}</span></div>
+            <div className="flex justify-between"><span className="text-body">Налоги за работников ({employees.length} чел)</span><span className="font-semibold text-foreground">{fmt(employeeCalc.monthlyTaxFromEmployees * calc.monthsInPeriod)}</span></div>
           ) : null}
           <div className="border-t border-emerald-500/20 pt-2 mt-2">
             <div className="flex justify-between text-base">
@@ -1038,7 +1038,7 @@ export default function TaxPage() {
           {bizSettings.vatPayer ? (
           <div>
             <div className="flex items-center justify-between mb-1">
-              <span className="text-sm text-slate-700 dark:text-slate-300">Порог регистрации по НДС (10 000 МРП = {fmtCompact(NDS_THRESHOLD)})</span>
+              <span className="text-sm text-body">Порог регистрации по НДС (10 000 МРП = {fmtCompact(NDS_THRESHOLD)})</span>
               <span className={`text-xs font-medium ${yearForecast.ndsRisk ? 'text-rose-400' : 'text-emerald-400'}`}>
                 {fmtCompact(yearForecast.currentYearRevenue)}
               </span>
@@ -1067,7 +1067,7 @@ export default function TaxPage() {
 
           <div>
             <div className="flex items-center justify-between mb-1">
-              <span className="text-sm text-slate-700 dark:text-slate-300">Порог упрощёнки (600 000 МРП = {fmtCompact(SIMPLIFIED_THRESHOLD)})</span>
+              <span className="text-sm text-body">Порог упрощёнки (600 000 МРП = {fmtCompact(SIMPLIFIED_THRESHOLD)})</span>
               <span className="text-xs font-medium text-emerald-400">
                 {fmtCompact(yearForecast.currentYearRevenue)}
               </span>
@@ -1294,10 +1294,10 @@ function CalendarSection({
                 <div className="text-[10px] text-slate-500 mt-0.5">{r.deadline}</div>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={() => copy(r.kbk)} className="rounded-lg bg-slate-100 dark:bg-slate-900/80 border border-border px-2 py-1 text-xs text-slate-700 dark:text-slate-200 hover:bg-emerald-500/20 hover:border-emerald-500/30">
+                <button onClick={() => copy(r.kbk)} className="rounded-lg bg-slate-100 dark:bg-slate-900/80 border border-border px-2 py-1 text-xs text-body hover:bg-emerald-500/20 hover:border-emerald-500/30">
                   КБК <span className="font-mono text-emerald-300">{r.kbk}</span>
                 </button>
-                <button onClick={() => copy(r.knp)} className="rounded-lg bg-slate-100 dark:bg-slate-900/80 border border-border px-2 py-1 text-xs text-slate-700 dark:text-slate-200 hover:bg-emerald-500/20 hover:border-emerald-500/30">
+                <button onClick={() => copy(r.knp)} className="rounded-lg bg-slate-100 dark:bg-slate-900/80 border border-border px-2 py-1 text-xs text-body hover:bg-emerald-500/20 hover:border-emerald-500/30">
                   КНП <span className="font-mono text-emerald-300">{r.knp}</span>
                 </button>
               </div>

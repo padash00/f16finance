@@ -66,13 +66,13 @@ function kindIcon(kind: IncidentRow['kind']) {
 function kindBadgeClass(kind: IncidentRow['kind']) {
   if (kind === 'violation') return 'bg-rose-500/15 text-rose-700 dark:text-rose-200'
   if (kind === 'bonus') return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-200'
-  return 'bg-slate-500/15 text-slate-700 dark:text-slate-200'
+  return 'bg-slate-500/15 text-body'
 }
 
 function statusBadgeClass(status: IncidentRow['status']) {
   if (status === 'confirmed') return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-200'
   if (status === 'disputed') return 'bg-amber-500/15 text-amber-700 dark:text-amber-200'
-  if (status === 'voided') return 'bg-slate-500/15 text-slate-600 dark:text-slate-300'
+  if (status === 'voided') return 'bg-slate-500/15 text-body'
   return 'bg-sky-500/15 text-sky-700 dark:text-sky-200'
 }
 
@@ -245,7 +245,7 @@ export default function IncidentsPage() {
                 </tr>
               ) : (
                 rows.map((row) => (
-                  <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-white/5">
+                  <tr key={row.id} className="hover:bg-surface-muted">
                     <td className="px-3 py-2">
                       <span
                         className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${kindBadgeClass(
@@ -265,14 +265,14 @@ export default function IncidentsPage() {
                         {row.article ? ` · ${row.article.title}` : ''}
                       </div>
                     </td>
-                    <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{row.company?.name || '—'}</td>
-                    <td className="px-3 py-2 text-slate-700 dark:text-slate-300">
+                    <td className="px-3 py-2 text-body">{row.company?.name || '—'}</td>
+                    <td className="px-3 py-2 text-body">
                       {row.subject?.short_name || row.subject?.full_name || '—'}
                     </td>
                     <td className="px-3 py-2 text-slate-400">{row.source}</td>
                     <td className="px-3 py-2 text-right text-rose-600 dark:text-rose-300">{fmtMoney(row.fine_amount)}</td>
                     <td className="px-3 py-2 text-right text-emerald-600 dark:text-emerald-300">{fmtMoney(row.bonus_amount)}</td>
-                    <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{fmtDateTime(row.occurred_at)}</td>
+                    <td className="px-3 py-2 text-body">{fmtDateTime(row.occurred_at)}</td>
                     <td className="px-3 py-2">
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs ${statusBadgeClass(row.status)}`}

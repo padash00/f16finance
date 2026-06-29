@@ -1649,7 +1649,7 @@ function WeeklyReportContent() {
                 <Button
                   variant="outline"
                   size="icon"
-                  className={`rounded-xl border-border bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 ${comparisonMode ? 'border-violet-500/50 bg-violet-500/20 text-violet-700 dark:text-violet-300' : ''}`}
+                  className={`rounded-xl border-border bg-surface-muted hover:bg-surface-hover ${comparisonMode ? 'border-violet-500/50 bg-violet-500/20 text-violet-700 dark:text-violet-300' : ''}`}
                   onClick={() => setComparisonMode(!comparisonMode)}
                   title="Сравнение с прошлой неделей"
                   aria-label="Сравнение с прошлой неделей"
@@ -1660,7 +1660,7 @@ function WeeklyReportContent() {
                 <Button
                   variant="outline"
                   size="icon"
-                  className={`rounded-xl border-border bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 ${refreshing ? '[&_svg]:animate-spin' : ''}`}
+                  className={`rounded-xl border-border bg-surface-muted hover:bg-surface-hover ${refreshing ? '[&_svg]:animate-spin' : ''}`}
                   onClick={handleRefresh}
                   title="Обновить"
                   aria-label="Обновить"
@@ -1670,7 +1670,7 @@ function WeeklyReportContent() {
 
                 <Button
                   variant="outline"
-                  className="rounded-xl border-border bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10"
+                  className="rounded-xl border-border bg-surface-muted hover:bg-surface-hover"
                   onClick={() => setShowActPrint(true)}
                   title="Печатный акт по точкам"
                 >
@@ -1680,12 +1680,12 @@ function WeeklyReportContent() {
 
                 {can('weekly-report.export') && (
                   <div className="relative group">
-                    <Button variant="outline" className="rounded-xl border-border bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10">
+                    <Button variant="outline" className="rounded-xl border-border bg-surface-muted hover:bg-surface-hover">
                       <Download className="mr-2 h-4 w-4" />
                       Экспорт
                       <ChevronDown className="ml-2 h-4 w-4" />
                     </Button>
-                    <div className="invisible absolute right-0 top-full z-50 mt-2 w-48 rounded-xl border border-border bg-white dark:bg-slate-900 py-2 opacity-0 shadow-xl transition-all group-hover:visible group-hover:opacity-100">
+                    <div className="invisible absolute right-0 top-full z-50 mt-2 w-48 rounded-xl border border-border bg-card py-2 opacity-0 shadow-xl transition-all group-hover:visible group-hover:opacity-100">
                       <button
                         type="button"
                         onClick={handleDownloadExcel}
@@ -1702,7 +1702,7 @@ function WeeklyReportContent() {
                   <Button
                     variant="outline"
                     size="icon"
-                    className="rounded-xl border-border bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10"
+                    className="rounded-xl border-border bg-surface-muted hover:bg-surface-hover"
                     onClick={handleShare}
                     title="Поделиться"
                     aria-label="Поделиться"
@@ -1731,7 +1731,7 @@ function WeeklyReportContent() {
                 variant="ghost"
                 size="icon"
                 onClick={() => shiftWeek(-1)}
-                className="hover:bg-slate-100 dark:hover:bg-white/10 w-10 h-10 rounded-xl"
+                className="hover:bg-surface-hover w-10 h-10 rounded-xl"
                 title="Предыдущая неделя"
               >
                 <ChevronLeft className="w-5 h-5" />
@@ -1751,7 +1751,7 @@ function WeeklyReportContent() {
                 size="icon"
                 onClick={() => shiftWeek(1)}
                 disabled={!canGoNext}
-                className="hover:bg-slate-100 dark:hover:bg-white/10 w-10 h-10 rounded-xl disabled:opacity-40"
+                className="hover:bg-surface-hover w-10 h-10 rounded-xl disabled:opacity-40"
                 title={!canGoNext ? 'Будущие недели недоступны' : 'Следующая неделя'}
               >
                 <ChevronRight className="w-5 h-5" />
@@ -1806,7 +1806,7 @@ function WeeklyReportContent() {
                     onChange={(e) => setIncludeExtraInTotals(e.target.checked)}
                     className="rounded border-slate-300 dark:border-white/10 bg-white dark:bg-slate-800/50 text-violet-500 focus:ring-violet-500/20"
                   />
-                  <span className="text-sm text-slate-700 dark:text-slate-300">Включить F16 Extra в итоги</span>
+                  <span className="text-sm text-body">Включить F16 Extra в итоги</span>
                 </label>
               </div>
             )}
@@ -2033,7 +2033,7 @@ function WeeklyReportContent() {
                             className="w-3 h-3 rounded-full shrink-0"
                             style={{ backgroundColor: PIE_COLORS[idx % PIE_COLORS.length] }}
                           />
-                          <span className="text-slate-700 dark:text-slate-300 truncate">{cat.name}</span>
+                          <span className="text-body truncate">{cat.name}</span>
                         </div>
                         <div className="text-right shrink-0">
                           <div>
@@ -2105,25 +2105,25 @@ function WeeklyReportContent() {
                     </h3>
 
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="p-4 bg-slate-50 dark:bg-white/5 rounded-xl">
+                      <div className="p-4 bg-surface-muted rounded-xl">
                         <p className="text-xs text-slate-500 mb-1">Расходы / Выручка</p>
                         <p className="text-2xl font-bold text-foreground">{totals.metrics.expenseRate.toFixed(1)}%</p>
                         <p className="text-xs text-slate-500 mt-1">норма &lt; 70%</p>
                       </div>
-                      <div className="p-4 bg-slate-50 dark:bg-white/5 rounded-xl">
+                      <div className="p-4 bg-surface-muted rounded-xl">
                         <p className="text-xs text-slate-500 mb-1">Маржинальность</p>
                         <p className={`text-2xl font-bold ${totals.metrics.profitMargin >= 20 ? 'text-emerald-400' : 'text-amber-400'}`}>
                           {totals.metrics.profitMargin.toFixed(1)}%
                         </p>
                         <p className="text-xs text-slate-500 mt-1">цель &gt; 25%</p>
                       </div>
-                      <div className="p-4 bg-slate-50 dark:bg-white/5 rounded-xl">
+                      <div className="p-4 bg-surface-muted rounded-xl">
                         <p className="text-xs text-slate-500 mb-1">Сальдо наличные</p>
                         <p className={`text-xl font-bold ${totals.netCash >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                           {formatMoneyCompact(totals.netCash)}
                         </p>
                       </div>
-                      <div className="p-4 bg-slate-50 dark:bg-white/5 rounded-xl">
+                      <div className="p-4 bg-surface-muted rounded-xl">
                         <p className="text-xs text-slate-500 mb-1">Сальдо безнал</p>
                         <p className={`text-xl font-bold ${totals.netNonCash >= 0 ? 'text-blue-400' : 'text-rose-400'}`}>
                           {formatMoneyCompact(totals.netNonCash)}
@@ -2229,29 +2229,29 @@ function WeeklyReportContent() {
                           {s.cash > 0 && (
                             <div className="flex justify-between items-center text-xs">
                               <span className="text-slate-400">Наличные</span>
-                              <span className="text-slate-700 dark:text-slate-200 font-medium">{formatMoneyCompact(s.cash)}</span>
+                              <span className="text-body font-medium">{formatMoneyCompact(s.cash)}</span>
                             </div>
                           )}
                           {s.kaspi > 0 && (
                             <div className="flex justify-between items-center text-xs">
                               <span className="text-slate-400">{cashLabels.providerName}</span>
-                              <span className="text-slate-700 dark:text-slate-200 font-medium">{formatMoneyCompact(s.kaspi)}</span>
+                              <span className="text-body font-medium">{formatMoneyCompact(s.kaspi)}</span>
                             </div>
                           )}
                           {s.online > 0 && (
                             <div className="flex justify-between items-center text-xs">
                               <span className="text-slate-400">Online</span>
-                              <span className="text-slate-700 dark:text-slate-200 font-medium">{formatMoneyCompact(s.online)}</span>
+                              <span className="text-body font-medium">{formatMoneyCompact(s.online)}</span>
                             </div>
                           )}
                           {s.card > 0 && (
                             <div className="flex justify-between items-center text-xs">
                               <span className="text-slate-400">Карта</span>
-                              <span className="text-slate-700 dark:text-slate-200 font-medium">{formatMoneyCompact(s.card)}</span>
+                              <span className="text-body font-medium">{formatMoneyCompact(s.card)}</span>
                             </div>
                           )}
                           <div className="flex justify-between items-center text-xs border-t border-slate-200 dark:border-white/5 pt-1 mt-1">
-                            <span className="text-slate-700 dark:text-slate-300 font-medium">Итого доход</span>
+                            <span className="text-body font-medium">Итого доход</span>
                             <span className="text-emerald-400 font-bold">{formatMoneyCompact(s.total)}</span>
                           </div>
                         </div>
@@ -2281,7 +2281,7 @@ function WeeklyReportContent() {
                               </div>
                             ))}
                             <div className="flex justify-between items-start gap-2 text-xs border-t border-slate-200 dark:border-white/5 pt-1 mt-1">
-                              <span className="text-slate-700 dark:text-slate-300 font-medium">Итого расход</span>
+                              <span className="text-body font-medium">Итого расход</span>
                               <div className="text-right shrink-0">
                                 <div className="text-rose-400 font-bold">{formatMoneyCompact(s.expenseTotal)}</div>
                                 <div className="text-[10px] text-slate-500 whitespace-nowrap">
@@ -2297,13 +2297,13 @@ function WeeklyReportContent() {
 
                       {/* САЛЬДО */}
                       <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-200 dark:border-white/5">
-                        <div className="bg-slate-50 dark:bg-white/[0.03] rounded-lg p-2.5 text-center">
+                        <div className="bg-surface-muted rounded-lg p-2.5 text-center">
                           <p className="text-xs text-slate-500 mb-0.5">Сальдо нал</p>
                           <p className={`text-sm font-bold ${s.netCash >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                             {s.netCash >= 0 ? '+' : ''}{formatMoneyCompact(s.netCash)}
                           </p>
                         </div>
-                        <div className="bg-slate-50 dark:bg-white/[0.03] rounded-lg p-2.5 text-center">
+                        <div className="bg-surface-muted rounded-lg p-2.5 text-center">
                           <p className="text-xs text-slate-500 mb-0.5">Сальдо безнал</p>
                           <p className={`text-sm font-bold ${s.netNonCash >= 0 ? 'text-blue-400' : 'text-rose-400'}`}>
                             {s.netNonCash >= 0 ? '+' : ''}{formatMoneyCompact(s.netNonCash)}
@@ -2337,12 +2337,12 @@ function WeeklyReportContent() {
                       <div className="mb-3">
                         <p className="text-xs text-emerald-400 font-medium mb-2 uppercase tracking-wide">Доходы</p>
                         <div className="space-y-1">
-                          {s.cash > 0 && <div className="flex justify-between text-xs"><span className="text-slate-400">Наличные</span><span className="text-slate-700 dark:text-slate-200 font-medium">{formatMoneyCompact(s.cash)}</span></div>}
-                          {s.kaspi > 0 && <div className="flex justify-between text-xs"><span className="text-slate-400">{cashLabels.providerName}</span><span className="text-slate-700 dark:text-slate-200 font-medium">{formatMoneyCompact(s.kaspi)}</span></div>}
-                          {s.online > 0 && <div className="flex justify-between text-xs"><span className="text-slate-400">Online</span><span className="text-slate-700 dark:text-slate-200 font-medium">{formatMoneyCompact(s.online)}</span></div>}
-                          {s.card > 0 && <div className="flex justify-between text-xs"><span className="text-slate-400">Карта</span><span className="text-slate-700 dark:text-slate-200 font-medium">{formatMoneyCompact(s.card)}</span></div>}
+                          {s.cash > 0 && <div className="flex justify-between text-xs"><span className="text-slate-400">Наличные</span><span className="text-body font-medium">{formatMoneyCompact(s.cash)}</span></div>}
+                          {s.kaspi > 0 && <div className="flex justify-between text-xs"><span className="text-slate-400">{cashLabels.providerName}</span><span className="text-body font-medium">{formatMoneyCompact(s.kaspi)}</span></div>}
+                          {s.online > 0 && <div className="flex justify-between text-xs"><span className="text-slate-400">Online</span><span className="text-body font-medium">{formatMoneyCompact(s.online)}</span></div>}
+                          {s.card > 0 && <div className="flex justify-between text-xs"><span className="text-slate-400">Карта</span><span className="text-body font-medium">{formatMoneyCompact(s.card)}</span></div>}
                           <div className="flex justify-between text-xs border-t border-slate-200 dark:border-white/5 pt-1 mt-1">
-                            <span className="text-slate-700 dark:text-slate-300 font-medium">Итого доход</span>
+                            <span className="text-body font-medium">Итого доход</span>
                             <span className="text-emerald-400 font-bold">{formatMoneyCompact(s.total)}</span>
                           </div>
                         </div>
@@ -2368,7 +2368,7 @@ function WeeklyReportContent() {
                               </div>
                             ))}
                             <div className="flex justify-between items-start gap-2 text-xs border-t border-slate-200 dark:border-white/5 pt-1 mt-1">
-                              <span className="text-slate-700 dark:text-slate-300 font-medium">Итого расход</span>
+                              <span className="text-body font-medium">Итого расход</span>
                               <div className="text-right shrink-0">
                                 <div className="text-rose-400 font-bold">{formatMoneyCompact(s.expenseTotal)}</div>
                                 <div className="text-[10px] text-slate-500 whitespace-nowrap">
@@ -2382,11 +2382,11 @@ function WeeklyReportContent() {
                         )}
                       </div>
                       <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-200 dark:border-white/5">
-                        <div className="bg-slate-50 dark:bg-white/[0.03] rounded-lg p-2.5 text-center">
+                        <div className="bg-surface-muted rounded-lg p-2.5 text-center">
                           <p className="text-xs text-slate-500 mb-0.5">Сальдо нал</p>
                           <p className={`text-sm font-bold ${s.netCash >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{s.netCash >= 0 ? '+' : ''}{formatMoneyCompact(s.netCash)}</p>
                         </div>
-                        <div className="bg-slate-50 dark:bg-white/[0.03] rounded-lg p-2.5 text-center">
+                        <div className="bg-surface-muted rounded-lg p-2.5 text-center">
                           <p className="text-xs text-slate-500 mb-0.5">Сальдо безнал</p>
                           <p className={`text-sm font-bold ${s.netNonCash >= 0 ? 'text-blue-400' : 'text-rose-400'}`}>{s.netNonCash >= 0 ? '+' : ''}{formatMoneyCompact(s.netNonCash)}</p>
                         </div>
@@ -2409,8 +2409,8 @@ function WeeklyReportContent() {
                   { income: 0, expense: 0, profit: 0, netCash: 0, netNonCash: 0 }
                 )
                 return (
-                  <div className="rounded-2xl bg-slate-50 dark:bg-white/[0.03] border border-border p-4 flex flex-wrap gap-4 items-center justify-between">
-                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Все точки</span>
+                  <div className="rounded-2xl bg-surface-muted border border-border p-4 flex flex-wrap gap-4 items-center justify-between">
+                    <span className="text-sm font-semibold text-body">Все точки</span>
                     <div className="flex flex-wrap gap-6 text-sm">
                       <div className="text-center">
                         <p className="text-xs text-slate-500">Доход</p>
@@ -2474,7 +2474,7 @@ function WeeklyReportContent() {
               {aiReportLoading && can('weekly-report.ai_generate') ? (
                 <button
                   onClick={handleCancelAiReport}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl border border-border bg-slate-50 dark:bg-white/5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10"
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl border border-border bg-surface-muted text-sm text-body hover:bg-surface-hover"
                 >
                   Отменить
                 </button>
@@ -2498,7 +2498,7 @@ function WeeklyReportContent() {
             {aiReport && (
               <div className="prose dark:prose-invert prose-sm max-w-none">
                 {aiReportLoading ? <p className="mb-2 text-xs text-violet-600 dark:text-violet-300">AI пишет отчёт...</p> : null}
-                <pre className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed font-sans bg-transparent p-0 border-0">{aiReport}</pre>
+                <pre className="text-sm text-body whitespace-pre-wrap leading-relaxed font-sans bg-transparent p-0 border-0">{aiReport}</pre>
               </div>
             )}
 

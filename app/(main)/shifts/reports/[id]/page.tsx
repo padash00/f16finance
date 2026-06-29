@@ -452,7 +452,7 @@ export default function ShiftReportDetailPage({
             <div className="flex flex-wrap items-center gap-4 px-1 text-xs text-slate-500">
               {shift.closer && (
                 <span>
-                  Закрыл: <span className="text-slate-700 dark:text-slate-300">{shift.closer.short_name || shift.closer.full_name}</span>
+                  Закрыл: <span className="text-body">{shift.closer.short_name || shift.closer.full_name}</span>
                 </span>
               )}
               {shift.handover_from_shift_id && (
@@ -492,13 +492,13 @@ export default function ShiftReportDetailPage({
                 )}
               </div>
               {shift.opening_notes && (
-                <div className="mt-3 text-sm text-slate-700 dark:text-slate-300">
+                <div className="mt-3 text-sm text-body">
                   <div className="text-xs text-slate-500">Заметка при открытии:</div>
                   <div className="whitespace-pre-wrap">{shift.opening_notes}</div>
                 </div>
               )}
               {shift.closing_notes && (
-                <div className="mt-3 text-sm text-slate-700 dark:text-slate-300">
+                <div className="mt-3 text-sm text-body">
                   <div className="text-xs text-slate-500">Заметка при закрытии:</div>
                   <div className="whitespace-pre-wrap">{shift.closing_notes}</div>
                 </div>
@@ -658,10 +658,10 @@ export default function ShiftReportDetailPage({
                 {topItems.map((t, i) => (
                   <div
                     key={t.name}
-                    className="flex items-center gap-3 bg-white dark:bg-slate-950 px-4 py-2 text-sm"
+                    className="flex items-center gap-3 bg-card px-4 py-2 text-sm"
                   >
                     <span className="w-5 text-right text-xs text-slate-500">{i + 1}</span>
-                    <span className="flex-1 truncate text-slate-700 dark:text-slate-200">{t.name}</span>
+                    <span className="flex-1 truncate text-body">{t.name}</span>
                     <span className="text-xs text-slate-400 tabular-nums">×{t.qty}</span>
                     <span className="w-24 text-right text-emerald-700 dark:text-emerald-300 tabular-nums">
                       {fmtMoney(t.amount)}
@@ -686,13 +686,13 @@ export default function ShiftReportDetailPage({
                   value={salesSearch}
                   onChange={(e) => setSalesSearch(e.target.value)}
                   placeholder="Поиск по товару, клиенту, оператору…"
-                  className="h-8 w-72 rounded-md border border-border bg-white dark:bg-white/[0.03] pl-7 pr-2 text-xs text-slate-700 dark:text-slate-200 outline-none placeholder:text-slate-500 focus:border-emerald-500/40"
+                  className="h-8 w-72 rounded-md border border-border bg-white dark:bg-white/[0.03] pl-7 pr-2 text-xs text-body outline-none placeholder:text-slate-500 focus:border-emerald-500/40"
                 />
               </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1000px] text-sm">
-                <thead className="bg-slate-50 dark:bg-white/5">
+                <thead className="bg-surface-muted">
                   <tr className="text-left text-xs uppercase tracking-wide text-slate-400">
                     <th className="w-6 px-2 py-2"></th>
                     <th className="px-3 py-2">Время</th>
@@ -731,7 +731,7 @@ export default function ShiftReportDetailPage({
                       return (
                         <Fragment key={s.id}>
                           <tr
-                            className={`hover:bg-slate-50 dark:hover:bg-white/5 ${hasItems ? 'cursor-pointer' : ''}`}
+                            className={`hover:bg-surface-muted ${hasItems ? 'cursor-pointer' : ''}`}
                             onClick={() => hasItems && toggleSaleExpand(s.id)}
                           >
                             <td className="px-2 py-2 text-slate-500">
@@ -743,8 +743,8 @@ export default function ShiftReportDetailPage({
                                 )
                               ) : null}
                             </td>
-                            <td className="px-3 py-2 text-slate-700 dark:text-slate-300 whitespace-nowrap">{fmtDateTime(s.sold_at)}</td>
-                            <td className="px-3 py-2 text-slate-700 dark:text-slate-300 max-w-[280px] truncate">
+                            <td className="px-3 py-2 text-body whitespace-nowrap">{fmtDateTime(s.sold_at)}</td>
+                            <td className="px-3 py-2 text-body max-w-[280px] truncate">
                               {composition || <span className="text-slate-500">—</span>}
                             </td>
                             <td className="px-3 py-2 text-slate-400">
@@ -753,11 +753,11 @@ export default function ShiftReportDetailPage({
                             <td className="px-3 py-2 text-slate-400">
                               {s.customer?.name || '—'}
                             </td>
-                            <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{paymentLabel(s.payment_method)}</td>
-                            <td className="px-3 py-2 text-right text-slate-700 dark:text-slate-200">
+                            <td className="px-3 py-2 text-body">{paymentLabel(s.payment_method)}</td>
+                            <td className="px-3 py-2 text-right text-body">
                               {fmtMoney(s.cash_amount)}
                             </td>
-                            <td className="px-3 py-2 text-right text-slate-700 dark:text-slate-200">
+                            <td className="px-3 py-2 text-right text-body">
                               {fmtMoney(s.kaspi_amount)}
                             </td>
                             <td className="px-3 py-2 text-right text-amber-700 dark:text-amber-300">
@@ -796,7 +796,7 @@ export default function ShiftReportDetailPage({
                                           key={it.id}
                                           className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 border-b border-slate-100 dark:border-white/5 py-1 last:border-0"
                                         >
-                                          <span className="text-slate-700 dark:text-slate-200">{itemName(it)}</span>
+                                          <span className="text-body">{itemName(it)}</span>
                                           <span className="text-slate-500 tabular-nums">
                                             ×{qty}
                                           </span>
@@ -829,7 +829,7 @@ export default function ShiftReportDetailPage({
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px] text-sm">
-                <thead className="bg-slate-50 dark:bg-white/5">
+                <thead className="bg-surface-muted">
                   <tr className="text-left text-xs uppercase tracking-wide text-slate-400">
                     <th className="px-3 py-2">Время</th>
                     <th className="px-3 py-2">Состав</th>
@@ -857,16 +857,16 @@ export default function ShiftReportDetailPage({
                         })
                         .join(', ')
                       return (
-                        <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-white/5">
-                          <td className="px-3 py-2 text-slate-700 dark:text-slate-300 whitespace-nowrap">{fmtDateTime(r.returned_at)}</td>
-                          <td className="px-3 py-2 text-slate-700 dark:text-slate-300 max-w-[280px]">
+                        <tr key={r.id} className="hover:bg-surface-muted">
+                          <td className="px-3 py-2 text-body whitespace-nowrap">{fmtDateTime(r.returned_at)}</td>
+                          <td className="px-3 py-2 text-body max-w-[280px]">
                             {composition || <span className="text-slate-500">—</span>}
                           </td>
-                          <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{paymentLabel(r.payment_method)}</td>
-                          <td className="px-3 py-2 text-right text-slate-700 dark:text-slate-200">
+                          <td className="px-3 py-2 text-body">{paymentLabel(r.payment_method)}</td>
+                          <td className="px-3 py-2 text-right text-body">
                             {fmtMoney(r.cash_amount)}
                           </td>
-                          <td className="px-3 py-2 text-right text-slate-700 dark:text-slate-200">
+                          <td className="px-3 py-2 text-right text-body">
                             {fmtMoney(r.kaspi_amount)}
                           </td>
                           <td className="px-3 py-2 text-right text-rose-600 dark:text-rose-300">
@@ -1400,7 +1400,7 @@ function ZReport({
           <div className="text-xs uppercase tracking-wider text-rose-700 dark:text-rose-300/80 font-semibold mb-2">📋 Долги клиентов на смене ({clientDebts.length})</div>
           <div className="rounded-lg border border-border bg-slate-50 dark:bg-white/[0.02] p-3 space-y-1 text-sm">
             {clientDebts.slice(0, 10).map((d) => (
-              <div key={d.id} className="flex justify-between items-center text-slate-700 dark:text-slate-300 text-xs">
+              <div key={d.id} className="flex justify-between items-center text-body text-xs">
                 <span className="truncate">
                   • {d.client_name || '—'} · {d.item_name || '—'}
                   {d.quantity > 1 && <span className="text-slate-500"> ×{d.quantity}</span>}
@@ -1442,13 +1442,13 @@ function ZReport({
           {shift.opening_notes && (
             <div className="rounded-lg border border-border bg-slate-50 dark:bg-white/[0.02] p-3 text-sm">
               <div className="text-[10px] text-slate-500 uppercase mb-1">📝 При открытии</div>
-              <div className="text-slate-700 dark:text-slate-300 italic">«{shift.opening_notes}»</div>
+              <div className="text-body italic">«{shift.opening_notes}»</div>
             </div>
           )}
           {shift.closing_notes && (
             <div className="rounded-lg border border-border bg-slate-50 dark:bg-white/[0.02] p-3 text-sm">
               <div className="text-[10px] text-slate-500 uppercase mb-1">📝 При закрытии</div>
-              <div className="text-slate-700 dark:text-slate-300 italic">«{shift.closing_notes}»</div>
+              <div className="text-body italic">«{shift.closing_notes}»</div>
             </div>
           )}
         </div>
@@ -1478,7 +1478,7 @@ function ZRow({
       ? 'text-emerald-700 dark:text-emerald-300'
       : negative
         ? 'text-rose-600 dark:text-rose-300'
-        : 'text-slate-700 dark:text-slate-200'
+        : 'text-body'
   return (
     <div className="flex justify-between items-center">
       <span className={`text-slate-400 ${muted ? 'text-xs' : ''}`}>{label}</span>

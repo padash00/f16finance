@@ -159,14 +159,14 @@ function moneyShort(n: number): string {
 function piColor(pi: number): { text: string; bg: string; border: string; label: string } {
   if (pi >= 1.15) return { text: 'text-emerald-700 dark:text-emerald-300', bg: 'bg-emerald-500/15', border: 'border-emerald-500/30', label: 'Превосходно' }
   if (pi >= 1.05) return { text: 'text-emerald-700 dark:text-emerald-300', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', label: 'Хорошо' }
-  if (pi >= 0.95) return { text: 'text-slate-700 dark:text-slate-300', bg: 'bg-slate-500/10', border: 'border-slate-500/20', label: 'Норма' }
+  if (pi >= 0.95) return { text: 'text-body', bg: 'bg-slate-500/10', border: 'border-slate-500/20', label: 'Норма' }
   if (pi >= 0.85) return { text: 'text-amber-700 dark:text-amber-300', bg: 'bg-amber-500/10', border: 'border-amber-500/20', label: 'Ниже нормы' }
   return { text: 'text-rose-700 dark:text-rose-300', bg: 'bg-rose-500/10', border: 'border-rose-500/20', label: 'Слабо' }
 }
 
 function rankBadge(rank: number) {
   if (rank === 1) return <Crown className="w-5 h-5 text-amber-600 dark:text-amber-300" />
-  if (rank === 2) return <Trophy className="w-5 h-5 text-slate-700 dark:text-slate-300" />
+  if (rank === 2) return <Trophy className="w-5 h-5 text-body" />
   if (rank === 3) return <Medal className="w-5 h-5 text-orange-600 dark:text-orange-300" />
   return <span className="text-xs font-mono text-muted-foreground">#{rank}</span>
 }
@@ -193,7 +193,7 @@ function weekKey(iso: string): string {
 // Дельта PI к прошлому периоду: ↑/↓/— с цветом. undefined prev → «новый».
 function DeltaBadge({ pi, prev }: { pi: number; prev: number | undefined }) {
   if (prev === undefined) {
-    return <span className="text-[10px] text-slate-400 dark:text-slate-500 whitespace-nowrap">новый</span>
+    return <span className="text-[10px] text-faint whitespace-nowrap">новый</span>
   }
   const d = pi - prev
   if (Math.abs(d) < 0.005) {
@@ -502,7 +502,7 @@ export default function PerformancePage() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-md border border-border bg-slate-100 dark:bg-white/5 px-2.5 py-0.5 text-[11px] font-medium text-slate-700 dark:text-slate-300">
+              <span className="rounded-md border border-border bg-slate-100 dark:bg-white/5 px-2.5 py-0.5 text-[11px] font-medium text-body">
                 {PERIOD_PRESETS[period].label}
               </span>
               {selectedCompany && (
@@ -555,7 +555,7 @@ export default function PerformancePage() {
                 type="button"
                 onClick={() => exportCsv(viewQualifying, bonusPct)}
                 disabled={viewQualifying.length === 0}
-                className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-zinc-900/50 border border-border rounded-xl px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-zinc-900/70 disabled:opacity-40"
+                className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-zinc-900/50 border border-border rounded-xl px-3 py-1.5 text-xs font-medium text-body hover:bg-slate-200 dark:hover:bg-zinc-900/70 disabled:opacity-40"
                 title="Скачать CSV (Excel)"
               >
                 <Download className="w-3.5 h-3.5" />Экспорт
@@ -610,7 +610,7 @@ export default function PerformancePage() {
       )}
 
       {/* Объяснение метода — сворачиваемое (справочник, по умолчанию скрыто) */}
-      <Card className="bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/8 overflow-hidden">
+      <Card className="bg-white dark:bg-gray-900/40 border-border overflow-hidden">
         <button
           type="button"
           onClick={() => setMethodOpen((v) => !v)}
@@ -629,12 +629,12 @@ export default function PerformancePage() {
             <div className="flex-1">
               <div className="font-semibold text-foreground mb-1">Считаем «ожидание» для каждой смены</div>
               <p className="text-muted-foreground leading-relaxed">
-                Берём <strong className="text-slate-700 dark:text-slate-200">всю историю проекта</strong>
+                Берём <strong className="text-body">всю историю проекта</strong>
                 {data?.baseline.from && (
-                  <> с <strong className="text-slate-700 dark:text-slate-200">{data.baseline.from}</strong> ({data.config.baseline_days_actual} дн.)</>
+                  <> с <strong className="text-body">{data.baseline.from}</strong> ({data.config.baseline_days_actual} дн.)</>
                 )}
                 {' '}и для каждого слота считаем
-                <strong className="text-slate-700 dark:text-slate-200"> медианную выручку</strong>. Слот — это уникальная комбинация
+                <strong className="text-body"> медианную выручку</strong>. Слот — это уникальная комбинация
                 «<strong className="text-emerald-700 dark:text-emerald-300">точка</strong> × <strong className="text-emerald-700 dark:text-emerald-300">день недели</strong> × <strong className="text-emerald-700 dark:text-emerald-300">день/ночь</strong>».
                 Окно автоматически расширяется по мере накопления данных — мы не теряем ранние смены и точно знаем,
                 сколько в среднем делается в каждый понедельник, пятницу, ночь и т.д.
@@ -643,7 +643,7 @@ export default function PerformancePage() {
                 <strong className="text-amber-700 dark:text-amber-300">Важно (leave-one-out):</strong> когда мы считаем ожидание для смены оператора Х — его собственные прошлые смены <strong className="text-amber-700 dark:text-amber-300">не входят в медиану</strong>.
                 Это убирает «само-смещение»: если оператор работал почти все пятничные ночи, его прошлые результаты не должны формировать его же норму. Сравниваем его только с тем что делали <strong>другие</strong> в таком же слоте.
               </p>
-              <div className="mt-2 rounded-lg border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-black/20 p-3 text-xs text-muted-foreground">
+              <div className="mt-2 rounded-lg border border-border bg-slate-50 dark:bg-black/20 p-3 text-xs text-muted-foreground">
                 Пример: «Arena × пятница × ночь» — за период базы было 24 таких смены. Когда считаем ожидание для Айгерим, исключаем её 6 смен → медиана из оставшихся 18 = <span className="text-foreground font-semibold">280 000 ₸</span>. Сравниваем её с этим значением.
               </div>
             </div>
@@ -679,9 +679,9 @@ export default function PerformancePage() {
             <div className="flex-1">
               <div className="font-semibold text-foreground mb-1">Собираем балл — по деньгам, а не по «среднему процентов»</div>
               <p className="text-muted-foreground leading-relaxed">
-                Балл = <strong className="text-slate-700 dark:text-slate-200">вся выручка ÷ всё ожидание</strong> по сменам (денежный вес). Большая смена весит больше маленькой — как в жизни. Это честнее простого среднего: удачная «мёртвая» смена с маленькими суммами больше не задирает балл.
+                Балл = <strong className="text-body">вся выручка ÷ всё ожидание</strong> по сменам (денежный вес). Большая смена весит больше маленькой — как в жизни. Это честнее простого среднего: удачная «мёртвая» смена с маленькими суммами больше не задирает балл.
               </p>
-              <div className="mt-2 rounded-lg border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-black/20 p-3 text-xs text-muted-foreground">
+              <div className="mt-2 rounded-lg border border-border bg-slate-50 dark:bg-black/20 p-3 text-xs text-muted-foreground">
                 <span className="text-foreground font-semibold">Айгерим:</span> Σфакт = 865к, Σожидание = 880к → балл = 865/880 = <span className="text-emerald-700 dark:text-emerald-300 font-semibold">0.98</span>. Копеечный удачный вторник почти не виден — он мал и в сумме не тянет.
               </div>
             </div>
@@ -702,8 +702,8 @@ export default function PerformancePage() {
                   <div className="text-emerald-700 dark:text-emerald-200 text-[10px]">Хорошо</div>
                 </div>
                 <div className="rounded-md border border-slate-500/20 bg-slate-500/10 px-2 py-1.5 text-center">
-                  <div className="text-slate-700 dark:text-slate-300 font-bold">0.95–1.04</div>
-                  <div className="text-slate-700 dark:text-slate-300 text-[10px]">Норма</div>
+                  <div className="text-body font-bold">0.95–1.04</div>
+                  <div className="text-body text-[10px]">Норма</div>
                 </div>
                 <div className="rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-1.5 text-center">
                   <div className="text-amber-700 dark:text-amber-300 font-bold">0.85–0.94</div>
@@ -724,17 +724,17 @@ export default function PerformancePage() {
               <div className="font-semibold text-foreground mb-1">Защита от случайных всплесков</div>
               <ul className="text-muted-foreground leading-relaxed space-y-1 list-disc pl-4">
                 <li>
-                  <strong className="text-slate-700 dark:text-slate-200">Минимум 3 смены</strong> для попадания в основной рейтинг.
+                  <strong className="text-body">Минимум 3 смены</strong> для попадания в основной рейтинг.
                   Меньше — оператор в секции «Накапливают данные».
                 </li>
                 <li>
-                  <strong className="text-slate-700 dark:text-slate-200">PI ограничен от 0.5 до 2.0</strong> — лотерейный день с одним крупным заказом не возносит и не валит надолго.
+                  <strong className="text-body">PI ограничен от 0.5 до 2.0</strong> — лотерейный день с одним крупным заказом не возносит и не валит надолго.
                 </li>
                 <li>
                   Если в слоте {'<'} 3 наблюдений (редкий случай) — берём fallback: медиана по точке-смене, потом по точке, потом глобально.
                 </li>
                 <li>
-                  <strong className="text-slate-700 dark:text-slate-200">Сравнение справедливое</strong> — пятница сравнивается с пятницей, ночь с ночью, Arena с Arena. Не зависит от того сколько смен у оператора.
+                  <strong className="text-body">Сравнение справедливое</strong> — пятница сравнивается с пятницей, ночь с ночью, Arena с Arena. Не зависит от того сколько смен у оператора.
                 </li>
               </ul>
             </div>
@@ -742,10 +742,10 @@ export default function PerformancePage() {
 
           {/* Stats */}
           {data?.baseline && (
-            <div className="rounded-xl border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-white/[0.02] p-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-slate-500">
-              <span><strong className="text-slate-700 dark:text-slate-300">База расчёта:</strong> {data.baseline.shifts_count} смен в {data.baseline.slots_count} уникальных слотах</span>
-              <span><strong className="text-slate-700 dark:text-slate-300">Период базы:</strong> {data.baseline.from} — {data.baseline.to}</span>
-              <span><strong className="text-slate-700 dark:text-slate-300">Медиана глобально:</strong> {moneyShort(data.baseline.global_median)}</span>
+            <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] p-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-slate-500">
+              <span><strong className="text-body">База расчёта:</strong> {data.baseline.shifts_count} смен в {data.baseline.slots_count} уникальных слотах</span>
+              <span><strong className="text-body">Период базы:</strong> {data.baseline.from} — {data.baseline.to}</span>
+              <span><strong className="text-body">Медиана глобально:</strong> {moneyShort(data.baseline.global_median)}</span>
             </div>
           )}
         </div>
@@ -807,7 +807,7 @@ export default function PerformancePage() {
                       <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-3 flex-wrap">
                         <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3" />{op.shifts} смен</span>
                         <span className="inline-flex items-center gap-1"><TrendingUp className="w-3 h-3" />{moneyShort(op.total_revenue)}</span>
-                        <span className="text-slate-400 dark:text-slate-500">норма {moneyShort(expectedTotal(op))}</span>
+                        <span className="text-faint">норма {moneyShort(expectedTotal(op))}</span>
                         <span className={`font-semibold ${above >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                           {above >= 0 ? '+' : ''}{moneyShort(above)} к норме
                         </span>
@@ -853,9 +853,9 @@ export default function PerformancePage() {
                 key={op.operator_id}
                 type="button"
                 onClick={() => setSelected(op)}
-                className="text-left rounded-xl border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-gray-900/40 px-3 py-2.5 transition hover:border-slate-300 dark:hover:border-white/15"
+                className="text-left rounded-xl border border-border bg-slate-50 dark:bg-gray-900/40 px-3 py-2.5 transition hover:border-slate-300 dark:hover:border-white/15"
               >
-                <div className="font-medium text-slate-700 dark:text-slate-200 text-sm truncate">{op.operator_short_name || op.operator_name}</div>
+                <div className="font-medium text-body text-sm truncate">{op.operator_short_name || op.operator_name}</div>
                 <div className="text-xs text-slate-500 mt-0.5">
                   {op.shifts}/{data?.config.min_qualifying_shifts || 3} смен · {moneyShort(op.total_revenue)}
                 </div>
@@ -1003,10 +1003,10 @@ function OperatorDetailModal({
               </div>
             )}
           </div>
-          <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-white/8">
+          <div className="overflow-hidden rounded-xl border border-border">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-white/[0.03] text-[11px] uppercase tracking-wide text-muted-foreground">
+                <tr className="border-b border-border bg-surface-muted text-[11px] uppercase tracking-wide text-muted-foreground">
                   <th className="px-3 py-2 text-left font-medium">Дата</th>
                   <th className="px-3 py-2 text-left font-medium">Смена</th>
                   <th className="px-3 py-2 text-right font-medium">Ожидалось</th>
@@ -1022,7 +1022,7 @@ function OperatorDetailModal({
                   const anomaly = sh.pi >= 1.99 || sh.pi <= 0.51
                   return (
                     <tr key={idx} className="border-b border-slate-100 dark:border-white/5 last:border-0 hover:bg-slate-50 dark:hover:bg-white/[0.02]">
-                      <td className="px-3 py-2 text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                      <td className="px-3 py-2 text-body whitespace-nowrap">
                         {anomaly && <Zap className="inline w-3 h-3 mr-1 text-amber-500" />}{sh.date}
                       </td>
                       <td className="px-3 py-2 text-muted-foreground">
@@ -1062,7 +1062,7 @@ function OperatorDetailModal({
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] px-3 py-2">
+    <div className="rounded-xl border border-border bg-surface-muted px-3 py-2">
       <div className="text-[10px] uppercase tracking-wide text-slate-500">{label}</div>
       <div className="mt-1 text-sm font-semibold text-foreground">{value}</div>
     </div>
@@ -1073,7 +1073,7 @@ const SUMMARY_TONE: Record<'emerald' | 'rose' | 'amber' | 'slate', { icon: strin
   emerald: { icon: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300', val: 'text-emerald-700 dark:text-emerald-300' },
   rose: { icon: 'bg-rose-500/15 text-rose-600 dark:text-rose-300', val: 'text-rose-700 dark:text-rose-300' },
   amber: { icon: 'bg-amber-500/15 text-amber-600 dark:text-amber-300', val: 'text-amber-700 dark:text-amber-300' },
-  slate: { icon: 'bg-slate-500/15 text-slate-600 dark:text-slate-300', val: 'text-foreground' },
+  slate: { icon: 'bg-slate-500/15 text-body', val: 'text-foreground' },
 }
 
 function SummaryCard({
@@ -1081,7 +1081,7 @@ function SummaryCard({
 }: { icon: React.ReactNode; label: string; value: string; hint: string; tone: 'emerald' | 'rose' | 'amber' | 'slate'; small?: boolean }) {
   const t = SUMMARY_TONE[tone]
   return (
-    <Card className="p-4 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/8">
+    <Card className="p-4 bg-white dark:bg-gray-900/40 border-border">
       <div className="flex items-center gap-2">
         <div className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg ${t.icon}`}>{icon}</div>
         <div className="text-[11px] uppercase tracking-wide text-muted-foreground leading-tight">{label}</div>

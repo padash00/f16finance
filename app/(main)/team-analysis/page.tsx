@@ -37,7 +37,7 @@ const num = (n: number) => Math.round(n || 0).toLocaleString('ru-RU')
 const cardCls = 'rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900/40'
 const sub = 'text-muted-foreground'
 const thCls = 'px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground'
-const tdCls = 'px-3 py-2 text-sm text-slate-700 dark:text-slate-200 tabular-nums'
+const tdCls = 'px-3 py-2 text-sm text-body tabular-nums'
 
 const SEV: Record<Insight['severity'], { accent: string; chip: string; label: string; icon: React.ReactNode }> = {
   high: {
@@ -222,7 +222,7 @@ export default function TeamAnalysisPage() {
                 <span aria-hidden>🧠</span> Главное по команде
                 <Sparkles className="h-4 w-4 text-violet-500" aria-hidden />
               </h2>
-              <p className="mt-2 text-sm leading-relaxed text-slate-700 dark:text-slate-200">{data.summary}</p>
+              <p className="mt-2 text-sm leading-relaxed text-body">{data.summary}</p>
             </div>
           ) : null}
 
@@ -242,7 +242,7 @@ export default function TeamAnalysisPage() {
                     </div>
                     {it.reason ? (
                       <p className={`mt-2.5 text-sm leading-relaxed ${sub}`}>
-                        <span className="font-medium text-slate-600 dark:text-slate-300">Почему: </span>{it.reason}
+                        <span className="font-medium text-body">Почему: </span>{it.reason}
                       </p>
                     ) : null}
                     {it.action ? (
@@ -266,7 +266,7 @@ export default function TeamAnalysisPage() {
             </h2>
             <div className="overflow-x-auto rounded-xl border border-border">
               <table className="min-w-full">
-                <thead className="bg-slate-50 dark:bg-white/[0.03]">
+                <thead className="bg-surface-muted">
                   <tr>
                     <th className={thCls}>Оператор</th>
                     <th className={thCls}>Смены</th>

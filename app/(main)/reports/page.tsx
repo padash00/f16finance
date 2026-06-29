@@ -240,7 +240,7 @@ const INSIGHT_STYLES: Record<InsightType, { bg: string; border: string; text: st
   warning: { bg: 'bg-amber-50 dark:bg-amber-500/5', border: 'border-amber-200 dark:border-amber-500/20', text: 'text-amber-600 dark:text-amber-400', icon: AlertTriangle },
   danger: { bg: 'bg-rose-50 dark:bg-rose-500/5', border: 'border-rose-200 dark:border-rose-500/20', text: 'text-rose-600 dark:text-rose-400', icon: AlertTriangle },
   opportunity: { bg: 'bg-blue-50 dark:bg-blue-500/5', border: 'border-blue-200 dark:border-blue-500/20', text: 'text-blue-600 dark:text-blue-400', icon: Lightbulb },
-  info: { bg: 'bg-slate-50 dark:bg-white/[0.03]', border: 'border-border', text: 'text-muted-foreground', icon: Activity },
+  info: { bg: 'bg-surface-muted', border: 'border-border', text: 'text-muted-foreground', icon: Activity },
 }
 
 const SEVERITY_STYLES: Record<Severity, { bg: string; border: string; text: string }> = {
@@ -790,13 +790,13 @@ function DrillDownModal({
     <div className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center p-4 py-8" onClick={onClose}>
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
       <div
-        className="relative z-10 w-full max-w-5xl max-h-[90vh] flex flex-col rounded-2xl bg-white dark:bg-slate-900 border border-border shadow-2xl my-auto"
+        className="relative z-10 w-full max-w-5xl max-h-[90vh] flex flex-col rounded-2xl bg-card border border-border shadow-2xl my-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border flex-shrink-0">
           <h2 className="text-lg font-semibold text-foreground">{DRILL_TITLES[type]}</h2>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 transition-colors">
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-surface-hover transition-colors">
             <X className="w-5 h-5 text-muted-foreground" />
           </button>
         </div>
@@ -807,7 +807,7 @@ function DrillDownModal({
           <select
             value={filterCompany}
             onChange={(e) => setFilterCompany(e.target.value)}
-            className="h-9 rounded-lg bg-white dark:bg-slate-800 border border-border text-sm text-foreground px-3 focus:outline-none focus:ring-1 focus:ring-amber-500"
+            className="h-9 rounded-lg bg-card border border-border text-sm text-foreground px-3 focus:outline-none focus:ring-1 focus:ring-amber-500"
           >
             <option value="all">Все компании</option>
             {companies.map((c) => (
@@ -822,7 +822,7 @@ function DrillDownModal({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Поиск по компании, категории…"
-              className="w-full h-9 pl-9 pr-3 rounded-lg bg-white dark:bg-slate-800 border border-border text-sm text-foreground placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+              className="w-full h-9 pl-9 pr-3 rounded-lg bg-card border border-border text-sm text-foreground placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
             />
           </div>
 
@@ -885,9 +885,9 @@ function DrillDownModal({
                 filtered.map((row) => (
                   <tr
                     key={`${row.type}-${row.id}`}
-                    className="border-b border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
+                    className="border-b border-slate-100 dark:border-white/5 hover:bg-surface-muted transition-colors"
                   >
-                    <td className="px-4 py-2.5 text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                    <td className="px-4 py-2.5 text-body whitespace-nowrap">
                       {fromISO(row.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })}
                     </td>
                     <td className="px-4 py-2.5 text-foreground font-medium">{row.companyName}</td>
@@ -903,8 +903,8 @@ function DrillDownModal({
                       </td>
                     )}
                     <td className="px-4 py-2.5 text-muted-foreground max-w-[200px] truncate">{row.label}</td>
-                    <td className="px-4 py-2.5 text-right text-slate-700 dark:text-slate-300">{row.cash > 0 ? formatMoneyCompact(row.cash) : '—'}</td>
-                    <td className="px-4 py-2.5 text-right text-slate-700 dark:text-slate-300">{row.kaspi > 0 ? formatMoneyCompact(row.kaspi) : '—'}</td>
+                    <td className="px-4 py-2.5 text-right text-body">{row.cash > 0 ? formatMoneyCompact(row.cash) : '—'}</td>
+                    <td className="px-4 py-2.5 text-right text-body">{row.kaspi > 0 ? formatMoneyCompact(row.kaspi) : '—'}</td>
                     <td className={`px-4 py-2.5 text-right font-semibold ${
                       row.type === 'income' ? 'text-emerald-400' : 'text-rose-400'
                     }`}>
@@ -2088,7 +2088,7 @@ function ReportsContent() {
                     setDatePreset('custom')
                   }}
                 />
-                <span className="text-slate-400 dark:text-slate-500">—</span>
+                <span className="text-faint">—</span>
                 <DatePicker
                   value={dateTo}
                   onChange={(v) => {
@@ -2122,7 +2122,7 @@ function ReportsContent() {
 
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors ${showFilters ? 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400' : 'bg-white dark:bg-white/[0.04] border-border text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.06]'}`}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors ${showFilters ? 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400' : 'bg-white dark:bg-white/[0.04] border-border text-body hover:bg-slate-100 dark:hover:bg-white/[0.06]'}`}
               >
                 <Filter className="w-4 h-4" />
                 Расширенные
@@ -2183,7 +2183,7 @@ function ReportsContent() {
                       onChange={(e) => setIncludeExtraInTotals(e.target.checked)}
                       className="rounded border-border bg-white dark:bg-slate-800/50 text-amber-500 focus:ring-amber-500/20"
                     />
-                    <span className="text-sm text-slate-700 dark:text-slate-300">Включить F16 Extra</span>
+                    <span className="text-sm text-body">Включить F16 Extra</span>
                   </label>
                 </div>
               </div>
@@ -2323,7 +2323,7 @@ function ReportsContent() {
                               className="w-3 h-3 rounded-full" 
                               style={{ backgroundColor: PIE_COLORS[idx % PIE_COLORS.length] }}
                             />
-                            <span className="text-slate-700 dark:text-slate-300 truncate max-w-[120px]">{cat.name}</span>
+                            <span className="text-body truncate max-w-[120px]">{cat.name}</span>
                           </div>
                           <div className="text-right">
                             <span className="text-foreground font-medium">{formatMoneyCompact(cat.amount)}</span>
@@ -2440,7 +2440,7 @@ function ReportsContent() {
                       return (
                         <div key={item.label} className="space-y-2">
                           <div className="flex justify-between text-sm">
-                            <span className="text-slate-700 dark:text-slate-300">{item.label}</span>
+                            <span className="text-body">{item.label}</span>
                             <span className="text-foreground font-medium">{formatMoneyFull(item.value)} ({pct.toFixed(1)}%)</span>
                           </div>
                           <div className="h-3 bg-slate-100 dark:bg-slate-800/50 rounded-full overflow-hidden">
@@ -2552,7 +2552,7 @@ function ReportsContent() {
                             type="checkbox"
                             checked={selectedRows.size === (useVirtualization ? filteredRows.length : paginatedRows.length) && (useVirtualization ? filteredRows.length : paginatedRows.length) > 0}
                             onChange={selectAllRows}
-                            className="rounded border-border bg-white dark:bg-slate-800 text-amber-500"
+                            className="rounded border-border bg-card text-amber-500"
                           />
                         </th>
                         {[
@@ -2596,17 +2596,17 @@ function ReportsContent() {
                                     height: `${virtualRow.size}px`,
                                     transform: `translateY(${virtualRow.start}px)`,
                                   }}
-                                  className="flex items-center px-4 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
+                                  className="flex items-center px-4 hover:bg-surface-muted transition-colors"
                                 >
                                   <div className="w-8">
                                     <input 
                                       type="checkbox"
                                       checked={selectedRows.has(row.id)}
                                       onChange={() => toggleRowSelection(row.id)}
-                                      className="rounded border-border bg-white dark:bg-slate-800 text-amber-500"
+                                      className="rounded border-border bg-card text-amber-500"
                                     />
                                   </div>
-                                  <div className="flex-1 px-4 text-sm text-slate-700 dark:text-slate-300 whitespace-nowrap">{row.date}</div>
+                                  <div className="flex-1 px-4 text-sm text-body whitespace-nowrap">{row.date}</div>
                                   <div className="flex-1 px-4">
                                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                                       row.type === 'income' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
@@ -2615,7 +2615,7 @@ function ReportsContent() {
                                     </span>
                                   </div>
                                   <div className="flex-1 px-4 text-sm text-foreground">{row.companyName}</div>
-                                  <div className="flex-1 px-4 text-sm text-slate-700 dark:text-slate-300">{row.category || (row.shift ? SHIFT_LABELS[row.shift] : '—')}</div>
+                                  <div className="flex-1 px-4 text-sm text-body">{row.category || (row.shift ? SHIFT_LABELS[row.shift] : '—')}</div>
                                   <div className="flex-1 px-4 text-sm text-right">
                                     <div className={`font-semibold tabular-nums ${row.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                                       {row.type === 'income' ? '+' : '-'}{formatMoneyFull(row.amount)}
@@ -2632,17 +2632,17 @@ function ReportsContent() {
                         paginatedRows.map((row) => (
                           <tr 
                             key={row.id} 
-                            className={`hover:bg-slate-50 dark:hover:bg-white/5 transition-colors ${selectedRows.has(row.id) ? 'bg-amber-500/10' : ''}`}
+                            className={`hover:bg-surface-muted transition-colors ${selectedRows.has(row.id) ? 'bg-amber-500/10' : ''}`}
                           >
                             <td className="px-4 py-3">
                               <input 
                                 type="checkbox"
                                 checked={selectedRows.has(row.id)}
                                 onChange={() => toggleRowSelection(row.id)}
-                                className="rounded border-border bg-white dark:bg-slate-800 text-amber-500"
+                                className="rounded border-border bg-card text-amber-500"
                               />
                             </td>
-                            <td className="px-4 py-3 text-sm text-slate-700 dark:text-slate-300 whitespace-nowrap">{row.date}</td>
+                            <td className="px-4 py-3 text-sm text-body whitespace-nowrap">{row.date}</td>
                             <td className="px-4 py-3">
                               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                                 row.type === 'income' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
@@ -2651,7 +2651,7 @@ function ReportsContent() {
                               </span>
                             </td>
                             <td className="px-4 py-3 text-sm text-foreground">{row.companyName}</td>
-                            <td className="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">
+                            <td className="px-4 py-3 text-sm text-body">
                               {row.category || (row.shift ? SHIFT_LABELS[row.shift] : '—')}
                             </td>
                             <td className="px-4 py-3 text-sm text-right">
@@ -2834,7 +2834,7 @@ function ReportsContent() {
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-white/5">
                       {companyComparisonData.map((c) => (
-                        <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-white/5">
+                        <tr key={c.id} className="hover:bg-surface-muted">
                           <td className="py-4 pl-4 font-medium text-foreground">{c.name}</td>
                           <td className="py-4 text-right tabular-nums text-emerald-600 dark:text-emerald-400">{formatMoneyFull(c.income)}</td>
                           <td className="py-4 text-right tabular-nums text-rose-600 dark:text-rose-400">{formatMoneyFull(c.expense)}</td>
@@ -2850,10 +2850,10 @@ function ReportsContent() {
                               {c.margin.toFixed(1)}%
                             </span>
                           </td>
-                          <td className="py-4 text-right text-slate-700 dark:text-slate-300">
+                          <td className="py-4 text-right text-body">
                             {formatMoneyCompact(c.cashIncome - c.cashExpense)}
                           </td>
-                          <td className="py-4 text-right text-slate-700 dark:text-slate-300">
+                          <td className="py-4 text-right text-body">
                             {formatMoneyCompact((c.kaspiIncome + c.onlineIncome + c.cardIncome) - c.kaspiExpense)}
                           </td>
                           <td className="py-4 text-center text-muted-foreground">{c.transactions}</td>

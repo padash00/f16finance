@@ -183,7 +183,7 @@ export default function ExpenseWhitelistPage() {
       <div className="overflow-hidden rounded-2xl border border-border bg-white dark:bg-slate-900/60 shadow-lg shadow-black/20">
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <span className="text-sm font-semibold text-foreground">Список</span>
-          <span className="rounded-full border border-border bg-slate-50 dark:bg-white/5 px-2 py-0.5 text-xs text-muted-foreground">{items.length}</span>
+          <span className="rounded-full border border-border bg-surface-muted px-2 py-0.5 text-xs text-muted-foreground">{items.length}</span>
         </div>
 
         {loading && items.length === 0 ? (

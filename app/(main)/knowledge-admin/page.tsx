@@ -1000,7 +1000,7 @@ export default function KnowledgeAdminPage() {
                     <div className="space-y-5">
                       <div className="rounded-3xl border border-amber-300/30 bg-amber-300/5 p-6 text-center">
                         <h3 className="text-xl font-black text-amber-700 dark:text-amber-100">Начните с готового чек-листа</h3>
-                        <p className="mt-2 text-sm leading-6 text-slate-700 dark:text-slate-300">Один клик — и шаблон создан. Потом останется только добавить свои пункты.</p>
+                        <p className="mt-2 text-sm leading-6 text-body">Один клик — и шаблон создан. Потом останется только добавить свои пункты.</p>
                       </div>
                       <div className="grid gap-3 sm:grid-cols-2">
                         {can('knowledge-admin.manage_checklists') && CHECKLIST_PRESETS.map((preset) => (
@@ -1199,7 +1199,7 @@ export default function KnowledgeAdminPage() {
                             </div>
                             <h3 className="mt-3 break-words text-xl font-black text-slate-900 dark:text-slate-100">{run.template_title || 'Чек-лист'}</h3>
                             <p className="mt-2 break-words text-sm leading-6 text-muted-foreground">
-                              Проходил: <span className="font-semibold text-slate-700 dark:text-slate-200">{run.run_by_name || 'не указан'}</span>
+                              Проходил: <span className="font-semibold text-body">{run.run_by_name || 'не указан'}</span>
                               {' · '}
                               Начало: {formatDateTime(run.started_at)}
                               {' · '}
@@ -1222,7 +1222,7 @@ export default function KnowledgeAdminPage() {
 
                         {run.response_items?.length ? (
                           <details className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/50">
-                            <summary className="cursor-pointer select-none text-sm font-black text-slate-700 dark:text-slate-200">
+                            <summary className="cursor-pointer select-none text-sm font-black text-body">
                               Детали ответов: {run.response_items.length}
                             </summary>
                             <div className="mt-4 grid gap-2">
@@ -1506,7 +1506,7 @@ function TabHint({ title, text }: { title: string; text: string }) {
   return (
     <div className="mb-5 rounded-3xl border border-sky-400/20 bg-sky-400/10 p-4">
       <p className="break-words text-sm font-black text-sky-700 dark:text-sky-100">{title}</p>
-      <p className="mt-1 break-words text-sm leading-6 text-slate-700 dark:text-slate-300">{text}</p>
+      <p className="mt-1 break-words text-sm leading-6 text-body">{text}</p>
     </div>
   )
 }

@@ -111,7 +111,7 @@ export function AppModal({
             {!hideCloseButton && (
               <button
                 onClick={onClose}
-                className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-colors text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white"
+                className="p-2 hover:bg-surface-hover rounded-lg transition-colors text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white"
                 aria-label="Закрыть"
                 type="button"
               >

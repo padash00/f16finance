@@ -48,15 +48,15 @@ type AdjustmentRow = { id: string; date: string; amount: number; kind: string; c
 type VoidTarget = { type: 'payment' | 'adjustment'; id: string; label: string }
 
 const input = 'h-11 w-full rounded-xl border border-border bg-white dark:bg-white/5 px-3 text-sm text-foreground placeholder:text-slate-500 focus:border-emerald-400/40 focus:outline-none'
-const selectCls = 'h-11 w-full rounded-xl border border-border bg-white dark:bg-slate-900 px-3 text-sm text-foreground focus:border-emerald-400/40 focus:outline-none dark:[color-scheme:dark]'
+const selectCls = 'h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:border-emerald-400/40 focus:outline-none dark:[color-scheme:dark]'
 const textarea = 'min-h-[80px] w-full rounded-2xl border border-border bg-white dark:bg-white/5 px-3 py-3 text-sm text-foreground placeholder:text-slate-500 focus:border-emerald-400/40 focus:outline-none'
 const money = formatMoney
 const parseMoney = (v: string) => { const n = Number(v.replace(',', '.').replace(/\s/g, '')); return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0 }
-const statusMeta = (s: WeekData['status']) => s === 'paid' ? { label: 'Выплачено', className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' } : s === 'partial' ? { label: 'Частично', className: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300' } : { label: 'Не выплачено', className: 'border-slate-500/30 bg-slate-500/10 text-slate-700 dark:text-slate-300' }
+const statusMeta = (s: WeekData['status']) => s === 'paid' ? { label: 'Выплачено', className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' } : s === 'partial' ? { label: 'Частично', className: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300' } : { label: 'Не выплачено', className: 'border-slate-500/30 bg-slate-500/10 text-body' }
 
 function Modal(props: { title: string; subtitle?: string; onClose: () => void; children: React.ReactNode }) {
   useModalEscape(true, props.onClose)
-  return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm overflow-y-auto" onClick={(e) => { if (e.target === e.currentTarget) props.onClose() }}><div className="w-full max-w-xl my-8 max-h-[calc(100vh-4rem)] overflow-y-auto rounded-3xl border border-border bg-white dark:bg-[#10182b] p-6 shadow-2xl shadow-black/40"><div className="mb-6 flex items-start justify-between gap-4"><div><h3 className="text-xl font-semibold text-foreground">{props.title}</h3>{props.subtitle ? <p className="mt-1 text-sm text-muted-foreground">{props.subtitle}</p> : null}</div><Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10" onClick={props.onClose}>Закрыть</Button></div>{props.children}</div></div>
+  return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm overflow-y-auto" onClick={(e) => { if (e.target === e.currentTarget) props.onClose() }}><div className="w-full max-w-xl my-8 max-h-[calc(100vh-4rem)] overflow-y-auto rounded-3xl border border-border bg-white dark:bg-[#10182b] p-6 shadow-2xl shadow-black/40"><div className="mb-6 flex items-start justify-between gap-4"><div><h3 className="text-xl font-semibold text-foreground">{props.title}</h3>{props.subtitle ? <p className="mt-1 text-sm text-muted-foreground">{props.subtitle}</p> : null}</div><Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover" onClick={props.onClose}>Закрыть</Button></div>{props.children}</div></div>
 }
 
 function OperatorSalaryDetailPageContent() {
@@ -261,23 +261,23 @@ function OperatorSalaryDetailPageContent() {
             }
             actions={
               <>
-                <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setWeekStart(addDaysISO(weekStart, -7))}>
+                <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover" onClick={() => setWeekStart(addDaysISO(weekStart, -7))}>
                   Прошлая неделя
                 </Button>
-                <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setWeekStart(currentWeek)}>
+                <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover" onClick={() => setWeekStart(currentWeek)}>
                   Текущая
                 </Button>
-                <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setWeekStart(addDaysISO(weekStart, 7))}>
+                <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover" onClick={() => setWeekStart(addDaysISO(weekStart, 7))}>
                   Следующая
                 </Button>
-                <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => void load()}>
+                <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover" onClick={() => void load()}>
                   <RefreshCw className="mr-2 h-4 w-4" />
                   Обновить
                 </Button>
               </>
             }
             toolbar={
-              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-700 dark:text-slate-300">
+              <div className="flex flex-wrap items-center gap-3 text-xs text-body">
                 <div className="rounded-full border border-border bg-white dark:bg-white/5 px-3 py-1.5">
                   Неделя: <span className="font-semibold text-foreground">{formatRuDate(weekStart)} — {formatRuDate(weekEnd)}</span>
                 </div>
@@ -327,7 +327,7 @@ function OperatorSalaryDetailPageContent() {
                         <div className="font-medium text-foreground">{formatRuDate(w.weekStart)}</div>
                         <div className="mt-1 text-muted-foreground">{formatRuDate(w.weekEnd)}</div>
                         <div className={`mt-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium ${wst.className}`}>{wst.label}</div>
-                        <div className="mt-1 text-slate-700 dark:text-slate-300">Остаток: {money(w.remainingAmount)}</div>
+                        <div className="mt-1 text-body">Остаток: {money(w.remainingAmount)}</div>
                       </button>
                     )
                   })}
@@ -337,7 +337,7 @@ function OperatorSalaryDetailPageContent() {
               {/* Actions */}
               <div className="flex flex-wrap gap-3">
                 {canCreateAdvance && (
-                  <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setAdvanceOpen(true)}>
+                  <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover" onClick={() => setAdvanceOpen(true)}>
                     <Plus className="mr-2 h-4 w-4" />Выдать аванс
                   </Button>
                 )}
@@ -346,7 +346,7 @@ function OperatorSalaryDetailPageContent() {
                   <Wallet className="mr-2 h-4 w-4" />Выплатить
                 </Button>
                 )}
-                <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 disabled:opacity-40" disabled={!data.operator.telegram_chat_id || tgSending} onClick={() => void sendTelegram()}>
+                <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover disabled:opacity-40" disabled={!data.operator.telegram_chat_id || tgSending} onClick={() => void sendTelegram()}>
                   {tgSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MessageCircle className="mr-2 h-4 w-4" />}
                   {data.operator.telegram_chat_id ? 'Отправить в Telegram' : 'Нет Telegram'}
                 </Button>
@@ -373,7 +373,7 @@ function OperatorSalaryDetailPageContent() {
                       </thead>
                       <tbody>
                         {data.week.companyAllocations.map((a) => (
-                          <tr key={a.companyId} className="border-t border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-200">
+                          <tr key={a.companyId} className="border-t border-slate-200 dark:border-white/5 text-body">
                             <td className="py-3 pr-3">
                               <div className="font-medium text-foreground">{a.companyName || a.companyCode || a.companyId}</div>
                               <div className="text-[11px] text-slate-500">Доля: {(a.shareRatio * 100).toFixed(1)}%</div>
@@ -487,7 +487,7 @@ function OperatorSalaryDetailPageContent() {
               {/* Shifts table */}
               <Card className="overflow-hidden border-border bg-white dark:bg-white/[0.04] p-0">
                 <div className="border-b border-border px-5 py-4 text-sm font-medium text-foreground">
-                  Смены за неделю <span className="ml-2 rounded-full bg-slate-100 dark:bg-white/10 px-2 py-0.5 text-xs text-muted-foreground">{shifts.length}</span>
+                  Смены за неделю <span className="ml-2 rounded-full bg-surface-hover px-2 py-0.5 text-xs text-muted-foreground">{shifts.length}</span>
                 </div>
                 <AdminTableViewport maxHeight="min(60vh, 36rem)" className="rounded-none border-0 bg-transparent">
                   <table className="min-w-full text-sm">
@@ -508,7 +508,7 @@ function OperatorSalaryDetailPageContent() {
                         <tr><td colSpan={8} className="px-4 py-12 text-center text-slate-400">Нет смен за эту неделю.</td></tr>
                       ) : shifts.map((shift) => (
                         <tr key={shift.id} className="border-t border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/[0.02]">
-                          <td className="px-4 py-3 font-mono text-xs text-slate-700 dark:text-slate-300">{formatRuDate(shift.date)}</td>
+                          <td className="px-4 py-3 font-mono text-xs text-body">{formatRuDate(shift.date)}</td>
                           <td className="px-4 py-3 text-center">
                             {shift.shift === 'day' ? <Sun className="inline h-4 w-4 text-yellow-600 dark:text-yellow-400" /> : <Moon className="inline h-4 w-4 text-blue-600 dark:text-blue-400" />}
                           </td>
@@ -533,28 +533,28 @@ function OperatorSalaryDetailPageContent() {
           <form className="space-y-4" onSubmit={submitAdvance}>
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Точка</label>
+                <label className="mb-2 block text-sm text-body">Точка</label>
                 <select className={selectCls} value={advanceCompanyId} onChange={(e) => setAdvanceCompanyId(e.target.value)}>
                   {(data?.week.companyAllocations.length ? data.week.companyAllocations.map((a) => ({ id: a.companyId, label: a.companyName || a.companyCode || a.companyId })) : (data?.companies || []).map((c) => ({ id: c.id, label: c.name || c.code || c.id }))).map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
                 </select>
               </div>
               <div>
-                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Дата</label>
+                <label className="mb-2 block text-sm text-body">Дата</label>
                 <DatePicker className="h-11" value={advanceDate} onChange={setAdvanceDate} />
               </div>
               <div>
-                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Наличные</label>
+                <label className="mb-2 block text-sm text-body">Наличные</label>
                 <Input className="border-border bg-white dark:bg-slate-900/60 text-foreground" type="text" value={advanceCash} onChange={(e) => setAdvanceCash(e.target.value)} placeholder="0" />
               </div>
               <div>
-                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Безналичный</label>
+                <label className="mb-2 block text-sm text-body">Безналичный</label>
                 <Input className="border-border bg-white dark:bg-slate-900/60 text-foreground" type="text" value={advanceKaspi} onChange={(e) => setAdvanceKaspi(e.target.value)} placeholder="0" />
               </div>
             </div>
             <textarea className={textarea} value={advanceComment} onChange={(e) => setAdvanceComment(e.target.value)} placeholder="Комментарий" />
-            <div className="rounded-2xl border border-border bg-slate-50 dark:bg-white/[0.03] p-3 text-sm text-slate-700 dark:text-slate-300">Итого: <span className="font-semibold text-foreground">{money(parseMoney(advanceCash) + parseMoney(advanceKaspi))}</span></div>
+            <div className="rounded-2xl border border-border bg-surface-muted p-3 text-sm text-body">Итого: <span className="font-semibold text-foreground">{money(parseMoney(advanceCash) + parseMoney(advanceKaspi))}</span></div>
             <div className="flex justify-end gap-3">
-              <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setAdvanceOpen(false)}>Отмена</Button>
+              <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover" onClick={() => setAdvanceOpen(false)}>Отмена</Button>
               <Button type="submit" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400">{advanceSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Выдать аванс'}</Button>
             </div>
           </form>
@@ -573,7 +573,7 @@ function OperatorSalaryDetailPageContent() {
               </div>
             </div>
             <div className="flex justify-end gap-3">
-              <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setVoidConfirm(null)} disabled={voidSaving}>Отмена</Button>
+              <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover" onClick={() => setVoidConfirm(null)} disabled={voidSaving}>Отмена</Button>
               <Button type="button" className="rounded-xl bg-red-500 text-white hover:bg-red-400" onClick={() => void voidItem()} disabled={voidSaving}>
                 {voidSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Trash2 className="mr-2 h-4 w-4" />Аннулировать</>}
               </Button>
@@ -587,23 +587,23 @@ function OperatorSalaryDetailPageContent() {
           <form className="space-y-4" onSubmit={submitPayment}>
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Дата выплаты</label>
+                <label className="mb-2 block text-sm text-body">Дата выплаты</label>
                 <DatePicker className="h-11" value={payDate} onChange={setPayDate} />
               </div>
-              <div className="flex items-center rounded-2xl border border-border bg-slate-50 dark:bg-white/[0.03] p-3 text-xs text-muted-foreground">Выплата разложится по точкам пропорционально начислению</div>
+              <div className="flex items-center rounded-2xl border border-border bg-surface-muted p-3 text-xs text-muted-foreground">Выплата разложится по точкам пропорционально начислению</div>
               <div>
-                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Наличные</label>
+                <label className="mb-2 block text-sm text-body">Наличные</label>
                 <Input className="border-border bg-white dark:bg-slate-900/60 text-foreground" type="text" value={payCash} onChange={(e) => setPayCash(e.target.value)} placeholder="0" />
               </div>
               <div>
-                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Безналичный</label>
+                <label className="mb-2 block text-sm text-body">Безналичный</label>
                 <Input className="border-border bg-white dark:bg-slate-900/60 text-foreground" type="text" value={payKaspi} onChange={(e) => setPayKaspi(e.target.value)} placeholder="0" />
               </div>
             </div>
             <textarea className={textarea} value={payComment} onChange={(e) => setPayComment(e.target.value)} placeholder="Комментарий" />
-            <div className="rounded-2xl border border-border bg-slate-50 dark:bg-white/[0.03] p-3 text-sm text-slate-700 dark:text-slate-300">Выплата: <span className="font-semibold text-foreground">{money(parseMoney(payCash) + parseMoney(payKaspi))}</span></div>
+            <div className="rounded-2xl border border-border bg-surface-muted p-3 text-sm text-body">Выплата: <span className="font-semibold text-foreground">{money(parseMoney(payCash) + parseMoney(payKaspi))}</span></div>
             <div className="flex justify-end gap-3">
-              <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setPayOpen(false)}>Отмена</Button>
+              <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover" onClick={() => setPayOpen(false)}>Отмена</Button>
               <Button type="submit" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400">{paySaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Провести выплату'}</Button>
             </div>
           </form>

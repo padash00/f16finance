@@ -206,13 +206,13 @@ export default function ProductionPage() {
         backHref="/"
         actions={
           <div className="flex gap-2">
-            <button onClick={load} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-slate-100 dark:bg-white/5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10">
+            <button onClick={load} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-slate-100 dark:bg-white/5 px-3 py-2 text-xs font-medium text-body hover:bg-slate-200 dark:hover:bg-white/10">
               {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Обновить
             </button>
-            <button onClick={() => setShowIng((v) => !v)} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-slate-100 dark:bg-white/5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10">
+            <button onClick={() => setShowIng((v) => !v)} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-slate-100 dark:bg-white/5 px-3 py-2 text-xs font-medium text-body hover:bg-slate-200 dark:hover:bg-white/10">
               Ингредиенты ({ingredients.length})
             </button>
-            <button onClick={loadJournal} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-slate-100 dark:bg-white/5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10">
+            <button onClick={loadJournal} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-slate-100 dark:bg-white/5 px-3 py-2 text-xs font-medium text-body hover:bg-slate-200 dark:hover:bg-white/10">
               Журнал
             </button>
             <button onClick={() => setShowForm((v) => !v)} className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-500">
@@ -251,7 +251,7 @@ export default function ProductionPage() {
                     <span className="text-[11px] text-slate-500">остаток</span>
                     <span className={`tabular-nums ${Number(ing.stock_qty || 0) < 0 ? 'text-rose-600 dark:text-rose-300' : 'text-foreground'}`}>{Number(ing.stock_qty || 0)} {ing.unit}</span>
                     <button onClick={() => receiptIng(ing)} className="rounded-lg border border-border bg-slate-100 dark:bg-white/5 px-2 py-1 text-[11px] text-emerald-700 dark:text-emerald-300 hover:bg-slate-200 dark:hover:bg-white/10">+ приход</button>
-                    <button onClick={() => countIng(ing)} className="rounded-lg border border-border bg-slate-100 dark:bg-white/5 px-2 py-1 text-[11px] text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10">ревизия</button>
+                    <button onClick={() => countIng(ing)} className="rounded-lg border border-border bg-slate-100 dark:bg-white/5 px-2 py-1 text-[11px] text-body hover:bg-slate-200 dark:hover:bg-white/10">ревизия</button>
                     <button onClick={() => deleteIngredient(ing.id, ing.name)} className="text-slate-500 hover:text-rose-600 dark:hover:text-rose-300"><Trash2 className="h-3.5 w-3.5" /></button>
                   </div>
                 </div>
@@ -341,7 +341,7 @@ export default function ProductionPage() {
           </div>
 
           <div className="mt-4 flex justify-end gap-2">
-            <button onClick={() => { setShowForm(false); resetForm() }} className="rounded-xl border border-border bg-slate-100 dark:bg-white/5 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-white/10">Отмена</button>
+            <button onClick={() => { setShowForm(false); resetForm() }} className="rounded-xl border border-border bg-slate-100 dark:bg-white/5 px-4 py-2 text-sm text-body hover:bg-slate-200 dark:hover:bg-white/10">Отмена</button>
             <button onClick={save} disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Сохранить
             </button>
@@ -383,7 +383,7 @@ export default function ProductionPage() {
                 {analysis.rows.map((r: any) => (
                   <div key={r.recipe_id} className="grid grid-cols-6 gap-2 px-3 py-2 text-sm">
                     <span className="col-span-2 truncate text-foreground">{r.name}</span>
-                    <span className="text-right tabular-nums text-slate-700 dark:text-slate-300">{r.sold_qty}</span>
+                    <span className="text-right tabular-nums text-body">{r.sold_qty}</span>
                     <span className="text-right tabular-nums text-muted-foreground">{money(r.portion_cost)}</span>
                     <span className="text-right tabular-nums text-amber-700 dark:text-amber-300">{money(r.food_cost)}</span>
                     <span className={`text-right tabular-nums ${r.food_cost_pct > 35 ? 'text-rose-600 dark:text-rose-300' : 'text-emerald-700 dark:text-emerald-300'}`}>{r.food_cost_pct}%</span>
@@ -396,7 +396,7 @@ export default function ProductionPage() {
                 <div className="mb-1.5 text-xs font-medium text-muted-foreground">Теоретический расход ингредиентов</div>
                 <div className="flex flex-wrap gap-2">
                   {analysis.ingredients.map((g: any) => (
-                    <span key={g.ingredient_id} className="rounded-lg border border-border bg-slate-50 dark:bg-white/[0.03] px-2.5 py-1 text-xs text-slate-700 dark:text-slate-300">{g.name}: <b className="text-foreground">{g.qty} {g.unit}</b> · {money(g.cost)}</span>
+                    <span key={g.ingredient_id} className="rounded-lg border border-border bg-surface-muted px-2.5 py-1 text-xs text-body">{g.name}: <b className="text-foreground">{g.qty} {g.unit}</b> · {money(g.cost)}</span>
                   ))}
                 </div>
               </div>
@@ -441,7 +441,7 @@ export default function ProductionPage() {
 
 function Kpi({ label, value, accent }: { label: string; value: string; accent: string }) {
   return (
-    <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] p-3">
+    <div className="rounded-xl border border-border bg-surface-muted p-3">
       <div className="text-[11px] uppercase tracking-wider text-slate-500">{label}</div>
       <div className={`mt-1 text-base font-bold tabular-nums ${accent}`}>{value}</div>
     </div>

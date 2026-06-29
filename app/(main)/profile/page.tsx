@@ -186,7 +186,7 @@ export default function ProfilePage() {
     return (
       <div className="app-page flex min-h-[60vh] items-center justify-center">
         <Card className="w-full max-w-xl border-border bg-white dark:bg-slate-950/70 p-6 text-foreground">
-          <div className="flex items-center gap-3 rounded-2xl border border-border bg-slate-50 dark:bg-black/20 px-4 py-4 text-sm text-slate-700 dark:text-slate-300">
+          <div className="flex items-center gap-3 rounded-2xl border border-border bg-slate-50 dark:bg-black/20 px-4 py-4 text-sm text-body">
             <Loader2 className="h-4 w-4 animate-spin text-violet-400" />
             Загружаем профиль…
           </div>
@@ -222,7 +222,7 @@ export default function ProfilePage() {
               </span>
             ) : null}
             {session.activeOrganization ? (
-              <span className="rounded-full border border-border bg-slate-100 dark:bg-white/5 px-3 py-0.5 text-xs text-slate-700 dark:text-slate-300">
+              <span className="rounded-full border border-border bg-slate-100 dark:bg-white/5 px-3 py-0.5 text-xs text-body">
                 {session.activeOrganization.name}
               </span>
             ) : null}
@@ -283,7 +283,7 @@ export default function ProfilePage() {
           <div>
             <h2 className="text-base font-semibold">Email и логин</h2>
             <p className="text-xs text-slate-500">
-              Текущий: <span className="text-slate-700 dark:text-slate-300">{session.email || '—'}</span>
+              Текущий: <span className="text-body">{session.email || '—'}</span>
             </p>
           </div>
         </div>

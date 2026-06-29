@@ -909,7 +909,7 @@ export default function SmartDashboardPage() {
     return (
       <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/55">
         <Sparkles className="h-5 w-5 text-amber-600 dark:text-amber-300" />
-        <span className="text-sm text-slate-700 dark:text-slate-300">Перенаправление на вход...</span>
+        <span className="text-sm text-body">Перенаправление на вход...</span>
       </div>
     )
   }
@@ -1114,7 +1114,7 @@ export default function SmartDashboardPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-[11px] uppercase tracking-wide text-muted-foreground border-b border-slate-200 dark:border-white/8">
+                    <tr className="text-[11px] uppercase tracking-wide text-muted-foreground border-b border-border">
                       <th className="px-2 py-2 text-left font-medium">Точка</th>
                       <th className="px-2 py-2 text-right font-medium">Выручка</th>
                       <th className="px-2 py-2 text-right font-medium">Прибыль</th>
@@ -1125,9 +1125,9 @@ export default function SmartDashboardPage() {
                     {companyBreakdown.map((c) => (
                       <tr key={c.id} className="border-b border-slate-100 dark:border-white/5 last:border-0">
                         <td className="px-2 py-2 font-medium text-foreground truncate max-w-[160px]">{c.name}</td>
-                        <td className="px-2 py-2 text-right tabular-nums text-slate-700 dark:text-slate-300">{Formatters.moneyDetailed(c.revenue)}</td>
+                        <td className="px-2 py-2 text-right tabular-nums text-body">{Formatters.moneyDetailed(c.revenue)}</td>
                         <td className={`px-2 py-2 text-right tabular-nums font-semibold ${c.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{Formatters.moneyDetailed(c.profit)}</td>
-                        <td className={`px-2 py-2 text-right tabular-nums ${c.margin >= 20 ? 'text-emerald-600 dark:text-emerald-400' : c.margin >= 0 ? 'text-slate-600 dark:text-slate-300' : 'text-rose-600 dark:text-rose-400'}`}>{c.margin.toFixed(1)}%</td>
+                        <td className={`px-2 py-2 text-right tabular-nums ${c.margin >= 20 ? 'text-emerald-600 dark:text-emerald-400' : c.margin >= 0 ? 'text-body' : 'text-rose-600 dark:text-rose-400'}`}>{c.margin.toFixed(1)}%</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1144,7 +1144,7 @@ export default function SmartDashboardPage() {
               </h3>
               <div className="flex flex-wrap gap-2">
                 {widgetData.birthdays.map((b) => (
-                  <div key={b.id} className="rounded-lg border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-white/[0.02] px-3 py-1.5">
+                  <div key={b.id} className="rounded-lg border border-border bg-slate-50 dark:bg-white/[0.02] px-3 py-1.5">
                     <span className="text-sm font-medium text-foreground">{b.title}</span>
                     {b.subtitle && <span className="ml-2 text-xs text-muted-foreground">{b.subtitle}</span>}
                   </div>
@@ -1261,7 +1261,7 @@ function HeaderBlock(props: {
             </span>
             <div className="flex items-center gap-2 px-3 py-1.5 bg-white border-slate-200 dark:bg-slate-800/50 rounded-lg border dark:border-slate-700">
               <Sparkles className="w-4 h-4 text-yellow-400" />
-              <span className="text-slate-600 dark:text-slate-300 text-sm">Прогноз:</span>
+              <span className="text-body text-sm">Прогноз:</span>
               <span className="font-medium text-amber-600 dark:text-amber-300 text-sm">{props.insight.predictions.confidence}%</span>
             </div>
           </>
@@ -1279,7 +1279,7 @@ function HeaderBlock(props: {
               className="flex items-center gap-2 px-3 py-1.5 bg-white border-slate-200 dark:bg-slate-800/50 rounded-lg border dark:border-slate-700 hover:border-amber-500/50 transition-colors"
             >
               <Calendar className="w-4 h-4 text-amber-500 dark:text-amber-300" />
-              <span className="text-slate-700 dark:text-slate-200">
+              <span className="text-body">
                 {DateUtils.formatFull(props.dateFrom)} — {DateUtils.formatFull(props.dateTo)}
               </span>
               <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${props.calendarOpen ? 'rotate-180' : ''}`} />
@@ -1421,7 +1421,7 @@ function AICard({ insight }: { insight: AIInsight }) {
         <div className="p-2 bg-amber-500/20 rounded-xl">
           <Brain className="w-5 h-5 text-amber-500 dark:text-amber-300" />
         </div>
-        <span className="text-sm font-medium text-slate-700 dark:text-slate-200">AI анализ</span>
+        <span className="text-sm font-medium text-body">AI анализ</span>
       </div>
 
       <div className="mb-3">
@@ -1452,7 +1452,7 @@ function AICard({ insight }: { insight: AIInsight }) {
 
         <div className="pt-3 border-t border-slate-200 dark:border-slate-800">
           <p className="text-xs text-muted-foreground mb-2">{insight.summary}</p>
-          <p className="text-sm text-slate-700 dark:text-slate-200">{insight.recommendation}</p>
+          <p className="text-sm text-body">{insight.recommendation}</p>
         </div>
       </div>
     </Card>
@@ -1619,7 +1619,7 @@ function CategoryPie(props: { title: string; data: CategoryData[]; total: number
               <div key={i} className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2 min-w-0">
                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: x.color }} />
-                  <span className="text-slate-600 dark:text-slate-300 truncate max-w-[120px]">{x.name}</span>
+                  <span className="text-body truncate max-w-[120px]">{x.name}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-foreground font-medium">{Formatters.moneyDetailed(x.value)}</span>
@@ -1629,7 +1629,7 @@ function CategoryPie(props: { title: string; data: CategoryData[]; total: number
             ))}
           </div>
 
-          <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
+          <div className="pt-2 border-t border-border">
             <div className="flex justify-between text-xs">
               <span className="text-muted-foreground">Всего</span>
               <span className="text-foreground font-medium">{Formatters.moneyDetailed(props.total)}</span>
@@ -1661,7 +1661,7 @@ function AnomaliesCard({ anomalies }: { anomalies: AIInsight['anomalies'] }) {
       {!anomalies.length ? (
         <div className="text-center py-8">
           <CheckCircle2 className="w-12 h-12 text-green-500/50 mx-auto mb-2" />
-          <p className="text-sm text-slate-600 dark:text-slate-300">Аномалий не обнаружено</p>
+          <p className="text-sm text-body">Аномалий не обнаружено</p>
           <p className="text-xs text-slate-500">Пока всё ровно</p>
         </div>
       ) : (
@@ -1691,7 +1691,7 @@ function FeedCard(props: {
 }) {
   return (
     <Card className="p-0 border border-slate-200 bg-white dark:border-0 dark:bg-slate-800/50 backdrop-blur-sm overflow-hidden flex flex-col">
-      <div className="p-4 border-b border-slate-200 dark:border-slate-700">
+      <div className="p-4 border-b border-border">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-amber-500/20 rounded-xl">
             <Activity className="w-5 h-5 text-amber-600 dark:text-amber-300" />
@@ -1865,8 +1865,8 @@ function MiniStat(props: { label: string; value: number; prev: number; icon: Rea
 
 function BalanceRow({ icon, label, value }: { icon: ReactNode; label: string; value: number }) {
   return (
-    <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/20 rounded-xl border border-slate-200 dark:border-slate-700">
-      <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+    <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/20 rounded-xl border border-border">
+      <div className="flex items-center gap-2 text-sm text-body">
         {icon}
         {label}
       </div>
@@ -1921,12 +1921,12 @@ function Forecast({ insight }: { insight: AIInsight }) {
 
 function Advice({ title, text, icon }: { title: string; text: string; icon: ReactNode }) {
   return (
-    <div className="p-4 bg-slate-50 dark:bg-slate-700/20 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-amber-500/30 transition-colors">
+    <div className="p-4 bg-slate-50 dark:bg-slate-700/20 rounded-xl border border-border hover:border-amber-500/30 transition-colors">
       <div className="flex items-center gap-2 mb-2">
         <div className="p-1.5 bg-amber-500/15 rounded-lg">{icon}</div>
         <div className="text-sm font-medium text-foreground">{title}</div>
       </div>
-      <div className="text-xs text-slate-600 dark:text-slate-300">{text}</div>
+      <div className="text-xs text-body">{text}</div>
     </div>
   )
 }

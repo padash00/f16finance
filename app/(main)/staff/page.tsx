@@ -572,14 +572,14 @@ export default function StaffPageSmart() {
                 <Button
                   variant="outline"
                   size="icon"
-                  className={`h-9 w-9 rounded-xl border-border bg-white dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 ${refreshing ? '[&_svg]:animate-spin' : ''}`}
+                  className={`h-9 w-9 rounded-xl border-border bg-white dark:bg-white/5 hover:bg-surface-hover ${refreshing ? '[&_svg]:animate-spin' : ''}`}
                   onClick={() => void loadData(true)}
                   aria-label="Обновить"
                 >
                   <RefreshCw className="h-4 w-4" />
                 </Button>
                 {canExport && (
-                  <Button variant="outline" size="icon" className="h-9 w-9 rounded-xl border-border bg-white dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => void handleExport()} aria-label="Экспорт PDF">
+                  <Button variant="outline" size="icon" className="h-9 w-9 rounded-xl border-border bg-white dark:bg-white/5 hover:bg-surface-hover" onClick={() => void handleExport()} aria-label="Экспорт PDF">
                     <Download className="h-4 w-4" />
                   </Button>
                 )}
@@ -620,7 +620,7 @@ export default function StaffPageSmart() {
               <option value="name">По имени</option>
               <option value="salary">По окладу</option>
             </select>
-            <button onClick={() => setSortDir(prev => prev === 'asc' ? 'desc' : 'asc')} className="h-9 px-3 bg-white dark:bg-white/5 border border-border rounded-xl text-foreground hover:bg-slate-100 dark:hover:bg-white/10 transition-colors flex items-center">{sortDir === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
+            <button onClick={() => setSortDir(prev => prev === 'asc' ? 'desc' : 'asc')} className="h-9 px-3 bg-white dark:bg-white/5 border border-border rounded-xl text-foreground hover:bg-surface-hover transition-colors flex items-center">{sortDir === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
             <label className="flex items-center gap-2 cursor-pointer text-sm text-muted-foreground ml-1">
               <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} className="rounded border-border text-emerald-500" />
               Архивные
@@ -717,7 +717,7 @@ function StaffRow({
   return (
     <>
       <tr className={cn(
-        "group transition-colors hover:bg-slate-50 dark:hover:bg-white/5",
+        "group transition-colors hover:bg-surface-muted",
         !staff.is_active && "opacity-50"
       )}>
         <td className="py-4 px-4">
@@ -779,7 +779,7 @@ function StaffRow({
                 className={cn(
                   "h-8 px-3 text-xs gap-1.5 border-border bg-white dark:bg-white/[0.03]",
                   !effectiveEmail?.trim() && "border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10",
-                  !staff.is_active && "border-slate-200 dark:border-slate-700 text-slate-500"
+                  !staff.is_active && "border-border text-slate-500"
                 )}
                 onClick={onInviteAccount}
                 disabled={inviteBusy}
@@ -890,7 +890,7 @@ function AddPaymentDialog({ isOpen, onClose, staff, paidSoFar, dateDefault, onSu
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-white dark:bg-slate-900 border-border text-foreground sm:max-w-md">
+      <DialogContent className="bg-card border-border text-foreground sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="text-xl flex items-center gap-2">
             <div className={cn(

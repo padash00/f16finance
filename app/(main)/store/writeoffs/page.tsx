@@ -436,7 +436,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
       {(() => {
         const hdrActions = (
           <>
-            <div className="inline-flex rounded-lg border border-border bg-slate-50 dark:bg-white/[0.03] p-0.5 text-xs">
+            <div className="inline-flex rounded-lg border border-border bg-surface-muted p-0.5 text-xs">
               {(['all', 'warehouse', 'showcase'] as const).map((s) => (
                 <button
                   key={s}
@@ -675,7 +675,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
                         setQuickError(null)
                         quickInputRef.current?.focus()
                       }}
-                      className="rounded-full border border-border bg-slate-100 dark:bg-white/[0.04] px-3 py-1 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-white/[0.08]"
+                      className="rounded-full border border-border bg-slate-100 dark:bg-white/[0.04] px-3 py-1 text-xs text-body hover:bg-slate-200 dark:hover:bg-white/[0.08]"
                       title={`${balance.item?.name || 'Товар'} · ${balance.item?.barcode || '—'} · ${formatQty(Number(balance.quantity || 0))}`}
                     >
                       <span className="block max-w-[340px] truncate">
@@ -698,7 +698,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
                 <div className="mt-2 flex flex-wrap gap-2">
                   {savedTemplates.map((tpl) => (
                     <div key={tpl.name} className="inline-flex items-center gap-1 rounded-full border border-border bg-slate-100 dark:bg-white/[0.04] px-3 py-1 text-xs">
-                      <button type="button" onClick={() => applyTemplate(tpl.name)} className="text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white">{tpl.name}</button>
+                      <button type="button" onClick={() => applyTemplate(tpl.name)} className="text-body hover:text-slate-900 dark:hover:text-white">{tpl.name}</button>
                       <button type="button" onClick={() => deleteTemplate(tpl.name)} className="text-rose-600 dark:text-rose-300 hover:text-rose-700 dark:hover:text-rose-200">×</button>
                     </div>
                   ))}
@@ -780,7 +780,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
 
                   <div className="space-y-1.5">
                     <Label>Штрихкод</Label>
-                    <Input value={selectedBalance?.item?.barcode || '—'} readOnly className="bg-slate-50 dark:bg-white/[0.03]" />
+                    <Input value={selectedBalance?.item?.barcode || '—'} readOnly className="bg-surface-muted" />
                   </div>
 
                   <div className="space-y-1.5">
@@ -847,7 +847,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
                 </div>
                 <div className="overflow-auto rounded-xl border border-border">
                   <table className="w-full table-fixed text-sm">
-                    <thead className="bg-slate-50 dark:bg-white/[0.03]">
+                    <thead className="bg-surface-muted">
                       <tr className="text-left text-xs text-muted-foreground">
                         <th className="px-3 py-2 font-normal">Товар</th>
                         <th className="px-3 py-2 font-normal">Штрихкод</th>

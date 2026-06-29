@@ -488,7 +488,7 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
               </p>
               <div className="space-y-1.5">
                 <Label className="text-xs">
-                  Введите фразу <code className="bg-slate-100 dark:bg-white/10 px-1 rounded text-xs">{CONFIRM_PHRASE}</code> для подтверждения:
+                  Введите фразу <code className="bg-surface-hover px-1 rounded text-xs">{CONFIRM_PHRASE}</code> для подтверждения:
                 </Label>
                 <Input
                   value={confirmPhrase}

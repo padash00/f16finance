@@ -104,7 +104,7 @@ export default function StoreShiftsPage() {
         accent="emerald"
         backHref="/store"
         actions={
-          <button onClick={load} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-white dark:bg-white/5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 transition-colors hover:bg-slate-50 dark:hover:bg-white/10">
+          <button onClick={load} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-white dark:bg-white/5 px-3 py-2 text-xs font-medium text-body transition-colors hover:bg-slate-50 dark:hover:bg-white/10">
             {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Обновить
           </button>
         }
@@ -122,7 +122,7 @@ export default function StoreShiftsPage() {
       <div className="rounded-2xl border border-border bg-white dark:bg-slate-900/60 shadow-lg shadow-black/20 overflow-hidden">
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <span className="text-sm font-semibold text-foreground">Смены</span>
-          <span className="rounded-full border border-border bg-slate-50 dark:bg-white/5 px-2 py-0.5 text-xs text-muted-foreground">{shifts.length}</span>
+          <span className="rounded-full border border-border bg-surface-muted px-2 py-0.5 text-xs text-muted-foreground">{shifts.length}</span>
         </div>
         {loading && shifts.length === 0 ? (
           <div className="flex items-center justify-center gap-2 py-16 text-slate-400"><Loader2 className="h-5 w-5 animate-spin" /> Загрузка…</div>
@@ -144,7 +144,7 @@ export default function StoreShiftsPage() {
                       <div className="text-[11px] text-slate-500">{dt(s.opened_at)} → {dt(s.closed_at)}</div>
                     </div>
                   </div>
-                  <span className={`rounded-md border px-2 py-0.5 text-[11px] font-medium ${open ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-border bg-slate-50 dark:bg-white/5 text-muted-foreground'}`}>
+                  <span className={`rounded-md border px-2 py-0.5 text-[11px] font-medium ${open ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-border bg-surface-muted text-muted-foreground'}`}>
                     {open ? 'Открыта' : 'Закрыта'}
                   </span>
                   <div className="ml-auto flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
@@ -207,7 +207,7 @@ function ShiftDetail({ id, onClose, onChanged }: { id: string; onClose: () => vo
   return createPortal(
     <div className="fixed inset-0 z-[200] flex items-stretch justify-end">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} aria-hidden />
-      <div className="relative z-10 flex h-full w-full max-w-2xl flex-col border-l border-border bg-white dark:bg-slate-900 shadow-2xl">
+      <div className="relative z-10 flex h-full w-full max-w-2xl flex-col border-l border-border bg-card shadow-2xl">
         {/* Шапка */}
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div className="flex items-center gap-3">
@@ -215,7 +215,7 @@ function ShiftDetail({ id, onClose, onChanged }: { id: string; onClose: () => vo
             <div>
               <div className="flex items-center gap-2 text-base font-semibold text-foreground">
                 {shift?.operator?.full_name || shift?.operator?.short_name || 'Смена'}
-                <span className={`rounded-md border px-2 py-0.5 text-[11px] font-medium ${open ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-border bg-slate-50 dark:bg-white/5 text-muted-foreground'}`}>{open ? 'Открыта' : 'Закрыта'}</span>
+                <span className={`rounded-md border px-2 py-0.5 text-[11px] font-medium ${open ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-border bg-surface-muted text-muted-foreground'}`}>{open ? 'Открыта' : 'Закрыта'}</span>
               </div>
               <div className="text-xs text-slate-500">{dt(shift?.opened_at)} → {dt(shift?.closed_at)}</div>
             </div>
@@ -245,7 +245,7 @@ function ShiftDetail({ id, onClose, onChanged }: { id: string; onClose: () => vo
             {/* Продажи */}
             <div className="mt-5 mb-2 flex items-center justify-between">
               <span className="text-sm font-semibold text-foreground">Продажи</span>
-              <span className="rounded-full border border-border bg-slate-50 dark:bg-white/5 px-2 py-0.5 text-xs text-muted-foreground">{sales.length}</span>
+              <span className="rounded-full border border-border bg-surface-muted px-2 py-0.5 text-xs text-muted-foreground">{sales.length}</span>
             </div>
             {sales.length === 0 ? (
               <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-4 py-8 text-center text-sm text-muted-foreground">Продаж нет</div>
@@ -294,7 +294,7 @@ function ShiftDetail({ id, onClose, onChanged }: { id: string; onClose: () => vo
 
 function Kpi({ label, value, accent, icon }: { label: string; value: string; accent: string; icon: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] p-3">
+    <div className="rounded-xl border border-border bg-surface-muted p-3">
       <div className="flex items-center justify-between text-[11px] uppercase tracking-wider text-slate-500"><span>{label}</span><span className="text-muted-foreground">{icon}</span></div>
       <div className={`mt-1 text-base font-bold tabular-nums ${accent}`}>{value}</div>
     </div>

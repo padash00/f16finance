@@ -750,7 +750,7 @@ function CronsCard({
                 key={c.path}
                 className="flex items-center gap-3 rounded-md border border-slate-200 dark:border-white/5 bg-white dark:bg-white/[0.02] px-2.5 py-1.5"
               >
-                <span className="font-mono text-slate-700 dark:text-slate-200 truncate flex-1">{name}</span>
+                <span className="font-mono text-body truncate flex-1">{name}</span>
                 <span className="text-[10px] text-slate-500 tabular-nums">
                   {fmtCronSchedule(c.schedule)}
                 </span>
@@ -933,7 +933,7 @@ function TablesSection({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Поиск…"
-              className="h-7 w-48 rounded-md border border-border bg-white dark:bg-white/[0.03] pl-6 pr-2 text-xs text-slate-700 dark:text-slate-200 outline-none placeholder:text-slate-500 focus:border-blue-500/40"
+              className="h-7 w-48 rounded-md border border-border bg-white dark:bg-white/[0.03] pl-6 pr-2 text-xs text-body outline-none placeholder:text-slate-500 focus:border-blue-500/40"
             />
           </div>
           <div className="flex gap-0.5 rounded-md bg-slate-100 dark:bg-white/5 p-0.5 text-[10px]">
@@ -1011,7 +1011,7 @@ function TableGroupBlock({
         ) : (
           <ChevronRight className="h-3 w-3 text-slate-500" />
         )}
-        <span className="font-medium text-slate-700 dark:text-slate-300">{title}</span>
+        <span className="font-medium text-body">{title}</span>
         <span className="text-slate-500">• {rows.length}</span>
         {problemCount > 0 && (
           <span className="ml-auto rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] text-rose-600 dark:text-rose-300">
@@ -1034,15 +1034,15 @@ function TableRow({ row }: { row: TableResult }) {
   const color = (() => {
     switch (row.status) {
       case 'ok':
-        return 'bg-white dark:bg-slate-950'
+        return 'bg-card'
       case 'empty':
-        return 'bg-white dark:bg-slate-950'
+        return 'bg-card'
       case 'missing':
         return 'bg-amber-500/[0.06]'
       case 'error':
         return 'bg-rose-500/[0.08]'
       default:
-        return 'bg-white dark:bg-slate-950'
+        return 'bg-card'
     }
   })()
 
@@ -1064,7 +1064,7 @@ function TableRow({ row }: { row: TableResult }) {
   return (
     <div className={`flex items-center gap-2 px-3 py-1.5 text-xs ${color}`}>
       <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${dot}`} />
-      <span className="font-mono text-slate-700 dark:text-slate-200 truncate flex-1">{row.name}</span>
+      <span className="font-mono text-body truncate flex-1">{row.name}</span>
       {row.error ? (
         <span
           title={row.error}
@@ -1107,7 +1107,7 @@ function StorageCard({
               key={b.name}
               className="flex items-center gap-2 rounded-md border border-slate-200 dark:border-white/5 bg-white dark:bg-white/[0.02] px-2.5 py-1.5"
             >
-              <span className="font-mono text-slate-700 dark:text-slate-200 flex-1 truncate">{b.name}</span>
+              <span className="font-mono text-body flex-1 truncate">{b.name}</span>
               <span
                 className={`text-[10px] ${
                   b.public ? 'text-emerald-600 dark:text-emerald-300' : 'text-slate-500'

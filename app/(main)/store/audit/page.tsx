@@ -444,7 +444,7 @@ export default function StoreAuditPage() {
             ) : (
               <div className="flex flex-wrap gap-2">
                 {detail.assignments.map((a) => (
-                  <span key={a.id} className="inline-flex items-center gap-1 rounded-md border border-border bg-slate-50 dark:bg-white/[0.03] px-2.5 py-1 text-xs text-muted-foreground">
+                  <span key={a.id} className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-muted px-2.5 py-1 text-xs text-muted-foreground">
                     <Users className="h-3 w-3" /> {a.operatorName} · {a.categoryName || 'Вся локация'}
                   </span>
                 ))}

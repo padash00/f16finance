@@ -130,7 +130,7 @@ function ReceiptLineRowImpl({ line, items, itemsById, canRemove, onPatch, onRemo
 
       <div className="space-y-1.5 min-w-0">
         <Label>Штрихкод</Label>
-        <Input value={lineItem?.barcode || '—'} readOnly className="bg-slate-50 dark:bg-white/[0.03] truncate" />
+        <Input value={lineItem?.barcode || '—'} readOnly className="bg-surface-muted truncate" />
       </div>
 
       <div className="space-y-1.5">

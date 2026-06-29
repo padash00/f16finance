@@ -34,7 +34,7 @@ function MessageBubble({ message }: { message: AssistantChatMessage }) {
           'max-w-[90%] rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap leading-relaxed',
           isUser
             ? 'bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-foreground border border-amber-500/20'
-            : 'bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-200 border border-border',
+            : 'bg-slate-100 dark:bg-white/5 text-body border border-border',
         )}
       >
         {message.content || (!isUser ? '...' : '')}
@@ -190,7 +190,7 @@ export function AssistantPanel({
                 type="button"
                 onClick={() => void sendPrompt(item)}
                 disabled={loading}
-                className="rounded-full border border-border bg-slate-50 dark:bg-white/5 px-3 py-1.5 text-xs text-slate-600 dark:text-slate-300 transition hover:border-amber-500/30 hover:bg-amber-500/10 hover:text-slate-900 dark:hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-full border border-border bg-surface-muted px-3 py-1.5 text-xs text-body transition hover:border-amber-500/30 hover:bg-amber-500/10 hover:text-slate-900 dark:hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {item}
               </button>
@@ -200,14 +200,14 @@ export function AssistantPanel({
       </CardHeader>
 
       <CardContent className="space-y-4">
-        <div className="rounded-2xl border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-black/20">
+        <div className="rounded-2xl border border-border bg-slate-50 dark:bg-black/20">
           <ScrollArea className="h-[320px]">
             <div className="space-y-3 p-4">
               {messages.length > 0 ? (
                 messages.map((message, index) => <MessageBubble key={`${message.role}-${index}`} message={message} />)
               ) : (
                 <div className="rounded-2xl border border-dashed border-border bg-slate-50/50 dark:bg-white/[0.03] p-4 text-sm text-muted-foreground">
-                  <div className="mb-2 flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                  <div className="mb-2 flex items-center gap-2 text-body">
                     <Sparkles className="h-4 w-4 text-amber-300" />
                     {emptyStateTitle}
                   </div>
@@ -216,7 +216,7 @@ export function AssistantPanel({
               )}
 
               {loading ? (
-                <div className="flex items-center gap-2 rounded-2xl border border-border bg-slate-50/50 dark:bg-white/[0.03] px-4 py-3 text-sm text-slate-700 dark:text-slate-300">
+                <div className="flex items-center gap-2 rounded-2xl border border-border bg-slate-50/50 dark:bg-white/[0.03] px-4 py-3 text-sm text-body">
                   <Loader2 className="h-4 w-4 animate-spin text-amber-300" />
                   Консультант печатает...
                 </div>

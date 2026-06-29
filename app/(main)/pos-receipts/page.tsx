@@ -122,7 +122,7 @@ function ReceiptDetailModal({ sale, onClose }: { sale: Sale; onClose: () => void
           <div className="rounded-xl border border-border overflow-hidden">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-border bg-slate-50 dark:bg-white/[0.03]">
+                <tr className="border-b border-border bg-surface-muted">
                   <th className="px-3 py-2 text-left font-medium text-muted-foreground">Товар</th>
                   <th className="px-3 py-2 text-center font-medium text-muted-foreground">Кол.</th>
                   <th className="px-3 py-2 text-right font-medium text-muted-foreground">Цена</th>
@@ -164,7 +164,7 @@ function ReceiptDetailModal({ sale, onClose }: { sale: Sale; onClose: () => void
 
           {/* Payment breakdown */}
           {paymentBreakdown.length > 0 && (
-            <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] p-3 space-y-1">
+            <div className="rounded-xl border border-border bg-surface-muted p-3 space-y-1">
               <p className="text-xs font-medium text-muted-foreground mb-2">Оплата</p>
               {paymentBreakdown.map((p) => (
                 <div key={p.label} className="flex justify-between text-xs">
@@ -196,7 +196,7 @@ function ReceiptDetailModal({ sale, onClose }: { sale: Sale; onClose: () => void
 
           {/* Comment */}
           {sale.comment && (
-            <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] p-3">
+            <div className="rounded-xl border border-border bg-surface-muted p-3">
               <p className="text-xs text-muted-foreground">Комментарий</p>
               <p className="mt-1 text-sm">{sale.comment}</p>
             </div>

@@ -352,7 +352,7 @@ function ItemForm({
             Такой штрихкод уже есть в каталоге: <span className="font-medium">{recog.data.name}</span>{recog.data.category_name ? ` · ${recog.data.category_name}` : ''}.
           </div>
         ) : recog.data?.found === 'none' ? (
-          <div className="rounded-lg border border-border bg-slate-50 dark:bg-white/[0.03] px-3 py-2 text-xs text-muted-foreground">
+          <div className="rounded-lg border border-border bg-surface-muted px-3 py-2 text-xs text-muted-foreground">
             Не нашли в открытых базах{recog.data.country ? ` (код: ${recog.data.country})` : ''}. Заполните вручную — товар сохранится в каталоге.
           </div>
         ) : recog.data?.found === 'external' || recog.data?.found === 'applied' ? (

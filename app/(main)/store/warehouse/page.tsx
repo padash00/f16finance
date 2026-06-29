@@ -1017,7 +1017,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
                 <button
                   key={mode}
                   onClick={() => { setAddMode(mode); setLines([]); setExcelRows([]) }}
-                  className={`flex min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2 transition ${addMode === mode ? 'bg-slate-100 dark:bg-white/10 text-foreground font-medium shadow-[inset_0_0_0_1px_rgba(0,0,0,0.08)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]' : 'text-muted-foreground hover:bg-slate-50 dark:hover:bg-white/[0.04] hover:text-foreground'}`}
+                  className={`flex min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2 transition ${addMode === mode ? 'bg-surface-hover text-foreground font-medium shadow-[inset_0_0_0_1px_rgba(0,0,0,0.08)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]' : 'text-muted-foreground hover:bg-slate-50 dark:hover:bg-white/[0.04] hover:text-foreground'}`}
                 >
                   <Icon className="h-3.5 w-3.5 shrink-0" />
                   <span className="truncate">{label}</span>
@@ -1165,7 +1165,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
               <div className="space-y-2 rounded-xl border border-border bg-white dark:bg-white/[0.02] p-2 max-h-64 overflow-y-auto">
                 <p className="text-[10px] uppercase tracking-widest text-muted-foreground px-1">К добавлению ({pendingLines.length})</p>
                 {pendingLines.map((line) => (
-                  <div key={line.key} className="flex items-center gap-2 rounded-lg border border-border bg-slate-50 dark:bg-white/[0.03] px-2.5 py-2">
+                  <div key={line.key} className="flex items-center gap-2 rounded-lg border border-border bg-surface-muted px-2.5 py-2">
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-xs font-medium">{line.name || line.barcode}</p>
                       {line.barcode && <p className="text-[10px] text-muted-foreground font-mono">{line.barcode}</p>}

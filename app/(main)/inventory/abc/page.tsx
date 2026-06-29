@@ -616,7 +616,7 @@ export function AbcAnalysisPageContent() {
           </DialogHeader>
           {editItem && (
             <form onSubmit={(e) => void handleSavePrice(e)} className="space-y-4">
-              <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] p-3 text-sm">
+              <div className="rounded-xl border border-border bg-surface-muted p-3 text-sm">
                 <p className="font-medium">{editItem.name}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Текущая цена: <span className="text-foreground font-semibold">{formatMoney(editItem.sale_price)}</span>

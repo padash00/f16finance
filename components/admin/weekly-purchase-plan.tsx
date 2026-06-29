@@ -550,7 +550,7 @@ export function WeeklyPurchasePlan({ reportEndDate }: { reportEndDate?: string }
                       {it.supplier ? <span className="text-slate-500"> · {it.supplier}</span> : null}
                     </span>
                     {it.amount ? (
-                      <span className="shrink-0 font-medium text-slate-700 dark:text-slate-200">{fmtMoney(it.amount)} ₸</span>
+                      <span className="shrink-0 font-medium text-body">{fmtMoney(it.amount)} ₸</span>
                     ) : null}
                     <button
                       type="button"

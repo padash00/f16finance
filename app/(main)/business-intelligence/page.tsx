@@ -49,7 +49,7 @@ const num = (n: number) => Math.round(n || 0).toLocaleString('ru-RU')
 const cardCls = 'rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900/40'
 const sub = 'text-muted-foreground'
 const thCls = 'px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground'
-const tdCls = 'px-3 py-2 text-sm text-slate-700 dark:text-slate-200 tabular-nums'
+const tdCls = 'px-3 py-2 text-sm text-body tabular-nums'
 
 function SectionCard({
   emoji,
@@ -95,7 +95,7 @@ function SectionCard({
         </div>
       </div>
       <div className="mt-3 rounded-lg bg-violet-500/[0.06] px-3 py-2">
-        <p className="flex items-start gap-1.5 text-sm text-slate-700 dark:text-slate-200">
+        <p className="flex items-start gap-1.5 text-sm text-body">
           <span aria-hidden>💡</span>
           <span className="leading-relaxed"><span className="font-medium">Что это:</span> {how}</span>
         </p>
@@ -107,7 +107,7 @@ function SectionCard({
         ) : null}
       </div>
       <div className="mt-4">
-        {available ? children : <p className="text-sm text-slate-400 dark:text-slate-500">{unavailableNote || 'Недостаточно данных для расчёта.'}</p>}
+        {available ? children : <p className="text-sm text-faint">{unavailableNote || 'Недостаточно данных для расчёта.'}</p>}
       </div>
     </div>
   )
@@ -377,7 +377,7 @@ export default function BusinessIntelligencePage() {
                 {data.healthScore.factors.map((f) => (
                   <div key={f.label}>
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-medium text-slate-700 dark:text-slate-200">{f.label}</span>
+                      <span className="font-medium text-body">{f.label}</span>
                       <span className="tabular-nums text-muted-foreground">{f.score0to100}</span>
                     </div>
                     <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
@@ -419,7 +419,7 @@ export default function BusinessIntelligencePage() {
             <div className="space-y-4">
               {data.anomalies.points.length ? (
                 <Table>
-                  <thead className="bg-slate-50 dark:bg-white/[0.03]">
+                  <thead className="bg-surface-muted">
                     <tr>
                       <th className={thCls}>Точка</th>
                       <th className={thCls}>Средняя выручка/день</th>
@@ -447,7 +447,7 @@ export default function BusinessIntelligencePage() {
                 <div>
                   <p className={`mb-2 text-xs font-medium uppercase tracking-wide ${sub}`}>Аномальные дни</p>
                   <Table>
-                    <thead className="bg-slate-50 dark:bg-white/[0.03]">
+                    <thead className="bg-surface-muted">
                       <tr>
                         <th className={thCls}>Точка</th>
                         <th className={thCls}>Дата</th>
@@ -491,7 +491,7 @@ export default function BusinessIntelligencePage() {
             headerExtra={<DeepLink href="/store/purchase-plan">📦 Запланировать закуп</DeepLink>}
           >
             <Table>
-              <thead className="bg-slate-50 dark:bg-white/[0.03]">
+              <thead className="bg-surface-muted">
                 <tr>
                   <th className={thCls}>Товар</th>
                   <th className={thCls}>Годовой спрос (D)</th>
@@ -526,7 +526,7 @@ export default function BusinessIntelligencePage() {
             headerExtra={<DeepLink href="/store/purchase-plan">📦 Запланировать закуп</DeepLink>}
           >
             <Table>
-              <thead className="bg-slate-50 dark:bg-white/[0.03]">
+              <thead className="bg-surface-muted">
                 <tr>
                   <th className={thCls}>Товар</th>
                   <th className={thCls}>Спрос/нед</th>
@@ -571,7 +571,7 @@ export default function BusinessIntelligencePage() {
           >
             {data.newsvendor.note ? <p className={`mb-3 text-xs ${sub}`}>{data.newsvendor.note}</p> : null}
             <Table>
-              <thead className="bg-slate-50 dark:bg-white/[0.03]">
+              <thead className="bg-surface-muted">
                 <tr>
                   <th className={thCls}>Товар</th>
                   <th className={thCls}>Cu (маржа)</th>
@@ -628,7 +628,7 @@ export default function BusinessIntelligencePage() {
                 <div>
                   <p className={`mb-2 text-xs font-medium uppercase tracking-wide ${sub}`}>Жизненно важные (класс A)</p>
                   <Table>
-                    <thead className="bg-slate-50 dark:bg-white/[0.03]">
+                    <thead className="bg-surface-muted">
                       <tr>
                         <th className={thCls}>Товар</th>
                         <th className={thCls}>Выручка</th>
@@ -663,7 +663,7 @@ export default function BusinessIntelligencePage() {
           >
             {data.cashierRisk.note ? <p className={`mb-3 text-xs ${sub}`}>{data.cashierRisk.note}</p> : null}
             <Table>
-              <thead className="bg-slate-50 dark:bg-white/[0.03]">
+              <thead className="bg-surface-muted">
                 <tr>
                   <th className={thCls}>Кассир</th>
                   <th className={thCls}>Недостачи</th>
@@ -714,7 +714,7 @@ export default function BusinessIntelligencePage() {
               ) : null}
               {data.rfm.customers.length ? (
                 <Table>
-                  <thead className="bg-slate-50 dark:bg-white/[0.03]">
+                  <thead className="bg-surface-muted">
                     <tr>
                       <th className={thCls}>Клиент</th>
                       <th className={thCls}>Сегмент</th>
@@ -753,7 +753,7 @@ export default function BusinessIntelligencePage() {
             headerExtra={<DeepLink href="/customers">✉️ К клиентам</DeepLink>}
           >
             <Table>
-              <thead className="bg-slate-50 dark:bg-white/[0.03]">
+              <thead className="bg-surface-muted">
                 <tr>
                   <th className={thCls}>Клиент</th>
                   <th className={thCls}>Средний чек</th>

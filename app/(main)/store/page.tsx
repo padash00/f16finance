@@ -126,7 +126,7 @@ export default function StoreOverviewPage() {
                 <div className="px-3 py-2 text-[11px] text-slate-500">{searching ? 'Ищу…' : `Найдено: ${searchResults.length}`}</div>
                 <div className="max-h-72 overflow-y-auto">
                   {searchResults.slice(0, 10).map((row, idx) => (
-                    <Link key={`${row.type}-${idx}`} href={row.href} className="flex items-center justify-between gap-3 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/5">
+                    <Link key={`${row.type}-${idx}`} href={row.href} className="flex items-center justify-between gap-3 px-3 py-2 text-sm text-body hover:bg-slate-100 dark:hover:bg-white/5">
                       <span className="truncate">{row.title}</span>
                       <span className="shrink-0 text-xs text-slate-500">{row.subtitle}</span>
                     </Link>
@@ -205,7 +205,7 @@ export default function StoreOverviewPage() {
                 <div key={e.id} className="flex items-center gap-3 px-4 py-2.5">
                   <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-slate-100 dark:bg-white/5"><Icon className={`h-4 w-4 ${m.color}`} /></span>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm text-slate-700 dark:text-slate-200">{m.phrase}</div>
+                    <div className="truncate text-sm text-body">{m.phrase}</div>
                     {actor ? <div className="text-[11px] text-slate-500">{actor}</div> : null}
                   </div>
                   <span className="shrink-0 text-xs text-slate-500">{new Date(e.created_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>

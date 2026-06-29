@@ -319,7 +319,7 @@ export default function PointDebtsPage() {
                 type="button"
                 variant="outline"
                 disabled={loading || (!items.length && !legacyRows.length)}
-                className="h-8 rounded-xl border-border bg-white dark:bg-white/5 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/10"
+                className="h-8 rounded-xl border-border bg-white dark:bg-white/5 text-xs text-body hover:bg-slate-50 dark:hover:bg-white/10"
                 onClick={() => void downloadExcel()}
               >
                 <Download className="mr-1.5 h-3.5 w-3.5" />
@@ -348,7 +348,7 @@ export default function PointDebtsPage() {
               <button
                 type="button"
                 onClick={() => setWeekStart(currentWeek)}
-                className="rounded-lg px-2.5 py-1.5 text-slate-700 dark:text-slate-300 transition hover:text-slate-900 dark:hover:text-white"
+                className="rounded-lg px-2.5 py-1.5 text-body transition hover:text-slate-900 dark:hover:text-white"
               >
                 Сейчас
               </button>
@@ -363,7 +363,7 @@ export default function PointDebtsPage() {
             <Button
               type="button"
               variant="outline"
-              className="h-8 w-8 rounded-xl border-border bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/10"
+              className="h-8 w-8 rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-slate-50 dark:hover:bg-white/10"
               onClick={() => void load()}
               aria-label="Обновить"
             >
@@ -385,7 +385,7 @@ export default function PointDebtsPage() {
               </label>
               <select
                 id="point-debts-company"
-                className="h-9 min-w-[200px] rounded-xl border border-border bg-white dark:bg-slate-900 px-3 text-sm text-foreground focus:border-amber-400/40 focus:outline-none focus:ring-1 focus:ring-amber-400/30 dark:[color-scheme:dark]"
+                className="h-9 min-w-[200px] rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:border-amber-400/40 focus:outline-none focus:ring-1 focus:ring-amber-400/30 dark:[color-scheme:dark]"
                 value={companyId}
                 onChange={(e) => setCompanyId(e.target.value)}
               >
@@ -401,10 +401,10 @@ export default function PointDebtsPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Поиск: должник, товар, комментарий..."
-              className="h-9 min-w-[240px] rounded-xl border border-border bg-white dark:bg-slate-900 px-3 text-sm text-foreground placeholder:text-slate-500 focus:border-amber-400/40 focus:outline-none focus:ring-1 focus:ring-amber-400/30"
+              className="h-9 min-w-[240px] rounded-xl border border-border bg-card px-3 text-sm text-foreground placeholder:text-slate-500 focus:border-amber-400/40 focus:outline-none focus:ring-1 focus:ring-amber-400/30"
             />
             <select
-              className="h-9 min-w-[200px] rounded-xl border border-border bg-white dark:bg-slate-900 px-3 text-sm text-foreground focus:border-amber-400/40 focus:outline-none focus:ring-1 focus:ring-amber-400/30 dark:[color-scheme:dark]"
+              className="h-9 min-w-[200px] rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:border-amber-400/40 focus:outline-none focus:ring-1 focus:ring-amber-400/30 dark:[color-scheme:dark]"
               value={debtorFilter}
               onChange={(e) => setDebtorFilter(e.target.value)}
             >
@@ -418,7 +418,7 @@ export default function PointDebtsPage() {
             {(searchQuery || debtorFilter) ? (
               <button
                 type="button"
-                className="h-9 rounded-xl border border-border bg-white dark:bg-white/5 px-3 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/10"
+                className="h-9 rounded-xl border border-border bg-white dark:bg-white/5 px-3 text-xs text-body hover:bg-slate-50 dark:hover:bg-white/10"
                 onClick={() => {
                   setSearchQuery('')
                   setDebtorFilter('')
@@ -532,7 +532,7 @@ export default function PointDebtsPage() {
               ) : null}
               {!loading
                 ? filteredItems.map((r) => (
-                    <tr key={r.id} className="border-t border-slate-200 dark:border-white/5 align-top text-slate-700 dark:text-slate-200">
+                    <tr key={r.id} className="border-t border-slate-200 dark:border-white/5 align-top text-body">
                       <td className="px-2 py-3 text-center">
                         <button type="button" className="text-muted-foreground hover:text-slate-900 dark:hover:text-white" onClick={() => toggleOne(r.id)}>
                           {selected[r.id] ? <CheckSquare className="h-4 w-4 text-amber-400" /> : <Square className="h-4 w-4" />}
@@ -540,7 +540,7 @@ export default function PointDebtsPage() {
                       </td>
                       <td className="px-3 py-3 font-medium text-foreground">{r.debtor_name}</td>
                       <td className="px-3 py-3 text-xs">
-                        <div className="text-slate-700 dark:text-slate-300">{r.company_name}</div>
+                        <div className="text-body">{r.company_name}</div>
                         <div className="text-slate-500">{r.point_device_name || '—'}</div>
                       </td>
                       <td className="px-3 py-3 text-xs">
@@ -569,7 +569,7 @@ export default function PointDebtsPage() {
           <div className="border-b border-border px-4 py-3">
             <h2 className="text-sm font-semibold text-foreground">Агрегат в учёте (таблица debts)</h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              Источники кроме <code className="rounded bg-slate-100 dark:bg-white/10 px-1">point-client</code> — например PyQt. Это не
+              Источники кроме <code className="rounded bg-surface-hover px-1">point-client</code> — например PyQt. Это не
               строки сканера; списание здесь через отчётность / зарплату, не галочками на этой странице.
             </p>
           </div>
@@ -590,7 +590,7 @@ export default function PointDebtsPage() {
                   const chain = r.rolled_over_chain || []
                   const origin = chain.length > 0 ? chain[chain.length - 1] : null
                   return (
-                    <tr key={r.id} className="border-t border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-200">
+                    <tr key={r.id} className="border-t border-slate-200 dark:border-white/5 text-body">
                       <td className="px-4 py-3 font-medium text-foreground">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span>{r.debtor_name}</span>
@@ -604,7 +604,7 @@ export default function PointDebtsPage() {
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{r.company_name}</td>
+                      <td className="px-4 py-3 text-body">{r.company_name}</td>
                       <td className="px-4 py-3 text-right font-medium text-violet-700 dark:text-violet-200 tabular-nums">{money(r.amount)}</td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">{r.source || '—'}</td>
                       <td className="max-w-[240px] truncate px-4 py-3 text-xs text-muted-foreground" title={r.comment || ''}>
@@ -625,7 +625,7 @@ export default function PointDebtsPage() {
       <Card className="border-border bg-white dark:bg-white/[0.03] p-4 text-sm text-muted-foreground">
         <p>
           Доступ с правами как у страницы «Зарплата». Списание выбранных строк здесь влияет только на список{' '}
-          <code className="rounded bg-slate-100 dark:bg-white/10 px-1">point_debt_items</code> (информативная витрина долгов с точки) и не
+          <code className="rounded bg-surface-hover px-1">point_debt_items</code> (информативная витрина долгов с точки) и не
           изменяет расчёты зарплаты / колонку «Долги».
         </p>
       </Card>

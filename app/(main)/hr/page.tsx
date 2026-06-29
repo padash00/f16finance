@@ -531,7 +531,7 @@ export default function HrPage() {
               className={`px-4 py-2 rounded-lg text-sm border transition ${
                 tab === 'active'
                   ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40'
-                  : 'border-slate-200 dark:border-slate-700 text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500'
+                  : 'border-border text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500'
               }`}
             >
               Активные · <span className="font-bold">{counts.active}</span>
@@ -541,7 +541,7 @@ export default function HrPage() {
               className={`px-4 py-2 rounded-lg text-sm border transition ${
                 tab === 'dismissed'
                   ? 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/40'
-                  : 'border-slate-200 dark:border-slate-700 text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500'
+                  : 'border-border text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500'
               }`}
             >
               Уволенные · <span className="font-bold">{counts.dismissed}</span>
@@ -551,7 +551,7 @@ export default function HrPage() {
               className={`px-4 py-2 rounded-lg text-sm border transition ${
                 tab === 'career'
                   ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/40'
-                  : 'border-slate-200 dark:border-slate-700 text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500'
+                  : 'border-border text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500'
               }`}
             >
               Карьера
@@ -561,7 +561,7 @@ export default function HrPage() {
               className={`px-4 py-2 rounded-lg text-sm border transition ${
                 tab === 'positions'
                   ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/40'
-                  : 'border-slate-200 dark:border-slate-700 text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500'
+                  : 'border-border text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500'
               }`}
             >
               Должности
@@ -571,7 +571,7 @@ export default function HrPage() {
               className={`px-4 py-2 rounded-lg text-sm border transition ${
                 tab === 'analytics'
                   ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/40'
-                  : 'border-slate-200 dark:border-slate-700 text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500'
+                  : 'border-border text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500'
               }`}
             >
               Аналитика
@@ -582,7 +582,7 @@ export default function HrPage() {
             <select
               value={kindFilter}
               onChange={(e) => setKindFilter(e.target.value as KindFilter)}
-              className="h-10 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm w-full sm:w-[240px]"
+              className="h-10 px-3 rounded-lg border border-border bg-card text-sm w-full sm:w-[240px]"
             >
               <option value="all">Все типы</option>
               <option value="operator">Только операторы</option>
@@ -594,7 +594,7 @@ export default function HrPage() {
                 placeholder="Поиск по имени, телефону, email..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="h-10 pl-8 pr-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm w-full"
+                className="h-10 pl-8 pr-3 rounded-lg border border-border bg-card text-sm w-full"
               />
             </div>
           </div>
@@ -624,7 +624,7 @@ export default function HrPage() {
               <select
                 value={groupBy}
                 onChange={(e) => setGroupBy(e.target.value as 'none' | 'role' | 'kind')}
-                className="h-8 px-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-700 dark:text-slate-300"
+                className="h-8 px-2 rounded-md border border-border bg-card text-xs text-body"
               >
                 <option value="none">Без группировки</option>
                 <option value="role">По должности</option>
@@ -638,7 +638,7 @@ export default function HrPage() {
                   setSortKey(k)
                   setSortAsc(dir === 'a')
                 }}
-                className="h-8 px-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-700 dark:text-slate-300"
+                className="h-8 px-2 rounded-md border border-border bg-card text-xs text-body"
               >
                 <option value="name|a">ФИО ↑</option>
                 <option value="name|d">ФИО ↓</option>
@@ -650,7 +650,7 @@ export default function HrPage() {
                 <option value="salary|a">Оклад ↑</option>
               </select>
               {/* View toggle */}
-              <div className="flex border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
+              <div className="flex border border-border rounded-md overflow-hidden">
                 <button
                   onClick={() => setViewMode('cards')}
                   className={`p-1.5 ${viewMode === 'cards' ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'}`}
@@ -698,7 +698,7 @@ export default function HrPage() {
                   onChange={(e) => { if (e.target.value) bulkChangeRole(e.target.value); e.target.value = '' }}
                   disabled={bulkBusy}
                   defaultValue=""
-                  className="h-8 px-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-700 dark:text-slate-300"
+                  className="h-8 px-2 rounded-md border border-border bg-card text-xs text-body"
                 >
                   <option value="" disabled>Сменить должность…</option>
                   {positions.map((p) => <option key={p.name} value={p.name}>{p.label || p.name}</option>)}
@@ -710,7 +710,7 @@ export default function HrPage() {
                   Уволить {selectedIds.size}
                 </Button>
               )}
-              <Button size="sm" variant="outline" onClick={exportCSV} className="border-slate-200 dark:border-slate-700">
+              <Button size="sm" variant="outline" onClick={exportCSV} className="border-border">
                 <Download className="w-3 h-3 mr-1" />
                 Экспорт CSV{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
               </Button>
@@ -743,7 +743,7 @@ export default function HrPage() {
         </div>
         {!loading && filtered.length > 0 ? (
           <div className="text-xs text-slate-500">
-            Найдено: <span className="text-slate-700 dark:text-slate-300 font-semibold">{filtered.length}</span>
+            Найдено: <span className="text-body font-semibold">{filtered.length}</span>
           </div>
         ) : null}
       </div>
@@ -810,12 +810,12 @@ export default function HrPage() {
                           {emp.is_hybrid ? 'Hybrid' : emp.kind === 'operator' ? 'Operator' : 'Admin'}
                         </span>
                       </td>
-                      <td className="px-3 py-2 text-slate-700 dark:text-slate-300 text-xs">{emp.role || '—'}</td>
+                      <td className="px-3 py-2 text-body text-xs">{emp.role || '—'}</td>
                       <td className="px-3 py-2 text-xs">
-                        {emp.phone && <div className="text-slate-700 dark:text-slate-300">{emp.phone}</div>}
+                        {emp.phone && <div className="text-body">{emp.phone}</div>}
                         {emp.email && <div className="text-slate-500 truncate max-w-[200px]">{emp.email}</div>}
                       </td>
-                      <td className="px-3 py-2 text-right text-xs text-slate-700 dark:text-slate-300 font-mono">
+                      <td className="px-3 py-2 text-right text-xs text-body font-mono">
                         {emp.monthly_salary != null ? emp.monthly_salary.toLocaleString('ru-RU') : '—'}
                       </td>
                       <td className="px-3 py-2 text-center">
@@ -967,7 +967,7 @@ export default function HrPage() {
                       <button
                         type="button"
                         onClick={() => toggleHistory(emp)}
-                        className="inline-flex items-center gap-1 rounded-md border border-slate-200 dark:border-slate-700 px-2 py-1 text-[11px] text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500 transition"
+                        className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500 transition"
                       >
                         {historyOpen[`${emp.kind}-${emp.id}`] ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
                         История действий
@@ -976,7 +976,7 @@ export default function HrPage() {
                   )}
 
                   {canViewHistory && historyOpen[`${emp.kind}-${emp.id}`] && (
-                    <div className="mt-2 pl-2 border-l border-slate-200 dark:border-slate-700 text-xs space-y-1">
+                    <div className="mt-2 pl-2 border-l border-border text-xs space-y-1">
                       {historyLoading[`${emp.kind}-${emp.id}`] ? (
                         <div className="text-slate-500 italic">Загрузка истории…</div>
                       ) : (historyData[`${emp.kind}-${emp.id}`] || []).length === 0 ? (
@@ -984,7 +984,7 @@ export default function HrPage() {
                       ) : (
                         (historyData[`${emp.kind}-${emp.id}`] || []).map((h) => (
                           <div key={h.id} className="text-muted-foreground">
-                            <span className="text-slate-700 dark:text-slate-300">{ACTION_LABEL[h.action] || h.action}</span>
+                            <span className="text-body">{ACTION_LABEL[h.action] || h.action}</span>
                             <span className="text-slate-500"> · {new Date(h.created_at).toLocaleString('ru-RU')}</span>
                             {h.actor_name && <span className="text-slate-500"> · {h.actor_name}</span>}
                             {h.action === 'dismiss' && h.payload?.reason && (
@@ -1041,7 +1041,7 @@ export default function HrPage() {
 
       {dismissTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={() => setDismissTarget(null)}>
-          <div className="bg-white dark:bg-slate-950 border border-border rounded-2xl p-5 w-full max-w-md max-h-[calc(100vh-2rem)] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-card border border-border rounded-2xl p-5 w-full max-w-md max-h-[calc(100vh-2rem)] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-bold mb-1 text-foreground">Уволить сотрудника</h3>
             <p className="text-sm text-muted-foreground mb-4">
               {dismissTarget.full_name} ({dismissTarget.kind === 'operator' ? 'оператор' : 'админ'})
@@ -1056,7 +1056,7 @@ export default function HrPage() {
                 <select
                   value={dismissType}
                   onChange={(e) => setDismissType(e.target.value as DismissalType)}
-                  className="w-full h-10 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
+                  className="w-full h-10 px-3 rounded-lg border border-border bg-card text-sm"
                 >
                   {(Object.keys(DISMISSAL_TYPE_LABELS) as DismissalType[]).map((t) => (
                     <option key={t} value={t}>{DISMISSAL_TYPE_LABELS[t]}</option>
@@ -1070,7 +1070,7 @@ export default function HrPage() {
               onChange={(e) => setDismissReason(e.target.value)}
               placeholder="Укажите причину (минимум 5 символов)"
               rows={4}
-              className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm mb-4"
+              className="w-full px-3 py-2 rounded-lg border border-border bg-card text-sm mb-4"
             />
             {pairedLoading ? (
               <div className="mb-4 text-xs text-slate-500">Проверяем парную запись…</div>
@@ -1128,7 +1128,7 @@ function MiniStat({
     emerald: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
     blue: 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300',
     orange: 'border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-300',
-    gray: 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 text-muted-foreground',
+    gray: 'border-border bg-slate-50 dark:bg-slate-900/40 text-muted-foreground',
   }
   return (
     <div className={`px-3 py-2 rounded-lg border ${toneMap[tone]}`}>
@@ -1160,7 +1160,7 @@ function Chip({
     <button
       onClick={onClick}
       className={`px-3 py-1.5 rounded-full text-xs font-medium border transition flex items-center gap-1.5 ${
-        active ? toneMap[tone] + ' ring-1 ring-current/20' : 'border-slate-200 dark:border-slate-700 text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500'
+        active ? toneMap[tone] + ' ring-1 ring-current/20' : 'border-border text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500'
       }`}
     >
       <span>{children}</span>

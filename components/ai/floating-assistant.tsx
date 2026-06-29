@@ -24,7 +24,7 @@ function MessageBubble({ message }: { message: AssistantChatMessage }) {
           'max-w-[88%] rounded-2xl px-3 py-2 text-xs whitespace-pre-wrap leading-relaxed',
           isUser
             ? 'bg-gradient-to-r from-amber-500/25 to-orange-500/20 text-foreground border border-amber-500/20'
-            : 'bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-200 border border-border',
+            : 'bg-slate-100 dark:bg-white/5 text-body border border-border',
         )}
       >
         {message.content}
@@ -114,7 +114,7 @@ export function FloatingAssistant({
             </div>
             <button
               onClick={() => setOpen(false)}
-              className="rounded-lg p-1.5 text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white transition-colors"
+              className="rounded-lg p-1.5 text-muted-foreground hover:bg-surface-hover hover:text-slate-900 dark:hover:text-white transition-colors"
             >
               <ChevronDown className="h-4 w-4" />
             </button>
@@ -127,8 +127,8 @@ export function FloatingAssistant({
             style={{ minHeight: 160, maxHeight: 'calc(72vh - 180px)' }}
           >
             {messages.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border bg-slate-50 dark:bg-white/[0.03] p-3">
-                <div className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300 mb-1.5">
+              <div className="rounded-xl border border-dashed border-border bg-surface-muted p-3">
+                <div className="flex items-center gap-2 text-xs text-body mb-1.5">
                   <Sparkles className="h-3.5 w-3.5 text-amber-300" />
                   Готов к анализу
                 </div>
@@ -141,7 +141,7 @@ export function FloatingAssistant({
             )}
 
             {loading && (
-              <div className="flex items-center gap-2 rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] px-3 py-2 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2 rounded-xl border border-border bg-surface-muted px-3 py-2 text-xs text-muted-foreground">
                 <Loader2 className="h-3 w-3 animate-spin text-amber-300" />
                 Анализирую данные...
               </div>
@@ -150,14 +150,14 @@ export function FloatingAssistant({
 
           {/* Suggested prompts */}
           {suggestedPrompts.length > 0 && messages.length === 0 && (
-            <div className="border-t border-slate-200 dark:border-white/8 px-3 py-2 flex flex-wrap gap-1.5">
+            <div className="border-t border-border px-3 py-2 flex flex-wrap gap-1.5">
               {suggestedPrompts.map((p) => (
                 <button
                   key={p}
                   type="button"
                   onClick={() => void sendPrompt(p)}
                   disabled={loading}
-                  className="rounded-full border border-border bg-slate-50 dark:bg-white/5 px-2.5 py-1 text-[10px] text-muted-foreground hover:border-amber-500/30 hover:bg-amber-500/10 hover:text-slate-900 dark:hover:text-white transition-colors disabled:opacity-40"
+                  className="rounded-full border border-border bg-surface-muted px-2.5 py-1 text-[10px] text-muted-foreground hover:border-amber-500/30 hover:bg-amber-500/10 hover:text-slate-900 dark:hover:text-white transition-colors disabled:opacity-40"
                 >
                   {p}
                 </button>

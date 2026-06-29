@@ -472,7 +472,7 @@ function PayloadRows({ item }: { item: LogItem }) {
       {rows.map((r) => (
         <div key={r.label} className="flex items-center gap-1.5 text-xs">
           <span className="text-slate-500">{r.label}:</span>
-          <span className={r.highlight ? 'font-semibold text-foreground' : 'text-slate-700 dark:text-slate-300'}>{r.value}</span>
+          <span className={r.highlight ? 'font-semibold text-foreground' : 'text-body'}>{r.value}</span>
         </div>
       ))}
     </div>
@@ -808,7 +808,7 @@ export default function LogsPage() {
             <option value="">Все действия</option>
             {(data?.filters.actions || []).map(o => <option key={o} value={o}>{ACTION_BADGE_LABELS[o] || o}</option>)}
           </select>
-          <label className="flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900/60 px-3 text-sm text-slate-700 dark:text-slate-200 cursor-pointer">
+          <label className="flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900/60 px-3 text-sm text-body cursor-pointer">
             <input type="checkbox" checked={onlyErrors} onChange={e => setOnlyErrors(e.target.checked)}
               className="h-4 w-4 rounded border-slate-300 dark:border-white/20 bg-transparent" />
             Только ошибки
@@ -865,7 +865,7 @@ export default function LogsPage() {
                         const f = formatItem(item)
                         if (!f) return null
                         const labels: Record<string, { text: string; cls: string }> = {
-                          info: { text: 'инфо', cls: 'bg-slate-500/15 text-slate-700 dark:text-slate-300' },
+                          info: { text: 'инфо', cls: 'bg-slate-500/15 text-body' },
                           normal: { text: 'обычное', cls: 'bg-sky-500/15 text-sky-700 dark:text-sky-300' },
                           important: { text: 'важное', cls: 'bg-amber-500/15 text-amber-700 dark:text-amber-300' },
                           critical: { text: 'критично', cls: 'bg-red-500/20 text-red-700 dark:text-red-300' },
@@ -932,10 +932,10 @@ export default function LogsPage() {
                               {value ? (
                                 <>
                                   <span className="text-slate-500">{label}:</span>{' '}
-                                  <span className="text-slate-700 dark:text-slate-200">{value}</span>
+                                  <span className="text-body">{value}</span>
                                 </>
                               ) : (
-                                <span className="text-slate-700 dark:text-slate-200">{row}</span>
+                                <span className="text-body">{row}</span>
                               )}
                             </div>
                           )

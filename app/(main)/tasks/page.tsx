@@ -704,7 +704,7 @@ function TasksContent() {
                 <Button
                   variant="outline"
                   size="icon"
-                  className={`rounded-xl border-border bg-white dark:bg-slate-900/50 backdrop-blur-xl hover:bg-slate-100 dark:hover:bg-white/10 ${refreshing ? 'animate-spin' : ''}`}
+                  className={`rounded-xl border-border bg-white dark:bg-slate-900/50 backdrop-blur-xl hover:bg-surface-hover ${refreshing ? 'animate-spin' : ''}`}
                   onClick={() => loadData(true)}
                   title="Обновить"
                 >
@@ -716,7 +716,7 @@ function TasksContent() {
                     onClick={() => setViewMode('kanban')}
                     className={cn(
                       "p-2 rounded-lg transition-colors",
-                      viewMode === 'kanban' ? 'bg-slate-100 dark:bg-white/10 text-foreground' : 'text-muted-foreground hover:text-slate-900 dark:hover:text-white'
+                      viewMode === 'kanban' ? 'bg-surface-hover text-foreground' : 'text-muted-foreground hover:text-slate-900 dark:hover:text-white'
                     )}
                   >
                     <LayoutGrid className="w-4 h-4" />
@@ -725,7 +725,7 @@ function TasksContent() {
                     onClick={() => setViewMode('list')}
                     className={cn(
                       "p-2 rounded-lg transition-colors",
-                      viewMode === 'list' ? 'bg-slate-100 dark:bg-white/10 text-foreground' : 'text-muted-foreground hover:text-slate-900 dark:hover:text-white'
+                      viewMode === 'list' ? 'bg-surface-hover text-foreground' : 'text-muted-foreground hover:text-slate-900 dark:hover:text-white'
                     )}
                   >
                     <LayoutList className="w-4 h-4" />
@@ -1032,7 +1032,7 @@ function TasksContent() {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="border-border text-muted-foreground hover:bg-slate-50 dark:hover:bg-white/5 text-xs"
+                      className="border-border text-muted-foreground hover:bg-surface-muted text-xs"
                       onClick={() => setSelectedTaskIds(new Set())}
                     >
                       Снять выбор
@@ -1075,7 +1075,7 @@ function TasksContent() {
                           setIsTaskModalOpen(true)
                         }}
                         className={cn(
-                          "hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer",
+                          "hover:bg-surface-muted transition-colors cursor-pointer",
                           selectedTaskIds.has(task.id) && "bg-violet-500/5"
                         )}
                       >
@@ -1114,7 +1114,7 @@ function TasksContent() {
                             <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-[10px] font-bold">
                               {task.operator_name?.[0] || task.operator_short_name?.[0] || '?'}
                             </div>
-                            <span className="text-sm text-slate-700 dark:text-slate-300">
+                            <span className="text-sm text-body">
                               {task.operator_name || task.operator_short_name || '—'}
                             </span>
                             {task.operator_telegram && (
@@ -1126,7 +1126,7 @@ function TasksContent() {
                           {task.due_date ? (
                             <span className={cn(
                               "text-sm",
-                              isOverdue(task.due_date, task.status) ? "text-red-400" : "text-slate-700 dark:text-slate-300"
+                              isOverdue(task.due_date, task.status) ? "text-red-400" : "text-body"
                             )}>
                               {formatDate(task.due_date)}
                             </span>
@@ -1251,13 +1251,13 @@ function TaskCard({ task, onClick, onStatusChange, onNotify, onDragStart, onDrag
             e.stopPropagation()
             setShowMenu(!showMenu)
           }}
-          className="p-1 hover:bg-slate-100 dark:hover:bg-white/10 rounded"
+          className="p-1 hover:bg-surface-hover rounded"
         >
           <MoreHorizontal className="w-3.5 h-3.5" />
         </button>
         
         {showMenu && (
-          <div className="absolute right-0 mt-6 w-40 bg-white dark:bg-slate-800 border border-border rounded-lg shadow-xl z-10">
+          <div className="absolute right-0 mt-6 w-40 bg-card border border-border rounded-lg shadow-xl z-10">
             {Object.entries(STATUS_CONFIG).map(([status, config]) => {
               if (status === task.status || status === 'archived') return null
               return (
@@ -1268,7 +1268,7 @@ function TaskCard({ task, onClick, onStatusChange, onNotify, onDragStart, onDrag
                     onStatusChange(status as TaskStatus)
                     setShowMenu(false)
                   }}
-                  className="w-full px-3 py-2 text-left text-xs hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-2"
+                  className="w-full px-3 py-2 text-left text-xs hover:bg-surface-muted flex items-center gap-2"
                 >
                   {config.title}
                 </button>
@@ -1529,7 +1529,7 @@ function TaskDetailModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-white dark:bg-slate-900 border-border text-foreground max-w-2xl max-h-[90vh] overflow-auto">
+      <DialogContent className="bg-card border-border text-foreground max-w-2xl max-h-[90vh] overflow-auto">
         <DialogHeader>
           <div className="flex items-start justify-between">
             <div>
@@ -1571,7 +1571,7 @@ function TaskDetailModal({
 
         <div className="space-y-4 py-4">
           {can('tasks.edit') && (
-          <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] p-4">
+          <div className="rounded-xl border border-border bg-surface-muted p-4">
             <div className="mb-3 text-sm font-medium text-foreground">Редактирование задачи</div>
 
             <div className="space-y-3">
@@ -1670,14 +1670,14 @@ function TaskDetailModal({
 
           {/* Мета-информация */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="p-3 bg-slate-50 dark:bg-white/5 rounded-lg">
+            <div className="p-3 bg-surface-muted rounded-lg">
               <p className="text-xs text-slate-500 mb-1">Статус</p>
               <div className="flex items-center gap-2">
                 <StatusIcon className={cn("w-4 h-4", statusConfig.color.split(' ')[0])} />
                 <span className="text-sm">{statusConfig.title}</span>
               </div>
             </div>
-            <div className="p-3 bg-slate-50 dark:bg-white/5 rounded-lg">
+            <div className="p-3 bg-surface-muted rounded-lg">
               <p className="text-xs text-slate-500 mb-1">Приоритет</p>
               <div className="flex items-center gap-2">
                 <span className={cn("text-sm px-2 py-0.5 rounded-full", priorityConfig.color)}>
@@ -1685,7 +1685,7 @@ function TaskDetailModal({
                 </span>
               </div>
             </div>
-            <div className="p-3 bg-slate-50 dark:bg-white/5 rounded-lg">
+            <div className="p-3 bg-surface-muted rounded-lg">
               <p className="text-xs text-slate-500 mb-1">Оператор</p>
               <div className="flex items-center gap-2">
                 <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-xs font-bold">
@@ -1697,12 +1697,12 @@ function TaskDetailModal({
                 )}
               </div>
             </div>
-            <div className="p-3 bg-slate-50 dark:bg-white/5 rounded-lg">
+            <div className="p-3 bg-surface-muted rounded-lg">
               <p className="text-xs text-slate-500 mb-1">Дедлайн</p>
               {task.due_date ? (
                 <div className={cn(
                   "flex items-center gap-2 text-sm",
-                  isTaskOverdue ? "text-red-400" : "text-slate-700 dark:text-slate-300"
+                  isTaskOverdue ? "text-red-400" : "text-body"
                 )}>
                   <Calendar className="w-4 h-4" />
                   <span>{formatDate(task.due_date)}</span>
@@ -1719,7 +1719,7 @@ function TaskDetailModal({
 
           {/* Компания */}
           {task.company_name && (
-            <div className="p-3 bg-slate-50 dark:bg-white/5 rounded-lg">
+            <div className="p-3 bg-surface-muted rounded-lg">
               <p className="text-xs text-slate-500 mb-1">Компания</p>
               <span className={cn(
                 "text-xs px-2 py-1 rounded-full border",
@@ -1741,7 +1741,7 @@ function TaskDetailModal({
           )}
 
           {can('tasks.respond') && (
-          <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] p-4">
+          <div className="rounded-xl border border-border bg-surface-muted p-4">
             <div className="mb-2 flex items-center gap-2">
               <MessageSquare className="h-4 w-4 text-violet-300" />
               <h3 className="text-sm font-medium text-foreground">Быстрый ответ по задаче</h3>
@@ -1788,7 +1788,7 @@ function TaskDetailModal({
                 {task.tags.map((tag: string) => (
                   <span
                     key={tag}
-                    className="text-xs px-2 py-1 rounded-full bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-white/5"
+                    className="text-xs px-2 py-1 rounded-full bg-card text-body border border-slate-200 dark:border-white/5"
                   >
                     #{tag}
                   </span>
@@ -1940,7 +1940,7 @@ function CreateTaskModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-white dark:bg-slate-900 border-border text-foreground sm:max-w-md">
+      <DialogContent className="bg-card border-border text-foreground sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Новая задача</DialogTitle>
           <DialogDescription className="text-muted-foreground">

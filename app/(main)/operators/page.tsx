@@ -683,7 +683,7 @@ export default function OperatorsPage() {
                 className={`rounded-lg border-border ${
                   showInactive
                     ? 'bg-amber-500/15 text-amber-700 dark:text-amber-200 hover:bg-amber-500/20'
-                    : 'bg-white dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50'
+                    : 'bg-white dark:bg-slate-800/50 text-body hover:bg-slate-100 dark:hover:bg-slate-700/50'
                 }`}
               >
                 {showInactive ? (
@@ -766,7 +766,7 @@ export default function OperatorsPage() {
                     return (
                       <tr
                         key={op.id}
-                        className="border-t border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
+                        className="border-t border-slate-100 dark:border-white/5 hover:bg-surface-muted transition-colors"
                       >
                         <td className="py-3 px-4">
                           {canManageOperators ? (
@@ -889,7 +889,7 @@ export default function OperatorsPage() {
                           <div className="flex items-center justify-center gap-1">
                             <Link
                               href={`/operators/${op.id}/profile`}
-                              className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-colors"
+                              className="p-2 hover:bg-surface-hover rounded-lg transition-colors"
                               title="Просмотр профиля"
                             >
                               <Eye className="w-4 h-4" />
@@ -899,7 +899,7 @@ export default function OperatorsPage() {
                                 {canEdit && (
                                   <button
                                     onClick={() => handleEdit(op)}
-                                    className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-colors"
+                                    className="p-2 hover:bg-surface-hover rounded-lg transition-colors"
                                     title="Редактировать"
                                   >
                                     <Edit className="w-4 h-4" />
@@ -908,7 +908,7 @@ export default function OperatorsPage() {
                                 {canToggleActive && (
                                   <button
                                     onClick={() => toggleActive(op)}
-                                    className={`p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-colors ${
+                                    className={`p-2 hover:bg-surface-hover rounded-lg transition-colors ${
                                       op.is_active ? 'text-emerald-400' : 'text-slate-500'
                                     }`}
                                     title={op.is_active ? 'Деактивировать' : 'Активировать'}
@@ -923,7 +923,7 @@ export default function OperatorsPage() {
                                 {canDelete && (
                                 <button
                                   onClick={() => handleDelete(op.id)}
-                                  className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-colors text-rose-400"
+                                  className="p-2 hover:bg-surface-hover rounded-lg transition-colors text-rose-400"
                                   title="Удалить"
                                 >
                                   <Trash2 className="w-4 h-4" />
@@ -941,7 +941,7 @@ export default function OperatorsPage() {
             </AdminTableViewport>
 
             {/* Footer с итогами */}
-            <div className="border-t border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/5 px-4 py-3">
+            <div className="border-t border-slate-200 dark:border-white/5 bg-surface-muted px-4 py-3">
               <div className="flex flex-wrap justify-between items-center gap-2 text-sm">
                 <span className="text-muted-foreground">
                   Всего: {filteredOperators.length} операторов

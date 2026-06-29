@@ -141,7 +141,7 @@ export default function DocumentUpload({ operatorId, onUploadComplete, onError }
         <h4 className="text-sm font-medium">Новый документ</h4>
         <button
           onClick={() => setShowForm(false)}
-          className="p-1 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-colors"
+          className="p-1 hover:bg-surface-hover rounded-lg transition-colors"
         >
           <X className="w-4 h-4" />
         </button>

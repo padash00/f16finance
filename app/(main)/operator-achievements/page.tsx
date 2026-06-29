@@ -400,10 +400,10 @@ function OperatorAchievementsModal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-white dark:bg-slate-900 border border-border rounded-2xl w-full max-w-3xl my-8 animate-in fade-in zoom-in duration-200"
+        className="bg-card border border-border rounded-2xl w-full max-w-3xl my-8 animate-in fade-in zoom-in duration-200"
       >
         {/* Header */}
-        <div className="sticky top-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/5 rounded-t-2xl z-10 p-5">
+        <div className="sticky top-0 bg-card border-b border-slate-200 dark:border-white/5 rounded-t-2xl z-10 p-5">
           <div className="flex items-center gap-4">
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-border bg-gradient-to-br from-amber-100 to-amber-200 dark:from-amber-500/30 dark:to-amber-600/30 overflow-hidden">
               {row.photo_url ? (
@@ -480,7 +480,7 @@ function OperatorAchievementsModal({
         </div>
 
         {/* Footer */}
-        <div className="sticky bottom-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-white/5 rounded-b-2xl p-4 flex justify-end">
+        <div className="sticky bottom-0 bg-card border-t border-slate-200 dark:border-white/5 rounded-b-2xl p-4 flex justify-end">
           <Button variant="outline" size="sm" onClick={onClose} className="border-border">
             Закрыть
           </Button>
@@ -493,7 +493,7 @@ function OperatorAchievementsModal({
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] px-3 py-2">
+    <div className="rounded-xl border border-border bg-surface-muted px-3 py-2">
       <div className="text-[10px] uppercase tracking-wide text-slate-500">{label}</div>
       <div className="mt-1 text-sm font-semibold text-foreground">{value}</div>
     </div>
@@ -514,7 +514,7 @@ function AchievementCard({
 
   return (
     <div
-      className={`rounded-xl border ${earned ? c.border : 'border-slate-200 dark:border-white/8'} ${
+      className={`rounded-xl border ${earned ? c.border : 'border-border'} ${
         earned ? c.bg : 'bg-slate-50 dark:bg-white/[0.02]'
       } p-4 ${!earned ? 'opacity-70' : ''}`}
     >
@@ -527,7 +527,7 @@ function AchievementCard({
           <AchievementIconCmp kind={ach.icon} className="w-5 h-5" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className={`text-sm font-semibold ${earned ? 'text-foreground' : 'text-slate-700 dark:text-slate-300'}`}>
+          <div className={`text-sm font-semibold ${earned ? 'text-foreground' : 'text-body'}`}>
             {ach.title}
           </div>
           <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">{ach.desc}</p>

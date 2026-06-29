@@ -1086,7 +1086,7 @@ function SalaryRulesContent() {
                 <Button
                   variant="outline"
                   size="icon"
-                  className={`rounded-xl border-border bg-white dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 ${refreshing ? '[&_svg]:animate-spin' : ''}`}
+                  className={`rounded-xl border-border bg-white dark:bg-white/5 hover:bg-surface-hover ${refreshing ? '[&_svg]:animate-spin' : ''}`}
                   onClick={() => void loadAll(true)}
                   title="Обновить"
                   aria-label="Обновить"
@@ -1100,7 +1100,7 @@ function SalaryRulesContent() {
                     variant="outline"
                     onClick={() => void handleSaveAll()}
                     disabled={savingAll || dirtyIds.size === 0}
-                    className="gap-2 rounded-xl border-border bg-white dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10"
+                    className="gap-2 rounded-xl border-border bg-white dark:bg-white/5 hover:bg-surface-hover"
                   >
                     <Save className="h-4 w-4" />
                     {savingAll ? 'Сохранение...' : `Сохранить (${dirtyIds.size})`}
@@ -1211,17 +1211,17 @@ function SalaryRulesContent() {
             <Card className="p-4 bg-white dark:bg-gray-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
               <p className="text-xs uppercase tracking-[0.24em] text-gray-500">Быстрый обзор</p>
               <div className="mt-3 space-y-3">
-                <div className="flex items-center justify-between rounded-2xl border border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.03] px-3 py-2">
+                <div className="flex items-center justify-between rounded-2xl border border-slate-200 dark:border-white/5 bg-surface-muted px-3 py-2">
                   <span className="text-sm text-slate-700 dark:text-gray-400">Средний оклад</span>
                   <span className="text-base font-semibold text-foreground">{formatMoney(stats.avgBase)}</span>
                 </div>
-                <div className="flex items-center justify-between rounded-2xl border border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.03] px-3 py-2">
+                <div className="flex items-center justify-between rounded-2xl border border-slate-200 dark:border-white/5 bg-surface-muted px-3 py-2">
                   <span className="text-sm text-slate-700 dark:text-gray-400">Последнее изменение</span>
                   <span className="text-sm text-foreground">
                     {filteredHistory[0] ? formatDateTime(filteredHistory[0].created_at) : 'Пока нет'}
                   </span>
                 </div>
-                <div className="flex items-center justify-between rounded-2xl border border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.03] px-3 py-2">
+                <div className="flex items-center justify-between rounded-2xl border border-slate-200 dark:border-white/5 bg-surface-muted px-3 py-2">
                   <span className="text-sm text-slate-700 dark:text-gray-400">История по фильтру</span>
                   <span className="text-base font-semibold text-foreground">{filteredHistory.length}</span>
                 </div>
@@ -1272,7 +1272,7 @@ function SalaryRulesContent() {
                     className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
                       active
                         ? `${style.bg} ${style.border} ${style.text}`
-                        : 'border-border bg-slate-50 dark:bg-white/[0.03] text-slate-700 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white'
+                        : 'border-border bg-surface-muted text-slate-700 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
                     {company.name}
@@ -1402,7 +1402,7 @@ function SalaryRulesContent() {
                         <>
                         <tr
                           key={r.id}
-                          className={`border-t border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors ${
+                          className={`border-t border-slate-200 dark:border-white/5 hover:bg-surface-muted transition-colors ${
                             !r.is_active ? 'opacity-60' : ''
                           }`}
                         >
@@ -1706,7 +1706,7 @@ function SalaryRulesContent() {
                                           <Save className="w-3 h-3 mr-1" />
                                           {savingNewVersion ? 'Сохранение...' : 'Сохранить версию'}
                                         </Button>
-                                        <Button size="xs" variant="outline" className="h-8 px-3 border-border bg-white dark:bg-white/5 text-slate-700 dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => { setNewVersionForRule(null); setNewVersionDraft({}) }}>
+                                        <Button size="xs" variant="outline" className="h-8 px-3 border-border bg-white dark:bg-white/5 text-slate-700 dark:text-gray-300 hover:bg-surface-hover" onClick={() => { setNewVersionForRule(null); setNewVersionDraft({}) }}>
                                           Отмена
                                         </Button>
                                       </div>
@@ -1718,7 +1718,7 @@ function SalaryRulesContent() {
                                   ) : (
                                     <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-white/5">
                                       <table className="w-full text-xs">
-                                        <thead className="bg-slate-50 dark:bg-white/[0.03]">
+                                        <thead className="bg-surface-muted">
                                           <tr>
                                             <th className="px-2 py-2 text-left text-slate-500 dark:text-gray-400">С даты</th>
                                             <th className="px-2 py-2 text-right text-slate-500 dark:text-gray-400">Оклад</th>
@@ -1852,7 +1852,7 @@ function SalaryRulesContent() {
                     Красивый журнал по изменениям правил без технических полей базы.
                   </p>
                 </div>
-                <div className="rounded-2xl border border-border bg-slate-50 dark:bg-white/[0.03] px-3 py-2 text-sm text-slate-700 dark:text-gray-300">
+                <div className="rounded-2xl border border-border bg-surface-muted px-3 py-2 text-sm text-slate-700 dark:text-gray-300">
                   {filteredHistory.length} событий
                 </div>
               </div>
@@ -1931,19 +1931,19 @@ function SalaryRulesContent() {
             <Card className="p-5 bg-white dark:bg-gray-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
               <h2 className="text-lg font-semibold text-foreground">Как использовать раздел</h2>
               <div className="mt-4 space-y-3 text-sm">
-                <div className="rounded-3xl border border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.03] p-4">
+                <div className="rounded-3xl border border-slate-200 dark:border-white/5 bg-surface-muted p-4">
                   <p className="font-medium text-foreground">1. Сначала выбери точку</p>
                   <p className="mt-1 text-slate-700 dark:text-gray-400">
                     Через быстрые вкладки сверху можно быстро перейти на F16 Arena, Ramen или Extra.
                   </p>
                 </div>
-                <div className="rounded-3xl border border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.03] p-4">
+                <div className="rounded-3xl border border-slate-200 dark:border-white/5 bg-surface-muted p-4">
                   <p className="font-medium text-foreground">2. Настрой базу и бонусы</p>
                   <p className="mt-1 text-slate-700 dark:text-gray-400">
                     Для каждой смены отдельно задаются оклад, пороги выручки и надбавки для старших ролей.
                   </p>
                 </div>
-                <div className="rounded-3xl border border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.03] p-4">
+                <div className="rounded-3xl border border-slate-200 dark:border-white/5 bg-surface-muted p-4">
                   <p className="font-medium text-foreground">3. Смотри историю</p>
                   <p className="mt-1 text-slate-700 dark:text-gray-400">
                     Ниже хранится понятный журнал: кто менял правило, на какой точке и что именно изменилось.
@@ -2083,7 +2083,7 @@ function SalaryRulesContent() {
                           .sort((left, right) => Number(left.min_months || 0) - Number(right.min_months || 0))
                           .map((tier) => {
                             return (
-                              <tr key={tier.id} className="border-t border-slate-200 dark:border-white/5 transition-colors hover:bg-slate-50 dark:hover:bg-white/5">
+                              <tr key={tier.id} className="border-t border-slate-200 dark:border-white/5 transition-colors hover:bg-surface-muted">
                                 <td className="px-4 py-3">
                                   <div className="flex items-center gap-2">
                                     <input

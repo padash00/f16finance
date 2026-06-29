@@ -722,7 +722,7 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
       {(() => {
         const hdrActions = (
           <>
-            <div className="inline-flex rounded-lg border border-border bg-slate-50 dark:bg-white/[0.03] p-0.5 text-xs">
+            <div className="inline-flex rounded-lg border border-border bg-surface-muted p-0.5 text-xs">
               {(['all', 'warehouse', 'showcase'] as const).map((s) => (
                 <button
                   key={s}
@@ -1000,7 +1000,7 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
               </div>
             )}
 
-            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] px-3 py-2 text-xs text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface-muted px-3 py-2 text-xs text-muted-foreground">
               <span>
                 Локация: <span className="font-medium text-foreground">{selectedLocation?.company?.name || selectedLocation?.name || '—'}</span>
               </span>
@@ -1058,7 +1058,7 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
 
             {/* Фильтры строк */}
             {lines.length > 0 && (
-              <div className="inline-flex rounded-lg border border-border bg-slate-50 dark:bg-white/[0.03] p-0.5 text-xs">
+              <div className="inline-flex rounded-lg border border-border bg-surface-muted p-0.5 text-xs">
                 {(['all', 'mismatch'] as const).map((f) => (
                   <button
                     key={f}
@@ -1227,7 +1227,7 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
                         </Select>
                       ) : (
                         <div
-                          className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] px-3 py-2 text-sm text-foreground"
+                          className="rounded-xl border border-border bg-surface-muted px-3 py-2 text-sm text-foreground"
                           title={`${lineItem?.name || 'Товар'}`}
                         >
                           <span className="block truncate">
@@ -1239,12 +1239,12 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
 
                     <div className="space-y-1.5">
                       <Label>Штрихкод</Label>
-                      <Input value={lineItem?.barcode || '—'} readOnly className="bg-slate-50 dark:bg-white/[0.03]" />
+                      <Input value={lineItem?.barcode || '—'} readOnly className="bg-surface-muted" />
                     </div>
 
                     <div className="space-y-1.5">
                       <Label>Система</Label>
-                      <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] px-3 py-2 text-sm text-foreground">{formatQty(expectedQty)}</div>
+                      <div className="rounded-xl border border-border bg-surface-muted px-3 py-2 text-sm text-foreground">{formatQty(expectedQty)}</div>
                     </div>
 
                     <div className="space-y-1.5">
@@ -1259,7 +1259,7 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
 
                     <div className="space-y-1.5">
                       <Label>Δ</Label>
-                      <div className={`rounded-xl border px-3 py-2 text-center text-sm ${deltaQty === 0 ? 'border-border bg-slate-50 dark:bg-white/[0.03] text-muted-foreground' : deltaQty > 0 ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200' : 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-200'}`}>
+                      <div className={`rounded-xl border px-3 py-2 text-center text-sm ${deltaQty === 0 ? 'border-border bg-surface-muted text-muted-foreground' : deltaQty > 0 ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200' : 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-200'}`}>
                         {deltaQty === 0 ? '—' : `${deltaQty > 0 ? '+' : ''}${formatQty(deltaQty)}`}
                       </div>
                     </div>
@@ -1332,7 +1332,7 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
                 </div>
                 <div className="overflow-auto rounded-xl border border-border">
                   <table className="w-full table-fixed text-sm">
-                    <thead className="bg-slate-50 dark:bg-white/[0.03]">
+                    <thead className="bg-surface-muted">
                       <tr className="text-left text-xs text-muted-foreground">
                         <th className="px-3 py-2 font-normal">Товар</th>
                         <th className="px-3 py-2 font-normal">Штрихкод</th>

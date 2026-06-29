@@ -290,7 +290,7 @@ export default function PurchasePlanPage() {
           <div className="flex items-center gap-2 mb-2 text-sm font-semibold text-emerald-700 dark:text-emerald-200">
             <Sparkles className="h-4 w-4" /> AI-совет по закупу
           </div>
-          <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700 dark:text-slate-200">{aiText}</p>
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-body">{aiText}</p>
         </Card>
       ) : null}
 
@@ -320,7 +320,7 @@ export default function PurchasePlanPage() {
                 {plan.revenue4wPerWeek > 0 ? (
                   <div className="text-right">
                     <div className="text-xs text-muted-foreground">Выручка точки за 7 дней</div>
-                    <div className="text-sm font-semibold tabular-nums text-slate-700 dark:text-slate-200">{money(plan.revenue4wPerWeek)}</div>
+                    <div className="text-sm font-semibold tabular-nums text-body">{money(plan.revenue4wPerWeek)}</div>
                   </div>
                 ) : null}
               </div>
@@ -358,7 +358,7 @@ export default function PurchasePlanPage() {
                           </td>
                           <td className="px-3 py-2 text-right tabular-nums">
                             <div className="inline-flex items-center justify-end gap-1">
-                              <span className="text-slate-700 dark:text-slate-200">{num(it.weeklyDemand)}</span>
+                              <span className="text-body">{num(it.weeklyDemand)}</span>
                               {it.trendPct >= 5 ? (
                                 <span className="inline-flex items-center text-emerald-600 dark:text-emerald-400 text-[11px]">
                                   <TrendingUp className="h-3 w-3" />{Math.round(it.trendPct)}%
@@ -370,7 +370,7 @@ export default function PurchasePlanPage() {
                               ) : null}
                             </div>
                           </td>
-                          <td className="px-3 py-2 text-right tabular-nums text-slate-700 dark:text-slate-200">{num(it.stock)}</td>
+                          <td className="px-3 py-2 text-right tabular-nums text-body">{num(it.stock)}</td>
                           <td className="px-3 py-2 text-right">
                             <Input
                               type="number"
@@ -391,7 +391,7 @@ export default function PurchasePlanPage() {
                               {it._packSize > 1 ? <span className="text-muted-foreground">= {it._packs} кор</span> : null}
                             </div>
                           </td>
-                          <td className="px-3 py-2 text-right tabular-nums text-slate-700 dark:text-slate-200">{money(it.unitCost)}</td>
+                          <td className="px-3 py-2 text-right tabular-nums text-body">{money(it.unitCost)}</td>
                           <td className="px-3 py-2 text-right tabular-nums">
                             {it.marginPct != null && it.marginPct !== 0 ? (
                               <span className={it.marginPct >= 25 ? 'text-emerald-600 dark:text-emerald-400' : it.marginPct >= 10 ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400'}>{Math.round(it.marginPct)}%</span>
@@ -416,7 +416,7 @@ export default function PurchasePlanPage() {
                 <div className="divide-y divide-slate-100 dark:divide-white/5">
                   {plan.doNotBuy.map((s) => (
                     <div key={s.item_id} className="flex items-center justify-between gap-3 px-4 py-2 text-sm">
-                      <span className="min-w-0 truncate text-slate-700 dark:text-slate-200">{s.name}</span>
+                      <span className="min-w-0 truncate text-body">{s.name}</span>
                       <div className="flex shrink-0 items-center gap-4 tabular-nums text-xs">
                         <span className="text-muted-foreground">в наличии {num(s.stock)} · ~{num(s.weeklyDemand)}/нед</span>
                         <span className="font-medium text-sky-600 dark:text-sky-400">хватит на {s.coverageWeeks >= 99 ? '∞' : `~${num(s.coverageWeeks)} нед`}</span>

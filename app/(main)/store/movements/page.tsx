@@ -102,7 +102,7 @@ function movementTypeClass(type: string) {
   if (type === 'return') return 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200'
   if (type === 'writeoff') return 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-200'
   if (type === 'posting') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
-  if (type === 'migration_initial') return 'border-slate-500/30 bg-slate-500/10 text-slate-600 dark:text-slate-300'
+  if (type === 'migration_initial') return 'border-slate-500/30 bg-slate-500/10 text-body'
   return 'border-border bg-slate-50 dark:bg-white/[0.05] text-muted-foreground'
 }
 

@@ -81,7 +81,7 @@ export function RowMenu({ actions, busy }: { actions: MenuAction[]; busy?: boole
             const toneCls =
               a.tone === 'danger' ? 'text-red-700 dark:text-red-300 hover:bg-red-500/10'
               : a.tone === 'success' ? 'text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10'
-              : 'text-slate-700 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white'
+              : 'text-slate-700 dark:text-gray-300 hover:bg-surface-muted hover:text-slate-900 dark:hover:text-white'
             return (
               <button
                 key={i}
@@ -183,7 +183,7 @@ export function InlineRoleDropdown({
                 setOpen(false)
                 if (p.name !== current) onChange(p.name)
               }}
-              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-slate-50 dark:hover:bg-white/5 transition ${
+              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-surface-muted transition ${
                 p.name === current ? 'text-indigo-600 dark:text-indigo-300 bg-indigo-500/5' : 'text-slate-700 dark:text-gray-300'
               }`}
             >

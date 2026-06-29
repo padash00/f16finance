@@ -66,7 +66,7 @@ const PAY_CHIP: Record<string, string> = {
   kaspi: 'bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-400/30',
   card: 'bg-sky-500/15 text-sky-600 dark:text-sky-300 border-sky-400/30',
   online: 'bg-violet-500/15 text-violet-600 dark:text-violet-300 border-violet-400/30',
-  mixed: 'bg-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-400/30',
+  mixed: 'bg-slate-500/15 text-body border-slate-400/30',
 }
 const fmt = (n: number) => Number(n || 0).toLocaleString('ru-RU')
 const pad2 = (n: number) => String(n).padStart(2, '0')
@@ -184,13 +184,13 @@ export default function SalesMonitorPage() {
             {tab === 'monitor' && isToday && (
               <button
                 onClick={() => setLive((v) => !v)}
-                className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition-colors ${live ? 'border-emerald-400/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-200' : 'border-border bg-slate-50 dark:bg-white/5 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10'}`}
+                className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition-colors ${live ? 'border-emerald-400/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-200' : 'border-border bg-surface-muted text-body hover:bg-surface-hover'}`}
               >
                 {live ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
                 {live ? 'Авто' : 'Пауза'}
               </button>
             )}
-            <button onClick={() => (tab === 'monitor' ? loadMonitor() : loadProducts())} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-slate-50 dark:bg-white/5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 transition-colors hover:bg-slate-100 dark:hover:bg-white/10">
+            <button onClick={() => (tab === 'monitor' ? loadMonitor() : loadProducts())} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-surface-muted px-3 py-2 text-xs font-medium text-body transition-colors hover:bg-surface-hover">
               {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
               Обновить
             </button>
@@ -214,7 +214,7 @@ export default function SalesMonitorPage() {
           <button
             key={k}
             onClick={() => applyPreset(k)}
-            className={`rounded-xl border px-3 py-2 text-xs font-medium transition-colors ${preset === k ? 'border-sky-400/40 bg-sky-500/15 text-sky-700 dark:text-sky-200' : 'border-border bg-slate-50 dark:bg-white/5 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10'}`}
+            className={`rounded-xl border px-3 py-2 text-xs font-medium transition-colors ${preset === k ? 'border-sky-400/40 bg-sky-500/15 text-sky-700 dark:text-sky-200' : 'border-border bg-surface-muted text-body hover:bg-surface-hover'}`}
           >
             {lbl}
           </button>
@@ -244,7 +244,7 @@ export default function SalesMonitorPage() {
         <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
           {isToday ? (
             <>
-              <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 ${live ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-border bg-slate-50 dark:bg-white/5'}`}>
+              <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 ${live ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-border bg-surface-muted'}`}>
                 <span className={`h-2 w-2 rounded-full ${live ? 'animate-pulse bg-emerald-400' : 'bg-slate-500'}`} />
                 {live ? 'В реальном времени' : 'На паузе'}
               </span>
@@ -342,7 +342,7 @@ function MonitorView({ data, loading, flashIds }: { data: MonData | null; loadin
                 <tbody className="divide-y divide-slate-100 dark:divide-white/5">{data.by_operator.map((o) => (
                   <tr key={o.name} className="transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.02]">
                     <td className="px-4 py-2.5 text-foreground">{o.name}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-300">{o.count}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-body">{o.count}</td>
                     <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">{fmt(o.avg_check)} ₸</td>
                     <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-emerald-600 dark:text-emerald-300">{fmt(o.amount)} ₸</td>
                   </tr>
@@ -364,7 +364,7 @@ function MonitorView({ data, loading, flashIds }: { data: MonData | null; loadin
                 <tbody className="divide-y divide-slate-100 dark:divide-white/5">{data.by_category.map((c) => (
                   <tr key={c.name} className="transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.02]">
                     <td className="px-4 py-2.5 text-foreground">{c.name}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-300">{fmt(c.qty)}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-body">{fmt(c.qty)}</td>
                     <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-amber-600 dark:text-amber-300">{fmt(c.revenue)} ₸</td>
                   </tr>
                 ))}</tbody>
@@ -392,7 +392,7 @@ function MonitorView({ data, loading, flashIds }: { data: MonData | null; loadin
                 { label: 'Онлайн', amount: data.payment.online },
               ].map((p) => (
                 <tr key={p.label} className="transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.02]">
-                  <td className="px-4 py-2.5 text-slate-700 dark:text-slate-200">{p.label}</td>
+                  <td className="px-4 py-2.5 text-body">{p.label}</td>
                   <td className="px-4 py-2.5 text-right font-medium tabular-nums text-foreground">{fmt(p.amount)} ₸</td>
                   <td className="px-4 py-2.5 text-right tabular-nums text-slate-500">{t!.amount > 0 ? Math.round((p.amount / t!.amount) * 100) : 0}%</td>
                 </tr>
@@ -434,7 +434,7 @@ function MonitorView({ data, loading, flashIds }: { data: MonData | null; loadin
             <div className="space-y-1.5">{data.top_items.map((it, i) => (
               <div key={it.name} className="flex items-center gap-3 text-sm">
                 <span className="w-5 shrink-0 text-center text-xs text-slate-500">{i + 1}</span>
-                <span className="min-w-0 flex-1 truncate text-slate-700 dark:text-slate-200">{it.name}</span>
+                <span className="min-w-0 flex-1 truncate text-body">{it.name}</span>
                 <span className="shrink-0 text-xs text-muted-foreground">{it.qty} шт</span>
                 <span className="w-24 shrink-0 text-right font-medium tabular-nums text-emerald-600 dark:text-emerald-300">{fmt(it.revenue)} ₸</span>
               </div>
@@ -532,7 +532,7 @@ function ProductView({ data, loading, tab, category, setCategory, q }: { data: P
       <div className={`${card} overflow-hidden`}>
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <span className="text-sm font-semibold text-foreground">{TABS.find((x) => x.key === tab)?.label} товары</span>
-          <span className="rounded-full border border-border bg-slate-50 dark:bg-white/5 px-2 py-0.5 text-xs text-muted-foreground">{rows.length}</span>
+          <span className="rounded-full border border-border bg-surface-muted px-2 py-0.5 text-xs text-muted-foreground">{rows.length}</span>
         </div>
         {rows.length === 0 ? <div className="px-4 py-16 text-center text-sm text-slate-400">Нет данных за период</div> : (
           <div className="overflow-x-auto">
@@ -555,7 +555,7 @@ function ProductView({ data, loading, tab, category, setCategory, q }: { data: P
                         <td className="px-4 py-2.5 text-foreground">{it.name}</td>
                         <td className="px-4 py-2.5 text-muted-foreground">{it.category || '—'}</td>
                         <td className={`px-4 py-2.5 text-right tabular-nums ${it.stock > 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500'}`}>{fmt(it.stock)} {it.unit}</td>
-                        <td className="px-4 py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-300">{fmt(it.purchase_price)} ₸</td>
+                        <td className="px-4 py-2.5 text-right tabular-nums text-body">{fmt(it.purchase_price)} ₸</td>
                         <td className="px-4 py-2.5 text-right tabular-nums text-foreground">{fmt(it.sale_price)} ₸</td>
                       </>
                     ) : (
@@ -563,7 +563,7 @@ function ProductView({ data, loading, tab, category, setCategory, q }: { data: P
                         <td className="px-4 py-2.5 text-foreground">{it.name}</td>
                         <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{it.barcode || '—'}</td>
                         <td className="px-4 py-2.5 text-muted-foreground">{it.category || '—'}</td>
-                        <td className="px-4 py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-200">{fmt(it.qty)} {it.unit}</td>
+                        <td className="px-4 py-2.5 text-right tabular-nums text-body">{fmt(it.qty)} {it.unit}</td>
                         <td className={`px-4 py-2.5 text-right font-medium tabular-nums ${tab === 'profit' ? 'text-emerald-600 dark:text-emerald-300' : 'text-sky-600 dark:text-sky-300'}`}>{fmt(tab === 'profit' ? it.profit : it.revenue)} ₸{tab === 'profit' && <span className="ml-1 text-[11px] text-slate-500">{it.margin_percent}%</span>}</td>
                         <td className="px-4 py-2.5 text-right tabular-nums text-slate-400">{fmt(it.stock)}</td>
                       </>

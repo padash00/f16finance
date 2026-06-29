@@ -376,7 +376,7 @@ export default function StoreAbcPage({ embedded = false }: { embedded?: boolean 
                   return (
                     <div
                       key={`${abc}${xyz}`}
-                      className={`rounded-lg border px-3 py-2 text-center ${ideal ? 'border-emerald-500/40 bg-emerald-500/10' : dead ? 'border-rose-500/30 bg-rose-500/5' : 'border-border bg-slate-50 dark:bg-white/[0.03]'}`}
+                      className={`rounded-lg border px-3 py-2 text-center ${ideal ? 'border-emerald-500/40 bg-emerald-500/10' : dead ? 'border-rose-500/30 bg-rose-500/5' : 'border-border bg-surface-muted'}`}
                       title={ideal ? 'Идеальные товары: всегда продаются' : dead ? 'Кандидаты на вывод из ассортимента' : ''}
                     >
                       <div className="text-base font-bold">{cell?.count || 0}</div>

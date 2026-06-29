@@ -209,7 +209,7 @@ function UserCard({
           </div>
           <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 px-2 py-1 dark:border-white/5 dark:bg-slate-800">
             <Shield className="h-3 w-3 text-muted-foreground" />
-            <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{roleLabel || 'control'}</span>
+            <span className="text-xs font-medium text-body">{roleLabel || 'control'}</span>
           </div>
         </div>
 
@@ -352,7 +352,7 @@ function SearchBar({
   return (
     <div className="group relative w-full">
       <div className="relative flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm text-slate-500 transition-colors duration-200 focus-within:border-emerald-400/40 focus-within:bg-slate-50 dark:border-white/10 dark:bg-slate-950/50 dark:text-slate-400 dark:focus-within:border-emerald-400/40 dark:focus-within:bg-slate-950/70">
-        <Search className="h-4 w-4 text-slate-400 dark:text-slate-500" />
+        <Search className="h-4 w-4 text-faint" />
         <input
           ref={inputRef}
           value={value}

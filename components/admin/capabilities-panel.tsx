@@ -265,14 +265,14 @@ export function CapabilitiesPanel() {
       {/* Сводка по ролям */}
       <div className={`${card} p-4`}>
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="font-semibold text-slate-700 dark:text-slate-300">Сводка:</span>
+          <span className="font-semibold text-body">Сводка:</span>
           {roles.map((role) => {
             const s = summary[role] || { granted: 0, total: 0 }
             const pct = s.total ? Math.round((s.granted / s.total) * 100) : 0
             return (
               <span
                 key={role}
-                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-slate-100 dark:bg-white/5 px-2.5 py-1 text-slate-700 dark:text-slate-300"
+                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-slate-100 dark:bg-white/5 px-2.5 py-1 text-body"
                 title={`${s.granted} из ${s.total} прав включено`}
               >
                 <span className="font-medium text-foreground">{roleLabel(role)}</span>
@@ -297,7 +297,7 @@ export function CapabilitiesPanel() {
             className="rounded-xl border-border bg-white dark:bg-slate-950/50 pl-10 text-sm text-foreground"
           />
         </div>
-        <button onClick={load} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-slate-100 dark:bg-white/5 px-3.5 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 transition-colors hover:bg-slate-200 dark:hover:bg-white/10">
+        <button onClick={load} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-slate-100 dark:bg-white/5 px-3.5 py-2 text-xs font-medium text-body transition-colors hover:bg-slate-200 dark:hover:bg-white/10">
           <RotateCcw className="h-3.5 w-3.5" />
           Обновить
         </button>
@@ -312,7 +312,7 @@ export function CapabilitiesPanel() {
             <div key={group.id} className={`${card} overflow-hidden`}>
               <button
                 onClick={() => toggleGroup(group.id)}
-                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-slate-50 dark:hover:bg-white/5"
+                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-surface-muted"
               >
                 <div className="flex items-center gap-2">
                   {groupCollapsed ? <ChevronRight className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-emerald-300" />}
@@ -363,7 +363,7 @@ export function CapabilitiesPanel() {
         {roles.filter((r) => r !== 'super_admin').map((role) => {
           const otherRoles = roles.filter((r) => r !== role && r !== 'super_admin')
           return (
-            <div key={role} className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.03] p-3">
+            <div key={role} className="rounded-xl border border-border bg-surface-muted p-3">
               <div className="mb-2 text-sm font-medium text-foreground">{roleLabel(role)}</div>
               <div className="flex flex-wrap gap-2 text-xs">
                 <button
@@ -459,8 +459,8 @@ function PageRow({
           onClick={onToggleCollapse}
           className="flex flex-1 items-center gap-2 text-left transition hover:opacity-80"
         >
-          {effectivelyCollapsed ? <ChevronRight className="h-3.5 w-3.5 text-slate-500" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-700 dark:text-slate-300" />}
-          <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{page.label}</span>
+          {effectivelyCollapsed ? <ChevronRight className="h-3.5 w-3.5 text-slate-500" /> : <ChevronDown className="h-3.5 w-3.5 text-body" />}
+          <span className="text-sm font-medium text-body">{page.label}</span>
           <span className="text-xs text-slate-500" title={page.path}>
             {page.capabilities.length} {page.capabilities.length === 1 ? 'действие' : 'действий'}
           </span>
@@ -504,7 +504,7 @@ function PageRow({
                 ))}
               </tr>
             </thead>
-            <tbody className="text-slate-700 dark:text-slate-200">
+            <tbody className="text-body">
               {page.capabilities.map((cap) => (
                 <tr key={cap.id} className="border-t border-slate-100 dark:border-white/5">
                   <td className="py-1.5 pr-3 align-top">
@@ -557,7 +557,7 @@ function PageRow({
               <span className="text-xs text-slate-500">Пакетно по роли:</span>
               {roles.map((role) => (
                 <div key={role} className="inline-flex items-center gap-1 rounded-full border border-border bg-slate-100 dark:bg-white/5 px-2 py-0.5">
-                  <span className="text-[11px] text-slate-700 dark:text-slate-300">{roleLabel(role)}:</span>
+                  <span className="text-[11px] text-body">{roleLabel(role)}:</span>
                   <button
                     onClick={() => onBulkSet(role, allCapIds, true)}
                     disabled={savingKey === `bulk:${role}`}

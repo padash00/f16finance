@@ -967,7 +967,7 @@ export default function IncomePage() {
                     className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-colors ${
                       activeFiltersCount > 0
                         ? 'bg-amber-500/20 border-amber-500/30 text-amber-400'
-                        : 'bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-amber-500/50'
+                        : 'bg-white dark:bg-slate-800/50 border-border text-body hover:border-amber-500/50'
                     }`}
                   >
                     <Filter className="w-4 h-4" />
@@ -981,10 +981,10 @@ export default function IncomePage() {
 
                   <button
                     onClick={() => setIsCalendarOpen(!isCalendarOpen)}
-                    className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-amber-500/50 transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800/50 rounded-xl border border-border hover:border-amber-500/50 transition-colors"
                   >
                     <Calendar className="w-4 h-4 text-amber-400" />
-                    <span className="text-slate-700 dark:text-slate-300 text-sm">{periodLabel}</span>
+                    <span className="text-body text-sm">{periodLabel}</span>
                     <ChevronDown className={`w-3 h-3 text-slate-500 transition-transform ${isCalendarOpen ? 'rotate-180' : ''}`} />
                   </button>
 
@@ -994,7 +994,7 @@ export default function IncomePage() {
                       className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-colors ${
                         includeExtraInTotals
                           ? 'bg-yellow-500/20 border-yellow-500/30 text-yellow-400'
-                          : 'bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-muted-foreground'
+                          : 'bg-white dark:bg-slate-800/50 border-border text-muted-foreground'
                       }`}
                     >
                       <span className={`w-2 h-2 rounded-full ${includeExtraInTotals ? 'bg-yellow-400' : 'bg-slate-500'}`} />
@@ -1003,7 +1003,7 @@ export default function IncomePage() {
                   )}
 
                   {canExportIncome && (
-                    <Button variant="outline" size="sm" onClick={downloadCSV} className="border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300">
+                    <Button variant="outline" size="sm" onClick={downloadCSV} className="border-border bg-white dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-700 text-body">
                       <Download className="w-4 h-4 mr-1" /> Экспорт
                     </Button>
                   )}
@@ -1032,7 +1032,7 @@ export default function IncomePage() {
                         className={`px-4 py-2 text-sm font-medium rounded-xl transition-all ${
                           activePreset === p
                             ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/25'
-                            : 'bg-white dark:bg-slate-800 text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700'
+                            : 'bg-card text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700'
                         }`}
                       >
                         {p === 'today' ? 'Сегодня' : p === 'week' ? 'Неделя' : p === 'month' ? 'Месяц' : 'Все время'}
@@ -1097,7 +1097,7 @@ export default function IncomePage() {
                       <select
                         value={companyFilter}
                         onChange={(e) => setCompanyFilter(e.target.value)}
-                        className="w-full bg-white dark:bg-slate-800 text-foreground px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none text-sm"
+                        className="w-full bg-card text-foreground px-3 py-2.5 rounded-lg border border-border focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none text-sm"
                       >
                         <option value="all">Все компании</option>
                         {companies.map(c => (
@@ -1115,7 +1115,7 @@ export default function IncomePage() {
                       <select
                         value={operatorFilter}
                         onChange={(e) => setOperatorFilter(e.target.value as OperatorFilter)}
-                        className="w-full bg-white dark:bg-slate-800 text-foreground px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none text-sm"
+                        className="w-full bg-card text-foreground px-3 py-2.5 rounded-lg border border-border focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none text-sm"
                       >
                         <option value="all">Все операторы</option>
                         <option value="none">Без оператора</option>
@@ -1134,7 +1134,7 @@ export default function IncomePage() {
                       <select
                         value={shiftFilter}
                         onChange={(e) => setShiftFilter(e.target.value as ShiftFilter)}
-                        className="w-full bg-white dark:bg-slate-800 text-foreground px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none text-sm"
+                        className="w-full bg-card text-foreground px-3 py-2.5 rounded-lg border border-border focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none text-sm"
                       >
                         <option value="all">Все смены</option>
                         <option value="day">День (утро)</option>
@@ -1151,7 +1151,7 @@ export default function IncomePage() {
                       <select
                         value={payFilter}
                         onChange={(e) => setPayFilter(e.target.value as PayFilter)}
-                        className="w-full bg-white dark:bg-slate-800 text-foreground px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none text-sm"
+                        className="w-full bg-card text-foreground px-3 py-2.5 rounded-lg border border-border focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none text-sm"
                       >
                         <option value="all">Любая оплата</option>
                         <option value="cash">Наличные 💵</option>
@@ -1175,7 +1175,7 @@ export default function IncomePage() {
                           placeholder="Введите текст для поиска..."
                           value={searchTerm}
                           onChange={(e) => setSearchTerm(e.target.value)}
-                          className="w-full bg-white dark:bg-slate-800 text-foreground pl-10 pr-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none text-sm"
+                          className="w-full bg-card text-foreground pl-10 pr-4 py-2.5 rounded-lg border border-border focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none text-sm"
                         />
                         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-500" />
                         {searchTerm && (
@@ -1196,7 +1196,7 @@ export default function IncomePage() {
                           className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border transition-colors w-full md:w-auto ${
                             hideExtraRows
                               ? 'bg-yellow-500/20 border-yellow-500/30 text-yellow-400'
-                              : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-muted-foreground hover:text-slate-700 dark:hover:text-slate-300'
+                              : 'bg-card border-border text-muted-foreground hover:text-slate-700 dark:hover:text-slate-300'
                           }`}
                         >
                           {hideExtraRows ? <Check className="w-4 h-4" /> : <div className="w-4 h-4 border border-slate-500 rounded" />}
@@ -1235,7 +1235,7 @@ export default function IncomePage() {
                         </span>
                       )}
                       {searchTerm && (
-                        <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs rounded-lg flex items-center gap-1">
+                        <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 text-body text-xs rounded-lg flex items-center gap-1">
                           Поиск: "{searchTerm}"
                           <button onClick={() => setSearchTerm('')} className="hover:text-slate-900 dark:hover:text-white"><X className="w-3 h-3" /></button>
                         </span>
@@ -1254,7 +1254,7 @@ export default function IncomePage() {
                     className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
                       activePreset === p
                         ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/30'
-                        : 'bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700'
+                        : 'bg-white dark:bg-slate-800/50 border border-border text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700'
                     }`}
                   >
                     {p === 'today' ? 'Сегодня' : p === 'week' ? '7 дней' : p === 'month' ? 'Месяц' : 'Все время'}
@@ -1271,7 +1271,7 @@ export default function IncomePage() {
           />
 
           {/* Табы навигации */}
-          <div className="flex gap-2 p-1 bg-white dark:bg-slate-800/50 rounded-xl w-fit border border-slate-200 dark:border-slate-700">
+          <div className="flex gap-2 p-1 bg-white dark:bg-slate-800/50 rounded-xl w-fit border border-border">
             <TabButton active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} icon={<Activity className="w-4 h-4" />} label="Обзор" />
             <TabButton active={activeTab === 'analytics'} onClick={() => setActiveTab('analytics')} icon={<LineChart className="w-4 h-4" />} label="Аналитика" />
             <TabButton active={activeTab === 'feed'} onClick={() => setActiveTab('feed')} icon={<Clock className="w-4 h-4" />} label="Операции" />
@@ -1327,7 +1327,7 @@ export default function IncomePage() {
           {editingIncome && typeof window !== 'undefined' && createPortal(
             <div className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center bg-black/70 p-4 py-8 backdrop-blur-sm overflow-y-auto"
               onClick={(e) => { if (e.target === e.currentTarget) closeIncomeEditor() }}>
-              <Card className="w-full max-w-2xl border-border bg-white dark:bg-slate-900 p-5 my-auto">
+              <Card className="w-full max-w-2xl border-border bg-card p-5 my-auto">
                 <div className="mb-4 flex items-center justify-between">
                   <div>
                     <h3 className="text-lg font-semibold text-foreground">Редактирование дохода</h3>
@@ -1339,7 +1339,7 @@ export default function IncomePage() {
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <label className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
+                  <label className="space-y-2 text-sm text-body">
                     <span>Дата</span>
                     <DatePicker
                       value={editIncomeDate}
@@ -1348,12 +1348,12 @@ export default function IncomePage() {
                     />
                   </label>
 
-                  <label className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
+                  <label className="space-y-2 text-sm text-body">
                     <span>Оператор</span>
                     <select
                       value={editIncomeOperatorId}
                       onChange={(e) => setEditIncomeOperatorId(e.target.value)}
-                      className="w-full rounded-lg border border-border bg-white dark:bg-slate-800 px-3 py-2 text-foreground outline-none focus:border-amber-500/40"
+                      className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground outline-none focus:border-amber-500/40"
                     >
                       <option value="none">Без оператора</option>
                       {operators.map((operator) => (
@@ -1364,18 +1364,18 @@ export default function IncomePage() {
                     </select>
                   </label>
 
-                  <label className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
+                  <label className="space-y-2 text-sm text-body">
                     <span>Наличные</span>
-                    <input value={editCashDraft} onChange={(e) => setEditCashDraft(e.target.value)} className="w-full rounded-lg border border-border bg-white dark:bg-slate-800 px-3 py-2 text-foreground outline-none focus:border-amber-500/40" />
+                    <input value={editCashDraft} onChange={(e) => setEditCashDraft(e.target.value)} className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground outline-none focus:border-amber-500/40" />
                   </label>
 
-                  <label className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
+                  <label className="space-y-2 text-sm text-body">
                     <span>{cashLabels.pos}</span>
-                    <input value={editKaspiDraft} onChange={(e) => setEditKaspiDraft(e.target.value)} className="w-full rounded-lg border border-border bg-white dark:bg-slate-800 px-3 py-2 text-foreground outline-none focus:border-amber-500/40" />
+                    <input value={editKaspiDraft} onChange={(e) => setEditKaspiDraft(e.target.value)} className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground outline-none focus:border-amber-500/40" />
                   </label>
 
                   {editingIncome?.shift === 'night' && (
-                    <label className="space-y-2 text-sm text-slate-700 dark:text-slate-300 md:col-span-2">
+                    <label className="space-y-2 text-sm text-body md:col-span-2">
                       <span className="flex items-center gap-2">
                         {cashLabels.providerName} до 00:00
                         <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] text-blue-300">только для ночных смен</span>
@@ -1390,23 +1390,23 @@ export default function IncomePage() {
                     </label>
                   )}
 
-                  <label className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
+                  <label className="space-y-2 text-sm text-body">
                     <span>Онлайн</span>
-                    <input value={editOnlineDraft} onChange={(e) => setEditOnlineDraft(e.target.value)} className="w-full rounded-lg border border-border bg-white dark:bg-slate-800 px-3 py-2 text-foreground outline-none focus:border-amber-500/40" />
+                    <input value={editOnlineDraft} onChange={(e) => setEditOnlineDraft(e.target.value)} className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground outline-none focus:border-amber-500/40" />
                   </label>
 
-                  <label className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
+                  <label className="space-y-2 text-sm text-body">
                     <span>Карта</span>
-                    <input value={editCardDraft} onChange={(e) => setEditCardDraft(e.target.value)} className="w-full rounded-lg border border-border bg-white dark:bg-slate-800 px-3 py-2 text-foreground outline-none focus:border-amber-500/40" />
+                    <input value={editCardDraft} onChange={(e) => setEditCardDraft(e.target.value)} className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground outline-none focus:border-amber-500/40" />
                   </label>
 
-                  <label className="space-y-2 text-sm text-slate-700 dark:text-slate-300 md:col-span-2">
+                  <label className="space-y-2 text-sm text-body md:col-span-2">
                     <span>Комментарий</span>
                     <textarea
                       rows={3}
                       value={editCommentDraft}
                       onChange={(e) => setEditCommentDraft(e.target.value)}
-                      className="w-full rounded-lg border border-border bg-white dark:bg-slate-800 px-3 py-2 text-foreground outline-none focus:border-amber-500/40"
+                      className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground outline-none focus:border-amber-500/40"
                     />
                   </label>
                 </div>
@@ -1428,14 +1428,14 @@ export default function IncomePage() {
               onClick={() => { setShowAddIncomeModal(false); setIncomeModalLoading(false) }}
             >
               <div
-                className="w-full max-w-[1280px] h-[92vh] rounded-2xl border border-border bg-white dark:bg-slate-950 overflow-hidden shadow-2xl"
+                className="w-full max-w-[1280px] h-[92vh] rounded-2xl border border-border bg-card overflow-hidden shadow-2xl"
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="h-12 border-b border-border flex items-center justify-between px-3">
                   <div className="text-sm text-foreground">Добавление дохода</div>
                   <button
                     onClick={() => { setShowAddIncomeModal(false); setIncomeModalLoading(false) }}
-                    className="rounded-md p-1.5 text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10"
+                    className="rounded-md p-1.5 text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-surface-hover"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -1451,7 +1451,7 @@ export default function IncomePage() {
                   ) : null}
                   <iframe
                     src="/income-embed/add?embedded=1"
-                    className="w-full h-full bg-white dark:bg-slate-950"
+                    className="w-full h-full bg-card"
                     title="Добавление дохода"
                     onLoad={() => setIncomeModalLoading(false)}
                   />
@@ -1811,7 +1811,7 @@ function IncomeRowCompact({
                 setOnlineDraft('')
                 saveOnlineAmount(row, val)
               }}
-              className="w-20 h-6 text-right px-1 rounded border border-pink-500 bg-white dark:bg-slate-900 text-foreground text-xs outline-none"
+              className="w-20 h-6 text-right px-1 rounded border border-pink-500 bg-card text-foreground text-xs outline-none"
             />
           </div>
         ) : (
@@ -1878,7 +1878,7 @@ function AnalyticsTab({ analytics, dateFrom, dateTo }: any) {
             </div>
           </div>
           
-          <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
+          <div className="mt-6 pt-4 border-t border-border">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Средний чек</span>
               <span className="text-foreground font-medium">{Formatters.moneyDetailed(analytics.avgCheck)}</span>
@@ -1928,7 +1928,7 @@ function FeedTab({
 }: any) {
   return (
     <Card className="p-0 border-0 bg-white dark:bg-slate-800/50 backdrop-blur-sm overflow-hidden">
-      <div className="p-4 border-b border-slate-200 dark:border-slate-700">
+      <div className="p-4 border-b border-border">
         <h3 className="text-sm font-semibold text-foreground">Все операции ({displayRows.length})</h3>
       </div>
       <div className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -2068,7 +2068,7 @@ function IncomeRowFull({
                     setOnlineDraft('')
                     saveOnlineAmount(row, val)
                   }}
-                  className="w-24 h-7 text-right px-2 rounded border border-pink-500 bg-white dark:bg-slate-900 text-foreground text-sm outline-none"
+                  className="w-24 h-7 text-right px-2 rounded border border-pink-500 bg-card text-foreground text-sm outline-none"
                 />
               ) : (
                 <button

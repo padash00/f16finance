@@ -229,7 +229,7 @@ export default function AiCfoPage() {
                 </div>
               ) : null}
               <div className="min-w-[240px] flex-1">
-                <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+                <p className="text-sm leading-relaxed text-body">
                   {firstSentence(sm?.where_earn) && firstSentence(sm?.where_losing)
                     ? `За период прибыль ${money(ex.profit)} при выручке ${money(ex.revenue)}, маржа ${ex.margin.toFixed(0)}%.`
                     : `Прибыль ${money(ex.profit)}, выручка ${money(ex.revenue)}, маржа ${ex.margin.toFixed(0)}%.`}
@@ -255,7 +255,7 @@ export default function AiCfoPage() {
                 {sm.three_actions.slice(0, 3).map((a, i) => (
                   <li key={i} className="flex gap-3">
                     <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-violet-500 text-xs font-bold text-white">{i + 1}</span>
-                    <span className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed">{clean(a)}</span>
+                    <span className="text-sm text-body leading-relaxed">{clean(a)}</span>
                   </li>
                 ))}
               </ol>
@@ -273,7 +273,7 @@ export default function AiCfoPage() {
           </div>
 
           {/* ВКЛАДКИ */}
-          <div className="flex flex-wrap gap-2 border-b border-slate-200 dark:border-white/8 pb-px">
+          <div className="flex flex-wrap gap-2 border-b border-border pb-px">
             {([['money', '💰 Деньги'], ['risks', '⚠️ Риски'], ['companies', '🏪 Точки'], ['plan', '📅 План']] as const).map(([k, l]) => (
               <button key={k} onClick={() => setTab(k)}
                 className={`rounded-t-lg px-4 py-2 text-sm font-medium transition ${tab === k ? 'bg-violet-500/15 text-violet-700 dark:text-violet-200 border-b-2 border-violet-500' : `${C.sub} hover:text-slate-900 dark:hover:text-white`}`}>
@@ -315,7 +315,7 @@ export default function AiCfoPage() {
                   <h3 className="mb-3 text-sm font-semibold flex items-center gap-2"><Lightbulb className="h-4 w-4 text-amber-500" />Возможности заработать</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {ai.opportunities.map((o, i) => (
-                      <div key={i} className="rounded-lg border border-slate-200 dark:border-white/8 p-3">
+                      <div key={i} className="rounded-lg border border-border p-3">
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-sm font-semibold">{clean(o.title)}</p>
                           {o.effect ? <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">+{clean(o.effect)}</span> : null}
@@ -333,7 +333,7 @@ export default function AiCfoPage() {
                   <div className="space-y-1.5">
                     {data.expenseChanges.slice(0, 8).map((c, i) => (
                       <div key={i} className="flex items-center justify-between gap-3 text-sm">
-                        <span className="text-slate-700 dark:text-slate-300 truncate">{c.label}</span>
+                        <span className="text-body truncate">{c.label}</span>
                         <span className="flex items-center gap-2 shrink-0">
                           <span className="tabular-nums text-foreground">{money(c.current)}</span>
                           <Delta value={c.deltaPct} goodWhenUp={false} />
@@ -356,8 +356,8 @@ export default function AiCfoPage() {
                     {ai.risks.map((r, i) => {
                       const lv = LEVEL[(r.level || '').toLowerCase()] || LEVEL.medium
                       return (
-                        <div key={i} className="flex items-start justify-between gap-3 rounded-lg border border-slate-200 dark:border-white/8 p-3">
-                          <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed">{firstSentence(r.risk)}</p>
+                        <div key={i} className="flex items-start justify-between gap-3 rounded-lg border border-border p-3">
+                          <p className="text-sm text-body leading-relaxed">{firstSentence(r.risk)}</p>
                           <span className="shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium" style={{ color: lv.c, backgroundColor: lv.c + '22' }}>{lv.l}</span>
                         </div>
                       )
@@ -370,7 +370,7 @@ export default function AiCfoPage() {
                   <h3 className="mb-3 text-sm font-semibold">Корневые причины</h3>
                   <ul className="space-y-2">
                     {ai.rootCauses.map((c, i) => (
-                      <li key={i} className="flex gap-2 text-sm text-slate-700 dark:text-slate-300">
+                      <li key={i} className="flex gap-2 text-sm text-body">
                         <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-slate-400" />
                         <span>{firstSentence(c.text)}</span>
                       </li>
@@ -387,7 +387,7 @@ export default function AiCfoPage() {
               <h3 className="mb-4 text-sm font-semibold">Точки</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {data.companies.map((c, i) => (
-                  <div key={i} className="rounded-lg border border-slate-200 dark:border-white/8 p-4">
+                  <div key={i} className="rounded-lg border border-border p-4">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-sm font-semibold">{c.name}</p>
                       <span className={`text-xs ${C.sub}`}>{c.profitShare.toFixed(0)}% прибыли</span>
@@ -416,7 +416,7 @@ export default function AiCfoPage() {
                         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-300">{t}</p>
                         <ul className="space-y-1.5">
                           {(arr || []).map((x, i) => (
-                            <li key={i} className="flex gap-2 text-sm text-slate-700 dark:text-slate-300">
+                            <li key={i} className="flex gap-2 text-sm text-body">
                               <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-violet-400" /><span>{firstSentence(x)}</span>
                             </li>
                           ))}
@@ -430,7 +430,7 @@ export default function AiCfoPage() {
               {ai?.forecast ? (
                 <div className={cardCls}>
                   <h3 className="mb-2 text-sm font-semibold flex items-center gap-2"><TrendingUp className="h-4 w-4 text-violet-500" />Прогноз прибыли (30 дней)</h3>
-                  <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{firstSentence(ai.forecast.text)}</p>
+                  <p className="text-sm text-body leading-relaxed">{firstSentence(ai.forecast.text)}</p>
                   <div className="mt-3 grid grid-cols-3 gap-2 text-center">
                     <ForecastCell label="Пессимистичный" value={ai.forecast.pessimistic} tone="rose" />
                     <ForecastCell label="Базовый" value={ai.forecast.base} tone="slate" />
@@ -444,7 +444,7 @@ export default function AiCfoPage() {
                   <h3 className="mb-3 text-sm font-semibold">Сценарии «что если»</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {ai.scenarios.map((s, i) => (
-                      <div key={i} className="rounded-lg border border-slate-200 dark:border-white/8 p-3">
+                      <div key={i} className="rounded-lg border border-border p-3">
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-sm font-semibold">{clean(s.name)}</p>
                           {s.effect ? <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">{clean(s.effect)}</span> : null}
@@ -471,7 +471,7 @@ function MainCard({ tone, icon, title, text, extra }: { tone: 'rose' | 'emerald'
   return (
     <div className={cardCls}>
       <div className={`flex items-center gap-2 text-sm font-semibold ${map[tone]}`}>{icon}{title}</div>
-      <p className="mt-2 text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{text || '—'}</p>
+      <p className="mt-2 text-sm text-body leading-relaxed">{text || '—'}</p>
       {extra ? <p className={`mt-2 text-base font-bold ${map[tone]} tabular-nums`}>{extra}</p> : null}
     </div>
   )
@@ -504,7 +504,7 @@ function ListCard({ icon, title, items }: { icon: React.ReactNode; title: string
 
 function ForecastCell({ label, value, tone }: { label: string; value?: string; tone: 'rose' | 'emerald' | 'slate' }) {
   return (
-    <div className="rounded-lg border border-slate-200 dark:border-white/8 py-2">
+    <div className="rounded-lg border border-border py-2">
       <p className={`text-[11px] ${C.sub}`}>{label}</p>
       <p className={`text-sm font-bold tabular-nums ${tone === 'rose' ? 'text-rose-600 dark:text-rose-400' : tone === 'emerald' ? 'text-emerald-600 dark:text-emerald-400' : 'text-foreground'}`}>{value ? clean(value) : '—'}</p>
     </div>
