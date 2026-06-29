@@ -606,6 +606,35 @@ export default function LogsPage() {
 
   // Копировать/скачать одну запись лога в JSON (для отправки разработчику).
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  // AI-объяснение ошибки: какая запись грузится + готовые объяснения по id.
+  const [explainingId, setExplainingId] = useState<string | null>(null)
+  const [explanations, setExplanations] = useState<Record<string, string>>({})
+  const explainError = async (item: any) => {
+    if (explanations[item.id] || explainingId === item.id) return
+    setExplainingId(item.id)
+    try {
+      const areaRow = (item.detailRows || []).find((r: string) => r.startsWith('Где упало:') || r.startsWith('Область:'))
+      const res = await fetch('/api/ai/explain-error', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: item.title,
+          area: areaRow ? areaRow.split(':').slice(1).join(':').trim() : item.entityType,
+          message: (item.detailRows || []).join(' · ') || item.details || item.title,
+          action: item.action,
+          entityType: item.entityType,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      const text = data?.explanation
+        || (data?.error === 'too-many-requests' ? 'Слишком часто — подождите минуту.' : 'Не удалось получить объяснение.')
+      setExplanations((m) => ({ ...m, [item.id]: text }))
+    } catch {
+      setExplanations((m) => ({ ...m, [item.id]: 'Не удалось получить объяснение.' }))
+    } finally {
+      setExplainingId((c) => (c === item.id ? null : c))
+    }
+  }
   const copyJson = (item: any) => {
     const text = JSON.stringify(item, null, 2)
     navigator.clipboard?.writeText(text).then(
@@ -876,6 +905,17 @@ export default function LogsPage() {
                       >
                         ↓
                       </button>
+                      {isError && (
+                        <button
+                          type="button"
+                          onClick={() => explainError(item)}
+                          disabled={explainingId === item.id || !!explanations[item.id]}
+                          title="Объяснить ошибку простым языком (AI)"
+                          className="rounded-md border border-violet-300 bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 transition hover:bg-violet-100 disabled:opacity-60 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-300 dark:hover:bg-violet-500/20"
+                        >
+                          {explainingId === item.id ? '🤖 думает…' : '🤖 Объяснить'}
+                        </button>
+                      )}
                     </div>
 
                     {/* Main title */}
@@ -903,6 +943,14 @@ export default function LogsPage() {
                       </div>
                     ) : item.details && (
                       <p className="mt-1 text-xs leading-relaxed text-slate-400">{item.details}</p>
+                    )}
+
+                    {/* AI-объяснение ошибки */}
+                    {explanations[item.id] && (
+                      <div className="mt-2 rounded-lg border border-violet-200 bg-violet-50/70 px-3 py-2.5 text-xs leading-relaxed text-slate-700 dark:border-violet-500/25 dark:bg-violet-500/[0.07] dark:text-slate-200">
+                        <div className="mb-1 font-semibold text-violet-700 dark:text-violet-300">🤖 Объяснение AI</div>
+                        <div className="whitespace-pre-wrap">{explanations[item.id]}</div>
+                      </div>
                     )}
 
                     {/* Key fields summary */}
