@@ -139,9 +139,12 @@ export async function resolvePointOperatorLoginForDevice(params: {
           (s: any) =>
             (s.operator_id && s.operator_id === operatorAuth.operator_id) || nameMatches(s.operator_name),
         )
-        if (!isScheduled) {
-          return { ok: false, error: 'operator-not-scheduled-today', status: 403 }
-        }
+        // Жёсткий блок ОТКЛЮЧЁН: рассинхрон shifts.operator_id/operator_name с
+        // аккаунтом оператора (логин латиницей vs ФИО кириллицей в графике)
+        // блокировал валидных кассиров. Оператор уже аутентифицирован паролем и
+        // назначен на точку — пускаем. Вернуть блок, когда публикация графика
+        // будет надёжно проставлять operator_id во все смены.
+        void isScheduled
       }
     }
   }
