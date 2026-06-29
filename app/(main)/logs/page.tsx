@@ -666,6 +666,8 @@ export default function LogsPage() {
   }
 
   useEffect(() => { loadLogs() }, [page, domain, kind, entityType, action, actor, onlyErrors, includeNoise]) // eslint-disable-line
+  // Гарантированно ставим заголовок вкладки на этой странице (подстраховка к DocumentTitle).
+  useEffect(() => { document.title = 'Журнал действий · Orda Control' }, [])
 
   const stats = useMemo(() => {
     const items = data?.items || []
