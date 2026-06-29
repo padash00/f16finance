@@ -569,6 +569,22 @@ function summarizeLogItem(item: Omit<CombinedLogItem, 'details' | 'detailRows'>)
     return { title: `${who} открыл страницу ${readablePage || page || ''}`.trim(), subtitle: readablePage || page || item.subtitle, details: rows.join(' · '), detailRows: rows }
   }
 
+  // Мастер расходов: показываем по-человечески, без дампа ключей payload.
+  if (et === 'expense-wizard' || act.startsWith('wizard.expense')) {
+    const amount = (Number(p.amount_cash) || 0) + (Number(p.amount_kaspi) || 0)
+    if (act.endsWith('.submit')) {
+      addDetail(details, 'Категория', p.category_name)
+      addDetail(details, 'Сумма', amount || p.amount || p.total_amount)
+      addDetail(details, 'Комментарий', p.comment)
+      return { title: `${who} добавил расход${amount ? ` ${money(amount)}` : ''}`, subtitle: text(p.category_name) || item.subtitle, details: compact(details), detailRows: details }
+    }
+    if (act.endsWith('.start')) {
+      return { title: `${who} начал добавлять расход`, subtitle: item.subtitle, details: '', detailRows: [] }
+    }
+    const step = p.step != null ? ` (шаг ${p.step})` : ''
+    return { title: `${who} заполняет расход${step}`, subtitle: item.subtitle, details: '', detailRows: [] }
+  }
+
   addDetail(details, 'Название', p.title || p.name || p.full_name)
   addDetail(details, 'Дата', dateLabel(p.date))
   addDetail(details, 'Сумма', p.amount || p.total_amount)
