@@ -113,18 +113,31 @@ export async function resolvePointOperatorLoginForDevice(params: {
     if (publications && publications.length > 0) {
       const publishedCompanyIds = (publications as Array<{ company_id: string }>).map((p) => p.company_id)
 
-      // Only enforce when shifts already have operator_id populated (new data).
-      // If operator_id is still null on all shifts (legacy rows) we skip to stay backward-compatible.
+      // Сопоставляем смену как САМО расписание: по operator_id ИЛИ по имени
+      // (shifts.operator_name). Раньше проверяли только operator_id — и если у строки
+      // смены имя есть, а operator_id пустой/другой, оператора блокировало, хотя в
+      // графике он стоит. Берём смены с заполненным id ИЛИ именем.
       const { data: todayShifts } = await supabase
         .from('shifts')
-        .select('id, operator_id')
+        .select('id, operator_id, operator_name')
         .in('company_id', publishedCompanyIds)
         .eq('date', todayKZ)
-        .not('operator_id', 'is', null)
 
-      if (todayShifts && todayShifts.length > 0) {
-        const isScheduled = (todayShifts as Array<{ operator_id: string }>).some(
-          (s) => s.operator_id === operatorAuth.operator_id,
+      const norm = (s: unknown) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim()
+      const opNames = [norm((operator as any)?.name), norm((operator as any)?.short_name)].filter((x) => x.length >= 3)
+      const nameMatches = (shiftName: unknown) => {
+        const n = norm(shiftName)
+        if (n.length < 3) return false
+        return opNames.some((c) => c === n || c.includes(n) || n.includes(c))
+      }
+
+      const scheduledShifts = (todayShifts || []).filter(
+        (s: any) => s.operator_id != null || String(s.operator_name || '').trim().length > 0,
+      )
+      if (scheduledShifts.length > 0) {
+        const isScheduled = scheduledShifts.some(
+          (s: any) =>
+            (s.operator_id && s.operator_id === operatorAuth.operator_id) || nameMatches(s.operator_name),
         )
         if (!isScheduled) {
           return { ok: false, error: 'operator-not-scheduled-today', status: 403 }
