@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useCashlessLabels } from '@/lib/client/use-cashless-labels'
+import { splitIncomeKaspiByCalendarDay } from '@/lib/reports/income-calendar-kaspi'
 import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
@@ -63,6 +64,8 @@ type IncomeRow = {
   id: string
   date: string // YYYY-MM-DD
   company_id: string
+  shift: 'day' | 'night'
+  zone: string | null
   cash_amount: number | null
   kaspi_amount: number | null
   kaspi_before_midnight: number | null
@@ -446,7 +449,10 @@ export default function SmartDashboardPage() {
         if (!mounted) return
 
         setCompanies(companiesBody.data || [])
-        setIncomes(incomesBody.data || [])
+        // Как в отчётах: разбиваем kaspi ночных смен по календарным суткам (часть
+        // после полуночи → следующий день). Иначе доход на границе периода
+        // расходился с отчётами на сумму ночного безнала.
+        setIncomes(splitIncomeKaspiByCalendarDay(incomesBody.data || []) as IncomeRow[])
         setExpenses(expensesBody.data || [])
       } catch (e: any) {
         setError(e?.message || 'Ошибка загрузки')
