@@ -37,8 +37,10 @@ const HIDDEN_PATH_PREFIXES = [
   '/cookies',
 ]
 
-// Главная (landing) страница тоже публичная — точное совпадение
-const HIDDEN_EXACT_PATHS = new Set<string>(['/'])
+// Главная (landing) — публичная. /reports и /expenses имеют собственный
+// page-консультант (FloatingAssistant), поэтому глобальный Copilot там скрываем,
+// чтобы не было ДВУХ AI-кнопок.
+const HIDDEN_EXACT_PATHS = new Set<string>(['/', '/reports', '/expenses'])
 
 function isOperatorCabinetPath(pathname: string) {
   return pathname === '/operator' || pathname.startsWith('/operator/')
