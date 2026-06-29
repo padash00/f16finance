@@ -513,7 +513,7 @@ export default function SmartDashboardPage() {
           if (row.date < DateUtils.addDaysISO(DateUtils.todayISO(), -13) || row.date > DateUtils.todayISO()) continue
             const key = companyById[row.company_id]?.name || '—'
           const amount =
-            Number(row.cash_amount || 0) + Number(row.kaspi_amount || 0) + Number(row.kaspi_before_midnight || 0) + Number(row.card_amount || 0) + Number(row.online_amount || 0)
+            Number(row.cash_amount || 0) + Number(row.kaspi_amount || 0) + Number(row.card_amount || 0) + Number(row.online_amount || 0)
           pointMap[key] = (pointMap[key] || 0) + amount
         }
         const topPoints = Object.entries(pointMap)
@@ -553,7 +553,7 @@ export default function SmartDashboardPage() {
       if (!mounted) return
       const income = (incomesBody.data || []).reduce(
         (s: number, r: { cash_amount: number | null; kaspi_amount: number | null; kaspi_before_midnight: number | null; card_amount: number | null; online_amount: number | null }) =>
-          s + Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0) + Number(r.kaspi_before_midnight || 0) + Number(r.card_amount || 0) + Number(r.online_amount || 0),
+          s + Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0) + Number(r.card_amount || 0) + Number(r.online_amount || 0),
         0,
       )
       const expense = (expensesBody.data || []).reduce(
@@ -954,7 +954,7 @@ export default function SmartDashboardPage() {
     for (const r of incomes) {
       if (!includeExtra && isExtraCompany(r.company_id)) continue
       if (r.date < dateFrom || r.date > dateTo) continue
-      ensure(r.company_id).revenue += Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0) + Number(r.kaspi_before_midnight || 0) + Number(r.card_amount || 0) + Number(r.online_amount || 0)
+      ensure(r.company_id).revenue += Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0) + Number(r.card_amount || 0) + Number(r.online_amount || 0)
     }
     for (const r of expenses) {
       if (!includeExtra && isExtraCompany(r.company_id)) continue
