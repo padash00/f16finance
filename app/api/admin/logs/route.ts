@@ -331,7 +331,8 @@ function describeChanges(previous: Record<string, unknown>, next: Record<string,
 }
 
 function addScalarDetails(rows: string[], source: Record<string, unknown>) {
-  const ignored = new Set(['id', 'created_at', 'updated_at', 'previous', 'next', 'meta'])
+  // Технический шум — не показываем пользователю (дамп ключей, метка актора уже есть отдельно).
+  const ignored = new Set(['id', 'created_at', 'updated_at', 'previous', 'next', 'meta', 'payload_keys', 'actor_label', 'actor_name'])
   for (const [key, value] of Object.entries(source)) {
     if (ignored.has(key) || key.endsWith('_id') || key.endsWith('_ids')) continue
     if (rows.some((row) => row.startsWith(`${fieldLabel(key)}:`))) continue
