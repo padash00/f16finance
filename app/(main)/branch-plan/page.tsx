@@ -834,7 +834,7 @@ export default function BranchPlanPage() {
                   formatter={(v: any) => `${formatMoney(Number(v))} ₸`}
                   contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
                 />
-                <Line type="monotone" dataKey="cash" stroke="#a855f7" strokeWidth={2.5} dot={false} />
+                <Line type="monotone" dataKey="cash" name="Накопительный кэш" stroke="#a855f7" strokeWidth={2.5} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -854,9 +854,9 @@ export default function BranchPlanPage() {
             <thead className="bg-slate-50 dark:bg-white/[0.03] text-xs text-muted-foreground">
               <tr className="text-left">
                 <th className="px-3 py-2 font-normal"></th>
-                <th className="px-3 py-2 text-center font-normal text-emerald-700 dark:text-emerald-300/80">Best</th>
-                <th className="px-3 py-2 text-center font-normal text-amber-700 dark:text-amber-300/80">Expected</th>
-                <th className="px-3 py-2 text-center font-normal text-rose-700 dark:text-rose-300/80">Worst</th>
+                <th className="px-3 py-2 text-center font-normal text-emerald-700 dark:text-emerald-300/80">Лучший</th>
+                <th className="px-3 py-2 text-center font-normal text-amber-700 dark:text-amber-300/80">Ожидаемый</th>
+                <th className="px-3 py-2 text-center font-normal text-rose-700 dark:text-rose-300/80">Худший</th>
               </tr>
             </thead>
             <tbody>
@@ -1286,7 +1286,7 @@ export default function BranchPlanPage() {
                   formatter={(v: any) => `${formatMoney(Number(v))} ₸ / мес`}
                   contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
                 />
-                <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                <Bar dataKey="value" name="Выручка / мес" radius={[4, 4, 0, 0]}>
                   {calc.zoneBreakdown.map((_, i) => <Cell key={i} fill="#10b981" />)}
                 </Bar>
               </BarChart>

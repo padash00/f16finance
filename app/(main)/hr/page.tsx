@@ -616,7 +616,7 @@ export default function HrPage() {
               <Chip active={chipFilter === 'no_login'} onClick={() => setChipFilter('no_login')} count={chipCounts.noLogin} tone="orange">Без логина</Chip>
             )}
             {chipCounts.hybrid > 0 && (
-              <Chip active={chipFilter === 'hybrid'} onClick={() => setChipFilter('hybrid')} count={chipCounts.hybrid} tone="purple">Hybrid</Chip>
+              <Chip active={chipFilter === 'hybrid'} onClick={() => setChipFilter('hybrid')} count={chipCounts.hybrid} tone="purple">Гибрид</Chip>
             )}
             <div className="ml-auto flex items-center gap-2 flex-wrap">
               {/* Группировка */}

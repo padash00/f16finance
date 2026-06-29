@@ -308,7 +308,7 @@ export default function SimulationPage() {
                   formatter={(v: any) => `${formatMoney(Number(v))} ₸ / мес`}
                   contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
                 />
-                <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                <Bar dataKey="value" name="Потенциал / мес" radius={[4, 4, 0, 0]}>
                   {calc.perZone.map((_, i) => <Cell key={i} fill="#3b82f6" />)}
                 </Bar>
               </BarChart>

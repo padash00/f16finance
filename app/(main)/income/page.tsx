@@ -1766,7 +1766,7 @@ function IncomeRowCompact({
         <div className="flex flex-col min-w-0">
           <span className="text-sm font-medium text-slate-900 dark:text-white truncate flex items-center gap-2">
             {companyName}
-            {isExtra && <span className="text-[9px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded">EXTRA</span>}
+            {isExtra && <span className="text-[9px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded">ДОП</span>}
           </span>
           <span className="text-xs text-slate-500 truncate">{operatorName} • {row.zone || '—'}</span>
         </div>
@@ -1999,7 +1999,7 @@ function IncomeRowFull({
           <div>
             <div className="flex items-center gap-2">
               <span className="font-medium text-slate-900 dark:text-white">{companyName}</span>
-              {isExtra && <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded-full">EXTRA</span>}
+              {isExtra && <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded-full">ДОП</span>}
             </div>
             <div className="text-xs text-slate-500 flex items-center gap-2 mt-1">
               <UserCircle2 className="w-3 h-3" />

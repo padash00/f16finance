@@ -282,7 +282,7 @@ export default function CashFlowPage() {
 
           {/* Header */}
           <AdminPageHeader
-            title="Cash Flow"
+            title="Движение денег"
             description="Движение денег и баланс нарастающим итогом"
             icon={<Activity className="h-5 w-5" />}
             accent="emerald"
@@ -404,7 +404,7 @@ export default function CashFlowPage() {
                 <div className="p-1.5 bg-amber-500/20 rounded-lg">
                   <Sparkles className="w-4 h-4 text-amber-400" />
                 </div>
-                <h2 className="text-sm font-semibold text-slate-900 dark:text-white">AI-анализ Cash Flow</h2>
+                <h2 className="text-sm font-semibold text-slate-900 dark:text-white">AI-анализ движения денег</h2>
                 {aiLoading && <Loader2 className="w-4 h-4 text-amber-400 animate-spin ml-1" />}
               </div>
 
@@ -519,7 +519,7 @@ export default function CashFlowPage() {
           {/* AI Chat */}
           <AssistantPanel
             page="cashflow"
-            title="AI Ассистент — Cash Flow"
+            title="AI Ассистент — движение денег"
             subtitle="Задайте вопрос по движению денег"
             snapshot={snapshot}
             suggestedPrompts={suggestedPrompts}

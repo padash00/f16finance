@@ -585,7 +585,7 @@ const MemoizedBarChart = memo(({ data }: { data: { name: string; cash: number; k
             const labels: Record<string, string> = {
               cash: 'Наличные',
               kaspi: cashLabels.providerName,
-              online: 'Online',
+              online: 'Онлайн',
               card: 'Карта'
             }
             return [formatMoneyFull(value), labels[name] || name]
