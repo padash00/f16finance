@@ -161,8 +161,9 @@
      что у Card, на светлой и тёмной теме. Меняешь тут (или --card-shadow выше)
      → меняется у ВСЕХ .orda-panel по проекту, страницы трогать не нужно. */
   .orda-panel {
-    @apply rounded-2xl border border-slate-200 bg-white backdrop-blur-xl transition-all duration-200 dark:border-white/10 dark:bg-slate-950/55;
+    @apply rounded-2xl border border-slate-200 bg-white backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/55;
     box-shadow: var(--card-shadow);
+    transition: box-shadow 0.3s ease-out;
   }
   .orda-panel:hover {
     box-shadow: var(--card-shadow-hover);

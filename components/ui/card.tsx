@@ -7,10 +7,11 @@ function Card({ className, ...props }: React.ComponentProps<'div'>) {
     <div
       data-slot="card"
       className={cn(
-        'bg-card text-card-foreground flex flex-col gap-6 rounded-[1.4rem] border border-white/[0.1] py-6 backdrop-blur-xl transition-all duration-200 ' +
+        'bg-card text-card-foreground flex flex-col gap-6 rounded-[1.4rem] border border-white/[0.1] py-6 backdrop-blur-xl ' +
           // Премиум 3D: тень из токена --card-shadow (globals.css — одно место на весь
-          // проект) + лёгкий подъём на ховере. Общая с .orda-panel.
-          'shadow-[var(--card-shadow)] hover:shadow-[var(--card-shadow-hover)] hover:-translate-y-0.5',
+          // проект). На ховере ПЛАВНО углубляется тень — без подъёма (translate ломал
+          // плавность из-за backdrop-blur → лаги). Анимируем только тень — дёшево.
+          'shadow-[var(--card-shadow)] transition-shadow duration-300 ease-out hover:shadow-[var(--card-shadow-hover)]',
         className,
       )}
       {...props}
