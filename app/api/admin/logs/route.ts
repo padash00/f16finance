@@ -97,26 +97,82 @@ const ENTITY_LABELS: Record<string, string> = {
   'operator-career': 'карьеру оператора',
   visit: 'посещение',
   'page-view': 'страницу',
+  category: 'категорию',
+  'expense-category': 'категорию расходов',
+  'operator-staff-link': 'связь оператора с сотрудником',
+  'shift-week': 'график смен',
+  'shift-change-request': 'заявку на замену смены',
+  'income-export': 'выгрузку доходов',
+  'expense-export': 'выгрузку расходов',
+  'checklist-run': 'чек-лист',
+  checklist_run: 'чек-лист',
+  bonus: 'бонус',
+  fine: 'штраф',
+  advance: 'аванс',
+  invoice: 'счет',
+  client: 'клиента',
+  user: 'пользователя',
 }
 
 const ACTION_LABELS: Record<string, string> = {
   create: 'добавил',
   'create-batch': 'добавил пачкой',
+  create_batch: 'добавил пачкой',
   update: 'изменил',
   'update-online': 'обновил Online сумму',
   delete: 'удалил',
+  remove: 'удалил',
   upsert: 'сохранил',
+  save: 'сохранил',
+  archive: 'архивировал',
+  unarchive: 'разархивировал',
+  block: 'заблокировал',
+  unblock: 'разблокировал',
   approve: 'одобрил',
   approved: 'одобрил',
   decline: 'отклонил',
   declined: 'отклонил',
+  reject: 'отклонил',
+  cancel: 'отменил',
+  cancelled: 'отменил',
+  canceled: 'отменил',
   dismiss: 'уволил',
+  fire: 'уволил',
+  demote: 'понизил',
+  promote: 'повысил',
+  invite: 'пригласил',
+  issue: 'выставил',
   restore: 'восстановил',
   bootstrap: 'подключил',
   open: 'открыл',
   close: 'закрыл',
+  closed: 'закрыл',
   handover: 'передал',
   complete: 'завершил',
+  completed: 'завершил',
+  finish: 'завершил',
+  broadcast: 'разослал',
+  send: 'отправил',
+  'change-role': 'сменил роль',
+  change_role: 'сменил роль',
+  'change-email': 'сменил email',
+  change_email: 'сменил email',
+  'change-status': 'сменил статус',
+  change_status: 'сменил статус',
+  'change-password': 'сменил пароль',
+  'add-stock': 'оприходовал',
+  add_stock: 'оприходовал',
+  'create-bonus': 'начислил бонус',
+  create_bonus: 'начислил бонус',
+  'create-fine': 'оштрафовал',
+  create_fine: 'оштрафовал',
+  'create-advance': 'выдал аванс',
+  create_advance: 'выдал аванс',
+  'admin-mark-paid': 'отметил оплату',
+  admin_mark_paid: 'отметил оплату',
+  'mark-paid': 'отметил оплату',
+  pay: 'оплатил',
+  paid: 'отметил оплату',
   login: 'вошел в систему',
   logout: 'вышел из системы',
   failed: 'получил ошибку',
@@ -131,6 +187,59 @@ const ACTION_LABELS: Record<string, string> = {
 function actorName(email: string | null) {
   if (!email) return 'Система'
   return email.split('@')[0] || email
+}
+
+// Превращает любой код действия (включая dotted/префиксные: wizard.expense.submit,
+// checklist_run.start, incident-open, change-role) в русский глагол. Никогда не возвращает сырой код.
+function actionVerb(rawAction: string): string {
+  const act = (rawAction || '').toLowerCase()
+  if (!act) return 'выполнил действие'
+  if (ACTION_LABELS[act]) return ACTION_LABELS[act]
+
+  // Точка/последняя часть для dotted-действий: wizard.expense.submit → submit
+  const tail = act.includes('.') ? act.split('.').pop()! : act
+  if (ACTION_LABELS[tail]) return ACTION_LABELS[tail]
+
+  const TAIL_VERBS: Record<string, string> = {
+    submit: 'отправил',
+    start: 'начал',
+    started: 'начал',
+    run: 'запустил',
+    notify: 'уведомил',
+    sync: 'синхронизировал',
+    import: 'импортировал',
+    export: 'выгрузил',
+    upload: 'загрузил',
+    download: 'скачал',
+    confirm: 'подтвердил',
+    confirmed: 'подтвердил',
+    accept: 'принял',
+    accepted: 'принял',
+    assign: 'назначил',
+    assigned: 'назначил',
+    unassign: 'снял назначение',
+    link: 'связал',
+    unlink: 'отвязал',
+    reset: 'сбросил',
+    reopen: 'переоткрыл',
+    resolve: 'закрыл',
+    resolved: 'закрыл',
+    'in-progress': 'взял в работу',
+  }
+  if (TAIL_VERBS[tail]) return TAIL_VERBS[tail]
+
+  // Префиксные семейства
+  if (act.startsWith('incident')) return tail === 'open' ? 'открыл инцидент' : 'обновил инцидент'
+  if (act.startsWith('checklist')) return tail === 'start' ? 'начал чек-лист' : tail === 'complete' ? 'завершил чек-лист' : 'обновил чек-лист'
+  if (act.startsWith('wizard')) return tail === 'submit' ? 'отправил' : 'заполняет'
+  if (act.includes('create')) return 'добавил'
+  if (act.includes('update') || act.includes('edit')) return 'изменил'
+  if (act.includes('delete') || act.includes('remove')) return 'удалил'
+  if (act.includes('cancel')) return 'отменил'
+  if (act.includes('approve')) return 'одобрил'
+
+  // Последний шанс — читаемая фраза без подчёркиваний/дефисов, но не сырой технокод
+  return tail.replace(/[_-]+/g, ' ')
 }
 
 function text(value: unknown) {
@@ -203,13 +312,37 @@ const PAGE_LABELS: Record<string, string> = {
   '/operators': 'Операторы',
   '/salary': 'Зарплата',
   '/tasks': 'Задачи',
+  '/dashboard': 'Дашборд',
+  '/staff': 'Сотрудники',
+  '/shifts': 'Смены',
+  '/access': 'Права доступа',
+  '/platform': 'Панель платформы',
+  '/store': 'Склад',
+  '/store/catalog': 'Каталог товаров',
+  '/store/showcase/requests': 'Заявки витрины',
+  '/income/add': 'Добавление дохода',
+  '/income-embed/add': 'Доход (встроенная форма)',
+  '/income-embed': 'Доход (встроенная форма)',
+  '/expenses/add': 'Добавление расхода',
+  '/suppliers': 'Поставщики',
+  '/clients': 'Клиенты',
+  '/notifications': 'Уведомления',
 }
 
+// Превращает технический путь в человеческое название страницы.
+// Никогда не возвращает «·» и не пусто: на неизвестный путь показываем сам путь.
 function pageLabel(value: unknown) {
-  const raw = text(value).split('?')[0]
-  if (!raw) return ''
+  const raw = text(value).split('?')[0].trim()
+  if (!raw || raw === '·') return ''
   const normalized = raw.startsWith('/') ? raw : `/${raw}`
-  return PAGE_LABELS[normalized] || PAGE_LABELS[normalized.replace(/\/$/, '')] || raw
+  const stripped = normalized.replace(/\/+$/, '') || '/'
+  const exact = PAGE_LABELS[normalized] || PAGE_LABELS[stripped]
+  if (exact) return exact
+  // Пробуем по родительскому сегменту (например /tasks/123 → Задачи)
+  const firstSeg = `/${stripped.split('/').filter(Boolean)[0] || ''}`
+  if (firstSeg !== stripped && PAGE_LABELS[firstSeg]) return PAGE_LABELS[firstSeg]
+  // Неизвестный путь — показываем как есть (сам путь), но не «·» и не пусто
+  return raw
 }
 
 function recipientLabel(item: Omit<CombinedLogItem, 'details' | 'detailRows'>) {
@@ -338,7 +471,7 @@ function describeChanges(previous: Record<string, unknown>, next: Record<string,
 
 function addScalarDetails(rows: string[], source: Record<string, unknown>) {
   // Технический шум — не показываем пользователю (дамп ключей, метка актора уже есть отдельно).
-  const ignored = new Set(['id', 'created_at', 'updated_at', 'previous', 'next', 'meta', 'payload_keys', 'actor_label', 'actor_name'])
+  const ignored = new Set(['id', 'created_at', 'updated_at', 'previous', 'next', 'meta', 'payload_keys', 'actor_label', 'actor_name', 'ids', 'rows', 'items', 'items_preview', 'stack', 'company_id', 'operator_id'])
   for (const [key, value] of Object.entries(source)) {
     if (ignored.has(key) || key.endsWith('_id') || key.endsWith('_ids')) continue
     if (rows.some((row) => row.startsWith(`${fieldLabel(key)}:`))) continue
@@ -348,19 +481,20 @@ function addScalarDetails(rows: string[], source: Record<string, unknown>) {
 }
 
 function summarizeSystemError(p: Record<string, unknown>, item: Omit<CombinedLogItem, 'details' | 'detailRows'>) {
-  const area = text(p.area) || text(p.scope) || item.subtitle || 'неизвестная область'
-  const message = text(p.message) || 'без текста ошибки'
-  const rows = [
-    `Где упало: ${area}`,
-    `Техническое действие: ${item.action || 'не указано'}`,
-    `Сообщение ошибки: ${message}`,
-  ]
+  const areaRaw = text(p.area) || text(p.scope) || text(item.subtitle)
+  const area = areaRaw && areaRaw !== '·' ? VALUE_LABELS[areaRaw.toLowerCase()] || areaRaw : 'системе'
+  // В сообщение НЕ берём стек — только первую человеческую строку.
+  const message = text(p.message) || text(p.error) || 'без текста ошибки'
+  const rows = [`Область: ${area}`, `Сообщение: ${message}`]
   addDetail(rows, 'Код', p.code)
   addDetail(rows, 'Подробности', p.details)
   addDetail(rows, 'Подсказка', p.hint)
+  // Стек — только в детали, не в заголовок.
+  const stack = text(p.stack)
+  if (stack) rows.push(`Стек: ${stack.split('\n').slice(0, 6).join(' ')}`)
   return {
-    title: `Ошибка системы в ${area}`,
-    subtitle: `Действие: ${item.action || 'не указано'}`,
+    title: `Ошибка в ${area}: ${message}`,
+    subtitle: area,
     details: rows.join(' · '),
     detailRows: rows,
   }
@@ -396,8 +530,8 @@ function summarizeLogItem(item: Omit<CombinedLogItem, 'details' | 'detailRows'>)
   const et = (item.entityType || '').toLowerCase()
   const act = (item.action || '').toLowerCase()
   const who = actorName(item.actorEmail)
-  const entity = ENTITY_LABELS[et] || et || 'событие'
-  const action = ACTION_LABELS[act] || act || 'сделал действие'
+  const entity = ENTITY_LABELS[et] || (et ? et.replace(/[_-]+/g, ' ') : 'событие')
+  const action = actionVerb(act)
   const details: string[] = []
 
   if (item.kind === 'notification') {
@@ -412,9 +546,14 @@ function summarizeLogItem(item: Omit<CombinedLogItem, 'details' | 'detailRows'>)
     addDetail(details, 'Токены всего', p.total_tokens)
     addDetail(details, 'Стоимость', p.cost_estimate)
     addDetail(details, 'Ошибка', p.error)
-    const statusLabel = text(p.status) === 'error' ? 'ошибка ИИ' : 'ИИ-запрос выполнен'
+    const section = text(p.endpoint)
+    const isError = text(p.status) === 'error'
+    const errText = text(p.error)
+    const title = isError
+      ? `ИИ${section ? ` ${section}` : ''}: ошибка${errText ? ` ${errText}` : ''}`
+      : `ИИ-запрос выполнен${section ? `: ${section}` : ''}`
     return {
-      title: `${who}: ${statusLabel} ${text(p.endpoint) || ''}`.trim(),
+      title,
       subtitle: compact([renderValue(p.provider), text(p.model)]),
       details: compact(details),
       detailRows: details,
@@ -423,6 +562,44 @@ function summarizeLogItem(item: Omit<CombinedLogItem, 'details' | 'detailRows'>)
 
   if (et === 'system-error') {
     return summarizeSystemError(p, item)
+  }
+
+  if (et === 'income' && (act === 'create-batch' || act === 'create_batch')) {
+    // Два источника пачки: серверный (count + rows[]) и клиентский (rows_count + total_amount).
+    const rows = Array.isArray(p.rows) ? p.rows.map((r) => record(r)) : []
+    const ids = Array.isArray(p.ids) ? p.ids : []
+    const count =
+      Number(p.count) ||
+      Number(p.rows_count) ||
+      rows.length ||
+      ids.length ||
+      0
+    const total =
+      Number(p.total_amount) ||
+      rows.reduce((sum, r) => sum + Number(r.total_amount || 0), 0) ||
+      0
+    // Дата/смена: из верхнего уровня (клиентский payload) или из первой строки (серверный).
+    const first = rows[0] || {}
+    const dateRaw = text(p.date) || text(first.date)
+    const shiftRaw = text(p.shift) || text(first.shift)
+    const shiftLabel = shiftRaw === 'day' ? 'день' : shiftRaw === 'night' ? 'ночь' : shiftRaw
+    const point = text(p.company_name)
+
+    addDetail(details, 'Записей', count || '')
+    addDetail(details, 'Дата', dateLabel(dateRaw))
+    addDetail(details, 'Смена', shiftLabel)
+    addDetail(details, 'Точка', point)
+    addDetail(details, 'Итого', total)
+
+    // Человеческий заголовок: «X внёс доходы пачкой ...», без «0 записей».
+    const countPart = count ? `${count} ${count === 1 ? 'запись' : count < 5 ? 'записи' : 'записей'}` : ''
+    const dateLbl = dateLabel(dateRaw)
+    const whenPart = compact([dateLbl, shiftLabel])
+    const title = total
+      ? `${who} внёс доходы пачкой${countPart ? ` (${countPart})` : ''} на ${money(total)}`
+      : `${who} внёс доходы пачкой${countPart ? ` (${countPart})` : ''}`
+    const subtitle = compact([point, whenPart]) || (count ? `${countPart}` : item.subtitle)
+    return { title, subtitle, details: compact(details), detailRows: details }
   }
 
   if (et === 'income') {
@@ -564,16 +741,29 @@ function summarizeLogItem(item: Omit<CombinedLogItem, 'details' | 'detailRows'>)
     addDetail(details, 'Email', email)
     addDetail(details, 'IP', p.ip)
     addDetail(details, 'Результат', p.result || item.action)
-    return { title: act === 'failed' ? `Неудачная попытка входа: ${email}` : `${email || who} вошел в систему`, subtitle: email || item.subtitle, details: compact(details), detailRows: details }
+    const subj = email || who
+    const title =
+      act === 'failed' || act === 'error'
+        ? `Неудачная попытка входа: ${email || subj}`
+        : act === 'logout'
+          ? `${subj} вышел из системы`
+          : `${subj} вошел в систему`
+    return { title, subtitle: email || item.subtitle, details: compact(details), detailRows: details }
   }
 
   if (et === 'visit' || et === 'page-view' || act === 'visit' || act === 'page-view') {
-    const page = text(p.pathname || p.path || p.page || p.url || item.subtitle)
+    // Путь может прийти как '·'/пусто — берём первый осмысленный источник.
+    const rawPath = text(p.pathname || p.path || p.page || p.url)
+    const subtitlePath = text(item.subtitle) === '·' ? '' : text(item.subtitle)
+    const page = rawPath && rawPath !== '·' ? rawPath : subtitlePath
     const readablePage = pageLabel(page)
+    const display = readablePage || page || 'неизвестная страница'
     const source = text(p.source)
-    const rows = [`Страница: ${readablePage || page || 'не указана'}`]
+    const rows = [`Страница: ${display}`]
+    // Показываем сам путь как доп. деталь, если он отличается от человеческого имени.
+    if (page && readablePage && readablePage !== page) rows.push(`Путь: ${page}`)
     if (source) rows.push(`Источник: ${renderValue(source)}`)
-    return { title: `${who} открыл страницу ${readablePage || page || ''}`.trim(), subtitle: readablePage || page || item.subtitle, details: rows.join(' · '), detailRows: rows }
+    return { title: `${who} открыл страницу: ${display}`, subtitle: display, details: rows.join(' · '), detailRows: rows }
   }
 
   // Мастер расходов: показываем по-человечески, без дампа ключей payload.
