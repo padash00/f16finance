@@ -787,7 +787,7 @@ const OperatorDetailsModal = memo(({
                   </p>
                 </div>
                 <div className="p-4 bg-white dark:bg-slate-800/30 rounded-xl border border-amber-500/20">
-                  <p className="text-xs text-slate-500 mb-2">Online</p>
+                  <p className="text-xs text-slate-500 mb-2">Онлайн</p>
                   <p className="text-xl font-bold text-amber-400">{formatMoneyCompact(operator.onlineAmount)}</p>
                   <p className="text-xs text-slate-500 mt-2">
                     {operator.totalTurnover > 0 ? ((operator.onlineAmount / operator.totalTurnover) * 100).toFixed(1) : 0}% от выручки
@@ -1643,7 +1643,7 @@ function OperatorAnalyticsContent() {
       { key: 'name', label: 'Оператор', w: '13%' }, { key: 'shifts', label: 'Смен', align: 'right' as const, w: '5%' },
       { key: 'turnover', label: 'Выручка', align: 'right' as const, w: '9%' }, { key: 'avgShift', label: 'Ср. смена', align: 'right' as const, w: '8%' },
       { key: 'share', label: 'Доля %', align: 'right' as const, w: '6%' }, { key: 'cash', label: 'Нал', align: 'right' as const, w: '8%' },
-      { key: 'kaspi', label: 'Безнал', align: 'right' as const, w: '8%' }, { key: 'online', label: 'Online', align: 'right' as const, w: '6%' },
+      { key: 'kaspi', label: 'Безнал', align: 'right' as const, w: '8%' }, { key: 'online', label: 'Онлайн', align: 'right' as const, w: '6%' },
       { key: 'card', label: 'Карта', align: 'right' as const, w: '6%' }, { key: 'debts', label: 'Долги', align: 'right' as const, w: '6%' },
       { key: 'fines', label: 'Штрафы', align: 'right' as const, w: '6%' }, { key: 'bonuses', label: 'Премии', align: 'right' as const, w: '6%' },
       { key: 'net', label: 'Чистый итог', align: 'right' as const, signed: true, w: '7%' },
@@ -1991,7 +1991,7 @@ function OperatorAnalyticsContent() {
                     <th className="py-3 px-2 text-right">Доля</th>
                     <th className="py-3 px-2 text-right text-emerald-400">Нал</th>
                     <th className="py-3 px-2 text-right text-blue-400">Безналичный</th>
-                    <th className="py-3 px-2 text-right text-amber-400">Online</th>
+                    <th className="py-3 px-2 text-right text-amber-400">Онлайн</th>
                     <th className="py-3 px-2 text-right text-amber-400">Карта</th>
                     <th className="py-3 px-2 text-right text-red-400">Долги</th>
                     <th className="py-3 px-2 text-right text-red-400">Штрафы</th>

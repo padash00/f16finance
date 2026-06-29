@@ -731,7 +731,7 @@ export default function ExpensesPage() {
         empty: {
           columns: [
             { label: 'Дата' }, { label: 'Компания' }, { label: 'Категория' },
-            { label: 'Cash', align: 'right' }, { label: 'Безнал', align: 'right' },
+            { label: 'Нал', align: 'right' }, { label: 'Безнал', align: 'right' },
             { label: 'Итого', align: 'right' }, { label: 'Комментарий' },
           ],
           message: 'Нет данных за выбранный период',
@@ -788,7 +788,7 @@ export default function ExpensesPage() {
         {
           type: 'split', title: 'Оплата: cash / безнал',
           parts: [
-            { label: 'Cash', pct: cashPct, amount: cashTotal, color: '#84cc16' },
+            { label: 'Нал', pct: cashPct, amount: cashTotal, color: '#84cc16' },
             { label: 'Безнал', pct: kaspiPct, amount: kaspiTotal, color: '#3b82f6' },
           ],
           accent: { title: 'Акцент для руководителя', text: maxDay ? `Пиковый день: ${maxDay.date} — ${nf(maxDay.total)} тг` : '' },
@@ -802,7 +802,7 @@ export default function ExpensesPage() {
           type: 'previewTable', title: 'Сводка по дням', hint: 'preview · полная ниже',
           columns: [
             { key: 'date', label: 'Дата' }, { key: 'count', label: 'Строк', align: 'right' },
-            { key: 'cash', label: 'Cash', align: 'right' }, { key: 'kaspi', label: 'Безнал', align: 'right' },
+            { key: 'cash', label: 'Нал', align: 'right' }, { key: 'kaspi', label: 'Безнал', align: 'right' },
             { key: 'total', label: 'Итого', align: 'right' },
           ],
           rows: days.slice(0, 3).map((d) => ({ date: d.date, count: d.count, cash: d.cash, kaspi: d.kaspi, total: d.total })),
@@ -814,7 +814,7 @@ export default function ExpensesPage() {
         subtitle: 'группы по дате, потом строки расходов',
         columns: [
           { key: 'date', label: 'Дата', w: '11%' }, { key: 'company', label: 'Компания', w: '13%' },
-          { key: 'category', label: 'Категория', w: '16%' }, { key: 'cash', label: 'Cash', align: 'right', w: '9%' },
+          { key: 'category', label: 'Категория', w: '16%' }, { key: 'cash', label: 'Нал', align: 'right', w: '9%' },
           { key: 'kaspi', label: 'Безнал', align: 'right', w: '9%' }, { key: 'total', label: 'Итого', align: 'right', w: '9%' },
           { key: 'comment', label: 'Комментарий', w: '24%' },
         ],

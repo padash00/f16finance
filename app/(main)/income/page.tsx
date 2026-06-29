@@ -835,8 +835,8 @@ export default function IncomePage() {
         empty: {
           columns: [
             { label: 'Дата' }, { label: 'Компания' }, { label: 'Оператор' }, { label: 'Смена' }, { label: 'Зона' },
-            { label: 'Cash', align: 'right' }, { label: 'Безнал', align: 'right' }, { label: 'Online', align: 'right' },
-            { label: 'Card', align: 'right' }, { label: 'Итого', align: 'right' }, { label: 'Комментарий' },
+            { label: 'Нал', align: 'right' }, { label: 'Безнал', align: 'right' }, { label: 'Онлайн', align: 'right' },
+            { label: 'Карта', align: 'right' }, { label: 'Итого', align: 'right' }, { label: 'Комментарий' },
           ],
           message: 'Нет данных за выбранный период',
           hint: 'Выберите период или добавьте доходы, чтобы сформировать отчёт.',
@@ -881,9 +881,9 @@ export default function IncomePage() {
       ],
       sections: [
         { type: 'bars', title: 'Доходы по компаниям', hint: 'топ по сумме', items: comps.slice(0, 6).map((c) => ({ label: c.name, amount: c.value, ratio: c.value / maxComp })) },
-        { type: 'split', title: 'Оплата: cash / безнал', parts: [{ label: 'Cash', pct: cashPct, amount: cashTotal, color: '#16a34a' }, { label: 'Безнал', pct: cashlessPct, amount: cashless, color: '#3b82f6' }], accent: { title: 'Акцент для руководителя', text: maxDay ? `Пиковый день: ${maxDay.date} — ${nf(maxDay.total)} тг` : '' } },
+        { type: 'split', title: 'Оплата: cash / безнал', parts: [{ label: 'Нал', pct: cashPct, amount: cashTotal, color: '#16a34a' }, { label: 'Безнал', pct: cashlessPct, amount: cashless, color: '#3b82f6' }], accent: { title: 'Акцент для руководителя', text: maxDay ? `Пиковый день: ${maxDay.date} — ${nf(maxDay.total)} тг` : '' } },
         { type: 'minichart', title: 'Динамика по дням', hint: 'активные даты периода', bars: daysAsc.map((d) => ({ ratio: d.total / maxDT, peak: maxDay && d.date === maxDay.date })), footer: `Топ-3 дня: ${top3.map((d) => `${d.date}: ${nf(d.total)}`).join('   ')}` },
-        { type: 'previewTable', title: 'Сводка по дням', hint: 'preview · полная ниже', columns: [{ key: 'date', label: 'Дата' }, { key: 'count', label: 'Строк', align: 'right' }, { key: 'cash', label: 'Cash', align: 'right' }, { key: 'cashless', label: 'Безнал', align: 'right' }, { key: 'total', label: 'Итого', align: 'right' }], rows: days.slice(0, 3).map((d) => ({ date: d.date, count: d.count, cash: d.cash, cashless: d.cashless, total: d.total })), moreNote: days.length > 3 ? `+ ещё ${days.length - 3} дней в детализации` : '' },
+        { type: 'previewTable', title: 'Сводка по дням', hint: 'preview · полная ниже', columns: [{ key: 'date', label: 'Дата' }, { key: 'count', label: 'Строк', align: 'right' }, { key: 'cash', label: 'Нал', align: 'right' }, { key: 'cashless', label: 'Безнал', align: 'right' }, { key: 'total', label: 'Итого', align: 'right' }], rows: days.slice(0, 3).map((d) => ({ date: d.date, count: d.count, cash: d.cash, cashless: d.cashless, total: d.total })), moreNote: days.length > 3 ? `+ ещё ${days.length - 3} дней в детализации` : '' },
       ],
       detail: {
         title: 'Детализация по дням',
@@ -891,8 +891,8 @@ export default function IncomePage() {
         columns: [
           { key: 'date', label: 'Дата', w: '8%' }, { key: 'company', label: 'Компания', w: '11%' }, { key: 'operator', label: 'Оператор', w: '11%' },
           { key: 'shift', label: 'Смена', w: '6%' }, { key: 'zone', label: 'Зона', w: '7%' },
-          { key: 'cash', label: 'Cash', align: 'right', w: '8%' }, { key: 'kaspi', label: 'Безнал', align: 'right', w: '8%' },
-          { key: 'online', label: 'Online', align: 'right', w: '7%' }, { key: 'card', label: 'Card', align: 'right', w: '7%' },
+          { key: 'cash', label: 'Нал', align: 'right', w: '8%' }, { key: 'kaspi', label: 'Безнал', align: 'right', w: '8%' },
+          { key: 'online', label: 'Онлайн', align: 'right', w: '7%' }, { key: 'card', label: 'Карта', align: 'right', w: '7%' },
           { key: 'total', label: 'Итого', align: 'right', w: '8%' }, { key: 'comment', label: 'Комментарий', w: '11%' },
         ],
         groups: days.map((d) => ({
@@ -1393,7 +1393,7 @@ export default function IncomePage() {
                   )}
 
                   <label className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
-                    <span>Online</span>
+                    <span>Онлайн</span>
                     <input value={editOnlineDraft} onChange={(e) => setEditOnlineDraft(e.target.value)} className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-white outline-none focus:border-amber-500/40" />
                   </label>
 
@@ -2035,7 +2035,7 @@ function IncomeRowFull({
             
             {/* Online с inline редактированием */}
             <div className="text-right">
-              <div className="text-[10px] text-slate-500">Online</div>
+              <div className="text-[10px] text-slate-500">Онлайн</div>
               {String(row.id).startsWith('extra-') ? (
                 <div className="text-pink-400 font-mono">{row.online_amount ? Formatters.moneyDetailed(row.online_amount) : '—'}</div>
               ) : !canManageIncome ? (
