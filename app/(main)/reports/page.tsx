@@ -438,7 +438,11 @@ const MemoizedComposedChart = memo(({ data }: { data: TimeAggregation[] }) => {
             borderRadius: '12px',
             backdropFilter: 'blur(10px)'
           }}
-          formatter={(value: number, name: string) => [formatMoneyFull(value), name]}
+          labelFormatter={(label: any) => `Дата: ${label}`}
+          formatter={(value: number, name: string) => {
+            const ru = name === 'income' ? 'Доход' : name === 'expense' ? 'Расход' : name === 'profit' ? 'Прибыль' : name
+            return [formatMoneyFull(value), ru]
+          }}
         />
         <Area 
           type="monotone" 
@@ -1791,8 +1795,8 @@ function ReportsContent() {
         { section: 'СТРУКТУРА ДОХОДОВ' },
         { label: 'Наличные', cur: totals.incomeCash, prev: totalsPrev.incomeCash },
         { label: 'Безналичный доход', cur: totals.incomeNonCash, prev: totalsPrev.incomeNonCash },
-        { label: 'Online', cur: totals.incomeOnline, prev: totalsPrev.incomeOnline },
-        { label: 'Card', cur: totals.incomeCard, prev: totalsPrev.incomeCard },
+        { label: 'Онлайн', cur: totals.incomeOnline, prev: totalsPrev.incomeOnline },
+        { label: 'Карта', cur: totals.incomeCard, prev: totalsPrev.incomeCard },
       ],
       byCompany: incomeByCompanyData.map((c) => ({
         name: c.name,
@@ -2276,8 +2280,8 @@ function ReportsContent() {
                 {[
                   { label: 'Наличные', value: totals.incomeCash, color: 'text-emerald-600 dark:text-emerald-400' },
                   { label: cashLabels.providerName, value: totals.incomeKaspi, color: 'text-blue-600 dark:text-blue-400' },
-                  { label: 'Online', value: totals.incomeOnline, color: 'text-amber-600 dark:text-amber-400' },
-                  { label: 'Card', value: totals.incomeCard, color: 'text-amber-600 dark:text-amber-400' },
+                  { label: 'Онлайн', value: totals.incomeOnline, color: 'text-amber-600 dark:text-amber-400' },
+                  { label: 'Карта', value: totals.incomeCard, color: 'text-amber-600 dark:text-amber-400' },
                 ].map((item) => (
                   <div key={item.label} className="rounded-2xl bg-white dark:bg-[#111113] border border-slate-200 dark:border-white/10 p-4">
                     <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{item.label}</p>
@@ -2445,7 +2449,7 @@ function ReportsContent() {
                     {[
                       { label: 'Наличные', value: totals.incomeCash, color: 'bg-emerald-500' },
                       { label: cashLabels.providerName, value: totals.incomeKaspi, color: 'bg-blue-500' },
-                      { label: 'Online', value: totals.incomeOnline, color: 'bg-amber-500' },
+                      { label: 'Онлайн', value: totals.incomeOnline, color: 'bg-amber-500' },
                       { label: 'Карта', value: totals.incomeCard, color: 'bg-amber-500' },
                     ].map((item) => {
                       const pct = totals.totalIncome > 0 ? (item.value / totals.totalIncome) * 100 : 0
