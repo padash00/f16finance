@@ -319,12 +319,18 @@ function describeChanges(previous: Record<string, unknown>, next: Record<string,
   const keys = Array.from(new Set([...Object.keys(previous), ...Object.keys(next)]))
     .filter((key) => !key.endsWith('_id') && !['id', 'created_at', 'updated_at'].includes(key))
 
+  // Значение для отображения: ISO-дата → ДД.ММ.ГГГГ, без кавычек.
+  const fmtVal = (v: unknown, label: string) => {
+    const r = renderValue(v, label)
+    if (!r) return 'пусто'
+    const m = r.match(/^(\d{4})-(\d{2})-(\d{2})/)
+    return m ? `${m[3]}.${m[2]}.${m[1]}` : r
+  }
+
   for (const key of keys) {
     if (normalizeForCompare(previous[key]) === normalizeForCompare(next[key])) continue
     const label = fieldLabel(key)
-    const before = renderValue(previous[key], label) || 'пусто'
-    const after = renderValue(next[key], label) || 'пусто'
-    rows.push(`${label}: было "${before}", стало "${after}"`)
+    rows.push(`${label}: ${fmtVal(previous[key], label)} → ${fmtVal(next[key], label)}`)
   }
 
   return rows
