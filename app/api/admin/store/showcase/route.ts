@@ -293,12 +293,15 @@ export async function POST(request: Request) {
           const itemMap: Record<string, { name: string; unit: string }> = {}
           for (const r of itemRows || []) itemMap[r.id] = { name: r.name, unit: r.unit }
 
-          const { data: staffRows } = await supabase
+          // staff не имеет company_id — скоуп по организации компании (была ошибка 42703).
+          const { data: orgRow } = await supabase.from('companies').select('organization_id').eq('id', companyId).maybeSingle()
+          let staffQuery = supabase
             .from('staff')
             .select('telegram_chat_id, full_name')
-            .eq('company_id', companyId)
             .in('role', ['owner', 'manager'])
             .not('telegram_chat_id', 'is', null)
+          if (orgRow?.organization_id) staffQuery = staffQuery.eq('organization_id', orgRow.organization_id)
+          const { data: staffRows } = await staffQuery
 
           const createdByName = access.staffMember
             ? (access.staffMember as any).full_name || (access.staffMember as any).name || null

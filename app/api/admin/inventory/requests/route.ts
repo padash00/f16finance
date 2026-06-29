@@ -579,13 +579,16 @@ export async function POST(request: Request) {
         const companyId = reqData.requesting_company_id
         const companyName = (Array.isArray(reqData.company) ? reqData.company[0] : reqData.company)?.name || companyId
 
-        // Staff telegram IDs
-        const { data: staffRows } = await supabase
+        // Staff telegram IDs. staff не имеет company_id — owner/manager скоупятся
+        // по организации компании (иначе уведомление уходило в ошибку 42703).
+        const { data: orgRow } = await supabase.from('companies').select('organization_id').eq('id', companyId).maybeSingle()
+        let staffQuery = supabase
           .from('staff')
           .select('telegram_chat_id')
-          .eq('company_id', companyId)
           .in('role', ['owner', 'manager'])
           .not('telegram_chat_id', 'is', null)
+        if (orgRow?.organization_id) staffQuery = staffQuery.eq('organization_id', orgRow.organization_id)
+        const { data: staffRows } = await staffQuery
 
         const chatIds = [
           ...(staffRows || []).map((s: any) => String(s.telegram_chat_id)),
