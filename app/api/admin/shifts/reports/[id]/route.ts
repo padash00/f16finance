@@ -313,7 +313,17 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           bonuses_total: bonusesTotal,
           count: incidents.length,
         },
-        income: incomeRes.data || null,
+        income: incomeRes.data
+          ? {
+              ...incomeRes.data,
+              // incomes не хранит total_amount — считаем для фронта (он ждёт это поле).
+              total_amount:
+                Number((incomeRes.data as any).cash_amount || 0) +
+                Number((incomeRes.data as any).kaspi_amount || 0) +
+                Number((incomeRes.data as any).online_amount || 0) +
+                Number((incomeRes.data as any).card_amount || 0),
+            }
+          : null,
         client_debts: debtsRes.data || [],
       },
     })
