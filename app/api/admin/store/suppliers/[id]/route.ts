@@ -76,6 +76,16 @@ export async function GET(
     const debts = debtsRes.data || []
     const aliases = aliasesRes.data || []
 
+    // Последняя закупочная цена от ЭТОГО поставщика по товару (алиасы отсортированы
+    // по last_seen_at desc → первое вхождение = самое свежее).
+    const supplierCostByItem = new Map<string, number>()
+    for (const a of aliases as any[]) {
+      const iid = String(a.item_id || '')
+      if (iid && a.last_unit_cost != null && !supplierCostByItem.has(iid)) {
+        supplierCostByItem.set(iid, Number(a.last_unit_cost))
+      }
+    }
+
     // Товары, закреплённые за этим поставщиком, с текущим остатком (сумма по всем локациям).
     const { data: productRows, error: productsError } = await supabase
       .from('inventory_items')
@@ -127,6 +137,7 @@ export async function GET(
         barcode: p.barcode,
         unit: p.unit,
         default_purchase_price: Number(p.default_purchase_price || 0),
+        supplier_unit_cost: supplierCostByItem.get(String(p.id)) ?? null,
         low_stock_threshold: manualThreshold,
         is_active: p.is_active !== false,
         stock,

@@ -35,6 +35,7 @@ type Product = {
   barcode: string
   unit: string | null
   default_purchase_price: number
+  supplier_unit_cost: number | null
   low_stock_threshold: number | null
   is_active: boolean
   stock: number
@@ -511,6 +512,7 @@ export default function SupplierCardPage() {
                   <tr className="text-left">
                     <th className="px-3 py-2 font-normal">Товар</th>
                     <th className="px-3 py-2 text-right font-normal">Остаток</th>
+                    <th className="px-3 py-2 text-right font-normal">Закупка</th>
                     <th className="px-3 py-2 text-right font-normal">Расход/день</th>
                     <th className="px-3 py-2 text-right font-normal">Порог</th>
                     <th className="px-3 py-2 text-right font-normal">Дозаказать</th>
@@ -533,6 +535,18 @@ export default function SupplierCardPage() {
                       </td>
                       <td className={`px-3 py-2 text-right tabular-nums ${p.needs_reorder ? 'text-amber-700 dark:text-amber-300 font-semibold' : ''}`}>
                         {p.stock} {p.unit || 'шт'}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums">
+                        {(() => {
+                          const cost = p.supplier_unit_cost ?? p.default_purchase_price
+                          return cost > 0 ? (
+                            <span title={p.supplier_unit_cost != null ? 'последняя цена от этого поставщика' : 'из каталога'}>
+                              {Math.round(cost).toLocaleString('ru-RU')} ₸
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )
+                        })()}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
                         {p.avg_daily_consumption > 0 ? `${p.avg_daily_consumption}/дн` : '—'}
