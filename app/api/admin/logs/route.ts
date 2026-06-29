@@ -125,8 +125,11 @@ const ACTION_LABELS: Record<string, string> = {
   created: 'добавил',
   'create-with-advance': 'выдал зарплату с авансом',
   create_with_advance: 'выдал зарплату с авансом',
-  'telegram-confirm-week': 'подтвердил график смен (через Telegram)',
-  telegram_confirm_week: 'подтвердил график смен (через Telegram)',
+  'telegram-confirm-week': 'подтвердил график смен в Telegram',
+  telegram_confirm_week: 'подтвердил график смен в Telegram',
+  'publish-week': 'опубликовал график смен',
+  publish_week: 'опубликовал график смен',
+  'publish-shifts': 'опубликовал график смен',
   'create-batch': 'добавил пачкой',
   create_batch: 'добавил пачкой',
   updated: 'изменил',
@@ -377,6 +380,23 @@ const PAGE_LABELS: Record<string, string> = {
   '/suppliers': 'Поставщики',
   '/clients': 'Клиенты',
   '/notifications': 'Уведомления',
+  '/telegram': 'Telegram',
+  '/business-intelligence': 'Центр управления',
+  '/analysis': 'AI-анализ',
+  '/analytics': 'Аналитика',
+  '/cashflow': 'Движение денег',
+  '/goals': 'Цели',
+  '/tax': 'Налоги',
+  '/calendar': 'Календарь',
+  '/hr': 'Кадры',
+  '/discounts': 'Скидки',
+  '/categories': 'Категории',
+  '/customers': 'Клиенты',
+  '/store/suppliers': 'Поставщики',
+  '/expense-analysis': 'AI-разбор расходов',
+  '/team-analysis': 'AI-разбор команды',
+  '/valuation': 'Оценка бизнеса',
+  '/operator-analytics': 'Аналитика операторов',
 }
 
 // Превращает технический путь в человеческое название страницы.
@@ -654,6 +674,13 @@ function summarizeLogItem(item: Omit<CombinedLogItem, 'details' | 'detailRows'>)
   const who = actorName(item.actorEmail)
   const entity = ENTITY_LABELS[et] || (et ? et.replace(/[_-]+/g, ' ') : 'событие')
   const action = actionVerb(act)
+  // Действия, где глагол уже полностью описывает событие — НЕ дописываем сущность,
+  // иначе выходит дубль («подтвердил график смен … ответ на график смен»).
+  const SELF_DESCRIBING = new Set([
+    'telegram-confirm-week', 'telegram_confirm_week',
+    'publish-week', 'publish_week', 'publish-shifts',
+  ])
+  const genericTitle = SELF_DESCRIBING.has(act) ? `${who} ${action}` : `${who} ${action} ${entity}`
   const details: string[] = []
 
   if (item.kind === 'notification') {
@@ -923,12 +950,9 @@ function summarizeLogItem(item: Omit<CombinedLogItem, 'details' | 'detailRows'>)
     const page = rawPath && rawPath !== '·' ? rawPath : subtitlePath
     const readablePage = pageLabel(page)
     const display = readablePage || page || 'неизвестная страница'
-    const source = text(p.source)
-    const rows = [`Страница: ${display}`]
-    // Показываем сам путь как доп. деталь, если он отличается от человеческого имени.
-    if (page && readablePage && readablePage !== page) rows.push(`Путь: ${page}`)
-    if (source) rows.push(`Источник: ${renderValue(source)}`)
-    return { title: `${who} открыл страницу: ${display}`, subtitle: display, details: rows.join(' · '), detailRows: rows }
+    // Заголовок самодостаточен («открыл страницу «Логи»») — детали-боксы не нужны,
+    // чтобы не дублировать («Страница: … · Путь: … · Источник: …»).
+    return { title: `${who} открыл страницу «${display}»`, subtitle: display, details: '', detailRows: [] }
   }
 
   // Мастер расходов: показываем по-человечески, без дампа ключей payload.
@@ -957,7 +981,7 @@ function summarizeLogItem(item: Omit<CombinedLogItem, 'details' | 'detailRows'>)
     const changeRows = describeChanges(record(p.previous), record(p.next))
     if (changeRows.length) {
       return {
-        title: `${who} ${action} ${entity}`,
+        title: genericTitle,
         subtitle: text(record(p.next).title) || text(record(p.next).name) || text(record(p.next).full_name) || item.subtitle,
         details: compact(changeRows),
         detailRows: changeRows,

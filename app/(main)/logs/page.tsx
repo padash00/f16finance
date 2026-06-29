@@ -771,7 +771,9 @@ export default function LogsPage() {
           {(data?.items || []).map((item) => {
             const { Icon, color, bg } = entityIcon(item.entityType, item.action)
             const isError = item.status === 'failed' || item.entityType === 'system-error'
-            const badgeLabel = ACTION_BADGE_LABELS[item.action || ''] || item.action || ''
+            // Не показываем сырой код действия чипом, если нет русской метки —
+            // заголовок и так описывает действие словами.
+            const badgeLabel = ACTION_BADGE_LABELS[item.action || ''] || ''
             const isNotif = item.kind === 'notification'
 
             return (
