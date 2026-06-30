@@ -94,6 +94,44 @@ export async function resolveOrgEntitlements(access: {
   if (!orgId || !hasAdminSupabaseCredentials()) return { features: [], allAccess: true }
   try {
     const supabase = createAdminSupabaseClient()
+
+    // ── НОВАЯ МОДЕЛЬ: пакет + аддоны организации ─────────────────────────────
+    // Если организации НАЗНАЧЕН пакет — фичи = пакет.feature_codes ∪ включённые
+    // аддоны.feature_codes, и гейтинг ВКЛЮЧАЕТСЯ (allAccess=false). Если пакета
+    // нет — fail-open ниже (F16-legacy и ненастроенные орги не трогаем).
+    try {
+      const { data: pkgRow } = await supabase
+        .from('organization_packages')
+        .select('package_code')
+        .eq('organization_id', orgId)
+        .maybeSingle()
+      if (pkgRow?.package_code) {
+        const features = new Set<string>()
+        const { data: pkg } = await supabase
+          .from('packages')
+          .select('feature_codes')
+          .eq('code', pkgRow.package_code)
+          .maybeSingle()
+        for (const f of ((pkg?.feature_codes as string[]) || [])) features.add(String(f))
+        const { data: addonRows } = await supabase
+          .from('organization_addons')
+          .select('addon_code')
+          .eq('organization_id', orgId)
+          .eq('enabled', true)
+        const addonCodes = (addonRows || []).map((r: any) => String(r.addon_code)).filter(Boolean)
+        if (addonCodes.length > 0) {
+          const { data: addons } = await supabase.from('addons').select('feature_codes').in('code', addonCodes)
+          for (const a of (addons || []) as any[]) {
+            for (const f of ((a.feature_codes as string[]) || [])) features.add(String(f))
+          }
+        }
+        return { features: Array.from(features), allAccess: false }
+      }
+    } catch {
+      // Таблиц пакетов может ещё не быть — падаем в legacy-путь ниже.
+    }
+    // ── LEGACY: company_features (старый источник) / fail-open ────────────────
+
     const { data: cos } = await supabase.from('companies').select('id').eq('organization_id', orgId)
     const cids = (cos || []).map((c: any) => String(c.id))
     if (cids.length === 0) return { features: [], allAccess: true }
