@@ -88,23 +88,45 @@ export default function PackagesConstructorPage() {
 }
 
 // ─── Пикер страниц (общий для пакета и аддона) ──────────────────────────────
-function PagePicker({ grouped, selected, toggle }: { grouped: [string, PageFeature[]][]; selected: Set<string>; toggle: (f: string) => void }) {
+function PagePicker({ grouped, selected, toggle, setMany }: { grouped: [string, PageFeature[]][]; selected: Set<string>; toggle: (f: string) => void; setMany: (features: string[], on: boolean) => void }) {
+  const [q, setQ] = useState('')
+  const norm = (s: string) => s.toLowerCase()
+  const filtered = grouped
+    .map(([group, items]) => [group, q ? items.filter((p) => norm(p.label).includes(norm(q)) || norm(p.path).includes(norm(q))) : items] as [string, PageFeature[]])
+    .filter(([, items]) => items.length > 0)
+
   return (
-    <div className="max-h-[420px] space-y-4 overflow-y-auto rounded-xl border border-border bg-surface-muted p-4">
-      {grouped.map(([group, items]) => (
-        <div key={group}>
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{group}</div>
-          <div className="grid gap-1.5 sm:grid-cols-2">
-            {items.map((p) => (
-              <label key={p.feature} className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition ${p.base ? 'border-border bg-surface-hover opacity-70' : selected.has(p.feature) ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-500/10' : 'border-border bg-white dark:bg-white/5 hover:border-emerald-300'}`}>
-                <input type="checkbox" disabled={p.base} checked={p.base || selected.has(p.feature)} onChange={() => toggle(p.feature)} className="h-4 w-4 accent-emerald-600" />
-                <span className="min-w-0 flex-1 truncate text-foreground">{p.label}</span>
-                {p.base && <span className="shrink-0 text-[10px] text-muted-foreground">базовая</span>}
-              </label>
-            ))}
-          </div>
-        </div>
-      ))}
+    <div className="space-y-3">
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Поиск страницы…" className="w-full rounded-xl border border-border bg-white px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground dark:bg-white/5" />
+      <div className="max-h-[400px] space-y-4 overflow-y-auto rounded-xl border border-border bg-surface-muted p-4">
+        {filtered.map(([group, items]) => {
+          const sellable = items.filter((p) => !p.base)
+          const selCount = sellable.filter((p) => selected.has(p.feature)).length
+          const allOn = sellable.length > 0 && selCount === sellable.length
+          return (
+            <div key={group}>
+              <div className="mb-2 flex items-center justify-between">
+                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{group} <span className="text-emerald-600">{selCount}/{sellable.length}</span></div>
+                {sellable.length > 0 && (
+                  <button type="button" onClick={() => setMany(sellable.map((p) => p.feature), !allOn)} className="text-[11px] font-medium text-emerald-600 hover:text-emerald-700">
+                    {allOn ? 'снять раздел' : 'выбрать раздел'}
+                  </button>
+                )}
+              </div>
+              <div className="grid gap-1.5 sm:grid-cols-2">
+                {items.map((p) => (
+                  <label key={p.feature} className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition ${p.base ? 'border-border bg-surface-hover opacity-70' : selected.has(p.feature) ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-500/10' : 'border-border bg-white dark:bg-white/5 hover:border-emerald-300'}`}>
+                    <input type="checkbox" disabled={p.base} checked={p.base || selected.has(p.feature)} onChange={() => toggle(p.feature)} className="h-4 w-4 accent-emerald-600" />
+                    <span className="min-w-0 flex-1 truncate text-foreground">{p.label}</span>
+                    {p.base && <span className="shrink-0 text-[10px] text-muted-foreground">базовая</span>}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )
+        })}
+        {filtered.length === 0 && <div className="py-6 text-center text-sm text-muted-foreground">Ничего не найдено</div>}
+      </div>
     </div>
   )
 }
@@ -116,6 +138,7 @@ function PackageEditor({ packages, grouped, saving, setSaving, reload, showToast
   const [sel, setSel] = useState<Set<string>>(new Set(cur.feature_codes))
   const start = (p: Pkg | null) => { const x = p || blank; setEditing(p || blank); setSel(new Set(x.feature_codes)) }
   const toggle = (f: string) => setSel((s) => { const n = new Set(s); n.has(f) ? n.delete(f) : n.add(f); return n })
+  const setMany = (fs: string[], on: boolean) => setSel((s) => { const n = new Set(s); fs.forEach((f) => (on ? n.add(f) : n.delete(f))); return n })
   const [form, setForm] = useState(cur)
   useEffect(() => { setForm(cur) /* eslint-disable-next-line */ }, [editing])
 
@@ -152,7 +175,7 @@ function PackageEditor({ packages, grouped, saving, setSaving, reload, showToast
         <Field label="Описание" value={form.description || ''} onChange={(v: string) => setForm({ ...form, description: v })} placeholder="Для кого этот пакет" />
         <div>
           <div className="mb-2 text-sm font-medium text-foreground">Страницы в пакете <span className="text-muted-foreground">({sel.size} выбрано)</span></div>
-          <PagePicker grouped={grouped} selected={sel} toggle={toggle} />
+          <PagePicker grouped={grouped} selected={sel} toggle={toggle} setMany={setMany} />
         </div>
         <button onClick={save} disabled={saving} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Сохранить пакет</button>
       </div>
@@ -169,6 +192,7 @@ function AddonEditor({ addons, grouped, saving, setSaving, reload, showToast }: 
   const start = (a: Addon | null) => { setEditing(a || blank); setSel(new Set((a || blank).feature_codes)) }
   useEffect(() => { setForm(cur) /* eslint-disable-next-line */ }, [editing])
   const toggle = (f: string) => setSel((s) => { const n = new Set(s); n.has(f) ? n.delete(f) : n.add(f); return n })
+  const setMany = (fs: string[], on: boolean) => setSel((s) => { const n = new Set(s); fs.forEach((f) => (on ? n.add(f) : n.delete(f))); return n })
   const save = async () => {
     if (!form.code.trim()) { showToast('Укажи код аддона'); return }
     setSaving(true)
@@ -209,7 +233,7 @@ function AddonEditor({ addons, grouped, saving, setSaving, reload, showToast }: 
         <Field label="Описание" value={form.description || ''} onChange={(v: string) => setForm({ ...form, description: v })} placeholder="Что даёт модуль" />
         <div>
           <div className="mb-2 text-sm font-medium text-foreground">Страницы аддона <span className="text-muted-foreground">({sel.size})</span></div>
-          <PagePicker grouped={grouped} selected={sel} toggle={toggle} />
+          <PagePicker grouped={grouped} selected={sel} toggle={toggle} setMany={setMany} />
         </div>
         <button onClick={save} disabled={saving} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Сохранить аддон</button>
       </div>
