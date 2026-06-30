@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { ArrowLeft, Lock, Package, Puzzle, Sparkles, Loader2 } from 'lucide-react'
+import { SUPPORT_CONTACT } from '@/lib/core/site'
 
 const money = (n: number) => `${(Number(n) || 0).toLocaleString('ru-RU')} ₸`
 const unitLabel = (u: string) => (u === 'company' ? 'за точку/мес' : u === 'device' ? 'за устройство/мес' : 'в месяц')
@@ -104,7 +105,7 @@ function UpgradeContent() {
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">
                   Подключение оформляет менеджер Orda. Напишите в поддержку или вашему менеджеру — активируем нужный пакет/модуль, и страница сразу появится.
                 </p>
-                <a href="https://t.me/" target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-emerald-700">
+                <a href={SUPPORT_CONTACT} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-emerald-700">
                   Связаться с менеджером
                 </a>
               </div>

@@ -7,6 +7,10 @@ export const SITE_NAME = rawSiteName || 'Orda Control'
 
 export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://ordaops.kz'
 
+// Контакт для связи (CTA «Связаться с менеджером» на /upgrade и др.).
+// Задаётся через NEXT_PUBLIC_SUPPORT_CONTACT (ссылка: https://t.me/…, https://wa.me/…, mailto:…).
+export const SUPPORT_CONTACT = process.env.NEXT_PUBLIC_SUPPORT_CONTACT || SITE_URL
+
 export const SITE_DESCRIPTION = `${SITE_NAME} — система для управления сменами, точками, зарплатой, доходами, расходами, Telegram-отчётами и управленческим учётом клуба и команды.`
 
 /**
