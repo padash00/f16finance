@@ -146,6 +146,28 @@ export async function POST(req: Request) {
       return json({ ok: true })
     }
 
+    // Пересобрать 5 отраслевых пакетов из ЖИВОГО каталога (по разделам навигации).
+    // Чинит несогласованность старых сид-кодов фич с пер-страничными.
+    if (action === 'seed_default_packages') {
+      const pages = getAllPageFeatures().filter((p) => !p.base)
+      const inGroups = (groups: string[]) => pages.filter((p) => groups.includes(p.group)).map((p) => p.feature)
+      const FIN = 'Деньги', CMD = 'Центр управления', STORE = 'Магазин', TEAM = 'Команда и зарплаты', OPS = 'Операционная работа', SPACE = 'Команда'
+      const defs = [
+        { code: 'finance', name: 'Orda Finance', vertical: 'finance', description: 'Контроль владельца поверх любой кассы', price_kzt: 9900, groups: [CMD, FIN] },
+        { code: 'club', name: 'Orda Club', vertical: 'club', description: 'Клубы и игровые точки', price_kzt: 19900, groups: [CMD, FIN, TEAM, OPS, SPACE] },
+        { code: 'restaurant', name: 'Orda Restaurant', vertical: 'restaurant', description: 'Кафе, бар, пиццерия, dark kitchen', price_kzt: 24900, groups: [CMD, FIN, STORE, TEAM] },
+        { code: 'shop', name: 'Orda Shop', vertical: 'shop', description: 'Магазины и небольшие сети', price_kzt: 19900, groups: [CMD, FIN, STORE, TEAM] },
+        { code: 'service', name: 'Orda Service', vertical: 'service', description: 'СТО, автомойки, ремонт, сервис', price_kzt: 16900, groups: [CMD, FIN, TEAM, OPS] },
+      ]
+      const rows = defs.map((d) => ({
+        code: d.code, name: d.name, vertical: d.vertical, description: d.description,
+        feature_codes: inGroups(d.groups), price_kzt: d.price_kzt, status: 'active', updated_at: new Date().toISOString(),
+      }))
+      const { error } = await supabase.from('packages').upsert(rows, { onConflict: 'code' })
+      if (error) return json({ error: error.message }, 500)
+      return json({ ok: true, rebuilt: rows.map((r) => ({ code: r.code, pages: r.feature_codes.length })) })
+    }
+
     return json({ error: 'unknown action' }, 400)
   } catch (error: any) {
     return json({ error: error?.message || 'Ошибка сервера' }, 500)

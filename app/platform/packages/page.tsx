@@ -149,11 +149,20 @@ function PackageEditor({ packages, grouped, saving, setSaving, reload, showToast
     catch (e: any) { showToast(e?.message || 'Ошибка') } finally { setSaving(false) }
   }
   const del = async (code: string) => { if (!confirm(`Удалить пакет ${code}?`)) return; setSaving(true); try { await api('POST', { action: 'delete_package', code }); showToast('Удалён'); await reload() } catch (e: any) { showToast(e?.message) } finally { setSaving(false) } }
+  const seedDefaults = async () => { if (!confirm('Пересобрать 5 отраслевых пакетов из текущего каталога? Их состав страниц обновится.')) return; setSaving(true); try { await api('POST', { action: 'seed_default_packages' }); showToast('Дефолтные пакеты пересобраны'); await reload() } catch (e: any) { showToast(e?.message) } finally { setSaving(false) } }
+
+  // Предпросмотр: что увидит орг с этим пакетом (выбранные + базовые), по разделам.
+  const preview = grouped.map(([group, items]: [string, PageFeature[]]) => {
+    const sellable = items.filter((p) => !p.base)
+    const open = sellable.filter((p) => sel.has(p.feature)).length + items.filter((p) => p.base).length
+    return { group, open, total: items.length }
+  }).filter((g: { group: string; open: number; total: number }) => g.open > 0)
 
   return (
     <div className="grid gap-6 lg:grid-cols-[340px_1fr]">
       <div className="space-y-2">
         <button onClick={() => start(null)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-700"><Plus className="h-4 w-4" />Новый пакет</button>
+        <button onClick={seedDefaults} disabled={saving} className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-white px-4 py-2 text-xs font-medium text-muted-foreground hover:text-foreground disabled:opacity-60 dark:bg-white/5">↻ Пересобрать дефолтные (5 ниш)</button>
         {packages.map((p: Pkg) => (
           <div key={p.code} className={`flex items-center justify-between rounded-xl border px-4 py-3 transition ${editing?.code === p.code ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-500/10' : 'border-border bg-white dark:bg-white/5 hover:border-emerald-300'}`}>
             <button onClick={() => start(p)} className="min-w-0 flex-1 text-left">
@@ -176,6 +185,19 @@ function PackageEditor({ packages, grouped, saving, setSaving, reload, showToast
         <div>
           <div className="mb-2 text-sm font-medium text-foreground">Страницы в пакете <span className="text-muted-foreground">({sel.size} выбрано)</span></div>
           <PagePicker grouped={grouped} selected={sel} toggle={toggle} setMany={setMany} />
+        </div>
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 dark:border-emerald-500/25 dark:bg-emerald-500/[0.06]">
+          <div className="mb-2 text-sm font-semibold text-foreground">Предпросмотр — что увидит организация</div>
+          {preview.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Только базовые страницы (дашборд, настройки).</p>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {preview.map((g: { group: string; open: number; total: number }) => (
+                <span key={g.group} className="rounded-lg bg-white px-2.5 py-1 text-xs text-foreground shadow-sm dark:bg-white/10">{g.group} <span className="text-emerald-600">{g.open}</span></span>
+              ))}
+            </div>
+          )}
+          <p className="mt-2 text-xs text-muted-foreground">Базовые страницы доступны всегда. Остальные разделы — скрыты.</p>
         </div>
         <button onClick={save} disabled={saving} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Сохранить пакет</button>
       </div>
