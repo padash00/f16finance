@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
+import { requireOrgFeature } from '@/lib/server/entitlements'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { fetchStoreOverview, fetchStoreWriteoffs } from '@/lib/server/repositories/inventory'
@@ -26,6 +27,8 @@ export async function GET(request: Request) {
     const denied = await requireCapability(access, 'store.global_search')
     if (denied) return denied
     if (!canManageStore(access)) return json({ error: 'forbidden' }, 403)
+    const entitlementGuard = await requireOrgFeature(access, 'shop.catalog')
+    if (entitlementGuard) return entitlementGuard
 
     const url = new URL(request.url)
     const q = String(url.searchParams.get('q') || '').trim().toLowerCase()

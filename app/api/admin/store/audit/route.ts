@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
+import { requireOrgFeature } from '@/lib/server/entitlements'
 import { listOrganizationOperatorIds, resolveCompanyScope } from '@/lib/server/organizations'
 import {
   ensureInventoryLocationAccess,
@@ -73,6 +74,8 @@ export async function GET(request: Request) {
     const denied = await requireCapability(access, 'store-revisions.view')
     if (denied) return denied
     if (!canManageStore(access)) return json({ error: 'forbidden' }, 403)
+    const entitlementGuard = await requireOrgFeature(access, 'shop.catalog')
+    if (entitlementGuard) return entitlementGuard
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const companyScope = await resolveCompanyScope({ activeOrganizationId: access.activeOrganization?.id || null, isSuperAdmin: access.isSuperAdmin })
@@ -285,6 +288,8 @@ export async function POST(request: Request) {
     const denied = await requireCapability(access, 'store-revisions.edit')
     if (denied) return denied
     if (!canMutateAudit(access)) return json({ error: 'forbidden' }, 403)
+    const entitlementGuard = await requireOrgFeature(access, 'shop.catalog')
+    if (entitlementGuard) return entitlementGuard
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const actorUserId = access.user?.id || null

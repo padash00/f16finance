@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { requireCapability } from '@/lib/server/capabilities'
+import { requireOrgFeature } from '@/lib/server/entitlements'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
@@ -27,6 +28,8 @@ export async function GET(request: Request) {
     if ('response' in access) return access.response
     const denied = await requireCapability(access, 'store.view')
     if (denied) return denied
+    const entitlementGuard = await requireOrgFeature(access, 'shop.catalog')
+    if (entitlementGuard) return entitlementGuard
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const orgId = access.activeOrganization?.id || null
@@ -59,6 +62,8 @@ export async function PUT(request: Request) {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
     if (!canManage(access)) return json({ error: 'forbidden' }, 403)
+    const entitlementGuard = await requireOrgFeature(access, 'shop.catalog')
+    if (entitlementGuard) return entitlementGuard
 
     const orgId = access.activeOrganization?.id || null
     if (!orgId) return json({ error: 'no-organization' }, 400)

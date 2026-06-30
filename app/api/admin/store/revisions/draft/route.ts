@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
+import { requireOrgFeature } from '@/lib/server/entitlements'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { ensureInventoryLocationAccess } from '@/lib/server/repositories/inventory'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
@@ -45,6 +46,8 @@ export async function GET(request: Request) {
     if ('response' in s) return s.response
     const denied = await requireCapability(s.access, 'store-revisions.view')
     if (denied) return denied
+    const entitlementGuard = await requireOrgFeature(s.access, 'shop.catalog')
+    if (entitlementGuard) return entitlementGuard
     const url = new URL(request.url)
     const locationId = String(url.searchParams.get('location_id') || '').trim()
     const date = String(url.searchParams.get('date') || '').trim() || todayISO()
@@ -76,6 +79,8 @@ export async function POST(request: Request) {
     if ('response' in s) return s.response
     const denied = await requireCapability(s.access, 'store-revisions.edit')
     if (denied) return denied
+    const entitlementGuard = await requireOrgFeature(s.access, 'shop.catalog')
+    if (entitlementGuard) return entitlementGuard
     const body = (await request.json().catch(() => null)) as any
     const locationId = String(body?.location_id || '').trim()
     const date = String(body?.date || '').trim() || todayISO()
@@ -117,6 +122,8 @@ export async function DELETE(request: Request) {
     if ('response' in s) return s.response
     const denied = await requireCapability(s.access, 'store-revisions.cancel')
     if (denied) return denied
+    const entitlementGuard = await requireOrgFeature(s.access, 'shop.catalog')
+    if (entitlementGuard) return entitlementGuard
     const url = new URL(request.url)
     const locationId = String(url.searchParams.get('location_id') || '').trim()
     const date = String(url.searchParams.get('date') || '').trim() || todayISO()

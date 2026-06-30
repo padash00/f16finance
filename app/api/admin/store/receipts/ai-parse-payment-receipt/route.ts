@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { logAiUsageSafe } from '@/lib/ai/usage-tracker'
 import { requireCapability } from '@/lib/server/capabilities'
+import { requireOrgFeature } from '@/lib/server/entitlements'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 
@@ -55,6 +56,8 @@ export async function POST(req: Request) {
     if (!access.isSuperAdmin && !access.staffRole) {
       return json({ error: 'forbidden' }, 403)
     }
+    const entitlementGuard = await requireOrgFeature(access, 'shop.catalog')
+    if (entitlementGuard) return entitlementGuard
 
     const body = (await req.json().catch(() => null)) as Body | null
     const fileUrl = String(body?.receipt_file_url || '').trim()

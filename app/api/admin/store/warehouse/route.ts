@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
 import { humanizeDbError } from '@/lib/server/db-error-humanize'
+import { requireOrgFeature } from '@/lib/server/entitlements'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { postInventoryReceipt } from '@/lib/server/repositories/inventory'
@@ -76,6 +77,8 @@ export async function GET(request: Request) {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
     if (!canViewWarehouse(access)) return json({ error: 'forbidden' }, 403)
+    const entitlementGuard = await requireOrgFeature(access, 'shop.catalog')
+    if (entitlementGuard) return entitlementGuard
 
     const url = new URL(request.url)
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
@@ -231,6 +234,8 @@ export async function POST(request: Request) {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
     if (!canManage(access)) return json({ error: 'forbidden' }, 403)
+    const entitlementGuard = await requireOrgFeature(access, 'shop.catalog')
+    if (entitlementGuard) return entitlementGuard
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const companyScope = await resolveCompanyScope({

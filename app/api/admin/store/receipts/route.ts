@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
+import { requireOrgFeature } from '@/lib/server/entitlements'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { bulkSyncInventoryItemsToPointProducts, ensureInventoryLocationAccess, fetchStoreReceipts, postInventoryReceipt } from '@/lib/server/repositories/inventory'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
@@ -138,6 +139,8 @@ export async function GET(request: Request) {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
     if (!canManageStore(access)) return json({ error: 'forbidden' }, 403)
+    const entitlementGuard = await requireOrgFeature(access, 'shop.catalog')
+    if (entitlementGuard) return entitlementGuard
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const url = new URL(request.url)
@@ -197,6 +200,8 @@ export async function POST(request: Request) {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
     if (!canManageStore(access)) return json({ error: 'forbidden' }, 403)
+    const entitlementGuard = await requireOrgFeature(access, 'shop.catalog')
+    if (entitlementGuard) return entitlementGuard
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const actorUserId = access.user?.id || null

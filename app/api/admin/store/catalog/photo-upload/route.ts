@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
+import { requireOrgFeature } from '@/lib/server/entitlements'
 import { checkRateLimit } from '@/lib/server/rate-limit'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { isStoreManager } from '@/lib/server/store-access'
@@ -32,6 +33,8 @@ export async function POST(request: Request) {
     if (!isStoreManager(access)) {
       return NextResponse.json({ error: 'forbidden' }, { status: 403 })
     }
+    const entitlementGuard = await requireOrgFeature(access, 'shop.catalog')
+    if (entitlementGuard) return entitlementGuard
 
     const rl = checkRateLimit(`photo-up:${access.user?.id || 'anon'}`, 20, 60_000)
     if (!rl.allowed) return NextResponse.json({ error: 'too-many-requests' }, { status: 429 })

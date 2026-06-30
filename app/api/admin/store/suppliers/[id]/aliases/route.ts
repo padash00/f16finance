@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { requireStaffCapability } from '@/lib/server/capabilities'
+import { requireOrgFeature } from '@/lib/server/entitlements'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 function json(data: unknown, status = 200) {
@@ -25,6 +26,8 @@ export async function POST(
     if ('response' in access) return access.response
     const denied = await requireStaffCapability(access, 'store-suppliers.add_alias')
     if (denied) return denied
+    const entitlementGuard = await requireOrgFeature(access, 'shop.catalog')
+    if (entitlementGuard) return entitlementGuard
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const body = (await request.json().catch(() => null)) as CreateBody | null
@@ -71,6 +74,8 @@ export async function DELETE(
     if ('response' in access) return access.response
     const denied = await requireStaffCapability(access, 'store-suppliers.delete_alias')
     if (denied) return denied
+    const entitlementGuard = await requireOrgFeature(access, 'shop.catalog')
+    if (entitlementGuard) return entitlementGuard
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const url = new URL(request.url)

@@ -3,6 +3,7 @@ import { PDFParse } from 'pdf-parse'
 
 import { logAiUsageSafe } from '@/lib/ai/usage-tracker'
 import { requireCapability } from '@/lib/server/capabilities'
+import { requireOrgFeature } from '@/lib/server/entitlements'
 import { matchInvoiceItems, parseInvoiceWithGPT, type ParsedInvoice } from '@/lib/server/invoice-parser'
 import { fetchInventoryItemsForMatching, fetchInvoiceNameMappings } from '@/lib/server/repositories/invoice'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
@@ -220,6 +221,8 @@ export async function POST(req: Request) {
     if (!access.isSuperAdmin && !access.staffRole) {
       return json({ error: 'forbidden' }, 403)
     }
+    const entitlementGuard = await requireOrgFeature(access, 'shop.catalog')
+    if (entitlementGuard) return entitlementGuard
 
     const body = (await req.json().catch(() => null)) as Body | null
     const invoiceFileUrl = String(body?.invoice_file_url || '').trim()

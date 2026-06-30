@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
+import { requireOrgFeature } from '@/lib/server/entitlements'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -93,6 +94,8 @@ export async function GET(request: Request) {
     if ('response' in access) return access.response
     const denied = await requireCapability(access, 'store-receipt-settings.view')
     if (denied) return denied as any
+    const entitlementGuard = await requireOrgFeature(access, 'shop.catalog')
+    if (entitlementGuard) return entitlementGuard
 
     const url = new URL(request.url)
     const requestedCompanyId = (url.searchParams.get('company_id') || '').trim() || null
@@ -180,6 +183,8 @@ export async function PUT(request: Request) {
     if ('response' in access) return access.response
     const denied = await requireCapability(access, 'store-receipt-settings.edit')
     if (denied) return denied as any
+    const entitlementGuard = await requireOrgFeature(access, 'shop.catalog')
+    if (entitlementGuard) return entitlementGuard
 
     const body = await request.json().catch(() => null)
     const companyId = String(body?.company_id || '').trim()

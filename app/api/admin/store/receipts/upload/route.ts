@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
+import { requireOrgFeature } from '@/lib/server/entitlements'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -29,6 +30,8 @@ export async function POST(request: Request) {
     if (!access.isSuperAdmin && !access.staffRole) {
       return NextResponse.json({ error: 'forbidden' }, { status: 403 })
     }
+    const entitlementGuard = await requireOrgFeature(access, 'shop.catalog')
+    if (entitlementGuard) return entitlementGuard
 
     const formData = await request.formData()
     const file = formData.get('file') as File | null

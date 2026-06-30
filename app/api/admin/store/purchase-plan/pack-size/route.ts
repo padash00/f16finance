@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
+import { requireOrgFeature } from '@/lib/server/entitlements'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { isStoreManager } from '@/lib/server/store-access'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -18,6 +19,8 @@ export async function PATCH(request: Request) {
     const denied = await requireCapability(access, 'store-catalog.edit')
     if (denied) return denied
     if (!isStoreManager(access)) return json({ error: 'forbidden' }, 403)
+    const entitlementGuard = await requireOrgFeature(access, 'shop.catalog')
+    if (entitlementGuard) return entitlementGuard
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
 
     // Не-супер без активной орг — отказ (иначе фильтр по орг отключается).

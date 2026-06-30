@@ -276,15 +276,17 @@ export type PageFeatureEntry = { path: string; label: string; feature: string; g
  */
 export function getAllPageFeatures(): PageFeatureEntry[] {
   const out: PageFeatureEntry[] = []
-  const seen = new Set<string>()
+  const seenFeature = new Set<string>()
   for (const section of navSections) {
     for (const item of section.items) {
-      if (seen.has(item.href)) continue
-      seen.add(item.href)
+      const feature = pageFeatureCode(item, section)
+      if (seenFeature.has(feature)) continue // одна фича = одна запись (раздел с общей фичей не дублируется)
+      seenFeature.add(feature)
+      const sectionLevel = !item.feature && !!section.feature // фича от раздела, а не от страницы
       out.push({
         path: item.href,
-        label: item.label,
-        feature: pageFeatureCode(item, section),
+        label: sectionLevel ? `${section.title} (весь раздел)` : item.label,
+        feature,
         group: section.title,
         base: BASE_FREE_PATHS.has(item.href),
       })

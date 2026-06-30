@@ -5,6 +5,7 @@ import { humanizeDbError } from '@/lib/server/db-error-humanize'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { requireStaffCapability } from '@/lib/server/capabilities'
+import { requireOrgFeature } from '@/lib/server/entitlements'
 import { createInventoryRequest } from '@/lib/server/repositories/inventory'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { notifyInventoryRequestCreated } from '@/lib/server/telegram'
@@ -73,6 +74,8 @@ export async function GET(request: Request) {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
     if (!canView(access)) return json({ error: 'forbidden' }, 403)
+    const entitlementGuard = await requireOrgFeature(access, 'shop.catalog')
+    if (entitlementGuard) return entitlementGuard
 
     const url = new URL(request.url)
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
@@ -229,6 +232,8 @@ export async function POST(request: Request) {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
     if (!canCreateRequest(access)) return json({ error: 'forbidden' }, 403)
+    const entitlementGuard = await requireOrgFeature(access, 'shop.catalog')
+    if (entitlementGuard) return entitlementGuard
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const companyScope = await resolveCompanyScope({

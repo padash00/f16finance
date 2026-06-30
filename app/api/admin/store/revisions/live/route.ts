@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
+import { requireOrgFeature } from '@/lib/server/entitlements'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { ensureInventoryLocationAccess } from '@/lib/server/repositories/inventory'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
@@ -24,6 +25,8 @@ export async function GET(request: Request) {
     const denied = await requireCapability(access, 'store-revisions.view')
     if (denied) return denied
     if (!access.isSuperAdmin && !access.staffRole) return json({ error: 'forbidden' }, 403)
+    const entitlementGuard = await requireOrgFeature(access, 'shop.catalog')
+    if (entitlementGuard) return entitlementGuard
 
     const url = new URL(request.url)
     const locationId = String(url.searchParams.get('location_id') || '').trim()

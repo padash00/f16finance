@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { requireCapability } from '@/lib/server/capabilities'
+import { requireOrgFeature } from '@/lib/server/entitlements'
 import { checkRateLimit } from '@/lib/server/rate-limit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { isStoreManager } from '@/lib/server/store-access'
@@ -68,6 +69,8 @@ export async function GET(request: Request) {
     const denied = await requireCapability(access, 'store-catalog.view')
     if (denied) return denied
     if (!isStoreManager(access)) return json({ error: 'forbidden' }, 403)
+    const entitlementGuard = await requireOrgFeature(access, 'shop.catalog')
+    if (entitlementGuard) return entitlementGuard
 
     const rl = checkRateLimit(`img-search:${access.user?.id || 'anon'}`, 30, 60_000)
     if (!rl.allowed) return json({ error: 'too-many-requests' }, 429)
