@@ -9,6 +9,7 @@ import { normalizeOperatorUsername, toOperatorAuthEmail } from '@/lib/core/auth'
 import { SITE_NAME } from '@/lib/core/site'
 import {
   AlertCircle,
+  ArrowLeft,
   ArrowRight,
   Brain,
   Building2,
@@ -21,6 +22,19 @@ import {
   Shield,
   User,
 } from 'lucide-react'
+
+// Кнопка «Назад» на сайт + ссылка на главную (общая для всех экранов входа).
+function BackToSite({ href = '/' }: { href?: string }) {
+  return (
+    <Link
+      href={href}
+      className="absolute left-5 top-5 z-10 inline-flex items-center gap-2 rounded-full border border-[#e3e8f0] bg-white/80 px-4 py-2 text-sm font-medium text-[#475569] shadow-sm backdrop-blur transition hover:border-emerald-300 hover:text-emerald-700"
+    >
+      <ArrowLeft className="h-4 w-4" />
+      На сайт
+    </Link>
+  )
+}
 
 type LoginMode = 'email' | 'operator'
 type HostOrg = { name: string; slug: string } | null
@@ -356,7 +370,13 @@ export default function LoginForm({
         <Link href="/forgot-password" className="font-medium text-emerald-600 hover:text-emerald-700">Забыли пароль?</Link>
         <span className="text-[#94a3b8]">Нет доступа? Обратитесь к администратору</span>
       </div>
-      <p className="mt-6 text-center text-[11px] text-[#94a3b8] lg:text-left">{SITE_NAME} · Безопасный вход</p>
+      <div className="mt-6 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-[#94a3b8] lg:justify-start">
+        <span>{SITE_NAME} · Безопасный вход</span>
+        <span className="text-[#cbd5e1]">·</span>
+        <Link href="/privacy" className="hover:text-emerald-600">Конфиденциальность</Link>
+        <span className="text-[#cbd5e1]">·</span>
+        <Link href="/terms" className="hover:text-emerald-600">Условия</Link>
+      </div>
     </div>
   )
 
@@ -367,7 +387,8 @@ export default function LoginForm({
   // ─── Tenant-поддомен организации ──────────────────────────────────────────
   if (hostOrg) {
     return (
-      <div className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.06),transparent_28%),linear-gradient(135deg,#ffffff_0%,#eef2f8_50%,#ffffff_100%)] p-4">
+      <div className="relative min-h-screen bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.06),transparent_28%),linear-gradient(135deg,#ffffff_0%,#eef2f8_50%,#ffffff_100%)] p-4">
+        <BackToSite href={platformUrl} />
         <div className="mx-auto flex min-h-screen max-w-6xl items-center justify-center">
           <div className="grid w-full gap-6 lg:grid-cols-[1.05fr_0.95fr]">
             <BrandPanel
@@ -394,7 +415,8 @@ export default function LoginForm({
 
   // ─── Общий вход платформы ─────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.07),transparent_30%),radial-gradient(circle_at_bottom_left,rgba(16,185,129,0.05),transparent_26%),linear-gradient(135deg,#ffffff_0%,#eef2f8_50%,#ffffff_100%)] p-4">
+    <div className="relative min-h-screen bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.07),transparent_30%),radial-gradient(circle_at_bottom_left,rgba(16,185,129,0.05),transparent_26%),linear-gradient(135deg,#ffffff_0%,#eef2f8_50%,#ffffff_100%)] p-4">
+      <BackToSite href="/" />
       <div className="mx-auto flex min-h-screen max-w-6xl items-center justify-center">
         <div className="grid w-full gap-6 lg:grid-cols-[1.05fr_0.95fr]">
           <BrandPanel
