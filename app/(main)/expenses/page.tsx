@@ -1130,12 +1130,6 @@ export default function ExpensesPage() {
                     </Button>
                   )}
 
-                  <Link href="/expenses/analysis">
-                    <Button variant="outline" size="sm" className="border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 hover:bg-slate-100 dark:hover:bg-gray-700 text-slate-700 dark:text-gray-300">
-                      <BarChart3 className="w-4 h-4 mr-1" /> Анализ
-                    </Button>
-                  </Link>
-
                   {canCreateExpense ? (
                     <Button
                       size="sm"
