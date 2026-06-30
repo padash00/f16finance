@@ -21,7 +21,7 @@ export function PageEntitlementGuard() {
     if (!pathname) return
     const feature = getPathFeature(pathname)
     if (feature && !featuresAllAccess && !orgFeatures.includes(feature)) {
-      router.replace(`/dashboard?upgrade=${encodeURIComponent(feature)}`)
+      router.replace(`/upgrade?feature=${encodeURIComponent(feature)}`)
     }
   }, [pathname, orgFeatures, featuresAllAccess, router])
 
