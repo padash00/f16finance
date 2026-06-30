@@ -948,19 +948,19 @@ export default function InventorySalesPageMinimal({
   const timeStr = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
 
   return (
-    <div className="relative flex h-screen flex-col overflow-hidden bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100">
+    <div className="relative flex h-screen flex-col overflow-hidden bg-background text-foreground">
       {/* Декоративные акценты */}
-      <div className="pointer-events-none absolute -top-32 right-0 h-64 w-64 rounded-full bg-emerald-500/5 blur-3xl dark:bg-emerald-500/10" />
-      <div className="pointer-events-none absolute bottom-0 -left-32 h-64 w-64 rounded-full bg-blue-500/5 blur-3xl dark:bg-blue-500/10" />
-      <div className="h-9 shrink-0 drag-region bg-white/80 backdrop-blur dark:bg-slate-900/80" />
+      <div className="pointer-events-none absolute -top-32 right-0 h-64 w-64 rounded-full bg-primary/5 blur-3xl" />
+      <div className="pointer-events-none absolute bottom-0 -left-32 h-64 w-64 rounded-full bg-primary/5 blur-3xl" />
+      <div className="h-9 shrink-0 drag-region bg-card/80 backdrop-blur" />
 
       {/* Шапка */}
-      <header className="relative z-10 flex shrink-0 items-center justify-between gap-3 border-b border-slate-200/70 bg-white/80 px-3 py-2 backdrop-blur-xl no-drag dark:border-slate-800/70 dark:bg-slate-900/80 sm:px-4">
+      <header className="relative z-10 flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card/80 px-3 py-2 backdrop-blur-xl no-drag sm:px-4">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 text-[11px] font-bold tracking-tight text-white shadow-md shadow-emerald-500/30">OP</div>
+          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary text-[11px] font-bold tracking-tight text-primary-foreground shadow-md shadow-primary/30">OP</div>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold">{session.company?.name || 'Точка'}</p>
-            <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+            <p className="truncate text-xs text-muted-foreground">
               {operatorName} · {formatShiftLabel(runtimeShift.shift)}
             </p>
           </div>
@@ -970,14 +970,14 @@ export default function InventorySalesPageMinimal({
             <button
               type="button"
               onClick={() => setShowParkedList((v) => !v)}
-              className="hidden items-center gap-1.5 rounded-full border border-amber-300/50 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700 transition hover:bg-amber-100 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-950/60 sm:inline-flex"
+              className="hidden items-center gap-1.5 rounded-full border border-amber-300/50 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 transition hover:bg-amber-100 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-950/60 sm:inline-flex"
               title="Отложенные корзины этой смены"
             >
               <Clock className="h-3.5 w-3.5" />
               Отложено · {parkedCarts.length}
             </button>
           )}
-          <span className="hidden text-sm tabular-nums text-slate-500 sm:inline dark:text-slate-400">{timeStr}</span>
+          <span className="hidden text-sm tabular-nums text-muted-foreground sm:inline">{timeStr}</span>
           <WorkModeSwitch
             active="sale"
             showSale
@@ -997,23 +997,23 @@ export default function InventorySalesPageMinimal({
             size="sm"
             onClick={() => void handleManualSync()}
             disabled={loading}
-            className="h-8 gap-2 border-emerald-500/30 bg-emerald-500/5 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-300"
+            className="h-9 gap-2 border-primary/30 bg-primary/5 text-primary hover:bg-primary/10"
             title="Подтянуть свежие остатки с сервера (после ревизии или перемещения со склада)"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             <span className="hidden sm:inline">{loading ? 'Синхронизирую…' : 'Синхронизировать'}</span>
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => setShowPreferences(true)} className="h-8 w-8 p-0" title="Настройки">
+          <Button variant="ghost" size="sm" onClick={() => setShowPreferences(true)} className="h-9 w-9 p-0" title="Настройки">
             <Settings className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="sm" onClick={onLogout} className="h-8 w-8 p-0">
+          <Button variant="ghost" size="sm" onClick={onLogout} className="h-9 w-9 p-0">
             <LogOut className="h-4 w-4" />
           </Button>
         </div>
       </header>
 
       {/* Вкладки: Продажи / История */}
-      <nav className="relative z-10 flex shrink-0 items-center gap-1 border-b border-slate-200/70 bg-white/80 px-3 backdrop-blur-xl dark:border-slate-800/70 dark:bg-slate-900/80 sm:px-4">
+      <nav className="relative z-10 flex shrink-0 items-center gap-1 border-b border-border bg-card/80 px-3 backdrop-blur-xl sm:px-4">
         {(['sale', 'history'] as const).map((mode) => (
           <button
             key={mode}
@@ -1021,13 +1021,13 @@ export default function InventorySalesPageMinimal({
             onClick={() => setViewMode(mode)}
             className={`relative px-4 py-2.5 text-sm font-medium transition ${
               viewMode === mode
-                ? 'text-emerald-600 dark:text-emerald-400'
-                : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                ? 'text-primary'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             {mode === 'sale' ? 'Продажи' : `История${(context?.sales?.length || 0) > 0 ? ` (${context?.sales?.length})` : ''}`}
             {viewMode === mode && (
-              <span className="absolute inset-x-0 -bottom-px h-0.5 bg-gradient-to-r from-emerald-500 to-teal-500 shadow shadow-emerald-500/30" />
+              <span className="absolute inset-x-0 -bottom-px h-0.5 bg-primary shadow shadow-primary/30" />
             )}
           </button>
         ))}
@@ -1038,10 +1038,10 @@ export default function InventorySalesPageMinimal({
         {viewMode === 'history' ? (
           <section className="flex-1 overflow-auto p-3 sm:p-4">
             {(context?.sales || []).length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center gap-3 text-slate-400">
+              <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
                 <ReceiptIcon className="h-12 w-12 opacity-30" />
                 <p className="text-sm">Чеков ещё нет</p>
-                <p className="text-xs text-slate-500">Все ваши продажи за смену появятся здесь</p>
+                <p className="text-xs text-muted-foreground">Все ваши продажи за смену появятся здесь</p>
               </div>
             ) : (
               <>
@@ -1061,18 +1061,18 @@ export default function InventorySalesPageMinimal({
                   )
                   return (
                     <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                      <div className="rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
-                        <p className="text-[10px] uppercase tracking-wider text-slate-500">Чеков</p>
+                      <div className="rounded-2xl border border-border bg-card p-3">
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Чеков</p>
                         <p className="mt-1 text-xl font-semibold tabular-nums">{sales.length}</p>
                       </div>
-                      <div className="rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
-                        <p className="text-[10px] uppercase tracking-wider text-slate-500">Сумма</p>
-                        <p className="mt-1 text-xl font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+                      <div className="rounded-2xl border border-border bg-card p-3">
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Сумма</p>
+                        <p className="mt-1 text-xl font-bold tabular-nums text-primary">
                           {formatMoney(total)} ₸
                         </p>
                       </div>
-                      <div className="rounded-2xl border border-emerald-200/60 bg-emerald-50/60 p-3 dark:border-emerald-900/40 dark:bg-emerald-950/30">
-                        <p className="text-[10px] uppercase tracking-wider text-emerald-700/80 dark:text-emerald-300/70">Наличные</p>
+                      <div className="rounded-2xl border border-primary/20 bg-primary/5 p-3">
+                        <p className="text-[10px] uppercase tracking-wider text-primary/80">Наличные</p>
                         <p className="mt-1 text-xl font-semibold tabular-nums">{formatMoney(cashSum)} ₸</p>
                       </div>
                       <div className="rounded-2xl border border-sky-200/60 bg-sky-50/60 p-3 dark:border-sky-900/40 dark:bg-sky-950/30">
@@ -1084,10 +1084,10 @@ export default function InventorySalesPageMinimal({
                     </div>
                   )
                 })()}
-              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+              <div className="overflow-hidden rounded-2xl border border-border bg-card">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                    <tr className="border-b border-border text-xs uppercase tracking-wider text-muted-foreground">
                       <th className="px-3 py-3 text-left font-medium">Время</th>
                       <th className="px-3 py-3 text-left font-medium">Позиций</th>
                       <th className="px-3 py-3 text-left font-medium">Оплата</th>
@@ -1100,17 +1100,17 @@ export default function InventorySalesPageMinimal({
                       const t = sale.sold_at ? new Date(sale.sold_at) : null
                       const timeStr = t ? t.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '—'
                       return (
-                        <tr key={sale.id} className="border-b border-slate-100 last:border-b-0 dark:border-slate-800/50">
+                        <tr key={sale.id} className="border-b border-border last:border-b-0">
                           <td className="px-3 py-3">
                             <p className="text-sm font-medium">{timeStr}</p>
-                            <p className="text-xs text-slate-500">#{sale.id.slice(-6)}</p>
+                            <p className="text-xs text-muted-foreground">#{sale.id.slice(-6)}</p>
                           </td>
                           <td className="px-3 py-3 text-sm">{sale.items?.length || 0}</td>
                           <td className="px-3 py-3">
                             <span
                               className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
                                 sale.payment_method === 'cash'
-                                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                                  ? 'bg-primary/10 text-primary'
                                   : sale.payment_method === 'kaspi'
                                     ? 'bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300'
                                     : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
@@ -1147,10 +1147,10 @@ export default function InventorySalesPageMinimal({
         {/* Левая зона: поиск + таблица позиций */}
         <section className="flex flex-1 flex-col overflow-hidden">
           {/* Поиск */}
-          <div className="relative shrink-0 border-b border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900 sm:p-4">
+          <div className="relative shrink-0 border-b border-border bg-card p-3 sm:p-4">
             <div className="grid grid-cols-[1fr_auto] gap-2">
               <div className="relative">
-                <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                 <input
                   ref={searchRef}
                   value={search}
@@ -1162,14 +1162,14 @@ export default function InventorySalesPageMinimal({
                     }
                   }}
                   placeholder="Поиск товара по названию, штрихкоду или артикулу"
-                  className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-12 pr-12 text-base outline-none transition focus:border-emerald-400 focus:bg-white dark:border-slate-700 dark:bg-slate-800 dark:focus:bg-slate-900"
+                  className="h-12 w-full rounded-2xl border border-input bg-muted pl-12 pr-12 text-base text-foreground outline-none transition focus:border-ring"
                   autoFocus
                 />
                 {search && (
                   <button
                     type="button"
                     onClick={() => setSearch('')}
-                    className="absolute right-3 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800"
+                    className="absolute right-3 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground"
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -1178,7 +1178,7 @@ export default function InventorySalesPageMinimal({
               <button
                 type="button"
                 onClick={() => setShowUniversal(true)}
-                className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition hover:border-emerald-400 hover:text-emerald-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                className="h-12 rounded-2xl border border-border bg-card px-4 text-sm font-medium text-foreground transition hover:border-primary hover:text-primary"
                 title="Универсальная продажа: услуга или товар не из каталога"
               >
                 + Универсальная
@@ -1186,7 +1186,7 @@ export default function InventorySalesPageMinimal({
             </div>
 
             {searchResults.length > 0 && (
-              <div className="absolute left-3 right-3 top-full z-20 mt-1 max-h-80 overflow-auto rounded-2xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900 sm:left-4 sm:right-4">
+              <div className="absolute left-3 right-3 top-full z-20 mt-1 max-h-80 overflow-auto rounded-2xl border border-border bg-popover text-popover-foreground shadow-lg sm:left-4 sm:right-4">
                 {searchResults.map((item) => {
                   const qty = Number(item.display_qty || 0)
                   const isLow = qty > 0 && qty <= 3
@@ -1199,11 +1199,11 @@ export default function InventorySalesPageMinimal({
                         setSearch('')
                         searchRef.current?.focus()
                       }}
-                      className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-slate-50 dark:hover:bg-slate-800"
+                      className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-accent"
                     >
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">{item.name}</p>
-                        <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                        <p className="truncate text-xs text-muted-foreground">
                           {item.barcode || '—'} · <span className={isLow ? 'text-amber-600 dark:text-amber-400 font-medium' : ''}>{qty} шт{isLow ? ' (мало!)' : ''}</span>
                         </p>
                       </div>
@@ -1218,25 +1218,25 @@ export default function InventorySalesPageMinimal({
           {/* Таблица позиций */}
           <div className="flex-1 overflow-auto p-3 sm:p-4">
             {loading && cart.length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center gap-3 text-slate-400">
+              <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
                 <Loader2 className="h-8 w-8 animate-spin" />
                 <p className="text-sm">Загружаем витрину…</p>
               </div>
             ) : error && cart.length === 0 ? (
-              <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-300">
+              <div className="rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
                 {error}
               </div>
             ) : cartDetailed.length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-slate-400">
+              <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-muted-foreground">
                 <ReceiptIcon className="h-12 w-12 opacity-30" />
                 <p className="text-sm">Список пуст</p>
-                <p className="text-xs text-slate-500 dark:text-slate-500">Найдите товар через поиск или отсканируйте штрихкод</p>
+                <p className="text-xs text-muted-foreground">Найдите товар через поиск или отсканируйте штрихкод</p>
               </div>
             ) : (
-              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+              <div className="overflow-hidden rounded-2xl border border-border bg-card">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                    <tr className="border-b border-border text-xs uppercase tracking-wider text-muted-foreground">
                       <th className="w-10 px-3 py-3 text-left font-medium">#</th>
                       <th className="px-3 py-3 text-left font-medium">Наименование</th>
                       <th className="hidden px-3 py-3 text-right font-medium sm:table-cell">Цена</th>
@@ -1247,11 +1247,11 @@ export default function InventorySalesPageMinimal({
                   </thead>
                   <tbody>
                     {cartDetailed.map((line, idx) => (
-                      <tr key={line.id} className="border-b border-slate-100 last:border-b-0 dark:border-slate-800/50">
-                        <td className="px-3 py-3 text-sm text-slate-500">{idx + 1}</td>
+                      <tr key={line.id} className="border-b border-border last:border-b-0">
+                        <td className="px-3 py-3 text-sm text-muted-foreground">{idx + 1}</td>
                         <td className="px-3 py-3">
                           <p className="text-sm font-medium leading-tight">{line.name}</p>
-                          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 sm:hidden">
+                          <p className="mt-0.5 text-xs text-muted-foreground sm:hidden">
                             {formatMoney(line.unit_price)} / {line.unit || 'шт'}
                           </p>
                           {!line.item_id && (
@@ -1262,11 +1262,11 @@ export default function InventorySalesPageMinimal({
                         </td>
                         <td className="hidden px-3 py-3 text-right text-sm tabular-nums sm:table-cell">{formatMoney(line.unit_price)}</td>
                         <td className="px-3 py-3">
-                          <div className="mx-auto flex w-fit items-center gap-1 rounded-xl border border-slate-200 dark:border-slate-700">
+                          <div className="mx-auto flex w-fit items-center gap-1 rounded-xl border border-border">
                             <button
                               type="button"
                               onClick={() => changeQty(line.id, line.quantity - 1)}
-                              className="grid h-8 w-8 place-items-center text-slate-500 hover:bg-slate-50 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-white"
+                              className="grid h-9 w-9 place-items-center text-muted-foreground hover:bg-muted hover:text-foreground"
                             >
                               <Minus className="h-3.5 w-3.5" />
                             </button>
@@ -1274,7 +1274,7 @@ export default function InventorySalesPageMinimal({
                             <button
                               type="button"
                               onClick={() => changeQty(line.id, line.quantity + 1)}
-                              className="grid h-8 w-8 place-items-center text-slate-500 hover:bg-slate-50 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-white"
+                              className="grid h-9 w-9 place-items-center text-muted-foreground hover:bg-muted hover:text-foreground"
                             >
                               <Plus className="h-3.5 w-3.5" />
                             </button>
@@ -1285,7 +1285,7 @@ export default function InventorySalesPageMinimal({
                           <button
                             type="button"
                             onClick={() => removeLine(line.id)}
-                            className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/30"
+                            className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
@@ -1300,21 +1300,21 @@ export default function InventorySalesPageMinimal({
         </section>
 
         {/* Правая зона: оплата */}
-        <aside className="shrink-0 border-t border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900 lg:w-96 lg:overflow-auto lg:border-l lg:border-t-0 lg:p-4 xl:w-[420px]">
+        <aside className="shrink-0 border-t border-border bg-card p-3 lg:w-96 lg:overflow-auto lg:border-l lg:border-t-0 lg:p-4 xl:w-[420px]">
           <div className="flex h-full flex-col gap-3">
             {/* Итого */}
-            <div className="relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-50 via-teal-50/40 to-white p-4 shadow-sm dark:from-emerald-950/40 dark:via-teal-950/30 dark:to-slate-900">
-              <div className="pointer-events-none absolute -top-10 -right-10 h-32 w-32 rounded-full bg-emerald-400/10 blur-2xl" />
-              <p className="relative text-xs uppercase tracking-wider text-emerald-700 dark:text-emerald-400">К оплате</p>
-              <p className="relative mt-1 bg-gradient-to-r from-emerald-600 to-teal-700 bg-clip-text text-3xl font-bold tabular-nums text-transparent dark:from-emerald-400 dark:to-teal-300 sm:text-4xl">
+            <div className="relative overflow-hidden rounded-2xl border border-primary/20 bg-primary/5 p-4 shadow-sm">
+              <div className="pointer-events-none absolute -top-10 -right-10 h-32 w-32 rounded-full bg-primary/10 blur-2xl" />
+              <p className="relative text-xs uppercase tracking-wider text-primary">К оплате</p>
+              <p className="relative mt-1 text-4xl font-bold tabular-nums text-primary sm:text-5xl">
                 {formatMoney(finalTotal)}
-                <span className="ml-1 text-lg font-medium text-emerald-500/60 dark:text-emerald-400/60">₸</span>
+                <span className="ml-1 text-lg font-medium text-primary/60">₸</span>
               </p>
               {(discountAmount > 0 || loyaltyDiscountAmount > 0) && (
                 <div className="mt-2 space-y-0.5 text-xs">
-                  <div className="flex justify-between text-slate-500"><span>Подытог</span><span>{formatMoney(subtotal)} ₸</span></div>
+                  <div className="flex justify-between text-muted-foreground"><span>Подытог</span><span>{formatMoney(subtotal)} ₸</span></div>
                   {discountAmount > 0 && (
-                    <div className="flex justify-between text-rose-600 dark:text-rose-400">
+                    <div className="flex justify-between text-destructive">
                       <span>Скидка {effectiveDiscountPercent}%</span>
                       <span>−{formatMoney(discountAmount)} ₸</span>
                     </div>
@@ -1327,7 +1327,7 @@ export default function InventorySalesPageMinimal({
                   )}
                 </div>
               )}
-              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+              <p className="mt-2 text-xs text-muted-foreground">
                 {cartDetailed.length} {cartDetailed.length === 1 ? 'позиция' : 'позиций'} · {cartDetailed.reduce((s, l) => s + l.quantity, 0)} шт
               </p>
             </div>
@@ -1337,10 +1337,10 @@ export default function InventorySalesPageMinimal({
               <button
                 type="button"
                 onClick={() => setShowCustomer(!showCustomer)}
-                className={`flex items-center justify-center gap-1.5 rounded-xl border py-2 text-xs font-medium transition ${
+                className={`flex items-center justify-center gap-1.5 rounded-xl border py-2.5 text-xs font-medium transition ${
                   selectedCustomer
-                    ? 'border-emerald-400 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
-                    : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border bg-card text-muted-foreground hover:text-foreground'
                 }`}
               >
                 <UserCircle2 className="h-3.5 w-3.5" />
@@ -1349,10 +1349,10 @@ export default function InventorySalesPageMinimal({
               <button
                 type="button"
                 onClick={() => setShowDiscount(!showDiscount)}
-                className={`flex items-center justify-center gap-1.5 rounded-xl border py-2 text-xs font-medium transition ${
+                className={`flex items-center justify-center gap-1.5 rounded-xl border py-2.5 text-xs font-medium transition ${
                   effectiveDiscountPercent > 0
-                    ? 'border-blue-400 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300'
-                    : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border bg-card text-muted-foreground hover:text-foreground'
                 }`}
               >
                 <Tag className="h-3.5 w-3.5" />
@@ -1362,13 +1362,13 @@ export default function InventorySalesPageMinimal({
 
             {/* Панель клиента */}
             {showCustomer && (
-              <div className="space-y-2 rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
+              <div className="space-y-2 rounded-2xl border border-border bg-card p-3">
                 {selectedCustomer ? (
                   <>
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">{selectedCustomer.name}</p>
-                        <p className="truncate text-xs text-slate-500">{selectedCustomer.phone || selectedCustomer.card_number || '—'}</p>
+                        <p className="truncate text-xs text-muted-foreground">{selectedCustomer.phone || selectedCustomer.card_number || '—'}</p>
                       </div>
                       <p className="shrink-0 text-sm font-bold text-amber-500">{selectedCustomer.loyalty_points} б.</p>
                     </div>
@@ -1383,7 +1383,7 @@ export default function InventorySalesPageMinimal({
                             setLoyaltyPointsToSpend(val)
                           }}
                           placeholder={`Использовать баллы (макс. ${maxRedeemablePoints})`}
-                          className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs outline-none focus:border-amber-400 dark:border-slate-700 dark:bg-slate-900"
+                          className="h-9 w-full rounded-lg border border-input bg-background px-2 text-xs text-foreground outline-none focus:border-ring"
                           min={0}
                           max={maxRedeemablePoints}
                         />
@@ -1392,7 +1392,7 @@ export default function InventorySalesPageMinimal({
                     <button
                       type="button"
                       onClick={clearCustomer}
-                      className="text-xs text-slate-500 hover:text-rose-600"
+                      className="text-xs text-muted-foreground hover:text-destructive"
                     >
                       Убрать клиента
                     </button>
@@ -1400,29 +1400,29 @@ export default function InventorySalesPageMinimal({
                 ) : (
                   <>
                     <div className="relative">
-                      <UserCircle2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                      <UserCircle2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                       <input
                         value={customerSearch}
                         onChange={(e) => setCustomerSearch(e.target.value)}
                         placeholder="Телефон или карта"
-                        className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-8 text-xs outline-none focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-900"
+                        className="h-9 w-full rounded-lg border border-input bg-background pl-9 pr-8 text-xs text-foreground outline-none focus:border-ring"
                       />
                       {customerSearching && (
-                        <Loader2 className="absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-slate-400" />
+                        <Loader2 className="absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
                       )}
                     </div>
                     {showCustomerDropdown && customerResults.length > 0 && (
-                      <div className="max-h-48 space-y-0.5 overflow-auto rounded-lg border border-slate-200 dark:border-slate-700">
+                      <div className="max-h-48 space-y-0.5 overflow-auto rounded-lg border border-border">
                         {customerResults.map((c) => (
                           <button
                             key={c.id}
                             type="button"
                             onClick={() => selectCustomer(c)}
-                            className="flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-xs hover:bg-slate-50 dark:hover:bg-slate-800"
+                            className="flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-xs hover:bg-accent"
                           >
                             <div className="min-w-0">
                               <p className="truncate font-medium">{c.name}</p>
-                              <p className="truncate text-slate-500">{c.phone || c.card_number || '—'}</p>
+                              <p className="truncate text-muted-foreground">{c.phone || c.card_number || '—'}</p>
                             </div>
                             <p className="shrink-0 font-semibold text-amber-500">{c.loyalty_points} б.</p>
                           </button>
@@ -1436,9 +1436,9 @@ export default function InventorySalesPageMinimal({
 
             {/* Панель скидки */}
             {showDiscount && (
-              <div className="space-y-2 rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
+              <div className="space-y-2 rounded-2xl border border-border bg-card p-3">
                 <div className="flex items-center gap-2">
-                  <Percent className="h-3.5 w-3.5 text-slate-400" />
+                  <Percent className="h-3.5 w-3.5 text-muted-foreground" />
                   <input
                     type="number"
                     value={manualDiscountPercent}
@@ -1447,7 +1447,7 @@ export default function InventorySalesPageMinimal({
                       clearPromoCode()
                     }}
                     placeholder="Скидка вручную, %"
-                    className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs outline-none focus:border-blue-400 dark:border-slate-700 dark:bg-slate-900"
+                    className="h-9 w-full rounded-lg border border-input bg-background px-2 text-xs text-foreground outline-none focus:border-ring"
                     min={0}
                     max={99}
                   />
@@ -1457,7 +1457,7 @@ export default function InventorySalesPageMinimal({
                     value={promoCodeInput}
                     onChange={(e) => setPromoCodeInput(e.target.value.toUpperCase())}
                     placeholder="Промокод"
-                    className="h-9 flex-1 rounded-lg border border-slate-200 bg-white px-2 font-mono text-xs outline-none focus:border-blue-400 dark:border-slate-700 dark:bg-slate-900"
+                    className="h-9 flex-1 rounded-lg border border-input bg-background px-2 font-mono text-xs text-foreground outline-none focus:border-ring"
                   />
                   <Button
                     type="button"
@@ -1471,8 +1471,8 @@ export default function InventorySalesPageMinimal({
                 </div>
                 {appliedPromoCode && (
                   <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-emerald-600 dark:text-emerald-400">✓ {appliedPromoCode} применён</span>
-                    <button type="button" onClick={clearPromoCode} className="text-slate-400 hover:text-rose-600">убрать</button>
+                    <span className="text-primary">✓ {appliedPromoCode} применён</span>
+                    <button type="button" onClick={clearPromoCode} className="text-muted-foreground hover:text-destructive">убрать</button>
                   </div>
                 )}
               </div>
@@ -1485,10 +1485,10 @@ export default function InventorySalesPageMinimal({
                   key={m}
                   type="button"
                   onClick={() => setPaymentMethod(m)}
-                  className={`rounded-xl border py-2.5 text-sm font-medium transition ${
+                  className={`rounded-xl border py-3 text-sm font-medium transition ${
                     paymentMethod === m
-                      ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
-                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600'
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border bg-card text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   {m === 'cash' ? 'Наличные' : m === 'kaspi' ? cashLabels.providerName : 'Смешанная'}
@@ -1497,9 +1497,9 @@ export default function InventorySalesPageMinimal({
             </div>
 
             {paymentMethod === 'mixed' && (
-              <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-50 p-3 dark:bg-slate-800">
+              <div className="grid grid-cols-2 gap-2 rounded-2xl bg-muted p-3">
                 <label className="block">
-                  <span className="text-xs text-slate-500 dark:text-slate-400">Наличными</span>
+                  <span className="text-xs text-muted-foreground">Наличными</span>
                   <input
                     value={mixedCash}
                     onChange={(e) => {
@@ -1510,11 +1510,11 @@ export default function InventorySalesPageMinimal({
                     }}
                     placeholder="0"
                     inputMode="numeric"
-                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium tabular-nums outline-none focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-900"
+                    className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm font-medium tabular-nums text-foreground outline-none focus:border-ring"
                   />
                 </label>
                 <label className="block">
-                  <span className="text-xs text-slate-500 dark:text-slate-400">{cashLabels.providerName}</span>
+                  <span className="text-xs text-muted-foreground">{cashLabels.providerName}</span>
                   <input
                     value={mixedKaspi}
                     onChange={(e) => {
@@ -1525,7 +1525,7 @@ export default function InventorySalesPageMinimal({
                     }}
                     placeholder="0"
                     inputMode="numeric"
-                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium tabular-nums outline-none focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-900"
+                    className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm font-medium tabular-nums text-foreground outline-none focus:border-ring"
                   />
                 </label>
               </div>
@@ -1537,7 +1537,7 @@ export default function InventorySalesPageMinimal({
               onChange={(e) => setComment(e.target.value)}
               rows={2}
               placeholder="Комментарий к продаже (необязательно)"
-              className="w-full rounded-xl border border-slate-200 bg-white p-2 text-xs outline-none focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-900"
+              className="w-full rounded-xl border border-input bg-background p-2 text-xs text-foreground outline-none focus:border-ring"
             />
 
             {/* Кнопки действий */}
@@ -1546,7 +1546,7 @@ export default function InventorySalesPageMinimal({
                 type="button"
                 onClick={openPayConfirm}
                 disabled={saving || cart.length === 0}
-                className="h-14 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-base font-semibold text-white shadow-lg shadow-emerald-500/30 transition-all hover:from-emerald-600 hover:to-teal-700 hover:shadow-xl hover:shadow-emerald-500/40 active:scale-[0.98] disabled:opacity-40 disabled:hover:shadow-lg"
+                className="h-16 rounded-2xl bg-primary text-lg font-bold text-primary-foreground shadow-lg shadow-primary/30 transition-all hover:bg-primary/90 hover:shadow-xl hover:shadow-primary/40 active:scale-[0.98] disabled:opacity-40 disabled:hover:shadow-lg"
               >
                 ОПЛАТИТЬ · {formatMoney(finalTotal)} ₸
               </Button>
@@ -1581,19 +1581,19 @@ export default function InventorySalesPageMinimal({
 
       {/* Модалка после успешной продажи: подтверждение + превью чека */}
       {lastReceipt && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-100 dark:bg-slate-800/60 p-3 sm:p-4" onClick={() => setLastReceipt(null)}>
-          <div onClick={(e) => e.stopPropagation()} className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-slate-900">
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-3 sm:p-4" onClick={() => setLastReceipt(null)}>
+          <div onClick={(e) => e.stopPropagation()} className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-card text-card-foreground shadow-xl">
             {/* Шапка */}
-            <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-emerald-50 px-5 py-4 dark:border-slate-800 dark:bg-emerald-950/30">
+            <div className="flex items-center justify-between gap-3 border-b border-primary/30 bg-primary/10 px-5 py-4">
               <div className="flex items-center gap-3">
-                <div className="grid h-10 w-10 place-items-center rounded-full bg-emerald-500 text-white">
+                <div className="grid h-10 w-10 place-items-center rounded-full bg-primary text-primary-foreground">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="h-5 w-5">
                     <path d="M5 12l5 5L20 7" />
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-emerald-700 dark:text-emerald-300">Оплата проведена</h3>
-                  <p className="text-xs text-emerald-700/80 dark:text-emerald-400/80">
+                  <h3 className="text-base font-bold text-primary">Оплата проведена</h3>
+                  <p className="text-xs text-primary/80">
                     Чек #{lastReceipt.saleId?.slice(-6) || '—'} · {formatMoney(lastReceipt.totalAmount)} ₸
                   </p>
                 </div>
@@ -1601,14 +1601,14 @@ export default function InventorySalesPageMinimal({
               <button
                 type="button"
                 onClick={() => setLastReceipt(null)}
-                className="grid h-9 w-9 place-items-center rounded-xl text-slate-500 hover:bg-white/60 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
+                className="grid h-9 w-9 place-items-center rounded-xl text-muted-foreground hover:bg-accent hover:text-foreground"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             {/* Превью чека */}
-            <div className="flex-1 overflow-auto bg-slate-100 p-3 dark:bg-slate-800 sm:p-5">
+            <div className="flex-1 overflow-auto bg-muted p-3 sm:p-5">
               <div className="mx-auto w-full max-w-[400px] overflow-hidden rounded-lg bg-white shadow-md">
                 <iframe
                   ref={receiptIframeRef}
@@ -1620,7 +1620,7 @@ export default function InventorySalesPageMinimal({
             </div>
 
             {/* Действия */}
-            <div className="flex flex-col gap-2 border-t border-slate-200 p-4 dark:border-slate-800 sm:flex-row sm:justify-end sm:gap-3 sm:p-5">
+            <div className="flex flex-col gap-2 border-t border-border p-4 sm:flex-row sm:justify-end sm:gap-3 sm:p-5">
               <Button
                 type="button"
                 variant="outline"
@@ -1634,7 +1634,7 @@ export default function InventorySalesPageMinimal({
                 onClick={() => {
                   printReceiptFromIframe(receiptIframeRef.current)
                 }}
-                className="h-12 rounded-xl bg-emerald-500 text-base font-semibold text-white hover:bg-emerald-600 sm:order-2 sm:px-8"
+                className="h-12 rounded-xl text-base font-semibold sm:order-2 sm:px-8"
               >
                 🖨 Печатать чек
               </Button>
@@ -1645,19 +1645,19 @@ export default function InventorySalesPageMinimal({
 
       {/* Модалка подтверждения оплаты */}
       {showPayConfirm && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-100 dark:bg-slate-800/60 p-4" onClick={() => !saving && setShowPayConfirm(false)}>
-          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-lg rounded-2xl bg-white shadow-xl dark:bg-slate-900">
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={() => !saving && setShowPayConfirm(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-lg rounded-2xl bg-card text-card-foreground shadow-xl">
             {/* Шапка */}
-            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+            <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
               <div>
                 <h3 className="text-lg font-bold">Подтвердите оплату</h3>
-                <p className="text-xs text-slate-500">Проверьте детали чека перед проведением</p>
+                <p className="text-xs text-muted-foreground">Проверьте детали чека перед проведением</p>
               </div>
               <button
                 type="button"
                 onClick={() => !saving && setShowPayConfirm(false)}
                 disabled={saving}
-                className="grid h-9 w-9 place-items-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 disabled:opacity-50"
+                className="grid h-9 w-9 place-items-center rounded-xl text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -1667,10 +1667,10 @@ export default function InventorySalesPageMinimal({
             <div className="max-h-64 overflow-auto px-5 py-3">
               <div className="space-y-1">
                 {cartDetailed.map((line) => (
-                  <div key={line.id} className="flex items-baseline justify-between gap-3 border-b border-slate-100 py-1.5 last:border-b-0 dark:border-slate-800/50">
+                  <div key={line.id} className="flex items-baseline justify-between gap-3 border-b border-border py-1.5 last:border-b-0">
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{line.name}</p>
-                      <p className="text-xs text-slate-500">{line.quantity} × {formatMoney(line.unit_price)} ₸</p>
+                      <p className="text-xs text-muted-foreground">{line.quantity} × {formatMoney(line.unit_price)} ₸</p>
                     </div>
                     <p className="shrink-0 text-sm font-semibold tabular-nums">{formatMoney(line.total)} ₸</p>
                   </div>
@@ -1679,14 +1679,14 @@ export default function InventorySalesPageMinimal({
             </div>
 
             {/* Сводка */}
-            <div className="border-t border-slate-200 px-5 py-3 dark:border-slate-800">
+            <div className="border-t border-border px-5 py-3">
               <div className="space-y-1 text-sm">
-                <div className="flex justify-between text-slate-500">
+                <div className="flex justify-between text-muted-foreground">
                   <span>Подытог ({cartDetailed.length} поз. · {cartDetailed.reduce((s, l) => s + l.quantity, 0)} шт)</span>
                   <span className="tabular-nums">{formatMoney(subtotal)} ₸</span>
                 </div>
                 {discountAmount > 0 && (
-                  <div className="flex justify-between text-rose-600 dark:text-rose-400">
+                  <div className="flex justify-between text-destructive">
                     <span>Скидка {effectiveDiscountPercent}%{appliedPromoCode ? ` (${appliedPromoCode})` : ''}</span>
                     <span className="tabular-nums">−{formatMoney(discountAmount)} ₸</span>
                   </div>
@@ -1700,17 +1700,17 @@ export default function InventorySalesPageMinimal({
               </div>
 
               {/* Способ оплаты */}
-              <div className="mt-3 rounded-xl bg-slate-50 p-3 dark:bg-slate-800">
+              <div className="mt-3 rounded-xl bg-primary/5 border border-primary/20 p-3">
                 <div className="flex items-baseline justify-between">
                   <span className="text-sm font-semibold">
                     {paymentMethod === 'cash' ? 'Наличные' : paymentMethod === 'kaspi' ? cashLabels.providerName : 'Смешанная'}
                   </span>
-                  <span className="text-2xl font-bold tabular-nums">
-                    {formatMoney(finalTotal)} <span className="text-sm font-medium text-slate-500">₸</span>
+                  <span className="text-2xl font-bold tabular-nums text-primary">
+                    {formatMoney(finalTotal)} <span className="text-sm font-medium text-muted-foreground">₸</span>
                   </span>
                 </div>
                 {paymentMethod === 'mixed' && (
-                  <div className="mt-2 space-y-0.5 border-t border-slate-200 pt-2 text-xs text-slate-500 dark:border-slate-700">
+                  <div className="mt-2 space-y-0.5 border-t border-border pt-2 text-xs text-muted-foreground">
                     <div className="flex justify-between">
                       <span>Наличные</span>
                       <span className="tabular-nums">{formatMoney(parseMoney(mixedCash))} ₸</span>
@@ -1725,13 +1725,13 @@ export default function InventorySalesPageMinimal({
 
               {/* Клиент / Комментарий */}
               {selectedCustomer && (
-                <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
+                <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
                   <UserCircle2 className="h-3.5 w-3.5" />
                   <span>{selectedCustomer.name}{selectedCustomer.phone ? ` · ${selectedCustomer.phone}` : ''}</span>
                 </div>
               )}
               {comment.trim() && (
-                <div className="mt-2 rounded-lg bg-slate-50 p-2 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                <div className="mt-2 rounded-lg bg-muted p-2 text-xs text-muted-foreground">
                   {comment.trim()}
                 </div>
               )}
@@ -1746,7 +1746,7 @@ export default function InventorySalesPageMinimal({
             )}
 
             {/* Кнопки */}
-            <div className="flex flex-col gap-2 border-t border-slate-200 p-5 dark:border-slate-800 sm:flex-row sm:justify-end">
+            <div className="flex flex-col gap-2 border-t border-border p-5 sm:flex-row sm:justify-end">
               <Button
                 type="button"
                 variant="outline"
@@ -1760,7 +1760,7 @@ export default function InventorySalesPageMinimal({
                 type="button"
                 onClick={() => void handlePay()}
                 disabled={saving}
-                className="h-14 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-base font-semibold text-white shadow-lg shadow-emerald-500/30 transition-all hover:from-emerald-600 hover:to-teal-700 hover:shadow-xl hover:shadow-emerald-500/40 active:scale-[0.98] disabled:opacity-50 disabled:hover:shadow-lg sm:order-2 sm:h-12 sm:px-8"
+                className="h-14 rounded-xl text-base font-semibold shadow-lg shadow-primary/30 transition-all hover:shadow-xl hover:shadow-primary/40 active:scale-[0.98] disabled:opacity-50 disabled:hover:shadow-lg sm:order-2 sm:h-12 sm:px-8"
               >
                 {saving ? (
                   <span className="flex items-center gap-2">
@@ -1778,10 +1778,10 @@ export default function InventorySalesPageMinimal({
 
       {/* Модалка корректировки оплаты */}
       {selectedSale && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-50 dark:bg-slate-800/50 p-4" onClick={closeCorrection}>
-          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl dark:bg-slate-900">
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={closeCorrection}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-2xl bg-card text-card-foreground p-5 shadow-xl">
             <h3 className="text-base font-semibold">Исправить оплату</h3>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-muted-foreground">
               Чек #{selectedSale.id.slice(-6)} · {formatMoney(selectedSale.total_amount)} ₸
             </p>
             <div className="mt-4 space-y-3">
@@ -1791,10 +1791,10 @@ export default function InventorySalesPageMinimal({
                     key={m}
                     type="button"
                     onClick={() => setCorrectionMethod(m)}
-                    className={`rounded-xl border py-2 text-sm font-medium transition ${
+                    className={`rounded-xl border py-2.5 text-sm font-medium transition ${
                       correctionMethod === m
-                        ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
-                        : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border bg-card text-muted-foreground hover:text-foreground'
                     }`}
                   >
                     {m === 'cash' ? 'Наличные' : m === 'kaspi' ? cashLabels.providerName : 'Смешан.'}
@@ -1804,7 +1804,7 @@ export default function InventorySalesPageMinimal({
               {correctionMethod === 'mixed' && (
                 <div className="grid grid-cols-2 gap-2">
                   <label>
-                    <span className="text-xs text-slate-500">Наличные</span>
+                    <span className="text-xs text-muted-foreground">Наличные</span>
                     <input
                       value={correctionCash}
                       onChange={(e) => {
@@ -1814,11 +1814,11 @@ export default function InventorySalesPageMinimal({
                         const cash = Math.max(0, Math.min(total, parseMoney(v)))
                         setCorrectionKaspi(String(Math.max(0, total - cash)))
                       }}
-                      className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm tabular-nums outline-none focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-800"
+                      className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm tabular-nums text-foreground outline-none focus:border-ring"
                     />
                   </label>
                   <label>
-                    <span className="text-xs text-slate-500">{cashLabels.providerName}</span>
+                    <span className="text-xs text-muted-foreground">{cashLabels.providerName}</span>
                     <input
                       value={correctionKaspi}
                       onChange={(e) => {
@@ -1828,19 +1828,19 @@ export default function InventorySalesPageMinimal({
                         const kaspi = Math.max(0, Math.min(total, parseMoney(v)))
                         setCorrectionCash(String(Math.max(0, total - kaspi)))
                       }}
-                      className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm tabular-nums outline-none focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-800"
+                      className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm tabular-nums text-foreground outline-none focus:border-ring"
                     />
                   </label>
                 </div>
               )}
               <label className="block">
-                <span className="text-xs text-slate-500">Причина исправления (обязательно)</span>
+                <span className="text-xs text-muted-foreground">Причина исправления (обязательно)</span>
                 <textarea
                   value={correctionReason}
                   onChange={(e) => setCorrectionReason(e.target.value)}
                   rows={2}
                   placeholder="Например: ошибка при выборе способа оплаты"
-                  className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2 text-sm outline-none focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-800"
+                  className="mt-1 w-full rounded-lg border border-input bg-background p-2 text-sm text-foreground outline-none focus:border-ring"
                 />
               </label>
             </div>
@@ -1850,7 +1850,6 @@ export default function InventorySalesPageMinimal({
                 type="button"
                 onClick={() => void handleCorrection()}
                 disabled={correctionSaving || !correctionReason.trim()}
-                className="bg-emerald-500 hover:bg-emerald-600"
               >
                 {correctionSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Исправить'}
               </Button>
@@ -1861,44 +1860,44 @@ export default function InventorySalesPageMinimal({
 
       {/* Модалка универсальной продажи */}
       {showUniversal && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-50 dark:bg-slate-800/50 p-4" onClick={() => setShowUniversal(false)}>
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={() => setShowUniversal(false)}>
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl dark:bg-slate-900"
+            className="w-full max-w-md rounded-2xl bg-card text-card-foreground p-5 shadow-xl"
           >
             <h3 className="text-base font-semibold">Универсальная продажа</h3>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-muted-foreground">
               Услуга или товар, которого нет на витрине. Способ оплаты выбирается перед проводом чека.
             </p>
             <div className="mt-4 space-y-3">
               <label className="block">
-                <span className="text-xs text-slate-500">Наименование*</span>
+                <span className="text-xs text-muted-foreground">Наименование*</span>
                 <input
                   value={uniName}
                   onChange={(e) => setUniName(e.target.value)}
                   placeholder="Например: услуга или товар не из каталога"
-                  className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-800"
+                  className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus:border-ring"
                   autoFocus
                 />
               </label>
               <label className="block">
-                <span className="text-xs text-slate-500">Сумма, ₸*</span>
+                <span className="text-xs text-muted-foreground">Сумма, ₸*</span>
                 <input
                   value={uniPrice}
                   onChange={(e) => setUniPrice(e.target.value)}
                   inputMode="numeric"
                   placeholder="0"
-                  className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm tabular-nums outline-none focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-800"
+                  className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm tabular-nums text-foreground outline-none focus:border-ring"
                 />
               </label>
               <label className="block">
-                <span className="text-xs text-slate-500">Комментарий</span>
+                <span className="text-xs text-muted-foreground">Комментарий</span>
                 <textarea
                   value={uniComment}
                   onChange={(e) => setUniComment(e.target.value)}
                   placeholder="Что именно продано (необязательно)"
                   rows={2}
-                  className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-800"
+                  className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-ring"
                 />
               </label>
             </div>
@@ -1915,7 +1914,7 @@ export default function InventorySalesPageMinimal({
               >
                 Отмена
               </Button>
-              <Button type="button" onClick={addUniversalItem} className="bg-emerald-500 hover:bg-emerald-600">
+              <Button type="button" onClick={addUniversalItem}>
                 Добавить
               </Button>
             </div>
@@ -1925,17 +1924,17 @@ export default function InventorySalesPageMinimal({
 
       {/* Диалог отложки — задать подпись */}
       {showParkDialog && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-50 dark:bg-slate-800/50 p-4" onClick={() => setShowParkDialog(false)}>
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={() => setShowParkDialog(false)}>
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl dark:bg-slate-900"
+            className="w-full max-w-sm rounded-2xl bg-card text-card-foreground p-5 shadow-xl"
           >
             <h3 className="text-base font-semibold">Отложить корзину</h3>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-muted-foreground">
               Сохранит {cart.length} позиций на {formatMoney(finalTotal)} ₸ как черновик до конца смены.
             </p>
             <label className="mt-4 block">
-              <span className="text-xs text-slate-500">Подпись (необязательно)</span>
+              <span className="text-xs text-muted-foreground">Подпись (необязательно)</span>
               <input
                 value={parkLabelInput}
                 onChange={(e) => setParkLabelInput(e.target.value)}
@@ -1947,14 +1946,14 @@ export default function InventorySalesPageMinimal({
                 }}
                 placeholder="Например: клиент в синей куртке"
                 autoFocus
-                className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-800"
+                className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus:border-ring"
               />
             </label>
             <div className="mt-5 flex justify-end gap-2">
               <Button type="button" variant="ghost" onClick={() => setShowParkDialog(false)}>
                 Отмена
               </Button>
-              <Button type="button" onClick={confirmParkCart} className="bg-amber-500 hover:bg-amber-600">
+              <Button type="button" onClick={confirmParkCart} className="bg-amber-500 text-white hover:bg-amber-600">
                 Отложить
               </Button>
             </div>
@@ -1964,27 +1963,27 @@ export default function InventorySalesPageMinimal({
 
       {/* Список отложек этой смены */}
       {showParkedList && (
-        <div className="fixed inset-0 z-50 grid place-items-start bg-slate-50 dark:bg-slate-800/50 p-4 pt-20" onClick={() => setShowParkedList(false)}>
+        <div className="fixed inset-0 z-50 grid place-items-start bg-black/60 p-4 pt-20" onClick={() => setShowParkedList(false)}>
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl dark:bg-slate-900"
+            className="w-full max-w-lg rounded-2xl bg-card text-card-foreground p-5 shadow-xl"
           >
             <div className="flex items-center justify-between">
               <h3 className="text-base font-semibold">Отложки этой смены</h3>
               <button
                 type="button"
                 onClick={() => setShowParkedList(false)}
-                className="grid h-8 w-8 place-items-center rounded-full text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-muted-foreground">
               Восстанавливается одноразово. После закрытия смены все отложки сбрасываются.
             </p>
             <div className="mt-4 space-y-2">
               {parkedCarts.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-slate-300 px-3 py-6 text-center text-sm text-slate-500 dark:border-slate-700">
+                <p className="rounded-xl border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">
                   Пусто
                 </p>
               ) : (
@@ -1994,11 +1993,11 @@ export default function InventorySalesPageMinimal({
                   return (
                     <div
                       key={parked.id}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-800"
+                      className="flex items-center justify-between gap-3 rounded-xl border border-border bg-muted px-3 py-2"
                     >
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium">{parked.label}</p>
-                        <p className="truncate text-xs text-slate-500">
+                        <p className="truncate text-xs text-muted-foreground">
                           {time} · {parked.items.length} поз. · {formatMoney(total)} ₸
                           {parked.customer ? ` · ${parked.customer.name}` : ''}
                         </p>
@@ -2008,14 +2007,14 @@ export default function InventorySalesPageMinimal({
                           type="button"
                           size="sm"
                           onClick={() => restoreParkedCart(parked)}
-                          className="h-8 rounded-lg bg-emerald-500 px-3 text-xs hover:bg-emerald-600"
+                          className="h-8 rounded-lg px-3 text-xs"
                         >
                           Восстановить
                         </Button>
                         <button
                           type="button"
                           onClick={() => removeParkedCart(parked.id)}
-                          className="grid h-8 w-8 place-items-center rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                          className="grid h-8 w-8 place-items-center rounded-lg text-destructive hover:bg-destructive/10"
                           title="Удалить отложку"
                         >
                           <Trash2 className="h-4 w-4" />

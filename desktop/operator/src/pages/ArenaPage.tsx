@@ -723,89 +723,101 @@ const StationCard = memo(function StationCard({
     : null
 
   return (
-    <div
-      className={`relative flex flex-col overflow-hidden rounded-2xl border transition-all duration-300 ${
+    <button
+      type="button"
+      onClick={occupied ? onManage : onStart}
+      className={`group relative flex w-full flex-col overflow-hidden rounded-2xl border bg-card text-left shadow-[var(--card-shadow)] transition-all duration-300 active:scale-[0.98] ${
         !occupied
-          ? 'border-emerald-500/20 bg-gradient-to-b from-emerald-500/5 to-transparent hover:border-emerald-500/40 hover:from-emerald-500/10'
+          ? 'border-primary/30 hover:border-primary/60'
           : isExpired
-            ? 'border-destructive/40 bg-gradient-to-b from-destructive/10 to-transparent'
+            ? 'border-destructive/50 ring-1 ring-destructive/30'
             : isWarning
-              ? 'border-amber-500/40 bg-gradient-to-b from-amber-500/10 to-transparent'
-              : 'border-red-500/25 bg-gradient-to-b from-red-500/8 to-transparent'
+              ? 'border-amber-500/50 ring-1 ring-amber-500/25'
+              : 'border-border hover:border-foreground/20'
       }`}
     >
+      {/* Status accent stripe down the left edge */}
+      <span
+        className={`absolute inset-y-0 left-0 w-1.5 ${
+          !occupied
+            ? 'bg-primary'
+            : isExpired
+              ? 'bg-destructive'
+              : isWarning
+                ? 'bg-amber-500'
+                : 'bg-foreground/30'
+        }`}
+      />
+
       {/* Progress bar at top */}
       {occupied && totalMs > 0 && (
-        <div className="absolute top-0 left-0 right-0 h-0.5 bg-white/10">
+        <div className="absolute top-0 left-0 right-0 h-1 bg-muted">
           <div
             className={`h-full transition-all duration-1000 ${
-              isWarning ? 'bg-amber-500' : isExpired ? 'bg-destructive' : 'bg-emerald-500'
+              isWarning ? 'bg-amber-500' : isExpired ? 'bg-destructive' : 'bg-primary'
             }`}
             style={{ width: `${progressPct}%` }}
           />
         </div>
       )}
 
-      <div className="p-4">
+      <div className="p-4 pl-5">
         {/* Station name + status */}
         <div className="mb-3 flex items-start justify-between gap-2">
-          <p className="font-semibold text-sm leading-snug">{station.name}</p>
+          <p className="font-bold text-base leading-snug text-foreground">{station.name}</p>
           <span
-            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+            className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide ${
               !occupied
-                ? 'bg-emerald-500/15 text-emerald-400'
+                ? 'bg-primary/15 text-primary'
                 : isExpired
                   ? 'bg-destructive/20 text-destructive'
                   : isWarning
-                    ? 'bg-amber-500/20 text-amber-400'
-                    : 'bg-red-500/15 text-red-400'
+                    ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400'
+                    : 'bg-muted text-muted-foreground'
             }`}
           >
-            {!occupied ? 'Свободно' : isExpired ? 'Истекло' : isWarning ? '⚠ Скоро' : 'Занято'}
+            {!occupied ? '● Свободно' : isExpired ? 'Истекло' : isWarning ? '⚠ Скоро' : '● Занято'}
           </span>
         </div>
 
         {/* Session info */}
         {occupied && activeSession ? (
-          <div className="mb-4 space-y-2">
+          <div className="mb-4 space-y-1.5">
             {tariff && (
-              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{tariff.name}</p>
+              <p className="text-xs font-medium text-muted-foreground truncate">{tariff.name}</p>
             )}
             {/* Big countdown */}
             <div
-              className={`text-3xl font-bold tabular-nums tracking-tight ${
-                isExpired ? 'text-destructive' : isWarning ? 'text-amber-400' : 'text-slate-900 dark:text-slate-100'
+              className={`text-4xl font-extrabold tabular-nums tracking-tight ${
+                isExpired ? 'text-destructive' : isWarning ? 'text-amber-600 dark:text-amber-400' : 'text-foreground'
               }`}
             >
               {isExpired ? '—:——' : formatRemaining(remainingMs)}
             </div>
-            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
               <span>до {endTime}</span>
-              <span className="font-medium text-slate-900 dark:text-slate-100">{formatMoney(activeSession.amount)}</span>
+              <span className="font-semibold text-foreground">{formatMoney(activeSession.amount)}</span>
             </div>
           </div>
         ) : (
-          <div className="mb-4 h-[72px] flex items-center justify-center">
-            <div className="text-slate-500 dark:text-slate-400/30">
-              <Monitor className="h-8 w-8" />
-            </div>
+          <div className="mb-4 flex h-[76px] flex-col items-center justify-center gap-1.5 text-primary/60">
+            <Monitor className="h-9 w-9" />
+            <span className="text-xs font-medium">Готова к запуску</span>
           </div>
         )}
 
         {/* Action button */}
-        <button
-          type="button"
-          onClick={occupied ? onManage : onStart}
-          className={`w-full rounded-xl py-2 text-sm font-semibold transition-all ${
+        <div
+          className={`w-full rounded-xl py-2.5 text-center text-sm font-bold transition-all ${
             !occupied
-              ? 'bg-emerald-500 text-white hover:bg-emerald-400 active:scale-95'
-              : 'border border-white/15 bg-white/5 text-slate-900 dark:text-slate-100 hover:bg-white/10 active:scale-95'
+              ? 'bg-primary text-primary-foreground group-hover:opacity-90'
+              : 'border border-border bg-muted/60 text-foreground group-hover:bg-muted'
           }`}
         >
           {occupied ? 'Управление' : 'Запустить'}
-        </button>
+        </div>
       </div>
-    </div>
+    </button>
   )
 })
 
@@ -1485,9 +1497,9 @@ export default function ArenaPage({
   // ─── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="relative flex h-screen flex-col bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100 text-slate-900 dark:text-slate-100">
-      <div className="pointer-events-none absolute -top-40 -right-40 h-80 w-80 rounded-full bg-fuchsia-500/5 blur-3xl dark:bg-fuchsia-500/10" />
-      <div className="pointer-events-none absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-cyan-500/5 blur-3xl dark:bg-cyan-500/10" />
+    <div className="relative flex h-screen flex-col bg-background text-foreground">
+      <div className="pointer-events-none absolute -top-40 -right-40 h-80 w-80 rounded-full bg-primary/5 blur-3xl dark:bg-primary/10" />
+      <div className="pointer-events-none absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-primary/5 blur-3xl dark:bg-primary/10" />
       {/* Drag region */}
       <div className="h-9 shrink-0 drag-region bg-white/80 backdrop-blur dark:bg-slate-900/80" />
 
@@ -1615,16 +1627,16 @@ export default function ArenaPage({
               onStationClick={handleStationClick}
             />
             {/* Mini summary under map */}
-            <div className="flex items-center gap-4 rounded-xl bg-muted/30 px-4 py-3 text-sm">
-              <span className="flex items-center gap-1.5 text-emerald-500">
-                <CheckCircle2 className="h-3.5 w-3.5" />
+            <div className="flex items-center gap-4 rounded-xl border border-border bg-card px-4 py-3 text-sm shadow-[var(--card-shadow)]">
+              <span className="flex items-center gap-1.5 font-semibold text-primary">
+                <CheckCircle2 className="h-4 w-4" />
                 {stations.length - sessions.length} свободно
               </span>
-              <span className="flex items-center gap-1.5 text-red-400">
-                <AlertTriangle className="h-3.5 w-3.5" />
+              <span className="flex items-center gap-1.5 font-semibold text-amber-600 dark:text-amber-400">
+                <AlertTriangle className="h-4 w-4" />
                 {sessions.length} занято
               </span>
-              <span className="ml-auto text-slate-500 dark:text-slate-400">
+              <span className="ml-auto font-medium text-muted-foreground">
                 {sessions.reduce((sum, s) => sum + (s.amount || 0), 0).toLocaleString('ru-RU')} ₸
               </span>
             </div>
@@ -1638,16 +1650,17 @@ export default function ArenaPage({
               return (
                 <section key={zone.id}>
                   <div className="mb-3 flex items-center justify-between gap-2">
-                    <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                      <span className="h-3 w-1 rounded-full bg-primary" />
                       {zone.name}
                     </h2>
                     {freeInZone > 0 && tariffs.some(t => t.zone_id === zone.id) && (
                       <button
                         type="button"
                         onClick={() => setMassStartTarget(zone)}
-                        className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-400 hover:bg-emerald-500/20 transition"
+                        className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-[11px] font-bold text-primary transition hover:bg-primary/20"
                       >
-                        Запустить зону
+                        Запустить зону · {freeInZone}
                       </button>
                     )}
                   </div>
@@ -1675,7 +1688,8 @@ export default function ArenaPage({
             {unzoned.length > 0 && (
               <section>
                 {zoneGroups.length > 0 && (
-                  <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  <h2 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    <span className="h-3 w-1 rounded-full bg-muted-foreground/40" />
                     Без зоны
                   </h2>
                 )}
@@ -1699,16 +1713,16 @@ export default function ArenaPage({
             )}
 
             {/* Summary */}
-            <div className="flex items-center gap-4 rounded-xl bg-muted/30 px-4 py-3 text-sm">
-              <span className="flex items-center gap-1.5 text-emerald-500">
-                <CheckCircle2 className="h-3.5 w-3.5" />
+            <div className="flex items-center gap-4 rounded-xl border border-border bg-card px-4 py-3 text-sm shadow-[var(--card-shadow)]">
+              <span className="flex items-center gap-1.5 font-semibold text-primary">
+                <CheckCircle2 className="h-4 w-4" />
                 {stations.length - sessions.length} свободно
               </span>
-              <span className="flex items-center gap-1.5 text-red-400">
-                <AlertTriangle className="h-3.5 w-3.5" />
+              <span className="flex items-center gap-1.5 font-semibold text-amber-600 dark:text-amber-400">
+                <AlertTriangle className="h-4 w-4" />
                 {sessions.length} занято
               </span>
-              <span className="ml-auto text-slate-500 dark:text-slate-400">
+              <span className="ml-auto font-medium text-muted-foreground">
                 {sessions.reduce((sum, s) => sum + (s.amount || 0), 0).toLocaleString('ru-RU')} ₸ за сессии
               </span>
             </div>

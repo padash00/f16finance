@@ -395,18 +395,18 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
   }
 
   return (
-    <div className="relative flex h-screen flex-col overflow-hidden bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100">
-      <div className="pointer-events-none absolute -top-40 -right-40 h-80 w-80 rounded-full bg-cyan-500/5 blur-3xl dark:bg-cyan-500/10" />
-      <div className="pointer-events-none absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-emerald-500/5 blur-3xl dark:bg-emerald-500/10" />
-      <div className="h-9 shrink-0 drag-region bg-white/80 backdrop-blur dark:bg-slate-900/80" />
-      <header className="relative z-10 flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 bg-white/80 px-5 py-2 backdrop-blur-xl no-drag dark:border-slate-800/70 dark:bg-slate-900/80">
+    <div className="relative flex h-screen flex-col overflow-hidden bg-background text-foreground">
+      <div className="pointer-events-none absolute -top-40 -right-40 h-80 w-80 rounded-full bg-primary/5 blur-3xl dark:bg-primary/10" />
+      <div className="pointer-events-none absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-primary/5 blur-3xl dark:bg-primary/10" />
+      <div className="h-9 shrink-0 drag-region bg-card/80 backdrop-blur" />
+      <header className="relative z-10 flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border bg-card/80 px-5 py-2 backdrop-blur-xl no-drag">
         <div className="flex items-center gap-3">
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 text-[11px] font-bold tracking-tight text-white shadow-md shadow-emerald-500/30">
+          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary text-[11px] font-bold tracking-tight text-primary-foreground shadow-md shadow-primary/30">
             OP
           </div>
           <div>
             <p className="text-sm font-semibold leading-none">{session.company.name}</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400">{operatorName}</p>
+            <p className="text-xs text-muted-foreground">{operatorName}</p>
           </div>
         </div>
 
@@ -439,11 +439,11 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
             onCabinet={onOpenCabinet}
           />
 
-          <Button variant="ghost" size="sm" onClick={doSync} disabled={syncing} className="text-slate-500 dark:text-slate-400">
+          <Button variant="ghost" size="sm" onClick={doSync} disabled={syncing} className="text-muted-foreground">
             <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
           </Button>
 
-          <Button variant="ghost" size="sm" onClick={onLogout} className="text-slate-500 dark:text-slate-400">
+          <Button variant="ghost" size="sm" onClick={onLogout} className="text-muted-foreground">
             <LogOut className="h-4 w-4" />
           </Button>
         </div>
@@ -456,12 +456,24 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
-                <ScanBarcode className="h-4 w-4" /> Сканер штрихкода
+                <ScanBarcode className="h-4 w-4 text-primary" /> Сканер штрихкода
                 {offline && <span className="text-xs font-normal text-amber-500">(кеш)</span>}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 no-drag">
-              <div className="space-y-1.5">
+              {/* Большая зона сканирования */}
+              <div className={`rounded-2xl border-2 border-dashed p-4 transition-colors ${
+                foundProduct
+                  ? 'border-primary/50 bg-primary/5'
+                  : 'border-primary/30 bg-primary/[0.03]'
+              }`}>
+                <div className="mb-3 flex flex-col items-center gap-1 text-center">
+                  <div className="grid h-12 w-12 place-items-center rounded-xl bg-primary/10 text-primary">
+                    <ScanBarcode className="h-6 w-6" />
+                  </div>
+                  <p className="text-sm font-semibold text-foreground">Наведите сканер</p>
+                  <p className="text-xs text-muted-foreground">или введите код вручную</p>
+                </div>
                 <Label className="text-xs">Штрихкод</Label>
                 <Input
                   ref={barcodeInputRef}
@@ -469,15 +481,15 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
                   onChange={handleBarcodeChange}
                   onKeyDown={handleBarcodeKeyDown}
                   placeholder="Сканируйте или введите код..."
-                  className="font-mono"
+                  className="mt-1.5 h-12 text-center font-mono text-lg tracking-widest"
                   autoFocus
                 />
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Нажмите Enter после сканирования</p>
+                <div className="mt-2 flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">Нажмите Enter после сканирования</p>
                   <button
                     type="button"
                     onClick={() => { setShowNameSearch(!showNameSearch); setNameSearch('') }}
-                    className="text-xs text-primary hover:underline cursor-pointer"
+                    className="text-xs font-medium text-primary hover:underline cursor-pointer"
                   >
                     {showNameSearch ? 'Скрыть поиск' : 'Найти по названию'}
                   </button>
@@ -494,7 +506,7 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
                     autoFocus={showNameSearch}
                   />
                   {nameSearchResults.length > 0 && (
-                    <div className="rounded-md border bg-white dark:bg-slate-900 shadow-md overflow-hidden">
+                    <div className="rounded-md border border-border bg-card shadow-md overflow-hidden">
                       {nameSearchResults.map(p => (
                         <button
                           key={p.id}
@@ -503,26 +515,26 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
                           className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-accent transition-colors cursor-pointer text-left"
                         >
                           <span className="truncate">{p.name}</span>
-                          <span className="ml-2 shrink-0 tabular-nums text-slate-500 dark:text-slate-400 text-xs">{formatMoney(p.price)}</span>
+                          <span className="ml-2 shrink-0 tabular-nums text-muted-foreground text-xs">{formatMoney(p.price)}</span>
                         </button>
                       ))}
                     </div>
                   )}
                   {nameSearch.trim().length >= 2 && nameSearchResults.length === 0 && (
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Ничего не найдено</p>
+                    <p className="text-xs text-muted-foreground">Ничего не найдено</p>
                   )}
                 </div>
               )}
 
               {flashMsg && (
-                <p className={`rounded-md px-3 py-2 text-xs flex items-center gap-2 ${
+                <p className={`rounded-lg px-3 py-2.5 text-sm font-medium flex items-center gap-2 ${
                   flashMsg.type === 'ok'
-                    ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
-                    : 'bg-destructive/10 border border-destructive/20 text-destructive-foreground'
+                    ? 'bg-primary/10 border border-primary/25 text-primary'
+                    : 'bg-destructive/10 border border-destructive/25 text-destructive'
                 }`}>
                   {flashMsg.type === 'ok'
-                    ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                    : <AlertTriangle className="h-3.5 w-3.5 shrink-0" />}
+                    ? <CheckCircle2 className="h-4 w-4 shrink-0" />
+                    : <AlertTriangle className="h-4 w-4 shrink-0" />}
                   {flashMsg.text}
                 </p>
               )}
@@ -530,10 +542,14 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
               {foundProduct && (
                 <>
                   <Separator />
-                  <div className="rounded-lg bg-muted/50 border p-3 space-y-1">
-                    <p className="text-sm font-medium">{foundProduct.name}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {foundProduct.barcode} · {formatMoney(foundProduct.price)} / шт.
+                  <div className="rounded-xl border border-primary/25 bg-primary/5 p-3 space-y-1">
+                    <div className="flex items-center gap-1.5 text-primary">
+                      <CheckCircle2 className="h-4 w-4 shrink-0" />
+                      <span className="text-xs font-semibold uppercase tracking-wide">Товар найден</span>
+                    </div>
+                    <p className="text-base font-bold text-foreground">{foundProduct.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {foundProduct.barcode} · <span className="font-semibold text-foreground">{formatMoney(foundProduct.price)}</span> / шт.
                     </p>
                   </div>
 
@@ -600,16 +616,16 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
         <div className="flex-1 flex flex-col min-w-0">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold flex items-center gap-2">
-              <Package className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+              <Package className="h-4 w-4 text-muted-foreground" />
               Долги за неделю
               <Badge variant="secondary">{filteredDebts.length}</Badge>
               {totalDebt > 0 && (
-                <span className="text-xs font-normal text-destructive-foreground tabular-nums">
+                <span className="text-xs font-semibold text-destructive tabular-nums">
                   · {formatMoney(totalDebt)}
                 </span>
               )}
             </h2>
-            <Button variant="ghost" size="sm" onClick={() => api.getDebts(config, session.company.id).then(setDebts).catch(() => {})} className="text-xs text-slate-500 dark:text-slate-400">
+            <Button variant="ghost" size="sm" onClick={() => api.getDebts(config, session.company.id).then(setDebts).catch(() => {})} className="text-xs text-muted-foreground">
               <RefreshCw className="h-3.5 w-3.5 mr-1" /> Обновить
             </Button>
           </div>
@@ -619,7 +635,7 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
               <select
                 value={debtFilterOpId}
                 onChange={e => setDebtFilterOpId(e.target.value)}
-                className="w-full rounded-md border bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100 px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100"
+                className="w-full rounded-md border border-border bg-card text-foreground px-3 py-1.5 text-xs"
               >
                 <option value="all">Все операторы ({debts.length})</option>
                 {debtOperators.map(([id, name]) => (
@@ -631,26 +647,26 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
 
           {loading ? (
             <div className="flex flex-1 items-center justify-center">
-              <span className="animate-spin h-6 w-6 border-2 border-slate-200 dark:border-slate-700 border-t-foreground rounded-full" />
+              <span className="animate-spin h-6 w-6 border-2 border-border border-t-primary rounded-full" />
             </div>
           ) : debts.length === 0 ? (
-            <div className="flex flex-1 flex-col items-center justify-center gap-2 text-slate-500 dark:text-slate-400">
+            <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">
               <Package className="h-10 w-10 opacity-20" />
               <p className="text-sm">Долгов нет</p>
             </div>
           ) : (
             <div className="flex-1 overflow-auto space-y-2">
               {filteredDebts.map(debt => (
-                <div key={debt.id} className="flex items-start justify-between rounded-lg border bg-white/80 backdrop-blur-xl dark:bg-slate-900/80 px-4 py-3 gap-4">
+                <div key={debt.id} className="flex items-start justify-between rounded-xl border border-border bg-card shadow-[var(--card-shadow)] px-4 py-3 gap-4">
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium truncate">{debt.item_name}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                    <p className="text-sm font-semibold truncate">{debt.item_name}</p>
+                    <p className="text-xs text-muted-foreground">
                       {debt.debtor_name} · {debt.quantity} шт.
                       {debt.comment && <> · {debt.comment}</>}
                     </p>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="text-sm font-semibold tabular-nums text-destructive-foreground">
+                    <span className="text-sm font-bold tabular-nums text-destructive">
                       {formatMoney(debt.total_amount)}
                     </span>
                     {(debt.operator_id === session.operator.operator_id ||
@@ -658,7 +674,7 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7 text-slate-500 dark:text-slate-400 hover:text-destructive-foreground"
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
                         onClick={() => setDeleteConfirm(debt.id)}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -669,7 +685,7 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7 text-slate-500 dark:text-slate-400/40 hover:text-amber-500"
+                      className="h-7 w-7 text-muted-foreground/40 hover:text-amber-500"
                       title="Админ: удалить или оплатить"
                       onClick={() => { setAdminTarget({ id: debt.id, item_name: debt.item_name, total_amount: debt.total_amount }); setAdminTokenInput(''); setAdminError(null) }}
                     >
@@ -687,13 +703,13 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
 
       {/* ─── Админ-модал ─── */}
       {adminTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-100/70 dark:bg-slate-950/70 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 backdrop-blur-sm">
           <Card className="w-full max-w-xs mx-4">
             <CardContent className="pt-5 space-y-4">
               <p className="text-sm font-semibold flex items-center gap-2">
                 <KeyRound className="h-4 w-4 text-amber-500" /> Действие администратора
               </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+              <p className="text-xs text-muted-foreground">
                 {adminTarget.item_name} — <span className="font-medium">{formatMoney(adminTarget.total_amount)}</span>
               </p>
               <div className="space-y-1.5">
@@ -719,7 +735,7 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
                 </Button>
                 <Button
                   variant="outline"
-                  className="w-full gap-2 border-emerald-500/30 text-emerald-400 hover:text-emerald-300"
+                  className="w-full gap-2 border-primary/40 text-primary hover:text-primary"
                   disabled={!adminToken || adminLoading}
                   onClick={handleAdminPay}
                 >
@@ -739,12 +755,12 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
       {deleteConfirm && (() => {
         const debt = debts.find(d => d.id === deleteConfirm)
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-100/70 dark:bg-slate-950/70 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 backdrop-blur-sm">
             <Card className="w-full max-w-xs mx-4">
               <CardContent className="pt-5 space-y-4">
                 <p className="text-sm">
                   Удалить долг <strong>{debt?.item_name}</strong>?
-                  {debt && <span className="block text-xs text-slate-500 dark:text-slate-400 mt-1">{debt.debtor_name} · {formatMoney(debt.total_amount)}</span>}
+                  {debt && <span className="block text-xs text-muted-foreground mt-1">{debt.debtor_name} · {formatMoney(debt.total_amount)}</span>}
                 </p>
                 <div className="flex gap-2">
                   <Button variant="outline" className="flex-1" onClick={() => setDeleteConfirm(null)}>

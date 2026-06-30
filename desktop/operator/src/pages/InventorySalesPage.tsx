@@ -841,18 +841,18 @@ export default function InventorySalesPage({
   const operatorName = session.operator.full_name || session.operator.name || session.operator.username
 
   return (
-    <div className="relative flex h-screen flex-col overflow-hidden bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100">
-      <div className="pointer-events-none absolute -top-40 -right-40 h-80 w-80 rounded-full bg-emerald-500/5 blur-3xl dark:bg-emerald-500/10" />
-      <div className="pointer-events-none absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-blue-500/5 blur-3xl dark:bg-blue-500/10" />
-      <div className="h-9 shrink-0 drag-region bg-white/80 backdrop-blur dark:bg-slate-900/80" />
-      <header className="flex shrink-0 items-center justify-between gap-2 border-b bg-white/80 backdrop-blur-xl dark:bg-slate-900/80 px-4 pb-2 no-drag">
+    <div className="relative flex h-screen flex-col overflow-hidden bg-background text-foreground">
+      <div className="pointer-events-none absolute -top-40 -right-40 h-80 w-80 rounded-full bg-primary/5 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-primary/5 blur-3xl" />
+      <div className="h-9 shrink-0 drag-region bg-card/80 backdrop-blur" />
+      <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-card/80 backdrop-blur-xl px-4 pb-2 no-drag">
         <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-400 to-teal-600 shadow-md shadow-emerald-500/30">
-            <span className="text-[9px] font-bold tracking-tight text-white">OP</span>
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary shadow-md shadow-primary/30">
+            <span className="text-[9px] font-bold tracking-tight text-primary-foreground">OP</span>
           </div>
           <div>
             <p className="text-sm font-semibold leading-none">{session.company.name}</p>
-            <p className="text-[10px] text-slate-500 dark:text-slate-400">{operatorName}</p>
+            <p className="text-[10px] text-muted-foreground">{operatorName}</p>
           </div>
         </div>
         <div className="flex items-center gap-1.5 no-drag">
@@ -869,10 +869,10 @@ export default function InventorySalesPage({
             onRequest={onSwitchToRequest}
             onCabinet={onOpenCabinet}
           />
-          <Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading} className="h-7 w-7 p-0 text-slate-500 dark:text-slate-400">
+          <Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading} className="h-9 w-9 p-0 text-muted-foreground">
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
           </Button>
-          <Button variant="ghost" size="sm" onClick={onLogout} className="h-7 w-7 p-0 text-slate-500 dark:text-slate-400">
+          <Button variant="ghost" size="sm" onClick={onLogout} className="h-9 w-9 p-0 text-muted-foreground">
             <LogOut className="h-3.5 w-3.5" />
           </Button>
         </div>
@@ -880,18 +880,18 @@ export default function InventorySalesPage({
 
       <div className="flex flex-1 overflow-hidden">
         {/* LEFT: minimal POS catalog */}
-        <div className="flex flex-1 flex-col overflow-hidden border-r border-slate-200 dark:border-slate-800">
+        <div className="flex flex-1 flex-col overflow-hidden border-r border-border">
           {/* Status bar */}
-          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 bg-white/80 backdrop-blur-xl dark:bg-slate-900/80 px-4 py-2">
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card/80 backdrop-blur-xl px-4 py-2">
             <div className="min-w-0">
-              <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                <span className="font-medium text-slate-900 dark:text-slate-100">{context?.location?.name || 'Витрина'}</span>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">{context?.location?.name || 'Витрина'}</span>
                 <span>·</span>
                 <span>{formatShiftLabel(runtimeShift.shift)}</span>
                 <span>·</span>
                 <span>{availableItemsCount} товаров доступно</span>
               </div>
-              <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
                 Быстрый режим: сканируйте штрихкод или найдите товар, полный каталог скрыт.
               </p>
             </div>
@@ -902,14 +902,14 @@ export default function InventorySalesPage({
                 variant="outline"
                 onClick={() => void handleManualSync()}
                 disabled={loading}
-                className="h-8 gap-2 border-emerald-500/30 bg-emerald-500/5 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-300"
+                className="h-9 gap-2 border-primary/30 bg-primary/5 text-primary hover:bg-primary/10"
                 title="Подтянуть свежие остатки с сервера (после ревизии или перемещения со склада)"
               >
                 <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
                 {loading ? 'Синхронизирую…' : 'Синхронизировать'}
               </Button>
               {onSwitchToScanner ? (
-                <Button type="button" size="sm" variant="outline" onClick={onSwitchToScanner} className="h-8 gap-2">
+                <Button type="button" size="sm" variant="outline" onClick={onSwitchToScanner} className="h-9 gap-2">
                   <ScanLine className="h-3.5 w-3.5" />
                   Сканер
                 </Button>
@@ -918,22 +918,22 @@ export default function InventorySalesPage({
           </div>
 
           {/* Search + quick filters */}
-          <div className="shrink-0 space-y-3 border-b border-slate-200 dark:border-slate-800 px-3 py-3">
+          <div className="shrink-0 space-y-3 border-b border-border px-3 py-3">
             <div className="grid grid-cols-[1fr_auto] gap-2">
               <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500 dark:text-slate-400" />
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
                   ref={searchInputRef}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Сканируйте штрихкод или введите название товара"
-                  className="h-12 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100 py-2 pl-10 pr-10 text-base outline-none transition focus:border-emerald-400/60 focus:bg-white/60 dark:bg-slate-800/40"
+                  className="h-12 w-full rounded-2xl border border-input bg-muted text-foreground py-2 pl-10 pr-10 text-base outline-none transition focus:border-ring"
                 />
                 {search ? (
                   <button
                     type="button"
                     onClick={() => setSearch('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-slate-500 dark:text-slate-400 hover:bg-white/10 hover:text-slate-900 dark:text-slate-100"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
                     aria-label="Очистить поиск"
                   >
                     <X className="h-4 w-4" />
@@ -965,8 +965,8 @@ export default function InventorySalesPage({
                   }}
                   className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
                     catalogView === option.key
-                      ? 'border-emerald-400/40 bg-emerald-500/15 text-emerald-100'
-                      : 'border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100'
+                      ? 'border-primary/40 bg-primary/15 text-primary'
+                      : 'border-border bg-card text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   {option.label}
@@ -977,8 +977,8 @@ export default function InventorySalesPage({
                 onClick={() => setCategoryFilter('all')}
                 className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
                   categoryFilter === 'all'
-                    ? 'border-sky-400/40 bg-sky-500/15 text-sky-100'
-                    : 'border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100'
+                    ? 'border-primary/40 bg-accent text-accent-foreground'
+                    : 'border-border bg-card text-muted-foreground hover:text-foreground'
                 }`}
               >
                 Все категории
@@ -993,8 +993,8 @@ export default function InventorySalesPage({
                   }}
                   className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
                     categoryFilter === category.id
-                      ? 'border-sky-400/40 bg-sky-500/15 text-sky-100'
-                      : 'border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100'
+                      ? 'border-primary/40 bg-accent text-accent-foreground'
+                      : 'border-border bg-card text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   {category.name}
@@ -1002,7 +1002,7 @@ export default function InventorySalesPage({
               ))}
             </div>
             {lowStockItemsCount > 0 && (
-              <p className="text-[11px] text-amber-300">
+              <p className="text-[11px] text-amber-600 dark:text-amber-400">
                 {lowStockItemsCount} товара почти закончились. Нажмите “Мало”, если нужно проверить остатки.
               </p>
             )}
@@ -1011,21 +1011,21 @@ export default function InventorySalesPage({
           {/* Product grid */}
           <div className="flex-1 overflow-y-auto p-3">
             {error ? (
-              <div className="rounded-lg border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{error}</div>
+              <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>
             ) : loading ? (
-              <div className="flex h-40 items-center justify-center text-slate-500 dark:text-slate-400">
+              <div className="flex h-40 items-center justify-center text-muted-foreground">
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Загружаем витрину...
               </div>
             ) : filteredItems.length === 0 ? (
-              <div className="flex h-40 flex-col items-center justify-center gap-2 text-center text-sm text-slate-500 dark:text-slate-400">
+              <div className="flex h-40 flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">
                 <ShoppingBasket className="h-8 w-8 opacity-50" />
                 <span>{search ? 'Товар не найден. Проверьте название или штрихкод.' : 'Нет доступных товаров на витрине.'}</span>
               </div>
             ) : (
               <div className="space-y-3">
                 {!search.trim() && catalogView === 'all' && !showAllCatalog ? (
-                  <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">
+                  <div className="rounded-2xl border border-primary/20 bg-primary/10 px-3 py-2 text-xs text-primary">
                     Показываем только быстрые позиции. Если товара нет на экране, отсканируйте штрихкод, начните поиск или нажмите “Все товары”.
                   </div>
                 ) : null}
@@ -1039,15 +1039,15 @@ export default function InventorySalesPage({
                         type="button"
                         onClick={() => addToCart(item)}
                         disabled={disabled}
-                        className={`rounded-2xl border p-3 text-left transition hover:border-emerald-400/40 hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-50 ${
-                          inCart ? 'border-emerald-400/30 bg-emerald-500/10' : 'border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-800/40'
+                        className={`rounded-2xl border p-3 text-left transition hover:border-primary/40 hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 ${
+                          inCart ? 'border-primary/40 bg-primary/10 ring-1 ring-primary/20' : 'border-border bg-card'
                         }`}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
-                            <p className="line-clamp-2 text-sm font-semibold leading-tight text-slate-900 dark:text-slate-100">{item.name}</p>
+                            <p className="line-clamp-2 text-sm font-semibold leading-tight text-foreground">{item.name}</p>
                             {item.category?.name ? (
-                              <p className="mt-1 truncate text-[10px] text-slate-500 dark:text-slate-400">{item.category.name}</p>
+                              <p className="mt-1 truncate text-[10px] text-muted-foreground">{item.category.name}</p>
                             ) : null}
                           </div>
                           <Badge variant={disabled ? 'secondary' : 'success'} className="shrink-0 text-[10px]">
@@ -1055,8 +1055,8 @@ export default function InventorySalesPage({
                           </Badge>
                         </div>
                         <div className="mt-3 flex items-center justify-between">
-                          <p className="text-base font-semibold text-slate-900 dark:text-slate-100">{formatMoney(item.sale_price)}</p>
-                          <div className={`flex h-8 w-8 items-center justify-center rounded-xl ${inCart ? 'bg-emerald-500/30 text-emerald-300' : 'bg-emerald-500/15 text-emerald-300'}`}>
+                          <p className="text-lg font-bold text-foreground">{formatMoney(item.sale_price)}</p>
+                          <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${inCart ? 'bg-primary text-primary-foreground' : 'bg-primary/15 text-primary'}`}>
                             <Plus className="h-4 w-4" />
                           </div>
                         </div>
@@ -1074,7 +1074,7 @@ export default function InventorySalesPage({
                   <button
                     type="button"
                     onClick={() => setShowAllCatalog(true)}
-                    className="w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-800/40 px-4 py-3 text-sm font-medium text-slate-500 dark:text-slate-400 transition hover:border-emerald-400/30 hover:text-slate-900 dark:text-slate-100"
+                    className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm font-medium text-muted-foreground transition hover:border-primary/30 hover:text-foreground"
                   >
                     Показать ещё {hiddenItemsCount} товаров
                   </button>
@@ -1085,15 +1085,15 @@ export default function InventorySalesPage({
         </div>
 
         {/* RIGHT: cart + checkout */}
-        <div className="flex w-[300px] shrink-0 flex-col overflow-hidden">
+        <div className="flex w-[320px] shrink-0 flex-col overflow-hidden bg-card/40">
           {/* Cart header */}
-          <div className="shrink-0 border-b border-slate-200 dark:border-slate-800 px-3 py-2">
+          <div className="shrink-0 border-b border-border px-3 py-2.5">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Корзина{cartDetailed.length > 0 ? ` (${cartDetailed.length})` : ''}
               </p>
               {cartDetailed.length > 0 && (
-                <button type="button" onClick={resetSaleForm} className="text-xs text-slate-500 dark:text-slate-400 transition hover:text-slate-900 dark:text-slate-100">
+                <button type="button" onClick={resetSaleForm} className="text-xs text-destructive transition hover:opacity-80">
                   Очистить
                 </button>
               )}
@@ -1103,27 +1103,27 @@ export default function InventorySalesPage({
           {/* Cart items */}
           <div className="flex-1 space-y-2 overflow-y-auto p-3">
             {cartDetailed.length === 0 ? (
-              <div className="flex h-24 items-center justify-center px-4 text-center text-xs text-slate-500 dark:text-slate-400">
+              <div className="flex h-24 items-center justify-center px-4 text-center text-xs text-muted-foreground">
                 Добавьте товары из каталога
               </div>
             ) : (
               cartDetailed.map((line) => (
-                <div key={line.item_id} className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-800/40 p-2.5">
+                <div key={line.item_id} className="rounded-xl border border-border bg-card p-2.5">
                   <div className="flex items-start justify-between gap-2">
                     <p className="truncate text-xs font-medium leading-tight">{line.item?.name}</p>
-                    <p className="shrink-0 text-xs font-semibold">{formatMoney(line.total)}</p>
+                    <p className="shrink-0 text-sm font-semibold text-foreground">{formatMoney(line.total)}</p>
                   </div>
                   <div className="mt-2 flex items-center justify-between">
-                    <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-0.5">
-                      <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => changeQty(line.item_id, line.quantity - 1)}>
-                        <Minus className="h-3 w-3" />
+                    <div className="inline-flex items-center gap-1 rounded-lg border border-border bg-muted p-0.5">
+                      <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => changeQty(line.item_id, line.quantity - 1)}>
+                        <Minus className="h-3.5 w-3.5" />
                       </Button>
-                      <span className="min-w-[2rem] text-center text-xs font-semibold">{line.quantity}</span>
-                      <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => changeQty(line.item_id, line.quantity + 1)}>
-                        <Plus className="h-3 w-3" />
+                      <span className="min-w-[2rem] text-center text-sm font-semibold">{line.quantity}</span>
+                      <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => changeQty(line.item_id, line.quantity + 1)}>
+                        <Plus className="h-3.5 w-3.5" />
                       </Button>
                     </div>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400">{formatMoney(line.unit_price)} / {line.item?.unit || 'шт'}</p>
+                    <p className="text-[10px] text-muted-foreground">{formatMoney(line.unit_price)} / {line.item?.unit || 'шт'}</p>
                   </div>
                 </div>
               ))
@@ -1131,25 +1131,25 @@ export default function InventorySalesPage({
           </div>
 
           {/* Extras (collapsible) */}
-          <div className="shrink-0 border-t border-slate-200 dark:border-slate-800">
+          <div className="shrink-0 border-t border-border">
             <button
               type="button"
               onClick={() => setShowExtras(!showExtras)}
-              className="flex w-full items-center justify-between px-3 py-2 text-xs text-slate-500 dark:text-slate-400 transition hover:text-slate-900 dark:text-slate-100"
+              className="flex w-full items-center justify-between px-3 py-2.5 text-xs text-muted-foreground transition hover:text-foreground"
             >
               <span>Дополнительно</span>
               <div className="flex items-center gap-2">
-                {selectedCustomer && <span className="text-emerald-400 truncate max-w-[80px]">{selectedCustomer.name}</span>}
-                {effectiveDiscountPercent > 0 && <span className="text-blue-400">-{effectiveDiscountPercent}%</span>}
+                {selectedCustomer && <span className="text-primary truncate max-w-[80px]">{selectedCustomer.name}</span>}
+                {effectiveDiscountPercent > 0 && <span className="text-primary">-{effectiveDiscountPercent}%</span>}
                 <span>{showExtras ? '▲' : '▼'}</span>
               </div>
             </button>
 
             {showExtras && (
-              <div className="max-h-64 space-y-2 overflow-y-auto border-t border-slate-200 dark:border-slate-800 p-3">
+              <div className="max-h-64 space-y-2 overflow-y-auto border-t border-border p-3">
                 {/* Customer search */}
                 <div className="relative">
-                  <UserCircle2 className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500 dark:text-slate-400" />
+                  <UserCircle2 className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                   <input
                     type="text"
                     value={customerSearch}
@@ -1158,40 +1158,40 @@ export default function InventorySalesPage({
                       if (selectedCustomer) clearCustomer()
                     }}
                     placeholder="Клиент (телефон или карта)"
-                    className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100 py-1.5 pl-9 pr-8 text-xs outline-none focus:border-emerald-400/50"
+                    className="w-full rounded-lg border border-input bg-muted text-foreground py-2 pl-9 pr-8 text-xs outline-none focus:border-ring"
                   />
                   {(customerSearch || selectedCustomer) && (
-                    <button type="button" onClick={clearCustomer} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100">
+                    <button type="button" onClick={clearCustomer} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                       <X className="h-3.5 w-3.5" />
                     </button>
                   )}
                   {customerSearching && (
-                    <Loader2 className="absolute right-8 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-slate-500 dark:text-slate-400" />
+                    <Loader2 className="absolute right-8 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
                   )}
                 </div>
 
                 {showCustomerDropdown && !selectedCustomer && (
-                  <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white/80 backdrop-blur-xl dark:bg-slate-900/80 shadow-lg">
+                  <div className="rounded-lg border border-border bg-popover text-popover-foreground shadow-lg">
                     {customerResults.map((customer) => (
                       <button
                         key={customer.id}
                         type="button"
                         onClick={() => selectCustomer(customer)}
-                        className="w-full px-3 py-2 text-left text-xs hover:bg-white/[0.05] first:rounded-t-lg last:rounded-b-lg"
+                        className="w-full px-3 py-2 text-left text-xs hover:bg-accent first:rounded-t-lg last:rounded-b-lg"
                       >
                         <div className="flex items-center justify-between">
                           <div>
                             <p className="font-medium">{customer.name}</p>
-                            <p className="text-slate-500 dark:text-slate-400">{customer.phone || customer.card_number || '—'}</p>
+                            <p className="text-muted-foreground">{customer.phone || customer.card_number || '—'}</p>
                           </div>
-                          <p className="text-amber-400 font-semibold">{customer.loyalty_points} б.</p>
+                          <p className="text-amber-600 dark:text-amber-400 font-semibold">{customer.loyalty_points} б.</p>
                         </div>
                       </button>
                     ))}
                     <button
                       type="button"
                       onClick={() => { setShowCustomerDropdown(false); setCustomerResults([]) }}
-                      className="w-full rounded-b-lg px-3 py-2 text-center text-xs text-slate-500 dark:text-slate-400 hover:bg-white/[0.05]"
+                      className="w-full rounded-b-lg px-3 py-2 text-center text-xs text-muted-foreground hover:bg-accent"
                     >
                       Без клиента
                     </button>
@@ -1199,14 +1199,14 @@ export default function InventorySalesPage({
                 )}
 
                 {selectedCustomer && (
-                  <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-2">
+                  <div className="rounded-lg border border-primary/20 bg-primary/10 p-2">
                     <div className="flex items-center justify-between gap-2">
                       <p className="truncate text-xs font-medium">{selectedCustomer.name}</p>
-                      <p className="shrink-0 text-xs font-bold text-amber-400">{selectedCustomer.loyalty_points} б.</p>
+                      <p className="shrink-0 text-xs font-bold text-amber-600 dark:text-amber-400">{selectedCustomer.loyalty_points} б.</p>
                     </div>
                     {loyaltyConfig?.is_active && selectedCustomer.loyalty_points >= (loyaltyConfig.min_points_to_redeem || 100) && (
                       <div className="mt-1.5 flex items-center gap-1.5">
-                        <Star className="h-3 w-3 shrink-0 text-amber-400" />
+                        <Star className="h-3 w-3 shrink-0 text-amber-500" />
                         <input
                           type="number"
                           value={loyaltyPointsToSpend || ''}
@@ -1215,7 +1215,7 @@ export default function InventorySalesPage({
                             setLoyaltyPointsToSpend(val)
                           }}
                           placeholder={`Баллы (макс. ${maxRedeemablePoints})`}
-                          className="w-full rounded border border-slate-200 dark:border-slate-700 bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100 px-2 py-0.5 text-xs outline-none focus:border-amber-400/50"
+                          className="w-full rounded border border-input bg-background text-foreground px-2 py-1 text-xs outline-none focus:border-ring"
                           min="0"
                           max={maxRedeemablePoints}
                         />
@@ -1228,21 +1228,21 @@ export default function InventorySalesPage({
                 <button
                   type="button"
                   onClick={() => setShowDiscountPanel(!showDiscountPanel)}
-                  className="flex w-full items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-800/40 px-2.5 py-2 text-xs hover:bg-white/[0.05]"
+                  className="flex w-full items-center gap-2 rounded-lg border border-border bg-card px-2.5 py-2 text-xs hover:bg-muted"
                 >
-                  <Tag className="h-3.5 w-3.5 text-blue-400" />
+                  <Tag className="h-3.5 w-3.5 text-primary" />
                   <span className="flex-1 text-left">Скидка</span>
                   {effectiveDiscountPercent > 0 && (
-                    <span className="rounded-full bg-blue-500/20 px-2 py-0.5 text-[10px] font-medium text-blue-300">
+                    <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-medium text-primary">
                       -{effectiveDiscountPercent}%
                     </span>
                   )}
                 </button>
 
                 {showDiscountPanel && (
-                  <div className="space-y-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-white/80 backdrop-blur-xl dark:bg-slate-900/80 p-2.5">
+                  <div className="space-y-2 rounded-lg border border-border bg-card p-2.5">
                     <div className="flex items-center gap-2">
-                      <Percent className="h-3.5 w-3.5 shrink-0 text-slate-500 dark:text-slate-400" />
+                      <Percent className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                       <input
                         type="number"
                         value={manualDiscountPercent}
@@ -1252,7 +1252,7 @@ export default function InventorySalesPage({
                           setPromoDiscountPercent(0)
                         }}
                         placeholder="Скидка вручную, %"
-                        className="w-full rounded border border-slate-200 dark:border-slate-700 bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100 px-2 py-1 text-xs outline-none focus:border-blue-400/50"
+                        className="w-full rounded border border-input bg-background text-foreground px-2 py-1 text-xs outline-none focus:border-ring"
                         min="0"
                         max="99"
                       />
@@ -1263,19 +1263,19 @@ export default function InventorySalesPage({
                         value={promoCodeInput}
                         onChange={(e) => setPromoCodeInput(e.target.value.toUpperCase())}
                         placeholder="Промокод"
-                        className="flex-1 rounded border border-slate-200 dark:border-slate-700 bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100 px-2 py-1 font-mono text-xs outline-none focus:border-blue-400/50"
+                        className="flex-1 rounded border border-input bg-background text-foreground px-2 py-1 font-mono text-xs outline-none focus:border-ring"
                       />
                       <button
                         type="button"
                         onClick={() => void applyPromoCode()}
                         disabled={promoValidating || !promoCodeInput.trim()}
-                        className="rounded border border-blue-400/30 bg-blue-500/10 px-2 py-1 text-[10px] font-medium text-blue-300 disabled:opacity-50 hover:bg-blue-500/20"
+                        className="rounded border border-primary/30 bg-primary/10 px-2 py-1 text-[10px] font-medium text-primary disabled:opacity-50 hover:bg-primary/20"
                       >
                         {promoValidating ? '...' : 'OK'}
                       </button>
                     </div>
                     {appliedPromoCode && (
-                      <p className="text-[10px] text-emerald-400">✓ «{appliedPromoCode}» применён</p>
+                      <p className="text-[10px] text-primary">✓ «{appliedPromoCode}» применён</p>
                     )}
                   </div>
                 )}
@@ -1286,29 +1286,29 @@ export default function InventorySalesPage({
                   onChange={(e) => setComment(e.target.value)}
                   rows={2}
                   placeholder="Комментарий к продаже"
-                  className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100 px-2.5 py-1.5 text-xs outline-none focus:border-emerald-400/50"
+                  className="w-full rounded-lg border border-input bg-muted text-foreground px-2.5 py-1.5 text-xs outline-none focus:border-ring"
                 />
               </div>
             )}
           </div>
 
           {recentSales.length > 0 ? (
-            <div className="shrink-0 border-t border-slate-200 dark:border-slate-800">
+            <div className="shrink-0 border-t border-border">
               <div className="flex items-center justify-between px-3 py-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Последние продажи</p>
-                <span className="text-[10px] text-slate-500 dark:text-slate-400">исправление оплаты</span>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Последние продажи</p>
+                <span className="text-[10px] text-muted-foreground">исправление оплаты</span>
               </div>
               <div className="max-h-44 space-y-1.5 overflow-y-auto px-3 pb-3">
                 {recentSales.map((sale) => (
-                  <div key={sale.id} className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-800/40 p-2">
+                  <div key={sale.id} className="rounded-xl border border-border bg-card p-2">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5">
                           <p className="text-xs font-semibold">{formatMoney(Number(sale.total_amount || 0))}</p>
                           <Badge variant="secondary" className="text-[10px]">{paymentBadge(sale.payment_method, cashLabels.providerName)}</Badge>
                         </div>
-                        <p className="mt-1 truncate text-[10px] text-slate-500 dark:text-slate-400">{salePaymentDetails(sale)}</p>
-                        <p className="mt-0.5 text-[10px] text-slate-500 dark:text-slate-400">
+                        <p className="mt-1 truncate text-[10px] text-muted-foreground">{salePaymentDetails(sale)}</p>
+                        <p className="mt-0.5 text-[10px] text-muted-foreground">
                           {formatSaleTime(sale.sold_at)} · {formatShiftLabel(sale.shift)}
                         </p>
                       </div>
@@ -1331,7 +1331,7 @@ export default function InventorySalesPage({
           ) : null}
 
           {/* Checkout form */}
-          <form onSubmit={handleSubmit} className="shrink-0 space-y-2.5 border-t border-slate-200 dark:border-slate-800 p-3">
+          <form onSubmit={handleSubmit} className="shrink-0 space-y-2.5 border-t border-border p-3">
             {/* Payment method */}
             <div className="grid grid-cols-3 gap-1.5">
               {(['cash', 'kaspi', 'mixed'] as const).map((method) => (
@@ -1339,10 +1339,10 @@ export default function InventorySalesPage({
                   key={method}
                   type="button"
                   onClick={() => setPaymentMethod(method)}
-                  className={`rounded-xl border px-2 py-2 text-center text-xs font-medium transition ${
+                  className={`rounded-xl border px-2 py-2.5 text-center text-xs font-medium transition ${
                     paymentMethod === method
-                      ? 'border-emerald-400/40 bg-emerald-500/15 text-emerald-100'
-                      : 'border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100'
+                      ? 'border-primary bg-primary/15 text-primary'
+                      : 'border-border bg-card text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   {paymentBadge(method, cashLabels.providerName)}
@@ -1353,7 +1353,7 @@ export default function InventorySalesPage({
             {paymentMethod === 'mixed' && (
               <div className="grid grid-cols-2 gap-1.5">
                 <div>
-                  <p className="mb-1 text-[10px] text-slate-500 dark:text-slate-400">Наличными</p>
+                  <p className="mb-1 text-[10px] text-muted-foreground">Наличными</p>
                   <Input
                     value={mixedCash}
                     onChange={(e) => {
@@ -1367,7 +1367,7 @@ export default function InventorySalesPage({
                   />
                 </div>
                 <div>
-                  <p className="mb-1 text-[10px] text-slate-500 dark:text-slate-400">{cashLabels.providerName}</p>
+                  <p className="mb-1 text-[10px] text-muted-foreground">{cashLabels.providerName}</p>
                   <Input
                     value={mixedKaspi}
                     onChange={(e) => {
@@ -1377,26 +1377,26 @@ export default function InventorySalesPage({
                       setMixedCash(String(Math.max(0, finalTotal - kaspi)))
                     }}
                     placeholder="0"
-                    className="h-8 text-xs"
+                    className="h-9 text-xs"
                   />
                 </div>
               </div>
             )}
 
             {/* Total */}
-            <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 px-3 py-2">
+            <div className="rounded-xl border border-primary/20 bg-primary/5 px-3 py-2.5">
               {(discountAmount > 0 || loyaltyDiscountAmount > 0) && (
-                <div className="mb-2 space-y-1 border-b border-slate-200 dark:border-slate-800 pb-2">
-                  <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                <div className="mb-2 space-y-1 border-b border-border pb-2">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
                     <span>Подытог</span><span>{formatMoney(cartTotal)}</span>
                   </div>
                   {discountAmount > 0 && (
-                    <div className="flex items-center justify-between text-xs text-blue-300">
+                    <div className="flex items-center justify-between text-xs text-primary">
                       <span>Скидка -{effectiveDiscountPercent}%</span><span>-{formatMoney(discountAmount)}</span>
                     </div>
                   )}
                   {loyaltyDiscountAmount > 0 && (
-                    <div className="flex items-center justify-between text-xs text-amber-300">
+                    <div className="flex items-center justify-between text-xs text-amber-600 dark:text-amber-400">
                       <span>Баллами</span><span>-{formatMoney(loyaltyDiscountAmount)}</span>
                     </div>
                   )}
@@ -1404,17 +1404,17 @@ export default function InventorySalesPage({
               )}
               <div className="flex items-end justify-between">
                 <div>
-                  <p className="text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400">Итого</p>
-                  <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{formatMoney(finalTotal)}</p>
+                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Итого</p>
+                  <p className="text-3xl font-bold text-foreground">{formatMoney(finalTotal)}</p>
                 </div>
-                <div className="text-right text-xs text-slate-500 dark:text-slate-400">
+                <div className="text-right text-xs text-muted-foreground">
                   <p>{cartDetailed.length} поз.</p>
                   <p>{cartDetailed.reduce((sum, l) => sum + l.quantity, 0)} шт.</p>
                 </div>
               </div>
             </div>
 
-            <Button type="submit" size="lg" className="h-12 w-full text-base font-semibold" disabled={saving || cartDetailed.length === 0}>
+            <Button type="submit" size="lg" className="h-14 w-full text-base font-semibold shadow-lg shadow-primary/20" disabled={saving || cartDetailed.length === 0}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingBasket className="h-5 w-5" />}
               Провести продажу
             </Button>
@@ -1423,16 +1423,16 @@ export default function InventorySalesPage({
       </div>
 
       {correctionSale ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <Card className="w-full max-w-lg border-slate-200 dark:border-slate-800 bg-slate-950/95 shadow-2xl">
-            <CardHeader className="border-b border-slate-200 dark:border-slate-800 pb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <Card className="w-full max-w-lg border-border shadow-2xl">
+            <CardHeader className="border-b border-border pb-4">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <CardTitle className="flex items-center gap-2 text-base">
-                    <PencilLine className="h-4 w-4 text-amber-300" />
+                    <PencilLine className="h-4 w-4 text-amber-500" />
                     Исправить оплату
                   </CardTitle>
-                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                  <p className="mt-2 text-sm text-muted-foreground">
                     Продажа #{correctionSale.id.slice(-6)} · {formatSaleTime(correctionSale.sold_at)}
                   </p>
                 </div>
@@ -1443,28 +1443,28 @@ export default function InventorySalesPage({
             </CardHeader>
             <CardContent className="p-5">
               <form onSubmit={handlePaymentCorrectionSubmit} className="space-y-4">
-                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-800/40 p-3">
+                <div className="rounded-2xl border border-border bg-muted p-3">
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm text-slate-500 dark:text-slate-400">Итого продажи</span>
+                    <span className="text-sm text-muted-foreground">Итого продажи</span>
                     <span className="text-lg font-semibold">{formatMoney(correctionTotal)}</span>
                   </div>
-                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                  <p className="mt-2 text-xs text-muted-foreground">
                     Сейчас: {salePaymentDetails(correctionSale)}
                   </p>
                 </div>
 
                 <div>
-                  <p className="mb-2 text-xs font-medium text-slate-500 dark:text-slate-400">Правильная оплата</p>
+                  <p className="mb-2 text-xs font-medium text-muted-foreground">Правильная оплата</p>
                   <div className="grid grid-cols-3 gap-2">
                     {(['cash', 'kaspi', 'mixed'] as const).map((method) => (
                       <button
                         key={method}
                         type="button"
                         onClick={() => setCorrectionMethod(method)}
-                        className={`rounded-xl border px-2 py-2 text-center text-sm font-medium transition ${
+                        className={`rounded-xl border px-2 py-2.5 text-center text-sm font-medium transition ${
                           correctionMethod === method
-                            ? 'border-emerald-400/40 bg-emerald-500/15 text-emerald-100'
-                            : 'border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100'
+                            ? 'border-primary bg-primary/15 text-primary'
+                            : 'border-border bg-card text-muted-foreground hover:text-foreground'
                         }`}
                       >
                         {paymentBadge(method, cashLabels.providerName)}
@@ -1476,7 +1476,7 @@ export default function InventorySalesPage({
                 {correctionMethod === 'mixed' ? (
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <p className="mb-1 text-xs text-slate-500 dark:text-slate-400">Наличными</p>
+                      <p className="mb-1 text-xs text-muted-foreground">Наличными</p>
                       <Input
                         value={correctionCash}
                         onChange={(e) => setCorrectionCash(e.target.value)}
@@ -1485,31 +1485,31 @@ export default function InventorySalesPage({
                       />
                     </div>
                     <div>
-                      <p className="mb-1 text-xs text-slate-500 dark:text-slate-400">{cashLabels.providerName}</p>
+                      <p className="mb-1 text-xs text-muted-foreground">{cashLabels.providerName}</p>
                       <Input value={String(correctionKaspiAmount)} readOnly className="h-10" />
                     </div>
                   </div>
                 ) : null}
 
-                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-3 text-sm">
+                <div className="rounded-2xl border border-border bg-muted p-3 text-sm">
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-500 dark:text-slate-400">Наличные</span>
+                    <span className="text-muted-foreground">Наличные</span>
                     <span className="font-semibold">{formatMoney(correctionCashAmount)}</span>
                   </div>
                   <div className="mt-2 flex items-center justify-between">
-                    <span className="text-slate-500 dark:text-slate-400">{cashLabels.providerName}</span>
+                    <span className="text-muted-foreground">{cashLabels.providerName}</span>
                     <span className="font-semibold">{formatMoney(correctionKaspiAmount)}</span>
                   </div>
                 </div>
 
                 <div>
-                  <p className="mb-1 text-xs text-slate-500 dark:text-slate-400">Причина исправления</p>
+                  <p className="mb-1 text-xs text-muted-foreground">Причина исправления</p>
                   <textarea
                     value={correctionReason}
                     onChange={(e) => setCorrectionReason(e.target.value)}
                     rows={3}
                     placeholder={`Например: клиент оплатил 500 наличными и 700 ${cashLabels.providerName}, оператор выбрал ${cashLabels.providerName}`}
-                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100 px-3 py-2 text-sm outline-none focus:border-emerald-400/50"
+                    className="w-full rounded-xl border border-input bg-muted text-foreground px-3 py-2 text-sm outline-none focus:border-ring"
                   />
                 </div>
 
@@ -1535,19 +1535,19 @@ export default function InventorySalesPage({
       ) : null}
 
       {receiptPreview ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <Card className="w-full max-w-xl border-slate-200 dark:border-slate-800 bg-slate-950/95 shadow-2xl">
-            <CardHeader className="border-b border-slate-200 dark:border-slate-800 pb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <Card className="w-full max-w-xl border-border shadow-2xl">
+            <CardHeader className="border-b border-border pb-4">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <CardTitle className="flex items-center gap-2 text-base">
-                    <ReceiptText className="h-4 w-4 text-emerald-300" />
+                    <ReceiptText className="h-4 w-4 text-primary" />
                     Сформированный чек
                   </CardTitle>
-                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                  <p className="mt-2 text-sm text-muted-foreground">
                     {receiptPreview.companyName} · {receiptPreview.locationName}
                   </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                  <p className="text-xs text-muted-foreground">
                     {receiptPreview.saleDate} · {receiptPreview.saleTime} · {formatShiftLabel(receiptPreview.shift)}
                   </p>
                 </div>
@@ -1557,28 +1557,28 @@ export default function InventorySalesPage({
               </div>
             </CardHeader>
             <CardContent className="space-y-4 p-5">
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-4">
+              <div className="rounded-2xl border border-border bg-muted p-4">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-500 dark:text-slate-400">Чек</span>
+                  <span className="text-muted-foreground">Чек</span>
                   <span className="font-semibold">#{receiptPreview.saleId?.slice(-6) || 'новый'}</span>
                 </div>
                 <div className="mt-2 flex items-center justify-between text-sm">
-                  <span className="text-slate-500 dark:text-slate-400">Оплата</span>
+                  <span className="text-muted-foreground">Оплата</span>
                   <span>{paymentBadge(receiptPreview.paymentMethod, cashLabels.providerName)}</span>
                 </div>
                 <div className="mt-2 flex items-center justify-between text-sm">
-                  <span className="text-slate-500 dark:text-slate-400">Оператор</span>
+                  <span className="text-muted-foreground">Оператор</span>
                   <span>{receiptPreview.operatorName}</span>
                 </div>
               </div>
 
-              <div className="max-h-72 space-y-2 overflow-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-800/40 p-3">
+              <div className="max-h-72 space-y-2 overflow-auto rounded-2xl border border-border bg-card p-3">
                 {receiptPreview.lines.map((line) => (
-                  <div key={line.item_id} className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-3">
+                  <div key={line.item_id} className="rounded-xl border border-border bg-muted p-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="truncate font-medium text-slate-900 dark:text-slate-100">{line.name}</p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                        <p className="truncate font-medium text-foreground">{line.name}</p>
+                        <p className="text-xs text-muted-foreground">
                           {line.quantity} {line.unit || 'шт'} × {formatMoney(line.unit_price)}
                         </p>
                       </div>
@@ -1588,43 +1588,43 @@ export default function InventorySalesPage({
                 ))}
               </div>
 
-              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
-                <div className="flex items-center justify-between text-sm text-slate-500 dark:text-slate-400">
+              <div className="rounded-2xl border border-primary/20 bg-primary/10 p-4">
+                <div className="flex items-center justify-between text-sm text-muted-foreground">
                   <span>Подытог</span>
                   <span>{formatMoney(receiptPreview.subtotal)}</span>
                 </div>
                 {receiptPreview.discountAmount > 0 ? (
-                  <div className="mt-2 flex items-center justify-between text-sm text-blue-300">
+                  <div className="mt-2 flex items-center justify-between text-sm text-primary">
                     <span>Скидка</span>
                     <span>-{formatMoney(receiptPreview.discountAmount)}</span>
                   </div>
                 ) : null}
                 {receiptPreview.loyaltyDiscountAmount > 0 ? (
-                  <div className="mt-2 flex items-center justify-between text-sm text-amber-300">
+                  <div className="mt-2 flex items-center justify-between text-sm text-amber-600 dark:text-amber-400">
                     <span>Бонусы</span>
                     <span>-{formatMoney(receiptPreview.loyaltyDiscountAmount)}</span>
                   </div>
                 ) : null}
                 <div className="mt-3 flex items-end justify-between">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Итого</p>
-                    <p className="mt-1 text-3xl font-semibold text-slate-900 dark:text-slate-100">{formatMoney(receiptPreview.totalAmount)}</p>
+                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Итого</p>
+                    <p className="mt-1 text-3xl font-bold text-foreground">{formatMoney(receiptPreview.totalAmount)}</p>
                   </div>
                   <Badge variant="secondary">{paymentBadge(receiptPreview.paymentMethod, cashLabels.providerName)}</Badge>
                 </div>
                 {receiptPreview.paymentMethod === 'mixed' ? (
-                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                  <p className="mt-2 text-xs text-muted-foreground">
                     Наличные: {formatMoney(receiptPreview.cashAmount)} · Безналичный: {formatMoney(receiptPreview.kaspiAmount)}
                   </p>
                 ) : null}
                 {receiptPreview.customer ? (
-                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                  <p className="mt-2 text-xs text-muted-foreground">
                     Клиент: {receiptPreview.customer.name}
                     {receiptPreview.customer.phone ? ` (${receiptPreview.customer.phone})` : ''}
                   </p>
                 ) : null}
                 {receiptPreview.comment ? (
-                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Комментарий: {receiptPreview.comment}</p>
+                  <p className="mt-2 text-xs text-muted-foreground">Комментарий: {receiptPreview.comment}</p>
                 ) : null}
               </div>
 
