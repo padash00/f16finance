@@ -27,17 +27,26 @@ function showPdfBusy() {
   ensureKeyframes()
   pdfBusyCount++
   if (pdfOverlay) return
+  // Определяем тему по классу .dark на <html> (next-themes), чтобы тост был
+  // светлым на светлой теме и тёмным на тёмной.
+  const isDark = document.documentElement.classList.contains('dark')
+  const bg = isDark ? 'rgba(15,23,42,0.96)' : 'rgba(255,255,255,0.97)'
+  const borderColor = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(15,23,42,0.10)'
+  const shadow = isDark ? '0 14px 44px rgba(0,0,0,0.5)' : '0 14px 44px rgba(15,23,42,0.18)'
+  const textColor = isDark ? '#fff' : '#0f172a'
+  const spinnerTrack = isDark ? 'rgba(255,255,255,0.22)' : 'rgba(15,23,42,0.15)'
+
   const el = document.createElement('div')
   el.style.cssText =
     'position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:99999;' +
     'display:flex;align-items:center;gap:10px;padding:12px 18px;border-radius:14px;' +
-    'background:rgba(15,23,42,0.96);border:1px solid rgba(255,255,255,0.12);' +
-    'box-shadow:0 14px 44px rgba(0,0,0,0.5);color:#fff;font-size:14px;' +
+    `background:${bg};border:1px solid ${borderColor};` +
+    `box-shadow:${shadow};color:${textColor};font-size:14px;` +
     'font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;backdrop-filter:blur(8px);' +
     'animation:pdfin 0.18s ease-out'
   el.innerHTML =
-    '<span data-pdf-spinner style="width:16px;height:16px;border:2px solid rgba(255,255,255,0.22);' +
-    'border-top-color:#34d399;border-radius:50%;display:inline-block;animation:pdfspin 0.7s linear infinite"></span>' +
+    `<span data-pdf-spinner style="width:16px;height:16px;border:2px solid ${spinnerTrack};` +
+    'border-top-color:#10b981;border-radius:50%;display:inline-block;animation:pdfspin 0.7s linear infinite"></span>' +
     '<span data-pdf-text>Готовим PDF…</span>'
   document.body.appendChild(el)
   pdfOverlay = el
