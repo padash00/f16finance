@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { computePurchasePlan } from '@/lib/server/purchase-plan'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
@@ -17,6 +18,8 @@ export async function GET(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+    const denied = await requireCapability(access, 'store-purchase-orders.view')
+    if (denied) return denied
     if (!isStoreManager(access)) return json({ error: 'forbidden' }, 403)
 
     const url = new URL(request.url)

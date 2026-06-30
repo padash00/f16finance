@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -38,6 +39,8 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+    const denied = await requireCapability(access, 'store-catalog.view')
+    if (denied) return denied
     if (!canManageCatalog(access)) return json({ error: 'forbidden' }, 403)
 
     const { id } = await context.params

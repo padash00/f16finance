@@ -8,6 +8,7 @@
 
 import { NextResponse } from 'next/server'
 import ExcelJS from 'exceljs'
+import { requireCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 
 export const runtime = 'nodejs'
@@ -47,6 +48,8 @@ export async function POST(request: Request) {
   if (!access.isSuperAdmin && access.staffRole !== 'owner' && access.staffRole !== 'manager') {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 })
   }
+  const denied = await requireCapability(access, 'tax.view')
+  if (denied) return denied
 
   const body = (await request.json().catch(() => null)) as Body | null
   if (!body?.period?.from || !body?.period?.to) {

@@ -6,6 +6,7 @@ export const revalidate = 0
 import { addDaysISO } from '@/lib/core/date'
 import { splitIncomeKaspiByCalendarDay, type ReportIncomeCalendarRow } from '@/lib/reports/income-calendar-kaspi'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -52,6 +53,8 @@ export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    const denied = await requireCapability(access, 'analytics.view')
+    if (denied) return denied
 
     const url = new URL(req.url)
     const year = parseInt(url.searchParams.get('year') || String(new Date().getFullYear()), 10)

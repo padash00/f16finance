@@ -4,6 +4,7 @@
  */
 
 import { NextResponse } from 'next/server'
+import { requireCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -59,6 +60,10 @@ export async function POST(request: Request) {
   // Только owner / manager / superadmin может менять провайдер
   const canEdit = access.isSuperAdmin || access.staffRole === 'owner' || access.staffRole === 'manager'
   if (!canEdit) return json({ error: 'forbidden' }, 403)
+
+  // Гранулярная проверка права: изменение провайдера = изменение настроек точки
+  const denied = await requireCapability(access, 'settings.manage_companies')
+  if (denied) return denied
 
   const user = access.user
   if (!user) return json({ error: 'unauthenticated' }, 401)

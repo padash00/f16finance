@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog } from '@/lib/server/audit'
-import { invalidateCapabilitiesCache } from '@/lib/server/capabilities'
+import { invalidateCapabilitiesCache, requireSuperAdmin } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -22,7 +22,8 @@ function json(data: unknown, status = 200) {
 export async function GET(request: Request) {
   const access = await getRequestAccessContext(request)
   if ('response' in access) return access.response
-  if (!access.isSuperAdmin) return json({ error: 'forbidden' }, 403)
+  const denied = await requireSuperAdmin(access)
+  if (denied) return denied
 
   const url = new URL(request.url)
   const userId = url.searchParams.get('user_id')
@@ -54,7 +55,8 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const access = await getRequestAccessContext(request)
   if ('response' in access) return access.response
-  if (!access.isSuperAdmin) return json({ error: 'forbidden' }, 403)
+  const denied = await requireSuperAdmin(access)
+  if (denied) return denied
 
   const body = (await request.json().catch(() => null)) as
     | { action?: string; user_id?: string; capability?: string; granted?: boolean; reason?: string }

@@ -5,6 +5,7 @@ import { DATA_SOURCE_NOTE, MAX_DAYS_HARD_LIMIT, PLANS_TABLE, getDefaultAllPeriod
 import { parseISODateSafe, toISODateLocal } from '@/lib/analysis/core-utils'
 import { buildFullHistory } from '@/lib/analysis/history'
 import type { AnalysisResult, DataPoint } from '@/lib/analysis/types'
+import { requireCapability } from '@/lib/server/capabilities'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -123,6 +124,8 @@ export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    const denied = await requireCapability(access, 'analysis.view')
+    if (denied) return denied
 
     const url = new URL(req.url)
     const rangePreset = url.searchParams.get('range') || '365'

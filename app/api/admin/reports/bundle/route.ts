@@ -7,6 +7,7 @@ import { lastMonthMtdRangeForCurrentMonth, type ForecastHints } from '@/lib/repo
 import { calculatePrevPeriod, isFullMonthRange, previousCalendarMonthRange } from '@/lib/reports/period'
 import { sumIncomeExpenseInRange } from '@/lib/reports/sum-range-totals'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -48,6 +49,8 @@ export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    const denied = await requireCapability(access, 'reports.view')
+    if (denied) return denied
 
     const url = new URL(req.url)
     const dateFrom = url.searchParams.get('from') || ''

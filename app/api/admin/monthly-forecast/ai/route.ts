@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { generateAiText } from '@/lib/ai/provider'
+import { requireCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 
 function fmt(n: number) {
@@ -11,6 +12,8 @@ export async function POST(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    const denied = await requireCapability(access, 'forecast.generate')
+    if (denied) return denied
 
     const b = await req.json().catch(() => null)
     if (!b) return NextResponse.json({ error: 'invalid-body' }, { status: 400 })

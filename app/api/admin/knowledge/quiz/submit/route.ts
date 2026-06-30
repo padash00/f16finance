@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -18,6 +19,8 @@ export async function POST(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+    const denied = await requireCapability(access, 'knowledge-admin.edit')
+    if (denied) return denied
 
     const body = (await request.json().catch(() => ({}))) as Body
     if (!body.attempt_id) return json({ error: 'attempt-id-required' }, 400)

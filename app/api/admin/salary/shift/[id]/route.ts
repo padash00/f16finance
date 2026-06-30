@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { requireCapability } from '@/lib/server/capabilities'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -18,6 +19,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
     if (!canView(access)) return json({ error: 'forbidden' }, 403)
+    const denied = await requireCapability(access, 'salary.view')
+    if (denied) return denied
 
     const { id } = await params
     if (!id) return json({ error: 'invalid-shift-id' }, 400)

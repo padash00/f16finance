@@ -13,6 +13,7 @@
  */
 import { NextResponse } from 'next/server'
 
+import { requireCapability } from '@/lib/server/capabilities'
 import { listOrganizationOperatorIds, resolveCompanyScope } from '@/lib/server/organizations'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
@@ -81,6 +82,8 @@ export async function GET(req: Request) {
     if (!access.isSuperAdmin && !access.staffRole) {
       return json({ error: 'forbidden' }, 403)
     }
+    const denied = await requireCapability(access, 'performance.view')
+    if (denied) return denied
 
     if (!hasAdminSupabaseCredentials()) {
       return json({ error: 'service_role_missing' }, 500)

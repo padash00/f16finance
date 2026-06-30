@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { logAiUsageSafe } from '@/lib/ai/usage-tracker'
 import { writeAuditLog } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -45,6 +46,8 @@ export async function POST(request: Request) {
     if (!rl.allowed) return json({ error: 'too-many-requests' }, 429)
 
     if (!canManage(access)) return json({ error: 'forbidden' }, 403)
+    const denied = await requireCapability(access, 'knowledge-admin.create')
+    if (denied) return denied
 
     const body = (await request.json().catch(() => ({}))) as Body
     if (!body.staff_id) return json({ error: 'staff-id-required' }, 400)

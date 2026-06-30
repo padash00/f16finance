@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { PDFParse } from 'pdf-parse'
 
 import { logAiUsageSafe } from '@/lib/ai/usage-tracker'
+import { requireCapability } from '@/lib/server/capabilities'
 import { matchInvoiceItems, parseInvoiceWithGPT, type ParsedInvoice } from '@/lib/server/invoice-parser'
 import { fetchInventoryItemsForMatching, fetchInvoiceNameMappings } from '@/lib/server/repositories/invoice'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
@@ -208,6 +209,8 @@ export async function POST(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    const denied = await requireCapability(access, 'store-receipts.ai_parse')
+    if (denied) return denied
 
     const ip = getClientIp(req)
     const rl = checkRateLimit(`ai-store-receipts-parse:${access.user?.id || ip}`, 30, 60_000)

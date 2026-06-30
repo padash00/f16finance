@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { requireCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -23,6 +24,8 @@ export async function GET(
     const { id } = await params
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+    const denied = await requireCapability(access, 'store-suppliers.view')
+    if (denied) return denied
     if (!canManageStore(access)) return json({ error: 'forbidden' }, 403)
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
@@ -203,6 +206,8 @@ export async function PATCH(
     const { id } = await params
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+    const denied = await requireCapability(access, 'store-suppliers.edit')
+    if (denied) return denied
     if (!canManageStore(access)) return json({ error: 'forbidden' }, 403)
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { buildMonthlyForecast, type ForecastIncomeRow, type ForecastExpenseRow } from '@/lib/analysis/monthly-forecast'
+import { requireCapability } from '@/lib/server/capabilities'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -50,6 +51,8 @@ export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    const denied = await requireCapability(access, 'forecast.view')
+    if (denied) return denied
 
     const url = new URL(req.url)
     const companyId = url.searchParams.get('company_id')

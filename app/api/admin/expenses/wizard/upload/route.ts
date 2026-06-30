@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -28,6 +29,8 @@ export async function POST(request: Request) {
     if (!access.isSuperAdmin && !role) {
       return NextResponse.json({ error: 'forbidden' }, { status: 403 })
     }
+    const denied = await requireCapability(access, 'expenses.import_file')
+    if (denied) return denied
 
     const formData = await request.formData()
     const file = formData.get('file') as File | null

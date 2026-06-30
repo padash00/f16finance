@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { requireCapability } from '@/lib/server/capabilities'
 import { checkRateLimit } from '@/lib/server/rate-limit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { isStoreManager } from '@/lib/server/store-access'
@@ -64,6 +65,8 @@ export async function GET(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+    const denied = await requireCapability(access, 'store-catalog.view')
+    if (denied) return denied
     if (!isStoreManager(access)) return json({ error: 'forbidden' }, 403)
 
     const rl = checkRateLimit(`img-search:${access.user?.id || 'anon'}`, 30, 60_000)

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { pushToOrganization } from '@/lib/server/push'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
@@ -96,6 +97,8 @@ export async function POST(request: Request) {
     if (!access.isSuperAdmin && !role) {
       return json({ error: 'forbidden' }, 403)
     }
+    const denied = await requireCapability(access, 'expenses.create')
+    if (denied) return denied
 
     const body = await request.json().catch(() => null) as { session_id?: string } | null
     const sessionId = String(body?.session_id || '').trim()

@@ -7,6 +7,7 @@
  */
 
 import { NextResponse } from 'next/server'
+import { requireCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { generateAiText } from '@/lib/ai/provider'
 
@@ -48,6 +49,8 @@ interface Body {
 export async function POST(request: Request) {
   const access = await getRequestAccessContext(request)
   if ('response' in access) return access.response
+  const denied = await requireCapability(access, 'reports.view')
+  if (denied) return denied
 
   const body = (await request.json().catch(() => null)) as Body | null
   if (!body?.totals) return NextResponse.json({ error: 'totals required' }, { status: 400 })

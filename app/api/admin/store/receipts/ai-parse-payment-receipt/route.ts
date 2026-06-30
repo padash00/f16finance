@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { logAiUsageSafe } from '@/lib/ai/usage-tracker'
+import { requireCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 
@@ -43,6 +44,8 @@ export async function POST(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    const denied = await requireCapability(access, 'store-receipts.parse_payment_receipt')
+    if (denied) return denied
 
     const ip = getClientIp(req)
     const rl = checkRateLimit(`ai-payment-receipt-parse:${access.user?.id || ip}`, 30, 60_000)

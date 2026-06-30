@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { requireSuperAdmin } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { writeAuditLog } from '@/lib/server/audit'
@@ -33,7 +34,8 @@ export async function POST(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
-    if (!access.isSuperAdmin) return json({ error: 'forbidden' }, 403)
+    const denied = await requireSuperAdmin(access)
+    if (denied) return denied
 
     if (!hasAdminSupabaseCredentials()) {
       return json({ error: 'Требуется SUPABASE_SERVICE_ROLE_KEY', code: 'missing_service_role' }, 500)

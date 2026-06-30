@@ -3,6 +3,7 @@ import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { createRequestSupabaseClient } from '@/lib/server/request-auth'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 import { resolveCompanyScope, listOrganizationOperatorIds } from '@/lib/server/organizations'
 
 function json(data: unknown, status = 200) {
@@ -15,6 +16,8 @@ export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    const denied = await requireCapability(access, 'operator-analytics.view')
+    if (denied) return denied
 
     const supabase = hasAdminSupabaseCredentials()
       ? createAdminSupabaseClient()

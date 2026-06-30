@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -35,6 +36,8 @@ export async function GET(req: Request) {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
     if (!access.isSuperAdmin && !access.staffMember) return json({ error: 'forbidden' }, 403)
+    const denied = await requireCapability(access, 'weekly-report.export_pdf')
+    if (denied) return denied
 
     const url = new URL(req.url)
     const from = (url.searchParams.get('from') || '').trim()

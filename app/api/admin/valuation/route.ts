@@ -7,6 +7,7 @@ import { addDaysISO } from '@/lib/core/date'
 import { resolveFinancialGroup, type FinancialGroup } from '@/lib/core/financial-groups'
 import { splitIncomeKaspiByCalendarDay, type ReportIncomeCalendarRow } from '@/lib/reports/income-calendar-kaspi'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 import { humanizeDbError } from '@/lib/server/db-error-humanize'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
@@ -52,6 +53,8 @@ export async function GET(req: Request) {
     if (!access.isSuperAdmin && access.staffRole !== 'owner') {
       return json({ error: 'forbidden' }, 403)
     }
+    const denied = await requireCapability(access, 'valuation.view')
+    if (denied) return denied
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : null
     if (!supabase) return json({ error: 'no admin supabase' }, 500)

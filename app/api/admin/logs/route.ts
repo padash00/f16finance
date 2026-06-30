@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { requireCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -1018,6 +1019,8 @@ export async function GET(req: Request) {
     if (!access.isSuperAdmin) {
       return json({ error: 'forbidden' }, 403)
     }
+    const denied = await requireCapability(access, 'logs.view')
+    if (denied) return denied
 
     const url = new URL(req.url)
     const search = url.searchParams.get('q')?.trim().toLowerCase() || ''

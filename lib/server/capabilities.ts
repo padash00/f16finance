@@ -25,6 +25,7 @@ import 'server-only'
 
 import { NextResponse } from 'next/server'
 
+import { getAllCapabilityIds } from '@/lib/core/capabilities'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 type CapabilitiesCache = {
@@ -58,9 +59,16 @@ export async function loadUserCapabilities(
   }
 
   const supabase = createAdminSupabaseClient()
-  const result = new Set<string>()
 
-  // 1) role_capabilities — права роли
+  // FAIL-OPEN для STAFF-ролей (как и задумано сидом: «никто прав не теряет»).
+  // Базово staff имеет ВСЕ права каталога; админ на /access их только ОТНИМАЕТ
+  // (granted=false). Снимает лок-аут на новые права, которых ещё нет в
+  // role_capabilities. Операторы (role='other') и без роли — пустой набор
+  // (в админ-роуты их всё равно не пускает staffMember-проверка).
+  const isStaffRole = !!role && role !== 'other'
+  const result = new Set<string>(isStaffRole ? getAllCapabilityIds() : [])
+
+  // 1) role_capabilities — что ОТНЯТО у роли (granted=false). granted=true — no-op.
   if (role) {
     const { data: roleRows } = await supabase
       .from('role_capabilities')
@@ -69,11 +77,11 @@ export async function loadUserCapabilities(
       .range(0, 999)
 
     for (const row of (roleRows || []) as Array<{ capability: string; granted: boolean }>) {
-      if (row.granted) result.add(row.capability)
+      if (!row.granted) result.delete(row.capability)
     }
   }
 
-  // 2) user_capability_overrides — переопределения для конкретного человека
+  // 2) user_capability_overrides — точечно по человеку (имеет приоритет над ролью).
   const { data: overrideRows } = await supabase
     .from('user_capability_overrides')
     .select('capability, granted')
@@ -148,6 +156,17 @@ export async function requireCapability(
   }
 
   return null
+}
+
+/**
+ * Только super-admin. Для роутов УПРАВЛЕНИЯ правами (role_capabilities,
+ * user_capability_overrides, set-password, role-permissions) — их нельзя
+ * завязывать на capability, потому что при fail-open менеджеры имеют access.*
+ * и смогли бы менять права. Эти роуты — платформенные, только super-admin.
+ */
+export function requireSuperAdmin(access: AccessLike): Response | null {
+  if (access.isSuperAdmin) return null
+  return NextResponse.json({ error: 'forbidden', reason: 'super-admin-only' }, { status: 403 })
 }
 
 /**

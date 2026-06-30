@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -41,6 +42,8 @@ export async function POST(request: Request) {
     if (!canCreateExpense(access.staffRole, access.isSuperAdmin)) {
       return json({ error: 'forbidden' }, 403)
     }
+    const denied = await requireCapability(access, 'expenses.create')
+    if (denied) return denied
 
     const supabase = hasAdminSupabaseCredentials()
       ? createAdminSupabaseClient()
@@ -90,6 +93,8 @@ export async function PATCH(request: Request) {
     if (!canCreateExpense(access.staffRole, access.isSuperAdmin)) {
       return json({ error: 'forbidden' }, 403)
     }
+    const denied = await requireCapability(access, 'expenses.create')
+    if (denied) return denied
 
     const body = await request.json().catch(() => null) as {
       session_id?: string
@@ -194,6 +199,8 @@ export async function GET(request: Request) {
     if (!canCreateExpense(access.staffRole, access.isSuperAdmin)) {
       return json({ error: 'forbidden' }, 403)
     }
+    const denied = await requireCapability(access, 'expenses.create')
+    if (denied) return denied
 
     const url = new URL(request.url)
     const sessionId = String(url.searchParams.get('session_id') || '').trim()

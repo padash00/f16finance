@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { requireSuperAdmin } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
@@ -11,7 +12,8 @@ export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
-    if (!access.isSuperAdmin) return json({ error: 'forbidden' }, 403)
+    const denied = await requireSuperAdmin(access)
+    if (denied) return denied
 
     const supabase = createAdminSupabaseClient()
     const { data, error } = await supabase
@@ -33,7 +35,8 @@ export async function POST(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
-    if (!access.isSuperAdmin) return json({ error: 'forbidden' }, 403)
+    const denied = await requireSuperAdmin(access)
+    if (denied) return denied
 
     const body = await req.json().catch(() => null)
     if (!body?.role || !body?.path || typeof body.enabled !== 'boolean') {

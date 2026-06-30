@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { getPublicAppUrl } from '@/lib/core/app-url'
 import { writeAuditLog, writeNotificationLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 import { listOrganizationStaffIds } from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -146,10 +147,8 @@ export async function GET(req: Request) {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
 
-    // Capability checks (если есть выше) уже отсеивают; здесь — любой staff
-    if (!access.isSuperAdmin && !access.staffRole) {
-      return json({ error: 'forbidden' }, 403)
-    }
+    const denied = await requireCapability(access, 'staff.view')
+    if (denied) return denied
 
     if (!hasAdminSupabaseCredentials()) {
       return json(
@@ -235,10 +234,8 @@ export async function POST(req: Request) {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
 
-    // Capability checks (если есть выше) уже отсеивают; здесь — любой staff
-    if (!access.isSuperAdmin && !access.staffRole) {
-      return json({ error: 'forbidden' }, 403)
-    }
+    const denied = await requireCapability(access, 'access.invite_staff')
+    if (denied) return denied
 
     if (!hasAdminSupabaseCredentials()) {
       return json(

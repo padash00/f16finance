@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { renderFinReportHTML, PDF_OPTIONS as FIN_OPTIONS } from '@/lib/reports/orda-finreport-pdf'
 import { renderTableHTML, PDF_OPTIONS as TABLE_OPTIONS } from '@/lib/reports/orda-table-pdf'
@@ -27,6 +28,8 @@ export async function POST(req: Request) {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
     if (!access.isSuperAdmin && !access.staffMember) return json({ error: 'forbidden' }, 403)
+    const denied = await requireCapability(access, 'reports.view')
+    if (denied) return denied
 
     const body = (await req.json().catch(() => null)) as { kind?: string; data?: any } | null
     const kind = body?.kind === 'table' ? 'table' : body?.kind === 'premium' ? 'premium' : 'finreport'

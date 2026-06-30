@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { requireCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -18,6 +19,8 @@ export async function GET(request: Request) {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
     if (!canView(access)) return json({ error: 'forbidden' }, 403)
+    const denied = await requireCapability(access, 'knowledge-admin.view')
+    if (denied) return denied
 
     const url = new URL(request.url)
     const articleId = url.searchParams.get('article_id')
