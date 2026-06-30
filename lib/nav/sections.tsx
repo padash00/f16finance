@@ -232,20 +232,65 @@ export function getSectionItem(sectionId: string, href: string) {
   return getSectionById(sectionId)?.items.find((item) => item.href === href)
 }
 
-/** Код фичи (company_features), требуемый для пути. null = путь не гейтится. */
+// Базовые страницы — всегда доступны в ЛЮБОМ пакете (не гейтятся, не продаются).
+// Ядро, без которого кабинет бессмысленен.
+export const BASE_FREE_PATHS = new Set<string>([
+  '/dashboard',
+  '/welcome',
+  '/profile',
+  '/settings',
+  '/access',
+  '/subscription',
+  '/notifications',
+  '/workspace',
+  '/pass',
+])
+
+// Модель «1 фича = 1 страница»: код фичи страницы = явный feature ИЛИ derived `page:<href>`.
+function pageFeatureCode(item: NavItem, section: NavSection): string {
+  return item.feature || section.feature || `page:${item.href}`
+}
+
+/** Код фичи (тариф), требуемый для пути. null = страница базовая/не гейтится. */
 export function getPathFeature(pathname: string): string | null {
+  const clean = pathname.split('?')[0]
   for (const section of navSections) {
     for (const item of section.items) {
-      if (pathname === item.href || pathname.startsWith(item.href + '/')) {
-        return item.feature || section.feature || null
+      if (clean === item.href || clean.startsWith(item.href + '/')) {
+        if (BASE_FREE_PATHS.has(item.href)) return null
+        return pageFeatureCode(item, section)
       }
     }
   }
-  // /store/* — секция магазина целиком (часть роутов может не быть в items)
-  if (pathname === '/store' || pathname.startsWith('/store/')) {
-    return navSections.find((s) => s.id === 'store')?.feature || null
+  if (clean === '/store' || clean.startsWith('/store/')) {
+    return navSections.find((s) => s.id === 'store')?.feature || 'page:/store'
   }
   return null
+}
+
+export type PageFeatureEntry = { path: string; label: string; feature: string; group: string; base: boolean }
+
+/**
+ * Каталог «страница → фича» для конструктора пакетов: ВСЕ страницы навигации
+ * с их фичами, сгруппированы по разделу. base=true — всегда бесплатна.
+ */
+export function getAllPageFeatures(): PageFeatureEntry[] {
+  const out: PageFeatureEntry[] = []
+  const seen = new Set<string>()
+  for (const section of navSections) {
+    for (const item of section.items) {
+      if (seen.has(item.href)) continue
+      seen.add(item.href)
+      out.push({
+        path: item.href,
+        label: item.label,
+        feature: pageFeatureCode(item, section),
+        group: section.title,
+        base: BASE_FREE_PATHS.has(item.href),
+      })
+    }
+  }
+  return out
 }
 
 export function buildOwnerNavSections(): NavSection[] {
