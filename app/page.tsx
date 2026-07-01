@@ -35,7 +35,7 @@ import { Button } from '@/components/ui/button'
 import { ContactLeadForm } from '@/components/public/contact-lead-form'
 import { FloatingCta } from '@/components/public/floating-cta'
 import { FaqStructuredData, WebsiteStructuredData } from '@/components/public/structured-data'
-import { CountUp, Floating, HeroIn, LiveDot, Parallax, Reveal, Stagger, StaggerItem } from '@/components/public/landing-motion'
+import { CountUp, HeroIn, LiveDot, Parallax, Reveal, Stagger, StaggerItem } from '@/components/public/landing-motion'
 
 export const metadata: Metadata = {
   title: 'Orda Control — финансовая управляемость бизнеса без Excel и хаоса',
@@ -51,11 +51,12 @@ const PRODUCT = 'Orda Control'
 const eyebrowClass =
   'inline-flex items-center gap-2 rounded-full border border-[#16a34a]/25 bg-[#16a34a]/[0.07] px-4 py-2 text-[13px] font-semibold uppercase tracking-[0.1em] text-[#15803d]'
 const h1Class =
-  'font-display text-[46px] font-extrabold leading-[1.04] tracking-[-0.03em] text-[#0f2038] sm:text-[60px] lg:text-[72px]'
+  'font-display text-[44px] font-extrabold leading-[1.05] tracking-[-0.03em] text-[#0f2038] sm:text-[56px] lg:text-[64px]'
 const h2Class =
   'font-display text-balance text-[34px] font-bold leading-[1.08] tracking-[-0.02em] text-[#0f2038] sm:text-[42px] lg:text-[48px]'
 const leadClass = 'text-pretty text-[19px] leading-[1.6] text-[#56657d] sm:text-[21px]'
-const sectionClass = 'mx-auto max-w-[1600px] px-6 py-20 sm:px-10 lg:py-24 lg:px-14'
+const sectionClass = 'mx-auto max-w-[1200px] px-6 py-20 sm:px-10 lg:py-24 lg:px-10'
+const sectionHeadClass = 'mx-auto max-w-[720px] text-center'
 const cardClass = 'rounded-[20px] border border-[#d6dde8] bg-white p-7 shadow-[0_12px_34px_-16px_rgba(15,32,56,0.18)]'
 const btnPrimary =
   'rounded-[14px] bg-gradient-to-br from-[#1db955] to-[#15803d] px-8 py-[16px] text-[17px] font-semibold text-white shadow-[0_12px_28px_-8px_rgba(22,163,74,0.5)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_36px_-8px_rgba(22,163,74,0.6)]'
@@ -144,7 +145,7 @@ export default async function MarketingHomePage() {
 
       {/* Шапка */}
       <header className="sticky top-0 z-50 border-b border-[#e2e8f0] bg-white/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-[1600px] items-center justify-between px-6 py-3.5 sm:px-10 lg:px-12">
+        <div className="mx-auto flex max-w-[1200px] items-center justify-between px-6 py-3.5 sm:px-10 lg:px-10">
           <div className="flex items-center gap-2.5">
             <div className="grid h-9 w-9 place-items-center rounded-[11px] bg-[#16a34a] text-[15px] font-bold text-white">◇</div>
             <div>
@@ -177,9 +178,9 @@ export default async function MarketingHomePage() {
             <div className="absolute top-[18%] left-[-8%] h-[380px] w-[380px] rounded-full bg-[#f97316]/[0.06] blur-[130px]" />
           </Parallax>
         </div>
-        <div className="relative mx-auto max-w-[1600px] px-6 pb-20 pt-14 sm:px-10 lg:px-12 lg:pb-28 lg:pt-20">
-          <div className="grid gap-14 lg:grid-cols-[1.02fr_0.98fr] lg:items-center">
-            <HeroIn className="max-w-[600px]">
+        <div className="relative mx-auto max-w-[1200px] px-6 pb-20 pt-14 sm:px-10 lg:px-10 lg:pb-28 lg:pt-20">
+          <div className="grid gap-12 lg:grid-cols-[1.02fr_0.98fr] lg:items-center lg:gap-14">
+            <HeroIn>
               <div className={eyebrowClass}><Sparkles className="h-3.5 w-3.5" />Финансовая управляемость</div>
               <h1 className={`mt-6 ${h1Class}`}>
                 Финансы бизнеса <span className="bg-gradient-to-r from-[#16a34a] to-[#22c55e] bg-clip-text text-transparent">под контролем</span>
@@ -200,7 +201,6 @@ export default async function MarketingHomePage() {
 
             {/* Светлый дашборд */}
             <HeroIn delay={0.15}>
-              <Floating amplitude={9}>
                 <div className="rounded-[22px] border border-[#d6dde8] bg-white p-5 shadow-[0_30px_70px_-26px_rgba(15,32,56,0.4)]">
                   <div className="rounded-[18px] border border-[#e2e8f0] bg-[#eef2f8] p-5">
                     <div className="flex items-center justify-between">
@@ -239,7 +239,6 @@ export default async function MarketingHomePage() {
                     </div>
                   </div>
                 </div>
-              </Floating>
             </HeroIn>
           </div>
         </div>
@@ -247,7 +246,7 @@ export default async function MarketingHomePage() {
 
       {/* СОЦ-ДОКАЗАТЕЛЬСТВО */}
       <div className="border-y border-[#e2e8f0] bg-white">
-        <Reveal className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-center gap-x-3 gap-y-1 px-6 py-5 text-center text-[15px] font-medium text-[#5b6b82] sm:px-10 lg:px-14">
+        <Reveal className="mx-auto flex max-w-[1200px] flex-wrap items-center justify-center gap-x-3 gap-y-1 px-6 py-5 text-center text-[15px] font-medium text-[#5b6b82] sm:px-10 lg:px-10">
           <span className="h-2 w-2 rounded-full bg-[#16a34a]" />
           Уже считает финансы сети <span className="font-bold text-[#0f2038]">F16</span>
           <span className="text-[#cbd3e0]">·</span>
@@ -258,7 +257,7 @@ export default async function MarketingHomePage() {
       {/* ПРОБЛЕМЫ */}
       <section className="bg-[#eef2f8]">
         <div className={sectionClass}>
-          <Reveal className="max-w-[640px]">
+          <Reveal className={sectionHeadClass}>
             <div className={eyebrowClass}><AlertCircle className="h-3.5 w-3.5" />Знакомая ситуация?</div>
             <h2 className={`mt-5 ${h2Class}`}>Что мешает видеть реальные деньги</h2>
             <p className={`mt-4 ${leadClass}`}>Шесть ситуаций, в которых прибыль утекает незаметно — и как Orda закрывает каждую.</p>
@@ -283,7 +282,7 @@ export default async function MarketingHomePage() {
       <section className={sectionClass}>
         <Reveal>
           <div className="overflow-hidden rounded-[28px] border border-[#d6dde8] bg-[linear-gradient(160deg,#f1f8f3,#f5f7fb)] p-8 shadow-[0_24px_60px_-28px_rgba(15,32,56,0.22)] sm:p-12 lg:p-14">
-            <div className="max-w-[640px]">
+            <div className={sectionHeadClass}>
               <div className={eyebrowClass}><Rocket className="h-3.5 w-3.5" />Как это работает</div>
               <h2 className={`mt-5 ${h2Class}`}>От хаоса к цифрам — за 3&nbsp;шага</h2>
               <p className={`mt-4 ${leadClass}`}>Без своих серверов и интеграторов — запуск за день, результат уже с первой смены.</p>
@@ -316,7 +315,7 @@ export default async function MarketingHomePage() {
       {/* ВОЗМОЖНОСТИ (4 столпа) */}
       <section id="features" className="scroll-mt-20 border-y border-[#e2e8f0] bg-[#eef2f8]">
         <div className={sectionClass}>
-        <Reveal className="max-w-[640px]">
+        <Reveal className={sectionHeadClass}>
           <div className={eyebrowClass}><Boxes className="h-3.5 w-3.5" />Что внутри</div>
           <h2 className={`mt-5 ${h2Class}`}>Финансы. AI. Смены. Продажи.</h2>
           <p className={`mt-4 ${leadClass}`}>Четыре модуля, которые закрывают весь операционный учёт точки.</p>
@@ -369,7 +368,7 @@ export default async function MarketingHomePage() {
 
       {/* ДЛЯ КОГО */}
       <section className={sectionClass}>
-        <Reveal className="max-w-[640px]">
+        <Reveal className={sectionHeadClass}>
           <div className={eyebrowClass}><Users className="h-3.5 w-3.5" />Для кого</div>
           <h2 className={`mt-5 ${h2Class}`}>Бизнесу с кассой, людьми и товаром</h2>
           <p className={`mt-4 ${leadClass}`}>Если есть касса, сотрудники и товар — Orda подстраивается под вашу нишу.</p>
@@ -400,7 +399,7 @@ export default async function MarketingHomePage() {
       {/* СРАВНЕНИЕ */}
       <section className="border-y border-[#e2e8f0] bg-[#eef2f8]">
         <div className={sectionClass}>
-          <Reveal className="max-w-[640px]">
+          <Reveal className={sectionHeadClass}>
             <div className={eyebrowClass}><Scale className="h-3.5 w-3.5" />Сравнение</div>
             <h2 className={`mt-5 ${h2Class}`}>Вместо пяти программ — одна</h2>
             <p className={`mt-4 ${leadClass}`}>Excel, 1С и кассовые программы решают по куску. Orda собирает всё в одном месте.</p>
@@ -448,7 +447,7 @@ export default async function MarketingHomePage() {
 
       {/* ТАРИФЫ */}
       <section id="pricing" className={`${sectionClass} scroll-mt-20`}>
-        <Reveal className="max-w-[640px]">
+        <Reveal className={sectionHeadClass}>
           <div className={eyebrowClass}><Tag className="h-3.5 w-3.5" />Тарифы</div>
           <h2 className={`mt-5 ${h2Class}`}>Подключайте только нужное</h2>
           <p className={`mt-4 ${leadClass}`}>Цена зависит от числа точек и модулей — посчитаем индивидуально за 5 минут.</p>
@@ -482,7 +481,7 @@ export default async function MarketingHomePage() {
       {/* FAQ */}
       <section className="border-y border-[#e2e8f0] bg-[#eef2f8]">
         <div className={sectionClass}>
-          <Reveal className="max-w-[640px]">
+          <Reveal className={sectionHeadClass}>
             <div className={eyebrowClass}><HelpCircle className="h-3.5 w-3.5" />Частые вопросы</div>
             <h2 className={`mt-5 ${h2Class}`}>Что спрашивают чаще всего</h2>
           </Reveal>
@@ -530,7 +529,7 @@ export default async function MarketingHomePage() {
 
       {/* ФУТЕР */}
       <footer className="border-t border-[#e2e8f0] bg-white">
-        <div className="mx-auto max-w-[1600px] px-6 py-10 sm:px-10 lg:px-12">
+        <div className="mx-auto max-w-[1200px] px-6 py-10 sm:px-10 lg:px-10">
           <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
             <div className="max-w-[340px]">
               <div className="flex items-center gap-2.5">
