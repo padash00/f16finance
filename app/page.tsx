@@ -56,8 +56,10 @@ const bentoTitle = 'font-display text-[19px] font-bold leading-[1.25] tracking-[
 const bentoText = 'mt-1.5 text-[14px] leading-[1.55] text-[#56657d]'
 const btnPrimary =
   'rounded-[14px] bg-gradient-to-br from-[#1db955] to-[#15803d] px-8 py-[15px] text-[16.5px] font-semibold text-white shadow-[0_12px_28px_-8px_rgba(22,163,74,0.5)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_36px_-8px_rgba(22,163,74,0.6)]'
+// dark:-переопределения обязательны: у Button.outline есть dark:bg-input/30 и dark:text-foreground,
+// из-за них при тёмной теме ОС кнопка на белом лендинге становилась невидимой.
 const btnGhost =
-  'rounded-[14px] border border-[#c8d1de] bg-white px-8 py-[15px] text-[16.5px] font-semibold text-[#0f2038] transition hover:border-[#16a34a]/40 hover:text-[#15803d]'
+  'rounded-[14px] border border-[#c8d1de] bg-white px-8 py-[15px] text-[16.5px] font-semibold text-[#0f2038] shadow-none transition hover:bg-white hover:border-[#16a34a]/40 hover:text-[#15803d] dark:border-[#c8d1de] dark:bg-white dark:text-[#0f2038] dark:shadow-none dark:hover:bg-white dark:hover:text-[#15803d]'
 
 // ─────────────── ДАННЫЕ ───────────────
 
@@ -129,13 +131,13 @@ export default async function MarketingHomePage() {
             </div>
           </div>
           <nav className="flex items-center gap-1.5">
-            <Button asChild variant="ghost" className="hidden rounded-[11px] text-[14px] font-medium text-[#56657d] hover:bg-[#f3f6fa] hover:text-[#0f2038] sm:inline-flex">
+            <Button asChild variant="ghost" className="hidden rounded-[11px] text-[14px] font-medium text-[#56657d] hover:bg-[#f3f6fa] hover:text-[#0f2038] dark:hover:bg-[#f3f6fa] dark:hover:text-[#0f2038] sm:inline-flex">
               <Link href="#features">Возможности</Link>
             </Button>
-            <Button asChild variant="ghost" className="hidden rounded-[11px] text-[14px] font-medium text-[#56657d] hover:bg-[#f3f6fa] hover:text-[#0f2038] sm:inline-flex">
+            <Button asChild variant="ghost" className="hidden rounded-[11px] text-[14px] font-medium text-[#56657d] hover:bg-[#f3f6fa] hover:text-[#0f2038] dark:hover:bg-[#f3f6fa] dark:hover:text-[#0f2038] sm:inline-flex">
               <Link href="#pricing">Тарифы</Link>
             </Button>
-            <Button asChild variant="ghost" className="rounded-[11px] text-[14px] font-medium text-[#56657d] hover:bg-[#f3f6fa] hover:text-[#0f2038]">
+            <Button asChild variant="ghost" className="rounded-[11px] text-[14px] font-medium text-[#56657d] hover:bg-[#f3f6fa] hover:text-[#0f2038] dark:hover:bg-[#f3f6fa] dark:hover:text-[#0f2038]">
               <Link href="/login">Войти</Link>
             </Button>
             <Button asChild className="rounded-[12px] bg-none bg-[#16a34a] px-5 py-2 text-[14px] font-semibold text-white hover:bg-[#15803d]">
