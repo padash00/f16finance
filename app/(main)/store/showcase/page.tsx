@@ -60,6 +60,7 @@ type BalanceItem = {
     barcode: string
     unit: string
     sale_price: number
+    default_purchase_price: number
     low_stock_threshold: number | null
     category: { id: string; name: string } | null
   } | null
@@ -296,6 +297,9 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
 
   const newRequestsCount = pendingRequests.filter((r) => r.status === 'new').length
   const totalShowcaseQty = balances.reduce((s, b) => s + Number(b.quantity || 0), 0)
+  const totalPurchase = balances.reduce((s, b) => s + Number(b.quantity || 0) * Number(b.item?.default_purchase_price || 0), 0)
+  const totalSale = balances.reduce((s, b) => s + Number(b.quantity || 0) * Number(b.item?.sale_price || 0), 0)
+  const fmtMoney = (n: number) => n.toLocaleString('ru-RU', { maximumFractionDigits: 0 })
 
   const filteredBalances = balances.filter((b) => {
     if (!stockSearch.trim()) return true
@@ -372,7 +376,7 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
       })()}
 
       {/* Stats strip */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Card className="border-border bg-white dark:bg-white/[0.03] p-3">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Позиций</p>
           <p className="mt-1 text-xl font-semibold">{balances.length}</p>
@@ -384,6 +388,12 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
         <Card className={`p-3 ${newRequestsCount > 0 ? 'border-amber-500/20 bg-amber-500/[0.05]' : 'border-border bg-white dark:bg-white/[0.03]'}`}>
           <p className={`text-[10px] uppercase tracking-widest ${newRequestsCount > 0 ? 'text-amber-700 dark:text-amber-300/70' : 'text-muted-foreground'}`}>Заявок в работе</p>
           <p className={`mt-1 text-xl font-semibold ${newRequestsCount > 0 ? 'text-amber-700 dark:text-amber-300' : ''}`}>{newRequestsCount}</p>
+        </Card>
+        <Card className="border-amber-500/20 bg-amber-500/[0.05] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-amber-700 dark:text-amber-300/70">Стоимость (закуп / продажа)</p>
+          <p className="mt-1 truncate text-sm font-semibold text-amber-700 dark:text-amber-200" title={`${fmtMoney(totalPurchase)} / ${fmtMoney(totalSale)} ₸`}>
+            {fmtMoney(totalPurchase)} / {fmtMoney(totalSale)} ₸
+          </p>
         </Card>
       </div>
 

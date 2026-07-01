@@ -150,7 +150,7 @@ export async function GET(request: Request) {
 
     const { data: balanceRows, error: balErr } = await supabase
       .from('inventory_balances')
-      .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, sale_price, low_stock_threshold, category_id, category:category_id(id, name))')
+      .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, sale_price, default_purchase_price, low_stock_threshold, category_id, category:category_id(id, name))')
       .in('location_id', [warehouseLoc.id, showcaseLoc.id])
     if (balErr) throw balErr
 
