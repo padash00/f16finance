@@ -50,7 +50,7 @@ import { ContactLeadForm } from '@/components/public/contact-lead-form'
 import { FloatingCta } from '@/components/public/floating-cta'
 import { FaqStructuredData, WebsiteStructuredData } from '@/components/public/structured-data'
 import { CountUp, HeroIn, LiveDot, Parallax, Reveal, Stagger, StaggerItem } from '@/components/public/landing-motion'
-import { CopilotDemo, FeatureMarquee, GrowBars, InsightTicker, OfflineDemo, TelegramDemo } from '@/components/public/landing-demos'
+import { CopilotDemo, FeatureMarquee, GrowBars, InsightTicker, OfflineDemo, ScrollProgress, TelegramDemo } from '@/components/public/landing-demos'
 
 export const metadata: Metadata = {
   title: 'Orda Control — касса, склад, зарплаты и AI-управление бизнесом',
@@ -260,6 +260,7 @@ export default async function MarketingHomePage() {
     <main className="min-h-screen bg-white pb-[76px] text-[#0f2038] sm:pb-0">
       <WebsiteStructuredData />
       <FaqStructuredData faq={faqItems} />
+      <ScrollProgress />
 
       {/* Шапка */}
       <header className="sticky top-0 z-50 border-b border-[#e2e8f0] bg-white/80 backdrop-blur-xl">
@@ -274,6 +275,12 @@ export default async function MarketingHomePage() {
           <nav className="flex items-center gap-1.5">
             <Button asChild variant="ghost" className="hidden rounded-[11px] text-[14px] font-medium text-[#56657d] hover:bg-[#f3f6fa] hover:text-[#0f2038] sm:inline-flex">
               <Link href="#features">Возможности</Link>
+            </Button>
+            <Button asChild variant="ghost" className="hidden rounded-[11px] text-[14px] font-medium text-[#56657d] hover:bg-[#f3f6fa] hover:text-[#0f2038] lg:inline-flex">
+              <Link href="#ai">AI</Link>
+            </Button>
+            <Button asChild variant="ghost" className="hidden rounded-[11px] text-[14px] font-medium text-[#56657d] hover:bg-[#f3f6fa] hover:text-[#0f2038] lg:inline-flex">
+              <Link href="#control">Контроль</Link>
             </Button>
             <Button asChild variant="ghost" className="hidden rounded-[11px] text-[14px] font-medium text-[#56657d] hover:bg-[#f3f6fa] hover:text-[#0f2038] sm:inline-flex">
               <Link href="#pricing">Тарифы</Link>
@@ -291,6 +298,15 @@ export default async function MarketingHomePage() {
       {/* HERO */}
       <section className="relative overflow-hidden bg-[radial-gradient(60%_60%_at_50%_0%,rgba(22,163,74,0.06),transparent)]">
         <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div
+            className="absolute inset-0"
+            style={{
+              backgroundImage: 'radial-gradient(circle, rgba(15,32,56,0.09) 1px, transparent 1px)',
+              backgroundSize: '26px 26px',
+              maskImage: 'radial-gradient(70% 70% at 50% 0%, black, transparent)',
+              WebkitMaskImage: 'radial-gradient(70% 70% at 50% 0%, black, transparent)',
+            }}
+          />
           <Parallax distance={50} className="absolute inset-0">
             <div className="absolute -top-24 right-[-6%] h-[440px] w-[440px] rounded-full bg-[#16a34a]/[0.08] blur-[130px]" />
             <div className="absolute top-[18%] left-[-8%] h-[380px] w-[380px] rounded-full bg-[#f97316]/[0.06] blur-[130px]" />
@@ -364,8 +380,9 @@ export default async function MarketingHomePage() {
           <span className="text-[#cbd3e0]">·</span>
           <span className="font-semibold text-[#475569]">Arena · Ramen · Extra</span>
         </Reveal>
-        <div className="mt-5">
-          <FeatureMarquee items={marqueeFeatures} />
+        <div className="mt-5 space-y-2.5">
+          <FeatureMarquee items={marqueeFeatures.slice(0, 10)} />
+          <FeatureMarquee items={marqueeFeatures.slice(10)} reverse duration={52} />
         </div>
       </div>
 
@@ -373,7 +390,7 @@ export default async function MarketingHomePage() {
       <section className="bg-[#eef2f8]">
         <div className={sectionClass}>
           <Reveal className={sectionHeadClass}>
-            <div className={eyebrowClass}><AlertCircle className="h-3.5 w-3.5" />Знакомая ситуация?</div>
+            <Kicker num="01" icon={AlertCircle}>Знакомая ситуация?</Kicker>
             <h2 className={`mt-5 ${h2Class}`}>Что мешает видеть реальные деньги</h2>
             <p className={`mt-4 ${leadClass}`}>Восемь ситуаций, в которых прибыль утекает незаметно — и как Orda закрывает каждую.</p>
           </Reveal>
@@ -398,7 +415,7 @@ export default async function MarketingHomePage() {
         <Reveal>
           <div className="overflow-hidden rounded-[28px] border border-[#d6dde8] bg-[linear-gradient(160deg,#f1f8f3,#f5f7fb)] p-8 shadow-[0_24px_60px_-28px_rgba(15,32,56,0.22)] sm:p-12 lg:p-14">
             <div className={sectionHeadClass}>
-              <div className={eyebrowClass}><Rocket className="h-3.5 w-3.5" />Как это работает</div>
+              <Kicker num="02" icon={Rocket}>Как это работает</Kicker>
               <h2 className={`mt-5 ${h2Class}`}>От хаоса к цифрам — за 3&nbsp;шага</h2>
               <p className={`mt-4 ${leadClass}`}>Без своих серверов и интеграторов — запуск за день, результат уже с первой смены.</p>
             </div>
@@ -431,17 +448,20 @@ export default async function MarketingHomePage() {
       <section id="features" className="scroll-mt-20 border-y border-[#e2e8f0] bg-[#eef2f8]">
         <div className={sectionClass}>
           <Reveal className={sectionHeadClass}>
-            <div className={eyebrowClass}><Boxes className="h-3.5 w-3.5" />Что внутри</div>
+            <Kicker num="03" icon={Boxes}>Что внутри</Kicker>
             <h2 className={`mt-5 ${h2Class}`}>Одна система вместо пяти программ</h2>
             <p className={`mt-4 ${leadClass}`}>Касса, склад, команда и финансы — связаны между собой: продажа сразу меняет остатки, смену и прибыль.</p>
           </Reveal>
-          <div className="mt-14 space-y-16 lg:space-y-20">
+          <div className="mt-14">
             {moduleRows.map((row, idx) => {
               const Icon = row.icon
               const textFirst = idx % 2 === 0
               return (
-                <Reveal key={row.title}>
-                  <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-14">
+                <Reveal key={row.title} className={idx > 0 ? 'mt-16 border-t border-[#dbe3ee] pt-16 lg:mt-20 lg:pt-20' : ''}>
+                  <div className="relative grid items-center gap-10 lg:grid-cols-2 lg:gap-14">
+                    <span aria-hidden className="pointer-events-none absolute -top-6 right-0 hidden select-none font-display text-[120px] font-extrabold leading-none tracking-[-0.04em] text-[#0f2038]/[0.045] lg:block">
+                      {String(idx + 1).padStart(2, '0')}
+                    </span>
                     <div className={textFirst ? '' : 'lg:order-2'}>
                       <div className={eyebrowClass}><Icon className="h-3.5 w-3.5" />{row.eyebrow}</div>
                       <h3 className={`mt-4 ${h3RowClass}`}>{row.title}</h3>
@@ -470,10 +490,10 @@ export default async function MarketingHomePage() {
       </section>
 
       {/* AI-КОПИЛОТ */}
-      <section className="border-b border-[#e2e8f0] bg-[#edf5ef]">
+      <section id="ai" className="scroll-mt-20 border-b border-[#e2e8f0] bg-[#edf5ef]">
         <div className={sectionClass}>
           <Reveal className={sectionHeadClass}>
-            <div className={eyebrowClass}><Bot className="h-3.5 w-3.5" />AI-помощник</div>
+            <Kicker num="04" icon={Bot}>AI-помощник</Kicker>
             <h2 className={`mt-5 ${h2Class}`}>AI, который не только советует — он делает</h2>
             <p className={`mt-4 ${leadClass}`}>Напишите копилоту как человеку: он начислит премию, создаст промокод, оприходует накладную и объяснит, почему упала маржа. 110+ действий.</p>
           </Reveal>
@@ -498,10 +518,10 @@ export default async function MarketingHomePage() {
       </section>
 
       {/* TELEGRAM */}
-      <section className={sectionClass}>
+      <section id="telegram" className={`${sectionClass} scroll-mt-20`}>
         <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-14">
           <Reveal>
-            <div className={eyebrowClass}><MessageCircle className="h-3.5 w-3.5" />Telegram-бот</div>
+            <Kicker num="05" icon={MessageCircle}>Telegram-бот</Kicker>
             <h2 className={`mt-5 ${h2Class}`}>Бизнес управляется из мессенджера</h2>
             <p className={`mt-4 ${leadClass}`}>Не нужно открывать программы: бот сам присылает главное и понимает вопросы своими словами.</p>
             <ul className="mt-7 space-y-3">
@@ -521,12 +541,17 @@ export default async function MarketingHomePage() {
       </section>
 
       {/* КОНТРОЛЬ И ЧЕСТНОСТЬ — тёмная секция */}
-      <section className="bg-[#0f2038]">
-        <div className={sectionClass}>
+      <section id="control" className="relative scroll-mt-20 overflow-hidden bg-[#0f2038]">
+        <div aria-hidden className="pointer-events-none absolute inset-0">
+          <div
+            className="absolute inset-0"
+            style={{ backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.07) 1px, transparent 1px)', backgroundSize: '28px 28px' }}
+          />
+          <div className="absolute -top-40 left-1/2 h-[420px] w-[760px] -translate-x-1/2 rounded-full bg-[#16a34a]/[0.14] blur-[130px]" />
+        </div>
+        <div className={`relative ${sectionClass}`}>
           <Reveal className={sectionHeadClass}>
-            <div className="inline-flex items-center gap-2 rounded-full border border-[#16a34a]/40 bg-[#16a34a]/[0.15] px-4 py-2 text-[13px] font-semibold uppercase tracking-[0.1em] text-[#4ade80]">
-              <ShieldCheck className="h-3.5 w-3.5" />Контроль и честность
-            </div>
+            <Kicker num="06" icon={ShieldCheck} dark>Контроль и честность</Kicker>
             <h2 className="mt-5 font-display text-balance text-[32px] font-bold leading-[1.1] tracking-[-0.02em] text-white sm:text-[40px] lg:text-[44px]">
               Деньги и товар перестают «испаряться»
             </h2>
@@ -552,25 +577,29 @@ export default async function MarketingHomePage() {
       </section>
 
       {/* ЦИФРЫ */}
-      <section className="border-b border-[#e2e8f0] bg-white">
+      <section className="bg-white">
         <div className="mx-auto max-w-[1200px] px-6 py-14 sm:px-10 lg:px-10">
-          <Stagger className="grid grid-cols-2 gap-8 text-center lg:grid-cols-4">
+          <Stagger className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             {numbers.map((n) => (
               <StaggerItem key={n.label}>
-                <div className="font-display text-[40px] font-extrabold tracking-[-0.02em] text-[#0f2038] sm:text-[48px]">
-                  <CountUp value={n.value} suffix={n.suffix} />
+                <div className="h-full rounded-[18px] border border-[#d6dde8] bg-white p-6 text-center shadow-[0_12px_34px_-16px_rgba(15,32,56,0.14)] transition duration-300 hover:-translate-y-1 hover:border-[#16a34a]/30">
+                  <div className="font-display text-[38px] font-extrabold tracking-[-0.02em] text-[#15803d] sm:text-[46px]">
+                    <CountUp value={n.value} suffix={n.suffix} />
+                  </div>
+                  <div className="mt-1 text-[13.5px] font-medium leading-[1.4] text-[#5b6b82]">{n.label}</div>
                 </div>
-                <div className="mt-1 text-[13.5px] font-medium leading-[1.4] text-[#5b6b82]">{n.label}</div>
               </StaggerItem>
             ))}
           </Stagger>
         </div>
       </section>
 
+      <OrnamentDivider />
+
       {/* ДЛЯ КОГО */}
       <section className={sectionClass}>
         <Reveal className={sectionHeadClass}>
-          <div className={eyebrowClass}><Users className="h-3.5 w-3.5" />Для кого</div>
+          <Kicker num="07" icon={Users}>Для кого</Kicker>
           <h2 className={`mt-5 ${h2Class}`}>Бизнесу с кассой, людьми и товаром</h2>
           <p className={`mt-4 ${leadClass}`}>Если есть касса, сотрудники и товар — Orda подстраивается под вашу нишу.</p>
         </Reveal>
@@ -601,7 +630,7 @@ export default async function MarketingHomePage() {
       <section className="border-y border-[#e2e8f0] bg-[#eef2f8]">
         <div className={sectionClass}>
           <Reveal className={sectionHeadClass}>
-            <div className={eyebrowClass}><Scale className="h-3.5 w-3.5" />Сравнение</div>
+            <Kicker num="08" icon={Scale}>Сравнение</Kicker>
             <h2 className={`mt-5 ${h2Class}`}>Вместо пяти программ — одна</h2>
             <p className={`mt-4 ${leadClass}`}>Excel, 1С и кассовые программы решают по куску. Orda собирает всё в одном месте.</p>
           </Reveal>
@@ -649,7 +678,7 @@ export default async function MarketingHomePage() {
       {/* ТАРИФЫ */}
       <section id="pricing" className={`${sectionClass} scroll-mt-20`}>
         <Reveal className={sectionHeadClass}>
-          <div className={eyebrowClass}><Tag className="h-3.5 w-3.5" />Тарифы</div>
+          <Kicker num="09" icon={Tag}>Тарифы</Kicker>
           <h2 className={`mt-5 ${h2Class}`}>Подключайте только нужное</h2>
           <p className={`mt-4 ${leadClass}`}>Цена зависит от числа точек и модулей — посчитаем индивидуально за 5 минут.</p>
         </Reveal>
@@ -683,7 +712,7 @@ export default async function MarketingHomePage() {
       <section className="border-y border-[#e2e8f0] bg-[#eef2f8]">
         <div className={sectionClass}>
           <Reveal className={sectionHeadClass}>
-            <div className={eyebrowClass}><HelpCircle className="h-3.5 w-3.5" />Частые вопросы</div>
+            <Kicker num="10" icon={HelpCircle}>Частые вопросы</Kicker>
             <h2 className={`mt-5 ${h2Class}`}>Что спрашивают чаще всего</h2>
           </Reveal>
           <Stagger className="mt-10 grid gap-3 md:grid-cols-2">
@@ -788,6 +817,37 @@ function StatCard({ label, value, unit, suffix, delta, up }: { label: string; va
         {unit ? <span className="text-[12px] text-[#64748b]">{unit}</span> : null}
       </div>
       <div className={'mt-1 text-[11px] font-semibold ' + (up ? 'text-[#16a34a]' : 'text-[#94a3b8]')}>{delta} к среднему</div>
+    </div>
+  )
+}
+
+/** Нумерованный кикер секции: делит страницу на «главы» 01…09. */
+function Kicker({ num, icon: Icon, children, dark = false }: { num: string; icon: any; children: React.ReactNode; dark?: boolean }) {
+  return (
+    <div
+      className={
+        dark
+          ? 'inline-flex items-center gap-2.5 rounded-full border border-[#16a34a]/40 bg-[#16a34a]/[0.15] px-4 py-2 text-[13px] font-semibold uppercase tracking-[0.1em] text-[#4ade80]'
+          : `${eyebrowClass} gap-2.5`
+      }
+    >
+      <span className={dark ? 'font-display text-[12px] font-extrabold tabular-nums text-[#4ade80]' : 'font-display text-[12px] font-extrabold tabular-nums text-[#16a34a]'}>{num}</span>
+      <span className={dark ? 'h-3.5 w-px bg-[#4ade80]/40' : 'h-3.5 w-px bg-[#16a34a]/30'} />
+      <Icon className="h-3.5 w-3.5" />
+      {children}
+    </div>
+  )
+}
+
+/** Декоративный разделитель секций с брендовым ромбом. */
+function OrnamentDivider() {
+  return (
+    <div aria-hidden className="mx-auto flex max-w-[1200px] items-center gap-5 px-6 sm:px-10 lg:px-10">
+      <div className="h-px flex-1 bg-gradient-to-r from-transparent to-[#dbe3ee]" />
+      <span className="grid h-7 w-7 rotate-45 place-items-center rounded-[7px] border border-[#16a34a]/30 bg-[#16a34a]/[0.06]">
+        <span className="h-2 w-2 -rotate-45 rounded-[2px] bg-[#16a34a]" />
+      </span>
+      <div className="h-px flex-1 bg-gradient-to-l from-transparent to-[#dbe3ee]" />
     </div>
   )
 }

@@ -4,11 +4,25 @@
 // Каждая демка — зацикленная мини-история (Telegram-приёмка, AI-копилот, офлайн-касса).
 // Все уважают prefers-reduced-motion: без анимации показывается финальный кадр.
 
-import { AnimatePresence, motion, useInView, useReducedMotion } from 'framer-motion'
+import { AnimatePresence, motion, useInView, useReducedMotion, useScroll } from 'framer-motion'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Bot, CheckCircle2, CloudOff, FileText, RefreshCw, Wifi } from 'lucide-react'
 
 const EASE = [0.16, 1, 0.3, 1] as const
+
+/** Тонкий прогресс-бар чтения страницы поверх шапки. */
+export function ScrollProgress() {
+  const rm = useReducedMotion()
+  const { scrollYProgress } = useScroll()
+  if (rm) return null
+  return (
+    <motion.div
+      aria-hidden
+      style={{ scaleX: scrollYProgress }}
+      className="fixed inset-x-0 top-0 z-[60] h-[3px] origin-left bg-gradient-to-r from-[#16a34a] via-[#22c55e] to-[#16a34a]"
+    />
+  )
+}
 
 /** Тикер AI-инсайтов: строки сменяют друг друга с мягким слайдом. */
 export function InsightTicker({ items, intervalMs = 4200, className }: { items: string[]; intervalMs?: number; className?: string }) {
@@ -57,8 +71,8 @@ export function GrowBars({ values, highlightLast = true }: { values: number[]; h
   )
 }
 
-/** Бегущая строка чипов-возможностей (бесшовный marquee). */
-export function FeatureMarquee({ items, duration = 44 }: { items: string[]; duration?: number }) {
+/** Бегущая строка чипов-возможностей (бесшовный marquee, reverse — в обратную сторону). */
+export function FeatureMarquee({ items, duration = 44, reverse = false }: { items: string[]; duration?: number; reverse?: boolean }) {
   const rm = useReducedMotion()
   const row = (
     <div className="flex shrink-0 items-center gap-2.5 pr-2.5">
@@ -79,7 +93,7 @@ export function FeatureMarquee({ items, duration = 44 }: { items: string[]; dura
   }
   return (
     <div className="relative overflow-hidden" style={{ maskImage: 'linear-gradient(90deg,transparent,black 8%,black 92%,transparent)' }}>
-      <motion.div className="flex w-max" animate={{ x: ['0%', '-50%'] }} transition={{ duration, repeat: Infinity, ease: 'linear' }}>
+      <motion.div className="flex w-max" animate={{ x: reverse ? ['-50%', '0%'] : ['0%', '-50%'] }} transition={{ duration, repeat: Infinity, ease: 'linear' }}>
         {row}
         {row}
       </motion.div>
