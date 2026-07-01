@@ -7,6 +7,7 @@ import {
   BadgePercent,
   Bot,
   Boxes,
+  MessageCircle,
   Building2,
   Camera,
   Check,
@@ -15,7 +16,6 @@ import {
   CloudOff,
   Eye,
   FileCheck,
-  GraduationCap,
   HelpCircle,
   LineChart,
   Scale,
@@ -53,7 +53,7 @@ const leadClass = 'text-pretty text-[17px] leading-[1.55] text-[#56657d] sm:text
 const bentoCard =
   'relative flex h-full flex-col overflow-hidden rounded-[22px] border border-[#dbe3ee] bg-white p-6 shadow-[0_10px_30px_-18px_rgba(15,32,56,0.2)] transition duration-300 hover:border-[#16a34a]/35 sm:p-7'
 const bentoTitle = 'font-display text-[19px] font-bold leading-[1.25] tracking-[-0.01em] text-[#0f2038] sm:text-[21px]'
-const bentoText = 'mt-1.5 text-[14px] leading-[1.55] text-[#56657d]'
+const bentoText = 'mt-3 text-[14px] leading-[1.55] text-[#56657d]'
 const btnPrimary =
   'rounded-[14px] bg-gradient-to-br from-[#1db955] to-[#15803d] px-8 py-[15px] text-[16.5px] font-semibold text-white shadow-[0_12px_28px_-8px_rgba(22,163,74,0.5)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_36px_-8px_rgba(22,163,74,0.6)]'
 // dark:-переопределения обязательны: у Button.outline есть dark:bg-input/30 и dark:text-foreground,
@@ -241,48 +241,42 @@ export default async function MarketingHomePage() {
             <p className={`mt-3 ${leadClass}`}>Касса, склад, команда, финансы и AI связаны между собой: продажа сразу меняет остатки, смену и прибыль.</p>
           </Reveal>
 
-          <Stagger className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-12">
-            {/* AI-копилот — большая карта */}
-            <StaggerItem className="md:col-span-2 lg:col-span-7">
+          <Stagger className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-6">
+            {/* Ряд 1: два флагмана пополам */}
+            <StaggerItem className="md:col-span-2 lg:col-span-3">
               <div className={bentoCard}>
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <h3 className={bentoTitle}>AI-копилот: не советует — делает</h3>
-                    <p className={bentoText}>Напишите как человеку: начислит премию, создаст промокод, оприходует накладную, объяснит падение маржи.</p>
-                  </div>
-                  <span className="hidden shrink-0 rounded-full bg-[#16a34a]/10 px-3 py-1.5 text-[12px] font-bold text-[#15803d] sm:block"><CountUp value={110} suffix="+" /> действий</span>
-                </div>
-                <div className="mt-5 flex-1"><CopilotDemo /></div>
+                <BentoHead icon={Bot} title="AI-копилот: не советует — делает" badge="110+ действий" />
+                <p className={bentoText}>Напишите как человеку: начислит премию, создаст промокод, оприходует накладную, объяснит падение маржи.</p>
+                <div className="mt-auto pt-5"><CopilotDemo /></div>
               </div>
             </StaggerItem>
 
-            {/* Telegram — высокая карта */}
-            <StaggerItem className="md:col-span-2 lg:col-span-5 lg:row-span-2">
+            <StaggerItem className="md:col-span-2 lg:col-span-3">
               <div className={bentoCard}>
-                <h3 className={bentoTitle}>Telegram-бот: бизнес в мессенджере</h3>
-                <p className={bentoText}>Фото накладной → готовая приёмка. Итоги дня — каждое утро. Зарплата — сотрудникам в личку. Вопросы — своими словами.</p>
-                <div className="mt-5 flex-1"><TelegramDemo /></div>
+                <BentoHead icon={MessageCircle} title="Telegram-бот: бизнес в мессенджере" />
+                <p className={bentoText}>Фото накладной → готовая приёмка. Итоги дня — каждое утро. Зарплата — сотрудникам в личку.</p>
+                <div className="mt-auto pt-5"><TelegramDemo /></div>
               </div>
             </StaggerItem>
 
-            {/* Офлайн-касса */}
-            <StaggerItem className="lg:col-span-4">
+            {/* Ряд 2: три равных */}
+            <StaggerItem className="lg:col-span-2">
               <div className={bentoCard}>
-                <div className="flex items-center gap-2 text-[#15803d]"><CloudOff className="h-5 w-5" /></div>
-                <h3 className={`mt-3 ${bentoTitle}`}>Касса без интернета</h3>
-                <p className={bentoText}>Сеть упала — торговля идёт. Продажи копятся в очередь и синхронизируются сами. Чеки ККМ и ОФД по приказу МФ РК №626.</p>
-                <div className="mt-4"><OfflineDemo /></div>
+                <BentoHead icon={CloudOff} title="Касса без интернета" />
+                <p className={bentoText}>Сеть упала — торговля идёт: продажи копятся в очередь и синхронизируются сами. Чеки ККМ и ОФД — приказ МФ РК №626.</p>
+                <div className="mt-auto pt-5"><OfflineDemo /></div>
               </div>
             </StaggerItem>
 
-            {/* Контроль — тёмная карта */}
-            <StaggerItem className="lg:col-span-3">
+            <StaggerItem className="lg:col-span-2">
               <div className="relative flex h-full flex-col overflow-hidden rounded-[22px] border border-[#0f2038] bg-[#0f2038] p-6 shadow-[0_10px_30px_-18px_rgba(15,32,56,0.5)] sm:p-7">
                 <div aria-hidden className="pointer-events-none absolute inset-0" style={{ backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.07) 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
-                <div className="relative">
-                  <ShieldCheck className="h-5 w-5 text-[#4ade80]" />
-                  <h3 className="mt-3 font-display text-[19px] font-bold leading-[1.25] text-white sm:text-[21px]">Недостачу не спрятать</h3>
-                  <ul className="mt-4 space-y-3">
+                <div className="relative flex h-full flex-col">
+                  <div className="flex items-center gap-3">
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] bg-[#4ade80]/15 text-[#4ade80]"><ShieldCheck className="h-5 w-5" /></span>
+                    <h3 className="font-display text-[19px] font-bold leading-[1.25] text-white sm:text-[20px]">Недостачу не спрятать</h3>
+                  </div>
+                  <ul className="mt-auto space-y-3 pt-5">
                     {[
                       { icon: Eye, text: 'Слепые ревизии: считают, не видя остаток' },
                       { icon: Wallet, text: 'Недостача — долгом из зарплаты' },
@@ -291,7 +285,7 @@ export default async function MarketingHomePage() {
                     ].map((f) => {
                       const Icon = f.icon
                       return (
-                        <li key={f.text} className="flex items-start gap-2.5 text-[13.5px] leading-[1.5] text-[#c3d0e2]">
+                        <li key={f.text} className="flex items-start gap-2.5 rounded-[11px] bg-white/[0.06] px-3.5 py-2.5 text-[13px] leading-[1.5] text-[#dbe6f4]">
                           <Icon className="mt-0.5 h-4 w-4 shrink-0 text-[#4ade80]" />{f.text}
                         </li>
                       )
@@ -301,13 +295,11 @@ export default async function MarketingHomePage() {
               </div>
             </StaggerItem>
 
-            {/* Склад и закуп */}
-            <StaggerItem className="lg:col-span-4">
+            <StaggerItem className="lg:col-span-2">
               <div className={bentoCard}>
-                <div className="flex items-center gap-2 text-[#15803d]"><Camera className="h-5 w-5" /></div>
-                <h3 className={`mt-3 ${bentoTitle}`}>Склад сам говорит, что закупать</h3>
+                <BentoHead icon={Camera} title="Склад сам говорит, что закупать" />
                 <p className={bentoText}>AI распознаёт фото накладной. План закупа — по продажам и остаткам, с автозаявками поставщикам.</p>
-                <div className="mt-4 space-y-2">
+                <div className="mt-auto space-y-2 pt-5">
                   {[
                     { name: 'Энергетик 0,45 л', note: 'осталось на 3 дня', qty: '4 уп.' },
                     { name: 'Вода 0,5 л', note: 'точка дозаказа', qty: '6 уп.' },
@@ -325,31 +317,30 @@ export default async function MarketingHomePage() {
               </div>
             </StaggerItem>
 
-            {/* Команда и зарплата */}
-            <StaggerItem className="lg:col-span-4">
+            {/* Ряд 3: три равных */}
+            <StaggerItem className="lg:col-span-2">
               <div className={bentoCard}>
-                <div className="flex items-center gap-2 text-[#15803d]"><Smartphone className="h-5 w-5" /></div>
-                <h3 className={`mt-3 ${bentoTitle}`}>Зарплата и смены — без споров</h3>
-                <p className={bentoText}>Ставка, процент, KPI, бонусы и штрафы считаются сами. У сотрудника — кабинет в телефоне.</p>
-                <div className="mt-4 rounded-[14px] border border-[#e2e8f0] bg-[#f7f9fc] p-4">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#64748b]">К выплате за неделю</div>
-                  <div className="mt-1 font-display text-[24px] font-extrabold text-[#0f2038] tabular-nums">86 400 ₸</div>
-                  <div className="mt-0.5 text-[11.5px] text-[#64748b]">5 смен · бонус за оборот · −1 долг</div>
-                </div>
-                <div className="mt-2 flex items-center justify-between rounded-[11px] bg-[#f7f9fc] px-3.5 py-2.5 text-[13px]">
-                  <span className="font-semibold text-[#0f2038]">Смена завтра · 09:00</span>
-                  <span className="rounded-full bg-[#16a34a]/10 px-2 py-0.5 text-[10.5px] font-semibold text-[#15803d]">Подтверждена</span>
+                <BentoHead icon={Smartphone} title="Зарплата и смены — без споров" />
+                <p className={bentoText}>Ставка, процент, KPI, бонусы и штрафы считаются сами. У сотрудника — кабинет в телефоне и AI-квизы для обучения.</p>
+                <div className="mt-auto space-y-2 pt-5">
+                  <div className="rounded-[14px] border border-[#e2e8f0] bg-[#f7f9fc] p-4">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#64748b]">К выплате за неделю</div>
+                    <div className="mt-1 font-display text-[24px] font-extrabold text-[#0f2038] tabular-nums">86 400 ₸</div>
+                    <div className="mt-0.5 text-[11.5px] text-[#64748b]">5 смен · бонус за оборот · −1 долг</div>
+                  </div>
+                  <div className="flex items-center justify-between rounded-[11px] bg-[#f7f9fc] px-3.5 py-2.5 text-[13px]">
+                    <span className="font-semibold text-[#0f2038]">Квиз по стандартам смены</span>
+                    <span className="rounded-full bg-[#16a34a]/10 px-2.5 py-0.5 text-[11px] font-bold text-[#15803d]">5/5</span>
+                  </div>
                 </div>
               </div>
             </StaggerItem>
 
-            {/* Финансы владельца */}
-            <StaggerItem className="lg:col-span-4">
+            <StaggerItem className="lg:col-span-2">
               <div className={bentoCard}>
-                <div className="flex items-center gap-2 text-[#15803d]"><LineChart className="h-5 w-5" /></div>
-                <h3 className={`mt-3 ${bentoTitle}`}>Цифры уровня финдиректора</h3>
+                <BentoHead icon={LineChart} title="Цифры уровня финдиректора" />
                 <p className={bentoText}>ОПиУ, Cash Flow, налоги ИП (форма 910), оценка бизнеса и финмодель новой точки.</p>
-                <div className="mt-4 space-y-2">
+                <div className="mt-auto space-y-2 pt-5">
                   {[
                     { name: 'Выручка', sum: '12 480 000 ₸', strong: false },
                     { name: 'Расходы и ФОТ', sum: '−10 520 000 ₸', strong: false },
@@ -364,34 +355,22 @@ export default async function MarketingHomePage() {
               </div>
             </StaggerItem>
 
-            {/* Лояльность */}
-            <StaggerItem className="lg:col-span-4">
+            <StaggerItem className="lg:col-span-2">
               <div className={bentoCard}>
-                <div className="flex items-center gap-2 text-[#15803d]"><BadgePercent className="h-5 w-5" /></div>
-                <h3 className={`mt-3 ${bentoTitle}`}>Клиенты возвращаются</h3>
-                <p className={bentoText}>Бонусные баллы, промокоды, акции и смешанная оплата. Сегментация клиентов — кого удерживать, кого возвращать.</p>
-                <div className="mt-4 flex items-center justify-between rounded-[14px] border border-[#e2e8f0] bg-[#f7f9fc] p-4 text-[13px]">
-                  <div>
-                    <div className="font-semibold text-[#0f2038]">Чек 3 640 ₸ · нал + Kaspi</div>
-                    <div className="mt-0.5 text-[11.5px] text-[#15803d]">Клиенту начислено 36 бонусов</div>
+                <BentoHead icon={BadgePercent} title="Клиенты возвращаются" />
+                <p className={bentoText}>Бонусные баллы, промокоды, акции и смешанная оплата. Сегментация: кого удерживать, кого возвращать.</p>
+                <div className="mt-auto space-y-2 pt-5">
+                  <div className="flex items-center justify-between rounded-[14px] border border-[#e2e8f0] bg-[#f7f9fc] p-4 text-[13px]">
+                    <div>
+                      <div className="font-semibold text-[#0f2038]">Чек 3 640 ₸ · нал + Kaspi</div>
+                      <div className="mt-0.5 text-[11.5px] text-[#15803d]">Клиенту начислено 36 бонусов</div>
+                    </div>
+                    <CheckCircle2 className="h-5 w-5 shrink-0 text-[#16a34a]" />
                   </div>
-                  <CheckCircle2 className="h-5 w-5 shrink-0 text-[#16a34a]" />
-                </div>
-              </div>
-            </StaggerItem>
-
-            {/* Обучение команды */}
-            <StaggerItem className="lg:col-span-4">
-              <div className={bentoCard}>
-                <div className="flex items-center gap-2 text-[#15803d]"><GraduationCap className="h-5 w-5" /></div>
-                <h3 className={`mt-3 ${bentoTitle}`}>Новички учатся сами</h3>
-                <p className={bentoText}>База знаний с обязательным подтверждением, AI-квизы по правилам, чек-листы смены с авто-штрафами и премиями.</p>
-                <div className="mt-4 flex items-center justify-between rounded-[14px] border border-[#e2e8f0] bg-[#f7f9fc] p-4 text-[13px]">
-                  <div>
-                    <div className="font-semibold text-[#0f2038]">Квиз по стандартам смены</div>
-                    <div className="mt-0.5 text-[11.5px] text-[#64748b]">5 вопросов · сгенерирован AI</div>
+                  <div className="flex items-center justify-between rounded-[11px] bg-[#f7f9fc] px-3.5 py-2.5 text-[13px]">
+                    <span className="font-semibold text-[#0f2038]">Промокод на выходные −10%</span>
+                    <span className="rounded-full bg-[#16a34a]/10 px-2.5 py-0.5 text-[11px] font-bold text-[#15803d]">Активен</span>
                   </div>
-                  <span className="rounded-full bg-[#16a34a]/10 px-2.5 py-1 text-[11.5px] font-bold text-[#15803d]">5/5</span>
                 </div>
               </div>
             </StaggerItem>
@@ -601,6 +580,19 @@ export default async function MarketingHomePage() {
 }
 
 // ─────────────── ВСПОМОГАТЕЛЬНЫЕ ───────────────
+
+/** Единая шапка bento-карты: иконка-чип + заголовок (+ бейдж справа). */
+function BentoHead({ icon: Icon, title, badge }: { icon: any; title: string; badge?: string }) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div className="flex items-center gap-3">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] bg-[#16a34a]/10 text-[#15803d]"><Icon className="h-5 w-5" /></span>
+        <h3 className={bentoTitle}>{title}</h3>
+      </div>
+      {badge ? <span className="hidden shrink-0 rounded-full bg-[#16a34a]/10 px-3 py-1.5 text-[12px] font-bold text-[#15803d] xl:block">{badge}</span> : null}
+    </div>
+  )
+}
 
 function StatCard({ label, value, unit, suffix, delta, up }: { label: string; value: number; unit?: string; suffix?: string; delta: string; up?: boolean }) {
   return (
