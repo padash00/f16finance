@@ -5,6 +5,7 @@ import Link from 'next/link'
 import {
   AlertCircle,
   ArrowRight,
+  Check,
   CheckCircle2,
   ChevronDown,
   ClipboardList,
@@ -12,12 +13,14 @@ import {
   MoreHorizontal,
   Minus,
   Package,
+  Pencil,
   Plus,
   Printer,
   RefreshCw,
   ShoppingBag,
   Store,
   Trash2,
+  X,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -139,6 +142,11 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
   const [sendError, setSendError] = useState<string | null>(null)
 
   const [stockSearch, setStockSearch] = useState('')
+
+  // Инлайн-правка остатка витрины (карандашик, как «Подсобка» на складе)
+  const [editingSc, setEditingSc] = useState<string | null>(null)
+  const [editScVal, setEditScVal] = useState('')
+  const [savingSc, setSavingSc] = useState(false)
 
   // Return to warehouse panel
   const [showReturnPanel, setShowReturnPanel] = useState(false)
@@ -290,6 +298,34 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
       setReturnError(err?.message || 'Ошибка')
     } finally {
       setReturning(false)
+    }
+  }
+
+  async function handleSetShowcase(itemId: string) {
+    if (!selectedCompanyId) return
+    const qty = parseQty(editScVal)
+    setSavingSc(true)
+    try {
+      const res = await fetch('/api/admin/store/showcase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'setShowcase',
+          company_id: selectedCompanyId,
+          item_id: itemId,
+          quantity: qty,
+        }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok || !json?.ok) {
+        alert(json?.error || 'Ошибка сохранения')
+        return
+      }
+      setEditingSc(null)
+      setEditScVal('')
+      await load(selectedCompanyId)
+    } finally {
+      setSavingSc(false)
     }
   }
 
@@ -528,8 +564,42 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
                         <span className="text-sm font-semibold text-amber-700 dark:text-amber-300">{b.warehouse_quantity}</span>
                       </td>
                       <td className="w-24 py-2.5 px-2 text-right align-middle">
-                        <span className={`text-sm font-semibold ${qtyColor}`}>{b.quantity}</span>
-                        <span className="ml-1 text-[10px] text-muted-foreground">{b.item?.unit || 'шт'}</span>
+                        {editingSc === b.item_id ? (
+                          <div className="flex items-center justify-end gap-1">
+                            <Input
+                              value={editScVal}
+                              onChange={(e) => setEditScVal(e.target.value)}
+                              className="h-7 w-14 px-1 text-center text-xs"
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') void handleSetShowcase(b.item_id)
+                                if (e.key === 'Escape') { setEditingSc(null); setEditScVal('') }
+                              }}
+                            />
+                            <button
+                              onClick={() => void handleSetShowcase(b.item_id)}
+                              disabled={savingSc}
+                              className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 disabled:opacity-50"
+                            >
+                              {savingSc ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                            </button>
+                            <button
+                              onClick={() => { setEditingSc(null); setEditScVal('') }}
+                              className="text-muted-foreground hover:text-rose-400"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => { setEditingSc(b.item_id); setEditScVal(String(b.quantity)) }}
+                            className={`inline-flex items-center justify-end gap-1 text-sm font-semibold ${qtyColor} hover:opacity-80`}
+                          >
+                            {b.quantity}
+                            <span className="text-[10px] font-normal text-muted-foreground">{b.item?.unit || 'шт'}</span>
+                            <Pencil className="h-3 w-3 opacity-40" />
+                          </button>
+                        )}
                       </td>
                       <td className="w-24 py-2.5 px-2 pr-4 text-right align-middle">
                         <span className="text-xs text-muted-foreground">{b.item?.sale_price ? `${b.item.sale_price} ₸` : '—'}</span>

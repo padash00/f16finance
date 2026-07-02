@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { humanizeDbError } from '@/lib/server/db-error-humanize'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
@@ -243,6 +243,69 @@ export async function POST(request: Request) {
 
     const body = await request.json().catch(() => null)
     if (!body?.action) return json({ error: 'action-required' }, 400)
+
+    // ── setShowcase: установить точный остаток витрины (карандашик, как на складе) ──
+    if (body.action === 'setShowcase') {
+      // Отдельного кода права на витрину нет — правка остатков закрыта тем же
+      // store-warehouse.edit, что и карандашик подсобки на складе.
+      const capDenied = await requireStaffCapability(access, 'store-warehouse.edit')
+      if (capDenied) return capDenied
+      const companyId = String(body.company_id || '').trim()
+      if (!companyId) return json({ error: 'company-id-required' }, 400)
+
+      if (!access.isSuperAdmin && companyScope.allowedCompanyIds?.length) {
+        if (!companyScope.allowedCompanyIds.includes(companyId)) return json({ error: 'forbidden' }, 403)
+      }
+
+      const itemId = String(body.item_id || '').trim()
+      if (!itemId) return json({ error: 'item-id-required' }, 400)
+      const qty = normalizeQty(body.quantity)
+      if (qty < 0) return json({ error: 'quantity-invalid' }, 400)
+
+      const showcaseLoc = await ensureCompanyLocation(supabase, companyId, 'point_display')
+      const actorUserId = access.staffMember?.id || null
+      const now = new Date().toISOString()
+
+      const { data: beforeRow } = await supabase
+        .from('inventory_balances')
+        .select('quantity')
+        .eq('location_id', showcaseLoc.id)
+        .eq('item_id', itemId)
+        .maybeSingle()
+      const beforeQty = Number((beforeRow as any)?.quantity) || 0
+
+      const { error: upsertErr } = await supabase
+        .from('inventory_balances')
+        .upsert({ location_id: showcaseLoc.id, item_id: itemId, quantity: qty, updated_at: now }, { onConflict: 'location_id,item_id' })
+      if (upsertErr) throw upsertErr
+
+      const delta = qty - beforeQty
+      if (Math.abs(delta) > 0.0005) {
+        const { error: mErr } = await supabase.from('inventory_movements').insert({
+          item_id: itemId,
+          movement_type: 'inventory_adjustment',
+          quantity: Math.abs(delta),
+          from_location_id: delta < 0 ? showcaseLoc.id : null,
+          to_location_id: delta > 0 ? showcaseLoc.id : null,
+          reference_type: 'showcase_set',
+          reference_id: null,
+          comment: String(body.comment || '').trim() || 'Установка остатка витрины',
+          actor_user_id: actorUserId,
+          created_at: now,
+        })
+        if (mErr) await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/store/showcase.setShowcase:movement', message: mErr.message })
+      }
+
+      await writeAuditLog(supabase, {
+        actorUserId,
+        entityType: 'inventory-showcase-alloc',
+        entityId: showcaseLoc.id,
+        action: 'set_showcase',
+        payload: { company_id: companyId, item_id: itemId, quantity: qty },
+      })
+
+      return json({ ok: true })
+    }
 
     if (body.action === 'createRequest') {
       const capDenied = await requireStaffCapability(access, 'store-showcase.move')
