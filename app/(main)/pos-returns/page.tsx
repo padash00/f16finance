@@ -242,64 +242,72 @@ export default function PosReturnsPage({ embedded = false }: { embedded?: boolea
 
       {/* Success Result */}
       {result && (
-        <Card className="mb-6 border-emerald-500/30 bg-emerald-500/5">
-          <CardContent className="p-6">
-            <div className="flex items-start gap-4">
-              <CheckCircle className="h-8 w-8 text-emerald-400 shrink-0 mt-0.5" />
-              <div>
-                <h2 className="text-lg font-bold text-emerald-400">Возврат оформлен</h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Номер возврата:{' '}
-                  <span className="font-mono text-foreground">
-                    {result.return_id.slice(-12).toUpperCase()}
-                  </span>
-                </p>
-                <p className="mt-2 text-xl font-bold">
-                  Сумма возврата: {formatMoney(result.return_amount)}
-                </p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Товары возвращены в витрину (доступный остаток точки)
-                </p>
+        <Card className="mb-6 overflow-hidden border-emerald-500/30 bg-gradient-to-b from-emerald-500/[0.08] via-emerald-500/[0.03] to-transparent">
+          <CardContent className="p-8 sm:p-10">
+            <div className="mx-auto flex max-w-md flex-col items-center text-center">
+              <div className="grid h-16 w-16 place-items-center rounded-full bg-emerald-500/15 ring-8 ring-emerald-500/[0.07]">
+                <CheckCircle className="h-8 w-8 text-emerald-500" />
               </div>
+              <h2 className="mt-5 text-xl font-bold">Возврат оформлен</h2>
+              <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+                Деньги возвращаются тем же способом, каким платил клиент. Возврат уже учтён в смене и записан в журнал.
+              </p>
+              <div className="mt-6 font-display text-4xl font-extrabold tracking-tight text-emerald-600 dark:text-emerald-400">
+                {formatMoney(result.return_amount)}
+              </div>
+              <span className="mt-3 rounded-full border border-border bg-surface-muted px-3.5 py-1.5 font-mono text-xs text-muted-foreground">
+                № {result.return_id.slice(-12).toUpperCase()}
+              </span>
+              <Button onClick={handleReset} className="mt-7">
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Оформить ещё возврат
+              </Button>
             </div>
           </CardContent>
         </Card>
       )}
 
       {/* Search */}
-      {!result && (
+      {!result && !sale && (
         <Card className="mb-6">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Поиск чека</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSearch} className="flex gap-2">
-              <div className="relative flex-1">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Введите номер чека (последние 6 символов)"
-                  className="pl-10"
-                  disabled={searching}
-                />
+          <CardContent className="p-8 sm:p-10">
+            <div className="mx-auto flex max-w-lg flex-col items-center text-center">
+              <div className="grid h-14 w-14 place-items-center rounded-2xl bg-emerald-500/10 text-emerald-500">
+                <Search className="h-6 w-6" />
               </div>
-              <Button type="submit" disabled={searching || !searchQuery.trim()}>
-                {searching ? (
-                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Search className="mr-2 h-4 w-4" />
-                )}
-                Найти чек
-              </Button>
-            </form>
+              <h2 className="mt-4 text-lg font-bold">Найдите чек для возврата</h2>
+              <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+                Введите последние 6 символов номера чека — он есть в истории чеков и внизу распечатанного чека.
+              </p>
+              <form onSubmit={handleSearch} className="mt-5 flex w-full gap-2">
+                <div className="relative flex-1">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Например: 1C54E4"
+                    className="h-11 pl-10 font-mono uppercase placeholder:font-sans placeholder:normal-case"
+                    disabled={searching}
+                    autoFocus
+                  />
+                </div>
+                <Button type="submit" size="lg" className="h-11" disabled={searching || !searchQuery.trim()}>
+                  {searching ? (
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Search className="mr-2 h-4 w-4" />
+                  )}
+                  Найти чек
+                </Button>
+              </form>
 
-            {searchError && (
-              <div className="mt-3 flex items-center gap-2 rounded-lg border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">
-                <AlertCircle className="h-4 w-4 shrink-0" />
-                {searchError}
-              </div>
-            )}
+              {searchError && (
+                <div className="mt-4 flex w-full items-center gap-2 rounded-lg border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-left text-sm text-rose-700 dark:text-rose-300">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  {searchError}
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
       )}
