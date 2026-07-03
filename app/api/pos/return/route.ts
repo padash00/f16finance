@@ -22,8 +22,11 @@ function roundQty(value: unknown) {
   return Math.round((amount + Number.EPSILON) * 1000) / 1000
 }
 
-function lineKey(itemId: unknown, unitPrice: unknown) {
-  return `${String(itemId || '')}:${roundMoney(unitPrice).toFixed(2)}`
+// Ключ строки чека: каталожные — по item_id, универсальные — по названию.
+function lineKey(itemId: unknown, universalName: unknown, unitPrice: unknown) {
+  const id = String(itemId || '').trim()
+  const base = id || `u:${String(universalName || '').trim().toLowerCase()}`
+  return `${base}:${roundMoney(unitPrice).toFixed(2)}`
 }
 
 async function attachReturnableQuantities(supabase: any, sale: any) {
@@ -43,13 +46,13 @@ async function attachReturnableQuantities(supabase: any, sale: any) {
   if (returnIds.length > 0) {
     const { data: returnItems, error: itemsError } = await supabase
       .from('point_return_items')
-      .select('item_id, unit_price, quantity, return_id')
+      .select('item_id, universal_name, unit_price, quantity, return_id')
       .in('return_id', returnIds)
 
     if (itemsError) throw itemsError
 
     for (const item of returnItems || []) {
-      const key = lineKey(item.item_id, item.unit_price)
+      const key = lineKey(item.item_id, item.universal_name, item.unit_price)
       returnedByLine.set(key, roundQty((returnedByLine.get(key) || 0) + Number(item.quantity || 0)))
     }
   }
@@ -57,7 +60,7 @@ async function attachReturnableQuantities(supabase: any, sale: any) {
   return {
     ...sale,
     items: items.map((item: any) => {
-      const returnedQty = returnedByLine.get(lineKey(item.item_id, item.unit_price)) || 0
+      const returnedQty = returnedByLine.get(lineKey(item.item_id, item.universal_name, item.unit_price)) || 0
       const quantity = Number(item.quantity || 0)
       return {
         ...item,
@@ -85,7 +88,7 @@ export async function GET(request: Request) {
 
     let query = supabase
       .from('point_sales')
-      .select('id, sale_date, sold_at, total_amount, payment_method, cash_amount, kaspi_amount, card_amount, online_amount, items:point_sale_items(id, item_id, quantity, unit_price, total_price, inventory_items(name))')
+      .select('id, sale_date, sold_at, total_amount, payment_method, cash_amount, kaspi_amount, card_amount, online_amount, items:point_sale_items(id, item_id, universal_name, quantity, unit_price, total_price, inventory_items(name))')
 
     if (!saleId && !shortId) {
       return json({ error: 'sale_id or short_id required' }, 400)
@@ -145,7 +148,7 @@ export async function POST(request: Request) {
 
     const { data: originalSale, error: saleError } = await supabase
       .from('point_sales')
-      .select('id, company_id, location_id, shift_id, sale_date, shift, payment_method, cash_amount, kaspi_amount, kaspi_before_midnight_amount, kaspi_after_midnight_amount, total_amount, items:point_sale_items(id, item_id, quantity, unit_price, total_price)')
+      .select('id, company_id, location_id, shift_id, sale_date, shift, payment_method, cash_amount, kaspi_amount, kaspi_before_midnight_amount, kaspi_after_midnight_amount, total_amount, items:point_sale_items(id, item_id, universal_name, quantity, unit_price, total_price)')
       .eq('id', sale_id)
       .maybeSingle()
 
@@ -163,12 +166,13 @@ export async function POST(request: Request) {
     }
 
     const saleItems = Array.isArray(originalSale.items) ? originalSale.items : []
-    const soldMap = new Map<string, { item_id: string; quantity: number; unit_price: number }>()
+    const soldMap = new Map<string, { item_id: string | null; universal_name: string | null; quantity: number; unit_price: number }>()
     for (const saleItem of saleItems) {
-      const key = lineKey(saleItem.item_id, saleItem.unit_price)
+      const key = lineKey(saleItem.item_id, (saleItem as any).universal_name, saleItem.unit_price)
       const current = soldMap.get(key)
       soldMap.set(key, {
-        item_id: String(saleItem.item_id),
+        item_id: saleItem.item_id ? String(saleItem.item_id) : null,
+        universal_name: (saleItem as any).universal_name || null,
         quantity: roundQty((current?.quantity || 0) + Number(saleItem.quantity || 0)),
         unit_price: roundMoney(saleItem.unit_price),
       })
@@ -177,26 +181,28 @@ export async function POST(request: Request) {
     const saleWithReturnable = await attachReturnableQuantities(supabase, originalSale)
     const returnableMap = new Map<string, number>()
     for (const saleItem of saleWithReturnable.items || []) {
-      returnableMap.set(lineKey(saleItem.item_id, saleItem.unit_price), Number(saleItem.returnable_qty || 0))
+      returnableMap.set(lineKey(saleItem.item_id, saleItem.universal_name, saleItem.unit_price), Number(saleItem.returnable_qty || 0))
     }
 
-    const normalizedItems: Array<{ item_id: string; quantity: number; unit_price: number; comment?: string | null }> = []
+    const normalizedItems: Array<{ item_id: string | null; universal_name?: string | null; quantity: number; unit_price: number; comment?: string | null }> = []
     let returnTotal = 0
     for (const item of items) {
       const itemId = String(item?.item_id || '').trim()
+      const universalName = String(item?.universal_name || '').trim()
       const quantity = roundQty(item?.quantity)
       const unitPrice = roundMoney(item?.unit_price)
-      const key = lineKey(itemId, unitPrice)
+      const key = lineKey(itemId, universalName, unitPrice)
       const soldLine = soldMap.get(key)
-      if (!itemId || quantity <= 0 || !soldLine) {
+      if ((!itemId && !universalName) || quantity <= 0 || !soldLine) {
         return json({ error: 'В возврате есть товар, которого нет в чеке' }, 400)
       }
       const returnableQty = Number(returnableMap.get(key) || 0)
       if (quantity > returnableQty + 0.0001) {
-        return json({ error: `Можно вернуть не больше ${returnableQty} шт. по товару ${itemId}` }, 400)
+        return json({ error: `Можно вернуть не больше ${returnableQty} шт. по товару ${universalName || itemId}` }, 400)
       }
       normalizedItems.push({
-        item_id: itemId,
+        item_id: itemId || null,
+        universal_name: itemId ? null : soldLine.universal_name || universalName,
         quantity,
         unit_price: unitPrice,
         comment: item?.comment || null,

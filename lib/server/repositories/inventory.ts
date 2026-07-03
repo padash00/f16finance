@@ -1068,7 +1068,8 @@ export async function createPointInventoryReturn(
     comment?: string | null
     source?: string | null
     local_ref?: string | null
-    items: Array<{ item_id: string; quantity: number; unit_price: number; comment?: string | null }>
+    // item_id = null + universal_name — возврат универсальной позиции чека
+    items: Array<{ item_id: string | null; universal_name?: string | null; quantity: number; unit_price: number; comment?: string | null }>
   },
 ) {
   const nextArgs = {

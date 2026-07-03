@@ -20,12 +20,19 @@ type ReturnBody = {
     comment?: string | null
     local_ref?: string | null
     items: Array<{
-      item_id: string
+      item_id: string | null
+      universal_name?: string | null // универсальная позиция чека (item_id = null)
       quantity: number
       unit_price: number
       comment?: string | null
     }>
   }
+}
+
+// Ключ строки чека: каталожные — по item_id, универсальные — по названию.
+function saleLineKey(saleId: string, itemId: string, universalName: unknown, unitPrice: number) {
+  const base = itemId || `u:${String(universalName || '').trim().toLowerCase()}`
+  return `${saleId}:${base}:${unitPrice.toFixed(2)}`
 }
 
 function json(data: unknown, status = 200) {
@@ -133,13 +140,13 @@ async function enrichSalesAndReturns(params: {
     saleIds.length
       ? params.supabase
           .from('point_sale_items')
-          .select('id, sale_id, item_id, quantity, unit_price, total_price')
+          .select('id, sale_id, item_id, universal_name, quantity, unit_price, total_price')
           .in('sale_id', saleIds)
       : Promise.resolve({ data: [], error: null } as any),
     returnIds.length
       ? params.supabase
           .from('point_return_items')
-          .select('id, return_id, sale_item_id, item_id, quantity, unit_price, total_price')
+          .select('id, return_id, sale_item_id, item_id, universal_name, quantity, unit_price, total_price')
           .in('return_id', returnIds)
       : Promise.resolve({ data: [], error: null } as any),
   ])
@@ -259,10 +266,11 @@ export async function GET(request: Request) {
       const returnItems = Array.isArray((pointReturn as any)?.items) ? (pointReturn as any).items : []
       for (const line of returnItems) {
         const itemId = String(line?.item?.id || line?.item_id || '').trim()
+        const universalName = line?.universal_name || null
         const unitPrice = normalizeMoney(line?.unit_price)
         const quantity = normalizeQty(line?.quantity)
-        if (!itemId || quantity <= 0) continue
-        const key = `${saleId}:${itemId}:${unitPrice.toFixed(2)}`
+        if ((!itemId && !universalName) || quantity <= 0) continue
+        const key = saleLineKey(saleId, itemId, universalName, unitPrice)
         returnedBySaleLineKey.set(key, (returnedBySaleLineKey.get(key) || 0) + quantity)
       }
     }
@@ -276,7 +284,7 @@ export async function GET(request: Request) {
           const itemId = String(line?.item?.id || '').trim()
           const unitPrice = normalizeMoney(line?.unit_price)
           const soldQty = normalizeQty(line?.quantity)
-          const key = `${saleId}:${itemId}:${unitPrice.toFixed(2)}`
+          const key = saleLineKey(saleId, itemId, line?.universal_name, unitPrice)
           const returnedQty = normalizeQty(returnedBySaleLineKey.get(key) || 0)
           return {
             ...line,
@@ -341,13 +349,18 @@ export async function POST(request: Request) {
 
     const items = Array.isArray(body.payload?.items)
       ? body.payload.items
-          .map((item) => ({
-            item_id: String(item.item_id || '').trim(),
-            quantity: normalizeQty(item.quantity),
-            unit_price: normalizeMoney(item.unit_price),
-            comment: item.comment?.trim() || null,
-          }))
-          .filter((item) => item.item_id && item.quantity > 0)
+          .map((item) => {
+            const itemId = String(item.item_id || '').trim()
+            const universalName = String(item.universal_name || '').trim()
+            return {
+              item_id: itemId || null,
+              universal_name: itemId ? null : universalName || null,
+              quantity: normalizeQty(item.quantity),
+              unit_price: normalizeMoney(item.unit_price),
+              comment: item.comment?.trim() || null,
+            }
+          })
+          .filter((item) => (item.item_id || item.universal_name) && item.quantity > 0)
       : []
 
     if (items.length === 0) return json({ error: 'point-return-items-required' }, 400)

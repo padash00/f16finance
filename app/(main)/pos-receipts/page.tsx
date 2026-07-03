@@ -18,7 +18,8 @@ type Location = { id: string; name: string; company_id: string }
 
 type SaleItem = {
   id: string
-  item_id: string
+  item_id: string | null
+  universal_name?: string | null
   quantity: number
   unit_price: number
   total_price: number
@@ -132,7 +133,7 @@ function ReceiptDetailModal({ sale, onClose }: { sale: Sale; onClose: () => void
               <tbody>
                 {sale.items.map((item) => (
                   <tr key={item.id} className="border-b border-slate-100 dark:border-white/5">
-                    <td className="px-3 py-2 font-medium">{item.inventory_items?.name || '—'}</td>
+                    <td className="px-3 py-2 font-medium">{item.inventory_items?.name || item.universal_name || '—'}</td>
                     <td className="px-3 py-2 text-center text-muted-foreground">{item.quantity}</td>
                     <td className="px-3 py-2 text-right text-muted-foreground">{fmt(item.unit_price)} ₸</td>
                     <td className="px-3 py-2 text-right font-medium">{fmt(item.total_price)} ₸</td>

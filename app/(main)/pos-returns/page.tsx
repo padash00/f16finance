@@ -14,7 +14,8 @@ import { AdminPageHeader } from '@/components/admin/admin-page-header'
 
 type SaleItem = {
   id: string
-  item_id: string
+  item_id: string | null
+  universal_name?: string | null
   quantity: number
   returned_qty?: number
   returnable_qty?: number
@@ -37,7 +38,8 @@ type Sale = {
 }
 
 type ReturnItem = {
-  item_id: string
+  item_id: string | null
+  universal_name: string | null
   quantity: number
   unit_price: number
   name: string
@@ -124,9 +126,10 @@ export default function PosReturnsPage({ embedded = false }: { embedded?: boolea
           const maxQty = Math.max(0, Number(item.returnable_qty ?? item.quantity ?? 0))
           return {
             item_id: item.item_id,
+            universal_name: item.universal_name || null,
             quantity: maxQty,
             unit_price: item.unit_price,
-            name: item.inventory_items?.name || item.item_id,
+            name: item.inventory_items?.name || item.universal_name || item.item_id || 'Товар',
             maxQty,
             selected: false,
           }
@@ -183,6 +186,7 @@ export default function PosReturnsPage({ embedded = false }: { embedded?: boolea
           sale_id: sale.id,
           items: selectedItems.map((item) => ({
             item_id: item.item_id,
+            universal_name: item.universal_name,
             quantity: item.quantity,
             unit_price: item.unit_price,
           })),
@@ -371,7 +375,7 @@ export default function PosReturnsPage({ embedded = false }: { embedded?: boolea
                 <div className="space-y-2">
                   {returnItems.map((item, index) => (
                     <div
-                      key={item.item_id}
+                      key={item.item_id || `u-${item.universal_name}-${item.unit_price}`}
                       className={`flex items-center gap-3 rounded-lg border p-3 transition-colors cursor-pointer ${
                         item.selected
                           ? 'border-amber-500/40 bg-amber-500/5'

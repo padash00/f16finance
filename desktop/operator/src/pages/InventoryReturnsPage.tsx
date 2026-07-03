@@ -147,7 +147,7 @@ export default function InventoryReturnsPage({
     const items = Array.isArray(selectedSale?.items) ? selectedSale.items : []
     if (!query) return items
     return items.filter((line) => {
-      const name = String(line.item?.name || '').toLowerCase()
+      const name = String(line.item?.name || (line as any).universal_name || '').toLowerCase()
       const barcode = String(line.item?.barcode || '').toLowerCase()
       return name.includes(query) || barcode.includes(query)
     })
@@ -311,7 +311,9 @@ export default function InventoryReturnsPage({
         comment: comment.trim() || null,
         local_ref: returnRef,
         items: cartDetailed.map((line) => ({
-          item_id: String(line.saleLine.item?.id || ''),
+          // Универсальная позиция чека: item_id = null + universal_name
+          item_id: line.saleLine.item?.id ? String(line.saleLine.item.id) : null,
+          universal_name: line.saleLine.item?.id ? null : (line.saleLine as any).universal_name || null,
           quantity: line.quantity,
           unit_price: line.unit_price,
         })),
@@ -345,7 +347,7 @@ export default function InventoryReturnsPage({
         originalSaleTime: originalSoldAt ? originalSoldAt.toLocaleTimeString('ru-RU') : null,
         refundReason: comment.trim() || null,
         lines: cartDetailed.map((line) => ({
-          name: line.saleLine.item?.name || 'Товар',
+          name: line.saleLine.item?.name || (line.saleLine as any).universal_name || 'Товар',
           quantity: line.quantity,
           unit_price: line.unit_price,
           total: line.quantity * line.unit_price,
@@ -508,7 +510,7 @@ export default function InventoryReturnsPage({
                       }`}
                     >
                       <div className="flex items-start justify-between gap-1.5">
-                        <p className="truncate text-xs font-semibold leading-tight text-foreground">{line.item?.name || 'Товар'}</p>
+                        <p className="truncate text-xs font-semibold leading-tight text-foreground">{line.item?.name || (line as any).universal_name || 'Товар'}</p>
                         <Badge variant={disabled ? 'secondary' : 'outline'} className="shrink-0 text-[10px]">
                           {returnableQty}
                         </Badge>
@@ -549,7 +551,7 @@ export default function InventoryReturnsPage({
                 return (
                   <div key={line.item_id} className="rounded-xl border border-destructive/20 bg-card p-2.5">
                     <div className="flex items-start justify-between gap-2">
-                      <p className="truncate text-xs font-medium leading-tight">{line.saleLine.item?.name || 'Товар'}</p>
+                      <p className="truncate text-xs font-medium leading-tight">{line.saleLine.item?.name || (line.saleLine as any).universal_name || 'Товар'}</p>
                       <p className="shrink-0 text-xs font-semibold text-destructive">{formatMoney(line.total)}</p>
                     </div>
                     <div className="mt-2 flex items-center justify-between">

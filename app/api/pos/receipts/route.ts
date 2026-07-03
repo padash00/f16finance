@@ -31,7 +31,7 @@ export async function GET(request: Request) {
 
     let query = supabase
       .from('point_sales')
-      .select('id, sale_date, sold_at, payment_method, cash_amount, kaspi_amount, card_amount, online_amount, total_amount, discount_amount, loyalty_points_earned, loyalty_points_spent, loyalty_discount_amount, customer_id, source, comment, items:point_sale_items(id, item_id, quantity, unit_price, total_price, inventory_items(name))', { count: 'exact' })
+      .select('id, sale_date, sold_at, payment_method, cash_amount, kaspi_amount, card_amount, online_amount, total_amount, discount_amount, loyalty_points_earned, loyalty_points_spent, loyalty_discount_amount, customer_id, source, comment, items:point_sale_items(id, item_id, universal_name, quantity, unit_price, total_price, inventory_items(name))', { count: 'exact' })
       .order('sold_at', { ascending: false })
       .range(offset, offset + pageSize - 1)
 
