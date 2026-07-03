@@ -819,6 +819,7 @@ export default function ProfitabilityPage() {
         const fcf = c.netProfit - (c.capex || 0) - (c.profitDistribution || 0)
         return {
           title: `${c.name} — детальная ОПиУ`,
+          dense: true,
           columns: detailColumns,
           rows: [
             { label: 'Выручка', value: c.revenue, meta: '100%', strong: true },
