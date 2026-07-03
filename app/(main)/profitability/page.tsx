@@ -808,28 +808,75 @@ export default function ProfitabilityPage() {
         payroll: a.payroll + c.payroll, payrollTaxes: a.payrollTaxes + c.payrollTaxes,
         ebitda: a.ebitda + c.ebitda, netProfit: a.netProfit + c.netProfit,
       }), { revenue: 0, cashRevenue: 0, cashlessRevenue: 0, cogs: 0, operating: 0, posCom: 0, payroll: 0, payrollTaxes: 0, ebitda: 0, netProfit: 0 })
+      // Детальная ОПиУ по точке — как раскрывающийся блок на экране (страница на точку).
+      const detailColumns = [
+        { key: 'label', label: 'Показатель' },
+        { key: 'value', label: 'Сумма', align: 'right' as const },
+        { key: 'meta', label: 'Маржа / Доля', align: 'right' as const },
+      ]
+      const detailSection = (c: any) => {
+        const pctOf = (v: number) => (c.revenue > 0 ? `${((v / c.revenue) * 100).toFixed(1)}%` : '—')
+        const fcf = c.netProfit - (c.capex || 0) - (c.profitDistribution || 0)
+        return {
+          title: `${c.name} — детальная ОПиУ`,
+          columns: detailColumns,
+          rows: [
+            { label: 'Выручка', value: c.revenue, meta: '100%', strong: true },
+            { label: '  Наличные', value: c.cashRevenue, meta: pctOf(c.cashRevenue) },
+            { label: '  Безналичные', value: c.cashlessRevenue, meta: pctOf(c.cashlessRevenue) },
+            { label: 'COGS (Себестоимость)', value: -c.cogs, meta: pctOf(c.cogs) },
+            { label: 'Валовая прибыль', value: c.grossProfit, meta: pctOf(c.grossProfit), strong: true },
+            { heading: 'Операционные расходы' },
+            { label: 'Операционные расходы', value: -c.operating, meta: pctOf(c.operating) },
+            { label: `Комиссия ${cashLabels.pos} / эквайринг`, value: -c.posCom, meta: pctOf(c.posCom) },
+            { label: 'Фонд оплаты труда', value: -c.payroll, meta: pctOf(c.payroll) },
+            { label: 'Налоги на зарплату', value: -c.payrollTaxes, meta: ' ' },
+            { label: 'Прочие операционные', value: -(c.otherOperating || 0), meta: ' ' },
+            { label: 'EBITDA', value: c.ebitda, meta: `${c.ebitdaMargin.toFixed(1)}%`, strong: true },
+            { heading: 'Неденежные · финансовые · налоги' },
+            { label: 'Износ', value: -c.depreciation, meta: ' ' },
+            { label: 'Амортизация', value: -c.amortization, meta: ' ' },
+            { label: 'Опер. прибыль (EBIT)', value: c.operatingProfit, meta: pctOf(c.operatingProfit), strong: true },
+            { label: 'Финансовые расходы (% по кредитам)', value: -c.financialExpenses, meta: ' ' },
+            { label: 'EBT', value: c.ebt, meta: ' ', strong: true },
+            { label: 'Налог на прибыль / 3%', value: -c.incomeTax, meta: ' ' },
+            { label: 'Неоперационные / разовые', value: -c.nonOperating, meta: ' ' },
+            { label: 'ЧИСТАЯ ПРИБЫЛЬ', value: c.netProfit, meta: `${c.margin.toFixed(1)}%`, strong: true },
+            { heading: 'Справочно — вне P&L' },
+            { label: 'CAPEX (покупка активов)', value: -(c.capex || 0), meta: ' ' },
+            { label: 'Распределение прибыли', value: -(c.profitDistribution || 0), meta: ' ' },
+            { label: 'FCF (после CAPEX + распределения)', value: fcf, meta: ' ', strong: true },
+          ],
+        }
+      }
       await downloadReportPdf('table', {
         meta: { title: 'P&L по точкам', period, generated },
-        columns: [
-          { key: 'name', label: 'Точка' },
-          { key: 'revenue', label: 'Выручка', align: 'right' },
-          { key: 'cashRevenue', label: 'Нал', align: 'right' },
-          { key: 'cashlessRevenue', label: 'Безнал', align: 'right' },
-          { key: 'cogs', label: 'COGS', align: 'right' },
-          { key: 'operating', label: 'Операц.', align: 'right' },
-          { key: 'posCom', label: 'POS-комис.', align: 'right' },
-          { key: 'payrollAll', label: 'ФОТ+налоги', align: 'right' },
-          { key: 'ebitda', label: 'EBITDA', align: 'right' },
-          { key: 'netProfit', label: 'Чистая прибыль', align: 'right' },
-          { key: 'margin', label: 'Маржа %', align: 'right' },
-          { key: 'share', label: 'Доля %', align: 'right' },
+        sections: [
+          {
+            title: 'Сводно по точкам',
+            columns: [
+              { key: 'name', label: 'Точка' },
+              { key: 'revenue', label: 'Выручка', align: 'right' },
+              { key: 'cashRevenue', label: 'Нал', align: 'right' },
+              { key: 'cashlessRevenue', label: 'Безнал', align: 'right' },
+              { key: 'cogs', label: 'COGS', align: 'right' },
+              { key: 'operating', label: 'Операц.', align: 'right' },
+              { key: 'posCom', label: 'POS-комис.', align: 'right' },
+              { key: 'payrollAll', label: 'ФОТ+налоги', align: 'right' },
+              { key: 'ebitda', label: 'EBITDA', align: 'right' },
+              { key: 'netProfit', label: 'Чистая прибыль', align: 'right' },
+              { key: 'margin', label: 'Маржа %', align: 'right' },
+              { key: 'share', label: 'Доля %', align: 'right' },
+            ],
+            rows: byCompanyPeriod.map((c) => ({
+              name: c.name, revenue: c.revenue, cashRevenue: c.cashRevenue, cashlessRevenue: c.cashlessRevenue,
+              cogs: c.cogs, operating: c.operating, posCom: c.posCom, payrollAll: c.payroll + c.payrollTaxes,
+              ebitda: c.ebitda, netProfit: c.netProfit, margin: Math.round(c.margin), share: Math.round(c.share * 100),
+            })),
+            total: { name: 'ИТОГО', revenue: t.revenue, cashRevenue: t.cashRevenue, cashlessRevenue: t.cashlessRevenue, cogs: t.cogs, operating: t.operating, posCom: t.posCom, payrollAll: t.payroll + t.payrollTaxes, ebitda: t.ebitda, netProfit: t.netProfit, margin: t.revenue ? Math.round((t.netProfit / t.revenue) * 100) : 0, share: 100 },
+          },
+          ...byCompanyPeriod.map(detailSection),
         ],
-        rows: byCompanyPeriod.map((c) => ({
-          name: c.name, revenue: c.revenue, cashRevenue: c.cashRevenue, cashlessRevenue: c.cashlessRevenue,
-          cogs: c.cogs, operating: c.operating, posCom: c.posCom, payrollAll: c.payroll + c.payrollTaxes,
-          ebitda: c.ebitda, netProfit: c.netProfit, margin: Math.round(c.margin), share: Math.round(c.share * 100),
-        })),
-        total: { name: 'ИТОГО', revenue: t.revenue, cashRevenue: t.cashRevenue, cashlessRevenue: t.cashlessRevenue, cogs: t.cogs, operating: t.operating, posCom: t.posCom, payrollAll: t.payroll + t.payrollTaxes, ebitda: t.ebitda, netProfit: t.netProfit, margin: t.revenue ? Math.round((t.netProfit / t.revenue) * 100) : 0, share: 100 },
       }, `Tochki_PnL_${monthFrom}_${monthTo}`)
     } catch (e: any) {
       setError(e?.message || 'Не удалось выгрузить отчёт по точкам')
