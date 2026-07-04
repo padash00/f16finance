@@ -1064,13 +1064,36 @@ export async function GET(req: Request) {
     if (shiftsRes.error) throw shiftsRes.error
     if (operatorsRes.error) throw operatorsRes.error
 
+    // Закрепления оператор↔точка: клиент показывает в ячейке графика только
+    // операторов, закреплённых за этой точкой.
+    const operatorRows = (operatorsRes.data || []) as any[]
+    const operatorIds = operatorRows.map((row) => String(row.id))
+    const assignmentsByOperator = new Map<string, string[]>()
+    if (operatorIds.length > 0) {
+      const { data: assignmentRows, error: assignmentsError } = await supabase
+        .from('operator_company_assignments')
+        .select('operator_id, company_id')
+        .eq('is_active', true)
+        .in('operator_id', operatorIds)
+      if (assignmentsError) throw assignmentsError
+      for (const row of (assignmentRows || []) as any[]) {
+        const opId = String(row.operator_id)
+        const list = assignmentsByOperator.get(opId) || []
+        list.push(String(row.company_id))
+        assignmentsByOperator.set(opId, list)
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       ...workflow,
       schedule: {
         companies: companiesRes.data || [],
         shifts: shiftsRes.data || [],
-        operators: operatorsRes.data || [],
+        operators: operatorRows.map((row) => ({
+          ...row,
+          company_ids: assignmentsByOperator.get(String(row.id)) || [],
+        })),
       },
     })
   } catch (error: any) {

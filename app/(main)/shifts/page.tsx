@@ -52,6 +52,13 @@ type Operator = {
   full_name?: string | null
   operator_profiles?: { full_name?: string | null }[] | null
   is_active: boolean
+  company_ids?: string[] // точки, за которыми закреплён (operator_company_assignments)
+}
+
+/** Операторы, закреплённые за точкой. Если закреплений нет ни у кого — все (иначе тупик). */
+function operatorsForCompany(operators: Operator[], companyId: string) {
+  const assigned = operators.filter((operator) => (operator.company_ids || []).includes(companyId))
+  return assigned.length > 0 ? assigned : operators
 }
 
 type ShiftCellData = {
@@ -658,10 +665,15 @@ function ShiftsPageContent() {
   }, [assignableCompanies, bulkCompanyId])
 
   useEffect(() => {
-    if (!bulkOperatorName && operators.length > 0) {
-      setBulkOperatorName(getOperatorDisplayName(operators[0]))
+    // Список операторов зависит от выбранной точки (закрепления): если текущий
+    // выбор не входит в список — переключаемся на первого закреплённого.
+    const companyOperators = bulkCompanyId ? operatorsForCompany(operators, bulkCompanyId) : operators
+    if (companyOperators.length === 0) return
+    const labels = companyOperators.map((operator) => getOperatorDisplayName(operator))
+    if (!bulkOperatorName || !labels.includes(bulkOperatorName)) {
+      setBulkOperatorName(labels[0])
     }
-  }, [operators, bulkOperatorName])
+  }, [operators, bulkOperatorName, bulkCompanyId])
 
   useEffect(() => {
     if (bulkDates.length === 0 && weekDays.length > 0) {
@@ -1089,7 +1101,7 @@ function ShiftsPageContent() {
                 onChange={(e) => setBulkOperatorName(e.target.value)}
                 className="h-10 rounded-2xl border border-border bg-background px-4 text-sm text-foreground outline-none transition-colors focus:border-accent"
               >
-                {operators.map((operator) => {
+                {(bulkCompanyId ? operatorsForCompany(operators, bulkCompanyId) : operators).map((operator) => {
                   const label = getOperatorDisplayName(operator)
                   return (
                     <option key={operator.id} value={label}>
@@ -1471,7 +1483,7 @@ function ShiftsPageContent() {
                                   className="h-10 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus:border-accent"
                                 >
                                   <option value="">Выбери оператора для замены</option>
-                                  {operators
+                                  {operatorsForCompany(operators, request.company_id)
                                     .filter(
                                       (operator) =>
                                         normalizeOperatorName(getOperatorDisplayName(operator)) !==
@@ -1783,14 +1795,23 @@ function EditableShiftCell({
           className="h-full w-full bg-background px-2 text-center text-sm font-medium focus:outline-none focus:ring-2 focus:ring-inset focus:ring-accent"
         >
           <option value="">Без оператора</option>
-          {operators.map((operator) => {
-                  const label = getOperatorDisplayName(operator)
+          {(() => {
+            const companyOperators = operatorsForCompany(operators, companyId)
+            const labels = companyOperators.map((operator) => getOperatorDisplayName(operator))
             return (
-              <option key={operator.id} value={label}>
-                {label}
-              </option>
+              <>
+                {companyOperators.map((operator, idx) => (
+                  <option key={operator.id} value={labels[idx]}>
+                    {labels[idx]}
+                  </option>
+                ))}
+                {/* Текущий назначенный, даже если не закреплён за точкой — иначе селект его «потеряет» */}
+                {val && !labels.includes(val) && (
+                  <option value={val}>{val} (не закреплён)</option>
+                )}
+              </>
             )
-          })}
+          })()}
         </select>
       ) : (
         <button
