@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
-import { writeAuditLog } from '@/lib/server/audit'
+import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import {
   resolveCompanyScope,
   listOrganizationStaffIds,
@@ -993,13 +993,21 @@ export async function POST(req: Request) {
           paid_by: access.user?.id || null,
           payment_id: payment.id,
         }
+        // Запись-связка не должна ронять выплату: удержание уже применено выше.
+        // Любая ошибка (нет колонки payment_id / неверный тип) → повтор без связи,
+        // затем — только системный лог.
         let { error: debtPaymentError } = await supabase.from('staff_debt_payments').insert(debtPaymentRow)
-        if (debtPaymentError && /payment_id/i.test(String(debtPaymentError.message || ''))) {
-          // Миграция payment_id ещё не применена — пишем без связи.
+        if (debtPaymentError) {
           delete debtPaymentRow.payment_id
           ;({ error: debtPaymentError } = await supabase.from('staff_debt_payments').insert(debtPaymentRow))
         }
-        if (debtPaymentError) throw debtPaymentError
+        if (debtPaymentError) {
+          await writeSystemErrorLogSafe({
+            scope: 'server',
+            area: 'api/admin/staff-salary.createPayment:debt-link',
+            message: debtPaymentError.message,
+          })
+        }
       }
 
       const halfSalary = Math.round(Number(staffMember?.monthly_salary || 0) / 2)
