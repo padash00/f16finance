@@ -73,6 +73,9 @@ export async function GET(req: Request) {
 
     const url = new URL(req.url)
     const includeArchived = url.searchParams.get('include_archived') === '1'
+    // Временная диагностика синтетических долгов: /api/admin/staff-salary?debug=1
+    const debugMode = url.searchParams.get('debug') === '1' && access.isSuperAdmin
+    const debugTrace: any[] = []
 
     const supabase = createAdminSupabaseClient()
 
@@ -270,14 +273,21 @@ export async function GET(req: Request) {
     for (const row of (adminOpDebtsRes.data ?? []) as any[]) {
       const operatorId = row.operator_id ? String(row.operator_id) : null
       const staffId = resolveDebtStaffId(operatorId, row.client_name)
-      if (!staffId) continue
+      if (!staffId) {
+        if (debugMode) debugTrace.push({ src: 'debts', client: row.client_name, op: operatorId, skip: 'no-staff-match' })
+        continue
+      }
 
       const lastPay = lastPaymentByStaff.get(staffId)
       if (lastPay) {
         const weekStart = String(row.week_start || '')
-        if (!weekStart || weekStart <= lastPay.payDate) continue  // skip weeks on/before pay_date
+        if (!weekStart || weekStart <= lastPay.payDate) {
+          if (debugMode) debugTrace.push({ src: 'debts', client: row.client_name, staffId, week: weekStart, skip: 'week<=payDate', payDate: lastPay.payDate })
+          continue  // skip weeks on/before pay_date
+        }
       }
 
+      if (debugMode) debugTrace.push({ src: 'debts', client: row.client_name, staffId, amount: Number(row.amount || 0), take: 'full-week' })
       accumDebt(staffId, Math.round(Number(row.amount || 0)), row.comment, null, String(row.id), null)
     }
 
@@ -287,20 +297,39 @@ export async function GET(req: Request) {
     for (const row of (adminOpDebtItemsRes.data ?? []) as any[]) {
       const operatorId = row.operator_id ? String(row.operator_id) : null
       const staffId = resolveDebtStaffId(operatorId, row.client_name)
-      if (!staffId) continue
+      if (!staffId) {
+        if (debugMode) debugTrace.push({ src: 'items', client: row.client_name, op: operatorId, skip: 'no-staff-match' })
+        continue
+      }
 
       const lastPay = lastPaymentByStaff.get(staffId)
-      if (!lastPay) continue  // no payment → already covered by step 1 (no filter there)
+      if (!lastPay) {
+        if (debugMode) debugTrace.push({ src: 'items', client: row.client_name, staffId, skip: 'no-payment' })
+        continue  // no payment → already covered by step 1 (no filter there)
+      }
 
       const weekStart = String(row.week_start || '')
-      if (weekStart > lastPay.payDate) continue  // full week → already counted in step 1
+      if (weekStart > lastPay.payDate) {
+        if (debugMode) debugTrace.push({ src: 'items', client: row.client_name, staffId, skip: 'future-week-in-step1' })
+        continue  // full week → already counted in step 1
+      }
 
       const itemCreatedAt = row.created_at ? String(row.created_at) : null
-      if (!itemCreatedAt) continue
+      if (!itemCreatedAt) {
+        if (debugMode) debugTrace.push({ src: 'items', client: row.client_name, staffId, skip: 'no-created-at' })
+        continue
+      }
       const itemDate = itemCreatedAt.slice(0, 10)
-      if (itemDate < lastPay.payDate) continue
-      if (itemDate === lastPay.payDate && itemCreatedAt <= lastPay.createdAt) continue
+      if (itemDate < lastPay.payDate) {
+        if (debugMode) debugTrace.push({ src: 'items', client: row.client_name, staffId, created: itemCreatedAt, skip: 'before-payDate', payDate: lastPay.payDate })
+        continue
+      }
+      if (itemDate === lastPay.payDate && itemCreatedAt <= lastPay.createdAt) {
+        if (debugMode) debugTrace.push({ src: 'items', client: row.client_name, staffId, created: itemCreatedAt, skip: 'before-payment-created', payCreated: lastPay.createdAt })
+        continue
+      }
 
+      if (debugMode) debugTrace.push({ src: 'items', client: row.client_name, staffId, amount: Number(row.total_amount || 0), created: itemCreatedAt, take: 'item' })
       accumDebt(staffId, Math.round(Number(row.total_amount || 0)), row.comment, itemCreatedAt, null, String(row.id))
     }
 
@@ -368,6 +397,20 @@ export async function GET(req: Request) {
       .order('paid_at', { ascending: false })
 
     return json({
+      ...(debugMode
+        ? {
+            debug: {
+              allowedCompanyIds: scope.allowedCompanyIds,
+              debtsRows: (adminOpDebtsRes.data ?? []).length,
+              itemRows: (adminOpDebtItemsRes.data ?? []).length,
+              adminOps: adminOps.map((op) => ({ id: op.id, name: op.name })),
+              staffNames: allStaffRows.map((r) => ({ id: r.id, full: r.full_name, short: r.short_name })),
+              lastPaymentByStaff: Object.fromEntries(lastPaymentByStaff),
+              debtByStaff: Object.fromEntries(Array.from(debtByStaff.entries()).map(([k, v]) => [k, { amount: v.amount }])),
+              trace: debugTrace.slice(0, 300),
+            },
+          }
+        : {}),
       // Capability checks выше уже отсеивают; здесь — любой staff
       can_edit: access.isSuperAdmin || !!access.staffRole,
       staff: [...baseStaff, ...virtualStaffFromOperators],
