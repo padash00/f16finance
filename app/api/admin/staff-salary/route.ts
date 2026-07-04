@@ -157,13 +157,18 @@ async function recomputeDebtMirrors(supabase: any, itemRows: any[]) {
   }
 }
 
-/** Все активные позиции сканера сотрудника на дату выплаты (для удержания из ЗП). */
+/**
+ * Активные позиции сканера сотрудника для удержания из ЗП: окно от предыдущей
+ * выплаты (не включая) до даты выплаты (включая). Позиции до предыдущей выплаты
+ * считаются закрытыми прошлым периодом и не трогаются.
+ */
 async function collectActiveScannerDebtForStaff(supabase: any, params: {
   staffId: string
   allowedCompanyIds: string[] | null
   allowedStaffIds: string[] | null
   allowedOperatorIds: string[] | null
   payDate: string
+  previousPay?: { payDate: string; createdAt: string | null } | null
 }) {
   const staffQuery = supabase.from('staff').select('id, full_name, short_name, telegram_chat_id')
   if (params.allowedStaffIds) staffQuery.in('id', params.allowedStaffIds)
@@ -188,9 +193,17 @@ async function collectActiveScannerDebtForStaff(supabase: any, params: {
   const items = ((itemsRes.data ?? []) as any[]).filter((row) => {
     const operatorId = row.operator_id ? String(row.operator_id) : null
     if (resolution.resolveDebtStaffId(operatorId, row.client_name) !== params.staffId) return false
+    const createdAt = String(row.created_at || '')
+    const itemDate = createdAt.slice(0, 10)
     // Не удерживаем позиции «из будущего» относительно даты выплаты (выплата задним числом).
-    const itemDate = String(row.created_at || '').slice(0, 10)
-    return !itemDate || itemDate <= params.payDate
+    if (itemDate && itemDate > params.payDate) return false
+    // Позиции до предыдущей выплаты — закрыты прошлым периодом, не трогаем.
+    const prev = params.previousPay
+    if (prev && itemDate) {
+      if (itemDate < prev.payDate) return false
+      if (itemDate === prev.payDate && prev.createdAt && createdAt <= prev.createdAt) return false
+    }
+    return true
   })
   const total = Math.round(items.reduce((s: number, r: any) => s + Number(r.total_amount || 0), 0))
   return { total, items }
@@ -331,12 +344,26 @@ export async function GET(req: Request) {
         source_type: 'operator',
       }))
 
+    // Последняя выплата каждого сотрудника: позиции до неё считаются закрытыми
+    // прошлым периодом и в карточке не показываются.
+    const lastPaymentByStaff = new Map<string, { payDate: string; createdAt: string }>()
+    for (const payment of (paymentsRes.data ?? []) as any[]) {
+      const staffId = String(payment?.staff_id || '')
+      const payDate = String(payment?.pay_date || '')
+      const createdAt = String(payment?.created_at || '')
+      if (!staffId || !payDate) continue
+      const existing = lastPaymentByStaff.get(staffId)
+      if (!existing || payDate > existing.payDate || (payDate === existing.payDate && createdAt > existing.createdAt)) {
+        lastPaymentByStaff.set(staffId, { payDate, createdAt })
+      }
+    }
+
     type DebtAccum = { amount: number; latestCreatedAt: string; comments: string[]; debtIds: string[]; itemIds: string[] }
     const debtByStaff = new Map<string, DebtAccum>()
 
-    // Каждая активная позиция сканера — висящий долг сотрудника. Выплата ЗП
-    // гасит удержанные позиции прямо в сканере, поэтому фильтры по датам выплат
-    // больше не нужны (и не могут «проглотить» долг, как раньше).
+    // Долг сотрудника = живые позиции сканера, взятые ПОСЛЕ последней выплаты
+    // (поштучно, по created_at — без недельных агрегатов). Выплата ЗП гасит
+    // позиции своего окна прямо в сканере, поэтому двойного счёта нет.
     for (const row of (adminOpDebtItemsRes.data ?? []) as any[]) {
       const operatorId = row.operator_id ? String(row.operator_id) : null
       const staffId = resolution.resolveDebtStaffId(operatorId, row.client_name)
@@ -347,6 +374,18 @@ export async function GET(req: Request) {
       const amount = Math.round(Number(row.total_amount || 0))
       if (amount <= 0) continue
       const createdAt = row.created_at ? String(row.created_at) : new Date().toISOString()
+      const lastPay = lastPaymentByStaff.get(staffId)
+      if (lastPay) {
+        const itemDate = createdAt.slice(0, 10)
+        if (itemDate < lastPay.payDate) {
+          if (debugMode) debugTrace.push({ src: 'items', client: row.client_name, staffId, created: createdAt, skip: 'before-last-payment' })
+          continue
+        }
+        if (itemDate === lastPay.payDate && lastPay.createdAt && createdAt <= lastPay.createdAt) {
+          if (debugMode) debugTrace.push({ src: 'items', client: row.client_name, staffId, created: createdAt, skip: 'before-payment-created' })
+          continue
+        }
+      }
       const existing = debtByStaff.get(staffId) || { amount: 0, latestCreatedAt: createdAt, comments: [] as string[], debtIds: [] as string[], itemIds: [] as string[] }
       existing.amount += amount
       if (createdAt > existing.latestCreatedAt) existing.latestCreatedAt = createdAt
@@ -884,6 +923,7 @@ export async function POST(req: Request) {
         allowedStaffIds,
         allowedOperatorIds: allowedOperatorIdsForDebts,
         payDate: String(pay_date),
+        previousPay: previousPayDate ? { payDate: previousPayDate, createdAt: previousPayCreatedAt } : null,
       })
       let scannerAdjustmentId: string | null = null
       if (scanner.total > 0) {
