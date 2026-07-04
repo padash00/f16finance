@@ -61,6 +61,141 @@ function salaryPaymentClosingPeriodLabel(payDate: string, previousPayDate: strin
   return `${from} - ${to}`
 }
 
+/**
+ * Резолв должника из сканера в staff. Долг с operator_id админ-состава →
+ * канонический staff по telegram/имени; долг без operator_id (оформлен как
+ * staff:<id>, в позиции хранится только client_name) → по имени/короткому имени.
+ */
+function buildDebtorResolution(allStaffRows: any[], adminOps: any[]) {
+  const staffIdSet = new Set(allStaffRows.map((row) => String(row.id)))
+  const staffByTelegram = new Map<string, string>()
+  const staffByName = new Map<string, string>()
+  for (const row of allStaffRows) {
+    const staffId = String(row.id)
+    const telegram = String(row.telegram_chat_id || '').trim()
+    if (telegram) staffByTelegram.set(telegram, staffId)
+    const fullNameKey = normalizePersonName(row.full_name || '')
+    const shortNameKey = normalizePersonName(row.short_name || '')
+    if (fullNameKey) staffByName.set(fullNameKey, staffId)
+    if (shortNameKey) staffByName.set(shortNameKey, staffId)
+  }
+
+  const adminOperatorIdSet = new Set(adminOps.map((op: any) => String(op.id)))
+  const canonicalStaffIdByOperatorId = new Map<string, string>()
+  const canonicalByAdminOpName = new Map<string, string>()
+  for (const op of adminOps) {
+    const opId = String(op.id)
+    const opTelegram = String(op.telegram_chat_id || '').trim()
+    const opNameKey = normalizePersonName(op.name || op.short_name || '')
+    const matchedStaffId =
+      (opTelegram && staffByTelegram.get(opTelegram)) ||
+      (opNameKey && staffByName.get(opNameKey)) ||
+      null
+    const canonicalId = matchedStaffId || opId
+    canonicalStaffIdByOperatorId.set(opId, canonicalId)
+    if (opNameKey) canonicalByAdminOpName.set(opNameKey, canonicalId)
+  }
+
+  function resolveDebtStaffId(operatorId: string | null, clientName: string | null): string | null {
+    if (operatorId && adminOperatorIdSet.has(operatorId)) {
+      return canonicalStaffIdByOperatorId.get(operatorId) || operatorId
+    }
+    if (!operatorId) {
+      const key = normalizePersonName(clientName || '')
+      return key ? staffByName.get(key) || canonicalByAdminOpName.get(key) || null : null
+    }
+    return null
+  }
+
+  return { staffIdSet, staffByTelegram, staffByName, adminOperatorIdSet, canonicalStaffIdByOperatorId, canonicalByAdminOpName, resolveDebtStaffId }
+}
+
+/**
+ * Пересчёт недельных зеркал `debts` после гашения/восстановления позиций
+ * сканера: amount = сумма живых позиций группы (компания+неделя+должник),
+ * 0 → paid. Иначе PDF «Долги с точки» продолжал бы показывать удержанное.
+ */
+async function recomputeDebtMirrors(supabase: any, itemRows: any[]) {
+  const seen = new Set<string>()
+  for (const row of itemRows) {
+    const companyId = String(row.company_id || '')
+    const weekStart = String(row.week_start || '')
+    const operatorId = row.operator_id ? String(row.operator_id) : null
+    const clientName = row.client_name ? String(row.client_name) : null
+    if (!companyId || !weekStart) continue
+    const key = `${companyId}|${weekStart}|${operatorId || `c:${clientName || ''}`}`
+    if (seen.has(key)) continue
+    seen.add(key)
+
+    let sumQuery = supabase
+      .from('point_debt_items')
+      .select('total_amount')
+      .eq('status', 'active')
+      .eq('company_id', companyId)
+      .eq('week_start', weekStart)
+    sumQuery = operatorId
+      ? sumQuery.eq('operator_id', operatorId)
+      : sumQuery.is('operator_id', null).eq('client_name', clientName)
+    const { data: activeRows, error: sumError } = await sumQuery
+    if (sumError) throw sumError
+    const remaining = Math.round(((activeRows ?? []) as any[]).reduce((s: number, r: any) => s + Number(r.total_amount || 0), 0) * 100) / 100
+
+    let updateQuery = supabase
+      .from('debts')
+      .update(
+        remaining > 0
+          ? { amount: remaining, status: 'active', paid_at: null }
+          : { amount: 0, status: 'paid', paid_at: new Date().toISOString() },
+      )
+      .eq('company_id', companyId)
+      .eq('week_start', weekStart)
+    updateQuery = operatorId
+      ? updateQuery.eq('operator_id', operatorId)
+      : updateQuery.is('operator_id', null).eq('client_name', clientName)
+    const { error: updateError } = await updateQuery
+    if (updateError) throw updateError
+  }
+}
+
+/** Все активные позиции сканера сотрудника на дату выплаты (для удержания из ЗП). */
+async function collectActiveScannerDebtForStaff(supabase: any, params: {
+  staffId: string
+  allowedCompanyIds: string[] | null
+  allowedStaffIds: string[] | null
+  allowedOperatorIds: string[] | null
+  payDate: string
+}) {
+  const staffQuery = supabase.from('staff').select('id, full_name, short_name, telegram_chat_id')
+  if (params.allowedStaffIds) staffQuery.in('id', params.allowedStaffIds)
+  const opsQuery = supabase
+    .from('operators')
+    .select('id, name, short_name, telegram_chat_id')
+    .eq('is_active', true)
+    .eq('is_admin_staff', true)
+  if (params.allowedOperatorIds) opsQuery.in('id', params.allowedOperatorIds)
+  const itemsQuery = supabase
+    .from('point_debt_items')
+    .select('id, operator_id, total_amount, client_name, week_start, created_at, company_id')
+    .eq('status', 'active')
+  if (params.allowedCompanyIds) itemsQuery.in('company_id', params.allowedCompanyIds)
+
+  const [staffRes, opsRes, itemsRes] = await Promise.all([staffQuery, opsQuery, itemsQuery])
+  if (staffRes.error) throw staffRes.error
+  if (opsRes.error) throw opsRes.error
+  if (itemsRes.error) throw itemsRes.error
+
+  const resolution = buildDebtorResolution((staffRes.data ?? []) as any[], (opsRes.data ?? []) as any[])
+  const items = ((itemsRes.data ?? []) as any[]).filter((row) => {
+    const operatorId = row.operator_id ? String(row.operator_id) : null
+    if (resolution.resolveDebtStaffId(operatorId, row.client_name) !== params.staffId) return false
+    // Не удерживаем позиции «из будущего» относительно даты выплаты (выплата задним числом).
+    const itemDate = String(row.created_at || '').slice(0, 10)
+    return !itemDate || itemDate <= params.payDate
+  })
+  const total = Math.round(items.reduce((s: number, r: any) => s + Number(r.total_amount || 0), 0))
+  return { total, items }
+}
+
 export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
@@ -129,19 +264,14 @@ export async function GET(req: Request) {
       .order('name')
     if (allowedOperatorIds) adminOpsQuery.in('id', allowedOperatorIds)
 
-    // Долги админ-сотрудников из сканера хранятся с operator_id = NULL (должник
-    // выбран как staff:<id> → пишется только client_name). Скоуп по operator_id
-    // выбрасывал такие строки → карточка ЗП показывала «Долги −0» (регрессия
-    // изоляции 2026-06-11). Скоупим по company_id — обе таблицы его имеют.
-    const adminOpDebtsQuery = supabase
-      .from('debts')
-      .select('id, operator_id, amount, client_name, week_start, comment')
-      .eq('status', 'active')
-    if (scope.allowedCompanyIds) adminOpDebtsQuery.in('company_id', scope.allowedCompanyIds)
-
+    // Долги сотрудников из сканера: считаем живые позиции point_debt_items.
+    // Позиции с должником-сотрудником хранятся с operator_id = NULL (пишется
+    // client_name), поэтому скоуп — по company_id. Фильтров по датам выплат
+    // нет: активная позиция = висящий долг; выплата ЗП гасит удержанные позиции
+    // (status='deleted'), так что двойного счёта не возникает.
     const adminOpDebtItemsQuery = supabase
       .from('point_debt_items')
-      .select('id, operator_id, total_amount, client_name, week_start, created_at, comment')
+      .select('id, operator_id, total_amount, client_name, week_start, created_at, comment, company_id')
       .eq('status', 'active')
     if (scope.allowedCompanyIds) adminOpDebtItemsQuery.in('company_id', scope.allowedCompanyIds)
 
@@ -151,7 +281,7 @@ export async function GET(req: Request) {
       .in('source_type', ['salary_payment', 'salary_advance'])
     if (scope.allowedCompanyIds) expensesQuery.in('company_id', scope.allowedCompanyIds)
 
-    const [staffRes, adjRes, paymentsRes, rulesRes, adminOpsRes, adminOpDebtsRes, adminOpDebtItemsRes, expensesRes] = await Promise.all([
+    const [staffRes, adjRes, paymentsRes, rulesRes, adminOpsRes, adminOpDebtItemsRes, expensesRes] = await Promise.all([
       staffQuery,
       adjQuery,
       paymentsQuery,
@@ -160,7 +290,6 @@ export async function GET(req: Request) {
         .select('company_code, shift_type, base_per_shift')
         .eq('is_active', true),
       adminOpsQuery,
-      adminOpDebtsQuery,
       adminOpDebtItemsQuery,
       expensesQuery,
     ])
@@ -170,7 +299,6 @@ export async function GET(req: Request) {
     if (paymentsRes.error) throw paymentsRes.error
     if (rulesRes.error) throw rulesRes.error
     if (adminOpsRes.error) throw adminOpsRes.error
-    if (adminOpDebtsRes.error) throw adminOpDebtsRes.error
     if (adminOpDebtItemsRes.error) throw adminOpDebtItemsRes.error
     if (expensesRes.error) throw expensesRes.error
 
@@ -180,34 +308,9 @@ export async function GET(req: Request) {
     const baseStaff = allStaffRows
       .filter((row) => (includeArchived ? true : row.is_active !== false))
       .map((row) => ({ ...row, source_type: 'staff' }))
-    const staffIdSet = new Set(allStaffRows.map((row) => String(row.id)))
-    const staffByTelegram = new Map<string, string>()
-    const staffByName = new Map<string, string>()
-    for (const row of allStaffRows) {
-      const staffId = String(row.id)
-      const telegram = String(row.telegram_chat_id || '').trim()
-      if (telegram) staffByTelegram.set(telegram, staffId)
-      const fullNameKey = normalizePersonName(row.full_name || '')
-      const shortNameKey = normalizePersonName(row.short_name || '')
-      if (fullNameKey) staffByName.set(fullNameKey, staffId)
-      if (shortNameKey) staffByName.set(shortNameKey, staffId)
-    }
-
     const adminOps = (adminOpsRes.data ?? []) as any[]
-    const canonicalStaffIdByOperatorId = new Map<string, string>()
-    const canonicalByAdminOpName = new Map<string, string>()
-    for (const op of adminOps) {
-      const opId = String(op.id)
-      const opTelegram = String(op.telegram_chat_id || '').trim()
-      const opNameKey = normalizePersonName(op.name || op.short_name || '')
-      const matchedStaffId =
-        (opTelegram && staffByTelegram.get(opTelegram)) ||
-        (opNameKey && staffByName.get(opNameKey)) ||
-        null
-      const canonicalId = matchedStaffId || opId
-      canonicalStaffIdByOperatorId.set(opId, canonicalId)
-      if (opNameKey) canonicalByAdminOpName.set(opNameKey, canonicalId)
-    }
+    const resolution = buildDebtorResolution(allStaffRows, adminOps)
+    const { staffIdSet, canonicalStaffIdByOperatorId } = resolution
 
     const virtualStaffFromOperators = adminOps
       .filter((op) => {
@@ -228,109 +331,29 @@ export async function GET(req: Request) {
         source_type: 'operator',
       }))
 
-    // Map staffId → { payDate, createdAt } of the most recent payment.
-    const lastPaymentByStaff = new Map<string, { payDate: string; createdAt: string }>()
-    for (const payment of (paymentsRes.data ?? []) as any[]) {
-      const staffId = String(payment?.staff_id || '')
-      const payDate = String(payment?.pay_date || '')
-      const createdAt = String(payment?.created_at || '')
-      if (!staffId || !payDate) continue
-      const existing = lastPaymentByStaff.get(staffId)
-      if (!existing || payDate > existing.payDate) {
-        lastPaymentByStaff.set(staffId, { payDate, createdAt })
-      }
-    }
-
-    const adminOperatorIdSet = new Set(adminOps.map((op) => String(op.id)))
     type DebtAccum = { amount: number; latestCreatedAt: string; comments: string[]; debtIds: string[]; itemIds: string[] }
     const debtByStaff = new Map<string, DebtAccum>()
 
-    function resolveDebtStaffId(operatorId: string | null, clientName: string | null): string | null {
-      if (operatorId && adminOperatorIdSet.has(operatorId)) {
-        return canonicalStaffIdByOperatorId.get(operatorId) || operatorId
-      }
-      if (!operatorId) {
-        const key = normalizePersonName(clientName || '')
-        return key ? staffByName.get(key) || canonicalByAdminOpName.get(key) || null : null
-      }
-      return null
-    }
-
-    function accumDebt(staffId: string, amount: number, comment: string | null, createdAt: string | null, debtId?: string | null, itemId?: string | null) {
-      if (amount <= 0) return
-      const now = createdAt || new Date().toISOString()
-      const existing = debtByStaff.get(staffId) || { amount: 0, latestCreatedAt: now, comments: [] as string[], debtIds: [] as string[], itemIds: [] as string[] }
-      existing.amount += amount
-      if (now > existing.latestCreatedAt) existing.latestCreatedAt = now
-      if (comment) existing.comments.push(String(comment))
-      if (debtId) existing.debtIds.push(String(debtId))
-      if (itemId) existing.itemIds.push(String(itemId))
-      debtByStaff.set(staffId, existing)
-    }
-
-    // Step 1: full weeks from debts table — only weeks that started AFTER pay_date.
-    // These weeks are entirely post-payment so we use the full aggregate amount.
-    for (const row of (adminOpDebtsRes.data ?? []) as any[]) {
-      const operatorId = row.operator_id ? String(row.operator_id) : null
-      const staffId = resolveDebtStaffId(operatorId, row.client_name)
-      if (!staffId) {
-        if (debugMode) debugTrace.push({ src: 'debts', client: row.client_name, op: operatorId, skip: 'no-staff-match' })
-        continue
-      }
-
-      const lastPay = lastPaymentByStaff.get(staffId)
-      if (lastPay) {
-        const weekStart = String(row.week_start || '')
-        if (!weekStart || weekStart <= lastPay.payDate) {
-          if (debugMode) debugTrace.push({ src: 'debts', client: row.client_name, staffId, week: weekStart, skip: 'week<=payDate', payDate: lastPay.payDate })
-          continue  // skip weeks on/before pay_date
-        }
-      }
-
-      if (debugMode) debugTrace.push({ src: 'debts', client: row.client_name, staffId, amount: Number(row.amount || 0), take: 'full-week' })
-      accumDebt(staffId, Math.round(Number(row.amount || 0)), row.comment, null, String(row.id), null)
-    }
-
-    // Step 2: partial week from point_debt_items — items created AFTER pay_date
-    // in the week that contains the payment date (week_start <= pay_date).
-    // This gives sub-week precision for the payment week itself.
+    // Каждая активная позиция сканера — висящий долг сотрудника. Выплата ЗП
+    // гасит удержанные позиции прямо в сканере, поэтому фильтры по датам выплат
+    // больше не нужны (и не могут «проглотить» долг, как раньше).
     for (const row of (adminOpDebtItemsRes.data ?? []) as any[]) {
       const operatorId = row.operator_id ? String(row.operator_id) : null
-      const staffId = resolveDebtStaffId(operatorId, row.client_name)
+      const staffId = resolution.resolveDebtStaffId(operatorId, row.client_name)
       if (!staffId) {
         if (debugMode) debugTrace.push({ src: 'items', client: row.client_name, op: operatorId, skip: 'no-staff-match' })
         continue
       }
-
-      const lastPay = lastPaymentByStaff.get(staffId)
-      if (!lastPay) {
-        if (debugMode) debugTrace.push({ src: 'items', client: row.client_name, staffId, skip: 'no-payment' })
-        continue  // no payment → already covered by step 1 (no filter there)
-      }
-
-      const weekStart = String(row.week_start || '')
-      if (weekStart > lastPay.payDate) {
-        if (debugMode) debugTrace.push({ src: 'items', client: row.client_name, staffId, skip: 'future-week-in-step1' })
-        continue  // full week → already counted in step 1
-      }
-
-      const itemCreatedAt = row.created_at ? String(row.created_at) : null
-      if (!itemCreatedAt) {
-        if (debugMode) debugTrace.push({ src: 'items', client: row.client_name, staffId, skip: 'no-created-at' })
-        continue
-      }
-      const itemDate = itemCreatedAt.slice(0, 10)
-      if (itemDate < lastPay.payDate) {
-        if (debugMode) debugTrace.push({ src: 'items', client: row.client_name, staffId, created: itemCreatedAt, skip: 'before-payDate', payDate: lastPay.payDate })
-        continue
-      }
-      if (itemDate === lastPay.payDate && itemCreatedAt <= lastPay.createdAt) {
-        if (debugMode) debugTrace.push({ src: 'items', client: row.client_name, staffId, created: itemCreatedAt, skip: 'before-payment-created', payCreated: lastPay.createdAt })
-        continue
-      }
-
-      if (debugMode) debugTrace.push({ src: 'items', client: row.client_name, staffId, amount: Number(row.total_amount || 0), created: itemCreatedAt, take: 'item' })
-      accumDebt(staffId, Math.round(Number(row.total_amount || 0)), row.comment, itemCreatedAt, null, String(row.id))
+      const amount = Math.round(Number(row.total_amount || 0))
+      if (amount <= 0) continue
+      const createdAt = row.created_at ? String(row.created_at) : new Date().toISOString()
+      const existing = debtByStaff.get(staffId) || { amount: 0, latestCreatedAt: createdAt, comments: [] as string[], debtIds: [] as string[], itemIds: [] as string[] }
+      existing.amount += amount
+      if (createdAt > existing.latestCreatedAt) existing.latestCreatedAt = createdAt
+      if (row.comment) existing.comments.push(String(row.comment))
+      existing.itemIds.push(String(row.id))
+      debtByStaff.set(staffId, existing)
+      if (debugMode) debugTrace.push({ src: 'items', client: row.client_name, staffId, amount, take: 'item' })
     }
 
     const todayISO = new Date().toISOString().slice(0, 10)
@@ -401,11 +424,9 @@ export async function GET(req: Request) {
         ? {
             debug: {
               allowedCompanyIds: scope.allowedCompanyIds,
-              debtsRows: (adminOpDebtsRes.data ?? []).length,
               itemRows: (adminOpDebtItemsRes.data ?? []).length,
               adminOps: adminOps.map((op) => ({ id: op.id, name: op.name })),
               staffNames: allStaffRows.map((r) => ({ id: r.id, full: r.full_name, short: r.short_name })),
-              lastPaymentByStaff: Object.fromEntries(lastPaymentByStaff),
               debtByStaff: Object.fromEntries(Array.from(debtByStaff.entries()).map(([k, v]) => [k, { amount: v.amount }])),
               trace: debugTrace.slice(0, 300),
             },
@@ -582,9 +603,17 @@ export async function POST(req: Request) {
         debtIds = (dd || []).map((d: any) => String(d.id))
         total += (dd || []).reduce((s: number, d: any) => s + Number(d.amount || 0), 0)
       }
+      let activeItemRows: any[] = []
       if (itemIds.length) {
-        const { data: ii } = await supabase.from('point_debt_items').select('id').in('id', itemIds).eq('status', 'active')
-        itemIds = (ii || []).map((i: any) => String(i.id))
+        const { data: ii } = await supabase
+          .from('point_debt_items')
+          .select('id, total_amount, company_id, week_start, operator_id, client_name')
+          .in('id', itemIds)
+          .eq('status', 'active')
+        activeItemRows = (ii || []) as any[]
+        itemIds = activeItemRows.map((i: any) => String(i.id))
+        // Синтетика больше не несёт зеркальные debt_ids — сумма считается по позициям.
+        if (debtIds.length === 0) total += activeItemRows.reduce((s: number, i: any) => s + Number(i.total_amount || 0), 0)
       }
       if (adjIds.length) {
         const { data: aa } = await supabase.from('staff_adjustments').select('id, amount').in('id', adjIds).eq('kind', 'debt').or('status.is.null,status.eq.active')
@@ -592,11 +621,13 @@ export async function POST(req: Request) {
         total += (aa || []).reduce((s: number, a: any) => s + Number(a.amount || 0), 0)
       }
 
-      if (debtIds.length === 0 && adjIds.length === 0) return json({ error: 'Нет активного долга' }, 400)
+      if (debtIds.length === 0 && adjIds.length === 0 && itemIds.length === 0) return json({ error: 'Нет активного долга' }, 400)
 
       if (debtIds.length) await supabase.from('debts').update({ status: 'paid', paid_at: paidAt }).in('id', debtIds)
       if (itemIds.length) await supabase.from('point_debt_items').update({ status: 'deleted', deleted_at: paidAt }).in('id', itemIds)
       if (adjIds.length) await supabase.from('staff_adjustments').update({ status: 'paid' }).in('id', adjIds)
+      // Недельные зеркала debts пересчитываем от живых позиций (если зеркала не закрыли напрямую).
+      if (activeItemRows.length && debtIds.length === 0) await recomputeDebtMirrors(supabase, activeItemRows)
 
       const { data: rec, error: recErr } = await supabase
         .from('staff_debt_payments')
@@ -630,12 +661,25 @@ export async function POST(req: Request) {
       if (!rec?.id) return json({ error: 'Платёж не найден' }, 404)
       if (staffOutOfScope((rec as any).staff_id)) return json({ error: 'forbidden' }, 403)
       if (rec.status === 'voided') return json({ ok: true })
+      if ((rec as any).payment_id) {
+        return json({ error: 'Это удержание из зарплаты. Чтобы вернуть долги, аннулируйте саму выплату.' }, 400)
+      }
 
       const debtIds = ((rec.debt_ids || []) as string[])
       const itemIds = ((rec.item_ids || []) as string[])
       const adjIds = ((rec.adjustment_ids || []) as string[])
       if (debtIds.length) await supabase.from('debts').update({ status: 'active', paid_at: null }).in('id', debtIds)
-      if (itemIds.length) await supabase.from('point_debt_items').update({ status: 'active', deleted_at: null }).in('id', itemIds)
+      if (itemIds.length) {
+        await supabase.from('point_debt_items').update({ status: 'active', deleted_at: null }).in('id', itemIds)
+        // Вернуть суммы в недельные зеркала (если зеркала не восстановлены напрямую).
+        if (debtIds.length === 0) {
+          const { data: restoredRows } = await supabase
+            .from('point_debt_items')
+            .select('id, company_id, week_start, operator_id, client_name')
+            .in('id', itemIds)
+          await recomputeDebtMirrors(supabase, (restoredRows ?? []) as any[])
+        }
+      }
       if (adjIds.length) await supabase.from('staff_adjustments').update({ status: 'active' }).in('id', adjIds)
       await supabase.from('staff_debt_payments').update({ status: 'voided', voided_at: new Date().toISOString() }).eq('id', id)
 
@@ -823,6 +867,77 @@ export async function POST(req: Request) {
         if (adjPayError) throw adjPayError
       }
 
+      // ── Удержание долгов из операторской программы (сканер) этой выплатой ──
+      // Все активные позиции сотрудника на дату выплаты: материализуются в
+      // корректировку-долг (закрытую этой выплатой) и гасятся в самом сканере,
+      // чтобы «Долги с точки» и зарплата не расходились.
+      const allowedOperatorIdsForDebts = scope.allowedCompanyIds
+        ? await listOrganizationOperatorIds({
+            activeOrganizationId: access.activeOrganization?.id || null,
+            isSuperAdmin: access.isSuperAdmin,
+            includeInactive: true,
+          })
+        : null
+      const scanner = await collectActiveScannerDebtForStaff(supabase, {
+        staffId: String(staff_id),
+        allowedCompanyIds: scope.allowedCompanyIds,
+        allowedStaffIds,
+        allowedOperatorIds: allowedOperatorIdsForDebts,
+        payDate: String(pay_date),
+      })
+      let scannerAdjustmentId: string | null = null
+      if (scanner.total > 0) {
+        const scannerClosedAt = new Date().toISOString()
+        const { data: scannerAdj, error: scannerAdjError } = await supabase
+          .from('staff_adjustments')
+          .insert({
+            staff_id,
+            kind: 'debt',
+            amount: scanner.total,
+            date: pay_date,
+            comment: `Долги с точки (сканер): удержано из выплаты (${slotLabel}, период ${closingPeriodLabel})`,
+            status: 'paid',
+            closed_by_payment_id: payment.id,
+            source_payment_id: payment.id,
+            closed_at: scannerClosedAt,
+          })
+          .select('id')
+          .single()
+        if (scannerAdjError) throw scannerAdjError
+        scannerAdjustmentId = String(scannerAdj.id)
+
+        const scannerItemIds = scanner.items.map((row: any) => String(row.id))
+        const { error: itemsCloseError } = await supabase
+          .from('point_debt_items')
+          .update({ status: 'deleted', deleted_at: scannerClosedAt })
+          .in('id', scannerItemIds)
+        if (itemsCloseError) throw itemsCloseError
+        await recomputeDebtMirrors(supabase, scanner.items)
+
+        // Запись об удержании — видна в «Оплаченные долги» и связана с выплатой
+        // (payment_id), чтобы аннулирование выплаты восстановило позиции.
+        const debtPaymentRow: Record<string, unknown> = {
+          staff_id,
+          amount: scanner.total,
+          comment: `Удержано из зарплаты (${slotLabel} ${pay_date})`,
+          debt_ids: [],
+          item_ids: scannerItemIds,
+          adjustment_ids: [],
+          status: 'active',
+          organization_id: access.activeOrganization?.id || null,
+          paid_at: scannerClosedAt,
+          paid_by: access.user?.id || null,
+          payment_id: payment.id,
+        }
+        let { error: debtPaymentError } = await supabase.from('staff_debt_payments').insert(debtPaymentRow)
+        if (debtPaymentError && /payment_id/i.test(String(debtPaymentError.message || ''))) {
+          // Миграция payment_id ещё не применена — пишем без связи.
+          delete debtPaymentRow.payment_id
+          ;({ error: debtPaymentError } = await supabase.from('staff_debt_payments').insert(debtPaymentRow))
+        }
+        if (debtPaymentError) throw debtPaymentError
+      }
+
       const halfSalary = Math.round(Number(staffMember?.monthly_salary || 0) / 2)
       const adjustmentTotals = adjustmentsToClose.reduce(
         (acc, row: any) => {
@@ -840,10 +955,13 @@ export async function POST(req: Request) {
         halfSalary +
         adjustmentTotals.bonuses -
         adjustmentTotals.debts -
+        scanner.total -
         adjustmentTotals.fines -
         adjustmentTotals.advances
+      // Сервер — источник истины: клиентская цифра могла устареть (открытая
+      // вкладка), она сохраняется в аудит только для сверки.
       const clientExpectedAmount = Math.round(Number(expected_amount))
-      const calculatedToPay = Number.isFinite(clientExpectedAmount) ? clientExpectedAmount : serverCalculatedToPay
+      const calculatedToPay = serverCalculatedToPay
       const overpaymentAmount = Math.max(0, total - calculatedToPay)
       let overpaymentAdjustmentId: string | null = null
 
@@ -879,6 +997,42 @@ export async function POST(req: Request) {
         })
       }
 
+      // Недоплата → «остаток к доплате»: симметрично переплате. Бонус-корректировка
+      // добавится к следующей выплате (или доплатите раньше и аннулируйте её).
+      const underpaymentAmount = Math.max(0, calculatedToPay - total)
+      let underpaymentAdjustmentId: string | null = null
+      if (underpaymentAmount > 0) {
+        const { data: underpaymentAdjustment, error: underpaymentError } = await supabase
+          .from('staff_adjustments')
+          .insert({
+            staff_id,
+            kind: 'bonus',
+            amount: underpaymentAmount,
+            date: pay_date,
+            comment: `Остаток по выплате ${pay_date}: по расчёту ${calculatedToPay.toLocaleString('ru-RU')} ₸, выдано ${total.toLocaleString('ru-RU')} ₸ — доплатить остаток`,
+            status: 'active',
+            source_payment_id: payment.id,
+          })
+          .select('id')
+          .single()
+        if (underpaymentError) throw underpaymentError
+        underpaymentAdjustmentId = String(underpaymentAdjustment.id)
+
+        await writeAuditLog(supabase, {
+          entityType: 'staff-adjustment',
+          entityId: underpaymentAdjustmentId,
+          action: 'create',
+          payload: {
+            staff_id,
+            kind: 'bonus',
+            amount: underpaymentAmount,
+            date: pay_date,
+            source: 'salary_underpayment',
+            payment_id: payment.id,
+          },
+        })
+      }
+
       await writeAuditLog(supabase, {
         entityType: 'staff-payment',
         entityId: String(payment.id),
@@ -887,9 +1041,14 @@ export async function POST(req: Request) {
           staff_id,
           total,
           calculated_to_pay: calculatedToPay,
-          server_calculated_to_pay: serverCalculatedToPay,
+          client_expected_amount: Number.isFinite(clientExpectedAmount) ? clientExpectedAmount : null,
+          scanner_debt_withheld: scanner.total,
+          scanner_adjustment_id: scannerAdjustmentId,
+          scanner_item_count: scanner.items.length,
           overpayment_amount: overpaymentAmount,
           overpayment_adjustment_id: overpaymentAdjustmentId,
+          underpayment_amount: underpaymentAmount,
+          underpayment_adjustment_id: underpaymentAdjustmentId,
           pay_date,
           slot,
           slot_label: slotLabel,
@@ -899,7 +1058,14 @@ export async function POST(req: Request) {
           expense_id: expenseId,
         },
       })
-      return json({ ok: true, payment, expense_id: expenseId, overpayment_adjustment_id: overpaymentAdjustmentId })
+      return json({
+        ok: true,
+        payment,
+        expense_id: expenseId,
+        scanner_debt_withheld: scanner.total,
+        overpayment_adjustment_id: overpaymentAdjustmentId,
+        underpayment_adjustment_id: underpaymentAdjustmentId,
+      })
     }
 
     // ── Delete payment ──────────────────────────────────────────────────────
@@ -978,6 +1144,46 @@ export async function POST(req: Request) {
         .select('id')
       if (voidOverpaymentsError) throw voidOverpaymentsError
 
+      // Восстановить позиции сканера, удержанные этой выплатой, и аннулировать
+      // запись удержания. Если миграция payment_id не применена — тихо пропускаем.
+      let restoredScannerItemCount = 0
+      try {
+        const { data: linkedDebtPayments, error: linkedError } = await supabase
+          .from('staff_debt_payments')
+          .select('id, item_ids')
+          .eq('payment_id', id)
+          .eq('status', 'active')
+        if (linkedError) throw linkedError
+        const linkedRows = (linkedDebtPayments ?? []) as any[]
+        const scannerItemIds = linkedRows
+          .flatMap((row) => (row.item_ids || []) as string[])
+          .map((value) => String(value))
+          .filter(Boolean)
+        if (scannerItemIds.length > 0) {
+          const { error: restoreItemsError } = await supabase
+            .from('point_debt_items')
+            .update({ status: 'active', deleted_at: null })
+            .in('id', scannerItemIds)
+          if (restoreItemsError) throw restoreItemsError
+          const { data: restoredRows, error: restoredFetchError } = await supabase
+            .from('point_debt_items')
+            .select('id, company_id, week_start, operator_id, client_name')
+            .in('id', scannerItemIds)
+          if (restoredFetchError) throw restoredFetchError
+          await recomputeDebtMirrors(supabase, (restoredRows ?? []) as any[])
+          restoredScannerItemCount = scannerItemIds.length
+        }
+        if (linkedRows.length > 0) {
+          const { error: voidDebtPaymentError } = await supabase
+            .from('staff_debt_payments')
+            .update({ status: 'voided', voided_at: new Date().toISOString() })
+            .in('id', linkedRows.map((row) => String(row.id)))
+          if (voidDebtPaymentError) throw voidDebtPaymentError
+        }
+      } catch (scannerRestoreError: any) {
+        if (!/payment_id/i.test(String(scannerRestoreError?.message || ''))) throw scannerRestoreError
+      }
+
       const { error: paymentDeleteError } = await supabase.from('staff_salary_payments').delete().eq('id', id)
       if (paymentDeleteError) throw paymentDeleteError
 
@@ -990,6 +1196,7 @@ export async function POST(req: Request) {
           deleted_expense_ids: expenseIdsToDelete,
           restored_adjustment_ids: (restoredAdjustments || []).map((row: any) => String(row.id)),
           voided_overpayment_ids: (voidedOverpayments || []).map((row: any) => String(row.id)),
+          restored_scanner_item_count: restoredScannerItemCount,
         },
       })
       return json({
@@ -999,6 +1206,7 @@ export async function POST(req: Request) {
         deleted_expense_count: expenseIdsToDelete.length,
         restored_adjustment_count: restoredAdjustments?.length || 0,
         voided_overpayment_count: voidedOverpayments?.length || 0,
+        restored_scanner_item_count: restoredScannerItemCount,
       })
     }
 
