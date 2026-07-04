@@ -126,17 +126,21 @@ export async function GET(req: Request) {
       .order('name')
     if (allowedOperatorIds) adminOpsQuery.in('id', allowedOperatorIds)
 
+    // Долги админ-сотрудников из сканера хранятся с operator_id = NULL (должник
+    // выбран как staff:<id> → пишется только client_name). Скоуп по operator_id
+    // выбрасывал такие строки → карточка ЗП показывала «Долги −0» (регрессия
+    // изоляции 2026-06-11). Скоупим по company_id — обе таблицы его имеют.
     const adminOpDebtsQuery = supabase
       .from('debts')
       .select('id, operator_id, amount, client_name, week_start, comment')
       .eq('status', 'active')
-    if (allowedOperatorIds) adminOpDebtsQuery.in('operator_id', allowedOperatorIds)
+    if (scope.allowedCompanyIds) adminOpDebtsQuery.in('company_id', scope.allowedCompanyIds)
 
     const adminOpDebtItemsQuery = supabase
       .from('point_debt_items')
       .select('id, operator_id, total_amount, client_name, week_start, created_at, comment')
       .eq('status', 'active')
-    if (allowedOperatorIds) adminOpDebtItemsQuery.in('operator_id', allowedOperatorIds)
+    if (scope.allowedCompanyIds) adminOpDebtItemsQuery.in('company_id', scope.allowedCompanyIds)
 
     const expensesQuery = supabase
       .from('expenses')
