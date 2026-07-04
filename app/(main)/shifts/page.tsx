@@ -182,6 +182,7 @@ type ScheduleGridProps = {
   conflictCellKeys: Set<string>
   companySearch: string
   workflowStateByCell: Map<string, { kind: 'confirmed' | 'issue' | 'resolved' | 'dismissed'; label: string }>
+  weekShiftCounts: Map<string, number>
 }
 
 type EditableCellProps = {
@@ -197,6 +198,7 @@ type EditableCellProps = {
     kind: 'confirmed' | 'issue' | 'resolved' | 'dismissed'
     label: string
   } | null
+  weekShiftCounts: Map<string, number>
 }
 
 const getWeekDetails = (date: Date): { range: string; days: WeekDay[] } => {
@@ -658,6 +660,17 @@ function ShiftsPageContent() {
     return shifts.filter((shift) => normalizeOperatorName(shift.operator_name) === selectedNormalized).length
   }, [urlState.operator, shifts])
 
+  // Нагрузка недели по оператору — показывается в выпадашке ячейки («· N см.»).
+  const weekShiftCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const shift of shifts) {
+      const key = normalizeOperatorName(shift.operator_name)
+      if (!key) continue
+      counts.set(key, (counts.get(key) || 0) + 1)
+    }
+    return counts
+  }, [shifts])
+
   useEffect(() => {
     if (!bulkCompanyId && assignableCompanies.length > 0) {
       setBulkCompanyId(assignableCompanies[0].id)
@@ -1015,37 +1028,40 @@ function ShiftsPageContent() {
             />
           </div>
 
-          <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <Card className="border-border bg-card p-4">
-              <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Заполнено</div>
-              <div className="mt-2 text-2xl font-semibold text-foreground">{filledSlots}</div>
-              <div className="mt-1 text-xs text-muted-foreground">из {totalSlots} смен за неделю</div>
+          <div className="mb-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
+            <Card className="border-emerald-500/20 bg-emerald-500/[0.05] p-3">
+              <div className="text-[10px] uppercase tracking-widest text-emerald-700 dark:text-emerald-300/70">Заполнено</div>
+              <div className="mt-1 text-xl font-semibold text-emerald-600 dark:text-emerald-300">
+                {filledSlots}
+                <span className="ml-1 text-sm font-normal text-muted-foreground">/ {totalSlots}</span>
+              </div>
+              <div className="mt-0.5 text-xs text-muted-foreground">смен за неделю</div>
             </Card>
 
-            <Card className="border-border bg-card p-4">
-              <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Пустые слоты</div>
-              <div className="mt-2 text-2xl font-semibold text-foreground">{Math.max(totalSlots - filledSlots, 0)}</div>
-              <div className="mt-1 text-xs text-muted-foreground">можно быстро дозаполнить</div>
+            <Card className={Math.max(totalSlots - filledSlots, 0) > 0 ? 'border-amber-500/20 bg-amber-500/[0.05] p-3' : 'border-border bg-white dark:bg-white/[0.03] p-3'}>
+              <div className={`text-[10px] uppercase tracking-widest ${Math.max(totalSlots - filledSlots, 0) > 0 ? 'text-amber-700 dark:text-amber-300/70' : 'text-muted-foreground'}`}>Пустые слоты</div>
+              <div className={`mt-1 text-xl font-semibold ${Math.max(totalSlots - filledSlots, 0) > 0 ? 'text-amber-600 dark:text-amber-300' : ''}`}>{Math.max(totalSlots - filledSlots, 0)}</div>
+              <div className="mt-0.5 text-xs text-muted-foreground">можно быстро дозаполнить</div>
             </Card>
 
-            <Card className="border-border bg-card p-4">
-              <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Конфликты</div>
-              <div className="mt-2 text-2xl font-semibold text-amber-400">{conflicts.length}</div>
-              <div className="mt-1 text-xs text-muted-foreground">оператор в нескольких сменах за день</div>
+            <Card className={conflicts.length > 0 ? 'border-rose-500/20 bg-rose-500/[0.05] p-3' : 'border-border bg-white dark:bg-white/[0.03] p-3'}>
+              <div className={`text-[10px] uppercase tracking-widest ${conflicts.length > 0 ? 'text-rose-700 dark:text-rose-300/70' : 'text-muted-foreground'}`}>Конфликты</div>
+              <div className={`mt-1 text-xl font-semibold ${conflicts.length > 0 ? 'text-rose-600 dark:text-rose-300' : ''}`}>{conflicts.length}</div>
+              <div className="mt-0.5 text-xs text-muted-foreground">оператор в нескольких сменах за день</div>
             </Card>
 
-            <Card className="border-border bg-card p-4">
-              <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">По фильтру</div>
-              <div className="mt-2 text-2xl font-semibold text-foreground">
+            <Card className="border-border bg-white dark:bg-white/[0.03] p-3">
+              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">По фильтру</div>
+              <div className="mt-1 text-xl font-semibold">
                 {urlState.operator === 'all' ? visibleCompanies.length : selectedOperatorAssignments}
               </div>
-              <div className="mt-1 text-xs text-muted-foreground">
+              <div className="mt-0.5 text-xs text-muted-foreground">
                 {urlState.operator === 'all' ? 'активных точек видно' : 'смен у выбранного оператора'}
               </div>
             </Card>
           </div>
 
-          <Card className="mb-6 border-border bg-card p-4 neon-glow">
+          <Card className="mb-6 border-border bg-card p-4">
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_260px]">
               <label className="relative block">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -1148,7 +1164,7 @@ function ShiftsPageContent() {
               </Button>
             </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7">
+            <div className="mt-4 grid grid-cols-4 gap-2 md:grid-cols-7">
               {weekDays.map((day) => {
                 const checked = bulkDates.includes(day.dateISO)
                 return (
@@ -1156,14 +1172,14 @@ function ShiftsPageContent() {
                     key={day.dateISO}
                     type="button"
                     onClick={() => toggleBulkDate(day.dateISO)}
-                    className={`rounded-2xl border px-3 py-3 text-left transition-all ${
+                    className={`rounded-xl border px-2 py-2 text-center transition-all ${
                       checked
-                        ? 'border-accent bg-accent/15 text-foreground'
+                        ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
                         : 'border-border bg-background text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/[0.04]'
                     }`}
                   >
-                    <div className="text-xs uppercase">{day.dayName}</div>
-                    <div className="mt-1 text-sm font-semibold">{day.dayShort}</div>
+                    <div className="text-[10px] font-semibold uppercase tracking-wide">{day.dayName}</div>
+                    <div className={`mt-0.5 text-sm font-semibold ${checked ? '' : 'text-foreground/70'}`}>{day.dayShort}</div>
                   </button>
                 )
               })}
@@ -1227,6 +1243,39 @@ function ShiftsPageContent() {
               </Card>
             )}
 
+            {/* Компактный статус согласования по точкам — без прокрутки к правой панели */}
+            {publications.length > 0 && (
+              <div className="mb-4 flex flex-wrap gap-2">
+                {visibleCompanies.map((company) => {
+                  const publication = latestPublicationByCompany.get(company.id)
+                  if (!publication) {
+                    return (
+                      <span key={company.id} className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-muted px-3 py-1 text-xs text-muted-foreground">
+                        {company.name}: не опубликована
+                      </span>
+                    )
+                  }
+                  const hasIssues = Number(publication.issue_count || 0) > 0
+                  const allConfirmed = publication.confirmed_count >= publication.total_count && publication.total_count > 0
+                  return (
+                    <span
+                      key={company.id}
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${
+                        hasIssues
+                          ? 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+                          : allConfirmed
+                            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                            : 'border-border bg-card text-foreground'
+                      }`}
+                    >
+                      {company.name}: подтвердили {publication.confirmed_count}/{publication.total_count}
+                      {hasIssues ? ` · проблем ${publication.issue_count}` : ''}
+                    </span>
+                  )
+                })}
+              </div>
+            )}
+
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
               <ScheduleGrid
                 companies={visibleCompanies}
@@ -1239,6 +1288,7 @@ function ShiftsPageContent() {
                 conflictCellKeys={conflictCellKeys}
                 companySearch={urlState.q}
                 workflowStateByCell={workflowStateByCell}
+                weekShiftCounts={weekShiftCounts}
               />
 
               <Card className="h-fit border-border bg-card p-4 xl:sticky xl:top-6">
@@ -1564,6 +1614,7 @@ function ScheduleGrid({
   conflictCellKeys,
   companySearch,
   workflowStateByCell,
+  weekShiftCounts,
 }: ScheduleGridProps) {
   if (loading && companies.length === 0) {
     return (
@@ -1586,7 +1637,7 @@ function ScheduleGrid({
   return (
     <div className="grid grid-cols-1 gap-8">
       {companies.map((company) => (
-        <Card key={company.id} className="overflow-hidden border-border bg-card p-0 neon-glow">
+        <Card key={company.id} className="overflow-hidden border-border bg-card p-0">
           <div className="flex items-center gap-2 border-b border-border bg-muted/30 p-3">
             <Briefcase className="h-4 w-4 text-accent" />
             <span className="font-bold text-foreground">{company.name}</span>
@@ -1640,6 +1691,7 @@ function ScheduleGrid({
                         }
                         isConflict={conflictCellKeys.has(getCellKey(company.id, day.dateISO, 'day'))}
                         workflowState={workflowStateByCell.get(getCellKey(company.id, day.dateISO, 'day')) || null}
+                        weekShiftCounts={weekShiftCounts}
                       />
                     )
                   })}
@@ -1665,6 +1717,7 @@ function ScheduleGrid({
                           }
                           isConflict={conflictCellKeys.has(getCellKey(company.id, day.dateISO, 'night'))}
                           workflowState={workflowStateByCell.get(getCellKey(company.id, day.dateISO, 'night')) || null}
+                          weekShiftCounts={weekShiftCounts}
                         />
                       )
                     })}
@@ -1689,6 +1742,7 @@ function EditableShiftCell({
   isSelectedOperator,
   isConflict,
   workflowState,
+  weekShiftCounts,
 }: EditableCellProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [val, setVal] = useState(shiftData?.name || '')
@@ -1763,6 +1817,11 @@ function EditableShiftCell({
     }
   }
 
+  // Пустая клетка на сегодня/завтра — срочная дыра в графике, подсвечиваем.
+  const todayIso = format(new Date(), 'yyyy-MM-dd')
+  const tomorrowIso = format(new Date(Date.now() + 86400000), 'yyyy-MM-dd')
+  const isUrgentEmpty = !val && (date === todayIso || date === tomorrowIso)
+
   const getCellClass = () => {
     if (status === 'saving') return 'bg-blue-500/20 shadow-[inset_0_0_10px_rgba(59,130,246,0.5)]'
     if (status === 'success') return 'bg-green-500/20 shadow-[inset_0_0_10px_rgba(34,197,94,0.5)]'
@@ -1773,6 +1832,7 @@ function EditableShiftCell({
     if (workflowState?.kind === 'dismissed') return 'bg-surface-muted shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]'
     if (workflowState?.kind === 'confirmed') return 'bg-emerald-500/10 shadow-[inset_0_0_0_1px_rgba(16,185,129,0.24)]'
     if (isSelectedOperator) return 'bg-emerald-500/12 shadow-[inset_0_0_0_1px_rgba(16,185,129,0.28)]'
+    if (isUrgentEmpty) return 'bg-rose-500/[0.07] shadow-[inset_0_0_0_1px_rgba(244,63,94,0.22)] hover:bg-rose-500/[0.12]'
     return 'hover:bg-slate-100 dark:hover:bg-white/5'
   }
 
@@ -1800,11 +1860,16 @@ function EditableShiftCell({
             const labels = companyOperators.map((operator) => getOperatorDisplayName(operator))
             return (
               <>
-                {companyOperators.map((operator, idx) => (
-                  <option key={operator.id} value={labels[idx]}>
-                    {labels[idx]}
-                  </option>
-                ))}
+                {companyOperators.map((operator, idx) => {
+                  const count = weekShiftCounts.get(normalizeOperatorName(labels[idx])) || 0
+                  return (
+                    <option key={operator.id} value={labels[idx]}>
+                      {labels[idx]}
+                      {count > 0 ? ` · ${count} см.` : ''}
+                      {count >= 6 ? ' ⚠' : ''}
+                    </option>
+                  )
+                })}
                 {/* Текущий назначенный, даже если не закреплён за точкой — иначе селект его «потеряет» */}
                 {val && !labels.includes(val) && (
                   <option value={val}>{val} (не закреплён)</option>
