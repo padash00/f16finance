@@ -158,6 +158,32 @@ async function recomputeDebtMirrors(supabase: any, itemRows: any[]) {
 }
 
 /**
+ * Активные позиции сканера с пагинацией: PostgREST молча режет выборку на
+ * 1000 строк, из-за чего свежие позиции не попадали в ответ (карточка «−0»).
+ * sinceISO — нижняя граница created_at (обычно дата последней выплаты).
+ */
+async function fetchActiveScannerItems(supabase: any, allowedCompanyIds: string[] | null, sinceISO: string | null) {
+  const pageSize = 1000
+  const rows: any[] = []
+  for (let page = 0; page < 20; page++) {
+    let query = supabase
+      .from('point_debt_items')
+      .select('id, operator_id, total_amount, client_name, week_start, created_at, comment, company_id')
+      .eq('status', 'active')
+      .order('created_at', { ascending: false })
+      .range(page * pageSize, page * pageSize + pageSize - 1)
+    if (allowedCompanyIds) query = query.in('company_id', allowedCompanyIds)
+    if (sinceISO) query = query.gte('created_at', sinceISO)
+    const { data, error } = await query
+    if (error) throw error
+    const batch = (data ?? []) as any[]
+    rows.push(...batch)
+    if (batch.length < pageSize) break
+  }
+  return rows
+}
+
+/**
  * Активные позиции сканера сотрудника для удержания из ЗП: окно от предыдущей
  * выплаты (не включая) до даты выплаты (включая). Позиции до предыдущей выплаты
  * считаются закрытыми прошлым периодом и не трогаются.
@@ -178,19 +204,16 @@ async function collectActiveScannerDebtForStaff(supabase: any, params: {
     .eq('is_active', true)
     .eq('is_admin_staff', true)
   if (params.allowedOperatorIds) opsQuery.in('id', params.allowedOperatorIds)
-  const itemsQuery = supabase
-    .from('point_debt_items')
-    .select('id, operator_id, total_amount, client_name, week_start, created_at, company_id')
-    .eq('status', 'active')
-  if (params.allowedCompanyIds) itemsQuery.in('company_id', params.allowedCompanyIds)
-
-  const [staffRes, opsRes, itemsRes] = await Promise.all([staffQuery, opsQuery, itemsQuery])
+  const [staffRes, opsRes, itemRows] = await Promise.all([
+    staffQuery,
+    opsQuery,
+    fetchActiveScannerItems(supabase, params.allowedCompanyIds, params.previousPay?.payDate || null),
+  ])
   if (staffRes.error) throw staffRes.error
   if (opsRes.error) throw opsRes.error
-  if (itemsRes.error) throw itemsRes.error
 
   const resolution = buildDebtorResolution((staffRes.data ?? []) as any[], (opsRes.data ?? []) as any[])
-  const items = ((itemsRes.data ?? []) as any[]).filter((row) => {
+  const items = (itemRows as any[]).filter((row) => {
     const operatorId = row.operator_id ? String(row.operator_id) : null
     if (resolution.resolveDebtStaffId(operatorId, row.client_name) !== params.staffId) return false
     const createdAt = String(row.created_at || '')
@@ -277,24 +300,13 @@ export async function GET(req: Request) {
       .order('name')
     if (allowedOperatorIds) adminOpsQuery.in('id', allowedOperatorIds)
 
-    // Долги сотрудников из сканера: считаем живые позиции point_debt_items.
-    // Позиции с должником-сотрудником хранятся с operator_id = NULL (пишется
-    // client_name), поэтому скоуп — по company_id. Фильтров по датам выплат
-    // нет: активная позиция = висящий долг; выплата ЗП гасит удержанные позиции
-    // (status='deleted'), так что двойного счёта не возникает.
-    const adminOpDebtItemsQuery = supabase
-      .from('point_debt_items')
-      .select('id, operator_id, total_amount, client_name, week_start, created_at, comment, company_id')
-      .eq('status', 'active')
-    if (scope.allowedCompanyIds) adminOpDebtItemsQuery.in('company_id', scope.allowedCompanyIds)
-
     const expensesQuery = supabase
       .from('expenses')
       .select('id, source_type, source_id')
       .in('source_type', ['salary_payment', 'salary_advance'])
     if (scope.allowedCompanyIds) expensesQuery.in('company_id', scope.allowedCompanyIds)
 
-    const [staffRes, adjRes, paymentsRes, rulesRes, adminOpsRes, adminOpDebtItemsRes, expensesRes] = await Promise.all([
+    const [staffRes, adjRes, paymentsRes, rulesRes, adminOpsRes, expensesRes] = await Promise.all([
       staffQuery,
       adjQuery,
       paymentsQuery,
@@ -303,7 +315,6 @@ export async function GET(req: Request) {
         .select('company_code, shift_type, base_per_shift')
         .eq('is_active', true),
       adminOpsQuery,
-      adminOpDebtItemsQuery,
       expensesQuery,
     ])
 
@@ -312,7 +323,6 @@ export async function GET(req: Request) {
     if (paymentsRes.error) throw paymentsRes.error
     if (rulesRes.error) throw rulesRes.error
     if (adminOpsRes.error) throw adminOpsRes.error
-    if (adminOpDebtItemsRes.error) throw adminOpDebtItemsRes.error
     if (expensesRes.error) throw expensesRes.error
 
     // Все staff (вкл. архивных) — для матчинга operator↔staff, чтобы уволенный
@@ -358,13 +368,26 @@ export async function GET(req: Request) {
       }
     }
 
+    // Горизонт выборки позиций: карточке нужны только позиции после последней
+    // выплаты. Если у кого-то из карточек выплат нет — берём всю историю
+    // (fetchActiveScannerItems пагинирует, лимит 1000 строк не режет данные).
+    const cardStaffRows = [...baseStaff, ...virtualStaffFromOperators]
+    let scannerHorizonISO: string | null = '9999-12-31'
+    for (const s of cardStaffRows) {
+      const lastPay = lastPaymentByStaff.get(String(s.id))
+      if (!lastPay) { scannerHorizonISO = null; break }
+      if (lastPay.payDate < scannerHorizonISO) scannerHorizonISO = lastPay.payDate
+    }
+    if (scannerHorizonISO === '9999-12-31') scannerHorizonISO = null
+    const scannerItems = await fetchActiveScannerItems(supabase, scope.allowedCompanyIds, scannerHorizonISO)
+
     type DebtAccum = { amount: number; latestCreatedAt: string; comments: string[]; debtIds: string[]; itemIds: string[] }
     const debtByStaff = new Map<string, DebtAccum>()
 
     // Долг сотрудника = живые позиции сканера, взятые ПОСЛЕ последней выплаты
     // (поштучно, по created_at — без недельных агрегатов). Выплата ЗП гасит
     // позиции своего окна прямо в сканере, поэтому двойного счёта нет.
-    for (const row of (adminOpDebtItemsRes.data ?? []) as any[]) {
+    for (const row of scannerItems) {
       const operatorId = row.operator_id ? String(row.operator_id) : null
       const staffId = resolution.resolveDebtStaffId(operatorId, row.client_name)
       if (!staffId) {
@@ -463,7 +486,8 @@ export async function GET(req: Request) {
         ? {
             debug: {
               allowedCompanyIds: scope.allowedCompanyIds,
-              itemRows: (adminOpDebtItemsRes.data ?? []).length,
+              itemRows: scannerItems.length,
+              scannerHorizon: scannerHorizonISO,
               adminOps: adminOps.map((op) => ({ id: op.id, name: op.name })),
               staffNames: allStaffRows.map((r) => ({ id: r.id, full: r.full_name, short: r.short_name })),
               debtByStaff: Object.fromEntries(Array.from(debtByStaff.entries()).map(([k, v]) => [k, { amount: v.amount }])),
