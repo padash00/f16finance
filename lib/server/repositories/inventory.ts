@@ -361,7 +361,7 @@ export async function fetchStoreReceipts(supabase: AnySupabase, scope?: Inventor
     ),
     supabase
       .from('inventory_receipts')
-      .select('id, location_id, supplier_id, received_at, invoice_number, invoice_file_url, comment, total_amount, status, kind, cancelled_at, cancel_reason, created_at, location:location_id(id, name, code, location_type, organization_id, company_id), supplier:supplier_id(id, name, bin_iin, organization_name), items:inventory_receipt_items(id, item_id, quantity, unit_cost, total_cost, is_bonus, comment, item:item_id(id, name, barcode, unit))')
+      .select('id, location_id, supplier_id, received_at, invoice_number, invoice_file_url, comment, total_amount, status, kind, cancelled_at, cancel_reason, created_at, location:location_id(id, name, code, location_type, organization_id, company_id), supplier:supplier_id(id, name, bin_iin, organization_name), items:inventory_receipt_items(id, item_id, quantity, unit_cost, total_cost, is_bonus, comment, production_date, expiry_date, item:item_id(id, name, barcode, unit))')
       .order('created_at', { ascending: false })
       .limit(60),
   ])

@@ -52,7 +52,7 @@ type RecentPosting = {
   status: 'posted' | 'cancelled'
   kind: 'supplier' | 'posting'
   location?: Location | null
-  items?: Array<{ id: string; quantity: number; unit_cost: number; total_cost: number; item?: Item | null }>
+  items?: Array<{ id: string; quantity: number; unit_cost: number; total_cost: number; comment?: string | null; production_date?: string | null; expiry_date?: string | null; item?: Item | null }>
 }
 
 type SessionRole = {
@@ -233,6 +233,9 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
           unit_cost: unitCost,
           sale_price: salePrice,
           markup: markupFrom(parseNum(unitCost), parseNum(salePrice)),
+          comment: row.comment || '',
+          production_date: row.production_date || '',
+          expiry_date: row.expiry_date || '',
         }
       }).filter((l) => l.item_id)
       setLines(restored.length > 0 ? restored : [newLine()])
@@ -677,6 +680,7 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
                       <th className="py-2 px-2 font-normal">Штрихкод</th>
                       <th className="py-2 px-2 text-right font-normal">Кол-во</th>
                       <th className="py-2 px-2 text-right font-normal">Цена</th>
+                      <th className="py-2 px-2 font-normal">Годен до</th>
                       <th className="py-2 px-2 pr-3 text-right font-normal">Сумма</th>
                     </tr>
                   </thead>
@@ -687,13 +691,14 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
                         <td className="py-2 px-2 font-mono text-[11px] text-muted-foreground">{row.item?.barcode || '—'}</td>
                         <td className="py-2 px-2 text-right text-xs tabular-nums">{Number(row.quantity || 0).toLocaleString('ru-RU')}</td>
                         <td className="py-2 px-2 text-right text-xs tabular-nums">{Number(row.unit_cost || 0).toLocaleString('ru-RU')}</td>
+                        <td className="py-2 px-2 text-xs text-muted-foreground">{row.expiry_date || '—'}</td>
                         <td className="py-2 px-2 pr-3 text-right text-xs font-medium tabular-nums">{Number(row.total_cost || 0).toLocaleString('ru-RU')}</td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
                     <tr className="border-t border-border bg-slate-50 dark:bg-white/[0.03]">
-                      <td colSpan={4} className="py-2 pl-3 pr-2 text-xs font-medium">Итого</td>
+                      <td colSpan={5} className="py-2 pl-3 pr-2 text-xs font-medium">Итого</td>
                       <td className="py-2 px-2 pr-3 text-right text-xs font-semibold tabular-nums">{Number(viewPosting.total_amount || 0).toLocaleString('ru-RU')} ₸</td>
                     </tr>
                   </tfoot>
