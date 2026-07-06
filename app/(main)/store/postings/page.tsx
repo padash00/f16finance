@@ -20,6 +20,7 @@ type Item = {
   barcode: string
   unit?: string | null
   default_purchase_price?: number | null
+  sale_price?: number | null
   requires_expiry?: boolean | null
 }
 
@@ -36,6 +37,8 @@ type PostingLine = {
   item_id: string
   quantity: string
   unit_cost: string
+  sale_price: string
+  markup: string
   comment: string
   production_date: string
   expiry_date: string
@@ -66,6 +69,8 @@ function newLine(): PostingLine {
     item_id: '',
     quantity: '',
     unit_cost: '',
+    sale_price: '',
+    markup: '',
     comment: '',
     production_date: '',
     expiry_date: '',
@@ -75,6 +80,18 @@ function newLine(): PostingLine {
 function parseNum(v: string) {
   const n = Number(String(v).replace(',', '.'))
   return Number.isFinite(n) ? n : 0
+}
+
+/** Наценка % из закупа и продажи (1 знак после запятой). */
+function markupFrom(unitCost: number, salePrice: number) {
+  if (unitCost <= 0 || salePrice <= 0) return ''
+  return String(Math.round(((salePrice / unitCost) - 1) * 1000) / 10)
+}
+
+/** Цена продажи из закупа и наценки (до целых тенге). */
+function saleFromMarkup(unitCost: number, markup: number) {
+  if (unitCost <= 0) return ''
+  return String(Math.round(unitCost * (1 + markup / 100)))
 }
 
 export default function StorePostingsPage({ embedded = false }: { embedded?: boolean } = {}) {
@@ -196,6 +213,7 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
         item_id: l.item_id,
         quantity: parseNum(l.quantity),
         unit_cost: parseNum(l.unit_cost),
+        sale_price: l.sale_price.trim() ? parseNum(l.sale_price) : null,
         comment: l.comment.trim() || null,
         production_date: l.production_date.trim() || null,
         expiry_date: l.expiry_date.trim() || null,
@@ -361,10 +379,11 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
                 return (
                   <div key={line.key} className="rounded-lg border border-border bg-slate-50 dark:bg-white/[0.02] p-3 space-y-2">
                     <div className="grid gap-2 sm:grid-cols-12">
-                      <div className="sm:col-span-6">
+                      <div className="sm:col-span-4">
+                        <Label className="mb-1 block text-[10px] text-muted-foreground">Товар</Label>
                         <Input
-                          placeholder="Поиск товара по названию или штрихкоду…"
-                          value={it ? `${it.name} · ${it.barcode}` : (search[line.key] || '')}
+                          placeholder="Поиск по названию или штрихкоду…"
+                          value={it ? it.name : (search[line.key] || '')}
                           onChange={(e) => {
                             setSearch((s) => ({ ...s, [line.key]: e.target.value }))
                             if (line.item_id) {
@@ -380,11 +399,18 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
                                 type="button"
                                 className="block w-full truncate px-2 py-1.5 text-left text-xs hover:bg-slate-100 dark:hover:bg-white/5"
                                 onClick={() => {
-                                  setLines((prev) => prev.map((l) => l.key === line.key ? {
-                                    ...l,
-                                    item_id: opt.id,
-                                    unit_cost: l.unit_cost || (opt.default_purchase_price ? String(opt.default_purchase_price) : ''),
-                                  } : l))
+                                  setLines((prev) => prev.map((l) => {
+                                    if (l.key !== line.key) return l
+                                    const unitCost = l.unit_cost || (opt.default_purchase_price ? String(opt.default_purchase_price) : '')
+                                    const salePrice = l.sale_price || (opt.sale_price ? String(opt.sale_price) : '')
+                                    return {
+                                      ...l,
+                                      item_id: opt.id,
+                                      unit_cost: unitCost,
+                                      sale_price: salePrice,
+                                      markup: markupFrom(parseNum(unitCost), parseNum(salePrice)),
+                                    }
+                                  }))
                                   setSearch((s) => ({ ...s, [line.key]: '' }))
                                 }}
                               >
@@ -398,31 +424,98 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
                         )}
                       </div>
                       <div className="sm:col-span-2">
+                        <Label className="mb-1 block text-[10px] text-muted-foreground">Штрихкод</Label>
+                        <Input value={it?.barcode || '—'} disabled className="font-mono text-xs" />
+                      </div>
+                      <div className="sm:col-span-1">
+                        <Label className="mb-1 block text-[10px] text-muted-foreground">Кол-во</Label>
                         <Input
                           type="number"
                           step="0.001"
                           min="0"
-                          placeholder="Кол-во"
+                          placeholder="0"
                           value={line.quantity}
                           onChange={(e) => setLines((prev) => prev.map((l) => l.key === line.key ? { ...l, quantity: e.target.value } : l))}
                         />
                       </div>
                       <div className="sm:col-span-2">
+                        <Label className="mb-1 block text-[10px] text-muted-foreground">Цена закупа</Label>
                         <Input
                           type="number"
                           step="0.01"
                           min="0"
-                          placeholder="Цена закупа (опц.)"
+                          placeholder="0"
                           value={line.unit_cost}
-                          onChange={(e) => setLines((prev) => prev.map((l) => l.key === line.key ? { ...l, unit_cost: e.target.value } : l))}
+                          onChange={(e) => {
+                            const next = e.target.value
+                            setLines((prev) => prev.map((l) => {
+                              if (l.key !== line.key) return l
+                              const cost = parseNum(next)
+                              // Наценка сохраняется — пересчитываем продажу; если наценки нет, но есть продажа — пересчитываем наценку.
+                              if (l.markup.trim() && cost > 0) {
+                                return { ...l, unit_cost: next, sale_price: saleFromMarkup(cost, parseNum(l.markup)) }
+                              }
+                              return { ...l, unit_cost: next, markup: markupFrom(cost, parseNum(l.sale_price)) }
+                            }))
+                          }}
                         />
                       </div>
-                      <div className="sm:col-span-2 flex items-center gap-2">
+                      <div className="sm:col-span-2">
+                        <Label className="mb-1 block text-[10px] text-muted-foreground">Цена продажи</Label>
                         <Input
-                          placeholder="Комментарий"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="0"
+                          value={line.sale_price}
+                          onChange={(e) => {
+                            const next = e.target.value
+                            setLines((prev) => prev.map((l) => l.key === line.key
+                              ? { ...l, sale_price: next, markup: markupFrom(parseNum(l.unit_cost), parseNum(next)) }
+                              : l))
+                          }}
+                        />
+                      </div>
+                      <div className="sm:col-span-1">
+                        <Label className="mb-1 block text-[10px] text-muted-foreground">Наценка %</Label>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          placeholder="0"
+                          value={line.markup}
+                          onChange={(e) => {
+                            const next = e.target.value
+                            setLines((prev) => prev.map((l) => l.key === line.key
+                              ? { ...l, markup: next, sale_price: saleFromMarkup(parseNum(l.unit_cost), parseNum(next)) || l.sale_price }
+                              : l))
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-12">
+                      {line.item_id ? (
+                        <>
+                          <div className="sm:col-span-2">
+                            <Label className="mb-1 block text-[10px] text-muted-foreground">Изготовлен (от)</Label>
+                            <DatePicker value={line.production_date} onChange={(v) => setLines((prev) => prev.map((l) => l.key === line.key ? { ...l, production_date: v } : l))} />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <Label className="mb-1 block text-[10px] text-muted-foreground">
+                              Годен до {it?.requires_expiry === false ? '(необяз.)' : '*'}
+                            </Label>
+                            <DatePicker value={line.expiry_date} onChange={(v) => setLines((prev) => prev.map((l) => l.key === line.key ? { ...l, expiry_date: v } : l))} />
+                          </div>
+                        </>
+                      ) : null}
+                      <div className={line.item_id ? 'sm:col-span-7' : 'sm:col-span-11'}>
+                        <Label className="mb-1 block text-[10px] text-muted-foreground">Комментарий</Label>
+                        <Input
+                          placeholder="Например: излишек по ревизии"
                           value={line.comment}
                           onChange={(e) => setLines((prev) => prev.map((l) => l.key === line.key ? { ...l, comment: e.target.value } : l))}
                         />
+                      </div>
+                      <div className="flex items-end justify-end sm:col-span-1">
                         <Button
                           type="button"
                           variant="ghost"
@@ -433,25 +526,10 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
+                      {line.item_id && it?.requires_expiry === false ? (
+                        <div className="sm:col-span-12"><span className="text-[11px] text-muted-foreground">Товар без срока годности (бургеры/хотдоги и пр.)</span></div>
+                      ) : null}
                     </div>
-                    {/* Срок годности (обязателен, кроме товаров без срока) */}
-                    {line.item_id ? (
-                      <div className="grid gap-2 sm:grid-cols-12">
-                        <div className="sm:col-span-3">
-                          <Label className="mb-1 block text-[10px] text-muted-foreground">Изготовлен (от)</Label>
-                          <DatePicker value={line.production_date} onChange={(v) => setLines((prev) => prev.map((l) => l.key === line.key ? { ...l, production_date: v } : l))} />
-                        </div>
-                        <div className="sm:col-span-3">
-                          <Label className="mb-1 block text-[10px] text-muted-foreground">
-                            Годен до {it?.requires_expiry === false ? '(необяз.)' : '*'}
-                          </Label>
-                          <DatePicker value={line.expiry_date} onChange={(v) => setLines((prev) => prev.map((l) => l.key === line.key ? { ...l, expiry_date: v } : l))} />
-                        </div>
-                        {it?.requires_expiry === false ? (
-                          <div className="flex items-end sm:col-span-6"><span className="text-[11px] text-muted-foreground">Товар без срока годности (бургеры/хотдоги и пр.)</span></div>
-                        ) : null}
-                      </div>
-                    ) : null}
                   </div>
                 )
               })}

@@ -84,7 +84,7 @@ type Body = {
     location_id: string
     received_at: string
     comment?: string | null
-    items: Array<{ item_id: string; quantity: number; unit_cost?: number; comment?: string | null; production_date?: string | null; expiry_date?: string | null }>
+    items: Array<{ item_id: string; quantity: number; unit_cost?: number; sale_price?: number | null; comment?: string | null; production_date?: string | null; expiry_date?: string | null }>
   }
   receipt_id?: string
   cancel_reason?: string
@@ -408,6 +408,49 @@ export async function POST(request: Request) {
           .update({ kind: 'posting' })
           .eq('id', newReceiptId)
         if (kindErr) throw kindErr
+      }
+
+      // Цены как в приёмке: закуп обновляет себестоимость, продажа синхронизируется
+      // по всем точкам. Обновляем только заполненные поля (оба опциональны).
+      const priceUpdatesRaw = (posting.items || [])
+        .map((i) => ({
+          item_id: String(i.item_id || '').trim(),
+          unit_cost: normalizeUnitCost(i.unit_cost ?? 0),
+          sale_price: i.sale_price != null ? normalizeMoney(i.sale_price) : null,
+        }))
+        .filter((i) => i.item_id && (i.unit_cost > 0 || (i.sale_price != null && i.sale_price > 0)))
+      const priceUpdatesMap = new Map<string, { item_id: string; unit_cost: number; sale_price: number | null }>()
+      for (const row of priceUpdatesRaw) priceUpdatesMap.set(row.item_id, row)
+      const postingSyncItems: Array<{ name: string; barcode: string; sale_price: number; is_active?: boolean }> = []
+      for (const row of priceUpdatesMap.values()) {
+        const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
+        if (row.unit_cost > 0) patch.default_purchase_price = row.unit_cost
+        if (row.sale_price != null && row.sale_price > 0) patch.sale_price = row.sale_price
+        let priceQuery: any = supabase
+          .from('inventory_items')
+          .update(patch)
+          .eq('id', row.item_id)
+          .select('name, barcode, sale_price, is_active')
+          .single()
+        if (!access.isSuperAdmin && access.activeOrganization?.id) {
+          priceQuery = priceQuery.eq('organization_id', access.activeOrganization.id)
+        }
+        const { data: itemRow, error: priceErr } = await priceQuery
+        if (priceErr) throw priceErr
+        if (row.sale_price != null && row.sale_price > 0 && itemRow?.name && itemRow?.barcode) {
+          postingSyncItems.push({
+            name: String(itemRow.name),
+            barcode: String(itemRow.barcode),
+            sale_price: Number(itemRow.sale_price || 0),
+            is_active: itemRow.is_active !== false,
+          })
+        }
+      }
+      if (postingSyncItems.length > 0) {
+        await bulkSyncInventoryItemsToPointProducts(supabase as any, postingSyncItems, {
+          organizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+        })
       }
 
       await writeAuditLog(supabase as any, {
