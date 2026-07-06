@@ -199,6 +199,39 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
     return null
   }
 
+  // Строки документа → в форму (цены продажи/наценка — из каталога).
+  const restoreLinesFrom = (posting: RecentPosting) => {
+    setLocationId(posting.location?.id || '')
+    setReceivedAt(posting.received_at || new Date().toISOString().slice(0, 10))
+    setComment(posting.comment && posting.comment !== 'Оприходование' ? posting.comment : '')
+    const restored = (posting.items || []).map((row) => {
+      const catalogItem = row.item ? itemById.get(row.item.id) || row.item : null
+      const unitCost = row.unit_cost ? String(row.unit_cost) : ''
+      const salePrice = catalogItem?.sale_price ? String(catalogItem.sale_price) : ''
+      return {
+        ...newLine(),
+        item_id: row.item?.id || '',
+        quantity: String(row.quantity || ''),
+        unit_cost: unitCost,
+        sale_price: salePrice,
+        markup: markupFrom(parseNum(unitCost), parseNum(salePrice)),
+        comment: row.comment || '',
+        production_date: row.production_date || '',
+        expiry_date: row.expiry_date || '',
+      }
+    }).filter((l) => l.item_id)
+    setLines(restored.length > 0 ? restored : [newLine()])
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  // Отменённый документ: просто загружаем строки в форму (остатки уже откатились).
+  const editCancelled = () => {
+    if (!viewPosting) return
+    restoreLinesFrom(viewPosting)
+    setViewPosting(null)
+    setSuccess('Строки отменённого оприходования загружены в форму. Отредактируйте и проведите заново.')
+  }
+
   // Отмена проведённого оприходования (остатки откатываются) + строки в форму на доработку.
   const cancelAndEdit = async () => {
     if (!viewPosting) return
@@ -218,30 +251,9 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
       const json = await res.json().catch(() => null)
       if (!res.ok) throw new Error(json?.message || json?.error || 'Не удалось отменить оприходование')
 
-      // Загружаем строки в форму: цены продажи/наценка — из каталога.
-      setLocationId(viewPosting.location?.id || '')
-      setReceivedAt(viewPosting.received_at || new Date().toISOString().slice(0, 10))
-      setComment(viewPosting.comment && viewPosting.comment !== 'Оприходование' ? viewPosting.comment : '')
-      const restored = (viewPosting.items || []).map((row) => {
-        const catalogItem = row.item ? itemById.get(row.item.id) || row.item : null
-        const unitCost = row.unit_cost ? String(row.unit_cost) : ''
-        const salePrice = catalogItem?.sale_price ? String(catalogItem.sale_price) : ''
-        return {
-          ...newLine(),
-          item_id: row.item?.id || '',
-          quantity: String(row.quantity || ''),
-          unit_cost: unitCost,
-          sale_price: salePrice,
-          markup: markupFrom(parseNum(unitCost), parseNum(salePrice)),
-          comment: row.comment || '',
-          production_date: row.production_date || '',
-          expiry_date: row.expiry_date || '',
-        }
-      }).filter((l) => l.item_id)
-      setLines(restored.length > 0 ? restored : [newLine()])
+      restoreLinesFrom(viewPosting)
       setViewPosting(null)
       setSuccess('Оприходование отменено — строки загружены в форму. Отредактируйте и проведите заново.')
-      window.scrollTo({ top: 0, behavior: 'smooth' })
       await load()
     } catch (e: any) {
       setError(e?.message || 'Ошибка отмены')
@@ -250,6 +262,28 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
       setCancelling(false)
     }
   }
+
+  // Переход из «Деталей приёмки»: /store/postings?edit=<receipt_id>.
+  // Отменённый документ сразу грузим в форму; проведённый — открываем модалку,
+  // чтобы владелец явно нажал «Отменить и редактировать» (иначе остатки задвоятся).
+  const [pendingEditId, setPendingEditId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null
+    try { return new URLSearchParams(window.location.search).get('edit') } catch { return null }
+  })
+  useEffect(() => {
+    if (!pendingEditId || recent.length === 0) return
+    const target = recent.find((r) => r.id === pendingEditId)
+    setPendingEditId(null)
+    try { window.history.replaceState(null, '', window.location.pathname) } catch { /* noop */ }
+    if (!target) return
+    if (target.status === 'cancelled') {
+      restoreLinesFrom(target)
+      setSuccess('Строки отменённого оприходования загружены в форму. Отредактируйте и проведите заново.')
+    } else {
+      setViewPosting(target)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingEditId, recent])
 
   const openConfirm = () => {
     setError(null)
@@ -714,6 +748,11 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
 
               <div className="flex justify-end gap-2">
                 <Button variant="ghost" onClick={() => setViewPosting(null)} disabled={cancelling}>Закрыть</Button>
+                {viewPosting.status === 'cancelled' && (
+                  <Button variant="outline" onClick={editCancelled}>
+                    Загрузить в форму для редактирования
+                  </Button>
+                )}
                 {viewPosting.status === 'posted' && (
                   <Button variant="outline" className="border-amber-500/40 text-amber-700 hover:bg-amber-500/10 dark:text-amber-300" onClick={() => void cancelAndEdit()} disabled={cancelling}>
                     {cancelling ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}

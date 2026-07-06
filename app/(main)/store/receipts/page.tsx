@@ -1707,7 +1707,12 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                       <span> · <span className="text-blue-700 dark:text-blue-300">Оприходование</span></span>
                     ) : null}
                   </div>
-                  <div className="ml-auto">
+                  <div className="ml-auto flex items-center gap-2">
+                    {selectedReceipt.kind === 'posting' ? (
+                      <Button asChild type="button" variant="outline" size="sm">
+                        <a href={`/store/postings?edit=${selectedReceipt.id}`}>Редактировать в оприходовании</a>
+                      </Button>
+                    ) : null}
                     {selectedReceipt.status === 'cancelled' ? (
                       <span className="inline-flex items-center rounded-full border border-rose-500/40 bg-rose-500/15 px-2 py-0.5 text-xs text-rose-700 dark:text-rose-200">
                         Отменена{selectedReceipt.cancelled_at ? ` · ${formatDate(selectedReceipt.cancelled_at)}` : ''}
