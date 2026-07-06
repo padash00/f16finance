@@ -116,6 +116,11 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
   const [confirmPhrase, setConfirmPhrase] = useState('')
   useModalEscape(confirmOpen, () => { if (!saving) setConfirmOpen(false) })
 
+  // Просмотр проведённого оприходования + «отменить и редактировать»
+  const [viewPosting, setViewPosting] = useState<RecentPosting | null>(null)
+  const [cancelling, setCancelling] = useState(false)
+  useModalEscape(!!viewPosting, () => { if (!cancelling) setViewPosting(null) })
+
   useEffect(() => {
     let cancelled = false
     void (async () => {
@@ -192,6 +197,55 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
       .map((l) => itemById.get(l.item_id)?.name || 'Товар')
     if (missing.length) return `Укажите «годен до» для: ${missing.slice(0, 5).join(', ')}${missing.length > 5 ? '…' : ''}. Товары без срока (бургеры/хотдоги) — снимите галочку «требует срок годности» в каталоге.`
     return null
+  }
+
+  // Отмена проведённого оприходования (остатки откатываются) + строки в форму на доработку.
+  const cancelAndEdit = async () => {
+    if (!viewPosting) return
+    if (!window.confirm('Оприходование будет отменено (остатки откатятся), а строки загрузятся в форму для редактирования. Продолжить?')) return
+    setCancelling(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/admin/store/receipts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'cancelReceipt',
+          receipt_id: viewPosting.id,
+          cancel_reason: 'Отменено для редактирования (оприходование)',
+        }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.message || json?.error || 'Не удалось отменить оприходование')
+
+      // Загружаем строки в форму: цены продажи/наценка — из каталога.
+      setLocationId(viewPosting.location?.id || '')
+      setReceivedAt(viewPosting.received_at || new Date().toISOString().slice(0, 10))
+      setComment(viewPosting.comment && viewPosting.comment !== 'Оприходование' ? viewPosting.comment : '')
+      const restored = (viewPosting.items || []).map((row) => {
+        const catalogItem = row.item ? itemById.get(row.item.id) || row.item : null
+        const unitCost = row.unit_cost ? String(row.unit_cost) : ''
+        const salePrice = catalogItem?.sale_price ? String(catalogItem.sale_price) : ''
+        return {
+          ...newLine(),
+          item_id: row.item?.id || '',
+          quantity: String(row.quantity || ''),
+          unit_cost: unitCost,
+          sale_price: salePrice,
+          markup: markupFrom(parseNum(unitCost), parseNum(salePrice)),
+        }
+      }).filter((l) => l.item_id)
+      setLines(restored.length > 0 ? restored : [newLine()])
+      setViewPosting(null)
+      setSuccess('Оприходование отменено — строки загружены в форму. Отредактируйте и проведите заново.')
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      await load()
+    } catch (e: any) {
+      setError(e?.message || 'Ошибка отмены')
+      setViewPosting(null)
+    } finally {
+      setCancelling(false)
+    }
   }
 
   const openConfirm = () => {
@@ -590,6 +644,83 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
         </div>
       )}
 
+      {viewPosting && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 overflow-y-auto"
+          onClick={(e) => { if (e.target === e.currentTarget && !cancelling) setViewPosting(null) }}
+        >
+          <Card className="w-full max-w-2xl max-h-[calc(100vh-2rem)] overflow-y-auto border-border bg-card">
+            <CardContent className="p-5 space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="flex items-center gap-2 font-semibold">
+                    <Package className="h-4 w-4 text-emerald-700 dark:text-emerald-300" />
+                    Оприходование от {viewPosting.received_at}
+                  </h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {viewPosting.location?.name || '—'} ({viewPosting.location?.location_type === 'point_display' ? 'витрина' : 'склад'})
+                    {viewPosting.comment ? ` · ${viewPosting.comment}` : ''}
+                  </p>
+                </div>
+                {viewPosting.status === 'cancelled' ? (
+                  <Badge variant="outline" className="shrink-0 border-rose-500/40 bg-rose-500/15 text-rose-700 dark:text-rose-200">Отменён</Badge>
+                ) : (
+                  <Badge variant="outline" className="shrink-0 border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200">Проведён</Badge>
+                )}
+              </div>
+
+              <div className="overflow-auto rounded-lg border border-border">
+                <table className="w-full min-w-[520px] text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-slate-50 dark:bg-white/[0.03] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                      <th className="py-2 pl-3 pr-2 font-normal">Товар</th>
+                      <th className="py-2 px-2 font-normal">Штрихкод</th>
+                      <th className="py-2 px-2 text-right font-normal">Кол-во</th>
+                      <th className="py-2 px-2 text-right font-normal">Цена</th>
+                      <th className="py-2 px-2 pr-3 text-right font-normal">Сумма</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
+                    {(viewPosting.items || []).map((row) => (
+                      <tr key={row.id}>
+                        <td className="py-2 pl-3 pr-2 text-xs">{row.item?.name || 'Товар'}</td>
+                        <td className="py-2 px-2 font-mono text-[11px] text-muted-foreground">{row.item?.barcode || '—'}</td>
+                        <td className="py-2 px-2 text-right text-xs tabular-nums">{Number(row.quantity || 0).toLocaleString('ru-RU')}</td>
+                        <td className="py-2 px-2 text-right text-xs tabular-nums">{Number(row.unit_cost || 0).toLocaleString('ru-RU')}</td>
+                        <td className="py-2 px-2 pr-3 text-right text-xs font-medium tabular-nums">{Number(row.total_cost || 0).toLocaleString('ru-RU')}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t border-border bg-slate-50 dark:bg-white/[0.03]">
+                      <td colSpan={4} className="py-2 pl-3 pr-2 text-xs font-medium">Итого</td>
+                      <td className="py-2 px-2 pr-3 text-right text-xs font-semibold tabular-nums">{Number(viewPosting.total_amount || 0).toLocaleString('ru-RU')} ₸</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+
+              {viewPosting.status === 'posted' && (
+                <p className="text-xs text-amber-700 dark:text-amber-200/80">
+                  «Отменить и редактировать» откатит остатки этого оприходования и загрузит строки в форму выше —
+                  отредактируйте количество/цены, добавьте товары и проведите заново.
+                </p>
+              )}
+
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setViewPosting(null)} disabled={cancelling}>Закрыть</Button>
+                {viewPosting.status === 'posted' && (
+                  <Button variant="outline" className="border-amber-500/40 text-amber-700 hover:bg-amber-500/10 dark:text-amber-300" onClick={() => void cancelAndEdit()} disabled={cancelling}>
+                    {cancelling ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
+                    Отменить и редактировать
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       <Card className="border-border bg-card/70 p-0">
         <CardContent className="p-4 sm:p-5">
           <div className="mb-2 flex items-center gap-2 text-sm font-medium">
@@ -615,7 +746,12 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
                   {recent.map((r) => (
-                    <tr key={r.id} className={r.status === 'cancelled' ? 'opacity-50 line-through' : ''}>
+                    <tr
+                      key={r.id}
+                      onClick={() => setViewPosting(r)}
+                      title="Нажмите, чтобы посмотреть позиции"
+                      className={`cursor-pointer transition hover:bg-slate-50 dark:hover:bg-white/[0.03] ${r.status === 'cancelled' ? 'opacity-50 line-through' : ''}`}
+                    >
                       <td className="py-2 pl-2 pr-2 text-xs text-muted-foreground">{r.received_at}</td>
                       <td className="py-2 px-2 text-xs">{r.location?.name || '—'}</td>
                       <td className="py-2 px-2 text-xs">
