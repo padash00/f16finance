@@ -117,6 +117,95 @@ function formatDate(s: string) {
   catch { return s }
 }
 
+// ─── Пикер товара с поиском по названию/штрихкоду ────────────────────────────
+// Работает со сканером: полный штрихкод + Enter выбирает товар сразу.
+
+type PickerOption = { id: string; name: string; barcode: string; hint: string }
+
+function ItemSearchPicker({
+  options,
+  value,
+  onSelect,
+  placeholder,
+}: {
+  options: PickerOption[]
+  value: string
+  onSelect: (id: string) => void
+  placeholder?: string
+}) {
+  const [query, setQuery] = useState('')
+  const selected = options.find((o) => o.id === value) || null
+
+  if (selected) {
+    return (
+      <div className="flex items-center justify-between gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/[0.06] px-2.5 py-1.5">
+        <div className="min-w-0">
+          <p className="truncate text-xs font-medium text-foreground">{selected.name}</p>
+          <p className="font-mono text-[10px] text-muted-foreground">
+            {selected.barcode || 'без штрихкода'} · {selected.hint}
+          </p>
+        </div>
+        <button
+          type="button"
+          className="shrink-0 text-[10px] text-muted-foreground underline transition hover:text-foreground"
+          onClick={() => { onSelect(''); setQuery('') }}
+        >
+          изменить
+        </button>
+      </div>
+    )
+  }
+
+  const q = query.trim().toLowerCase()
+  const matches = (q
+    ? options.filter((o) => o.name.toLowerCase().includes(q) || o.barcode.includes(q))
+    : options
+  ).slice(0, 20)
+
+  const pickByBarcode = () => {
+    const raw = query.trim()
+    if (!raw) return
+    const exact = options.find((o) => o.barcode && o.barcode === raw)
+    if (exact) { onSelect(exact.id); setQuery(''); return }
+    if (matches.length === 1) { onSelect(matches[0].id); setQuery('') }
+  }
+
+  return (
+    <div>
+      <Input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder={placeholder || 'Название или штрихкод (сканер работает)'}
+        className="h-8 text-xs"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            pickByBarcode()
+          }
+        }}
+      />
+      {q.length > 0 && (
+        <div className="mt-1 max-h-44 overflow-auto rounded-lg border border-border bg-background shadow-sm">
+          {matches.map((o) => (
+            <button
+              key={o.id}
+              type="button"
+              className="flex w-full items-center justify-between gap-2 px-2.5 py-1.5 text-left transition hover:bg-slate-100 dark:hover:bg-white/5"
+              onClick={() => { onSelect(o.id); setQuery('') }}
+            >
+              <span className="min-w-0 truncate text-xs text-foreground">{o.name}</span>
+              <span className="shrink-0 font-mono text-[10px] text-muted-foreground">{o.barcode || '—'} · {o.hint}</span>
+            </button>
+          ))}
+          {matches.length === 0 && (
+            <div className="px-2.5 py-2 text-[11px] text-muted-foreground">Ничего не найдено</div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ShowcasePage({ embedded = false }: { embedded?: boolean } = {}) {
@@ -711,18 +800,18 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
                       <div key={idx} className="rounded-xl border border-border bg-white dark:bg-white/[0.03] p-2.5 space-y-2">
                         <div className="space-y-1">
                           <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Товар</Label>
-                          <select
+                          <ItemSearchPicker
+                            options={warehouseItems
+                              .filter((wi) => wi.item_id === line.item_id || !requestLines.some((l, i) => i !== idx && l.item_id === wi.item_id))
+                              .map((wi) => ({
+                                id: wi.item_id,
+                                name: wi.item?.name || wi.item_id,
+                                barcode: wi.item?.barcode || '',
+                                hint: `${wi.quantity} ${wi.item?.unit || 'шт'} на складе`,
+                              }))}
                             value={line.item_id}
-                            onChange={(e) => setLineItem(idx, e.target.value)}
-                            className="w-full rounded-lg border border-input bg-background px-2 py-1.5 text-xs outline-none focus:border-amber-400/50"
-                          >
-                            <option value="">Выберите товар</option>
-                            {warehouseItems.map((wi) => (
-                              <option key={wi.item_id} value={wi.item_id}>
-                                {wi.item?.name || wi.item_id} · {wi.quantity} {wi.item?.unit || 'шт'} на складе
-                              </option>
-                            ))}
-                          </select>
+                            onSelect={(id) => setLineItem(idx, id)}
+                          />
                           {line.item_id && (() => {
                             const bal = balances.find((b) => b.item_id === line.item_id)
                             return bal ? (
@@ -758,7 +847,26 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
                               >
                                 <Plus className="h-3 w-3" />
                               </button>
+                              {(() => {
+                                const wi = warehouseItems.find((w) => w.item_id === line.item_id)
+                                return wi && wi.quantity > 0 ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setLineQty(idx, String(wi.quantity))}
+                                    className="h-7 rounded-lg border border-border px-2 text-[10px] text-muted-foreground transition hover:bg-slate-100 dark:hover:bg-white/[0.06] hover:text-foreground"
+                                    title={`Запросить весь остаток склада: ${wi.quantity}`}
+                                  >
+                                    макс
+                                  </button>
+                                ) : null
+                              })()}
                             </div>
+                            {(() => {
+                              const wi = warehouseItems.find((w) => w.item_id === line.item_id)
+                              return wi && parseQty(line.requested_qty) > Number(wi.quantity)
+                                ? <p className="text-[10px] text-amber-600 dark:text-amber-300">Больше, чем на складе ({wi.quantity}) — заявку могут одобрить частично</p>
+                                : null
+                            })()}
                           </div>
                           {requestLines.length > 1 && (
                             <button
@@ -792,10 +900,24 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
 
                   {sendError && <p className="text-xs text-rose-400">{sendError}</p>}
 
-                  <Button type="submit" disabled={sending} className="w-full gap-2">
-                    {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardList className="h-4 w-4" />}
-                    Отправить заявку
-                  </Button>
+                  {(() => {
+                    const filled = requestLines.filter((l) => l.item_id && parseQty(l.requested_qty) > 0)
+                    const totalUnits = filled.reduce((s, l) => s + parseQty(l.requested_qty), 0)
+                    return (
+                      <>
+                        <div className="flex items-center justify-between rounded-lg border border-border bg-slate-50 dark:bg-white/[0.03] px-3 py-2 text-xs">
+                          <span className="text-muted-foreground">В заявке</span>
+                          <span className="font-medium text-foreground">
+                            {filled.length} поз. · {totalUnits.toLocaleString('ru-RU')} ед.
+                          </span>
+                        </div>
+                        <Button type="submit" disabled={sending || filled.length === 0} className="w-full gap-2">
+                          {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardList className="h-4 w-4" />}
+                          Отправить заявку
+                        </Button>
+                      </>
+                    )
+                  })()}
                 </form>
               )}
           </div>
@@ -826,18 +948,19 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
                       <div key={idx} className="rounded-xl border border-border bg-white dark:bg-white/[0.03] p-2.5 space-y-2">
                         <div className="space-y-1">
                           <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Товар</Label>
-                          <select
+                          <ItemSearchPicker
+                            options={balances
+                              .filter((b) => Number(b.quantity) > 0)
+                              .filter((b) => b.item_id === line.item_id || !returnLines.some((l, i) => i !== idx && l.item_id === b.item_id))
+                              .map((b) => ({
+                                id: b.item_id,
+                                name: b.item?.name || b.item_id,
+                                barcode: b.item?.barcode || '',
+                                hint: `${b.quantity} ${b.item?.unit || 'шт'} на витрине`,
+                              }))}
                             value={line.item_id}
-                            onChange={(e) => setReturnLines((prev) => prev.map((l, i) => i === idx ? { ...l, item_id: e.target.value } : l))}
-                            className="w-full rounded-lg border border-input bg-background px-2 py-1.5 text-xs outline-none focus:border-amber-400/50"
-                          >
-                            <option value="">Выберите товар</option>
-                            {balances.filter((b) => Number(b.quantity) > 0).map((b) => (
-                              <option key={b.item_id} value={b.item_id}>
-                                {b.item?.name || b.item_id} · {b.quantity} {b.item?.unit || 'шт'} на витрине
-                              </option>
-                            ))}
-                          </select>
+                            onSelect={(id) => setReturnLines((prev) => prev.map((l, i) => i === idx ? { ...l, item_id: id } : l))}
+                          />
                         </div>
                         <div className="flex items-center gap-2">
                           <div className="space-y-1 flex-1">
