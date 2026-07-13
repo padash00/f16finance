@@ -232,6 +232,16 @@ export async function GET(request: Request) {
           totalItems: snapRows.length,
           countedItems: countsByItem.size,
           report,
+          // Непосчитанные позиции с остатком — для предпросмотра жёсткого закрытия
+          uncounted: snapRows
+            .filter((r) => !countsByItem.has(String(r.item_id)) && num(r.expected_qty) > 0)
+            .map((r) => ({
+              item_id: String(r.item_id),
+              name: itemName.get(String(r.item_id)) || 'Товар',
+              expected: num(r.expected_qty),
+              purchase_price: itemPrice.get(String(r.item_id)) || 0,
+            }))
+            .sort((a, b) => b.expected * b.purchase_price - a.expected * a.purchase_price),
         },
       })
     }
@@ -380,6 +390,18 @@ export async function POST(request: Request) {
         if (!access.isSuperAdmin && role !== 'owner') return json({ error: 'forbidden', message: 'Принудительно закрыть акт может только владелец.' }, 403)
       }
 
+      // Жёсткая (полная) ревизия: непосчитанные позиции снимка обнуляются —
+      // «чего не посчитали, того нет». Несовместимо с force: там позиции
+      // сознательно оставляют недосчитанными.
+      const zeroUncounted = body?.zero_uncounted === true
+      if (zeroUncounted && force) {
+        return json({ error: 'Жёсткое закрытие с обнулением нельзя совмещать с принудительным: сначала завершите подсчёт или закройте мягко.' }, 400)
+      }
+      if (zeroUncounted) {
+        const role = String(access.staffMember?.role || access.staffRole || '').toLowerCase()
+        if (!access.isSuperAdmin && role !== 'owner') return json({ error: 'forbidden', message: 'Полную ревизию с обнулением может провести только владелец.' }, 403)
+      }
+
       const openTransfers = await fetchOpenTransferRequestsForLocation(supabase as any, locationId, inventoryScope)
       if (!force && openTransfers.length > 0) {
         return json({ error: 'inventory-stocktake-open-transfers', message: 'Есть заявки склад ↔ витрина в пути. Сначала завершите их.' }, 409)
@@ -435,6 +457,7 @@ export async function POST(request: Request) {
         shrinkage: number // необъяснённая недостача (исключая движения)
         surplus: number // необъяснённый излишек
         purchase_price: number // закупочная цена позиции (для недостачи в ₸)
+        zeroed?: boolean // жёсткая ревизия: не посчитано → обнулено
       }
       const report: ReportRow[] = []
       // Недостача товара для долга: реальная нехватка на момент подсчёта =
@@ -472,6 +495,33 @@ export async function POST(request: Request) {
       }
       if (conflicts.length > 0) {
         return json({ error: 'unresolved-conflicts', message: `Расхождение между счётчиками: ${conflicts.length} поз. Нужен пересчёт или решение владельца.`, conflicts }, 409)
+      }
+
+      // Жёсткий режим: всё из снимка, что осталось без счёта, проводим нулём.
+      // В долг такие позиции по умолчанию не идут (отдельная галочка ниже).
+      const zeroedItemIds: string[] = []
+      if (zeroUncounted) {
+        for (const [itemId, expectedRaw] of expectedBy) {
+          if (grouped.has(itemId)) continue
+          const expected = num(expectedRaw)
+          if (expected <= 0) continue
+          zeroedItemIds.push(itemId)
+          stocktakeItems.push({ item_id: itemId, actual_qty: 0, comment: 'Полная ревизия: не посчитано — обнулено' })
+          report.push({
+            item_id: itemId,
+            name: '',
+            expected,
+            counted: 0,
+            movedIn: 0,
+            movedOut: 0,
+            final: 0,
+            variance: -expected,
+            shrinkage: 0, // не смешиваем с «настоящей» недостачей — учитываем отдельно как zeroed
+            surplus: 0,
+            purchase_price: 0,
+            zeroed: true,
+          })
+        }
       }
 
       // имена + закупочные цены товаров для отчёта (недостача/излишек в ₸)
@@ -545,24 +595,65 @@ export async function POST(request: Request) {
         }
       }
 
-      await writeAuditLog(supabase as any, { actorUserId, entityType: 'inventory-audit-act', entityId: actId, action: force ? 'force-close' : 'close', payload: { counted: countRows.length, debtsCreated, force } })
+      // Обнулённое (жёсткая ревизия) — в долг только по явной галочке.
+      // Персонального счётчика у непосчитанного нет, поэтому сумма делится
+      // поровну между всеми операторами акта.
+      const zeroedRows = report.filter((r: any) => (r as any).zeroed)
+      const zeroedValue = zeroedRows.reduce((s, r) => s + r.expected * (r.purchase_price || 0), 0)
+      if (body?.assignDebtZeroed === true && zeroedRows.length > 0 && zeroedValue > 0.5) {
+        const { data: assignRows } = await supabase
+          .from('inventory_audit_assignments')
+          .select('operator_id')
+          .eq('act_id', actId)
+        const zeroOpIds = Array.from(new Set(((assignRows || []) as any[]).map((r) => String(r.operator_id)).filter(Boolean)))
+        const perOp = zeroOpIds.length > 0 ? zeroedValue / zeroOpIds.length : 0
+        if (perOp > 0.5) {
+          const companyId = (act as any)?.company_id || null
+          const dz = new Date()
+          const dowZ = (dz.getUTCDay() + 6) % 7
+          const weekStartZ = new Date(Date.UTC(dz.getUTCFullYear(), dz.getUTCMonth(), dz.getUTCDate() - dowZ)).toISOString().slice(0, 10)
+          const todayZ = new Date().toISOString().slice(0, 10)
+          const zeroDebtRows = zeroOpIds.map((op) => ({
+            company_id: companyId,
+            operator_id: op,
+            amount: Math.round(perOp),
+            comment: `Обнулено полной ревизией ${actId.slice(0, 8)} (не посчитано)`,
+            client_name: 'Недостача (ревизия)',
+            status: 'active',
+            week_start: weekStartZ,
+            date: todayZ,
+            created_by: actorUserId,
+          }))
+          const { error: zeroDebtErr } = await supabase.from('debts').insert(zeroDebtRows)
+          if (!zeroDebtErr) debtsCreated += zeroDebtRows.length
+          else await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/store/audit.close:zero-debts', message: zeroDebtErr.message })
+        }
+      }
+
+      await writeAuditLog(supabase as any, { actorUserId, entityType: 'inventory-audit-act', entityId: actId, action: force ? 'force-close' : 'close', payload: { counted: countRows.length, debtsCreated, force, zero_uncounted: zeroUncounted, zeroed_count: zeroedRows.length, zeroed_value: Math.round(zeroedValue) } })
 
       // Сводка: движения во время ревизии (учтены в факте) + необъяснённое расхождение.
-      const summary = report.reduce(
-        (acc, r) => {
-          if (r.movedIn > 0 || r.movedOut > 0) acc.movedItems += 1
-          acc.movedIn += r.movedIn
-          acc.movedOut += r.movedOut
-          acc.shrinkageQty += r.shrinkage
-          acc.surplusQty += r.surplus
-          acc.shrinkageValue += r.shrinkage * (r.purchase_price || 0)
-          acc.surplusValue += r.surplus * (r.purchase_price || 0)
-          if (r.shrinkage > 0) acc.shrinkageItems += 1
-          if (r.surplus > 0) acc.surplusItems += 1
-          return acc
-        },
-        { movedItems: 0, movedIn: 0, movedOut: 0, shrinkageItems: 0, shrinkageQty: 0, surplusItems: 0, surplusQty: 0, shrinkageValue: 0, surplusValue: 0 },
-      )
+      // Обнулённое учитывается отдельно (zeroed*), в shrinkage не смешивается.
+      const summary = {
+        ...report.reduce(
+          (acc, r) => {
+            if (r.movedIn > 0 || r.movedOut > 0) acc.movedItems += 1
+            acc.movedIn += r.movedIn
+            acc.movedOut += r.movedOut
+            acc.shrinkageQty += r.shrinkage
+            acc.surplusQty += r.surplus
+            acc.shrinkageValue += r.shrinkage * (r.purchase_price || 0)
+            acc.surplusValue += r.surplus * (r.purchase_price || 0)
+            if (r.shrinkage > 0) acc.shrinkageItems += 1
+            if (r.surplus > 0) acc.surplusItems += 1
+            return acc
+          },
+          { movedItems: 0, movedIn: 0, movedOut: 0, shrinkageItems: 0, shrinkageQty: 0, surplusItems: 0, surplusQty: 0, shrinkageValue: 0, surplusValue: 0 },
+        ),
+        zeroedItems: zeroedRows.length,
+        zeroedQty: zeroedRows.reduce((s, r) => s + r.expected, 0),
+        zeroedValue,
+      }
 
       return json({ ok: true, data: { stocktake_id: (result as any)?.stocktake_id || null, report, summary, debtsCreated } })
     }

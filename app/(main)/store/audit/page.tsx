@@ -15,8 +15,9 @@ type ActListRow = { id: string; status: string; comment: string | null; opened_a
 type FormData = { operators: Array<{ id: string; name: string }>; otherOperators?: Array<{ id: string; name: string }>; categories: Array<{ id: string; name: string }> }
 type Assignment = { operator_id: string; category_id: string | null }
 type ReportRow = { item_id: string; name: string; expected: number; counted: number; variance: number; purchase_price?: number; countedBy: string | null; conflict?: boolean; counts?: Array<{ qty: number; by: string | null }> }
-type CloseRow = { item_id: string; name: string; expected: number; counted: number; movedIn: number; movedOut: number; final: number; variance: number; shrinkage: number; surplus: number; purchase_price?: number }
-type CloseSummary = { movedItems: number; movedIn: number; movedOut: number; shrinkageItems: number; shrinkageQty: number; surplusItems: number; surplusQty: number; shrinkageValue?: number; surplusValue?: number }
+type CloseRow = { item_id: string; name: string; expected: number; counted: number; movedIn: number; movedOut: number; final: number; variance: number; shrinkage: number; surplus: number; purchase_price?: number; zeroed?: boolean }
+type CloseSummary = { movedItems: number; movedIn: number; movedOut: number; shrinkageItems: number; shrinkageQty: number; surplusItems: number; surplusQty: number; shrinkageValue?: number; surplusValue?: number; zeroedItems?: number; zeroedQty?: number; zeroedValue?: number }
+type UncountedRow = { item_id: string; name: string; expected: number; purchase_price: number }
 type Detail = {
   act: { id: string; status: string; comment: string | null; opened_at: string; closed_at: string | null }
   location: Loc | null
@@ -25,6 +26,7 @@ type Detail = {
   totalItems: number
   countedItems: number
   report: ReportRow[]
+  uncounted?: UncountedRow[]
 }
 
 const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2))
@@ -52,6 +54,10 @@ export default function StoreAuditPage() {
   const [reverting, setReverting] = useState(false)
   const [canceling, setCanceling] = useState(false)
   const [assignDebt, setAssignDebt] = useState(false)
+  // Жёсткая (полная) ревизия: непосчитанное обнуляется
+  const [zeroUncounted, setZeroUncounted] = useState(false)
+  const [assignDebtZeroed, setAssignDebtZeroed] = useState(false)
+  const [zeroPreviewOpen, setZeroPreviewOpen] = useState(false)
   const [debtsCreated, setDebtsCreated] = useState<number | null>(null)
   const [closeReport, setCloseReport] = useState<CloseRow[] | null>(null)
   const [closeSummary, setCloseSummary] = useState<CloseSummary | null>(null)
@@ -144,16 +150,19 @@ export default function StoreAuditPage() {
     }
   }
 
-  const closeAct = async (force = false) => {
+  const closeAct = async (force = false, skipConfirm = false) => {
     if (!detailId) return
-    const ok = force
+    const ok = skipConfirm
+      ? true
+      : force
       ? confirm('Принудительно закрыть акт?\n\nБлокировки игнорируются: заявки склад ↔ витрина в пути, расхождения двойного счёта, отсутствие подсчёта. Посчитанные позиции проведутся (расхождение двойного счёта берётся по последнему счёту), непосчитанные останутся без изменений.')
       : confirm('Закрыть акт и провести ревизию? Остатки будут обновлены.')
     if (!ok) return
+    setZeroPreviewOpen(false)
     setClosing(true)
     setError(null)
     try {
-      const res = await fetch('/api/admin/store/audit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'close', act_id: detailId, assignDebt, force }) })
+      const res = await fetch('/api/admin/store/audit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'close', act_id: detailId, assignDebt, force, zero_uncounted: !force && zeroUncounted, assignDebtZeroed: !force && zeroUncounted && assignDebtZeroed }) })
       const j = await res.json().catch(() => null)
       if (!res.ok) throw new Error(j?.message || j?.error || 'Ошибка закрытия')
       setCloseReport((j?.data?.report || []) as CloseRow[])
@@ -464,8 +473,39 @@ export default function StoreAuditPage() {
                   <input type="checkbox" checked={assignDebt} onChange={(e) => setAssignDebt(e.target.checked)} className="h-4 w-4 accent-amber-500" />
                   Повесить недостачу долгом на ответственных (удержится из зарплаты)
                 </label>
+                {(() => {
+                  const uncountedRows = detail.uncounted || []
+                  const zeroSum = uncountedRows.reduce((s, r) => s + r.expected * (r.purchase_price || 0), 0)
+                  if (uncountedRows.length === 0) {
+                    return <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">Все позиции с остатком посчитаны — обнулять нечего.</div>
+                  }
+                  return (
+                    <div className="space-y-1.5 rounded-md border border-border bg-surface-muted px-3 py-2">
+                      <label className="flex cursor-pointer items-start gap-2 text-xs text-foreground">
+                        <input type="checkbox" checked={zeroUncounted} onChange={(e) => setZeroUncounted(e.target.checked)} className="mt-0.5 h-4 w-4 accent-rose-500" />
+                        <span>
+                          <span className="font-medium">Полная ревизия: обнулить непосчитанное.</span>{' '}
+                          <span className="text-muted-foreground">Не посчитано {uncountedRows.length} поз. на {money(zeroSum)} по закупу — «чего не посчитали, того нет». Перед проведением покажем список.</span>
+                        </span>
+                      </label>
+                      {zeroUncounted ? (
+                        <label className="flex cursor-pointer items-start gap-2 pl-6 text-xs text-muted-foreground">
+                          <input type="checkbox" checked={assignDebtZeroed} onChange={(e) => setAssignDebtZeroed(e.target.checked)} className="mt-0.5 h-4 w-4 accent-rose-500" />
+                          <span>Обнулённое тоже повесить долгом — поровну на операторов акта. <span className="text-rose-500/80">Для первой полной ревизии не рекомендуется: спишется старая грязь каталога.</span></span>
+                        </label>
+                      ) : null}
+                    </div>
+                  )
+                })()}
                 {hasConflicts ? <div className="rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-700 dark:text-rose-300">Есть расхождения между счётчиками — решите их (примите значение или на пересчёт), затем закрывайте.</div> : null}
-                <Button onClick={() => void closeAct(false)} disabled={closing || detail.countedItems === 0 || hasConflicts} className="w-full gap-2 bg-amber-600 hover:bg-amber-700">
+                <Button
+                  onClick={() => {
+                    if (zeroUncounted && (detail.uncounted || []).length > 0) setZeroPreviewOpen(true)
+                    else void closeAct(false)
+                  }}
+                  disabled={closing || detail.countedItems === 0 || hasConflicts}
+                  className="w-full gap-2 bg-amber-600 hover:bg-amber-700"
+                >
                   {closing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
                   Закрыть акт и провести
                 </Button>
@@ -514,7 +554,7 @@ export default function StoreAuditPage() {
             <Card className="p-4">
               <div className="mb-3">
                 <div className="text-sm font-medium text-foreground">Результат ревизии</div>
-                <div className="mt-2 grid grid-cols-2 gap-2">
+                <div className={`mt-2 grid grid-cols-2 gap-2 ${(closeSummary?.zeroedItems || 0) > 0 ? 'sm:grid-cols-3' : ''}`}>
                   <div className="rounded-lg border border-rose-500/30 bg-rose-500/[0.05] px-3 py-2">
                     <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Недостача</div>
                     <div className="text-lg font-bold tabular-nums text-rose-600 dark:text-rose-300">{money(closeSummary?.shrinkageValue || 0)}</div>
@@ -525,6 +565,13 @@ export default function StoreAuditPage() {
                     <div className="text-lg font-bold tabular-nums text-emerald-600 dark:text-emerald-300">{money(closeSummary?.surplusValue || 0)}</div>
                     <div className="text-[11px] tabular-nums text-muted-foreground">{fmt(closeSummary?.surplusQty || 0)} шт · {closeSummary?.surplusItems || 0} поз.</div>
                   </div>
+                  {(closeSummary?.zeroedItems || 0) > 0 ? (
+                    <div className="rounded-lg border border-slate-400/40 bg-slate-500/[0.06] px-3 py-2">
+                      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Обнулено (не посчитано)</div>
+                      <div className="text-lg font-bold tabular-nums text-foreground">{money(closeSummary?.zeroedValue || 0)}</div>
+                      <div className="text-[11px] tabular-nums text-muted-foreground">{fmt(closeSummary?.zeroedQty || 0)} шт · {closeSummary?.zeroedItems || 0} поз.</div>
+                    </div>
+                  ) : null}
                 </div>
               </div>
 
@@ -547,20 +594,26 @@ export default function StoreAuditPage() {
                     .sort((a, b) => (b.shrinkage + b.surplus) - (a.shrinkage + a.surplus) || Math.abs(b.variance) - Math.abs(a.variance))
                     .map((r) => {
                       const moved = r.movedIn > 0 || r.movedOut > 0
-                      const diff = r.shrinkage > 0 ? 'short' : r.surplus > 0 ? 'surplus' : 'ok'
+                      const diff = r.zeroed ? 'zeroed' : r.shrinkage > 0 ? 'short' : r.surplus > 0 ? 'surplus' : 'ok'
                       return (
                         <div
                           key={r.item_id}
                           className={`flex flex-col gap-1 rounded-lg border px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3 ${
                             diff === 'short' ? 'border-rose-500/30 bg-rose-500/[0.05]'
                             : diff === 'surplus' ? 'border-emerald-500/30 bg-emerald-500/[0.05]'
+                            : diff === 'zeroed' ? 'border-slate-400/30 bg-slate-500/[0.05]'
                             : 'border-transparent opacity-55'
                           }`}
                         >
                           <span className={`min-w-0 truncate text-sm ${diff === 'ok' ? 'text-muted-foreground' : 'font-medium text-foreground'}`}>{r.name}</span>
                           <div className="flex shrink-0 items-center gap-3 tabular-nums">
                             <span className="text-[11px] text-muted-foreground">{fmt(r.expected)} → <span className="text-foreground">{fmt(r.final)}</span></span>
-                            {diff === 'short' ? (
+                            {diff === 'zeroed' ? (
+                              <span className="flex items-center gap-2">
+                                {r.purchase_price ? <span className="text-[11px] tabular-nums text-muted-foreground">{money(r.expected * r.purchase_price)}</span> : null}
+                                <span className="rounded-md bg-slate-500/15 px-2 py-0.5 text-xs font-semibold text-slate-600 dark:text-slate-300">обнулено −{fmt(r.expected)}</span>
+                              </span>
+                            ) : diff === 'short' ? (
                               <span className="flex items-center gap-2">
                                 {r.purchase_price ? <span className="text-[11px] tabular-nums text-rose-400/80">{money(r.shrinkage * r.purchase_price)}</span> : null}
                                 <span className="rounded-md bg-rose-500/15 px-2 py-0.5 text-sm font-bold text-rose-600 dark:text-rose-300">−{fmt(r.shrinkage)}</span>
@@ -657,6 +710,59 @@ export default function StoreAuditPage() {
               )}
             </Card>
           )}
+
+          {/* Предпросмотр жёсткого закрытия: что будет обнулено */}
+          {zeroPreviewOpen && detail ? (
+            <div
+              className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-black/60 p-4"
+              onClick={(e) => { if (e.target === e.currentTarget && !closing) setZeroPreviewOpen(false) }}
+            >
+              <Card className="w-full max-w-2xl max-h-[calc(100vh-2rem)] overflow-y-auto border-rose-500/30 p-5">
+                {(() => {
+                  const uncountedRows = detail.uncounted || []
+                  const zeroSum = uncountedRows.reduce((s, r) => s + r.expected * (r.purchase_price || 0), 0)
+                  return (
+                    <div className="space-y-3">
+                      <div>
+                        <h3 className="text-sm font-semibold text-foreground">Полная ревизия: обнуление непосчитанного</h3>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Эти позиции никто не посчитал — их остаток в системе будет установлен в <b>0</b>.
+                          Будет обнулено <b className="text-foreground">{uncountedRows.length} поз.</b> на{' '}
+                          <b className="text-rose-500">{money(zeroSum)}</b> по закупу.
+                          {assignDebtZeroed ? ' Сумма ляжет долгом поровну на операторов акта.' : ' В долг операторам это не пойдёт.'}
+                          {' '}Если что-то из списка физически есть — закройте окно и досчитайте.
+                        </p>
+                      </div>
+                      <div className="max-h-72 overflow-auto rounded-lg border border-border">
+                        {uncountedRows.slice(0, 200).map((r) => (
+                          <div key={r.item_id} className="flex items-center justify-between gap-3 border-b border-slate-100 dark:border-white/5 px-3 py-1.5 text-sm last:border-0">
+                            <span className="min-w-0 truncate text-foreground">{r.name}</span>
+                            <span className="shrink-0 tabular-nums text-xs text-muted-foreground">
+                              {fmt(r.expected)} шт{r.purchase_price ? ` · ${money(r.expected * r.purchase_price)}` : ''}
+                            </span>
+                          </div>
+                        ))}
+                        {uncountedRows.length > 200 ? (
+                          <div className="px-3 py-2 text-center text-xs text-muted-foreground">…и ещё {uncountedRows.length - 200} поз.</div>
+                        ) : null}
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button variant="ghost" onClick={() => setZeroPreviewOpen(false)} disabled={closing}>Отмена</Button>
+                        <Button
+                          onClick={() => void closeAct(false, true)}
+                          disabled={closing}
+                          className="gap-2 bg-rose-600 hover:bg-rose-700"
+                        >
+                          {closing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
+                          Обнулить {uncountedRows.length} поз. и провести
+                        </Button>
+                      </div>
+                    </div>
+                  )
+                })()}
+              </Card>
+            </div>
+          ) : null}
         </>
       )}
     </div>
