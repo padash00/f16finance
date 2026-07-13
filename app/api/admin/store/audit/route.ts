@@ -157,11 +157,12 @@ export async function GET(request: Request) {
       const opIds = Array.from(new Set([...((assigns.data || []) as any[]).map((r) => String(r.operator_id)), ...countRows.map((r) => String(r.counted_by || '')).filter(Boolean)]))
       const catIds = Array.from(new Set(((assigns.data || []) as any[]).map((r) => String(r.category_id || '')).filter(Boolean)))
       const [items, opers, cats] = await Promise.all([
-        fetchItemsByIds(supabase, itemIds, 'id, name, category_id'),
+        fetchItemsByIds(supabase, itemIds, 'id, name, category_id, default_purchase_price'),
         opIds.length ? supabase.from('operators').select('id, name, short_name').in('id', opIds) : Promise.resolve({ data: [] as any[] }),
         catIds.length ? supabase.from('inventory_categories').select('id, name').in('id', catIds) : Promise.resolve({ data: [] as any[] }),
       ])
       const itemName = new Map((items || []).map((i: any) => [String(i.id), i.name as string]))
+      const itemPrice = new Map((items || []).map((i: any) => [String(i.id), num((i as any).default_purchase_price)]))
       const opName = new Map(((opers as any).data || []).map((o: any) => [String(o.id), (o.name || o.short_name || 'Оператор') as string]))
       const catName = new Map(((cats as any).data || []).map((c: any) => [String(c.id), c.name as string]))
       const expectedBy = new Map(snapRows.map((r) => [String(r.item_id), num(r.expected_qty)]))
@@ -185,6 +186,7 @@ export async function GET(request: Request) {
           expected,
           counted,
           variance: counted - expected,
+          purchase_price: itemPrice.get(itemId) || 0,
           conflict,
           counts: list.map((x) => ({ qty: x.qty, by: x.by ? opName.get(x.by) || null : null })),
           countedBy: list.length === 1 && list[0].by ? opName.get(list[0].by) || null : null,

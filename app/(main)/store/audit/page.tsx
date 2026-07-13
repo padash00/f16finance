@@ -14,7 +14,7 @@ type Loc = { id: string; name: string; location_type: string; company?: { name?:
 type ActListRow = { id: string; status: string; comment: string | null; opened_at: string; closed_at: string | null; locationName: string; totalItems: number; countedItems: number }
 type FormData = { operators: Array<{ id: string; name: string }>; otherOperators?: Array<{ id: string; name: string }>; categories: Array<{ id: string; name: string }> }
 type Assignment = { operator_id: string; category_id: string | null }
-type ReportRow = { item_id: string; name: string; expected: number; counted: number; variance: number; countedBy: string | null; conflict?: boolean; counts?: Array<{ qty: number; by: string | null }> }
+type ReportRow = { item_id: string; name: string; expected: number; counted: number; variance: number; purchase_price?: number; countedBy: string | null; conflict?: boolean; counts?: Array<{ qty: number; by: string | null }> }
 type CloseRow = { item_id: string; name: string; expected: number; counted: number; movedIn: number; movedOut: number; final: number; variance: number; shrinkage: number; surplus: number; purchase_price?: number }
 type CloseSummary = { movedItems: number; movedIn: number; movedOut: number; shrinkageItems: number; shrinkageQty: number; surplusItems: number; surplusQty: number; shrinkageValue?: number; surplusValue?: number }
 type Detail = {
@@ -221,11 +221,19 @@ export default function StoreAuditPage() {
     const rows = detail?.report || []
     let short = 0
     let surplus = 0
+    let shortValue = 0
+    let surplusValue = 0
     for (const r of rows) {
-      if (r.variance < 0) short += -r.variance
-      else if (r.variance > 0) surplus += r.variance
+      const price = Number(r.purchase_price || 0)
+      if (r.variance < 0) {
+        short += -r.variance
+        shortValue += -r.variance * price
+      } else if (r.variance > 0) {
+        surplus += r.variance
+        surplusValue += r.variance * price
+      }
     }
-    return { short, surplus }
+    return { short, surplus, shortValue, surplusValue }
   }, [detail?.report])
 
   // ── Список ───────────────────────────────────────────────────────────────
@@ -401,7 +409,7 @@ export default function StoreAuditPage() {
   const isOpen = detail?.act.status === 'open'
   const hasConflicts = isOpen && !closeReport && detailRows.some((r) => r.conflict)
   return (
-    <div className="app-page-tight space-y-4">
+    <div className="app-page-wide space-y-4">
       <AdminPageHeader
         title="Аудит-акт"
         description="Подсчёт, расхождения и проведение ревизии"
@@ -583,9 +591,15 @@ export default function StoreAuditPage() {
               <div className="mb-3 flex items-center justify-between">
                 <div className="text-sm font-medium text-foreground">{isOpen ? 'Что уже посчитано' : 'Расхождение'}</div>
                 {!isOpen ? (
-                  <div className="flex gap-3 text-xs tabular-nums">
-                    <span className="text-rose-400">недостача {fmt(totals.short)}</span>
-                    <span className="text-emerald-400">излишек {fmt(totals.surplus)}</span>
+                  <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-1 text-xs tabular-nums">
+                    <span className="text-rose-400">
+                      недостача {fmt(totals.short)} шт
+                      {totals.shortValue > 0 ? <span className="ml-1.5 font-semibold">−{money(totals.shortValue)}</span> : null}
+                    </span>
+                    <span className="text-emerald-400">
+                      излишек {fmt(totals.surplus)} шт
+                      {totals.surplusValue > 0 ? <span className="ml-1.5 font-semibold">+{money(totals.surplusValue)}</span> : null}
+                    </span>
                   </div>
                 ) : null}
               </div>
@@ -626,7 +640,14 @@ export default function StoreAuditPage() {
                               // (как и обещает заголовок). Это лишь отметка «посчитано».
                               <span className="flex w-16 items-center justify-end text-emerald-500"><Check className="h-4 w-4" /></span>
                             ) : (
-                              <span className={`w-16 text-right font-medium ${r.variance < 0 ? 'text-rose-400' : r.variance > 0 ? 'text-emerald-400' : 'text-muted-foreground'}`}>{r.variance > 0 ? '+' : ''}{fmt(r.variance)}</span>
+                              <>
+                                {r.variance !== 0 && Number(r.purchase_price || 0) > 0 ? (
+                                  <span className={`text-[11px] ${r.variance < 0 ? 'text-rose-400/80' : 'text-emerald-400/80'}`}>
+                                    {r.variance < 0 ? '−' : '+'}{money(Math.abs(r.variance) * Number(r.purchase_price || 0))}
+                                  </span>
+                                ) : null}
+                                <span className={`w-16 text-right font-medium ${r.variance < 0 ? 'text-rose-400' : r.variance > 0 ? 'text-emerald-400' : 'text-muted-foreground'}`}>{r.variance > 0 ? '+' : ''}{fmt(r.variance)}</span>
+                              </>
                             )}
                           </div>
                         </div>
