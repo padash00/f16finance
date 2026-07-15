@@ -21,6 +21,7 @@ type TaskPayload = {
   company_id?: string | null
   due_date?: string | null
   tags?: string[] | null
+  checklist?: Array<{ id: string; text: string; done: boolean }> | null
 }
 
 type Body =
