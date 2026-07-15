@@ -689,9 +689,11 @@ function TasksContent() {
   }
 
   // Быстрая задача прямо из колонки канбана: только название, остальное — умные
-  // дефолты (приоритет средний, точка/оператор из активных фильтров).
+  // дефолты из активных фильтров (иначе созданная задача сразу пропадает из вида).
   const quickCreateTask = async (status: TaskStatus, title: string): Promise<boolean> => {
     const companyId = filterCompany !== 'all' ? filterCompany : (companies[0]?.id || '')
+    const priority: TaskPriority =
+      filterPriority !== 'all' ? (filterPriority as TaskPriority) : 'medium'
     try {
       const response = await fetch('/api/admin/tasks', {
         method: 'POST',
@@ -701,7 +703,7 @@ function TasksContent() {
           payload: {
             title,
             description: null,
-            priority: 'medium',
+            priority,
             status,
             operator_id: filterOperator !== 'all' ? filterOperator : null,
             company_id: companyId,
@@ -952,6 +954,26 @@ function TasksContent() {
               </div>
             </div>
           </Card>
+
+          {/* Всё скрыто фильтрами — задачи есть, но ни одна не проходит */}
+          {filteredTasks.length === 0 && tasks.length > 0 && (
+            <div className="flex flex-col items-start gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2">
+                <EyeOff className="h-5 w-5 shrink-0 text-amber-500" />
+                <p className="text-sm text-amber-700 dark:text-amber-300">
+                  Все задачи скрыты фильтрами: показано 0 из {tasks.length}. Проверьте статус, приоритет и исполнителя.
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="shrink-0 border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10"
+                onClick={resetFilters}
+              >
+                Сбросить фильтры
+              </Button>
+            </div>
+          )}
 
           {/* Overdue Banner */}
           {(() => {
