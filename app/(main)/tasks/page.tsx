@@ -176,31 +176,31 @@ const RESPONSE_CONFIG: Record<
   accept: {
     label: 'Принял в работу',
     status: 'in_progress',
-    tone: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200',
+    tone: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200 hover:bg-emerald-500/20',
     helper: 'Задача сразу перейдет в колонку "В работе".',
   },
   need_info: {
     label: 'Нужны уточнения',
     status: 'backlog',
-    tone: 'border-sky-500/30 bg-sky-500/10 text-sky-200',
+    tone: 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-200 hover:bg-sky-500/20',
     helper: 'Задача вернется в ожидание уточнений.',
   },
   blocked: {
     label: 'Не могу выполнить',
     status: 'backlog',
-    tone: 'border-rose-500/30 bg-rose-500/10 text-rose-200',
+    tone: 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-200 hover:bg-rose-500/20',
     helper: 'Руководитель увидит, что задача заблокирована.',
   },
   already_done: {
     label: 'Уже сделано',
     status: 'review',
-    tone: 'border-violet-500/30 bg-violet-500/10 text-violet-200',
+    tone: 'border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-200 hover:bg-violet-500/20',
     helper: 'Задача уйдет на проверку.',
   },
   complete: {
     label: 'Завершил задачу',
     status: 'done',
-    tone: 'border-amber-500/30 bg-amber-500/10 text-amber-200',
+    tone: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200 hover:bg-amber-500/20',
     helper: 'Задача будет закрыта как выполненная.',
   },
 }

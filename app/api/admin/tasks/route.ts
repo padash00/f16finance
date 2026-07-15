@@ -313,10 +313,11 @@ async function addTaskComment(
 
   if (!primaryInsert.error) return primaryInsert.data
 
+  // Колонки operator_id может не быть (старые базы) — ретраим без неё независимо
+  // от того, передан operatorId или null: insert включает поле всегда.
   const errorMessage = String(primaryInsert.error?.message || '')
   const canRetryWithoutOperatorId =
-    payload.operatorId &&
-    (errorMessage.includes("Could not find the 'operator_id' column") || errorMessage.includes('schema cache'))
+    errorMessage.includes("Could not find the 'operator_id' column") || errorMessage.includes('schema cache')
 
   if (!canRetryWithoutOperatorId) {
     throw primaryInsert.error
