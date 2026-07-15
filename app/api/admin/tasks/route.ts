@@ -552,9 +552,23 @@ export async function GET(req: Request) {
             .from('operators')
             .select('id, name, short_name, telegram_chat_id, role, is_active, operator_profiles(*)')
             .eq('is_active', true)
-        : (() => {
-            const operatorIds = Array.from(new Set((data || []).map((row: any) => row.operator_id).filter(Boolean)))
-            if (!operatorIds.length) return Promise.resolve({ data: [], error: null } as any)
+        : (async () => {
+            // Операторы доступных точек (по закреплениям) + уже назначенные на задачи
+            // (чтобы имена в старых задачах не терялись). Раньше грузились только
+            // назначенные — у ролей без задач селект исполнителя был пустым.
+            const referencedIds = (data || []).map((row: any) => row.operator_id).filter(Boolean)
+            let assignedIds: string[] = []
+            if (companyScope.allowedCompanyIds !== null && companyScope.allowedCompanyIds.length > 0) {
+              const { data: assignments, error: assignmentsError } = await supabase
+                .from('operator_company_assignments')
+                .select('operator_id')
+                .eq('is_active', true)
+                .in('company_id', companyScope.allowedCompanyIds)
+              if (assignmentsError) throw assignmentsError
+              assignedIds = (assignments || []).map((row: any) => String(row.operator_id)).filter(Boolean)
+            }
+            const operatorIds = Array.from(new Set([...assignedIds, ...referencedIds]))
+            if (!operatorIds.length) return { data: [], error: null } as any
 
             return supabase
               .from('operators')
@@ -592,11 +606,19 @@ export async function GET(req: Request) {
     if (staffResult.error) throw staffResult.error
     if (companiesResult.error) throw companiesResult.error
 
+    // Кто смотрит: страница по этому решает, какие задачи можно удалять
+    // (суперадмин — все, сотрудник — только созданные им).
+    const viewerStaff = access.staffMember || (await resolveStaffByUser(access.supabase, access.user).catch(() => null))
+
     return json({
       data: taskRows,
       operators: operatorsResult.data || [],
       staff: staffResult.data || [],
       companies: companiesResult.data || [],
+      viewer: {
+        staffId: viewerStaff?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+      },
       page,
       pageSize,
       hasMore: taskRows.length === pageSize,
@@ -999,6 +1021,12 @@ export async function POST(req: Request) {
         { activeOrganizationId: access.activeOrganization?.id || null, isSuperAdmin: access.isSuperAdmin },
         existingContext.task.company_id,
       )
+      // Суперадмин удаляет любые задачи, сотрудник — только созданные им.
+      if (!access.isSuperAdmin) {
+        if (!staffMember?.id || String(existingContext.task.created_by || '') !== String(staffMember.id)) {
+          return json({ error: 'Удалять можно только задачи, которые создали вы' }, 403)
+        }
+      }
       const { error } = await supabase.from('tasks').delete().eq('id', body.taskId)
       if (error) throw error
       await writeAuditLog(supabase, {

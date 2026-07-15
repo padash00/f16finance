@@ -148,6 +148,7 @@ type TaskDetailModalProps = {
   operators: Operator[]
   staff: Staff[]
   companies: Company[]
+  canDelete: boolean
   onNotify: () => void
   onTaskUpdated: () => Promise<void> | void
 }
@@ -356,6 +357,7 @@ function TasksContent() {
   const [operators, setOperators] = useState<Operator[]>([])
   const [staff, setStaff] = useState<Staff[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
+  const [viewer, setViewer] = useState<{ staffId: string | null; isSuperAdmin: boolean }>({ staffId: null, isSuperAdmin: false })
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -400,6 +402,10 @@ function TasksContent() {
       setOperators(operatorsData)
       setStaff(staffData)
       setCompanies(companiesData)
+      setViewer({
+        staffId: json?.viewer?.staffId || null,
+        isSuperAdmin: json?.viewer?.isSuperAdmin === true,
+      })
       setTasks(enrichTasks(tasksData, operatorsData, staffData, companiesData))
     } catch (err) {
       console.error('Error loading data:', err)
@@ -935,7 +941,7 @@ function TasksContent() {
                 >
                   <option value="all">Все исполнители</option>
                   <optgroup label="Операторы">
-                    {operators.map(op => (
+                    {operators.filter(op => op.is_active !== false).map(op => (
                       <option key={op.id} value={`op:${op.id}`}>
                         {getOperatorDisplayName(op)} {op.telegram_chat_id ? '📱' : ''}
                       </option>
@@ -1410,6 +1416,7 @@ function TasksContent() {
           operators={operators}
           staff={staff}
           companies={companies}
+          canDelete={viewer.isSuperAdmin || (!!viewer.staffId && selectedTask.created_by === viewer.staffId)}
           onNotify={() => handleNotifyOperator(selectedTask)}
           onTaskUpdated={() => loadData(true)}
         />
@@ -1787,6 +1794,7 @@ function TaskDetailModal({
   operators,
   staff,
   companies,
+  canDelete,
   onNotify,
   onTaskUpdated,
 }: TaskDetailModalProps) {
@@ -2031,11 +2039,14 @@ function TaskDetailModal({
           >
             <option value="">Без исполнителя</option>
             <optgroup label="Операторы">
-              {operators.map((operator) => (
-                <option key={operator.id} value={`op:${operator.id}`}>
-                  {getOperatorDisplayName(operator)} {operator.telegram_chat_id ? '📱' : ''}
-                </option>
-              ))}
+              {operators
+                .filter((operator) => operator.is_active !== false || `op:${operator.id}` === editForm.assignee)
+                .map((operator) => (
+                  <option key={operator.id} value={`op:${operator.id}`}>
+                    {getOperatorDisplayName(operator)} {operator.telegram_chat_id ? '📱' : ''}
+                    {operator.is_active === false ? ' (неактивен)' : ''}
+                  </option>
+                ))}
             </optgroup>
             {(() => {
               // Активные + уже назначенный на задачу (даже если уволен)
@@ -2179,7 +2190,7 @@ function TaskDetailModal({
                   Уведомить
                 </Button>
               )}
-              {can('tasks.delete') && (
+              {can('tasks.delete') && canDelete && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -2504,7 +2515,7 @@ function CreateTaskModal({
             >
               <option value="">Исполнитель</option>
               <optgroup label="Операторы">
-                {operators.map((op: Operator) => (
+                {operators.filter((op: Operator) => op.is_active !== false).map((op: Operator) => (
                   <option key={op.id} value={`op:${op.id}`}>
                     {getOperatorDisplayName(op)} {op.telegram_chat_id ? '📱' : ''}
                   </option>
