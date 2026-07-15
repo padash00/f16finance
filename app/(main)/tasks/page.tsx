@@ -2070,7 +2070,7 @@ function TaskDetailModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-card border-border text-foreground flex max-h-[92dvh] max-w-4xl flex-col gap-0 overflow-hidden p-0">
+      <DialogContent className="bg-card border-border text-foreground flex max-h-[92dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(56rem,calc(100vw-2rem))]">
         <DialogTitle className="sr-only">Задача #{task.task_number}: {task.title}</DialogTitle>
         <DialogDescription className="sr-only">Детали и редактирование задачи</DialogDescription>
 
