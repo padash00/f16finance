@@ -459,7 +459,7 @@ export async function GET(req: Request) {
 
     let query = supabase
       .from('tasks')
-      .select('id, task_number, title, description, status, priority, due_date, tags, operator_id, company_id, created_at, updated_at, completed_at, task_comments(count)')
+      .select('id, task_number, title, description, status, priority, due_date, tags, checklist, operator_id, company_id, created_at, updated_at, completed_at, task_comments(count)')
       .order('created_at', { ascending: false })
       .range(page * pageSize, (page + 1) * pageSize - 1)
 
@@ -580,6 +580,7 @@ export async function POST(req: Request) {
         company_id: body.payload.company_id || null,
         due_date: body.payload.due_date || null,
         tags: body.payload.tags || [],
+        checklist: Array.isArray(body.payload.checklist) ? body.payload.checklist : [],
       }
 
       for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -680,15 +681,18 @@ export async function POST(req: Request) {
         )
       }
 
+      // Частичный апдейт: непереданные поля (undefined) не трогаем — иначе
+      // обновление одного чек-листа стирало бы дедлайн/оператора/точку.
       const updatePayload = {
         title: body.payload.title?.trim(),
-        description: body.payload.description?.trim() || null,
+        description: body.payload.description !== undefined ? (body.payload.description?.trim() || null) : undefined,
         priority: body.payload.priority,
         status: body.payload.status,
-        operator_id: body.payload.operator_id || null,
-        company_id: body.payload.company_id || null,
-        due_date: body.payload.due_date || null,
+        operator_id: body.payload.operator_id !== undefined ? (body.payload.operator_id || null) : undefined,
+        company_id: body.payload.company_id !== undefined ? (body.payload.company_id || null) : undefined,
+        due_date: body.payload.due_date !== undefined ? (body.payload.due_date || null) : undefined,
         tags: body.payload.tags,
+        checklist: Array.isArray(body.payload.checklist) ? body.payload.checklist : undefined,
         completed_at:
           body.payload.completed_at !== undefined
             ? body.payload.completed_at

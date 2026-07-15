@@ -79,6 +79,8 @@ type TaskFormState = {
   tags: string
 }
 
+type ChecklistItem = { id: string; text: string; done: boolean }
+
 type Task = {
   id: string
   title: string
@@ -91,6 +93,7 @@ type Task = {
   company_id: string | null
   due_date: string | null
   tags: string[] | null
+  checklist?: ChecklistItem[] | null
   created_at: string
   updated_at: string
   completed_at: string | null
@@ -521,9 +524,24 @@ function TasksContent() {
     const total = filteredTasks.length
     const overdue = filteredTasks.filter(t => isOverdue(t.due_date, t.status)).length
     const critical = filteredTasks.filter(t => t.priority === 'critical' && t.status !== 'done').length
-    
+
     return { total, overdue, critical }
   }, [filteredTasks])
+
+  // Сортировка списка
+  const [sortBy, setSortBy] = useState<'number' | 'due' | 'priority'>('number')
+  const sortedListTasks = useMemo(() => {
+    const priorityOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 }
+    const arr = [...filteredTasks]
+    if (sortBy === 'due') {
+      arr.sort((a, b) => (a.due_date || '9999-12-31').localeCompare(b.due_date || '9999-12-31') || b.task_number - a.task_number)
+    } else if (sortBy === 'priority') {
+      arr.sort((a, b) => (priorityOrder[a.priority] ?? 9) - (priorityOrder[b.priority] ?? 9) || b.task_number - a.task_number)
+    } else {
+      arr.sort((a, b) => b.task_number - a.task_number)
+    }
+    return arr
+  }, [filteredTasks, sortBy])
 
   const nextTaskNumber = useMemo(
     () => tasks.reduce((maxNumber, task) => Math.max(maxNumber, task.task_number || 0), 0) + 1,
@@ -664,6 +682,70 @@ function TasksContent() {
 
     if (taskToMove.status === targetStatus) return
     await handleStatusChange(taskToMove.id, targetStatus)
+  }
+
+  // Быстрая задача прямо из колонки канбана: только название, остальное — умные
+  // дефолты (приоритет средний, точка/оператор из активных фильтров).
+  const quickCreateTask = async (status: TaskStatus, title: string): Promise<boolean> => {
+    const companyId = filterCompany !== 'all' ? filterCompany : (companies[0]?.id || '')
+    try {
+      const response = await fetch('/api/admin/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'createTask',
+          payload: {
+            title,
+            description: null,
+            priority: 'medium',
+            status,
+            operator_id: filterOperator !== 'all' ? filterOperator : null,
+            company_id: companyId,
+            due_date: null,
+            tags: [],
+          },
+        }),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(json?.error || `Ошибка запроса (${response.status})`)
+      await loadData(true)
+      return true
+    } catch (error: any) {
+      toast({ title: 'Задача не создана', description: error?.message || 'Попробуй ещё раз', variant: 'destructive' })
+      return false
+    }
+  }
+
+  // Напомнить в Telegram всем исполнителям просроченных задач разом.
+  const [notifyingAll, setNotifyingAll] = useState(false)
+  const handleNotifyAllOverdue = async (overdueTasks: Task[]) => {
+    const withTelegram = overdueTasks.filter((t) => t.operator_telegram)
+    if (withTelegram.length === 0) {
+      toast({ title: 'Некому отправлять', description: 'Ни у одного исполнителя просроченных задач нет Telegram.', variant: 'destructive' })
+      return
+    }
+    setNotifyingAll(true)
+    let sent = 0
+    let failed = 0
+    for (const t of withTelegram) {
+      try {
+        const response = await fetch('/api/admin/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'notifyTask', taskId: t.id }),
+        })
+        if (response.ok) sent += 1
+        else failed += 1
+      } catch {
+        failed += 1
+      }
+    }
+    setNotifyingAll(false)
+    const skipped = overdueTasks.length - withTelegram.length
+    toast({
+      title: 'Напоминания отправлены',
+      description: `Отправлено: ${sent}${failed ? ` · ошибок: ${failed}` : ''}${skipped ? ` · без Telegram: ${skipped}` : ''}`,
+    })
   }
 
   if (loading && !refreshing) {
@@ -874,11 +956,23 @@ function TasksContent() {
             if (overdueTasks.length === 0) return null
             return (
               <div className="rounded-2xl border border-red-500/30 bg-red-500/5 p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <AlertCircle className="w-5 h-5 text-red-400" />
-                  <h3 className="text-sm font-semibold text-red-400">
-                    Просроченные задачи: {overdueTasks.length}
-                  </h3>
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5 text-red-400" />
+                    <h3 className="text-sm font-semibold text-red-400">
+                      Просроченные задачи: {overdueTasks.length}
+                    </h3>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-red-500/30 text-red-400 hover:bg-red-500/10 text-xs gap-1.5"
+                    onClick={() => void handleNotifyAllOverdue(overdueTasks)}
+                    disabled={notifyingAll}
+                  >
+                    {notifyingAll ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                    Напомнить всем в Telegram
+                  </Button>
                 </div>
                 <div className="space-y-2">
                   {overdueTasks.slice(0, 5).map(task => {
@@ -985,6 +1079,10 @@ function TasksContent() {
                         </div>
                       )}
                     </div>
+
+                    {can('tasks.create') && status !== 'archived' && (
+                      <QuickAddTask status={status as TaskStatus} onCreate={quickCreateTask} />
+                    )}
                   </div>
                 )
               })}
@@ -1040,6 +1138,18 @@ function TasksContent() {
                   </div>
                 </div>
               )}
+              <div className="flex items-center justify-end gap-2 border-b border-slate-200 dark:border-white/5 px-4 py-2">
+                <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as 'number' | 'due' | 'priority')}
+                  className="h-8 rounded-lg border border-border bg-white dark:bg-slate-800/50 px-2 text-xs text-foreground outline-none"
+                >
+                  <option value="number">Сначала новые</option>
+                  <option value="due">По сроку</option>
+                  <option value="priority">По приоритету</option>
+                </select>
+              </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -1067,7 +1177,7 @@ function TasksContent() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                    {filteredTasks.map(task => (
+                    {sortedListTasks.map(task => (
                       <tr
                         key={task.id}
                         onClick={() => {
@@ -1294,6 +1404,26 @@ function TaskCard({ task, onClick, onStatusChange, onNotify, onDragStart, onDrag
         </span>
       </div>
 
+      {/* Прогресс чек-листа */}
+      {Array.isArray(task.checklist) && task.checklist.length > 0 && (() => {
+        const doneCount = task.checklist.filter((i) => i.done).length
+        const total = task.checklist.length
+        return (
+          <div className="mb-2">
+            <div className="flex items-center gap-1 text-[10px] text-slate-500">
+              <CheckCircle2 className={cn('w-3 h-3', doneCount === total ? 'text-emerald-400' : '')} />
+              <span>{doneCount}/{total}</span>
+            </div>
+            <div className="mt-1 h-1 w-full overflow-hidden rounded bg-slate-200 dark:bg-white/10">
+              <div
+                className={cn('h-full transition-all', doneCount === total ? 'bg-emerald-500' : 'bg-violet-500')}
+                style={{ width: `${(doneCount / total) * 100}%` }}
+              />
+            </div>
+          </div>
+        )
+      })()}
+
       {/* Оператор и компания */}
       <div className="flex items-center justify-between text-xs mb-2">
         <div className="flex items-center gap-1 text-muted-foreground">
@@ -1338,6 +1468,195 @@ function TaskCard({ task, onClick, onStatusChange, onNotify, onDragStart, onDrag
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+// =====================
+// БЫСТРАЯ ЗАДАЧА В КОЛОНКЕ
+// =====================
+function QuickAddTask({
+  status,
+  onCreate,
+}: {
+  status: TaskStatus
+  onCreate: (status: TaskStatus, title: string) => Promise<boolean>
+}) {
+  const [open, setOpen] = useState(false)
+  const [title, setTitle] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const submit = async () => {
+    const text = title.trim()
+    if (!text || busy) return
+    setBusy(true)
+    const ok = await onCreate(status, text)
+    setBusy(false)
+    if (ok) setTitle('') // остаёмся в режиме ввода — можно накидать несколько подряд
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-300 dark:border-white/10 py-2 text-xs text-slate-500 transition-colors hover:border-violet-400/50 hover:text-violet-400"
+      >
+        <Plus className="h-3.5 w-3.5" />
+        Быстрая задача
+      </button>
+    )
+  }
+
+  return (
+    <div className="mt-2 space-y-1.5">
+      <Input
+        autoFocus
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            void submit()
+          }
+          if (e.key === 'Escape') {
+            setOpen(false)
+            setTitle('')
+          }
+        }}
+        placeholder="Название — Enter"
+        className="h-8 bg-white dark:bg-slate-800/50 border-border text-sm"
+        disabled={busy}
+      />
+      <div className="flex gap-1.5">
+        <Button size="sm" className="h-7 flex-1 text-xs bg-violet-500 hover:bg-violet-600" onClick={() => void submit()} disabled={busy || !title.trim()}>
+          {busy ? <RefreshCw className="h-3 w-3 animate-spin" /> : 'Добавить'}
+        </Button>
+        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setOpen(false); setTitle('') }} disabled={busy}>
+          Отмена
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+// =====================
+// ЧЕК-ЛИСТ ЗАДАЧИ
+// =====================
+function TaskChecklist({
+  task,
+  canEdit,
+  onTaskUpdated,
+}: {
+  task: Task
+  canEdit: boolean
+  onTaskUpdated: () => Promise<void> | void
+}) {
+  const { toast } = useToast()
+  const [items, setItems] = useState<ChecklistItem[]>(Array.isArray(task.checklist) ? task.checklist : [])
+  const [newText, setNewText] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    setItems(Array.isArray(task.checklist) ? task.checklist : [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task.id, task.updated_at])
+
+  const persist = async (next: ChecklistItem[]) => {
+    const prev = items
+    setItems(next)
+    setSaving(true)
+    try {
+      const response = await fetch('/api/admin/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'updateTask', taskId: task.id, payload: { checklist: next } }),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(json?.error || `Ошибка запроса (${response.status})`)
+      await onTaskUpdated()
+    } catch (error: any) {
+      setItems(prev)
+      toast({ title: 'Чек-лист не сохранён', description: error?.message || 'Попробуй ещё раз', variant: 'destructive' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const addItem = () => {
+    const text = newText.trim()
+    if (!text) return
+    setNewText('')
+    void persist([...items, { id: Math.random().toString(36).slice(2), text, done: false }])
+  }
+
+  const doneCount = items.filter((i) => i.done).length
+
+  if (!canEdit && items.length === 0) return null
+
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between">
+        <h3 className="text-sm font-medium text-muted-foreground">
+          Чек-лист{items.length > 0 ? ` · ${doneCount}/${items.length}` : ''}
+        </h3>
+        {saving && <RefreshCw className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+      </div>
+      {items.length > 0 && (
+        <div className="mb-2 h-1.5 w-full overflow-hidden rounded bg-slate-200 dark:bg-white/10">
+          <div
+            className={cn('h-full transition-all', doneCount === items.length ? 'bg-emerald-500' : 'bg-violet-500')}
+            style={{ width: items.length ? `${(doneCount / items.length) * 100}%` : '0%' }}
+          />
+        </div>
+      )}
+      <div className="space-y-1">
+        {items.map((item) => (
+          <div key={item.id} className="group flex items-center gap-2 rounded-lg border border-slate-200 dark:border-white/5 bg-white dark:bg-slate-800/50 px-3 py-2">
+            <Checkbox
+              checked={item.done}
+              disabled={!canEdit || saving}
+              onCheckedChange={(checked) =>
+                void persist(items.map((i) => (i.id === item.id ? { ...i, done: checked === true } : i)))
+              }
+            />
+            <span className={cn('flex-1 text-sm', item.done ? 'text-muted-foreground line-through' : 'text-foreground')}>
+              {item.text}
+            </span>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => void persist(items.filter((i) => i.id !== item.id))}
+                disabled={saving}
+                className="text-muted-foreground opacity-0 transition hover:text-rose-400 group-hover:opacity-100"
+                title="Удалить пункт"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+      {canEdit && (
+        <div className="mt-2 flex gap-2">
+          <Input
+            value={newText}
+            onChange={(e) => setNewText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                addItem()
+              }
+            }}
+            placeholder="Новый пункт — Enter, чтобы добавить"
+            className="h-8 bg-white dark:bg-slate-800/50 border-border text-sm"
+            disabled={saving}
+          />
+          <Button type="button" size="sm" variant="outline" onClick={addItem} disabled={saving || !newText.trim()}>
+            <Plus className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      )}
     </div>
   )
 }
@@ -1740,6 +2059,9 @@ function TaskDetailModal({
             </div>
           )}
 
+          {/* Чек-лист */}
+          <TaskChecklist task={task} canEdit={can('tasks.edit')} onTaskUpdated={onTaskUpdated} />
+
           {can('tasks.respond') && (
           <div className="rounded-xl border border-border bg-surface-muted p-4">
             <div className="mb-2 flex items-center gap-2">
@@ -2012,6 +2334,36 @@ function CreateTaskModal({
               value={form.due_date}
               onChange={(v) => setForm({...form, due_date: v})}
             />
+          </div>
+
+          {/* Быстрые сроки */}
+          <div className="-mt-2 flex flex-wrap gap-1.5">
+            {[
+              { label: 'Сегодня', days: 0 },
+              { label: 'Завтра', days: 1 },
+              { label: '+3 дня', days: 3 },
+              { label: 'Через неделю', days: 7 },
+            ].map((preset) => {
+              const d = new Date()
+              d.setDate(d.getDate() + preset.days)
+              const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+              const active = form.due_date === iso
+              return (
+                <button
+                  key={preset.label}
+                  type="button"
+                  onClick={() => setForm({ ...form, due_date: active ? '' : iso })}
+                  className={cn(
+                    'rounded-full border px-2.5 py-1 text-[11px] transition-colors',
+                    active
+                      ? 'border-violet-400/60 bg-violet-500/15 text-violet-500 dark:text-violet-300'
+                      : 'border-border text-muted-foreground hover:border-violet-400/40 hover:text-foreground',
+                  )}
+                >
+                  {preset.label}
+                </button>
+              )
+            })}
           </div>
 
           <Input
