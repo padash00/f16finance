@@ -327,7 +327,11 @@ function TasksContent() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban')
+  // На телефоне канбан из шести колонок неудобен — стартуем со списка.
+  const [viewMode, setViewMode] = useState<'kanban' | 'list'>(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) return 'list'
+    return 'kanban'
+  })
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set())
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false)
@@ -828,28 +832,26 @@ function TasksContent() {
           />
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className="p-4 bg-white dark:bg-slate-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
-              <p className="text-xs text-slate-500">Всего задач</p>
-              <p className="text-2xl font-bold text-foreground">{stats.total}</p>
+          <div className="grid grid-cols-3 gap-2 sm:gap-4">
+            <Card className="p-3 sm:p-4 bg-white dark:bg-slate-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
+              <p className="text-[11px] sm:text-xs text-slate-500">Всего задач</p>
+              <p className="text-xl sm:text-2xl font-bold text-foreground">{stats.total}</p>
             </Card>
-            <Card className="p-4 bg-red-500/5 border-red-500/20">
-              <p className="text-xs text-red-400">Просрочено</p>
-              <p className="text-2xl font-bold text-red-400">{stats.overdue}</p>
+            <Card className="p-3 sm:p-4 bg-red-500/5 border-red-500/20">
+              <p className="text-[11px] sm:text-xs text-red-400">Просрочено</p>
+              <p className="text-xl sm:text-2xl font-bold text-red-400">{stats.overdue}</p>
             </Card>
-            <Card className="p-4 bg-rose-500/5 border-rose-500/20">
-              <p className="text-xs text-rose-400">Критических</p>
-              <p className="text-2xl font-bold text-rose-400">{stats.critical}</p>
+            <Card className="p-3 sm:p-4 bg-rose-500/5 border-rose-500/20">
+              <p className="text-[11px] sm:text-xs text-rose-400">Критических</p>
+              <p className="text-xl sm:text-2xl font-bold text-rose-400">{stats.critical}</p>
             </Card>
           </div>
 
           {/* Filters */}
-          <Card className="p-4 bg-white dark:bg-slate-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
-            <div className="flex flex-wrap items-center gap-3">
-              <Filter className="w-4 h-4 text-slate-500" />
-
-              {/* Поиск */}
-              <div className="relative flex-1 max-w-xs">
+          <Card className="p-3 sm:p-4 bg-white dark:bg-slate-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+              {/* Поиск — на телефоне во всю ширину */}
+              <div className="relative w-full sm:max-w-xs sm:flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                 <input
                   type="text"
@@ -868,85 +870,86 @@ function TasksContent() {
                 )}
               </div>
 
-              {/* Фильтр по статусу */}
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="px-3 py-2 bg-white dark:bg-slate-800/50 border border-border rounded-lg text-sm text-foreground focus:outline-none focus:border-violet-500/50"
-              >
-                <option value="all">Все статусы</option>
-                {Object.entries(STATUS_CONFIG).map(([key, config]) => (
-                  <option key={key} value={key}>{config.title}</option>
-                ))}
-              </select>
-
-              {/* Фильтр по приоритету */}
-              <select
-                value={filterPriority}
-                onChange={(e) => setFilterPriority(e.target.value)}
-                className="px-3 py-2 bg-white dark:bg-slate-800/50 border border-border rounded-lg text-sm text-foreground focus:outline-none focus:border-violet-500/50"
-              >
-                <option value="all">Все приоритеты</option>
-                {Object.entries(PRIORITY_CONFIG).map(([key, config]) => (
-                  <option key={key} value={key}>{config.icon} {config.label}</option>
-                ))}
-              </select>
-
-              {/* Фильтр по оператору */}
-              <select
-                value={filterOperator}
-                onChange={(e) => setFilterOperator(e.target.value)}
-                className="px-3 py-2 bg-white dark:bg-slate-800/50 border border-border rounded-lg text-sm text-foreground focus:outline-none focus:border-violet-500/50"
-              >
-                <option value="all">Все операторы</option>
-                {operators.map(op => (
-                  <option key={op.id} value={op.id}>
-                    {getOperatorDisplayName(op)} {op.telegram_chat_id ? '📱' : ''}
-                  </option>
-                ))}
-              </select>
-
-              {/* Фильтр по компании */}
-              <select
-                value={filterCompany}
-                onChange={(e) => setFilterCompany(e.target.value)}
-                className="px-3 py-2 bg-white dark:bg-slate-800/50 border border-border rounded-lg text-sm text-foreground focus:outline-none focus:border-violet-500/50"
-              >
-                <option value="all">Все компании</option>
-                {companies.map(company => (
-                  <option key={company.id} value={company.id}>{company.name}</option>
-                ))}
-              </select>
-
-              {/* Фильтр "Просроченные" */}
-              <button
-                onClick={() => setFilterStatus(filterStatus === 'overdue' ? 'all' : 'overdue')}
-                className={cn(
-                  "px-3 py-2 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5",
-                  filterStatus === 'overdue'
-                    ? 'bg-red-500/20 border-red-500/40 text-red-300'
-                    : 'bg-white dark:bg-slate-800/50 border-border text-muted-foreground hover:text-red-300 hover:border-red-500/30'
-                )}
-              >
-                <AlertCircle className="w-3.5 h-3.5" />
-                Просроченные
-                {stats.overdue > 0 && (
-                  <span className="ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] bg-red-500/30 text-red-300">
-                    {stats.overdue}
-                  </span>
-                )}
-              </button>
-
-              {/* Сброс фильтров */}
-              {(searchTerm || filterStatus !== 'all' || filterPriority !== 'all' ||
-                filterOperator !== 'all' || filterCompany !== 'all') && (
-                <button
-                  onClick={resetFilters}
-                  className="text-sm text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors ml-auto"
+              {/* Селекты — на телефоне сеткой 2×2 */}
+              <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center sm:gap-3">
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="w-full min-w-0 px-3 py-2 bg-white dark:bg-slate-800/50 border border-border rounded-lg text-sm text-foreground focus:outline-none focus:border-violet-500/50 sm:w-auto"
                 >
-                  Сбросить
+                  <option value="all">Все статусы</option>
+                  {Object.entries(STATUS_CONFIG).map(([key, config]) => (
+                    <option key={key} value={key}>{config.title}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={filterPriority}
+                  onChange={(e) => setFilterPriority(e.target.value)}
+                  className="w-full min-w-0 px-3 py-2 bg-white dark:bg-slate-800/50 border border-border rounded-lg text-sm text-foreground focus:outline-none focus:border-violet-500/50 sm:w-auto"
+                >
+                  <option value="all">Все приоритеты</option>
+                  {Object.entries(PRIORITY_CONFIG).map(([key, config]) => (
+                    <option key={key} value={key}>{config.icon} {config.label}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={filterOperator}
+                  onChange={(e) => setFilterOperator(e.target.value)}
+                  className="w-full min-w-0 px-3 py-2 bg-white dark:bg-slate-800/50 border border-border rounded-lg text-sm text-foreground focus:outline-none focus:border-violet-500/50 sm:w-auto"
+                >
+                  <option value="all">Все операторы</option>
+                  {operators.map(op => (
+                    <option key={op.id} value={op.id}>
+                      {getOperatorDisplayName(op)} {op.telegram_chat_id ? '📱' : ''}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={filterCompany}
+                  onChange={(e) => setFilterCompany(e.target.value)}
+                  className="w-full min-w-0 px-3 py-2 bg-white dark:bg-slate-800/50 border border-border rounded-lg text-sm text-foreground focus:outline-none focus:border-violet-500/50 sm:w-auto"
+                >
+                  <option value="all">Все компании</option>
+                  {companies.map(company => (
+                    <option key={company.id} value={company.id}>{company.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex w-full items-center gap-2 sm:w-auto">
+                {/* Фильтр "Просроченные" */}
+                <button
+                  onClick={() => setFilterStatus(filterStatus === 'overdue' ? 'all' : 'overdue')}
+                  className={cn(
+                    "flex-1 sm:flex-none px-3 py-2 rounded-lg text-sm font-medium border transition-colors flex items-center justify-center gap-1.5",
+                    filterStatus === 'overdue'
+                      ? 'bg-red-500/20 border-red-500/40 text-red-300'
+                      : 'bg-white dark:bg-slate-800/50 border-border text-muted-foreground hover:text-red-300 hover:border-red-500/30'
+                  )}
+                >
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  Просроченные
+                  {stats.overdue > 0 && (
+                    <span className="ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] bg-red-500/30 text-red-300">
+                      {stats.overdue}
+                    </span>
+                  )}
                 </button>
-              )}
+
+                {/* Сброс фильтров */}
+                {(searchTerm || filterStatus !== 'all' || filterPriority !== 'all' ||
+                  filterOperator !== 'all' || filterCompany !== 'all') && (
+                  <button
+                    onClick={resetFilters}
+                    className="shrink-0 text-sm text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors sm:ml-auto"
+                  >
+                    Сбросить
+                  </button>
+                )}
+              </div>
             </div>
           </Card>
 
@@ -1010,8 +1013,8 @@ function TasksContent() {
 
           {/* Content */}
           {viewMode === 'kanban' ? (
-            // Kanban View
-            <div className="flex gap-4 overflow-x-auto pb-4 min-h-[600px]">
+            // Kanban View — на телефоне колонки почти во весь экран с доводкой свайпа
+            <div className="flex gap-3 sm:gap-4 overflow-x-auto pb-4 min-h-[600px] snap-x snap-mandatory sm:snap-none">
               {Object.entries(STATUS_CONFIG).map(([status, config]) => {
                 const statusTasks = tasksByStatus[status] || []
                 const Icon = config.icon
@@ -1031,7 +1034,7 @@ function TasksContent() {
                       await handleTaskDrop(status as TaskStatus)
                     }}
                     className={cn(
-                      "w-80 flex-shrink-0 rounded-xl border backdrop-blur-xl p-3 transition-colors",
+                      "w-[86vw] max-w-[320px] sm:w-80 sm:max-w-none flex-shrink-0 snap-center sm:snap-align-none rounded-xl border backdrop-blur-xl p-3 transition-colors",
                       dragOverStatus === status
                         ? 'border-violet-400/50 bg-violet-500/10'
                         : 'border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/40',
@@ -1150,7 +1153,48 @@ function TasksContent() {
                   <option value="priority">По приоритету</option>
                 </select>
               </div>
-              <div className="overflow-x-auto">
+              {/* Мобильный список карточками — таблица на телефоне нечитаема */}
+              <div className="md:hidden divide-y divide-slate-100 dark:divide-white/5">
+                {sortedListTasks.map((task) => {
+                  const overdueRow = isOverdue(task.due_date, task.status)
+                  return (
+                    <button
+                      key={task.id}
+                      type="button"
+                      onClick={() => { setSelectedTask(task); setIsTaskModalOpen(true) }}
+                      className="w-full px-4 py-3 text-left transition-colors active:bg-surface-muted"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="text-sm font-medium leading-snug text-foreground">{task.title}</span>
+                        <span className="shrink-0 font-mono text-[10px] text-slate-500">#{task.task_number}</span>
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
+                        <span className="rounded-full border border-border bg-surface-muted px-1.5 py-0.5 text-muted-foreground">
+                          {STATUS_CONFIG[task.status]?.title || task.status}
+                        </span>
+                        <span className={cn('rounded-full px-1.5 py-0.5', PRIORITY_CONFIG[task.priority]?.color)}>
+                          {PRIORITY_CONFIG[task.priority]?.icon} {PRIORITY_CONFIG[task.priority]?.label}
+                        </span>
+                        {task.due_date && (
+                          <span className={cn('flex items-center gap-1', overdueRow ? 'text-red-400 font-medium' : 'text-slate-500')}>
+                            <Calendar className="h-3 w-3" />
+                            {formatDate(task.due_date)}
+                            {overdueRow ? ' · просрочено' : ''}
+                          </span>
+                        )}
+                        {(task.operator_short_name || task.operator_name) && (
+                          <span className="text-slate-500">· {task.operator_short_name || task.operator_name}</span>
+                        )}
+                      </div>
+                    </button>
+                  )
+                })}
+                {sortedListTasks.length === 0 && (
+                  <p className="px-4 py-8 text-center text-sm text-slate-500">Нет задач по выбранным фильтрам</p>
+                )}
+              </div>
+
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-slate-900/50">
@@ -2262,7 +2306,7 @@ function CreateTaskModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-card border-border text-foreground sm:max-w-md">
+      <DialogContent className="bg-card border-border text-foreground sm:max-w-md max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Новая задача</DialogTitle>
           <DialogDescription className="text-muted-foreground">
