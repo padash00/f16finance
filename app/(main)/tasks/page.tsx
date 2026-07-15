@@ -1769,12 +1769,17 @@ function TaskDetailModal({
   }, [operators, staff, task])
 
   useEffect(() => {
-    if (isOpen && task) {
-      setEditForm(toTaskFormState(task))
-      setResponseNote('')
-      loadComments()
-    }
-  }, [isOpen, task, loadComments])
+    if (!isOpen || !task) return
+    setEditForm(toTaskFormState(task))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, task?.id, task?.updated_at])
+
+  useEffect(() => {
+    if (!isOpen || !task) return
+    setResponseNote('')
+    loadComments()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, task?.id, loadComments])
 
   const handleAddComment = async () => {
     if (!newComment.trim()) return
@@ -1837,10 +1842,8 @@ function TaskDetailModal({
 
     if (response.ok) {
       await onTaskUpdated()
-      onClose()
       toast({
-        title: 'Задача обновлена',
-        description: 'Изменения сохранены.',
+        title: 'Изменения сохранены',
       })
       return
     }
@@ -1911,30 +1914,191 @@ function TaskDetailModal({
   const StatusIcon = statusConfig.icon
   const isTaskOverdue = isOverdue(task.due_date, task.status)
   const daysUntilDue = getDaysUntilDue(task.due_date)
+  const canEdit = can('tasks.edit')
+
+  const baselineForm = useMemo(() => toTaskFormState(task), [task])
+  const isDirty = useMemo(
+    () => JSON.stringify(editForm) !== JSON.stringify(baselineForm),
+    [editForm, baselineForm],
+  )
+
+  const fieldSelectClass =
+    'h-9 w-full rounded-lg border border-border bg-white dark:bg-slate-800/50 px-2.5 text-sm text-foreground'
+  const fieldLabelClass = 'mb-1 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground'
+
+  const propertyFields = (
+    <div className="space-y-3">
+      <div>
+        <label className={fieldLabelClass}>Статус</label>
+        {canEdit ? (
+          <select
+            value={editForm.status}
+            onChange={(e) => setEditForm((prev) => ({ ...prev, status: e.target.value as TaskStatus }))}
+            className={fieldSelectClass}
+          >
+            {Object.entries(STATUS_CONFIG).map(([status, config]) => (
+              <option key={status} value={status}>
+                {config.title}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span className={cn('inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium', statusConfig.color)}>
+            <StatusIcon className="h-3.5 w-3.5" />
+            {statusConfig.title}
+          </span>
+        )}
+      </div>
+
+      <div>
+        <label className={fieldLabelClass}>Приоритет</label>
+        {canEdit ? (
+          <select
+            value={editForm.priority}
+            onChange={(e) => setEditForm((prev) => ({ ...prev, priority: e.target.value as TaskPriority }))}
+            className={fieldSelectClass}
+          >
+            {Object.entries(PRIORITY_CONFIG).map(([priority, config]) => (
+              <option key={priority} value={priority}>
+                {config.icon} {config.label}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span className={cn('inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium', priorityConfig.color)}>
+            {priorityConfig.icon} {priorityConfig.label}
+          </span>
+        )}
+      </div>
+
+      <div>
+        <label className={fieldLabelClass}>Оператор</label>
+        {canEdit ? (
+          <select
+            value={editForm.operator_id}
+            onChange={(e) => setEditForm((prev) => ({ ...prev, operator_id: e.target.value }))}
+            className={fieldSelectClass}
+          >
+            <option value="">Без оператора</option>
+            {operators.map((operator) => (
+              <option key={operator.id} value={operator.id}>
+                {getOperatorDisplayName(operator)}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <div className="flex items-center gap-2">
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-pink-500 text-xs font-bold text-white">
+              {task.operator_short_name?.[0] || task.operator_name?.[0] || '?'}
+            </div>
+            <span className="text-sm text-foreground">{task.operator_name || 'Не назначен'}</span>
+            {task.operator_telegram && <Send className="h-3 w-3 text-blue-400" />}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <label className={fieldLabelClass}>Компания</label>
+        {canEdit ? (
+          <select
+            value={editForm.company_id}
+            onChange={(e) => setEditForm((prev) => ({ ...prev, company_id: e.target.value }))}
+            className={fieldSelectClass}
+          >
+            <option value="">Без компании</option>
+            {companies.map((company) => (
+              <option key={company.id} value={company.id}>
+                {company.name}
+              </option>
+            ))}
+          </select>
+        ) : task.company_name ? (
+          <span className={cn('inline-flex rounded-full border px-2.5 py-1 text-xs', getCompanyStyle(task.company_code ?? null))}>
+            {task.company_name}
+          </span>
+        ) : (
+          <span className="text-sm text-muted-foreground">—</span>
+        )}
+      </div>
+
+      <div>
+        <label className={fieldLabelClass}>Дедлайн</label>
+        {canEdit ? (
+          <DatePicker
+            value={editForm.due_date}
+            onChange={(v) => setEditForm((prev) => ({ ...prev, due_date: v }))}
+          />
+        ) : task.due_date ? (
+          <div className={cn('flex items-center gap-1.5 text-sm', isTaskOverdue ? 'text-red-500 dark:text-red-400' : 'text-foreground')}>
+            <Calendar className="h-4 w-4" />
+            {formatDate(task.due_date)}
+          </div>
+        ) : (
+          <span className="text-sm text-muted-foreground">Не указан</span>
+        )}
+        {isTaskOverdue && (
+          <p className="mt-1 text-[11px] font-medium text-red-500 dark:text-red-400">Просрочено</p>
+        )}
+        {!isTaskOverdue && daysUntilDue !== null && daysUntilDue <= 3 && daysUntilDue >= 0 && (
+          <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-300">Осталось {daysUntilDue} дн.</p>
+        )}
+      </div>
+
+      <div>
+        <label className={fieldLabelClass}>Теги</label>
+        {canEdit ? (
+          <Input
+            value={editForm.tags}
+            onChange={(e) => setEditForm((prev) => ({ ...prev, tags: e.target.value }))}
+            className="h-9 bg-white dark:bg-slate-800/50 border-border text-sm"
+            placeholder="Через запятую"
+          />
+        ) : task.tags && task.tags.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {task.tags.map((tag: string) => (
+              <span key={tag} className="rounded-full border border-slate-200 bg-card px-2 py-0.5 text-xs text-body dark:border-white/5">
+                #{tag}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <span className="text-sm text-muted-foreground">—</span>
+        )}
+      </div>
+    </div>
+  )
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-card border-border text-foreground max-w-2xl max-h-[90vh] overflow-auto">
-        <DialogHeader>
-          <div className="flex items-start justify-between">
-            <div>
-              <DialogTitle className="text-xl flex items-center gap-2">
-                <span className="text-slate-500">#{task.task_number}</span>
-                <span>{task.title}</span>
-              </DialogTitle>
-              <DialogDescription className="text-muted-foreground mt-1">
-                Создано {formatDateTime(task.created_at)}
-              </DialogDescription>
-            </div>
-            <div className="flex items-center gap-2">
+      <DialogContent className="bg-card border-border text-foreground flex max-h-[92dvh] max-w-4xl flex-col gap-0 overflow-hidden p-0">
+        <DialogTitle className="sr-only">Задача #{task.task_number}: {task.title}</DialogTitle>
+        <DialogDescription className="sr-only">Детали и редактирование задачи</DialogDescription>
+
+        {/* Шапка */}
+        <div className="shrink-0 border-b border-border px-4 py-4 pr-12 md:px-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold text-muted-foreground">#{task.task_number}</span>
+            <span className={cn('inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium', statusConfig.color)}>
+              <StatusIcon className="h-3 w-3" />
+              {statusConfig.title}
+            </span>
+            <span className={cn('rounded-full border px-2 py-0.5 text-[11px] font-medium', priorityConfig.color)}>
+              {priorityConfig.icon} {priorityConfig.label}
+            </span>
+            {isTaskOverdue && (
+              <span className="rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-[11px] font-medium text-red-500 dark:text-red-400">
+                Просрочено
+              </span>
+            )}
+            <div className="ml-auto flex items-center gap-1.5">
               {task.operator_telegram && can('tasks.notify') && (
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={onNotify}
-                  className="gap-2 border-border"
+                  className="h-7 gap-1.5 border-border px-2 text-xs"
                 >
-                  <Send className="w-4 h-4" />
+                  <Send className="h-3.5 w-3.5" />
                   Уведомить
                 </Button>
               )}
@@ -1944,293 +2108,202 @@ function TaskDetailModal({
                   variant="outline"
                   onClick={handleDelete}
                   disabled={deleting}
-                  className="gap-2 border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                  className="h-7 gap-1.5 border-red-500/30 px-2 text-xs text-red-500 hover:bg-red-500/10 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="h-3.5 w-3.5" />
                   {deleting ? 'Удаляем...' : 'Удалить'}
                 </Button>
               )}
             </div>
           </div>
-        </DialogHeader>
+          {canEdit ? (
+            <input
+              value={editForm.title}
+              onChange={(e) => setEditForm((prev) => ({ ...prev, title: e.target.value }))}
+              className="mt-2 w-full rounded-md bg-transparent text-lg font-semibold text-foreground outline-none transition-colors placeholder:font-normal placeholder:text-muted-foreground hover:bg-surface-muted focus:bg-surface-muted px-1 -mx-1"
+              placeholder="Название задачи"
+            />
+          ) : (
+            <div className="mt-2 text-lg font-semibold text-foreground">{task.title}</div>
+          )}
+          <div className="mt-1 text-xs text-muted-foreground">
+            Создано {formatDateTime(task.created_at)}
+            {task.completed_at ? ` · выполнено ${formatDateTime(task.completed_at)}` : ''}
+          </div>
+        </div>
 
-        <div className="space-y-4 py-4">
-          {can('tasks.edit') && (
-          <div className="rounded-xl border border-border bg-surface-muted p-4">
-            <div className="mb-3 text-sm font-medium text-foreground">Редактирование задачи</div>
+        {/* Тело: контент слева, свойства справа */}
+        <div className="min-h-0 flex-1 overflow-y-auto md:grid md:grid-cols-[minmax(0,1fr)_280px] md:overflow-hidden">
+          <div className="min-h-0 space-y-5 px-4 py-4 md:overflow-y-auto md:px-6">
+            {/* Параметры — мобильная версия */}
+            <details className="rounded-xl border border-border bg-surface-muted px-4 py-3 md:hidden">
+              <summary className="cursor-pointer select-none text-sm font-medium text-foreground">
+                Параметры задачи
+              </summary>
+              <div className="mt-3">{propertyFields}</div>
+            </details>
 
-            <div className="space-y-3">
-              <Input
-                value={editForm.title}
-                onChange={(e) => setEditForm((prev) => ({ ...prev, title: e.target.value }))}
-                className="bg-white dark:bg-slate-800/50 border-border"
-                placeholder="Название задачи"
-              />
+            {/* Описание */}
+            <div>
+              <h3 className="mb-2 text-sm font-medium text-muted-foreground">Описание</h3>
+              {canEdit ? (
+                <textarea
+                  value={editForm.description}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, description: e.target.value }))}
+                  className="min-h-24 w-full resize-none rounded-lg border border-border bg-white dark:bg-slate-800/50 p-3 text-sm text-foreground"
+                  placeholder="Опиши, что нужно сделать и какой результат ждёшь..."
+                />
+              ) : task.description ? (
+                <div className="rounded-lg border border-slate-200 bg-white p-3 dark:border-white/5 dark:bg-slate-800/50">
+                  <p className="whitespace-pre-wrap text-sm">{task.description}</p>
+                </div>
+              ) : (
+                <p className="text-sm italic text-muted-foreground">Без описания</p>
+              )}
+            </div>
+
+            {/* Чек-лист */}
+            <TaskChecklist task={task} canEdit={canEdit} onTaskUpdated={onTaskUpdated} />
+
+            {can('tasks.respond') && (
+            <div className="rounded-xl border border-border bg-surface-muted p-4">
+              <div className="mb-1 flex items-center gap-2">
+                <MessageSquare className="h-4 w-4 text-violet-500 dark:text-violet-300" />
+                <h3 className="text-sm font-medium text-foreground">Быстрый ответ</h3>
+              </div>
+              <p className="mb-3 text-xs leading-5 text-muted-foreground">
+                Один клик — комментарий в историю, уведомление и перенос задачи в нужную колонку.
+              </p>
 
               <textarea
-                value={editForm.description}
-                onChange={(e) => setEditForm((prev) => ({ ...prev, description: e.target.value }))}
-                className="min-h-24 w-full resize-none rounded-lg border border-border bg-white dark:bg-slate-800/50 p-3 text-sm text-foreground"
-                placeholder="Описание задачи"
+                value={responseNote}
+                onChange={(e) => setResponseNote(e.target.value)}
+                placeholder="Комментарий к ответу (необязательно)..."
+                rows={2}
+                className="mb-3 w-full resize-none rounded-lg border border-border bg-white dark:bg-slate-800/50 p-2.5 text-sm text-foreground"
               />
 
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <select
-                  value={editForm.operator_id}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, operator_id: e.target.value }))}
-                  className="h-10 rounded-lg border border-border bg-white dark:bg-slate-800/50 px-3 text-sm text-foreground"
-                >
-                  <option value="">Без оператора</option>
-                  {operators.map((operator) => (
-                    <option key={operator.id} value={operator.id}>
-                      {getOperatorDisplayName(operator)}
-                    </option>
-                  ))}
-                </select>
-
-                <select
-                  value={editForm.company_id}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, company_id: e.target.value }))}
-                  className="h-10 rounded-lg border border-border bg-white dark:bg-slate-800/50 px-3 text-sm text-foreground"
-                >
-                  <option value="">Без компании</option>
-                  {companies.map((company) => (
-                    <option key={company.id} value={company.id}>
-                      {company.name}
-                    </option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {TASK_RESPONSE_ORDER.map((key) => {
+                  const config = RESPONSE_CONFIG[key]
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => handleQuickResponse(key)}
+                      disabled={responding !== null}
+                      className={cn(
+                        'rounded-xl border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60',
+                        config.tone,
+                      )}
+                    >
+                      <div className="flex items-center gap-1.5 text-[13px] font-semibold">
+                        {config.label}
+                        {responding === key && <RefreshCw className="h-3 w-3 animate-spin" />}
+                      </div>
+                      <div className="mt-0.5 text-[11px] opacity-80">{config.helper}</div>
+                    </button>
+                  )
+                })}
               </div>
+            </div>
+            )}
 
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                <select
-                  value={editForm.status}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, status: e.target.value as TaskStatus }))}
-                  className="h-10 rounded-lg border border-border bg-white dark:bg-slate-800/50 px-3 text-sm text-foreground"
-                >
-                  {Object.entries(STATUS_CONFIG).map(([status, config]) => (
-                    <option key={status} value={status}>
-                      {config.title}
-                    </option>
-                  ))}
-                </select>
+            {/* Комментарии */}
+            <div>
+              <h3 className="mb-2 text-sm font-medium text-muted-foreground">
+                Комментарии{comments.length > 0 ? ` · ${comments.length}` : ''}
+              </h3>
 
-                <select
-                  value={editForm.priority}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, priority: e.target.value as TaskPriority }))}
-                  className="h-10 rounded-lg border border-border bg-white dark:bg-slate-800/50 px-3 text-sm text-foreground"
-                >
-                  {Object.entries(PRIORITY_CONFIG).map(([priority, config]) => (
-                    <option key={priority} value={priority}>
-                      {config.icon} {config.label}
-                    </option>
-                  ))}
-                </select>
-
-                <DatePicker
-                  value={editForm.due_date}
-                  onChange={(v) => setEditForm((prev) => ({ ...prev, due_date: v }))}
+              <div className="mb-4 flex gap-2">
+                <textarea
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                      e.preventDefault()
+                      void handleAddComment()
+                    }
+                  }}
+                  placeholder="Напишите комментарий... (Ctrl+Enter — отправить)"
+                  className="flex-1 resize-none rounded-lg border border-border bg-white dark:bg-slate-800/50 p-2 text-sm text-foreground"
+                  rows={2}
                 />
+                <Button
+                  onClick={handleAddComment}
+                  disabled={loading || !newComment.trim()}
+                  className="self-end bg-violet-500 text-white hover:bg-violet-600"
+                >
+                  {loading ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Отправить'}
+                </Button>
               </div>
 
-              <Input
-                value={editForm.tags}
-                onChange={(e) => setEditForm((prev) => ({ ...prev, tags: e.target.value }))}
-                className="bg-white dark:bg-slate-800/50 border-border"
-                placeholder="Теги через запятую"
-              />
+              <div className="space-y-3">
+                {comments.map(comment => (
+                  <div key={comment.id} className="flex gap-3">
+                    <div className={cn(
+                      'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-xs font-bold text-white',
+                      comment.author_type === 'operator'
+                        ? 'from-violet-500 to-fuchsia-500'
+                        : comment.author_type === 'staff'
+                          ? 'from-sky-500 to-cyan-500'
+                          : 'from-slate-400 to-slate-500',
+                    )}>
+                      {comment.author_name?.[0] || '?'}
+                    </div>
+                    <div className="flex-1 rounded-lg border border-slate-200 bg-white p-3 dark:border-white/5 dark:bg-slate-800/50">
+                      <div className="mb-1 flex justify-between gap-2">
+                        <span className="text-sm font-medium">{comment.author_name}</span>
+                        <span className="shrink-0 text-xs text-slate-500">
+                          {formatDateTime(comment.created_at)}
+                        </span>
+                      </div>
+                      <p className="whitespace-pre-wrap text-sm">{comment.content}</p>
+                    </div>
+                  </div>
+                ))}
+                {comments.length === 0 && (
+                  <p className="text-sm italic text-slate-500">Нет комментариев</p>
+                )}
+              </div>
+            </div>
+          </div>
 
-              <div className="flex justify-end">
+          {/* Свойства — десктопный сайдбар */}
+          <aside className="hidden min-h-0 border-l border-border bg-surface-muted px-4 py-4 md:block md:overflow-y-auto">
+            <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Параметры
+            </h3>
+            {propertyFields}
+          </aside>
+        </div>
+
+        {/* Панель несохранённых изменений */}
+        {canEdit && isDirty && (
+          <div className="shrink-0 border-t border-border bg-amber-500/5 px-4 py-3 md:px-6">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs text-amber-600 dark:text-amber-300">Есть несохранённые изменения</span>
+              <div className="flex gap-2">
                 <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setEditForm(toTaskFormState(task))}
+                  disabled={savingTask}
+                >
+                  Отменить
+                </Button>
+                <Button
+                  size="sm"
                   onClick={handleTaskSave}
                   disabled={savingTask || !editForm.title.trim()}
-                  className="gap-2"
+                  className="bg-violet-500 text-white hover:bg-violet-600"
                 >
-                  {savingTask ? 'Сохраняем...' : 'Сохранить изменения'}
+                  {savingTask ? 'Сохраняем...' : 'Сохранить'}
                 </Button>
               </div>
             </div>
           </div>
-          )}
-
-          {/* Мета-информация */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="p-3 bg-surface-muted rounded-lg">
-              <p className="text-xs text-slate-500 mb-1">Статус</p>
-              <div className="flex items-center gap-2">
-                <StatusIcon className={cn("w-4 h-4", statusConfig.color.split(' ')[0])} />
-                <span className="text-sm">{statusConfig.title}</span>
-              </div>
-            </div>
-            <div className="p-3 bg-surface-muted rounded-lg">
-              <p className="text-xs text-slate-500 mb-1">Приоритет</p>
-              <div className="flex items-center gap-2">
-                <span className={cn("text-sm px-2 py-0.5 rounded-full", priorityConfig.color)}>
-                  {priorityConfig.icon} {priorityConfig.label}
-                </span>
-              </div>
-            </div>
-            <div className="p-3 bg-surface-muted rounded-lg">
-              <p className="text-xs text-slate-500 mb-1">Оператор</p>
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-xs font-bold">
-                  {task.operator_short_name?.[0] || task.operator_name?.[0] || '?'}
-                </div>
-                <span className="text-sm">{task.operator_name || 'Не назначен'}</span>
-                {task.operator_telegram && (
-                  <Send className="w-3 h-3 text-blue-400" />
-                )}
-              </div>
-            </div>
-            <div className="p-3 bg-surface-muted rounded-lg">
-              <p className="text-xs text-slate-500 mb-1">Дедлайн</p>
-              {task.due_date ? (
-                <div className={cn(
-                  "flex items-center gap-2 text-sm",
-                  isTaskOverdue ? "text-red-400" : "text-body"
-                )}>
-                  <Calendar className="w-4 h-4" />
-                  <span>{formatDate(task.due_date)}</span>
-                  {isTaskOverdue && <span className="text-xs text-red-400">(просрочено)</span>}
-                  {!isTaskOverdue && daysUntilDue !== null && daysUntilDue <= 3 && daysUntilDue >= 0 && (
-                    <span className="text-xs text-yellow-400">(осталось {daysUntilDue} дн.)</span>
-                  )}
-                </div>
-              ) : (
-                <span className="text-sm text-slate-500">Не указан</span>
-              )}
-            </div>
-          </div>
-
-          {/* Компания */}
-          {task.company_name && (
-            <div className="p-3 bg-surface-muted rounded-lg">
-              <p className="text-xs text-slate-500 mb-1">Компания</p>
-              <span className={cn(
-                "text-xs px-2 py-1 rounded-full border",
-                getCompanyStyle(task.company_code ?? null)
-              )}>
-                {task.company_name}
-              </span>
-            </div>
-          )}
-
-          {/* Описание */}
-          {task.description && (
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground mb-2">Описание</h3>
-              <div className="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/5 rounded-lg p-3">
-                <p className="text-sm whitespace-pre-wrap">{task.description}</p>
-              </div>
-            </div>
-          )}
-
-          {/* Чек-лист */}
-          <TaskChecklist task={task} canEdit={can('tasks.edit')} onTaskUpdated={onTaskUpdated} />
-
-          {can('tasks.respond') && (
-          <div className="rounded-xl border border-border bg-surface-muted p-4">
-            <div className="mb-2 flex items-center gap-2">
-              <MessageSquare className="h-4 w-4 text-violet-300" />
-              <h3 className="text-sm font-medium text-foreground">Быстрый ответ по задаче</h3>
-            </div>
-            <p className="mb-3 text-xs leading-5 text-muted-foreground">
-              Используй быстрый ответ, если задачу приняли в работу, нужна помощь или нужно сразу отправить её на проверку.
-            </p>
-
-            <textarea
-              value={responseNote}
-              onChange={(e) => setResponseNote(e.target.value)}
-              placeholder="Короткий комментарий для истории задачи и уведомления..."
-              className="mb-3 min-h-20 w-full resize-none rounded-lg border border-border bg-white dark:bg-slate-800/50 p-3 text-sm text-foreground"
-            />
-
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-              {TASK_RESPONSE_ORDER.map((key) => {
-                const config = RESPONSE_CONFIG[key]
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => handleQuickResponse(key)}
-                    disabled={responding !== null}
-                    className={cn(
-                      'rounded-xl border px-3 py-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60',
-                      config.tone,
-                    )}
-                  >
-                    <div className="text-sm font-medium">{config.label}</div>
-                    <div className="mt-1 text-xs opacity-80">{config.helper}</div>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-          )}
-
-          {/* Теги */}
-          {task.tags && task.tags.length > 0 && (
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground mb-2">Теги</h3>
-              <div className="flex flex-wrap gap-2">
-                {task.tags.map((tag: string) => (
-                  <span
-                    key={tag}
-                    className="text-xs px-2 py-1 rounded-full bg-card text-body border border-slate-200 dark:border-white/5"
-                  >
-                    #{tag}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Комментарии */}
-          <div>
-            <h3 className="text-sm font-medium text-muted-foreground mb-2">Комментарии</h3>
-            
-            {/* Форма комментария */}
-            <div className="flex gap-2 mb-4">
-              <textarea
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-                placeholder="Напишите комментарий..."
-                className="flex-1 bg-white dark:bg-slate-800/50 border border-border rounded-lg p-2 text-sm resize-none text-foreground"
-                rows={2}
-              />
-              <Button
-                onClick={handleAddComment}
-                disabled={loading || !newComment.trim()}
-                className="self-end bg-violet-500 hover:bg-violet-600"
-              >
-                Отправить
-              </Button>
-            </div>
-
-            {/* Список комментариев */}
-            <div className="space-y-3 max-h-60 overflow-auto">
-              {comments.map(comment => (
-                <div key={comment.id} className="flex gap-3">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-xs font-bold flex-shrink-0">
-                    {comment.author_name?.[0] || '?'}
-                  </div>
-                  <div className="flex-1 bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/5 rounded-lg p-3">
-                    <div className="flex justify-between mb-1">
-                      <span className="font-medium text-sm">{comment.author_name}</span>
-                      <span className="text-xs text-slate-500">
-                        {formatDateTime(comment.created_at)}
-                      </span>
-                    </div>
-                    <p className="text-sm">{comment.content}</p>
-                  </div>
-                </div>
-              ))}
-              {comments.length === 0 && (
-                <p className="text-sm text-slate-500 italic">Нет комментариев</p>
-              )}
-            </div>
-          </div>
-        </div>
+        )}
       </DialogContent>
     </Dialog>
   )
