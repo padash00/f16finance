@@ -146,8 +146,8 @@ export default function IncidentsPage() {
           </Button>
         }
         toolbar={
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <div className="flex flex-wrap items-center gap-2">
               {(['all', 'violation', 'bonus', 'note'] as const).map((value) => (
                 <button
                   key={value}
@@ -163,7 +163,7 @@ export default function IncidentsPage() {
                 </button>
               ))}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {(['all', 'confirmed', 'disputed', 'draft', 'voided'] as const).map((value) => (
                 <button
                   key={value}
@@ -183,22 +183,22 @@ export default function IncidentsPage() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-        <Card className="border-rose-500/30 bg-rose-500/5 p-4">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-4">
+        <Card className="border-rose-500/30 bg-rose-500/5 p-3 sm:p-4">
           <div className="text-xs text-rose-600/70 dark:text-rose-300/70">Штрафы (подтв.)</div>
           <div className="mt-1 text-xl font-semibold text-rose-700 dark:text-rose-200">{fmtMoney(summary.fines)}</div>
           <div className="text-xs text-slate-400">{summary.violations} нарушений</div>
         </Card>
-        <Card className="border-emerald-500/30 bg-emerald-500/5 p-4">
+        <Card className="border-emerald-500/30 bg-emerald-500/5 p-3 sm:p-4">
           <div className="text-xs text-emerald-600/70 dark:text-emerald-300/70">Бонусы (подтв.)</div>
           <div className="mt-1 text-xl font-semibold text-emerald-700 dark:text-emerald-200">{fmtMoney(summary.bonuses)}</div>
           <div className="text-xs text-slate-400">{summary.bonusCount} бонусов</div>
         </Card>
-        <Card className="border-border p-4">
+        <Card className="border-border p-3 sm:p-4">
           <div className="text-xs text-slate-400">Всего записей</div>
           <div className="mt-1 text-xl font-semibold text-foreground">{rows.length}</div>
         </Card>
-        <Card className="border-border p-4">
+        <Card className="border-border p-3 sm:p-4">
           <div className="text-xs text-slate-400">Чистый эффект</div>
           <div
             className={`mt-1 text-xl font-semibold ${
@@ -216,7 +216,7 @@ export default function IncidentsPage() {
 
       <Card className="overflow-hidden border-border">
         <AdminTableViewport>
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[900px] text-sm">
             <thead className={adminTableStickyTheadClass}>
               <tr className="text-left text-xs uppercase tracking-wide text-slate-400">
                 <th className="px-3 py-2">Тип</th>

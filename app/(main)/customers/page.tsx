@@ -345,21 +345,21 @@ export default function CustomersPage({ embedded = false }: { embedded?: boolean
       })()}
 
       {/* Stats */}
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+      <div className="mb-6 grid grid-cols-2 gap-2 sm:gap-4 sm:grid-cols-3">
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-3 sm:p-4">
             <p className="text-xs text-muted-foreground uppercase tracking-wide">Всего клиентов</p>
-            <p className="mt-1 text-2xl font-bold">{customers.length}</p>
+            <p className="mt-1 text-xl sm:text-2xl font-bold">{customers.length}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-3 sm:p-4">
             <p className="text-xs text-muted-foreground uppercase tracking-wide">Баллов лояльности</p>
-            <p className="mt-1 text-2xl font-bold">{totalLoyaltyPoints.toLocaleString('ru-RU')}</p>
+            <p className="mt-1 text-xl sm:text-2xl font-bold">{totalLoyaltyPoints.toLocaleString('ru-RU')}</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="p-4">
+        <Card className="col-span-2 sm:col-span-1">
+          <CardContent className="p-3 sm:p-4">
             <p className="text-xs text-muted-foreground uppercase tracking-wide">Топ клиент</p>
             {topCustomer ? (
               <>
@@ -526,7 +526,7 @@ export default function CustomersPage({ embedded = false }: { embedded?: boolean
 
       {/* Add Customer Dialog */}
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
-        <DialogContent>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Добавить клиента</DialogTitle>
           </DialogHeader>
@@ -562,7 +562,7 @@ export default function CustomersPage({ embedded = false }: { embedded?: boolean
 
       {/* Edit Customer Dialog */}
       <Dialog open={!!editCustomer} onOpenChange={(open) => { if (!open) { setEditCustomer(null); setForm(EMPTY_FORM) } }}>
-        <DialogContent>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Редактировать клиента</DialogTitle>
           </DialogHeader>
@@ -598,7 +598,7 @@ export default function CustomersPage({ embedded = false }: { embedded?: boolean
 
       {/* Adjust Points Dialog */}
       <Dialog open={!!adjustCustomer} onOpenChange={(open) => { if (!open) setAdjustCustomer(null) }}>
-        <DialogContent>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Корректировка баллов</DialogTitle>
           </DialogHeader>
@@ -698,7 +698,7 @@ export default function CustomersPage({ embedded = false }: { embedded?: boolean
 
       {/* Detail Dialog */}
       <Dialog open={!!detailCustomer} onOpenChange={(open) => { if (!open) setDetailCustomer(null) }}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Клиент: {detailCustomer?.name}</DialogTitle>
           </DialogHeader>

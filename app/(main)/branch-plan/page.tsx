@@ -745,7 +745,7 @@ export default function BranchPlanPage() {
                   void loadDraft(v)
                 }
               }}>
-                <SelectTrigger className="w-56"><SelectValue placeholder="Черновик" /></SelectTrigger>
+                <SelectTrigger className="w-full max-w-full sm:w-56"><SelectValue placeholder="Черновик" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__new__">+ Новый черновик</SelectItem>
                   {drafts.map((d) => (
@@ -849,8 +849,8 @@ export default function BranchPlanPage() {
             Множители выручки и OPEX к базе. Используйте для оценки рисков и upside.
           </p>
         </div>
-        <div className="mt-3 overflow-auto rounded-xl border border-border">
-          <table className="w-full text-sm">
+        <div className="mt-3 overflow-x-auto rounded-xl border border-border">
+          <table className="w-full min-w-[560px] text-sm">
             <thead className="bg-surface-muted text-xs text-muted-foreground">
               <tr className="text-left">
                 <th className="px-3 py-2 font-normal"></th>
@@ -924,7 +924,7 @@ export default function BranchPlanPage() {
 
       {/* ── RAMP-UP ───────────────────────────────────────────────────────────── */}
       <Card className="border-border bg-white dark:bg-white/[0.02] p-5">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="text-sm font-semibold">Постепенный выход на нагрузку (ramp-up)</h2>
             <p className="text-[11px] text-muted-foreground">
@@ -978,7 +978,7 @@ export default function BranchPlanPage() {
 
       {/* ── КОНФИГУРАЦИИ ПК ────────────────────────────────────────────────────── */}
       <Card className="border-border bg-white dark:bg-white/[0.02] p-5">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Cpu className="h-4 w-4 text-purple-600 dark:text-purple-300" />
             <div>
@@ -1022,7 +1022,7 @@ export default function BranchPlanPage() {
                 <div>
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <Label className="text-[10px] text-muted-foreground">Компоненты</Label>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Select
                         value=""
                         onValueChange={(v) => {
@@ -1036,7 +1036,7 @@ export default function BranchPlanPage() {
                           }))
                         }}
                       >
-                        <SelectTrigger className="h-8 w-56">
+                        <SelectTrigger className="h-8 w-full max-w-full sm:w-56">
                           <SelectValue placeholder="+ Из каталога..." />
                         </SelectTrigger>
                         <SelectContent>
@@ -1097,7 +1097,7 @@ export default function BranchPlanPage() {
             <h2 className="text-sm font-semibold">Прочие стартовые вложения</h2>
             <p className="text-[11px] text-muted-foreground">Мебель, периферия, ремонт, депозит, оборудование зала.</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Select
               value=""
               onValueChange={(v) => {
@@ -1109,7 +1109,7 @@ export default function BranchPlanPage() {
                 }))
               }}
             >
-              <SelectTrigger className="h-9 w-56">
+              <SelectTrigger className="h-9 w-full max-w-full sm:w-56">
                 <SelectValue placeholder="+ Из каталога..." />
               </SelectTrigger>
               <SelectContent>
@@ -1165,7 +1165,7 @@ export default function BranchPlanPage() {
 
       {/* ── ТАРИФЫ ──────────────────────────────────────────────────────────── */}
       <Card className="border-border bg-white dark:bg-white/[0.02] p-5">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="text-sm font-semibold">Тарифы</h2>
             <p className="text-[11px] text-muted-foreground">₸/час = цена ÷ (оплаченные + бонусные часы).</p>
@@ -1209,7 +1209,7 @@ export default function BranchPlanPage() {
 
       {/* ── ЗОНЫ ────────────────────────────────────────────────────────────── */}
       <Card className="border-border bg-white dark:bg-white/[0.02] p-5">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="text-sm font-semibold">Зоны и загрузка</h2>
             <p className="text-[11px] text-muted-foreground">Сколько устройств, средняя загрузка (ч/сутки), доли тарифов в зоне.</p>
@@ -1297,7 +1297,7 @@ export default function BranchPlanPage() {
 
       {/* ── OPEX ────────────────────────────────────────────────────────────── */}
       <Card className="border-border bg-white dark:bg-white/[0.02] p-5">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="text-sm font-semibold">Ежемесячные расходы (OPEX)</h2>
             <p className="text-[11px] text-muted-foreground">Фиксированная сумма или процент от выручки.</p>

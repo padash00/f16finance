@@ -657,8 +657,8 @@ export default function OperatorsPage() {
 
           {/* Поиск и фильтры */}
           <div className="rounded-xl bg-white dark:bg-slate-900/40 backdrop-blur-xl border border-slate-200 dark:border-white/5 p-4">
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="relative flex-1 min-w-[200px]">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+              <div className="relative w-full sm:flex-1 sm:min-w-[200px]">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                 <input
                   value={search}
@@ -680,7 +680,7 @@ export default function OperatorsPage() {
                 type="button"
                 variant="outline"
                 onClick={() => setShowInactive((prev) => !prev)}
-                className={`rounded-lg border-border ${
+                className={`w-full sm:w-auto rounded-lg border-border ${
                   showInactive
                     ? 'bg-amber-500/15 text-amber-700 dark:text-amber-200 hover:bg-amber-500/20'
                     : 'bg-white dark:bg-slate-800/50 text-body hover:bg-slate-100 dark:hover:bg-slate-700/50'
@@ -698,7 +698,7 @@ export default function OperatorsPage() {
                 <Button
                   onClick={handleBulkDelete}
                   variant="outline"
-                  className="border-rose-500/30 text-rose-400 hover:bg-rose-500/10"
+                  className="w-full sm:w-auto border-rose-500/30 text-rose-400 hover:bg-rose-500/10"
                 >
                   <Trash2 className="w-4 h-4 mr-2" />
                   Удалить выбранные ({selectedOperators.size})
@@ -964,8 +964,8 @@ export default function OperatorsPage() {
           </Card>
 
           {/* Быстрая статистика */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className="p-4 bg-white dark:bg-slate-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4">
+            <Card className="p-3 sm:p-4 bg-white dark:bg-slate-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-emerald-500/20">
                   <Users2 className="w-4 h-4 text-emerald-400" />
@@ -977,7 +977,7 @@ export default function OperatorsPage() {
               </div>
             </Card>
 
-            <Card className="p-4 bg-white dark:bg-slate-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
+            <Card className="p-3 sm:p-4 bg-white dark:bg-slate-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-blue-500/20">
                   <Briefcase className="w-4 h-4 text-blue-400" />
@@ -989,7 +989,7 @@ export default function OperatorsPage() {
               </div>
             </Card>
 
-            <Card className="p-4 bg-white dark:bg-slate-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
+            <Card className="p-3 sm:p-4 bg-white dark:bg-slate-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-amber-500/20">
                   <User className="w-4 h-4 text-amber-400" />

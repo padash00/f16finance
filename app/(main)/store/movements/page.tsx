@@ -281,7 +281,7 @@ function StoreMovementsPageContent({ embedded = false }: { embedded?: boolean } 
           <Input value={queryInput} onChange={(event) => setQueryInput(event.target.value)} placeholder="Поиск по товару, точке, штрихкоду или комментарию" className="h-9 pl-9" />
         </div>
         <Select value={filters.type} onValueChange={(value) => setFilters({ type: value })}>
-          <SelectTrigger className="h-9 w-[180px]"><SelectValue placeholder="Все операции" /></SelectTrigger>
+          <SelectTrigger className="h-9 w-full sm:w-[180px]"><SelectValue placeholder="Все операции" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Все операции</SelectItem>
             <SelectItem value="receipt">Приемка</SelectItem>
@@ -294,7 +294,7 @@ function StoreMovementsPageContent({ embedded = false }: { embedded?: boolean } 
           </SelectContent>
         </Select>
         <Select value={filters.place} onValueChange={(value) => setFilters({ place: value })}>
-          <SelectTrigger className="h-9 w-[200px]"><SelectValue placeholder="Все места" /></SelectTrigger>
+          <SelectTrigger className="h-9 w-full sm:w-[200px]"><SelectValue placeholder="Все места" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Все места</SelectItem>
             <SelectItem value="warehouse">В подсобке</SelectItem>

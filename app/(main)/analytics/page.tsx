@@ -236,7 +236,7 @@ export default function AnalyticsPage() {
       ) : (
         <>
           {/* KPI */}
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+          <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 lg:grid-cols-6">
             <Card className="border-border bg-white dark:bg-white/[0.03] p-3">
               <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Выручка</p>
               <p className="mt-1 text-xl font-semibold tabular-nums text-emerald-700 dark:text-emerald-200">{fmt(totals.revenue)} ₸</p>
@@ -275,8 +275,8 @@ export default function AnalyticsPage() {
           </div>
 
           {/* Чарт: выручка по месяцам + прошлый год */}
-          <Card className="border-border bg-card/70 p-5">
-            <div className="mb-3 flex items-center justify-between">
+          <Card className="border-border bg-card/70 p-4 sm:p-5">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-sm font-semibold">Выручка по месяцам</h2>
               <span className="text-xs text-muted-foreground">Сравнение с {year - 1}</span>
             </div>
@@ -300,7 +300,7 @@ export default function AnalyticsPage() {
 
           {/* Чарт: способы оплаты + прибыль */}
           <div className="grid gap-4 lg:grid-cols-2">
-            <Card className="border-border bg-card/70 p-5">
+            <Card className="border-border bg-card/70 min-w-0 p-4 sm:p-5">
               <h2 className="mb-3 text-sm font-semibold">Способы оплаты по месяцам</h2>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
@@ -320,7 +320,7 @@ export default function AnalyticsPage() {
               </div>
             </Card>
 
-            <Card className="border-border bg-card/70 p-5">
+            <Card className="border-border bg-card/70 min-w-0 p-4 sm:p-5">
               <h2 className="mb-3 text-sm font-semibold">Прибыль и расходы</h2>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
@@ -346,8 +346,8 @@ export default function AnalyticsPage() {
             <div className="border-b border-border px-5 py-3">
               <h2 className="text-sm font-semibold">Выручка по точкам · {year}</h2>
             </div>
-            <div className="overflow-auto">
-              <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[720px] text-sm">
                 <thead className="sticky top-0 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur">
                   <tr className="border-b border-slate-200 dark:border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
                     <th className="w-32 py-2.5 px-4 font-normal">Месяц</th>
@@ -406,9 +406,9 @@ export default function AnalyticsPage() {
           </Card>
 
           {/* Маржа по месяцам */}
-          <Card className="border-border bg-card/70 p-5">
+          <Card className="border-border bg-card/70 p-4 sm:p-5">
             <h2 className="mb-3 text-sm font-semibold">Маржа по месяцам</h2>
-            <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
               {months.map((m) => {
                 const pct = m.margin_pct
                 const positive = pct >= 0

@@ -76,7 +76,7 @@ export default function StoreExpiryPage({ embedded = false }: { embedded?: boole
             className={`rounded-xl border p-3 text-left transition ${filter === c.key ? 'border-emerald-400/40 bg-emerald-500/[0.06]' : 'border-border bg-white dark:bg-white/[0.02] hover:border-slate-300 dark:hover:border-white/20'}`}
           >
             <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{c.label}</div>
-            <div className={`mt-1 font-mono text-2xl font-semibold tabular-nums ${c.cls}`}>{c.value}</div>
+            <div className={`mt-1 font-mono text-xl font-semibold tabular-nums sm:text-2xl ${c.cls}`}>{c.value}</div>
           </button>
         ))}
       </div>
@@ -92,7 +92,7 @@ export default function StoreExpiryPage({ embedded = false }: { embedded?: boole
               {filter === 'all' ? 'Партий со сроком годности пока нет. Срок указывается при приёмке/оприходовании.' : 'Ничего не найдено по фильтру.'}
             </div>
           ) : (
-            <div className="overflow-auto">
+            <div className="overflow-x-auto">
               <table className="w-full min-w-[760px] text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 dark:border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">

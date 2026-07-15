@@ -990,7 +990,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
       })()}
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3">
         <Card className="border-border bg-white dark:bg-white/[0.03] p-3">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Документов</p>
           {loading ? <Skeleton className="mt-1 h-7 w-14" /> : (
@@ -1227,9 +1227,9 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                     }
                   }}
                   placeholder="Сканируй штрихкод или введи название товара"
-                  className="min-w-[260px] flex-1"
+                  className="w-full min-w-0 flex-1 sm:w-auto sm:min-w-[260px]"
                 />
-                <Button type="button" onClick={handleQuickAdd}>
+                <Button type="button" onClick={handleQuickAdd} className="w-full sm:w-auto">
                   Добавить товар
                 </Button>
               </div>
@@ -1292,7 +1292,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
               {showTemplatesTools ? (
                 <>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <Input value={templateName} onChange={(e) => setTemplateName(e.target.value)} placeholder="Название шаблона" className="min-w-[220px] flex-1" />
+                    <Input value={templateName} onChange={(e) => setTemplateName(e.target.value)} placeholder="Название шаблона" className="w-full min-w-0 flex-1 sm:w-auto sm:min-w-[220px]" />
                     {canSaveTemplate && (
                       <Button type="button" variant="outline" onClick={saveTemplate}>Сохранить шаблон</Button>
                     )}
@@ -1648,10 +1648,10 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <Button type="button" variant="outline" onClick={addLine}>
+              <Button type="button" variant="outline" onClick={addLine} className="w-full sm:w-auto">
                 Добавить строку
               </Button>
-              <div className="rounded-2xl border border-border bg-slate-50 dark:bg-black/20 px-4 py-3 text-right">
+              <div className="w-full rounded-2xl border border-border bg-slate-50 dark:bg-black/20 px-4 py-3 text-right sm:w-auto">
                 {returnTotal > 0 ? (
                   <>
                     <div className="flex justify-end gap-4 text-xs text-muted-foreground">

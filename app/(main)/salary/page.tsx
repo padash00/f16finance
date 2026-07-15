@@ -1128,7 +1128,7 @@ export default function SalaryPage() {
             }
             toolbar={
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex rounded-xl border border-border bg-slate-100 dark:bg-black/20 p-0.5" role="tablist" aria-label="Раздел зарплаты">
+                <div className="flex flex-wrap rounded-xl border border-border bg-slate-100 dark:bg-black/20 p-0.5" role="tablist" aria-label="Раздел зарплаты">
                   <button
                     type="button"
                     role="tab"
@@ -1199,7 +1199,7 @@ export default function SalaryPage() {
           {/* ── OPERATORS TAB ───────────────────────────────────────────────── */}
           {tab === 'operators' && (<>
 
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-5">
             <Card className="border-border bg-white dark:bg-white/[0.04] p-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-violet-500/15 p-2 text-violet-700 dark:text-violet-300"><CalendarDays className="h-4 w-4" /></div><div><div className="text-[11px] uppercase tracking-wide text-slate-500">Смен</div><div className="mt-0.5 text-xl font-semibold text-foreground">{loading ? '—' : totalShifts}</div></div></div></Card>
             <Card className="border-border bg-white dark:bg-white/[0.04] p-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-emerald-500/15 p-2 text-emerald-700 dark:text-emerald-300"><DollarSign className="h-4 w-4" /></div><div><div className="text-[11px] uppercase tracking-wide text-slate-500">К выплате</div><div className="mt-0.5 text-xl font-semibold text-foreground">{data ? money(data.totals.netAmount) : '—'}</div></div></div></Card>
             <Card className="border-border bg-white dark:bg-white/[0.04] p-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-blue-500/15 p-2 text-blue-700 dark:text-blue-300"><CheckCircle2 className="h-4 w-4" /></div><div><div className="text-[11px] uppercase tracking-wide text-slate-500">Выплачено</div><div className="mt-0.5 text-xl font-semibold text-foreground">{data ? money(data.totals.paidAmount) : '—'}</div></div></div></Card>
@@ -1210,7 +1210,7 @@ export default function SalaryPage() {
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-white dark:bg-white/[0.04] px-4 py-3 text-sm text-body">
             <div className="min-w-0 flex-1 text-xs">{summaryText}</div>
             <div className="flex flex-wrap items-center gap-2">
-              <div className="flex rounded-xl border border-border bg-slate-100 dark:bg-black/20 p-0.5 text-xs">
+              <div className="flex flex-wrap rounded-xl border border-border bg-slate-100 dark:bg-black/20 p-0.5 text-xs">
                 {(['all', 'draft', 'partial', 'paid'] as const).map((s) => (
                   <button key={s} type="button" onClick={() => setStatusFilter(s)} className={`rounded-lg px-3 py-1.5 transition ${statusFilter === s ? 'bg-white dark:bg-white/10 text-foreground' : 'text-muted-foreground hover:text-slate-700 dark:hover:text-slate-200'}`}>
                     {s === 'all' ? 'Все' : s === 'draft' ? 'Не выплачено' : s === 'partial' ? 'Частично' : 'Выплачено'}
@@ -1372,7 +1372,7 @@ export default function SalaryPage() {
           {/* ── OPERATOR EVENTS TAB ─────────────────────────────────────────── */}
           {tab === 'operator-events' && (
             <Card className="overflow-hidden border-border bg-white dark:bg-white/[0.04]">
-              <div className="flex items-center justify-between gap-4 border-b border-border p-5">
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border p-5">
                 <div className="flex items-center gap-3">
                   <div className="rounded-2xl bg-blue-500/15 p-3 text-blue-700 dark:text-blue-300">
                     <CalendarDays className="h-5 w-5" />
@@ -1570,7 +1570,7 @@ export default function SalaryPage() {
           {/* ── STAFF TAB ───────────────────────────────────────────────────── */}
           {tab === 'staff' && canViewStaffSalary && (
           <Card className="overflow-hidden border-border bg-white dark:bg-white/[0.04]">
-            <div className="flex items-center justify-between gap-4 border-b border-border p-5">
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border p-5">
               <div className="flex items-center gap-3">
                 <div className="rounded-2xl bg-violet-500/15 p-3 text-violet-700 dark:text-violet-300"><Users className="h-5 w-5" /></div>
                 <div>
@@ -1617,7 +1617,7 @@ export default function SalaryPage() {
                       </div>
                       <Skeleton className="h-9 w-28 rounded-xl" />
                     </div>
-                    <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                    <div className="mt-4 grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-5">
                       {Array.from({ length: 5 }).map((__, i) => (
                         <Skeleton key={i} className="h-16 rounded-2xl" />
                       ))}
@@ -1713,7 +1713,7 @@ export default function SalaryPage() {
                       {isMonthClosed ? (
                         <div className="mt-2 text-xs text-amber-700 dark:text-amber-300">Месяц закрыт: оба слота выплаты уже проведены. Следующая выплата доступна в следующем месяце.</div>
                       ) : null}
-                      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                      <div className="mt-4 grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-5">
                         <div className="rounded-2xl border border-border bg-white dark:bg-white/[0.03] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-slate-500">Пол-оклада</div><div className="mt-1 text-sm font-semibold text-foreground">{money(calc.half)}</div></div>
                         <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-emerald-700 dark:text-emerald-400/70">Бонусы</div><div className="mt-1 text-sm font-semibold text-emerald-700 dark:text-emerald-300">+{money(calc.bonuses)}</div></div>
                         <div className="rounded-2xl border border-rose-500/20 bg-rose-500/[0.06] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-rose-700 dark:text-rose-400/70">Штрафы / долги</div><div className="mt-1 text-sm font-semibold text-rose-700 dark:text-rose-300">−{money(calc.fines + calc.debts)}</div></div>
@@ -1775,7 +1775,7 @@ export default function SalaryPage() {
                           <div className="mb-1 text-xs text-slate-500">Последние выплаты:</div>
                           <div className="flex flex-wrap gap-2">
                             {recentPaymentDetails.map(({ payment, closedAdjustments, generatedAdjustments, closingWindow }) => (
-                              <div key={payment.id} className="min-w-[260px] rounded-xl border border-border bg-white dark:bg-white/[0.03] px-3 py-2 text-xs text-body">
+                              <div key={payment.id} className="min-w-[260px] max-w-full rounded-xl border border-border bg-white dark:bg-white/[0.03] px-3 py-2 text-xs text-body">
                                 <div className="flex items-center justify-between gap-2">
                                   <span>{payment.pay_date} · {money(payment.amount)} · {staffPaymentSlotLabel(payment.slot)}</span>
                                   {canEditStaffSalary ? (
@@ -1829,7 +1829,7 @@ export default function SalaryPage() {
           {/* ── EVENTS TAB ─────────────────────────────────────────────────── */}
           {tab === 'events' && (
             <Card className="overflow-hidden border-border bg-white dark:bg-white/[0.04]">
-              <div className="flex items-center justify-between gap-4 border-b border-border p-5">
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border p-5">
                 <div className="flex items-center gap-3">
                   <div className="rounded-2xl bg-cyan-500/15 p-3 text-cyan-700 dark:text-cyan-300">
                     <CalendarDays className="h-5 w-5" />

@@ -826,7 +826,7 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
               </div>
             ) : null}
             <div className={refreshing ? 'pointer-events-none opacity-50' : undefined}>
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[900px] text-sm">
               <thead className="sticky top-0 z-10 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur">
                 <tr className="border-b border-slate-200 dark:border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
                   <th className="w-24 py-2.5 pl-4 pr-2 font-normal">Дата</th>
@@ -943,7 +943,7 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
           }
         }}
       >
-        <DialogContent className="flex h-[90vh] !w-[96vw] !max-w-[96vw] sm:!max-w-[1400px] flex-col gap-0 overflow-hidden p-0">
+        <DialogContent className="flex h-[90dvh] max-h-[90dvh] !w-[96vw] !max-w-[96vw] sm:!max-w-[1400px] flex-col gap-0 overflow-hidden p-0">
           <DialogHeader className="border-b border-border p-5 text-left">
             <DialogTitle className="flex items-center gap-2">
               <ClipboardCheck className="h-5 w-5 text-amber-600 dark:text-amber-300" />
@@ -1097,17 +1097,17 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
                     }
                   }}
                   placeholder="Сканируйте или введите штрихкод и нажмите Enter"
-                  className="h-11 flex-1 text-base"
+                  className="h-11 min-w-0 flex-1 text-base"
                   autoComplete="off"
                   disabled={!locationId}
                 />
-                <Button type="button" variant="outline" className="h-11" onClick={handleScan} disabled={!locationId}>
+                <Button type="button" variant="outline" className="h-11 w-full sm:w-auto" onClick={handleScan} disabled={!locationId}>
                   Добавить +1
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-11"
+                  className="h-11 w-full sm:w-auto"
                   onClick={loadFromBalances}
                   disabled={!locationId || !selectedBalances.length}
                 >
@@ -1298,8 +1298,8 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
       </Dialog>
 
       <Dialog open={revisionDetailsOpen} onOpenChange={setRevisionDetailsOpen}>
-        <DialogContent className="flex h-[85vh] !w-[92vw] !max-w-[92vw] sm:!max-w-[1200px] flex-col gap-0 overflow-hidden p-0">
-          <DialogHeader className="flex flex-row items-start justify-between gap-3 border-b border-border p-5 text-left">
+        <DialogContent className="flex h-[85dvh] max-h-[85dvh] !w-[92vw] !max-w-[92vw] sm:!max-w-[1200px] flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="flex flex-row flex-wrap items-start justify-between gap-3 border-b border-border p-4 text-left sm:p-5">
             <div className="space-y-1">
               <DialogTitle>Детали ревизии</DialogTitle>
               <DialogDescription>
@@ -1330,8 +1330,8 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
                     <span> · Комментарий: <span className="text-foreground">{selectedRevision.comment}</span></span>
                   ) : null}
                 </div>
-                <div className="overflow-auto rounded-xl border border-border">
-                  <table className="w-full table-fixed text-sm">
+                <div className="overflow-x-auto rounded-xl border border-border">
+                  <table className="w-full min-w-[640px] table-fixed text-sm">
                     <thead className="bg-surface-muted">
                       <tr className="text-left text-xs text-muted-foreground">
                         <th className="px-3 py-2 font-normal">Товар</th>

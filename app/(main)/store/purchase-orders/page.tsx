@@ -337,7 +337,7 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
       {createOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => { if (!saving) setCreateOpen(false) }}>
           <div
-            className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl border border-border bg-white dark:bg-slate-950/95 p-6 text-foreground shadow-2xl"
+            className="w-full max-w-2xl max-h-[90dvh] overflow-y-auto rounded-3xl border border-border bg-white dark:bg-slate-950/95 p-4 sm:p-6 text-foreground shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between">
@@ -362,7 +362,7 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
               <div className="space-y-2">
                 <Label>Позиции</Label>
                 {formLines.map((line, index) => (
-                  <div key={index} className="grid grid-cols-[minmax(0,1fr)_120px_auto] gap-2">
+                  <div key={index} className="grid grid-cols-[minmax(0,1fr)_80px_auto] gap-2 sm:grid-cols-[minmax(0,1fr)_120px_auto]">
                     <Select
                       value={line.item_id || `__none__${index}`}
                       onValueChange={(v) =>
@@ -420,13 +420,13 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
       {detail ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => { if (!statusBusy) setDetail(null) }}>
           <div
-            className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl border border-border bg-white dark:bg-slate-950/95 p-6 text-foreground shadow-2xl"
+            className="w-full max-w-2xl max-h-[90dvh] overflow-y-auto rounded-3xl border border-border bg-white dark:bg-slate-950/95 p-4 sm:p-6 text-foreground shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between">
               <div>
                 <h2 className="text-lg font-semibold">{detail.supplier?.organization_name || detail.supplier?.name || 'Заявка'}</h2>
-                <div className="flex items-center gap-2 mt-1">
+                <div className="flex flex-wrap items-center gap-2 mt-1">
                   <span className={`text-[10px] px-2 py-0.5 rounded-full border ${STATUS_META[detail.status].cls}`}>
                     {STATUS_META[detail.status].label}
                   </span>
@@ -454,8 +454,8 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
               <p className="mt-2 text-sm text-rose-600 dark:text-rose-300">Причина отмены: {detail.cancel_reason}</p>
             ) : null}
 
-            <div className="mt-4 overflow-auto rounded-xl border border-border">
-              <table className="w-full text-sm">
+            <div className="mt-4 overflow-x-auto rounded-xl border border-border">
+              <table className="w-full min-w-[420px] text-sm">
                 <thead className="bg-surface-muted text-xs text-muted-foreground">
                   <tr className="text-left">
                     <th className="px-3 py-2 font-normal">Товар</th>

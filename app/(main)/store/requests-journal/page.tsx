@@ -392,7 +392,7 @@ function StoreRequestsJournalPageContent({ embedded = false }: { embedded?: bool
         )
         const hdrToolbar = (
           <div className="flex flex-wrap items-center gap-2">
-            <div className="relative min-w-0 flex-1 sm:max-w-md">
+            <div className="relative w-full min-w-0 flex-1 sm:w-auto sm:max-w-md">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={searchInput}
@@ -402,7 +402,7 @@ function StoreRequestsJournalPageContent({ embedded = false }: { embedded?: bool
               />
             </div>
             <Select value={filters.status} onValueChange={(value) => setFilters({ status: value })}>
-              <SelectTrigger className="h-9 w-[200px]"><SelectValue placeholder="Все статусы" /></SelectTrigger>
+              <SelectTrigger className="h-9 w-full sm:w-[200px]"><SelectValue placeholder="Все статусы" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Все статусы</SelectItem>
                 <SelectItem value="new">Новая</SelectItem>
@@ -418,10 +418,12 @@ function StoreRequestsJournalPageContent({ embedded = false }: { embedded?: bool
               value={filters.actor}
               onChange={(event) => setFilters({ actor: event.target.value })}
               placeholder="Кто создавал/одобрял"
-              className="h-9 w-[220px]"
+              className="h-9 w-full sm:w-[220px]"
             />
-            <DatePicker value={filters.from} onChange={(v) => setFilters({ from: v })} className="w-[150px]" />
-            <DatePicker value={filters.to} onChange={(v) => setFilters({ to: v })} className="w-[150px]" />
+            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
+              <DatePicker value={filters.from} onChange={(v) => setFilters({ from: v })} className="w-full sm:w-[150px]" />
+              <DatePicker value={filters.to} onChange={(v) => setFilters({ to: v })} className="w-full sm:w-[150px]" />
+            </div>
             <Button
               variant="outline"
               size="sm"
@@ -454,7 +456,7 @@ function StoreRequestsJournalPageContent({ embedded = false }: { embedded?: bool
       })()}
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-3 md:grid-cols-6">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3 md:grid-cols-6">
         <Card className="border-slate-200 bg-white dark:border-white/10 dark:bg-white/[0.03] p-3">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Всего</p>
           {loading ? <Skeleton className="mt-1 h-7 w-10" /> : <p className="mt-1 text-xl font-semibold">{stats.total}</p>}

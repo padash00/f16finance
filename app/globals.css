@@ -366,6 +366,23 @@
   padding-top: 4rem;
 }
 
+/* Мобильный портал: таблицы скроллятся пальцем вбок, а не разъезжают страницу;
+   поля ввода не мельче 16px — иначе iOS приближает экран при фокусе. */
+@media (max-width: 767px) {
+  .app-main table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: max(16px, 1em);
+  }
+}
+
 .app-page {
   width: 100%;
   margin-inline: auto;

@@ -611,7 +611,7 @@ export default function StaffPageSmart() {
 
           {/* Filters */}
           <div className="flex flex-wrap items-center gap-2">
-            <div className="relative flex-1 min-w-[200px] max-w-xs">
+            <div className="relative w-full sm:flex-1 sm:min-w-[200px] sm:max-w-xs">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
               <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Поиск..." className="w-full pl-9 pr-8 h-9 bg-white dark:bg-white/5 border border-border rounded-xl text-sm text-foreground placeholder-slate-500 focus:outline-none focus:border-emerald-500/50" />
               {searchTerm && <button onClick={() => setSearchTerm('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-900 dark:hover:text-white"><X className="w-4 h-4" /></button>}
@@ -631,7 +631,7 @@ export default function StaffPageSmart() {
           {/* Main Table */}
           <Card className="overflow-hidden border-border bg-white dark:bg-white/[0.04] p-0">
             <AdminTableViewport maxHeight="min(70vh, 40rem)" className="rounded-none border-0 bg-transparent">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[640px] text-sm">
                 <thead className={adminTableStickyTheadClass}>
                   <tr className="border-b border-slate-200 dark:border-white/5">
                     <th className="py-4 px-4 text-left text-xs font-medium text-muted-foreground">Сотрудник</th>
@@ -890,7 +890,7 @@ function AddPaymentDialog({ isOpen, onClose, staff, paidSoFar, dateDefault, onSu
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-card border-border text-foreground sm:max-w-md">
+      <DialogContent className="bg-card border-border text-foreground sm:max-w-md max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl flex items-center gap-2">
             <div className={cn(

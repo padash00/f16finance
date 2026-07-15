@@ -445,7 +445,7 @@ export default function PerformancePage() {
         backHref="/"
         actions={
           <>
-            <div className="flex items-center gap-1 bg-slate-100 dark:bg-zinc-900/50 p-1 rounded-xl border border-border">
+            <div className="flex flex-wrap max-w-full items-center gap-1 bg-slate-100 dark:bg-zinc-900/50 p-1 rounded-xl border border-border">
               {(Object.keys(PERIOD_PRESETS) as PeriodPreset[]).map((p) => (
                 <button
                   key={p}
@@ -519,13 +519,13 @@ export default function PerformancePage() {
 
             {/* Поиск · сортировка · бонус · экспорт */}
             <div className="flex flex-wrap items-center gap-2">
-              <div className="relative">
+              <div className="relative w-full sm:w-auto">
                 <Search className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Поиск оператора…"
-                  className="w-44 bg-slate-100 dark:bg-zinc-900/50 border border-border rounded-xl pl-8 pr-3 py-1.5 text-xs text-foreground placeholder:text-slate-400 outline-none focus:border-violet-400"
+                  className="w-full sm:w-44 bg-slate-100 dark:bg-zinc-900/50 border border-border rounded-xl pl-8 pr-3 py-1.5 text-xs text-foreground placeholder:text-slate-400 outline-none focus:border-violet-400"
                 />
               </div>
               <select
@@ -576,7 +576,7 @@ export default function PerformancePage() {
 
       {/* Сводка */}
       {summary && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
           <SummaryCard
             icon={<Users className="w-4 h-4" />}
             label="Средний PI команды"
@@ -791,8 +791,8 @@ export default function PerformancePage() {
                       : 'border-border bg-slate-50 dark:bg-gray-900/60 hover:border-emerald-400/30'
                   }`}
                 >
-                  <div className="flex items-center gap-4">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center">
+                  <div className="flex items-center gap-3 sm:gap-4">
+                    <div className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center">
                       {sortBy === 'pi' && !q ? rankBadge(i + 1) : <span className="text-xs font-mono text-muted-foreground">#{i + 1}</span>}
                     </div>
                     <div className="min-w-0 flex-1">
@@ -819,9 +819,9 @@ export default function PerformancePage() {
                       </div>
                       <div className="mt-2 max-w-[260px]"><PiBar pi={op.pi} /></div>
                     </div>
-                    <div className="flex items-center gap-3 shrink-0">
+                    <div className="flex flex-col items-end gap-1 shrink-0 sm:flex-row sm:items-center sm:gap-3">
                       <div className="text-right">
-                        <div className={`text-2xl font-bold ${c.text} tabular-nums`}>{op.pi.toFixed(2)}</div>
+                        <div className={`text-xl sm:text-2xl font-bold ${c.text} tabular-nums`}>{op.pi.toFixed(2)}</div>
                         <div className="flex items-center justify-end gap-1.5">
                           <span className="text-[10px] text-slate-500 uppercase tracking-wide">PI</span>
                           <DeltaBadge pi={op.pi} prev={prevPi[op.operator_id]} />
@@ -1003,8 +1003,8 @@ function OperatorDetailModal({
               </div>
             )}
           </div>
-          <div className="overflow-hidden rounded-xl border border-border">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto rounded-xl border border-border">
+            <table className="w-full min-w-[520px] text-sm">
               <thead>
                 <tr className="border-b border-border bg-surface-muted text-[11px] uppercase tracking-wide text-muted-foreground">
                   <th className="px-3 py-2 text-left font-medium">Дата</th>

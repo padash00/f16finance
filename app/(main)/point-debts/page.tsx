@@ -379,13 +379,13 @@ export default function PointDebtsPage() {
                 {formatRuDate(weekStart)} — {formatRuDate(weekEnd)}
               </span>
             </span>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
               <label htmlFor="point-debts-company" className="text-slate-500">
                 Компания:
               </label>
               <select
                 id="point-debts-company"
-                className="h-9 min-w-[200px] rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:border-amber-400/40 focus:outline-none focus:ring-1 focus:ring-amber-400/30 dark:[color-scheme:dark]"
+                className="h-9 w-full sm:w-auto sm:min-w-[200px] rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:border-amber-400/40 focus:outline-none focus:ring-1 focus:ring-amber-400/30 dark:[color-scheme:dark]"
                 value={companyId}
                 onChange={(e) => setCompanyId(e.target.value)}
               >
@@ -401,10 +401,10 @@ export default function PointDebtsPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Поиск: должник, товар, комментарий..."
-              className="h-9 min-w-[240px] rounded-xl border border-border bg-card px-3 text-sm text-foreground placeholder:text-slate-500 focus:border-amber-400/40 focus:outline-none focus:ring-1 focus:ring-amber-400/30"
+              className="h-9 w-full sm:w-auto sm:min-w-[240px] sm:max-w-xs rounded-xl border border-border bg-card px-3 text-sm text-foreground placeholder:text-slate-500 focus:border-amber-400/40 focus:outline-none focus:ring-1 focus:ring-amber-400/30"
             />
             <select
-              className="h-9 min-w-[200px] rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:border-amber-400/40 focus:outline-none focus:ring-1 focus:ring-amber-400/30 dark:[color-scheme:dark]"
+              className="h-9 w-full sm:w-auto sm:min-w-[200px] rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:border-amber-400/40 focus:outline-none focus:ring-1 focus:ring-amber-400/30 dark:[color-scheme:dark]"
               value={debtorFilter}
               onChange={(e) => setDebtorFilter(e.target.value)}
             >

@@ -1401,7 +1401,7 @@ export default function ExpensesPage() {
           />
 
           {/* Tabs */}
-          <div className="flex gap-2 p-1 bg-white dark:bg-gray-800/50 rounded-xl w-fit border border-slate-200 dark:border-gray-700">
+          <div className="flex flex-wrap gap-2 p-1 bg-white dark:bg-gray-800/50 rounded-xl w-fit max-w-full border border-slate-200 dark:border-gray-700">
             <TabButton active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} icon={<Activity className="w-4 h-4" />} label="Обзор" />
             <TabButton active={activeTab === 'analytics'} onClick={() => setActiveTab('analytics')} icon={<BarChart3 className="w-4 h-4" />} label="Аналитика" />
             <TabButton active={activeTab === 'list'} onClick={() => setActiveTab('list')} icon={<Clock className="w-4 h-4" />} label="Список" />
@@ -1740,7 +1740,7 @@ function OverviewTab({ analytics, trendIcon, rows, companyName, extraCompanyId, 
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4">
         <MetricCard
           label="Всего расходов"
           value={analytics.total}
@@ -2299,14 +2299,14 @@ function ListTab({
 
 function MetricCard({ label, value, icon, color, trend, trendIcon, percentage }: any) {
   return (
-    <Card className="p-4 border-0 bg-white dark:bg-gray-800/50 backdrop-blur-sm hover:bg-slate-50 dark:hover:bg-gray-800/80 transition-colors">
+    <Card className="p-3 sm:p-4 border-0 bg-white dark:bg-gray-800/50 backdrop-blur-sm hover:bg-slate-50 dark:hover:bg-gray-800/80 transition-colors">
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs text-slate-500 dark:text-gray-400 uppercase tracking-wide">{label}</span>
         <div className={`p-2 rounded-xl bg-gradient-to-br ${color} bg-opacity-20`}>
           {icon}
         </div>
       </div>
-      <div className="text-xl font-bold text-foreground mb-1">{Formatters.moneyDetailed(value)}</div>
+      <div className="text-lg sm:text-xl font-bold text-foreground mb-1">{Formatters.moneyDetailed(value)}</div>
       {percentage !== undefined && (
         <div className="text-xs text-gray-500">{percentage.toFixed(1)}% от общего</div>
       )}
@@ -2338,7 +2338,7 @@ function ExpenseRowCompact({ row, companyName, isExtra }: any) {
         </div>
       </div>
 
-      <div className="flex items-center gap-4 text-xs">
+      <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-4 text-xs">
         {row.cash_amount > 0 && <span className="text-amber-400 font-mono">{Formatters.moneyDetailed(row.cash_amount)}</span>}
         {row.kaspi_amount > 0 && <span className="text-red-400 font-mono">{Formatters.moneyDetailed(row.kaspi_amount)}</span>}
         <span className="text-sm font-bold text-red-500 font-mono min-w-[80px] text-right">{Formatters.moneyDetailed(total)}</span>

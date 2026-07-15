@@ -469,8 +469,8 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
                 const it = itemById.get(line.item_id)
                 return (
                   <div key={line.key} className="rounded-lg border border-border bg-slate-50 dark:bg-white/[0.02] p-3 space-y-2">
-                    <div className="grid gap-2 sm:grid-cols-12">
-                      <div className="sm:col-span-4">
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-12">
+                      <div className="col-span-2 sm:col-span-4">
                         <Label className="mb-1 block text-[10px] text-muted-foreground">Товар</Label>
                         <Input
                           placeholder="Поиск по названию или штрихкоду…"
@@ -583,7 +583,7 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
                         />
                       </div>
                     </div>
-                    <div className="grid gap-2 sm:grid-cols-12">
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-12">
                       {line.item_id ? (
                         <>
                           <div className="sm:col-span-2">
@@ -598,7 +598,7 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
                           </div>
                         </>
                       ) : null}
-                      <div className={line.item_id ? 'sm:col-span-7' : 'sm:col-span-11'}>
+                      <div className={line.item_id ? 'col-span-2 sm:col-span-7' : 'col-span-2 sm:col-span-11'}>
                         <Label className="mb-1 block text-[10px] text-muted-foreground">Комментарий</Label>
                         <Input
                           placeholder="Например: излишек по ревизии"
@@ -606,7 +606,7 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
                           onChange={(e) => setLines((prev) => prev.map((l) => l.key === line.key ? { ...l, comment: e.target.value } : l))}
                         />
                       </div>
-                      <div className="flex items-end justify-end sm:col-span-1">
+                      <div className="col-span-2 flex items-end justify-end sm:col-span-1">
                         <Button
                           type="button"
                           variant="ghost"
@@ -618,7 +618,7 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
                         </Button>
                       </div>
                       {line.item_id && it?.requires_expiry === false ? (
-                        <div className="sm:col-span-12"><span className="text-[11px] text-muted-foreground">Товар без срока годности (бургеры/хотдоги и пр.)</span></div>
+                        <div className="col-span-2 sm:col-span-12"><span className="text-[11px] text-muted-foreground">Товар без срока годности (бургеры/хотдоги и пр.)</span></div>
                       ) : null}
                     </div>
                   </div>
@@ -631,7 +631,7 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
           {success && <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">{success}</div>}
 
           <div className="flex justify-end">
-            <Button type="button" onClick={openConfirm} disabled={saving || loading}>
+            <Button type="button" onClick={openConfirm} disabled={saving || loading} className="w-full sm:w-auto">
               {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Package className="h-3.5 w-3.5 mr-1" />}
               Оприходовать
             </Button>

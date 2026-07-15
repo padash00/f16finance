@@ -781,7 +781,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
       })()}
 
       {/* Stats strip */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-5">
         <Card className="border-border bg-white dark:bg-white/[0.03] p-3">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Позиций</p>
           <p className="mt-1 text-xl font-semibold">{balances.length}</p>
@@ -1387,7 +1387,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
       </Sheet>
 
       {deleteConfirm && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm overflow-y-auto"
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm overflow-y-auto p-4"
           onClick={(e) => { if (e.target === e.currentTarget) setDeleteConfirm(null) }}>
           <div className="w-full max-w-sm max-h-[calc(100vh-2rem)] overflow-y-auto rounded-2xl border border-border bg-white dark:bg-[#111827] p-6 shadow-2xl space-y-4">
             <div className="flex items-center gap-3">

@@ -554,7 +554,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
               </div>
             ) : null}
             <div className={refreshing ? 'pointer-events-none opacity-50' : undefined}>
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[680px] text-sm">
               <thead className="sticky top-0 z-10 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur">
                 <tr className="border-b border-slate-200 dark:border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
                   <th className="w-24 py-2.5 pl-4 pr-2 font-normal">Дата</th>
@@ -628,7 +628,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
 
       {/* Create writeoff dialog */}
       <Dialog open={formSheetOpen} onOpenChange={setFormSheetOpen}>
-        <DialogContent className="flex h-[90vh] !w-[96vw] !max-w-[96vw] sm:!max-w-[1300px] flex-col gap-0 overflow-hidden p-0">
+        <DialogContent className="flex h-[90dvh] max-h-[90dvh] !w-[96vw] !max-w-[96vw] sm:!max-w-[1300px] flex-col gap-0 overflow-hidden p-0">
           <DialogHeader className="border-b border-border p-5 text-left">
             <DialogTitle className="flex items-center gap-2">
               <ArchiveX className="h-5 w-5 text-rose-700 dark:text-rose-300" />
@@ -655,9 +655,9 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
                     }
                   }}
                   placeholder="Сканируй штрихкод или введи название товара"
-                  className="min-w-[260px] flex-1"
+                  className="min-w-0 flex-1 sm:min-w-[260px]"
                 />
-                <Button type="button" onClick={handleQuickAdd}>
+                <Button type="button" onClick={handleQuickAdd} className="w-full sm:w-auto">
                   Добавить товар
                 </Button>
               </div>
@@ -690,7 +690,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
             <div className="rounded-2xl border border-border bg-white dark:bg-white/[0.02] p-3">
               <p className="mb-2 text-xs uppercase tracking-[0.14em] text-muted-foreground">Шаблоны и экспорт</p>
               <div className="flex flex-wrap gap-2">
-                <Input value={templateName} onChange={(e) => setTemplateName(e.target.value)} placeholder="Название шаблона" className="min-w-[220px] flex-1" />
+                <Input value={templateName} onChange={(e) => setTemplateName(e.target.value)} placeholder="Название шаблона" className="min-w-0 flex-1 sm:min-w-[220px]" />
                 <Button type="button" variant="outline" onClick={saveTemplate}>Сохранить</Button>
                 <Button type="button" variant="outline" onClick={exportCsv}>Экспорт CSV</Button>
               </div>
@@ -817,7 +817,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
       </Dialog>
 
       <Dialog open={writeoffDetailsOpen} onOpenChange={setWriteoffDetailsOpen}>
-        <DialogContent className="flex h-[85vh] !w-[92vw] !max-w-[92vw] sm:!max-w-[1200px] flex-col gap-0 overflow-hidden p-0">
+        <DialogContent className="flex h-[85dvh] max-h-[85dvh] !w-[92vw] !max-w-[92vw] sm:!max-w-[1200px] flex-col gap-0 overflow-hidden p-0">
           <DialogHeader className="border-b border-border p-5 text-left">
             <DialogTitle>Детали списания</DialogTitle>
             <DialogDescription>
@@ -845,8 +845,8 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
                   ) : null}
                   <span> · Сумма: <span className="text-foreground">{formatMoney(Number(selectedWriteoff.total_amount || 0))}</span></span>
                 </div>
-                <div className="overflow-auto rounded-xl border border-border">
-                  <table className="w-full table-fixed text-sm">
+                <div className="overflow-x-auto rounded-xl border border-border">
+                  <table className="w-full min-w-[640px] table-fixed text-sm">
                     <thead className="bg-surface-muted">
                       <tr className="text-left text-xs text-muted-foreground">
                         <th className="px-3 py-2 font-normal">Товар</th>

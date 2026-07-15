@@ -975,12 +975,12 @@ function ShiftsPageContent() {
               icon={<Users className="h-5 w-5" aria-hidden />}
               actions={
                 <>
-                  <Card className="!flex-row !items-center !gap-0 shrink-0 self-start border-border bg-card !px-1 !py-1 neon-glow">
+                  <Card className="!flex-row !items-center !gap-0 flex-wrap max-w-full shrink-0 self-start border-border bg-card !px-1 !py-1 neon-glow">
                     <Button variant="ghost" size="icon" onClick={goToPrevWeek} aria-label="Предыдущая неделя">
                       <ChevronLeft className="h-5 w-5" />
                     </Button>
 
-                    <div className="min-w-[160px] px-4 text-center">
+                    <div className="min-w-[120px] px-2 sm:min-w-[160px] sm:px-4 text-center">
                       <div className="flex items-center justify-center gap-2 text-sm font-bold">
                         <CalendarDays className="h-4 w-4 text-accent" aria-hidden />
                         {weekRange}
@@ -1015,7 +1015,7 @@ function ShiftsPageContent() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="gap-2"
+                      className="gap-2 w-full sm:w-auto"
                       onClick={handleCopyPreviousWeek}
                       disabled={copyingWeek || loading}
                     >
@@ -1028,7 +1028,7 @@ function ShiftsPageContent() {
             />
           </div>
 
-          <div className="mb-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
+          <div className="mb-6 grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
             <Card className="border-emerald-500/20 bg-emerald-500/[0.05] p-3">
               <div className="text-[10px] uppercase tracking-widest text-emerald-700 dark:text-emerald-300/70">Заполнено</div>
               <div className="mt-1 text-xl font-semibold text-emerald-600 dark:text-emerald-300">

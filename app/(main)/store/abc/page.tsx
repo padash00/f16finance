@@ -326,7 +326,7 @@ export default function StoreAbcPage({ embedded = false }: { embedded?: boolean 
       {/* Slow-movers — мёртвый запас */}
       {slowMovers.length > 0 ? (
         <Card className="border-orange-500/25 bg-orange-500/[0.05] p-4">
-          <div className="mb-2 flex items-center gap-2">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
             <PackageX className="h-4 w-4 text-orange-700 dark:text-orange-300" />
             <h2 className="text-sm font-semibold text-orange-700 dark:text-orange-200">Мёртвый запас</h2>
             <span className="text-[11px] text-orange-700/70 dark:text-orange-200/70">
@@ -361,7 +361,8 @@ export default function StoreAbcPage({ embedded = false }: { embedded?: boolean 
             <h2 className="text-sm font-semibold text-foreground">Матрица ABC × XYZ</h2>
             <span className="text-[11px] text-muted-foreground">· XYZ = стабильность спроса</span>
           </div>
-          <div className="grid grid-cols-[80px_1fr_1fr_1fr] gap-1 text-xs">
+          <div className="overflow-x-auto">
+          <div className="grid min-w-[440px] grid-cols-[80px_1fr_1fr_1fr] gap-1 text-xs">
             <div></div>
             <div className="text-center font-semibold text-emerald-700 dark:text-emerald-300">X · стабильный</div>
             <div className="text-center font-semibold text-amber-700 dark:text-amber-300">Y · средний</div>
@@ -386,6 +387,7 @@ export default function StoreAbcPage({ embedded = false }: { embedded?: boolean 
                 })}
               </>
             ))}
+          </div>
           </div>
           <p className="mt-2 text-[10px] text-muted-foreground">
             <span className="text-emerald-700 dark:text-emerald-300">AX</span> = звёзды, всегда в наличии · <span className="text-rose-700 dark:text-rose-300">CZ</span> = кандидаты на удаление.
@@ -420,7 +422,7 @@ export default function StoreAbcPage({ embedded = false }: { embedded?: boolean 
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
-            className="h-9 rounded-lg border border-border bg-white dark:bg-white/[0.03] px-3 text-sm text-foreground outline-none"
+            className="h-9 w-full rounded-lg border border-border bg-white dark:bg-white/[0.03] px-3 text-sm text-foreground outline-none sm:w-auto"
           >
             <option value="all">Все категории</option>
             {categories.map((c) => (
