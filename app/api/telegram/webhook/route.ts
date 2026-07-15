@@ -936,18 +936,30 @@ async function clearCallbackButtons(chatId: string | number, messageId: number) 
 }
 
 async function loadTaskById(supabase: ReturnType<typeof createAdminSupabaseClient>, taskId: string) {
-  const { data, error } = await supabase.from('tasks').select('id, task_number, title, status, operator_id, created_by').eq('id', taskId).maybeSingle()
+  // select('*') — staff_id появляется миграцией, не падаем на старых базах
+  const { data, error } = await supabase.from('tasks').select('*').eq('id', taskId).maybeSingle()
   if (error) throw error
   return data
 }
 
+// Задача по номеру для ответившего: сперва ищем среди задач оператора,
+// затем среди задач админ-сотрудника с этим telegram_chat_id.
 async function loadTaskByNumberForOperator(supabase: ReturnType<typeof createAdminSupabaseClient>, taskNumber: number, telegramUserId: string) {
   const { data: operator, error: operatorError } = await supabase.from('operators').select('id').eq('telegram_chat_id', telegramUserId).maybeSingle()
   if (operatorError) throw operatorError
-  if (!operator?.id) return null
-  const { data, error } = await supabase.from('tasks').select('id, task_number, title, status, operator_id, created_by').eq('task_number', taskNumber).eq('operator_id', operator.id).maybeSingle()
-  if (error) throw error
-  return data
+  if (operator?.id) {
+    const { data, error } = await supabase.from('tasks').select('*').eq('task_number', taskNumber).eq('operator_id', operator.id).maybeSingle()
+    if (error) throw error
+    if (data) return data
+  }
+
+  const { data: staffRow } = await supabase.from('staff').select('id').eq('telegram_chat_id', telegramUserId).maybeSingle()
+  if (staffRow?.id) {
+    const { data, error } = await supabase.from('tasks').select('*').eq('task_number', taskNumber).eq('staff_id', staffRow.id).maybeSingle()
+    if (!error && data) return data
+  }
+
+  return null
 }
 
 async function processTaskResponse(params: {
@@ -959,16 +971,42 @@ async function processTaskResponse(params: {
 }) {
   const task = await loadTaskById(params.supabase, params.taskId)
   if (!task) throw new Error('Задача не найдена')
-  if (!task.operator_id) throw new Error('У задачи не назначен оператор')
 
-  const { data: operator, error: operatorError } = await params.supabase
-    .from('operators')
-    .select('id, name, short_name, telegram_chat_id, operator_profiles(*)')
-    .eq('id', task.operator_id)
-    .maybeSingle()
-  if (operatorError) throw operatorError
-  if (!operator) throw new Error('Оператор не найден')
-  if (String(operator.telegram_chat_id || '') !== String(params.telegramUserId)) throw new Error('Эта задача назначена другому сотруднику')
+  // Исполнитель — оператор или админ-сотрудник; отвечать может только он.
+  let responder: { kind: 'operator' | 'staff'; id: string; name: string; telegram_chat_id: string | null } | null = null
+
+  if (task.operator_id) {
+    const { data: operator, error: operatorError } = await params.supabase
+      .from('operators')
+      .select('id, name, short_name, telegram_chat_id, operator_profiles(*)')
+      .eq('id', task.operator_id)
+      .maybeSingle()
+    if (operatorError) throw operatorError
+    if (!operator) throw new Error('Оператор не найден')
+    responder = {
+      kind: 'operator',
+      id: String(operator.id),
+      name: getOperatorDisplayName(operator, 'Оператор'),
+      telegram_chat_id: operator.telegram_chat_id ? String(operator.telegram_chat_id) : null,
+    }
+  } else if (task.staff_id) {
+    const { data: staffRow, error: staffError } = await params.supabase
+      .from('staff')
+      .select('id, full_name, short_name, telegram_chat_id')
+      .eq('id', task.staff_id)
+      .maybeSingle()
+    if (staffError) throw staffError
+    if (!staffRow) throw new Error('Сотрудник не найден')
+    responder = {
+      kind: 'staff',
+      id: String(staffRow.id),
+      name: String(staffRow.full_name || staffRow.short_name || 'Сотрудник'),
+      telegram_chat_id: staffRow.telegram_chat_id ? String(staffRow.telegram_chat_id) : null,
+    }
+  }
+
+  if (!responder) throw new Error('У задачи не назначен исполнитель')
+  if (String(responder.telegram_chat_id || '') !== String(params.telegramUserId)) throw new Error('Эта задача назначена другому сотруднику')
 
   const config = RESPONSE_CONFIG[params.response]
   const payload = { status: config.status, completed_at: config.status === 'done' ? new Date().toISOString() : null }
@@ -978,11 +1016,12 @@ async function processTaskResponse(params: {
   const commentText = [config.emoji, config.comment, params.note?.trim() ? `Комментарий: ${params.note.trim()}` : ''].filter(Boolean).join(' ')
   let comment: { id: string } | null = null
 
-  const primaryInsert = await params.supabase.from('task_comments').insert([{ task_id: task.id, operator_id: operator.id, content: commentText }]).select('id').single()
+  const commentAuthor = responder.kind === 'operator' ? { operator_id: responder.id } : { staff_id: responder.id }
+  const primaryInsert = await params.supabase.from('task_comments').insert([{ task_id: task.id, ...commentAuthor, content: commentText }]).select('id').single()
   if (!primaryInsert.error) {
     comment = primaryInsert.data
   } else if (String(primaryInsert.error?.message || '').includes("Could not find the 'operator_id' column") || String(primaryInsert.error?.message || '').includes('schema cache')) {
-    const fallbackInsert = await params.supabase.from('task_comments').insert([{ task_id: task.id, content: `${getOperatorDisplayName(operator, 'Оператор')}: ${commentText}` }]).select('id').single()
+    const fallbackInsert = await params.supabase.from('task_comments').insert([{ task_id: task.id, content: `${responder.name}: ${commentText}` }]).select('id').single()
     if (fallbackInsert.error) throw fallbackInsert.error
     comment = fallbackInsert.data
   } else {
@@ -991,15 +1030,15 @@ async function processTaskResponse(params: {
 
   await writeAuditLog(params.supabase, {
     entityType: 'task', entityId: String(task.id), action: `telegram-response-${params.response}`,
-    payload: { task_number: task.task_number, operator_id: operator.id, operator_name: getOperatorDisplayName(operator, 'Оператор'), response: params.response, status: config.status, note: params.note?.trim() || null, comment_id: comment?.id || null },
+    payload: { task_number: task.task_number, operator_id: responder.kind === 'operator' ? responder.id : null, staff_id: responder.kind === 'staff' ? responder.id : null, assignee_name: responder.name, response: params.response, status: config.status, note: params.note?.trim() || null, comment_id: comment?.id || null },
   })
   await writeNotificationLog(params.supabase, {
     channel: 'telegram', recipient: String(params.telegramUserId), status: 'received',
-    payload: { kind: 'task-response', task_id: task.id, task_number: task.task_number, operator_id: operator.id, operator_name: getOperatorDisplayName(operator, 'Оператор'), response: params.response, status: config.status },
+    payload: { kind: 'task-response', task_id: task.id, task_number: task.task_number, operator_id: responder.kind === 'operator' ? responder.id : null, staff_id: responder.kind === 'staff' ? responder.id : null, assignee_name: responder.name, response: params.response, status: config.status },
   })
 
-  // Notify task creator
-  if (task.created_by) {
+  // Notify task creator (кроме случая, когда постановщик сам же и исполнитель)
+  if (task.created_by && !(responder.kind === 'staff' && String(task.created_by) === responder.id)) {
     try {
       const { data: creator } = await params.supabase
         .from('staff')
@@ -1007,17 +1046,15 @@ async function processTaskResponse(params: {
         .eq('id', task.created_by)
         .maybeSingle()
       if (creator?.telegram_chat_id) {
-        const operatorName = getOperatorDisplayName(operator, 'Оператор')
         const creatorText = [
           `📋 <b>Ответ по задаче #${task.task_number}</b>`,
-          ``,
           `<b>${escapeTelegramHtml(task.title)}</b>`,
           ``,
-          `${config.emoji} <b>${escapeTelegramHtml(operatorName)}</b>: ${escapeTelegramHtml(config.label)}`,
+          `${config.emoji} <b>${escapeTelegramHtml(responder.name)}</b>: ${escapeTelegramHtml(config.label)}`,
           `Новый статус: <b>${escapeTelegramHtml(STATUS_LABELS[config.status])}</b>`,
           params.note?.trim() ? `\n💬 ${escapeTelegramHtml(params.note.trim())}` : '',
-        ].filter(s => s !== undefined).join('\n')
-        await sendTelegramMessage(String(creator.telegram_chat_id), creatorText).catch(() => null)
+        ].filter(Boolean).join('\n')
+        await sendTelegramMessage(String(creator.telegram_chat_id), creatorText, { skipFrame: true }).catch(() => null)
       }
     } catch {
       // Не блокируем основной ответ если уведомление создателю не ушло

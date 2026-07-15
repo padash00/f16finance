@@ -66,6 +66,7 @@ type Staff = {
   id: string
   full_name: string
   short_name: string | null
+  telegram_chat_id?: string | null
 }
 
 type TaskFormState = {
@@ -73,7 +74,8 @@ type TaskFormState = {
   description: string
   priority: TaskPriority
   status: TaskStatus
-  operator_id: string
+  // Исполнитель: '' | 'op:<uuid>' (оператор) | 'st:<uuid>' (сотрудник)
+  assignee: string
   company_id: string
   due_date: string
   tags: string
@@ -89,6 +91,7 @@ type Task = {
   status: TaskStatus
   priority: TaskPriority
   operator_id: string | null
+  staff_id?: string | null
   created_by: string | null
   company_id: string | null
   due_date: string | null
@@ -97,11 +100,13 @@ type Task = {
   created_at: string
   updated_at: string
   completed_at: string | null
-  
+
   // Расширенные поля
-  operator_name?: string
-  operator_short_name?: string | null
-  operator_telegram?: string | null
+  assignee_kind?: 'operator' | 'staff'
+  assignee_name?: string
+  assignee_short_name?: string | null
+  assignee_telegram?: string | null
+  creator_name?: string
   company_name?: string
   company_code?: string | null
   comments_count?: number
@@ -118,7 +123,7 @@ type TaskComment = {
   author_type?: 'operator' | 'staff'
 }
 
-type TasksQueryTask = Omit<Task, 'operator_name' | 'operator_short_name' | 'operator_telegram' | 'company_name' | 'company_code' | 'comments_count'>
+type TasksQueryTask = Omit<Task, 'assignee_kind' | 'assignee_name' | 'assignee_short_name' | 'assignee_telegram' | 'creator_name' | 'company_name' | 'company_code' | 'comments_count'>
 
 type TaskCardProps = {
   task: Task
@@ -146,6 +151,7 @@ type CreateTaskModalProps = {
   onClose: () => void
   onSuccess: () => void
   operators: Operator[]
+  staff: Staff[]
   companies: Company[]
   nextTaskNumber: number
 }
@@ -256,10 +262,18 @@ const createEmptyTaskForm = (): TaskFormState => ({
   description: '',
   priority: 'medium',
   status: 'todo',
-  operator_id: '',
+  assignee: '',
   company_id: '',
   due_date: '',
   tags: '',
+})
+
+const taskAssigneeValue = (task: Pick<Task, 'operator_id' | 'staff_id'>) =>
+  task.operator_id ? `op:${task.operator_id}` : task.staff_id ? `st:${task.staff_id}` : ''
+
+const assigneeToPayload = (assignee: string) => ({
+  operator_id: assignee.startsWith('op:') ? assignee.slice(3) : null,
+  staff_id: assignee.startsWith('st:') ? assignee.slice(3) : null,
 })
 
 const toTaskFormState = (task: Task): TaskFormState => ({
@@ -267,7 +281,7 @@ const toTaskFormState = (task: Task): TaskFormState => ({
   description: task.description || '',
   priority: task.priority,
   status: task.status,
-  operator_id: task.operator_id || '',
+  assignee: taskAssigneeValue(task),
   company_id: task.company_id || '',
   due_date: task.due_date || '',
   tags: task.tags?.join(', ') || '',
@@ -279,16 +293,28 @@ const parseTags = (value: string) =>
     .map((item) => item.trim())
     .filter(Boolean)
 
-const enrichTasks = (taskRows: TasksQueryTask[], operators: Operator[], companies: Company[]): Task[] =>
+const enrichTasks = (taskRows: TasksQueryTask[], operators: Operator[], staff: Staff[], companies: Company[]): Task[] =>
   taskRows.map((task) => {
     const operator = operators.find((item) => item.id === task.operator_id)
+    const staffAssignee = !operator && task.staff_id ? staff.find((item) => item.id === task.staff_id) : undefined
+    const creator = task.created_by ? staff.find((item) => item.id === task.created_by) : undefined
     const company = companies.find((item) => item.id === task.company_id)
 
     return {
       ...task,
-      operator_name: operator ? getOperatorDisplayName(operator, 'Оператор') : undefined,
-      operator_short_name: operator ? getOperatorShortLabel(operator, 'Оператор') : undefined,
-      operator_telegram: operator?.telegram_chat_id,
+      assignee_kind: operator ? 'operator' as const : staffAssignee ? 'staff' as const : undefined,
+      assignee_name: operator
+        ? getOperatorDisplayName(operator, 'Оператор')
+        : staffAssignee
+          ? staffAssignee.full_name || staffAssignee.short_name || 'Сотрудник'
+          : undefined,
+      assignee_short_name: operator
+        ? getOperatorShortLabel(operator, 'Оператор')
+        : staffAssignee
+          ? staffAssignee.short_name || staffAssignee.full_name
+          : undefined,
+      assignee_telegram: operator?.telegram_chat_id || staffAssignee?.telegram_chat_id || null,
+      creator_name: creator ? creator.short_name || creator.full_name : undefined,
       company_name: company?.name,
       company_code: company?.code ?? null,
     }
@@ -343,7 +369,7 @@ function TasksContent() {
   const [searchTerm, setSearchTerm] = useState(searchParams.get('q') || '')
   const [filterStatus, setFilterStatus] = useState(searchParams.get('status') || 'all')
   const [filterPriority, setFilterPriority] = useState(searchParams.get('priority') || 'all')
-  const [filterOperator, setFilterOperator] = useState(searchParams.get('operator') || 'all')
+  const [filterAssignee, setFilterAssignee] = useState(searchParams.get('assignee') || 'all')
   const [filterCompany, setFilterCompany] = useState(searchParams.get('company') || 'all')
 
   // Загрузка данных
@@ -368,7 +394,7 @@ function TasksContent() {
       setOperators(operatorsData)
       setStaff(staffData)
       setCompanies(companiesData)
-      setTasks(enrichTasks(tasksData, operatorsData, companiesData))
+      setTasks(enrichTasks(tasksData, operatorsData, staffData, companiesData))
     } catch (err) {
       console.error('Error loading data:', err)
       setError('Не удалось загрузить данные')
@@ -475,11 +501,11 @@ function TasksContent() {
     if (searchTerm) params.set('q', searchTerm)
     if (filterStatus !== 'all') params.set('status', filterStatus)
     if (filterPriority !== 'all') params.set('priority', filterPriority)
-    if (filterOperator !== 'all') params.set('operator', filterOperator)
+    if (filterAssignee !== 'all') params.set('assignee', filterAssignee)
     if (filterCompany !== 'all') params.set('company', filterCompany)
-    
+
     router.replace(`/tasks?${params.toString()}`, { scroll: false })
-  }, [searchTerm, filterStatus, filterPriority, filterOperator, filterCompany, router])
+  }, [searchTerm, filterStatus, filterPriority, filterAssignee, filterCompany, router])
 
   // Фильтрация задач
   const filteredTasks = useMemo(() => {
@@ -487,10 +513,10 @@ function TasksContent() {
       // Поиск
       if (searchTerm) {
         const term = searchTerm.toLowerCase()
-        const matches = 
+        const matches =
           task.title.toLowerCase().includes(term) ||
           task.task_number.toString().includes(term) ||
-          task.operator_name?.toLowerCase().includes(term) ||
+          task.assignee_name?.toLowerCase().includes(term) ||
           task.description?.toLowerCase().includes(term)
         if (!matches) return false
       }
@@ -504,15 +530,15 @@ function TasksContent() {
       // Фильтр по приоритету
       if (filterPriority !== 'all' && task.priority !== filterPriority) return false
 
-      // Фильтр по оператору
-      if (filterOperator !== 'all' && task.operator_id !== filterOperator) return false
+      // Фильтр по исполнителю (оператор или сотрудник)
+      if (filterAssignee !== 'all' && taskAssigneeValue(task) !== filterAssignee) return false
 
       // Фильтр по компании
       if (filterCompany !== 'all' && task.company_id !== filterCompany) return false
 
       return true
     })
-  }, [tasks, searchTerm, filterStatus, filterPriority, filterOperator, filterCompany])
+  }, [tasks, searchTerm, filterStatus, filterPriority, filterAssignee, filterCompany])
 
   // Группировка по статусам
   const tasksByStatus = useMemo(() => {
@@ -606,7 +632,7 @@ function TasksContent() {
     setSearchTerm('')
     setFilterStatus('all')
     setFilterPriority('all')
-    setFilterOperator('all')
+    setFilterAssignee('all')
     setFilterCompany('all')
   }
 
@@ -641,10 +667,10 @@ function TasksContent() {
   }
 
   const handleNotifyOperator = async (task: Task) => {
-    if (!task.operator_telegram) {
+    if (!task.assignee_telegram) {
       toast({
         title: 'Telegram не настроен',
-        description: 'У оператора нет telegram_chat_id.',
+        description: 'У исполнителя нет привязанного Telegram.',
         variant: 'destructive',
       })
       return
@@ -666,7 +692,7 @@ function TasksContent() {
 
       toast({
         title: 'Уведомление отправлено',
-        description: `${task.operator_name || task.operator_short_name || 'Оператор'} получил сообщение в Telegram.`,
+        description: `${task.assignee_name || task.assignee_short_name || 'Исполнитель'} получил сообщение в Telegram.`,
       })
     } catch (error: any) {
       toast({
@@ -705,7 +731,7 @@ function TasksContent() {
             description: null,
             priority,
             status,
-            operator_id: filterOperator !== 'all' ? filterOperator : null,
+            ...assigneeToPayload(filterAssignee !== 'all' ? filterAssignee : ''),
             company_id: companyId,
             due_date: null,
             tags: [],
@@ -725,7 +751,7 @@ function TasksContent() {
   // Напомнить в Telegram всем исполнителям просроченных задач разом.
   const [notifyingAll, setNotifyingAll] = useState(false)
   const handleNotifyAllOverdue = async (overdueTasks: Task[]) => {
-    const withTelegram = overdueTasks.filter((t) => t.operator_telegram)
+    const withTelegram = overdueTasks.filter((t) => t.assignee_telegram)
     if (withTelegram.length === 0) {
       toast({ title: 'Некому отправлять', description: 'Ни у одного исполнителя просроченных задач нет Telegram.', variant: 'destructive' })
       return
@@ -783,7 +809,7 @@ function TasksContent() {
           {/* Header */}
           <AdminPageHeader
             title="Задачи"
-            description="Текущая работа операторов — уведомления в Telegram"
+            description="Задачи операторов и сотрудников — уведомления и ответы в Telegram"
             icon={<Kanban className="h-5 w-5" />}
             accent="blue"
             backHref="/"
@@ -897,16 +923,27 @@ function TasksContent() {
                 </select>
 
                 <select
-                  value={filterOperator}
-                  onChange={(e) => setFilterOperator(e.target.value)}
+                  value={filterAssignee}
+                  onChange={(e) => setFilterAssignee(e.target.value)}
                   className="w-full min-w-0 px-3 py-2 bg-white dark:bg-slate-800/50 border border-border rounded-lg text-sm text-foreground focus:outline-none focus:border-violet-500/50 sm:w-auto"
                 >
-                  <option value="all">Все операторы</option>
-                  {operators.map(op => (
-                    <option key={op.id} value={op.id}>
-                      {getOperatorDisplayName(op)} {op.telegram_chat_id ? '📱' : ''}
-                    </option>
-                  ))}
+                  <option value="all">Все исполнители</option>
+                  <optgroup label="Операторы">
+                    {operators.map(op => (
+                      <option key={op.id} value={`op:${op.id}`}>
+                        {getOperatorDisplayName(op)} {op.telegram_chat_id ? '📱' : ''}
+                      </option>
+                    ))}
+                  </optgroup>
+                  {staff.length > 0 && (
+                    <optgroup label="Сотрудники">
+                      {staff.map(member => (
+                        <option key={member.id} value={`st:${member.id}`}>
+                          {member.full_name || member.short_name} {member.telegram_chat_id ? '📱' : ''}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
 
                 <select
@@ -943,7 +980,7 @@ function TasksContent() {
 
                 {/* Сброс фильтров */}
                 {(searchTerm || filterStatus !== 'all' || filterPriority !== 'all' ||
-                  filterOperator !== 'all' || filterCompany !== 'all') && (
+                  filterAssignee !== 'all' || filterCompany !== 'all') && (
                   <button
                     onClick={resetFilters}
                     className="shrink-0 text-sm text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors sm:ml-auto"
@@ -1204,8 +1241,8 @@ function TasksContent() {
                             {overdueRow ? ' · просрочено' : ''}
                           </span>
                         )}
-                        {(task.operator_short_name || task.operator_name) && (
-                          <span className="text-slate-500">· {task.operator_short_name || task.operator_name}</span>
+                        {(task.assignee_short_name || task.assignee_name) && (
+                          <span className="text-slate-500">· {task.assignee_short_name || task.assignee_name}</span>
                         )}
                       </div>
                     </button>
@@ -1237,7 +1274,7 @@ function TasksContent() {
                       <th className="py-3 px-4 text-left text-xs font-medium text-muted-foreground">Задача</th>
                       <th className="py-3 px-4 text-left text-xs font-medium text-muted-foreground">Статус</th>
                       <th className="py-3 px-4 text-left text-xs font-medium text-muted-foreground">Приоритет</th>
-                      <th className="py-3 px-4 text-left text-xs font-medium text-muted-foreground">Оператор</th>
+                      <th className="py-3 px-4 text-left text-xs font-medium text-muted-foreground">Исполнитель</th>
                       <th className="py-3 px-4 text-left text-xs font-medium text-muted-foreground">Дедлайн</th>
                       <th className="py-3 px-4 text-left text-xs font-medium text-muted-foreground">Компания</th>
                     </tr>
@@ -1287,13 +1324,16 @@ function TasksContent() {
                         </td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-[10px] font-bold">
-                              {task.operator_name?.[0] || task.operator_short_name?.[0] || '?'}
+                            <div className={cn(
+                              'w-6 h-6 rounded-full bg-gradient-to-br flex items-center justify-center text-[10px] font-bold text-white',
+                              task.assignee_kind === 'staff' ? 'from-sky-500 to-cyan-500' : 'from-purple-500 to-pink-500',
+                            )}>
+                              {task.assignee_name?.[0] || task.assignee_short_name?.[0] || '?'}
                             </div>
                             <span className="text-sm text-body">
-                              {task.operator_name || task.operator_short_name || '—'}
+                              {task.assignee_name || task.assignee_short_name || '—'}
                             </span>
-                            {task.operator_telegram && (
+                            {task.assignee_telegram && (
                               <Send className="w-3 h-3 text-blue-400" />
                             )}
                           </div>
@@ -1378,6 +1418,7 @@ function TasksContent() {
           setIsCreateModalOpen(false)
         }}
         operators={operators}
+        staff={staff}
         companies={companies}
         nextTaskNumber={nextTaskNumber}
       />
@@ -1410,7 +1451,7 @@ function TaskCard({ task, onClick, onStatusChange, onNotify, onDragStart, onDrag
     >
       {/* Кнопки действий */}
       <div className="absolute top-2 right-2 flex gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
-        {task.operator_telegram && (
+        {task.assignee_telegram && (
           <button
             onClick={(e) => {
               e.stopPropagation()
@@ -1490,14 +1531,17 @@ function TaskCard({ task, onClick, onStatusChange, onNotify, onDragStart, onDrag
         )
       })()}
 
-      {/* Оператор и компания */}
+      {/* Исполнитель и компания */}
       <div className="flex items-center justify-between text-xs mb-2">
         <div className="flex items-center gap-1 text-muted-foreground">
-          <div className="w-5 h-5 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-[8px] font-bold">
-            {task.operator_short_name?.[0] || task.operator_name?.[0] || '?'}
+          <div className={cn(
+            'w-5 h-5 rounded-full bg-gradient-to-br flex items-center justify-center text-[8px] font-bold text-white',
+            task.assignee_kind === 'staff' ? 'from-sky-500 to-cyan-500' : 'from-purple-500 to-pink-500',
+          )}>
+            {task.assignee_short_name?.[0] || task.assignee_name?.[0] || '?'}
           </div>
-                            <span className="text-[10px]">{task.operator_name || task.operator_short_name || 'Не назначен'}</span>
-          {task.operator_telegram && (
+          <span className="text-[10px]">{task.assignee_name || task.assignee_short_name || 'Не назначен'}</span>
+          {task.assignee_telegram && (
             <Send className="w-2.5 h-2.5 text-blue-400" />
           )}
         </div>
@@ -1820,7 +1864,7 @@ function TaskDetailModal({
       description: editForm.description.trim() || null,
       priority: editForm.priority,
       status: editForm.status,
-      operator_id: editForm.operator_id || null,
+      ...assigneeToPayload(editForm.assignee),
       company_id: editForm.company_id || null,
       due_date: editForm.due_date || null,
       tags: parseTags(editForm.tags),
@@ -1972,27 +2016,41 @@ function TaskDetailModal({
       </div>
 
       <div>
-        <label className={fieldLabelClass}>Оператор</label>
+        <label className={fieldLabelClass}>Исполнитель</label>
         {canEdit ? (
           <select
-            value={editForm.operator_id}
-            onChange={(e) => setEditForm((prev) => ({ ...prev, operator_id: e.target.value }))}
+            value={editForm.assignee}
+            onChange={(e) => setEditForm((prev) => ({ ...prev, assignee: e.target.value }))}
             className={fieldSelectClass}
           >
-            <option value="">Без оператора</option>
-            {operators.map((operator) => (
-              <option key={operator.id} value={operator.id}>
-                {getOperatorDisplayName(operator)}
-              </option>
-            ))}
+            <option value="">Без исполнителя</option>
+            <optgroup label="Операторы">
+              {operators.map((operator) => (
+                <option key={operator.id} value={`op:${operator.id}`}>
+                  {getOperatorDisplayName(operator)} {operator.telegram_chat_id ? '📱' : ''}
+                </option>
+              ))}
+            </optgroup>
+            {staff.length > 0 && (
+              <optgroup label="Сотрудники">
+                {staff.map((member) => (
+                  <option key={member.id} value={`st:${member.id}`}>
+                    {member.full_name || member.short_name} {member.telegram_chat_id ? '📱' : ''}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
         ) : (
           <div className="flex items-center gap-2">
-            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-pink-500 text-xs font-bold text-white">
-              {task.operator_short_name?.[0] || task.operator_name?.[0] || '?'}
+            <div className={cn(
+              'flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-xs font-bold text-white',
+              task.assignee_kind === 'staff' ? 'from-sky-500 to-cyan-500' : 'from-purple-500 to-pink-500',
+            )}>
+              {task.assignee_short_name?.[0] || task.assignee_name?.[0] || '?'}
             </div>
-            <span className="text-sm text-foreground">{task.operator_name || 'Не назначен'}</span>
-            {task.operator_telegram && <Send className="h-3 w-3 text-blue-400" />}
+            <span className="text-sm text-foreground">{task.assignee_name || 'Не назначен'}</span>
+            {task.assignee_telegram && <Send className="h-3 w-3 text-blue-400" />}
           </div>
         )}
       </div>
@@ -2065,6 +2123,11 @@ function TaskDetailModal({
           <span className="text-sm text-muted-foreground">—</span>
         )}
       </div>
+
+      <div>
+        <label className={fieldLabelClass}>Постановщик</label>
+        <span className="text-sm text-foreground">{task.creator_name || '—'}</span>
+      </div>
     </div>
   )
 
@@ -2091,7 +2154,7 @@ function TaskDetailModal({
               </span>
             )}
             <div className="ml-auto flex items-center gap-1.5">
-              {task.operator_telegram && can('tasks.notify') && (
+              {task.assignee_telegram && can('tasks.notify') && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -2128,6 +2191,7 @@ function TaskDetailModal({
           )}
           <div className="mt-1 text-xs text-muted-foreground">
             Создано {formatDateTime(task.created_at)}
+            {task.creator_name ? ` · ${task.creator_name}` : ''}
             {task.completed_at ? ` · выполнено ${formatDateTime(task.completed_at)}` : ''}
           </div>
         </div>
@@ -2317,6 +2381,7 @@ function CreateTaskModal({
   onClose,
   onSuccess,
   operators,
+  staff,
   companies,
   nextTaskNumber,
 }: CreateTaskModalProps) {
@@ -2336,31 +2401,17 @@ function CreateTaskModal({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen])
 
-  const buildTaskData = (taskNumber: number) => {
-    const payload: {
-      title: string
-      description: string | null
-      priority: TaskPriority
-      status: TaskStatus
-      operator_id: string | null
-      company_id: string | null
-      due_date: string | null
-      tags: string[]
-      task_number: number
-    } = {
-      title: form.title.trim(),
-      description: form.description.trim() || null,
-      priority: form.priority,
-      status: form.status,
-      operator_id: form.operator_id || null,
-      company_id: form.company_id || null,
-      due_date: form.due_date || null,
-      tags: parseTags(form.tags),
-      task_number: taskNumber,
-    }
-
-    return payload
-  }
+  const buildTaskData = (taskNumber: number) => ({
+    title: form.title.trim(),
+    description: form.description.trim() || null,
+    priority: form.priority,
+    status: form.status,
+    ...assigneeToPayload(form.assignee),
+    company_id: form.company_id || null,
+    due_date: form.due_date || null,
+    tags: parseTags(form.tags),
+    task_number: taskNumber,
+  })
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -2387,8 +2438,8 @@ function CreateTaskModal({
         title: 'Задача создана',
         description:
           json?.notification?.sent === false
-            ? 'Новая задача добавлена в систему. Уведомление сотруднику не отправилось автоматически.'
-            : form.operator_id
+            ? 'Новая задача добавлена в систему. Уведомление исполнителю не отправилось автоматически.'
+            : form.assignee
               ? 'Новая задача добавлена в систему и отправлена исполнителю.'
               : 'Новая задача добавлена в систему.',
       })
@@ -2405,7 +2456,7 @@ function CreateTaskModal({
         <DialogHeader>
           <DialogTitle>Новая задача</DialogTitle>
           <DialogDescription className="text-muted-foreground">
-            Создайте задачу для оператора
+            Создайте задачу для оператора или сотрудника
           </DialogDescription>
         </DialogHeader>
 
@@ -2433,16 +2484,27 @@ function CreateTaskModal({
 
           <div className="grid grid-cols-2 gap-3">
             <select
-              value={form.operator_id}
-              onChange={(e) => setForm({...form, operator_id: e.target.value})}
+              value={form.assignee}
+              onChange={(e) => setForm({...form, assignee: e.target.value})}
               className="h-9 bg-white dark:bg-slate-800/50 border border-border rounded-lg px-3 text-sm text-foreground"
             >
-              <option value="">Выберите оператора</option>
-              {operators.map((op: Operator) => (
-                <option key={op.id} value={op.id}>
-                  {getOperatorDisplayName(op)} {op.telegram_chat_id ? '📱' : ''}
-                </option>
-              ))}
+              <option value="">Исполнитель</option>
+              <optgroup label="Операторы">
+                {operators.map((op: Operator) => (
+                  <option key={op.id} value={`op:${op.id}`}>
+                    {getOperatorDisplayName(op)} {op.telegram_chat_id ? '📱' : ''}
+                  </option>
+                ))}
+              </optgroup>
+              {staff.length > 0 && (
+                <optgroup label="Сотрудники">
+                  {staff.map((member: Staff) => (
+                    <option key={member.id} value={`st:${member.id}`}>
+                      {member.full_name || member.short_name} {member.telegram_chat_id ? '📱' : ''}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
 
             <select

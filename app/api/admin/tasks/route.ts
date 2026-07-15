@@ -18,6 +18,7 @@ type TaskPayload = {
   priority: TaskPriority
   status: TaskStatus
   operator_id?: string | null
+  staff_id?: string | null
   company_id?: string | null
   due_date?: string | null
   tags?: string[] | null
@@ -70,8 +71,10 @@ type LoadedTask = {
   priority: TaskPriority
   due_date: string | null
   operator_id: string | null
+  staff_id?: string | null
   company_id: string | null
   created_by: string | null
+  checklist?: Array<{ done?: boolean }> | null
 }
 type LoadedOperator = {
   id: string
@@ -84,6 +87,13 @@ type LoadedCompany = {
   id: string
   name: string
   code: string | null
+}
+// Единый исполнитель задачи: оператор или админ-сотрудник.
+type TaskAssignee = {
+  kind: 'operator' | 'staff'
+  id: string
+  name: string
+  telegram_chat_id: string | null
 }
 
 const STATUS_LABELS: Record<TaskStatus, string> = {
@@ -188,9 +198,10 @@ function buildTaskResponseKeyboard(taskId: string) {
 }
 
 async function loadTaskContext(supabase: ClientLike, taskId: string) {
+  // select('*') — чтобы не падать на базах, где миграция staff_id ещё не применена.
   const { data: task, error: taskError } = await supabase
     .from('tasks')
-    .select('id, task_number, title, description, status, priority, due_date, operator_id, company_id, created_by')
+    .select('*')
     .eq('id', taskId)
     .single()
 
@@ -206,6 +217,16 @@ async function loadTaskContext(supabase: ClientLike, taskId: string) {
 
   if (operatorError) throw operatorError
 
+  const { data: assigneeStaff, error: staffError } = !task.operator_id && task.staff_id
+    ? await supabase
+        .from('staff')
+        .select('id, full_name, short_name, telegram_chat_id')
+        .eq('id', task.staff_id)
+        .maybeSingle()
+    : { data: null, error: null }
+
+  if (staffError) throw staffError
+
   const { data: company, error: companyError } = task.company_id
     ? await supabase
         .from('companies')
@@ -216,10 +237,27 @@ async function loadTaskContext(supabase: ClientLike, taskId: string) {
 
   if (companyError) throw companyError
 
+  const assignee: TaskAssignee | null = operator
+    ? {
+        kind: 'operator',
+        id: String(operator.id),
+        name: getOperatorDisplayName(operator as LoadedOperator, 'Оператор'),
+        telegram_chat_id: operator.telegram_chat_id ? String(operator.telegram_chat_id) : null,
+      }
+    : assigneeStaff
+      ? {
+          kind: 'staff',
+          id: String(assigneeStaff.id),
+          name: String(assigneeStaff.full_name || assigneeStaff.short_name || 'Сотрудник'),
+          telegram_chat_id: assigneeStaff.telegram_chat_id ? String(assigneeStaff.telegram_chat_id) : null,
+        }
+      : null
+
   return {
     task: task as LoadedTask,
     operator: (operator || null) as LoadedOperator | null,
     company: (company || null) as LoadedCompany | null,
+    assignee,
   }
 }
 
@@ -245,51 +283,59 @@ async function ensureTaskCompanyAccess(
   })
 }
 
+const PRIORITY_EMOJI: Record<TaskPriority, string> = {
+  critical: '🔥',
+  high: '⚡',
+  medium: '📌',
+  low: '💧',
+}
+
+// Компактное сообщение без общего «системного» шаблона (skipFrame):
+// заголовок с номером, название, описание, одна строка меты, подсказка про ответ.
 function buildTaskTelegramMessage(params: {
   type: 'assigned' | 'status'
   task: LoadedTask
-  operator: LoadedOperator | null
   company: LoadedCompany | null
   statusLabel?: string
   note?: string | null
 }) {
   const { type, task, company } = params
-  const header =
-    type === 'assigned'
-      ? '📋 Новая задача'
-      : '📝 Обновление по задаче'
 
-  const lines = [
-    `<b>${header}</b>`,
-    '',
-    `<b>#${task.task_number}</b> · ${escapeHtml(task.title)}`,
-    '',
-    `<b>Точка</b> · ${escapeHtml(company?.name || 'не указана')}`,
-    `<b>Приоритет</b> · ${escapeHtml(PRIORITY_LABELS[task.priority])}`,
-    `<b>Дедлайн</b> · ${escapeHtml(formatTaskDate(task.due_date))}`,
-    `<b>Статус</b> · ${escapeHtml(params.statusLabel || STATUS_LABELS[task.status])}`,
-  ]
+  const lines: string[] = []
 
-  if (task.description?.trim()) {
-    lines.push('', `<b>Описание</b>`, escapeHtml(task.description.trim()))
+  if (type === 'assigned') {
+    lines.push(`📋 <b>Новая задача #${task.task_number}</b>`)
+  } else {
+    lines.push(`🔄 <b>Задача #${task.task_number} → ${escapeHtml(params.statusLabel || STATUS_LABELS[task.status])}</b>`)
+  }
+  lines.push(`<b>${escapeHtml(task.title)}</b>`)
+
+  if (type === 'assigned' && task.description?.trim()) {
+    const description = task.description.trim()
+    lines.push('', escapeHtml(description.length > 500 ? `${description.slice(0, 500)}…` : description))
   }
 
   if (params.note?.trim()) {
-    lines.push('', `<b>Комментарий</b>`, escapeHtml(params.note.trim()))
+    lines.push('', `💬 ${escapeHtml(params.note.trim())}`)
+  }
+
+  const meta: string[] = []
+  if (company?.name) meta.push(`🏢 ${escapeHtml(company.name)}`)
+  meta.push(`${PRIORITY_EMOJI[task.priority]} ${escapeHtml(PRIORITY_LABELS[task.priority])}`)
+  lines.push('', meta.join(' · '))
+
+  if (task.due_date) {
+    lines.push(`⏰ Срок: ${escapeHtml(formatTaskDate(task.due_date))}`)
+  }
+
+  const checklistTotal = Array.isArray(task.checklist) ? task.checklist.length : 0
+  if (type === 'assigned' && checklistTotal > 0) {
+    lines.push(`☑️ Чек-лист: ${checklistTotal} пункт${checklistTotal === 1 ? '' : checklistTotal < 5 ? 'а' : 'ов'}`)
   }
 
   if (type === 'assigned') {
-    lines.push(
-      '',
-      `<b>Ответ в Telegram</b>`,
-      '▸ Кнопки под сообщением',
-      `▸ Или текстом: <code>#${task.task_number} принял</code>`,
-      '',
-      `<i>Или откройте задачи в кабинете.</i>`,
-    )
+    lines.push('', `<i>Ответьте кнопками ниже или текстом:</i> <code>#${task.task_number} принял</code>`)
   }
-
-  lines.push('', `<i>Раздел «Задачи» в Orda Control</i>`)
 
   return lines.join('\n')
 }
@@ -343,14 +389,14 @@ async function notifyTaskAssignee(
   supabase: ClientLike,
   params: {
     task: LoadedTask
-    operator: LoadedOperator | null
+    assignee: TaskAssignee | null
     company: LoadedCompany | null
     type: 'assigned' | 'status'
     statusLabel?: string
     note?: string | null
   },
 ) {
-  if (!params.operator?.telegram_chat_id) {
+  if (!params.assignee?.telegram_chat_id) {
     return { sent: false as const, reason: 'telegram-missing' }
   }
 
@@ -361,7 +407,6 @@ async function notifyTaskAssignee(
   const text = buildTaskTelegramMessage({
     type: params.type,
     task: params.task,
-    operator: params.operator,
     company: params.company,
     statusLabel: params.statusLabel,
     note: params.note,
@@ -372,8 +417,9 @@ async function notifyTaskAssignee(
       ? buildTaskResponseKeyboard(params.task.id)
       : undefined
 
-  const result = await sendOrdaTelegram(String(params.operator.telegram_chat_id), text, {
+  const result = await sendOrdaTelegram(params.assignee.telegram_chat_id, text, {
     replyMarkup,
+    skipFrame: true,
   })
   if (!result.ok) {
     throw new Error(result.error || 'Telegram не принял сообщение')
@@ -381,14 +427,15 @@ async function notifyTaskAssignee(
 
   await writeNotificationLog(supabase, {
     channel: 'telegram',
-    recipient: String(params.operator.telegram_chat_id),
+    recipient: params.assignee.telegram_chat_id,
     status: 'sent',
     payload: {
       kind: params.type === 'assigned' ? 'task-assigned' : 'task-status-update',
       task_id: params.task.id,
       task_number: params.task.task_number,
-      operator_id: params.operator.id,
-      operator_name: getOperatorDisplayName(params.operator, 'Оператор'),
+      operator_id: params.assignee.kind === 'operator' ? params.assignee.id : null,
+      staff_id: params.assignee.kind === 'staff' ? params.assignee.id : null,
+      assignee_name: params.assignee.name,
       status: params.task.status,
     },
   })
@@ -399,7 +446,7 @@ async function notifyTaskAssignee(
 async function logTaskNotificationFailure(
   supabase: ClientLike,
   params: {
-    context: { task: LoadedTask; operator: LoadedOperator | null }
+    context: { task: LoadedTask; assignee: TaskAssignee | null }
     kind: string
     error: unknown
   },
@@ -407,15 +454,16 @@ async function logTaskNotificationFailure(
   await writeNotificationLog(supabase, {
     channel: 'telegram',
     recipient:
-      params.context.operator?.telegram_chat_id ||
-      params.context.operator?.id ||
-      'unknown-operator',
+      params.context.assignee?.telegram_chat_id ||
+      params.context.assignee?.id ||
+      'unknown-assignee',
     status: 'failed',
     payload: {
       kind: params.kind,
       task_id: params.context.task.id,
       task_number: params.context.task.task_number,
-      operator_id: params.context.operator?.id || null,
+      operator_id: params.context.assignee?.kind === 'operator' ? params.context.assignee.id : null,
+      staff_id: params.context.assignee?.kind === 'staff' ? params.context.assignee.id : null,
       error: params.error instanceof Error ? params.error.message : 'send-failed',
     },
   })
@@ -459,22 +507,32 @@ export async function GET(req: Request) {
       isSuperAdmin: access.isSuperAdmin,
     })
 
-    let query = supabase
-      .from('tasks')
-      .select('id, task_number, title, description, status, priority, due_date, tags, checklist, operator_id, company_id, created_at, updated_at, completed_at, task_comments(count)')
-      .order('created_at', { ascending: false })
-      .range(page * pageSize, (page + 1) * pageSize - 1)
+    const buildListQuery = (withStaffId: boolean) => {
+      let query = supabase
+        .from('tasks')
+        .select(
+          `id, task_number, title, description, status, priority, due_date, tags, checklist, operator_id, ${withStaffId ? 'staff_id, ' : ''}company_id, created_by, created_at, updated_at, completed_at, task_comments(count)`,
+        )
+        .order('created_at', { ascending: false })
+        .range(page * pageSize, (page + 1) * pageSize - 1)
 
-    if (status) query = query.eq('status', status)
-    if (operatorId) query = query.eq('operator_id', operatorId)
-    if (companyScope.allowedCompanyIds !== null) {
-      if (companyScope.allowedCompanyIds.length === 0) {
-        return json({ data: [], page, pageSize, hasMore: false })
+      if (status) query = query.eq('status', status)
+      if (operatorId) query = query.eq('operator_id', operatorId)
+      if (companyScope.allowedCompanyIds !== null) {
+        query = query.in('company_id', companyScope.allowedCompanyIds)
       }
-      query = query.in('company_id', companyScope.allowedCompanyIds)
+      return query
     }
 
-    const { data, error } = await query
+    if (companyScope.allowedCompanyIds !== null && companyScope.allowedCompanyIds.length === 0) {
+      return json({ data: [], page, pageSize, hasMore: false })
+    }
+
+    let { data, error } = await buildListQuery(true)
+    if (error && String(error.message || '').includes('staff_id')) {
+      // Миграция tasks.staff_id ещё не применена — страница должна жить и без неё.
+      ;({ data, error } = await buildListQuery(false))
+    }
     if (error) throw error
 
     const taskRows = (data ?? []).map((row: any) => {
@@ -504,13 +562,25 @@ export async function GET(req: Request) {
               .in('id', operatorIds)
           })(),
       access.isSuperAdmin
-        ? supabase.from('staff').select('id, full_name, short_name').order('full_name')
-        : (() => {
-            const staffIds = Array.from(new Set((data || []).map((row: any) => row.created_by).filter(Boolean)))
-            if (!staffIds.length) return Promise.resolve({ data: [], error: null } as any)
+        ? supabase.from('staff').select('id, full_name, short_name, telegram_chat_id').order('full_name')
+        : access.activeOrganization?.id
+          ? supabase
+              .from('staff')
+              .select('id, full_name, short_name, telegram_chat_id')
+              .eq('organization_id', access.activeOrganization.id)
+              .order('full_name')
+          : (() => {
+              const staffIds = Array.from(
+                new Set(
+                  (data || [])
+                    .flatMap((row: any) => [row.created_by, row.staff_id])
+                    .filter(Boolean),
+                ),
+              )
+              if (!staffIds.length) return Promise.resolve({ data: [], error: null } as any)
 
-            return supabase.from('staff').select('id, full_name, short_name').in('id', staffIds)
-          })(),
+              return supabase.from('staff').select('id, full_name, short_name, telegram_chat_id').in('id', staffIds)
+            })(),
       access.isSuperAdmin || companyScope.allowedCompanyIds === null
         ? supabase.from('companies').select('id, name, code').order('name')
         : companyScope.allowedCompanyIds.length > 0
@@ -573,12 +643,17 @@ export async function POST(req: Request) {
       let nextTaskNumber = await getNextTaskNumber(supabase)
       let insertError: any = null
       let createdTask: any = null
+      // Исполнитель — либо оператор, либо сотрудник: одно из полей всегда null.
+      const assigneeOperatorId = body.payload.operator_id || null
+      const assigneeStaffId = assigneeOperatorId ? null : body.payload.staff_id || null
+
       const payloadBase = {
         title: body.payload.title.trim(),
         description: body.payload.description?.trim() || null,
         priority: body.payload.priority,
         status: body.payload.status,
-        operator_id: body.payload.operator_id || null,
+        operator_id: assigneeOperatorId,
+        staff_id: assigneeStaffId,
         company_id: body.payload.company_id || null,
         due_date: body.payload.due_date || null,
         tags: body.payload.tags || [],
@@ -607,6 +682,21 @@ export async function POST(req: Request) {
         if (error?.code === '23505' || String(error?.message || '').toLowerCase().includes('duplicate')) {
           nextTaskNumber = await getNextTaskNumber(supabase)
           continue
+        }
+        if (String(error?.message || '').includes("'staff_id' column")) {
+          if (assigneeStaffId) {
+            return json({ error: 'Назначение на сотрудника недоступно: примените миграцию 20260715_tasks_staff_assignee.sql' }, 400)
+          }
+          const { staff_id, ...withoutStaff } = insertPayload
+          const retry = await supabase
+            .from('tasks')
+            .insert([withoutStaff])
+            .select('*')
+            .single()
+
+          insertError = retry.error
+          createdTask = retry.data
+          break
         }
         if (String(error?.message || '').includes('tasks_created_by_fkey')) {
           const { created_by, ...withoutCreator } = insertPayload
@@ -639,22 +729,16 @@ export async function POST(req: Request) {
       try {
         notification = await notifyTaskAssignee(supabase, {
           task: context.task,
-          operator: context.operator,
+          assignee: context.assignee,
           company: context.company,
           type: 'assigned',
         })
       } catch (notifyError) {
         notification = { sent: false, reason: 'send-failed' }
-        await writeNotificationLog(supabase, {
-          channel: 'telegram',
-          recipient: context.operator?.telegram_chat_id || context.operator?.id || 'unknown-operator',
-          status: 'failed',
-          payload: {
-            kind: 'task-assigned',
-            task_id: context.task.id,
-            task_number: context.task.task_number,
-            error: notifyError instanceof Error ? notifyError.message : 'send-failed',
-          },
+        await logTaskNotificationFailure(supabase, {
+          context,
+          kind: 'task-assigned',
+          error: notifyError,
         })
       }
 
@@ -691,6 +775,7 @@ export async function POST(req: Request) {
         priority: body.payload.priority,
         status: body.payload.status,
         operator_id: body.payload.operator_id !== undefined ? (body.payload.operator_id || null) : undefined,
+        staff_id: body.payload.staff_id !== undefined ? (body.payload.staff_id || null) : undefined,
         company_id: body.payload.company_id !== undefined ? (body.payload.company_id || null) : undefined,
         due_date: body.payload.due_date !== undefined ? (body.payload.due_date || null) : undefined,
         tags: body.payload.tags,
@@ -708,8 +793,18 @@ export async function POST(req: Request) {
       const sanitized = Object.fromEntries(
         Object.entries(updatePayload).filter(([, value]) => value !== undefined),
       )
+      // Исполнитель один: назначение оператора снимает сотрудника и наоборот.
+      if (sanitized.operator_id) sanitized.staff_id = null
+      else if (sanitized.staff_id) sanitized.operator_id = null
 
-      const { data, error } = await supabase.from('tasks').update(sanitized).eq('id', body.taskId).select('*').single()
+      let { data, error } = await supabase.from('tasks').update(sanitized).eq('id', body.taskId).select('*').single()
+      if (error && String(error.message || '').includes("'staff_id' column")) {
+        if (sanitized.staff_id) {
+          return json({ error: 'Назначение на сотрудника недоступно: примените миграцию 20260715_tasks_staff_assignee.sql' }, 400)
+        }
+        const { staff_id, ...withoutStaff } = sanitized
+        ;({ data, error } = await supabase.from('tasks').update(withoutStaff).eq('id', body.taskId).select('*').single())
+      }
       if (error) throw error
 
       await writeAuditLog(supabase, {
@@ -760,7 +855,7 @@ export async function POST(req: Request) {
 
         await notifyTaskAssignee(supabase, {
           task: context.task,
-          operator: context.operator,
+          assignee: context.assignee,
           company: context.company,
           type: 'status',
           statusLabel: STATUS_LABELS[body.status],
@@ -821,7 +916,7 @@ export async function POST(req: Request) {
         const context = await loadTaskContext(supabase, body.taskId)
         await notifyTaskAssignee(supabase, {
           task: context.task,
-          operator: context.operator,
+          assignee: context.assignee,
           company: context.company,
           type: 'status',
           statusLabel: STATUS_LABELS[config.status],
@@ -872,7 +967,7 @@ export async function POST(req: Request) {
         const context = await loadTaskContext(supabase, body.taskId)
         await notifyTaskAssignee(supabase, {
           task: context.task,
-          operator: context.operator,
+          assignee: context.assignee,
           company: context.company,
           type: 'status',
           statusLabel: STATUS_LABELS[context.task.status],
@@ -926,45 +1021,44 @@ export async function POST(req: Request) {
       },
       context.task.company_id,
     )
-    if (!context.operator?.telegram_chat_id) return json({ error: 'У оператора нет telegram_chat_id' }, 400)
+    if (!context.assignee?.telegram_chat_id) return json({ error: 'У исполнителя нет Telegram' }, 400)
 
     try {
       if (body.message?.trim()) {
-        const customCore = `<b>📨 Сообщение по задаче #${context.task.task_number}</b>\n\n${escapeTelegramHtml(body.message.trim())}`
-        const tgResult = await sendOrdaTelegram(String(context.operator.telegram_chat_id), customCore)
+        const customCore = [
+          `💬 <b>Сообщение по задаче #${context.task.task_number}</b>`,
+          `<b>${escapeTelegramHtml(context.task.title)}</b>`,
+          '',
+          escapeTelegramHtml(body.message.trim()),
+        ].join('\n')
+        const tgResult = await sendOrdaTelegram(context.assignee.telegram_chat_id, customCore, { skipFrame: true })
         if (!tgResult.ok) throw new Error(tgResult.error || 'Telegram не принял сообщение')
         await writeNotificationLog(supabase, {
           channel: 'telegram',
-          recipient: String(context.operator.telegram_chat_id),
+          recipient: context.assignee.telegram_chat_id,
           status: 'sent',
           payload: {
             kind: 'task-notify-custom',
             task_id: context.task.id,
             task_number: context.task.task_number,
-            operator_id: context.operator.id,
-            operator_name: getOperatorDisplayName(context.operator, 'Оператор'),
+            operator_id: context.assignee.kind === 'operator' ? context.assignee.id : null,
+            staff_id: context.assignee.kind === 'staff' ? context.assignee.id : null,
+            assignee_name: context.assignee.name,
           },
         })
       } else {
         await notifyTaskAssignee(supabase, {
           task: context.task,
-          operator: context.operator,
+          assignee: context.assignee,
           company: context.company,
           type: 'assigned',
         })
       }
     } catch (notifyError) {
-      await writeNotificationLog(supabase, {
-        channel: 'telegram',
-        recipient: String(context.operator.telegram_chat_id),
-        status: 'failed',
-        payload: {
-          kind: 'task-notify',
-          task_id: context.task.id,
-          task_number: context.task.task_number,
-          operator_id: context.operator.id,
-          error: notifyError instanceof Error ? notifyError.message : 'send-failed',
-        },
+      await logTaskNotificationFailure(supabase, {
+        context,
+        kind: 'task-notify',
+        error: notifyError,
       })
       throw notifyError
     }
@@ -974,7 +1068,11 @@ export async function POST(req: Request) {
       entityType: 'task',
       entityId: String(body.taskId),
       action: 'notify',
-      payload: { operator_id: context.operator.id, operator_name: getOperatorDisplayName(context.operator, 'Оператор') },
+      payload: {
+        operator_id: context.assignee.kind === 'operator' ? context.assignee.id : null,
+        staff_id: context.assignee.kind === 'staff' ? context.assignee.id : null,
+        assignee_name: context.assignee.name,
+      },
     })
 
     return json({ ok: true })
