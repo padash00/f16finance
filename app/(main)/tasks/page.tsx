@@ -39,6 +39,8 @@ import {
   Tag,
   ArrowUpDown,
   Trash2,
+  Repeat,
+  Pencil,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
@@ -370,6 +372,7 @@ function TasksContent() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [isTemplatesOpen, setIsTemplatesOpen] = useState(false)
   const [draggedTask, setDraggedTask] = useState<Task | null>(null)
   const [dragOverStatus, setDragOverStatus] = useState<TaskStatus | null>(null)
   const realtimeRefreshRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -857,6 +860,18 @@ function TasksContent() {
                     <LayoutList className="w-4 h-4" />
                   </button>
                 </div>
+
+                {can('tasks.create') && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsTemplatesOpen(true)}
+                    className="rounded-xl border-border bg-white dark:bg-slate-900/50 backdrop-blur-xl hover:bg-surface-hover gap-2"
+                    title="Шаблоны и повторяющиеся задачи"
+                  >
+                    <Repeat className="w-4 h-4" />
+                    <span className="hidden sm:inline">Шаблоны</span>
+                  </Button>
+                )}
 
                 {can('tasks.create') && (
                   <Button
@@ -1434,6 +1449,16 @@ function TasksContent() {
         staff={staff}
         companies={companies}
         nextTaskNumber={nextTaskNumber}
+      />
+
+      {/* Templates Modal */}
+      <TaskTemplatesModal
+        isOpen={isTemplatesOpen}
+        onClose={() => setIsTemplatesOpen(false)}
+        operators={operators}
+        staff={staff}
+        companies={companies}
+        onTaskCreated={() => loadData(true)}
       />
     </>
   )
@@ -2608,6 +2633,491 @@ function CreateTaskModal({
             </Button>
           </DialogFooter>
         </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// =====================
+// ШАБЛОНЫ И ПОВТОРЯЮЩИЕСЯ ЗАДАЧИ
+// =====================
+type TaskTemplate = {
+  id: string
+  company_id: string | null
+  title: string
+  description: string | null
+  checklist: string[] | null
+  priority: TaskPriority
+  operator_id: string | null
+  staff_id: string | null
+  due_in_days: number | null
+  recurrence_days: number[] | null
+  is_active: boolean
+  last_spawned_on: string | null
+}
+
+type TemplateFormState = {
+  id?: string
+  title: string
+  description: string
+  checklistText: string
+  priority: TaskPriority
+  assignee: string
+  company_id: string
+  due_in_days: string
+  days: number[]
+  is_active: boolean
+}
+
+const WEEKDAYS: Array<{ value: number; label: string }> = [
+  { value: 1, label: 'Пн' },
+  { value: 2, label: 'Вт' },
+  { value: 3, label: 'Ср' },
+  { value: 4, label: 'Чт' },
+  { value: 5, label: 'Пт' },
+  { value: 6, label: 'Сб' },
+  { value: 7, label: 'Вс' },
+]
+
+function templateToPayload(form: TemplateFormState) {
+  return {
+    id: form.id || null,
+    title: form.title.trim(),
+    description: form.description.trim() || null,
+    checklist: form.checklistText
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean),
+    priority: form.priority,
+    ...assigneeToPayload(form.assignee),
+    company_id: form.company_id || null,
+    due_in_days: form.due_in_days.trim() === '' ? null : Math.max(0, Math.floor(Number(form.due_in_days))),
+    recurrence_days: form.days,
+    is_active: form.is_active,
+  }
+}
+
+function TaskTemplatesModal({
+  isOpen,
+  onClose,
+  operators,
+  staff,
+  companies,
+  onTaskCreated,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  operators: Operator[]
+  staff: Staff[]
+  companies: Company[]
+  onTaskCreated: () => Promise<void> | void
+}) {
+  const { toast } = useToast()
+  const { can } = useCapabilities()
+  const [templates, setTemplates] = useState<TaskTemplate[]>([])
+  const [loading, setLoading] = useState(false)
+  const [migrationMissing, setMigrationMissing] = useState(false)
+  const [form, setForm] = useState<TemplateFormState | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [busyId, setBusyId] = useState<string | null>(null)
+
+  const loadTemplates = useCallback(async () => {
+    setLoading(true)
+    try {
+      const response = await fetch('/api/admin/tasks?templates=1', { cache: 'no-store' })
+      const json = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(json?.error || `Ошибка запроса (${response.status})`)
+      setTemplates(Array.isArray(json?.templates) ? json.templates : [])
+      setMigrationMissing(json?.migrationMissing === true)
+    } catch (error: any) {
+      toast({ title: 'Шаблоны не загрузились', description: error?.message || 'Попробуй ещё раз', variant: 'destructive' })
+    } finally {
+      setLoading(false)
+    }
+  }, [toast])
+
+  useEffect(() => {
+    if (isOpen) {
+      setForm(null)
+      void loadTemplates()
+    }
+  }, [isOpen, loadTemplates])
+
+  const emptyForm = (): TemplateFormState => ({
+    title: '',
+    description: '',
+    checklistText: '',
+    priority: 'medium',
+    assignee: '',
+    company_id: companies.length === 1 ? companies[0].id : '',
+    due_in_days: '0',
+    days: [],
+    is_active: true,
+  })
+
+  const toForm = (t: TaskTemplate): TemplateFormState => ({
+    id: t.id,
+    title: t.title,
+    description: t.description || '',
+    checklistText: (Array.isArray(t.checklist) ? t.checklist : []).join('\n'),
+    priority: t.priority,
+    assignee: taskAssigneeValue(t),
+    company_id: t.company_id || '',
+    due_in_days: t.due_in_days === null || t.due_in_days === undefined ? '' : String(t.due_in_days),
+    days: Array.isArray(t.recurrence_days) ? t.recurrence_days : [],
+    is_active: t.is_active,
+  })
+
+  const saveForm = async () => {
+    if (!form || !form.title.trim()) return
+    setSaving(true)
+    try {
+      const response = await fetch('/api/admin/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'saveTemplate', template: templateToPayload(form) }),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(json?.error || `Ошибка запроса (${response.status})`)
+      toast({ title: form.id ? 'Шаблон обновлён' : 'Шаблон создан' })
+      setForm(null)
+      await loadTemplates()
+    } catch (error: any) {
+      toast({ title: 'Не удалось сохранить шаблон', description: error?.message || 'Попробуй ещё раз', variant: 'destructive' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const toggleActive = async (template: TaskTemplate) => {
+    setBusyId(template.id)
+    try {
+      const payload = templateToPayload({ ...toForm(template), is_active: !template.is_active })
+      const response = await fetch('/api/admin/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'saveTemplate', template: payload }),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(json?.error || `Ошибка запроса (${response.status})`)
+      await loadTemplates()
+    } catch (error: any) {
+      toast({ title: 'Не удалось изменить шаблон', description: error?.message || 'Попробуй ещё раз', variant: 'destructive' })
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const spawnNow = async (template: TaskTemplate) => {
+    setBusyId(template.id)
+    try {
+      const response = await fetch('/api/admin/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'spawnTemplate', templateId: template.id }),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(json?.error || `Ошибка запроса (${response.status})`)
+      toast({
+        title: `Задача #${json?.data?.task_number || ''} создана`,
+        description: json?.notification?.sent === false ? 'Уведомление исполнителю не отправилось.' : 'Исполнитель получил уведомление.',
+      })
+      await onTaskCreated()
+    } catch (error: any) {
+      toast({ title: 'Не удалось создать задачу', description: error?.message || 'Попробуй ещё раз', variant: 'destructive' })
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const removeTemplate = async (template: TaskTemplate) => {
+    if (!window.confirm(`Удалить шаблон «${template.title}»?`)) return
+    setBusyId(template.id)
+    try {
+      const response = await fetch('/api/admin/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'deleteTemplate', templateId: template.id }),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(json?.error || `Ошибка запроса (${response.status})`)
+      toast({ title: 'Шаблон удалён' })
+      await loadTemplates()
+    } catch (error: any) {
+      toast({ title: 'Не удалось удалить шаблон', description: error?.message || 'Попробуй ещё раз', variant: 'destructive' })
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const assigneeName = (t: TaskTemplate) => {
+    if (t.operator_id) {
+      const operator = operators.find((o) => o.id === t.operator_id)
+      return operator ? getOperatorDisplayName(operator) : 'Оператор'
+    }
+    if (t.staff_id) {
+      const member = staff.find((s) => s.id === t.staff_id)
+      return member ? member.full_name || member.short_name || 'Сотрудник' : 'Сотрудник'
+    }
+    return 'Без исполнителя'
+  }
+
+  const fieldClass = 'h-9 w-full rounded-lg border border-border bg-white dark:bg-slate-800/50 px-2.5 text-sm text-foreground'
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="bg-card border-border text-foreground max-h-[90dvh] overflow-y-auto sm:max-w-[min(44rem,calc(100vw-2rem))]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Repeat className="h-5 w-5 text-violet-500 dark:text-violet-300" />
+            Шаблоны и повторяющиеся задачи
+          </DialogTitle>
+          <DialogDescription className="text-muted-foreground">
+            Шаблон с днями недели создаёт задачу сам каждое утро (08:50). Без расписания — по кнопке «Создать».
+          </DialogDescription>
+        </DialogHeader>
+
+        {migrationMissing && (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
+            Примените миграцию 20260716_task_templates.sql — без неё шаблоны не сохраняются.
+          </div>
+        )}
+
+        {form ? (
+          <div className="space-y-3">
+            <Input
+              placeholder="Название задачи *"
+              value={form.title}
+              onChange={(e) => setForm({ ...form, title: e.target.value })}
+              className="bg-white dark:bg-slate-800/50 border-border"
+            />
+            <textarea
+              placeholder="Описание"
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              rows={2}
+              className="w-full resize-none rounded-lg border border-border bg-white dark:bg-slate-800/50 p-2.5 text-sm text-foreground"
+            />
+            <div>
+              <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                Чек-лист — каждая строка станет пунктом
+              </label>
+              <textarea
+                placeholder={'Протереть витрину\nПроверить кассу\nВключить консоли'}
+                value={form.checklistText}
+                onChange={(e) => setForm({ ...form, checklistText: e.target.value })}
+                rows={4}
+                className="w-full resize-none rounded-lg border border-border bg-white dark:bg-slate-800/50 p-2.5 text-sm text-foreground"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <select
+                value={form.assignee}
+                onChange={(e) => setForm({ ...form, assignee: e.target.value })}
+                className={fieldClass}
+              >
+                <option value="">Исполнитель</option>
+                <optgroup label="Операторы">
+                  {operators.filter((op) => op.is_active !== false).map((op) => (
+                    <option key={op.id} value={`op:${op.id}`}>
+                      {getOperatorDisplayName(op)} {op.telegram_chat_id ? '📱' : ''}
+                    </option>
+                  ))}
+                </optgroup>
+                {staff.filter(isActiveStaff).length > 0 && (
+                  <optgroup label="Сотрудники">
+                    {staff.filter(isActiveStaff).map((member) => (
+                      <option key={member.id} value={`st:${member.id}`}>
+                        {member.full_name || member.short_name} {member.telegram_chat_id ? '📱' : ''}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+
+              <select
+                value={form.company_id}
+                onChange={(e) => setForm({ ...form, company_id: e.target.value })}
+                className={fieldClass}
+              >
+                <option value="">Выберите компанию</option>
+                {companies.map((company) => (
+                  <option key={company.id} value={company.id}>{company.name}</option>
+                ))}
+              </select>
+
+              <select
+                value={form.priority}
+                onChange={(e) => setForm({ ...form, priority: e.target.value as TaskPriority })}
+                className={fieldClass}
+              >
+                {Object.entries(PRIORITY_CONFIG).map(([priority, config]) => (
+                  <option key={priority} value={priority}>{config.icon} {config.label}</option>
+                ))}
+              </select>
+
+              <Input
+                type="number"
+                min={0}
+                placeholder="Дедлайн через N дней (пусто — без)"
+                value={form.due_in_days}
+                onChange={(e) => setForm({ ...form, due_in_days: e.target.value })}
+                className="h-9 bg-white dark:bg-slate-800/50 border-border text-sm"
+                title="0 — срок в день создания; пусто — без дедлайна"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                Дни автосоздания — пусто, если шаблон только ручной
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {WEEKDAYS.map((day) => {
+                  const active = form.days.includes(day.value)
+                  return (
+                    <button
+                      key={day.value}
+                      type="button"
+                      onClick={() =>
+                        setForm({
+                          ...form,
+                          days: active ? form.days.filter((d) => d !== day.value) : [...form.days, day.value].sort(),
+                        })
+                      }
+                      className={cn(
+                        'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+                        active
+                          ? 'border-violet-400/60 bg-violet-500/15 text-violet-600 dark:text-violet-300'
+                          : 'border-border text-muted-foreground hover:border-violet-400/40 hover:text-foreground',
+                      )}
+                    >
+                      {day.label}
+                    </button>
+                  )
+                })}
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, days: form.days.length === 7 ? [] : [1, 2, 3, 4, 5, 6, 7] })}
+                  className="rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-violet-400/40 hover:text-foreground"
+                >
+                  {form.days.length === 7 ? 'Сбросить' : 'Каждый день'}
+                </button>
+              </div>
+            </div>
+
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
+              <Checkbox checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: v === true })} />
+              Шаблон активен
+            </label>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="ghost" onClick={() => setForm(null)} disabled={saving}>
+                Отмена
+              </Button>
+              <Button type="button" onClick={() => void saveForm()} disabled={saving || !form.title.trim()}>
+                {saving ? 'Сохраняем...' : form.id ? 'Сохранить шаблон' : 'Создать шаблон'}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {loading && templates.length === 0 && (
+              <p className="py-6 text-center text-sm text-muted-foreground">Загрузка...</p>
+            )}
+            {!loading && templates.length === 0 && (
+              <p className="py-6 text-center text-sm italic text-muted-foreground">
+                Шаблонов пока нет. Создайте первый — например, «Чек-лист открытия смены».
+              </p>
+            )}
+            {templates.map((template) => (
+              <div
+                key={template.id}
+                className={cn(
+                  'rounded-xl border border-border bg-surface-muted p-3',
+                  !template.is_active && 'opacity-60',
+                )}
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium text-foreground">{template.title}</span>
+                  {Array.isArray(template.recurrence_days) && template.recurrence_days.length > 0 ? (
+                    <span className="rounded-full border border-violet-400/40 bg-violet-500/10 px-2 py-0.5 text-[11px] font-medium text-violet-600 dark:text-violet-300">
+                      {template.recurrence_days.length === 7
+                        ? 'Каждый день'
+                        : template.recurrence_days.map((d) => WEEKDAYS.find((w) => w.value === d)?.label).filter(Boolean).join(', ')}
+                    </span>
+                  ) : (
+                    <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">Вручную</span>
+                  )}
+                  {!template.is_active && (
+                    <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">Выключен</span>
+                  )}
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                  <span>{assigneeName(template)}</span>
+                  <span>{PRIORITY_CONFIG[template.priority]?.icon} {PRIORITY_CONFIG[template.priority]?.label}</span>
+                  {template.company_id && (
+                    <span>{companies.find((c) => c.id === template.company_id)?.name || 'Точка'}</span>
+                  )}
+                  {template.due_in_days !== null && template.due_in_days !== undefined && (
+                    <span>срок: {template.due_in_days === 0 ? 'в день создания' : `+${template.due_in_days} дн.`}</span>
+                  )}
+                  {Array.isArray(template.checklist) && template.checklist.length > 0 && (
+                    <span>чек-лист: {template.checklist.length}</span>
+                  )}
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  <Button
+                    size="sm"
+                    className="h-7 gap-1.5 bg-violet-500 px-2 text-xs text-white hover:bg-violet-600"
+                    onClick={() => void spawnNow(template)}
+                    disabled={busyId === template.id}
+                  >
+                    {busyId === template.id ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                    Создать сейчас
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 gap-1.5 border-border px-2 text-xs"
+                    onClick={() => setForm(toForm(template))}
+                    disabled={busyId === template.id}
+                  >
+                    <Pencil className="h-3 w-3" />
+                    Изменить
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 px-2 text-xs border-border"
+                    onClick={() => void toggleActive(template)}
+                    disabled={busyId === template.id}
+                  >
+                    {template.is_active ? 'Выключить' : 'Включить'}
+                  </Button>
+                  {can('tasks.delete') && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 gap-1.5 border-red-500/30 px-2 text-xs text-red-500 hover:bg-red-500/10 dark:text-red-400"
+                      onClick={() => void removeTemplate(template)}
+                      disabled={busyId === template.id}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            <div className="pt-1">
+              <Button type="button" onClick={() => setForm(emptyForm())} className="w-full gap-2 sm:w-auto">
+                <Plus className="h-4 w-4" />
+                Новый шаблон
+              </Button>
+            </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   )

@@ -7,6 +7,7 @@ import { requireCapability } from '@/lib/server/capabilities'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { spawnTaskFromTemplate } from '@/lib/server/task-templates'
 import { escapeTelegramHtml } from '@/lib/telegram/message-kit'
 import { sendTelegramMessage as sendOrdaTelegram } from '@/lib/telegram/send'
 
@@ -60,6 +61,32 @@ type Body =
       action: 'deleteTask'
       taskId: string
     }
+  | {
+      action: 'saveTemplate'
+      template: TaskTemplatePayload
+    }
+  | {
+      action: 'deleteTemplate'
+      templateId: string
+    }
+  | {
+      action: 'spawnTemplate'
+      templateId: string
+    }
+
+type TaskTemplatePayload = {
+  id?: string | null
+  title: string
+  description?: string | null
+  checklist?: string[] | null
+  priority: TaskPriority
+  operator_id?: string | null
+  staff_id?: string | null
+  company_id?: string | null
+  due_in_days?: number | null
+  recurrence_days?: number[] | null
+  is_active?: boolean
+}
 
 type ClientLike = ReturnType<typeof createAdminSupabaseClient> | ReturnType<typeof createRequestSupabaseClient>
 type LoadedTask = {
@@ -506,6 +533,22 @@ export async function GET(req: Request) {
       requestedCompanyId: companyId,
       isSuperAdmin: access.isSuperAdmin,
     })
+
+    // Шаблоны задач: ?templates=1
+    if (url.searchParams.get('templates') === '1') {
+      let templatesQuery = supabase.from('task_templates').select('*').order('created_at', { ascending: false })
+      if (companyScope.allowedCompanyIds !== null) {
+        if (companyScope.allowedCompanyIds.length === 0) return json({ templates: [] })
+        templatesQuery = templatesQuery.in('company_id', companyScope.allowedCompanyIds)
+      }
+      const { data: templates, error: templatesError } = await templatesQuery
+      if (templatesError) {
+        // Миграция могла быть не применена — не роняем страницу задач.
+        if (String(templatesError.message || '').includes('task_templates')) return json({ templates: [], migrationMissing: true })
+        throw templatesError
+      }
+      return json({ templates: templates || [] })
+    }
 
     const buildListQuery = (withStaffId: boolean) => {
       let query = supabase
@@ -1037,6 +1080,135 @@ export async function POST(req: Request) {
         payload: { task_number: existingContext.task.task_number, title: existingContext.task.title },
       })
       return json({ ok: true })
+    }
+
+    if (body.action === 'saveTemplate') {
+      const denied = await requireCapability(access, 'tasks.create')
+      if (denied) return denied as any
+      const t = body.template
+      if (!t?.title?.trim()) return json({ error: 'Название шаблона обязательно' }, 400)
+      if (!t.company_id?.trim() && !access.isSuperAdmin) {
+        return json({ error: 'Для шаблона нужно выбрать точку' }, 400)
+      }
+      await ensureTaskCompanyAccess(
+        { activeOrganizationId: access.activeOrganization?.id || null, isSuperAdmin: access.isSuperAdmin },
+        t.company_id,
+      )
+
+      const operatorId = t.operator_id || null
+      const recurrence = Array.isArray(t.recurrence_days)
+        ? Array.from(new Set(t.recurrence_days.map(Number).filter((d) => d >= 1 && d <= 7))).sort()
+        : null
+      const dueInDaysRaw = t.due_in_days
+      const row = {
+        title: t.title.trim(),
+        description: t.description?.trim() || null,
+        checklist: Array.isArray(t.checklist)
+          ? t.checklist.map((text) => String(text).trim()).filter(Boolean)
+          : [],
+        priority: t.priority || 'medium',
+        operator_id: operatorId,
+        staff_id: operatorId ? null : t.staff_id || null,
+        company_id: t.company_id || null,
+        due_in_days:
+          dueInDaysRaw === null || dueInDaysRaw === undefined || Number.isNaN(Number(dueInDaysRaw))
+            ? null
+            : Math.max(0, Math.floor(Number(dueInDaysRaw))),
+        recurrence_days: recurrence && recurrence.length ? recurrence : null,
+        is_active: t.is_active !== false,
+      }
+
+      const result = t.id
+        ? await supabase.from('task_templates').update(row).eq('id', t.id).select('*').single()
+        : await supabase
+            .from('task_templates')
+            .insert([{ ...row, created_by: staffMember?.id || null }])
+            .select('*')
+            .single()
+      if (result.error) {
+        if (String(result.error.message || '').includes('task_templates')) {
+          return json({ error: 'Шаблоны недоступны: примените миграцию 20260716_task_templates.sql' }, 400)
+        }
+        throw result.error
+      }
+
+      await writeAuditLog(supabase, {
+        actorUserId: user?.id || null,
+        entityType: 'task-template',
+        entityId: String(result.data.id),
+        action: t.id ? 'update' : 'create',
+        payload: { title: row.title, recurrence_days: row.recurrence_days },
+      })
+
+      return json({ ok: true, data: result.data })
+    }
+
+    if (body.action === 'deleteTemplate') {
+      const denied = await requireCapability(access, 'tasks.delete')
+      if (denied) return denied as any
+      if (!body.templateId) return json({ error: 'templateId обязателен' }, 400)
+      const { data: template, error: templateError } = await supabase
+        .from('task_templates')
+        .select('id, title, company_id')
+        .eq('id', body.templateId)
+        .single()
+      if (templateError) throw templateError
+      await ensureTaskCompanyAccess(
+        { activeOrganizationId: access.activeOrganization?.id || null, isSuperAdmin: access.isSuperAdmin },
+        template.company_id,
+      )
+      const { error } = await supabase.from('task_templates').delete().eq('id', body.templateId)
+      if (error) throw error
+      await writeAuditLog(supabase, {
+        actorUserId: user?.id || null,
+        entityType: 'task-template',
+        entityId: String(body.templateId),
+        action: 'delete',
+        payload: { title: template.title },
+      })
+      return json({ ok: true })
+    }
+
+    if (body.action === 'spawnTemplate') {
+      const denied = await requireCapability(access, 'tasks.create')
+      if (denied) return denied as any
+      if (!body.templateId) return json({ error: 'templateId обязателен' }, 400)
+      const { data: template, error: templateError } = await supabase
+        .from('task_templates')
+        .select('*')
+        .eq('id', body.templateId)
+        .single()
+      if (templateError) throw templateError
+      await ensureTaskCompanyAccess(
+        { activeOrganizationId: access.activeOrganization?.id || null, isSuperAdmin: access.isSuperAdmin },
+        template.company_id,
+      )
+
+      const createdTask = await spawnTaskFromTemplate(supabase, template, staffMember?.id || template.created_by || null)
+
+      await writeAuditLog(supabase, {
+        actorUserId: user?.id || null,
+        entityType: 'task',
+        entityId: String(createdTask.id),
+        action: 'create-from-template',
+        payload: { template_id: template.id, task_number: createdTask.task_number, title: createdTask.title },
+      })
+
+      let notification: { sent: boolean; reason?: string } | undefined
+      try {
+        const context = await loadTaskContext(supabase, String(createdTask.id))
+        notification = await notifyTaskAssignee(supabase, {
+          task: context.task,
+          assignee: context.assignee,
+          company: context.company,
+          type: 'assigned',
+        })
+      } catch (notifyError) {
+        notification = { sent: false, reason: 'send-failed' }
+        console.error('Template spawn notify error', notifyError)
+      }
+
+      return json({ ok: true, data: createdTask, notification })
     }
 
     if (!body.taskId) return json({ error: 'taskId обязателен' }, 400)
