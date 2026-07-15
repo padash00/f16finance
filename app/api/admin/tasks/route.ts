@@ -562,11 +562,11 @@ export async function GET(req: Request) {
               .in('id', operatorIds)
           })(),
       access.isSuperAdmin
-        ? supabase.from('staff').select('id, full_name, short_name, telegram_chat_id').order('full_name')
+        ? supabase.from('staff').select('id, full_name, short_name, telegram_chat_id, is_active, dismissed_at').order('full_name')
         : access.activeOrganization?.id
           ? supabase
               .from('staff')
-              .select('id, full_name, short_name, telegram_chat_id')
+              .select('id, full_name, short_name, telegram_chat_id, is_active, dismissed_at')
               .eq('organization_id', access.activeOrganization.id)
               .order('full_name')
           : (() => {
@@ -579,7 +579,7 @@ export async function GET(req: Request) {
               )
               if (!staffIds.length) return Promise.resolve({ data: [], error: null } as any)
 
-              return supabase.from('staff').select('id, full_name, short_name, telegram_chat_id').in('id', staffIds)
+              return supabase.from('staff').select('id, full_name, short_name, telegram_chat_id, is_active, dismissed_at').in('id', staffIds)
             })(),
       access.isSuperAdmin || companyScope.allowedCompanyIds === null
         ? supabase.from('companies').select('id, name, code').order('name')

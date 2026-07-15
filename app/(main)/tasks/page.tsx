@@ -67,7 +67,13 @@ type Staff = {
   full_name: string
   short_name: string | null
   telegram_chat_id?: string | null
+  is_active?: boolean | null
+  dismissed_at?: string | null
 }
+
+// Уволенных не предлагаем в исполнители, но храним в списке для имён
+// (постановщик, старые задачи, комментарии).
+const isActiveStaff = (member: Staff) => member.is_active !== false && !member.dismissed_at
 
 type TaskFormState = {
   title: string
@@ -935,9 +941,9 @@ function TasksContent() {
                       </option>
                     ))}
                   </optgroup>
-                  {staff.length > 0 && (
+                  {staff.filter(isActiveStaff).length > 0 && (
                     <optgroup label="Сотрудники">
-                      {staff.map(member => (
+                      {staff.filter(isActiveStaff).map(member => (
                         <option key={member.id} value={`st:${member.id}`}>
                           {member.full_name || member.short_name} {member.telegram_chat_id ? '📱' : ''}
                         </option>
@@ -2031,15 +2037,23 @@ function TaskDetailModal({
                 </option>
               ))}
             </optgroup>
-            {staff.length > 0 && (
-              <optgroup label="Сотрудники">
-                {staff.map((member) => (
-                  <option key={member.id} value={`st:${member.id}`}>
-                    {member.full_name || member.short_name} {member.telegram_chat_id ? '📱' : ''}
-                  </option>
-                ))}
-              </optgroup>
-            )}
+            {(() => {
+              // Активные + уже назначенный на задачу (даже если уволен)
+              const selectable = staff.filter(
+                (member) => isActiveStaff(member) || `st:${member.id}` === editForm.assignee,
+              )
+              if (selectable.length === 0) return null
+              return (
+                <optgroup label="Сотрудники">
+                  {selectable.map((member) => (
+                    <option key={member.id} value={`st:${member.id}`}>
+                      {member.full_name || member.short_name} {member.telegram_chat_id ? '📱' : ''}
+                      {!isActiveStaff(member) ? ' (уволен)' : ''}
+                    </option>
+                  ))}
+                </optgroup>
+              )
+            })()}
           </select>
         ) : (
           <div className="flex items-center gap-2">
@@ -2496,9 +2510,9 @@ function CreateTaskModal({
                   </option>
                 ))}
               </optgroup>
-              {staff.length > 0 && (
+              {staff.filter(isActiveStaff).length > 0 && (
                 <optgroup label="Сотрудники">
-                  {staff.map((member: Staff) => (
+                  {staff.filter(isActiveStaff).map((member: Staff) => (
                     <option key={member.id} value={`st:${member.id}`}>
                       {member.full_name || member.short_name} {member.telegram_chat_id ? '📱' : ''}
                     </option>
