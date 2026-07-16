@@ -723,7 +723,7 @@ export default function PointDevicesPage() {
               </ol>
             </div>
           </div>
-          <div className="flex shrink-0 flex-col gap-2">
+          <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto">
             <a
               href={process.env.NEXT_PUBLIC_OPERATOR_DOWNLOAD_URL || 'https://github.com/padash00/f16finance/releases/latest'}
               target="_blank"

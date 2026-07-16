@@ -47,17 +47,17 @@ function UpgradeContent() {
       </button>
 
       <div className="overflow-hidden rounded-[2rem] border border-border bg-white shadow-[var(--card-shadow)] dark:bg-white/5">
-        <div className="bg-[linear-gradient(135deg,#0a7d4a,#0f6b40)] px-8 py-10 text-white">
+        <div className="bg-[linear-gradient(135deg,#0a7d4a,#0f6b40)] px-5 py-8 sm:px-8 sm:py-10 text-white">
           <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-white/15 backdrop-blur-sm">
             <Lock className="h-7 w-7" />
           </div>
-          <h1 className="mt-5 text-3xl font-semibold tracking-[-0.02em]">«{pageLabel}» не входит в ваш тариф</h1>
+          <h1 className="mt-5 text-2xl sm:text-3xl font-semibold tracking-[-0.02em]">«{pageLabel}» не входит в ваш тариф</h1>
           <p className="mt-2 max-w-xl text-sm leading-7 text-emerald-50/85">
             Эта страница доступна в подходящем пакете или как отдельный модуль. Подключите её — и она появится в меню.
           </p>
         </div>
 
-        <div className="space-y-6 p-8">
+        <div className="space-y-6 p-5 sm:p-8">
           {loading ? (
             <div className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" />Загрузка вариантов…</div>
           ) : (

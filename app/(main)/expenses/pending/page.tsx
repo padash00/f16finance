@@ -133,7 +133,7 @@ export default function PendingExpensesPage() {
               <Card key={item.id} className="p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1 text-xs text-muted-foreground">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mb-1 text-xs text-muted-foreground">
                       <Clock className="w-3 h-3" />
                       <span>{new Date(item.created_at).toLocaleString('ru-RU')}</span>
                       <span>·</span>
@@ -152,7 +152,7 @@ export default function PendingExpensesPage() {
                     <div className="text-xs text-muted-foreground">{item.date}</div>
                   </div>
                 </div>
-                <div className="flex gap-2 mt-3">
+                <div className="flex flex-wrap gap-2 mt-3">
                   {canApprove && (
                     <Button size="sm" onClick={() => approve(item.id)} disabled={busy}>
                       {busy ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <CheckCircle2 className="w-3 h-3 mr-1" />}

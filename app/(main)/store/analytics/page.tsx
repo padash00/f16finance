@@ -331,7 +331,7 @@ export default function StoreAnalyticsPage({ embedded = false }: { embedded?: bo
                     </div>
                     <Skeleton className="h-6 w-14 rounded-full" />
                   </div>
-                  <div className="mt-4 grid gap-2 md:grid-cols-4">
+                  <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4">
                     {Array.from({ length: 4 }).map((__, i) => (
                       <div key={i} className="rounded-xl border border-border bg-slate-100 dark:bg-black/20 px-3 py-2">
                         <Skeleton className="h-3 w-20" />
@@ -355,7 +355,7 @@ export default function StoreAnalyticsPage({ embedded = false }: { embedded?: bo
                       {point.stockItems} SKU
                     </div>
                   </div>
-                  <div className="mt-4 grid gap-2 md:grid-cols-4">
+                  <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4">
                     <div className="rounded-xl border border-border bg-slate-100 dark:bg-black/20 px-3 py-2">
                       <p className="text-xs text-muted-foreground">На витрине</p>
                       <p className="mt-1 font-semibold text-foreground">{formatQty(point.stockQty)}</p>
@@ -376,7 +376,7 @@ export default function StoreAnalyticsPage({ embedded = false }: { embedded?: bo
                       <p className="text-xs text-muted-foreground">{formatMoney(point.debtAmount)}</p>
                     </div>
                   </div>
-                  <div className="mt-2 grid gap-2 md:grid-cols-3">
+                  <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-3">
                     <div className="rounded-xl border border-border bg-slate-100 dark:bg-black/20 px-3 py-2">
                       <p className="text-xs text-muted-foreground">Возвраты</p>
                       <p className="mt-1 font-semibold text-foreground">{formatQty(point.returnQty)}</p>
@@ -448,7 +448,7 @@ export default function StoreAnalyticsPage({ embedded = false }: { embedded?: bo
               <h2 className="text-lg font-semibold text-foreground">Складские запасы</h2>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">Общая картина по подсобке.</p>
-            <div className="mt-4 grid gap-2 md:grid-cols-2">
+            <div className="mt-4 grid grid-cols-2 gap-2">
               <div className="rounded-xl border border-border bg-slate-100 dark:bg-black/20 px-3 py-2">
                 <p className="text-xs text-muted-foreground">Ед. товара</p>
                 <p className="mt-1 font-semibold text-foreground">{formatQty(warehouseAnalytics.totalStockQty)}</p>

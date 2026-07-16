@@ -235,7 +235,7 @@ export default function OperatorAchievementsPage() {
         backHref="/"
         actions={
           <>
-            <div className="flex items-center gap-1 bg-white/50 dark:bg-zinc-900/50 p-1 rounded-xl border border-border">
+            <div className="flex flex-wrap items-center gap-1 bg-white/50 dark:bg-zinc-900/50 p-1 rounded-xl border border-border">
               {(Object.keys(PERIOD_PRESETS) as PeriodPreset[]).map((p) => (
                 <button
                   key={p}

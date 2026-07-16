@@ -893,7 +893,7 @@ export default function SmartDashboardPage() {
       <div className="space-y-4">
         <StatGridSkeleton count={4} />
         <CardSkeleton rows={4} />
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <CardSkeleton rows={3} />
           <CardSkeleton rows={3} />
         </div>
@@ -1112,7 +1112,7 @@ export default function SmartDashboardPage() {
                 Сравнение точек
               </h3>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[480px] text-sm">
                   <thead>
                     <tr className="text-[11px] uppercase tracking-wide text-muted-foreground border-b border-border">
                       <th className="px-2 py-2 text-left font-medium">Точка</th>
@@ -1503,7 +1503,7 @@ function ChartCard(props: {
 
   return (
     <Card className="p-6 border border-slate-200 bg-white dark:border-0 dark:bg-slate-800/50 backdrop-blur-sm">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-amber-500/20 rounded-xl">
             <LineChart className="w-5 h-5 text-amber-600 dark:text-amber-300" />

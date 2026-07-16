@@ -852,7 +852,7 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
       </div>
 
       {/* Right: sidebar - zones on/off map, unplaced stations */}
-      <div className="flex w-48 flex-col gap-4">
+      <div className="flex w-full flex-col gap-4 lg:w-48">
         {/* Zones placement */}
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Зоны</p>
@@ -1885,7 +1885,7 @@ function StationsPageContent() {
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-0 border-b border-border">
+            <div className="flex gap-0 overflow-x-auto border-b border-border">
               {[
                 { id: 'manage', label: 'Управление', icon: Settings },
                 { id: 'catalog', label: 'Каталог игр', icon: Gamepad2 },
@@ -1896,7 +1896,7 @@ function StationsPageContent() {
                 <button
                   key={id}
                   onClick={() => setActiveTab(id as any)}
-                  className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${activeTab === id ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+                  className={`flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 py-3 text-sm font-medium transition-colors sm:px-4 ${activeTab === id ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
                 >
                   <Icon className="h-4 w-4" />{label}
                 </button>
@@ -2253,7 +2253,7 @@ function StationsPageContent() {
                                       )
                                     )}
                                   </div>
-                                  <div className="hidden items-center gap-1 group-hover:flex">
+                                  <div className="flex items-center gap-1 sm:hidden sm:group-hover:flex">
                                     {can('stations.edit_station_game') && (
                                       <button
                                         type="button"
@@ -2436,7 +2436,7 @@ function StationsPageContent() {
                                       <span className="ml-1.5 rounded bg-amber-500/20 px-1 py-0.5 text-[10px] font-semibold text-amber-400">Окно</span>
                                     )}
                                   </div>
-                                  <div className="hidden shrink-0 items-center gap-1 group-hover:flex">
+                                  <div className="flex shrink-0 items-center gap-1 sm:hidden sm:group-hover:flex">
                                     {can('stations.edit_tariff') && (
                                       <button type="button" onClick={() => setEditingTariff(t)} className="rounded p-1 text-muted-foreground hover:bg-surface-hover hover:text-foreground"><Pencil className="h-3 w-3" /></button>
                                     )}
@@ -2611,7 +2611,7 @@ function StationsPageContent() {
                       <p className="text-sm font-medium truncate">{g.title}</p>
                       <p className="text-xs text-muted-foreground">{g.category === 'game' ? 'Игра' : g.category === 'browser' ? 'Браузер' : 'Программа'}{!g.is_active ? ' · выключена' : ''}</p>
                     </div>
-                    <div className="hidden group-hover:flex items-center gap-1 shrink-0">
+                    <div className="flex items-center gap-1 shrink-0 sm:hidden sm:group-hover:flex">
                       {can('stations.edit_game_catalog') && (
                         <button type="button" onClick={() => startEditGame(g)} className="rounded-lg p-1.5 hover:bg-surface-hover text-muted-foreground hover:text-slate-900 dark:hover:text-white transition-colors"><Pencil className="h-3.5 w-3.5" /></button>
                       )}
@@ -3431,7 +3431,7 @@ function StationsPageContent() {
                         <span className="flex-1 truncate">{g.title}</span>
                         <span className="text-muted-foreground/50 shrink-0">{g.category === 'game' ? 'Игра' : g.category === 'browser' ? 'Браузер' : 'Прог.'}</span>
                         {!g.is_active && <span className="text-red-400/70 shrink-0">выкл</span>}
-                        <div className="hidden group-hover:flex gap-1 shrink-0">
+                        <div className="flex gap-1 shrink-0 sm:hidden sm:group-hover:flex">
                           <button type="button" onClick={() => startEditGame(g)} className="rounded p-0.5 hover:bg-slate-200 dark:hover:bg-white/15 text-muted-foreground hover:text-slate-900 dark:hover:text-white"><Pencil className="h-3 w-3" /></button>
                           <button type="button" onClick={() => void handleDeleteGame(g.id)} className="rounded p-0.5 hover:bg-destructive/20 text-muted-foreground hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
                         </div>

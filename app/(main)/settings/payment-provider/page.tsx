@@ -102,12 +102,12 @@ export default function PaymentProviderSettingsPage() {
                     <div className="text-sm font-medium text-foreground">{c.name}</div>
                     {c.code && <div className="text-xs text-slate-500">Код: {c.code}</div>}
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <select
                       value={c.payment_provider_id || ''}
                       onChange={(e) => void changeProvider(c.id, e.target.value || null)}
                       disabled={savingId === c.id}
-                      className="rounded-lg border border-border bg-white dark:bg-slate-900/60 px-3 py-2 text-sm text-foreground focus:border-emerald-400 focus:outline-none"
+                      className="w-full min-w-0 rounded-lg border border-border bg-white dark:bg-slate-900/60 px-3 py-2 text-sm text-foreground focus:border-emerald-400 focus:outline-none sm:w-auto"
                     >
                       <option value="">— не выбрано —</option>
                       {providers.map((p) => (

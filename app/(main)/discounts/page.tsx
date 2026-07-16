@@ -479,7 +479,7 @@ export default function DiscountsPage({ embedded = false }: { embedded?: boolean
 
       {/* Create Dialog */}
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
-        <DialogContent>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Создать скидку</DialogTitle>
           </DialogHeader>
@@ -496,7 +496,7 @@ export default function DiscountsPage({ embedded = false }: { embedded?: boolean
 
       {/* Edit Dialog */}
       <Dialog open={!!editDiscount} onOpenChange={(open) => { if (!open) { setEditDiscount(null); setForm(EMPTY_FORM) } }}>
-        <DialogContent>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Редактировать скидку</DialogTitle>
           </DialogHeader>

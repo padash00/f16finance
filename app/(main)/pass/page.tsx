@@ -424,14 +424,14 @@ export default function AccessPage() {
           
           {/* Уведомления */}
           {error && (
-            <div className="fixed top-5 right-5 z-50 bg-rose-500/10 border border-rose-500/20 text-rose-400 px-4 py-3 rounded-2xl backdrop-blur-xl flex items-center gap-3">
+            <div className="fixed top-5 left-4 right-4 sm:left-auto sm:right-5 z-50 bg-rose-500/10 border border-rose-500/20 text-rose-400 px-4 py-3 rounded-2xl backdrop-blur-xl flex items-center gap-3">
               <AlertTriangle className="w-5 h-5" />
               {error}
             </div>
           )}
 
           {success && (
-            <div className="fixed top-5 right-5 z-50 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-4 py-3 rounded-2xl backdrop-blur-xl flex items-center gap-3">
+            <div className="fixed top-5 left-4 right-4 sm:left-auto sm:right-5 z-50 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-4 py-3 rounded-2xl backdrop-blur-xl flex items-center gap-3">
               <CheckCircle2 className="w-5 h-5" />
               {success}
             </div>
@@ -511,37 +511,37 @@ export default function AccessPage() {
           />
 
           {/* Статистика */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className="p-5 bg-white dark:bg-gray-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-4">
+            <Card className="p-3 sm:p-5 bg-white dark:bg-gray-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
               <div className="flex items-center gap-3 mb-2">
                 <div className="p-2 bg-violet-500/20 rounded-lg">
                   <Users className="w-4 h-4 text-violet-400" />
                 </div>
                 <p className="text-xs text-gray-500 uppercase">Всего активных</p>
               </div>
-              <p className="text-2xl font-bold text-foreground">{operators.length}</p>
+              <p className="text-xl sm:text-2xl font-bold text-foreground">{operators.length}</p>
             </Card>
 
-            <Card className="p-5 bg-white dark:bg-gray-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
+            <Card className="p-3 sm:p-5 bg-white dark:bg-gray-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
               <div className="flex items-center gap-3 mb-2">
                 <div className="p-2 bg-amber-500/20 rounded-lg">
                   <Shield className="w-4 h-4 text-amber-400" />
                 </div>
                 <p className="text-xs text-gray-500 uppercase">С Telegram</p>
               </div>
-              <p className="text-2xl font-bold text-amber-400">
+              <p className="text-xl sm:text-2xl font-bold text-amber-400">
                 {operators.filter(o => o.telegram_chat_id).length}
               </p>
             </Card>
 
-            <Card className="p-5 bg-white dark:bg-gray-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
+            <Card className="p-3 sm:p-5 bg-white dark:bg-gray-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
               <div className="flex items-center gap-3 mb-2">
                 <div className="p-2 bg-emerald-500/20 rounded-lg">
                   <Key className="w-4 h-4 text-emerald-400" />
                 </div>
                 <p className="text-xs text-gray-500 uppercase">Сгенерировано</p>
               </div>
-              <p className="text-2xl font-bold text-emerald-400">
+              <p className="text-xl sm:text-2xl font-bold text-emerald-400">
                 {Object.keys(newPasswords).length}
               </p>
             </Card>
@@ -550,7 +550,7 @@ export default function AccessPage() {
           {/* Таблица операторов */}
           <Card className="overflow-hidden bg-white dark:bg-gray-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[880px] text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 dark:border-white/5 bg-surface-muted">
                     <th className="py-4 px-4 text-left font-medium text-gray-400">Оператор</th>

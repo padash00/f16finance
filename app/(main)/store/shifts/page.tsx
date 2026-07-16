@@ -111,7 +111,7 @@ export default function StoreShiftsPage() {
         toolbar={
           <div className="inline-flex flex-wrap gap-1 rounded-2xl border border-border bg-slate-50 dark:bg-slate-950/50 p-1">
             {STATUS.map(({ key, label }) => (
-              <button key={key} onClick={() => setStatus(key)} className={`rounded-xl px-4 py-2 text-sm font-medium transition-all ${status === key ? 'bg-white dark:bg-white/10 text-foreground shadow-sm ring-1 ring-slate-200 dark:ring-white/10' : 'text-muted-foreground hover:text-slate-900 dark:hover:text-white'}`}>{label}</button>
+              <button key={key} onClick={() => setStatus(key)} className={`rounded-xl px-3 py-2 text-sm font-medium transition-all sm:px-4 ${status === key ? 'bg-white dark:bg-white/10 text-foreground shadow-sm ring-1 ring-slate-200 dark:ring-white/10' : 'text-muted-foreground hover:text-slate-900 dark:hover:text-white'}`}>{label}</button>
             ))}
           </div>
         }
@@ -136,7 +136,7 @@ export default function StoreShiftsPage() {
               const cash = open ? (s.live_totals?.cash ?? 0) : Number(s.closing_cash || 0)
               const kaspi = open ? (s.live_totals?.kaspi ?? 0) : Number(s.closing_kaspi || 0)
               return (
-                <button key={s.id} onClick={() => setDetailId(s.id)} className="flex w-full flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 text-left transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.03]">
+                <button key={s.id} onClick={() => setDetailId(s.id)} className="flex w-full flex-wrap items-center gap-x-4 gap-y-2 px-3 py-3 text-left transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.03] sm:gap-x-6 sm:px-4">
                   <div className="flex min-w-[180px] items-center gap-2">
                     <span className="grid h-8 w-8 place-items-center rounded-lg bg-slate-100 dark:bg-white/5 text-muted-foreground"><User className="h-4 w-4" /></span>
                     <div>
@@ -209,7 +209,7 @@ function ShiftDetail({ id, onClose, onChanged }: { id: string; onClose: () => vo
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} aria-hidden />
       <div className="relative z-10 flex h-full w-full max-w-2xl flex-col border-l border-border bg-card shadow-2xl">
         {/* Шапка */}
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+        <div className="flex items-center justify-between border-b border-border px-4 py-4 sm:px-5">
           <div className="flex items-center gap-3">
             <span className="grid h-10 w-10 place-items-center rounded-xl border border-emerald-400/30 bg-emerald-500/15"><Clock className="h-5 w-5 text-emerald-700 dark:text-emerald-300" /></span>
             <div>
@@ -228,7 +228,7 @@ function ShiftDetail({ id, onClose, onChanged }: { id: string; onClose: () => vo
         ) : err ? (
           <div className="m-5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-700 dark:text-rose-200">{err}</div>
         ) : (
-          <div className="flex-1 overflow-y-auto p-5">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-5">
             {/* KPI */}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <Kpi label="Продажи" value={`${fmt(salesTotal)} ₸`} accent="text-emerald-700 dark:text-emerald-300" icon={<TrendingUp className="h-4 w-4" />} />

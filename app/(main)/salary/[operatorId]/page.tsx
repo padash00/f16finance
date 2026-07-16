@@ -359,7 +359,7 @@ function OperatorSalaryDetailPageContent() {
                     <Building2 className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />Разбивка по точкам
                   </div>
                   <AdminTableViewport maxHeight="min(45vh, 22rem)" className="rounded-xl border border-border bg-transparent">
-                    <table className="min-w-full text-xs">
+                    <table className="w-full min-w-[640px] text-xs">
                       <thead className={adminTableStickyTheadClass}>
                         <tr>
                           <th className="pb-3 text-left font-medium">Точка</th>
@@ -490,7 +490,7 @@ function OperatorSalaryDetailPageContent() {
                   Смены за неделю <span className="ml-2 rounded-full bg-surface-hover px-2 py-0.5 text-xs text-muted-foreground">{shifts.length}</span>
                 </div>
                 <AdminTableViewport maxHeight="min(60vh, 36rem)" className="rounded-none border-0 bg-transparent">
-                  <table className="min-w-full text-sm">
+                  <table className="w-full min-w-[760px] text-sm">
                     <thead className={adminTableStickyTheadClass}>
                       <tr>
                         <th className="px-4 py-3 text-left">Дата</th>

@@ -325,7 +325,7 @@ export default function CashFlowPage() {
                     )
                   })}
                 </div>
-                <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-800/50 rounded-xl border border-border">
+                <div className="flex flex-wrap items-center gap-2 px-3 py-2 bg-white dark:bg-slate-800/50 rounded-xl border border-border">
                   <CalendarDays className="w-4 h-4 text-emerald-400 shrink-0" />
                   <DatePicker value={dateFrom} onChange={setDateFrom} className="w-[120px]" />
                   <span className="text-slate-500">—</span>
@@ -335,7 +335,7 @@ export default function CashFlowPage() {
                   <select
                     value={companyId}
                     onChange={(e) => setCompanyId(e.target.value)}
-                    className="px-3 py-2 bg-white dark:bg-slate-800/50 border border-border rounded-xl text-sm text-body outline-none"
+                    className="w-full sm:w-auto px-3 py-2 bg-white dark:bg-slate-800/50 border border-border rounded-xl text-sm text-body outline-none"
                   >
                     <option value="">Все компании</option>
                     {companies.map((c) => (
@@ -350,22 +350,22 @@ export default function CashFlowPage() {
           />
 
           {/* Summary Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card className="p-4 bg-white dark:bg-slate-900/80 border-emerald-500/20">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+            <Card className="p-3 sm:p-4 bg-white dark:bg-slate-900/80 border-emerald-500/20">
               <div className="flex items-center gap-2 mb-2">
                 <TrendingUp className="w-4 h-4 text-emerald-400" />
                 <p className="text-xs text-muted-foreground">Доходы</p>
               </div>
               <p className="text-xl font-bold text-emerald-400">{fmtMoney(stats.totalIncome)}</p>
             </Card>
-            <Card className="p-4 bg-white dark:bg-slate-900/80 border-red-500/20">
+            <Card className="p-3 sm:p-4 bg-white dark:bg-slate-900/80 border-red-500/20">
               <div className="flex items-center gap-2 mb-2">
                 <TrendingDown className="w-4 h-4 text-red-400" />
                 <p className="text-xs text-muted-foreground">Расходы</p>
               </div>
               <p className="text-xl font-bold text-red-400">{fmtMoney(stats.totalExpenses)}</p>
             </Card>
-            <Card className={`p-4 bg-white dark:bg-slate-900/80 ${stats.profit >= 0 ? 'border-amber-500/20' : 'border-red-500/30'}`}>
+            <Card className={`p-3 sm:p-4 bg-white dark:bg-slate-900/80 ${stats.profit >= 0 ? 'border-amber-500/20' : 'border-red-500/30'}`}>
               <div className="flex items-center gap-2 mb-2">
                 <Wallet className="w-4 h-4 text-amber-400" />
                 <p className="text-xs text-muted-foreground">Прибыль</p>
@@ -374,7 +374,7 @@ export default function CashFlowPage() {
                 {fmtMoney(stats.profit)}
               </p>
             </Card>
-            <Card className="p-4 bg-white dark:bg-slate-900/80 border-border">
+            <Card className="p-3 sm:p-4 bg-white dark:bg-slate-900/80 border-border">
               <div className="flex items-center gap-2 mb-2">
                 <Activity className="w-4 h-4 text-amber-400" />
                 <p className="text-xs text-muted-foreground">Маржа</p>

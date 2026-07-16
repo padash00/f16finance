@@ -143,7 +143,7 @@ export default function ValuationPage() {
         <p className="text-[11px] uppercase tracking-widest text-amber-700 dark:text-amber-300/80">Ориентировочная стоимость бизнеса</p>
         {data.profitable ? (
           <>
-            <p className="mt-2 text-4xl font-bold tabular-nums text-amber-700 dark:text-amber-200">
+            <p className="mt-2 text-2xl sm:text-4xl font-bold tabular-nums text-amber-700 dark:text-amber-200">
               {fmtMln(data.valuation.low)} — {fmtMln(data.valuation.high)}
             </p>
             <p className="mt-1 text-sm text-muted-foreground">

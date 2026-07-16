@@ -761,15 +761,15 @@ export default function AddIncomePage() {
 
             {/* Итоговая карточка */}
             {previewTotal > 0 && (
-              <Card className="p-6 border-0 bg-gradient-to-br from-purple-50 via-white to-blue-50 dark:from-purple-900/30 dark:via-gray-900 dark:to-blue-900/30 backdrop-blur-sm">
-                <div className="flex items-center justify-between">
+              <Card className="p-4 sm:p-6 border-0 bg-gradient-to-br from-purple-50 via-white to-blue-50 dark:from-purple-900/30 dark:via-gray-900 dark:to-blue-900/30 backdrop-blur-sm">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-3">
                     <div className="p-3 bg-purple-500/20 rounded-xl">
                       <TrendingUp className="w-6 h-6 text-purple-400" />
                     </div>
                     <div>
                       <p className="text-sm text-slate-500 dark:text-gray-400">Итого к сохранению</p>
-                      <p className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">
+                      <p className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">
                         {formatMoney(previewTotal)}
                       </p>
                     </div>

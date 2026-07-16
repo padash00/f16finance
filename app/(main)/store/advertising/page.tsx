@@ -217,7 +217,7 @@ export default function AdvertisingPage({ embedded = false }: { embedded?: boole
               <select
                 value={companyId}
                 onChange={(e) => setCompanyId(e.target.value)}
-                className="h-9 rounded-md border border-border bg-white dark:bg-white/[0.03] px-3 text-sm text-body outline-none focus:border-amber-500/40"
+                className="h-9 w-full sm:w-auto rounded-md border border-border bg-white dark:bg-white/[0.03] px-3 text-sm text-body outline-none focus:border-amber-500/40"
               >
                 {companies.map((c) => (
                   <option key={c.id} value={c.id}>

@@ -151,7 +151,7 @@ export default function SuppliersListPage({ embedded = false }: { embedded?: boo
         <Card className="p-6 text-sm text-muted-foreground text-center">Поставщиков нет.</Card>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-border">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[860px] text-sm">
             <thead className="bg-slate-50 dark:bg-white/[0.04] text-left text-xs text-muted-foreground">
               <tr>
                 <th className="px-4 py-2.5 font-normal">Поставщик</th>

@@ -192,7 +192,7 @@ export default function AiCfoPage() {
 
             {/* Раскрывающийся выбор дат */}
             {showCustom ? (
-              <div className="flex w-full items-center gap-2">
+              <div className="flex w-full flex-wrap items-center gap-2">
                 <DatePicker value={customFrom} onChange={setCustomFrom} max={customTo || undefined} />
                 <span className={C.sub}>—</span>
                 <DatePicker value={customTo} onChange={setCustomTo} min={customFrom || undefined} />
@@ -431,7 +431,7 @@ export default function AiCfoPage() {
                 <div className={cardCls}>
                   <h3 className="mb-2 text-sm font-semibold flex items-center gap-2"><TrendingUp className="h-4 w-4 text-violet-500" />Прогноз прибыли (30 дней)</h3>
                   <p className="text-sm text-body leading-relaxed">{firstSentence(ai.forecast.text)}</p>
-                  <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                  <div className="mt-3 grid grid-cols-1 gap-2 text-center sm:grid-cols-3">
                     <ForecastCell label="Пессимистичный" value={ai.forecast.pessimistic} tone="rose" />
                     <ForecastCell label="Базовый" value={ai.forecast.base} tone="slate" />
                     <ForecastCell label="Оптимистичный" value={ai.forecast.optimistic} tone="emerald" />

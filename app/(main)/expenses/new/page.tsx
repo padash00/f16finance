@@ -831,7 +831,7 @@ function ExpenseWizardPageContent() {
             {isCommentValid ? <p className={validHintClass}>Комментарий заполнен</p> : null}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-sm font-medium mb-1 block">Наличные ₸</label>
               <input
@@ -952,8 +952,8 @@ function ExpenseWizardPageContent() {
           </button>
 
           {(payload.document_kind === 'receipt' || payload.document_kind === 'invoice' || payload.document_kind === 'bill') && (
-            <div className="ml-8 space-y-3">
-              <div className="flex gap-2">
+            <div className="ml-4 sm:ml-8 space-y-3">
+              <div className="flex flex-wrap gap-2">
                 {(['receipt', 'invoice', 'bill'] as const).map((k) => (
                   <button
                     key={k}
@@ -1041,8 +1041,8 @@ function ExpenseWizardPageContent() {
           </button>
 
           {payload.document_kind === 'whitelist' && (
-            <div className="ml-8">
-              <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="ml-4 sm:ml-8">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <div className="text-xs text-muted-foreground">Список обновляется при возврате на вкладку</div>
                 <button
                   type="button"
@@ -1116,7 +1116,7 @@ function ExpenseWizardPageContent() {
           </button>
 
           {payload.document_kind === 'one_off' && (
-            <div className="ml-8 space-y-3">
+            <div className="ml-4 sm:ml-8 space-y-3">
               <div>
                 <label className="text-sm font-medium mb-1 block">Кому платим</label>
                 <input

@@ -794,17 +794,17 @@ export default function LogsPage() {
               className="border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900/60 pl-10 text-foreground" />
           </div>
           <select value={actor} onChange={e => setActor(e.target.value)}
-            className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900 dark:border-white/10 dark:bg-slate-900/60 dark:text-white dark:[color-scheme:dark]">
+            className="h-10 w-full sm:w-auto rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900 dark:border-white/10 dark:bg-slate-900/60 dark:text-white dark:[color-scheme:dark]">
             <option value="">Все пользователи</option>
             {(data?.filters.actors || []).map(o => <option key={o} value={o}>{o.split('@')[0]}</option>)}
           </select>
           <select value={entityType} onChange={e => setEntityType(e.target.value)}
-            className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900 dark:border-white/10 dark:bg-slate-900/60 dark:text-white dark:[color-scheme:dark]">
+            className="h-10 w-full sm:w-auto rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900 dark:border-white/10 dark:bg-slate-900/60 dark:text-white dark:[color-scheme:dark]">
             <option value="">Все типы</option>
             {(data?.filters.entityTypes || []).map(o => <option key={o} value={o}>{ENTITY_LABELS[o] || o}</option>)}
           </select>
           <select value={action} onChange={e => setAction(e.target.value)}
-            className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900 dark:border-white/10 dark:bg-slate-900/60 dark:text-white dark:[color-scheme:dark]">
+            className="h-10 w-full sm:w-auto rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900 dark:border-white/10 dark:bg-slate-900/60 dark:text-white dark:[color-scheme:dark]">
             <option value="">Все действия</option>
             {(data?.filters.actions || []).map(o => <option key={o} value={o}>{ACTION_BADGE_LABELS[o] || o}</option>)}
           </select>

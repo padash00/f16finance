@@ -205,7 +205,7 @@ export default function ProductionPage() {
         accent="emerald"
         backHref="/"
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button onClick={load} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-slate-100 dark:bg-white/5 px-3 py-2 text-xs font-medium text-body hover:bg-slate-200 dark:hover:bg-white/10">
               {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Обновить
             </button>
@@ -353,7 +353,7 @@ export default function ProductionPage() {
       <div className="rounded-2xl border border-border bg-white dark:bg-slate-900/60 p-5 shadow-lg shadow-black/20">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-foreground">Анализ продаж · теоретический food cost</h3>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <DatePicker className={inputCls} value={anFrom} onChange={setAnFrom} />
             <span className="text-slate-500">—</span>
             <DatePicker className={inputCls} value={anTo} onChange={setAnTo} />
@@ -376,12 +376,12 @@ export default function ProductionPage() {
             {analysis.rows.length === 0 ? (
               <p className="text-xs text-slate-500">Нет продаж связанных блюд за период. Свяжи техкарты с блюдами в продаже (поле «Блюдо в продаже»).</p>
             ) : (
-              <div className="overflow-hidden rounded-xl border border-border">
-                <div className="grid grid-cols-6 gap-2 border-b border-border bg-slate-50 dark:bg-white/[0.02] px-3 py-2 text-[11px] uppercase tracking-wide text-slate-500">
+              <div className="overflow-x-auto rounded-xl border border-border">
+                <div className="grid min-w-[560px] grid-cols-6 gap-2 border-b border-border bg-slate-50 dark:bg-white/[0.02] px-3 py-2 text-[11px] uppercase tracking-wide text-slate-500">
                   <span className="col-span-2">Блюдо</span><span className="text-right">Продано</span><span className="text-right">Себест.</span><span className="text-right">Food cost</span><span className="text-right">FC %</span>
                 </div>
                 {analysis.rows.map((r: any) => (
-                  <div key={r.recipe_id} className="grid grid-cols-6 gap-2 px-3 py-2 text-sm">
+                  <div key={r.recipe_id} className="grid min-w-[560px] grid-cols-6 gap-2 px-3 py-2 text-sm">
                     <span className="col-span-2 truncate text-foreground">{r.name}</span>
                     <span className="text-right tabular-nums text-body">{r.sold_qty}</span>
                     <span className="text-right tabular-nums text-muted-foreground">{money(r.portion_cost)}</span>

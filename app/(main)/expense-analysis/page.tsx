@@ -110,7 +110,7 @@ export default function ExpenseAnalysisPage() {
   const categories = metrics?.categories || []
 
   const selectCls =
-    'rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-white/10 dark:bg-slate-900/40 dark:text-slate-200 dark:hover:bg-white/[0.04]'
+    'w-full sm:w-auto rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-white/10 dark:bg-slate-900/40 dark:text-slate-200 dark:hover:bg-white/[0.04]'
 
   return (
     <div className="app-page-wide space-y-5 text-foreground">

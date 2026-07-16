@@ -570,7 +570,7 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
         )
         const hdrToolbar = (
           <div className="flex flex-wrap items-center gap-2">
-            <div className="relative min-w-0 flex-1 sm:max-w-md">
+            <div className="relative w-full min-w-0 flex-1 sm:w-auto sm:max-w-md">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={searchInput}
@@ -580,7 +580,7 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
               />
             </div>
             <Select value={filters.status} onValueChange={(value) => setFilters({ status: value })}>
-              <SelectTrigger className="h-9 w-[200px]"><SelectValue placeholder="Все статусы" /></SelectTrigger>
+              <SelectTrigger className="h-9 w-full sm:w-[200px]"><SelectValue placeholder="Все статусы" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Все статусы</SelectItem>
                 <SelectItem value="new">Новая</SelectItem>
@@ -596,10 +596,10 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
               value={filters.actor}
               onChange={(event) => setFilters({ actor: event.target.value })}
               placeholder="Кто создавал/одобрял"
-              className="h-9 w-[220px]"
+              className="h-9 w-full sm:w-[220px]"
             />
-            <DatePicker value={filters.from} onChange={(v) => setFilters({ from: v })} className="w-[150px]" />
-            <DatePicker value={filters.to} onChange={(v) => setFilters({ to: v })} className="w-[150px]" />
+            <DatePicker value={filters.from} onChange={(v) => setFilters({ from: v })} className="w-full sm:w-[150px]" />
+            <DatePicker value={filters.to} onChange={(v) => setFilters({ to: v })} className="w-full sm:w-[150px]" />
           </div>
         )
         return embedded ? (

@@ -359,13 +359,13 @@ export function ConsumablesPageContent({ embedded = false }: { embedded?: boolea
         </p>
       </Card>
 
-      <div className="flex gap-2 border-b border-border/50">
+      <div className="flex gap-2 overflow-x-auto border-b border-border/50">
         {(['balances', 'issues', 'norms'] as Tab[]).map((t) => (
           <button
             key={t}
             type="button"
             onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm font-medium transition-colors ${tab === t ? 'border-b-2 border-primary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            className={`whitespace-nowrap px-3 sm:px-4 py-2 text-sm font-medium transition-colors ${tab === t ? 'border-b-2 border-primary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
           >
             {t === 'balances' ? 'Остатки' : t === 'issues' ? 'Выдача по точкам' : 'Нормы'}
           </button>
@@ -407,7 +407,7 @@ export function ConsumablesPageContent({ embedded = false }: { embedded?: boolea
                   <div className="px-4 py-4 text-sm text-muted-foreground">Нет расходников. Добавьте товары с типом "Расходник" в каталоге.</div>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="w-full min-w-[720px] text-sm">
                       <thead>
                         <tr className="border-b border-border/50 text-xs text-muted-foreground">
                           <th className="px-4 py-2 text-left font-medium">Товар</th>
@@ -524,7 +524,7 @@ export function ConsumablesPageContent({ embedded = false }: { embedded?: boolea
               <div className="px-4 py-6 text-center text-sm text-muted-foreground">Выдач пока нет</div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full table-fixed text-sm">
+                <table className="w-full min-w-[720px] table-fixed text-sm">
                   <thead>
                     <tr className="border-b border-border/50 text-xs text-muted-foreground">
                       <th className="px-4 py-2 text-left font-medium">Дата</th>
@@ -612,7 +612,7 @@ export function ConsumablesPageContent({ embedded = false }: { embedded?: boolea
               <div className="px-4 py-6 text-center text-sm text-muted-foreground">Нормы не заданы</div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[560px] text-sm">
                   <thead>
                     <tr className="border-b border-border/50 text-xs text-muted-foreground">
                       <th className="px-4 py-2 text-left font-medium">Товар</th>

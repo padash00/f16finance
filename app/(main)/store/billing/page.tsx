@@ -617,7 +617,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
 
       {activeTab === 'debts' ? (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
             <Card className="p-3 bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
               <div className="text-[11px] text-muted-foreground uppercase">Открытых долгов</div>
               <div className="text-lg font-bold text-amber-700 dark:text-amber-300">{totalsByStatus.openCount}</div>

@@ -265,7 +265,7 @@ export default function TeamAnalysisPage() {
               <Users className="h-4 w-4 text-violet-500" /> Операторы за период
             </h2>
             <div className="overflow-x-auto rounded-xl border border-border">
-              <table className="min-w-full">
+              <table className="w-full min-w-[760px]">
                 <thead className="bg-surface-muted">
                   <tr>
                     <th className={thCls}>Оператор</th>

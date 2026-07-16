@@ -94,7 +94,7 @@ export default function NotificationSettingsPage() {
                 <div className="text-xs text-muted-foreground mt-0.5">{meta.subtitle}</div>
               )}
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               {channels.map(channel => {
                 const ch = CHANNEL_LABELS[channel] || { label: channel, icon: Bell, color: 'text-slate-300' }
                 const Icon = ch.icon

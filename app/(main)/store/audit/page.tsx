@@ -372,7 +372,7 @@ export default function StoreAuditPage() {
                 <div className="text-xs text-muted-foreground">У этой точки нет назначенных операторов — можно добавить с других точек ниже.</div>
               ) : null}
               {assignments.map((a, idx) => (
-                <div key={idx} className="flex items-center gap-2">
+                <div key={idx} className="flex flex-col gap-2 sm:flex-row sm:items-center">
                   <Select value={a.operator_id} onValueChange={(v) => setAssignments((p) => p.map((x, i) => (i === idx ? { ...x, operator_id: v } : x)))}>
                     <SelectTrigger className="flex-1"><SelectValue placeholder="Оператор" /></SelectTrigger>
                     <SelectContent>
@@ -392,7 +392,7 @@ export default function StoreAuditPage() {
                       {formData.categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
-                  <Button type="button" variant="ghost" size="icon" onClick={() => setAssignments((p) => p.filter((_, i) => i !== idx))}><Trash2 className="h-4 w-4 text-muted-foreground" /></Button>
+                  <Button type="button" variant="ghost" size="icon" className="self-end sm:self-auto" onClick={() => setAssignments((p) => p.filter((_, i) => i !== idx))}><Trash2 className="h-4 w-4 text-muted-foreground" /></Button>
                 </div>
               ))}
             </div>
@@ -436,12 +436,12 @@ export default function StoreAuditPage() {
       ) : (
         <>
           <Card className="space-y-3 p-4">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
               <div>
                 <div className="text-sm font-medium text-foreground">{locLabel(detail.location)}</div>
                 <div className="text-xs text-muted-foreground">{fmtDate(detail.act.opened_at)} · {isOpen ? 'открыт' : 'закрыт'}{detail.act.comment ? ` · ${detail.act.comment}` : ''}</div>
               </div>
-              <div className="text-right text-xs text-muted-foreground tabular-nums">посчитано {detail.countedItems} из {detail.totalItems}</div>
+              <div className="text-xs text-muted-foreground tabular-nums sm:text-right">посчитано {detail.countedItems} из {detail.totalItems}</div>
             </div>
             {/* Прогресс по операторам */}
             {detail.progress && detail.progress.length > 0 ? (

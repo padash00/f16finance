@@ -314,8 +314,8 @@ export default function SimulationPage() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <div className="mt-3 overflow-auto rounded-xl border border-border">
-            <table className="w-full text-sm">
+          <div className="mt-3 overflow-x-auto rounded-xl border border-border">
+            <table className="w-full min-w-[640px] text-sm">
               <thead className="bg-surface-muted text-xs text-muted-foreground">
                 <tr className="text-left">
                   <th className="px-3 py-2 font-normal">Зона</th>
@@ -352,7 +352,7 @@ export default function SimulationPage() {
 
       {/* ── ТАРИФЫ ──────────────────────────────────────────────────────────── */}
       <Card className="border-border bg-white dark:bg-white/[0.02] p-5">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="text-sm font-semibold">Тарифы</h2>
             <p className="text-[11px] text-muted-foreground">Пакеты времени: 2+1, 3+2, день, ночь, продление. ₸/час = цена ÷ (оплаченные + бонусные часы).</p>
@@ -404,7 +404,7 @@ export default function SimulationPage() {
 
       {/* ── ЗОНЫ ────────────────────────────────────────────────────────────── */}
       <Card className="border-border bg-white dark:bg-white/[0.02] p-5">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="text-sm font-semibold">Зоны</h2>
             <p className="text-[11px] text-muted-foreground">Кол-во устройств, средняя загрузка (ч/сутки) и доля каждого тарифа в зоне.</p>

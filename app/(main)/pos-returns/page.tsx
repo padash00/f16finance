@@ -279,7 +279,7 @@ export default function PosReturnsPage({ embedded = false }: { embedded?: boolea
               <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
                 Введите последние 6 символов номера чека — он есть в истории чеков и внизу распечатанного чека.
               </p>
-              <form onSubmit={handleSearch} className="mt-5 flex w-full gap-2">
+              <form onSubmit={handleSearch} className="mt-5 flex w-full flex-col gap-2 sm:flex-row">
                 <div className="relative flex-1">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input

@@ -158,7 +158,7 @@ export default function AnalysisPage() {
               <Verdict label="Расход" value={data.expense.expected} tone="rose" icon={<TrendingDown className="w-4 h-4" />} />
               <Verdict label="Прибыль" value={data.profit.expected} range={[data.scenarios.worst, data.scenarios.best]} tone={data.profit.expected >= 0 ? 'violet' : 'rose'} icon={<Wallet className="w-4 h-4" />} />
             </div>
-            <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+            <div className="mt-4 grid grid-cols-1 gap-2 text-center sm:grid-cols-3">
               {([['Худший', data.scenarios.worst, 'rose'], ['Ожидаемый', data.scenarios.expected, 'slate'], ['Лучший', data.scenarios.best, 'emerald']] as const).map(([l, v, t]) => (
                 <div key={l} className="rounded-xl border border-border bg-white/60 dark:bg-white/[0.02] py-2">
                   <div className="text-[11px] text-muted-foreground">{l}</div>
@@ -242,7 +242,7 @@ export default function AnalysisPage() {
             <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
               <h3 className="text-sm font-semibold text-foreground mb-4">Детали по месяцам</h3>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[640px] text-sm">
                   <thead>
                     <tr className="text-[11px] uppercase tracking-wide text-muted-foreground border-b border-border">
                       <th className="px-2 py-2 text-left font-medium">Месяц</th>
@@ -311,7 +311,7 @@ export default function AnalysisPage() {
                   const max = data.expenseByGroup[0].amount || 1
                   return (
                     <div key={g.group} className="flex items-center gap-3">
-                      <div className="w-40 shrink-0 text-xs text-body truncate">{g.label}</div>
+                      <div className="w-28 sm:w-40 shrink-0 text-xs text-body truncate">{g.label}</div>
                       <div className="flex-1 h-2 rounded-full bg-surface-hover overflow-hidden">
                         <div className={`h-full rounded-full ${g.bucket === 'variable' ? 'bg-amber-500' : 'bg-violet-500'}`} style={{ width: `${Math.min(100, g.amount / max * 100)}%` }} />
                       </div>
@@ -349,7 +349,7 @@ export default function AnalysisPage() {
             <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
               <h3 className="text-sm font-semibold text-foreground mb-4">Прогноз по точкам ({data.targetMonthLabel})</h3>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[520px] text-sm">
                   <thead>
                     <tr className="text-[11px] uppercase tracking-wide text-muted-foreground border-b border-border">
                       <th className="px-2 py-2 text-left font-medium">Точка</th>

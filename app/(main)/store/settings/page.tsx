@@ -58,7 +58,7 @@ export default function StoreSettingsPage() {
         backHref="/store"
       />
 
-      <div className="rounded-2xl border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900/60 p-5 shadow-lg shadow-black/20">
+      <div className="rounded-2xl border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900/60 p-4 sm:p-5 shadow-lg shadow-black/20">
         <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-foreground">
           <Store className="h-4 w-4 text-emerald-300" /> Точка магазина
         </div>
@@ -97,7 +97,7 @@ export default function StoreSettingsPage() {
           </div>
         )}
 
-        <div className="mt-4 flex items-center gap-3">
+        <div className="mt-4 flex flex-wrap items-center gap-3">
           <button
             onClick={save}
             disabled={!canManage || saving || !dirty}

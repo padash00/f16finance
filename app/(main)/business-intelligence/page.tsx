@@ -607,7 +607,7 @@ export default function BusinessIntelligencePage() {
             unavailableNote={data.abc.note}
           >
             <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 {data.abc.classes.map((c) => (
                   <div key={c.cls} className="rounded-xl border border-slate-200 p-3 dark:border-white/10">
                     <p className="text-sm font-semibold text-foreground">

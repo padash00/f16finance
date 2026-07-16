@@ -333,7 +333,7 @@ function ChatContent() {
                   <p className="text-sm text-foreground whitespace-pre-wrap break-words">{m.message}</p>
                 )}
                 {showPinPicker === m.id && (
-                  <div className="mt-2 flex items-center gap-2">
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
                     <DatePicker
                       value={pinDate}
                       onChange={setPinDate}

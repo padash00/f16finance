@@ -578,7 +578,7 @@ const StatCard = memo(({ title, value, subValue, icon: Icon, trend, color = 'blu
   return (
     <div
       onClick={onClick}
-      className={`group rounded-2xl bg-white dark:bg-[#111113] border border-border p-5 transition-all hover:border-slate-300 dark:hover:border-white/20 hover:shadow-sm ${onClick ? 'cursor-pointer' : ''}`}
+      className={`group rounded-2xl bg-white dark:bg-[#111113] border border-border p-4 sm:p-5 transition-all hover:border-slate-300 dark:hover:border-white/20 hover:shadow-sm ${onClick ? 'cursor-pointer' : ''}`}
     >
       <div className="flex items-center justify-between mb-4">
         <div className={`grid place-items-center h-9 w-9 rounded-xl ${iconTone[color]}`}>
@@ -591,7 +591,7 @@ const StatCard = memo(({ title, value, subValue, icon: Icon, trend, color = 'blu
         )}
       </div>
       <p className="text-muted-foreground text-xs font-medium">{title}</p>
-      <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{value}</p>
+      <p className="mt-1 text-lg sm:text-2xl font-bold tabular-nums text-foreground">{value}</p>
       {subValue && <p className="mt-1.5 text-xs text-muted-foreground">{subValue}</p>}
     </div>
   )
@@ -1897,7 +1897,7 @@ function ReportsContent() {
         >
           {/* Toast */}
           {toast && (
-            <div className={`fixed top-5 right-5 z-50 px-4 py-3 rounded-2xl border backdrop-blur-xl shadow-xl animate-in slide-in-from-top-2 ${
+            <div className={`fixed top-5 right-5 z-50 max-w-[calc(100vw-2.5rem)] px-4 py-3 rounded-2xl border backdrop-blur-xl shadow-xl animate-in slide-in-from-top-2 ${
               toast.type === 'success' ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400' :
               toast.type === 'error' ? 'bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400' :
               'bg-white dark:bg-slate-900/80 border-border text-foreground'
@@ -1967,7 +1967,7 @@ function ReportsContent() {
               </>
             }
             toolbar={
-              <div className="inline-flex w-fit items-center rounded-xl p-0.5 border border-border bg-slate-100 dark:bg-white/[0.03]">
+              <div className="inline-flex w-fit max-w-full overflow-x-auto items-center rounded-xl p-0.5 border border-border bg-slate-100 dark:bg-white/[0.03]">
                 {(['overview', 'analytics', 'details', 'companies'] as const).map((tab) => (
                   <button
                     key={tab}

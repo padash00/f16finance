@@ -597,8 +597,8 @@ const OperatorDetailsModal = memo(({
         className="bg-card border border-border rounded-2xl w-full max-w-4xl my-8 animate-in fade-in zoom-in duration-200"
       >
         <div className="sticky top-0 bg-card border-b border-slate-200 dark:border-white/5 rounded-t-2xl z-10">
-          <div className="p-6 flex justify-between items-center">
-            <div className="flex items-center gap-4">
+          <div className="p-4 sm:p-6 flex justify-between items-center gap-3">
+            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
               <div className="w-12 h-12 rounded-xl overflow-hidden bg-gradient-to-br from-amber-500 to-amber-600">
                 {operator.photo_url ? (
                   <Image
@@ -614,11 +614,11 @@ const OperatorDetailsModal = memo(({
                   </div>
                 )}
               </div>
-              <div>
-                <h2 className="text-2xl font-bold text-foreground">
+              <div className="min-w-0">
+                <h2 className="text-xl sm:text-2xl font-bold text-foreground truncate">
                   {operator.operatorName}
                 </h2>
-                <div className="flex items-center gap-3 mt-1">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
                   {operator.position && (
                     <>
                       <p className="text-sm text-slate-700 dark:text-slate-400">{operator.position}</p>
@@ -1747,7 +1747,7 @@ function OperatorAnalyticsContent() {
             backHref="/dashboard"
             actions={
               <>
-                <div className="flex bg-white dark:bg-slate-900/50 backdrop-blur-xl rounded-xl p-1 border border-border">
+                <div className="flex flex-wrap bg-white dark:bg-slate-900/50 backdrop-blur-xl rounded-xl p-1 border border-border">
                   {(['thisWeek', 'lastWeek', 'thisMonth'] as DatePreset[]).map((preset) => (
                     <button
                       key={preset}
@@ -1862,13 +1862,13 @@ function OperatorAnalyticsContent() {
 
               <div className="flex-1" />
 
-              <div className="relative">
+              <div className="relative w-full sm:w-auto">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Поиск оператора..."
-                  className="h-8 w-48 pl-8 pr-7 bg-white dark:bg-slate-800/50 border border-border rounded-lg text-xs text-foreground placeholder-slate-500 focus:outline-none focus:border-amber-500/50"
+                  className="h-8 w-full sm:w-48 pl-8 pr-7 bg-white dark:bg-slate-800/50 border border-border rounded-lg text-xs text-foreground placeholder-slate-500 focus:outline-none focus:border-amber-500/50"
                 />
                 {search && (
                   <button
@@ -1883,7 +1883,7 @@ function OperatorAnalyticsContent() {
           </div>
 
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-3">
             <StatCard
               title="Общая выручка"
               value={formatMoney(analytics.totalsFiltered.turnover, moneyFmt)}
@@ -1938,7 +1938,7 @@ function OperatorAnalyticsContent() {
           {/* Main Table */}
           <Card className="p-4 bg-white dark:bg-slate-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5 overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[1280px] text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 dark:border-white/5">
                     <th className="py-3 px-2 text-left">
@@ -2181,7 +2181,7 @@ function OperatorAnalyticsContent() {
           {showCharts && analytics.rows.length > 0 && mounted && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Top Operators Chart */}
-              <Card className="p-4 bg-white dark:bg-slate-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
+              <Card className="min-w-0 p-4 bg-white dark:bg-slate-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
                 <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
                   <BarChart3 className="w-4 h-4 text-amber-400" />
                   Топ-5 операторов по выручке
@@ -2210,7 +2210,7 @@ function OperatorAnalyticsContent() {
               </Card>
 
               {/* Payment Distribution */}
-              <Card className="p-4 bg-white dark:bg-slate-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
+              <Card className="min-w-0 p-4 bg-white dark:bg-slate-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
                 <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
                   <PieChart className="w-4 h-4 text-amber-400" />
                   Распределение по типам платежей

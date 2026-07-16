@@ -329,7 +329,7 @@ export default function ForecastPage() {
                 <select
                   value={companyId}
                   onChange={(e) => setCompanyId(e.target.value)}
-                  className="px-3 py-2 bg-white dark:bg-slate-800/80 border border-border rounded-xl text-sm text-body min-w-[210px]"
+                  className="px-3 py-2 bg-white dark:bg-slate-800/80 border border-border rounded-xl text-sm text-body w-full min-w-0 sm:w-auto sm:min-w-[210px]"
                 >
                   <option value="all">Все компании</option>
                   {companies.map((c) => (
@@ -342,7 +342,7 @@ export default function ForecastPage() {
                   <button
                     onClick={handleGenerate}
                     disabled={loading}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors"
+                    className="flex w-full sm:w-auto items-center justify-center gap-2 px-5 py-2.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors"
                   >
                     {loading ? (
                       <>
@@ -423,7 +423,7 @@ export default function ForecastPage() {
 
               {/* Scenario selector */}
               {result?.scenarios && (
-                <div className="flex items-center gap-2 p-1 bg-white dark:bg-slate-900/80 border border-border rounded-xl w-fit">
+                <div className="flex flex-wrap items-center gap-2 p-1 bg-white dark:bg-slate-900/80 border border-border rounded-xl w-fit max-w-full">
                   {(['pessimistic', 'realistic', 'optimistic'] as const).map((s) => (
                     <button
                       key={s}
@@ -619,7 +619,8 @@ export default function ForecastPage() {
                 <Card className="p-5 bg-white dark:bg-slate-900/80 border-slate-200 dark:border-slate-800">
                   <h2 className="text-sm font-semibold text-foreground mb-1">📅 Сезонность по дням недели</h2>
                   <p className="text-xs text-slate-500 mb-4">Средняя выручка в каждый день недели</p>
-                  <div className="grid grid-cols-7 gap-2">
+                  <div className="overflow-x-auto">
+                  <div className="grid grid-cols-7 gap-2 min-w-[420px]">
                     {[1, 2, 3, 4, 5, 6, 0].map((dayIdx) => {
                       const day = result.seasonality!.byDay[dayIdx]
                       if (!day) return null
@@ -648,7 +649,8 @@ export default function ForecastPage() {
                       )
                     })}
                   </div>
-                  <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center gap-4 text-xs">
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
                     <span className="text-emerald-400">★ Лучший: {result.seasonality.best?.name}</span>
                     <span className="text-red-400">▼ Худший: {result.seasonality.worst?.name}</span>
                   </div>

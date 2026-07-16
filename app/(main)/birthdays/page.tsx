@@ -142,7 +142,7 @@ export default function BirthdaysPage() {
             }
           />
 
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 sm:gap-4 xl:grid-cols-4">
             {[
               { label: 'Сегодня', value: stats.today, icon: Gift },
               { label: 'На 7 дней', value: stats.week, icon: CalendarDays },
@@ -151,13 +151,13 @@ export default function BirthdaysPage() {
             ].map((stat) => {
               const Icon = stat.icon
               return (
-                <Card key={stat.label} className="border-border bg-white dark:bg-slate-950/65 p-5 text-foreground">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <p className="text-sm text-slate-400">{stat.label}</p>
-                      <p className="mt-2 text-3xl font-semibold">{stat.value}</p>
+                <Card key={stat.label} className="border-border bg-white dark:bg-slate-950/65 p-3 sm:p-5 text-foreground">
+                  <div className="flex items-center justify-between gap-2 sm:gap-4">
+                    <div className="min-w-0">
+                      <p className="text-xs sm:text-sm text-slate-400">{stat.label}</p>
+                      <p className="mt-2 text-2xl sm:text-3xl font-semibold">{stat.value}</p>
                     </div>
-                    <div className="rounded-2xl bg-slate-100 dark:bg-white/6 p-3">
+                    <div className="shrink-0 rounded-2xl bg-slate-100 dark:bg-white/6 p-2 sm:p-3">
                       <Icon className="h-5 w-5 text-amber-300" />
                     </div>
                   </div>

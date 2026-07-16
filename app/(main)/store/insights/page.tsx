@@ -46,12 +46,12 @@ const C = {
 
 function Kpi({ label, value, icon, tone }: { label: string; value: string; icon: React.ReactNode; tone: string }) {
   return (
-    <div className={`rounded-2xl border ${C.border} ${C.card} p-4`}>
+    <div className={`rounded-2xl border ${C.border} ${C.card} p-3 sm:p-4`}>
       <div className="flex items-center justify-between">
         <p className={`text-xs ${C.sub}`}>{label}</p>
         <span className={`grid h-7 w-7 place-items-center rounded-lg ${tone}`}>{icon}</span>
       </div>
-      <p className="mt-2 text-2xl font-bold tabular-nums text-foreground">{value}</p>
+      <p className="mt-2 text-xl sm:text-2xl font-bold tabular-nums text-foreground">{value}</p>
     </div>
   )
 }
@@ -136,7 +136,7 @@ export default function StoreInsightsPage() {
         backHref="/store"
         icon={<Sparkles className="h-5 w-5" />}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <div className="flex rounded-xl border border-slate-200 bg-slate-100 p-0.5 dark:border-white/10 dark:bg-white/5">
               {PERIODS.map((p) => (
                 <button

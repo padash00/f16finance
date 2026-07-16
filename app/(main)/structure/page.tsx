@@ -923,7 +923,7 @@ export default function StructurePage() {
                   </div>
                 </div>
                 {(searchQuery || companyFilter !== 'all' || roleFilter !== 'all') && (
-                  <div className="mt-3 flex items-center gap-2">
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
                     <Button
                       variant="outline"
                       size="sm"
@@ -1152,7 +1152,7 @@ export default function StructurePage() {
         </div>
 
       {editingOperator ? (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm overflow-y-auto"
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm overflow-y-auto"
           onClick={(e) => { if (e.target === e.currentTarget) setEditingOperator(null) }}>
           <Card className="w-full max-w-3xl max-h-[calc(100vh-2rem)] overflow-y-auto border-border bg-white dark:bg-slate-950/96 p-6 text-foreground shadow-[0_24px_80px_rgba(0,0,0,0.5)]">
             <div className="flex items-start justify-between gap-4">

@@ -123,7 +123,7 @@ export default function ModerationPage() {
           </Button>
         }
         toolbar={
-          <div className="flex gap-1 border-b border-border">
+          <div className="flex gap-1 border-b border-border overflow-x-auto">
             {([
               { id: 'pending' as const, label: `На рассмотрении ${pendingCount > 0 ? `(${pendingCount})` : ''}`, icon: AlertTriangle },
               { id: 'confirmed' as const, label: 'Подтверждённые', icon: ShieldCheck },
@@ -132,7 +132,7 @@ export default function ModerationPage() {
               <button
                 key={id}
                 onClick={() => setTab(id)}
-                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition-colors ${
                   tab === id ? 'border-red-500 text-red-300' : 'border-transparent text-muted-foreground hover:text-foreground'
                 }`}
               >
@@ -205,7 +205,7 @@ export default function ModerationPage() {
             )}
 
             {flag.status === 'pending' && (
-              <div className="flex gap-2 justify-end">
+              <div className="flex flex-wrap gap-2 justify-end">
                 <Button
                   variant="outline"
                   size="sm"

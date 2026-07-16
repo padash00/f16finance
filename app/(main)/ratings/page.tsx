@@ -157,7 +157,7 @@ export default function RatingsPage() {
                     {p === 'today' ? 'Сегодня' : p === 'week' ? '7 дней' : 'Месяц'}
                   </button>
                 ))}
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                   <DatePicker
                     value={dateFrom}
                     onChange={(v) => { setDateFrom(v); setActivePreset('custom') }}
@@ -174,7 +174,7 @@ export default function RatingsPage() {
                   <select
                     value={companyId}
                     onChange={(e) => setCompanyId(e.target.value)}
-                    className="px-3 py-2 bg-white dark:bg-slate-800/50 border border-border rounded-xl text-sm text-body outline-none"
+                    className="w-full sm:w-auto px-3 py-2 bg-white dark:bg-slate-800/50 border border-border rounded-xl text-sm text-body outline-none"
                   >
                     <option value="">Все компании</option>
                     {companies.map((c) => (
@@ -187,7 +187,7 @@ export default function RatingsPage() {
           />
 
           {/* Summary stats */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-4">
             <Card className="p-4 bg-white dark:bg-slate-900/80 border-amber-500/20">
               <div className="flex items-center gap-2 mb-2">
                 <Users2 className="w-4 h-4 text-amber-400" />
@@ -308,7 +308,7 @@ export default function RatingsPage() {
           {leaderboard.filter(r => r.revenue > 0).length >= 3 && (
             <Card className="p-5 bg-white dark:bg-slate-900/80 border-amber-500/20">
               <h2 className="text-sm font-semibold text-foreground mb-4">Подиум</h2>
-              <div className="flex items-end justify-center gap-3">
+              <div className="flex items-end justify-center gap-2 sm:gap-3 overflow-x-auto">
                 {/* 2nd */}
                 <div className="flex flex-col items-center gap-2">
                   <div className="w-20 h-20 rounded-2xl bg-card border border-border flex items-center justify-center">

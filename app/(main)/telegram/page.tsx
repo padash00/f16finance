@@ -410,7 +410,7 @@ create table if not exists telegram_allowed_users (
             {can('telegram.add_user') && (
             <div className="rounded-xl border border-border bg-slate-50 dark:bg-slate-800/30 p-4 mb-4 space-y-3">
               <p className="text-xs font-medium text-body">Добавить пользователя</p>
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row">
                 <input
                   type="text"
                   value={newUserId}
@@ -423,10 +423,10 @@ create table if not exists telegram_allowed_users (
                   value={newUserLabel}
                   onChange={(e) => setNewUserLabel(e.target.value)}
                   placeholder="Имя (необязательно)"
-                  className="w-40 px-3 py-2 bg-card border border-border rounded-xl text-sm text-body placeholder-slate-400 dark:placeholder-slate-600 outline-none focus:border-amber-500/50"
+                  className="w-full sm:w-40 px-3 py-2 bg-card border border-border rounded-xl text-sm text-body placeholder-slate-400 dark:placeholder-slate-600 outline-none focus:border-amber-500/50"
                 />
               </div>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
@@ -547,7 +547,7 @@ create table if not exists telegram_allowed_users (
                 {staffMembers.map((member) => {
                   const isEditing = editingStaffId === member.id
                   return (
-                    <div key={member.id} className="flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/50">
+                    <div key={member.id} className="flex flex-wrap items-center gap-3 p-3 rounded-xl bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/50">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-foreground font-medium truncate">{member.full_name}</p>
                         <p className="text-xs text-slate-500">{getStaffRoleLabel(member.role)}</p>
@@ -626,7 +626,7 @@ create table if not exists telegram_allowed_users (
               <p className="text-xs text-slate-500 mb-3">
                 Telegram отправляет сообщения на этот URL. Должен быть публичным HTTPS-адресом.
               </p>
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row">
                 <input
                   type="text"
                   value={webhookUrl}

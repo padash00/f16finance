@@ -511,7 +511,7 @@ export default function TaxPage() {
         accent="emerald"
         backHref="/"
         actions={
-          <Card className="p-1 flex items-center gap-2 bg-card/50">
+          <Card className="p-1 flex flex-wrap items-center gap-2 bg-card/50">
             <div className="flex items-center px-2">
               <CalendarDays className="w-4 h-4 text-muted-foreground mr-2" />
               <DatePicker value={dateFrom} onChange={setDateFrom} />
@@ -616,7 +616,7 @@ export default function TaxPage() {
         <div className="flex flex-wrap items-end gap-6">
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">Ставка ИПН (упрощёнка)</label>
-            <div className="flex gap-1 rounded-xl border border-border bg-white dark:bg-slate-900/40 p-1">
+            <div className="flex flex-wrap gap-1 rounded-xl border border-border bg-white dark:bg-slate-900/40 p-1">
               {[2, 3, 4, 5, 6].map((r) => (
                 <button
                   key={r}
@@ -690,7 +690,7 @@ export default function TaxPage() {
             ) : null}
           </p>
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <table className="w-full min-w-[560px] text-xs">
               <thead>
                 <tr className="text-left text-muted-foreground">
                   <th className="px-2 py-2">Компания</th>
@@ -761,7 +761,7 @@ export default function TaxPage() {
               {staffFromDB.length > 0 ? <> · подтянуто {staffFromDB.length}</> : null}
               {excludedIds.size > 0 ? <> · скрыто {excludedIds.size}</> : null}
             </p>
-            <div className="mt-2 flex items-center gap-2">
+            <div className="mt-2 flex flex-wrap items-center gap-2">
               <span className="text-[11px] text-muted-foreground">Оклады заданы как:</span>
               <div className="flex rounded-lg border border-border bg-white dark:bg-slate-900/40 p-0.5 text-[11px]">
                 <button

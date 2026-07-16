@@ -1129,7 +1129,7 @@ function SalaryRulesContent() {
           />
 
           <Tabs defaultValue="base" className="space-y-6">
-            <TabsList className="bg-white dark:bg-gray-900/40 border border-slate-200 dark:border-white/5 backdrop-blur-xl">
+            <TabsList className="h-auto flex-wrap bg-white dark:bg-gray-900/40 border border-slate-200 dark:border-white/5 backdrop-blur-xl">
               <TabsTrigger value="base">Базовые правила</TabsTrigger>
               <TabsTrigger value="variants">Варианты по выручке</TabsTrigger>
               <TabsTrigger value="seniority">Стаж</TabsTrigger>
@@ -1317,13 +1317,13 @@ function SalaryRulesContent() {
 
               <div className="flex-1" />
 
-              <div className="relative">
+              <div className="relative w-full sm:w-auto">
                 <input
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Поиск по компании..."
-                  className="pl-8 pr-7 py-1.5 bg-white dark:bg-gray-800/50 border border-border rounded-lg text-xs text-foreground placeholder-gray-500 focus:outline-none focus:border-violet-500/50"
+                  className="w-full sm:w-auto pl-8 pr-7 py-1.5 bg-white dark:bg-gray-800/50 border border-border rounded-lg text-xs text-foreground placeholder-gray-500 focus:outline-none focus:border-violet-500/50"
                 />
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
                 {searchTerm && (
@@ -1350,7 +1350,7 @@ function SalaryRulesContent() {
           {/* Rules Table */}
           <Card className="overflow-hidden border-slate-200 dark:border-white/5 bg-white dark:bg-gray-900/40 p-0 backdrop-blur-xl">
             <AdminTableViewport maxHeight="min(70vh, 40rem)" className="rounded-none border-0 bg-transparent">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[1100px] text-sm">
                 <thead className={adminTableStickyTheadClass}>
                   <tr className="border-b border-slate-200 dark:border-white/5">
                     <th className="py-3 px-4 text-left text-xs font-medium text-slate-500 dark:text-gray-400">Компания</th>
@@ -1717,7 +1717,7 @@ function SalaryRulesContent() {
                                     <div className="text-xs text-gray-500 italic">Нет версий — все смены считаются по текущему правилу.</div>
                                   ) : (
                                     <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-white/5">
-                                      <table className="w-full text-xs">
+                                      <table className="w-full min-w-[900px] text-xs">
                                         <thead className="bg-surface-muted">
                                           <tr>
                                             <th className="px-2 py-2 text-left text-slate-500 dark:text-gray-400">С даты</th>
@@ -1954,7 +1954,7 @@ function SalaryRulesContent() {
           </div>
 
           {/* Bottom info */}
-          <div className="flex justify-between items-center text-xs text-gray-500">
+          <div className="flex flex-wrap justify-between items-center gap-2 text-xs text-gray-500">
             <div>
               Показано {filteredRules.length} из {rules.length} правил
               {dirtyIds.size > 0 && (

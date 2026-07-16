@@ -199,7 +199,7 @@ export default function SalesMonitorPage() {
         toolbar={
           <div className="inline-flex flex-wrap gap-1 rounded-2xl border border-border bg-slate-50 dark:bg-slate-950/50 p-1">
             {TABS.map(({ key, label }) => (
-              <button key={key} onClick={() => setTab(key)} className={`rounded-xl px-4 py-2 text-sm font-medium transition-all ${tab === key ? 'bg-white/10 text-foreground shadow-sm ring-1 ring-slate-200 dark:ring-white/10' : 'text-muted-foreground hover:text-slate-900 dark:hover:text-white'}`}>
+              <button key={key} onClick={() => setTab(key)} className={`rounded-xl px-3 py-2 text-sm font-medium transition-all sm:px-4 ${tab === key ? 'bg-white/10 text-foreground shadow-sm ring-1 ring-slate-200 dark:ring-white/10' : 'text-muted-foreground hover:text-slate-900 dark:hover:text-white'}`}>
                 {label}
               </button>
             ))}
@@ -225,13 +225,13 @@ export default function SalesMonitorPage() {
           <DatePicker value={to} max={today} onChange={(v) => { setTo(v); setPreset('custom') }} className={inputCls} />
         </div>
         {!storeCompanyId && (
-          <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} className={inputCls}>
+          <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} className={`${inputCls} w-full sm:w-auto`}>
             <option value="">Все точки</option>
             {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         )}
         {isProduct && (
-          <div className="relative min-w-[200px] flex-1">
+          <div className="relative w-full flex-1 sm:w-auto sm:min-w-[200px]">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Поиск по товару, артикулу…" className={`${inputCls} w-full pl-9`} />
           </div>
@@ -332,7 +332,7 @@ function MonitorView({ data, loading, flashIds }: { data: MonData | null; loadin
           <div className="flex items-center gap-2 border-b border-border px-4 py-3 text-sm font-semibold text-foreground"><Users className="h-4 w-4 text-violet-600 dark:text-violet-300" /> Информация о сотрудниках</div>
           {data.by_operator.length === 0 ? <div className="px-4 py-10 text-center text-sm text-slate-400">Нет данных</div> : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[480px] text-sm">
                 <thead><tr className="border-b border-border text-left text-[11px] uppercase tracking-wider text-slate-500">
                   <th className="px-4 py-2 font-medium">ФИО</th>
                   <th className="px-4 py-2 text-right font-medium">Продаж</th>
@@ -448,7 +448,7 @@ function MonitorView({ data, loading, flashIds }: { data: MonData | null; loadin
 
 function StatCard({ label, icon, color, amount, count, delta }: { label: string; icon: React.ReactNode; color: string; amount: number; count: number; delta?: number | null }) {
   return (
-    <div className={`${card} p-4`}>
+    <div className={`${card} p-3 sm:p-4`}>
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-sm font-semibold text-foreground"><span className={color}>{icon}</span> {label}</div>
         {delta != null && (
@@ -523,7 +523,7 @@ function ProductView({ data, loading, tab, category, setCategory, q }: { data: P
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        <select value={category} onChange={(e) => setCategory(e.target.value)} className={inputCls}>
+        <select value={category} onChange={(e) => setCategory(e.target.value)} className={`${inputCls} w-full sm:w-auto`}>
           <option value="">Все категории</option>
           {categories.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
@@ -536,7 +536,7 @@ function ProductView({ data, loading, tab, category, setCategory, q }: { data: P
         </div>
         {rows.length === 0 ? <div className="px-4 py-16 text-center text-sm text-slate-400">Нет данных за период</div> : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[640px] text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-[11px] uppercase tracking-wider text-slate-500">
                   {tab === 'stock' ? (
@@ -585,9 +585,9 @@ function Loading() {
 
 function Kpi({ label, value, sub, icon, accent, big }: { label: string; value: string; sub?: string; icon: React.ReactNode; accent: string; big?: boolean }) {
   return (
-    <div className={`${card} p-4`}>
+    <div className={`${card} p-3 sm:p-4`}>
       <div className="flex items-center justify-between text-xs uppercase tracking-wider text-slate-500"><span>{label}</span><span className="text-muted-foreground">{icon}</span></div>
-      <div className={`mt-1.5 font-bold tabular-nums ${accent} ${big ? 'text-2xl' : 'text-xl'}`}>{value}</div>
+      <div className={`mt-1.5 font-bold tabular-nums ${accent} ${big ? 'text-xl sm:text-2xl' : 'text-xl'}`}>{value}</div>
       {sub && <div className="mt-0.5 text-[11px] text-slate-500">{sub}</div>}
     </div>
   )

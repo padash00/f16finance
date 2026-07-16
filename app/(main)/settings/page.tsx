@@ -319,13 +319,13 @@ export default function SettingsPage() {
                             <p className="text-center text-sm text-muted-foreground py-10">Компаний пока нет. Добавьте первую ниже.</p>
                         )}
                         {!loading && filteredCompanies.map(c => (
-                            <div key={c.id} className="group p-3 rounded-lg border border-border/50 bg-slate-100/50 hover:bg-slate-100 dark:bg-black/20 dark:hover:bg-white/5 transition-all flex items-center justify-between">
+                            <div key={c.id} className="group p-3 rounded-lg border border-border/50 bg-slate-100/50 hover:bg-slate-100 dark:bg-black/20 dark:hover:bg-white/5 transition-all flex items-center justify-between gap-2">
                                 {editCompId === c.id ? (
-                                    <div className="flex-1 flex items-center gap-2">
+                                    <div className="flex-1 flex flex-wrap items-center gap-2">
                                         <input
                                             value={editCompData.name}
                                             onChange={e => setEditCompData({...editCompData, name: e.target.value})}
-                                            className="bg-input border border-border rounded px-2 py-1 text-sm flex-1"
+                                            className="bg-input border border-border rounded px-2 py-1 text-sm min-w-[120px] flex-1"
                                             autoFocus
                                         />
                                         <input
@@ -352,12 +352,12 @@ export default function SettingsPage() {
                                     </div>
                                 ) : (
                                     <>
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded bg-blue-500/10 flex items-center justify-center text-blue-500 font-bold text-xs">
+                                        <div className="flex min-w-0 items-center gap-3">
+                                            <div className="w-8 h-8 shrink-0 rounded bg-blue-500/10 flex items-center justify-center text-blue-500 font-bold text-xs">
                                                 {c.name.charAt(0)}
                                             </div>
-                                            <div>
-                                                <p className="text-sm font-medium text-foreground">{c.name}</p>
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-medium text-foreground truncate">{c.name}</p>
                                                 <div className="flex flex-wrap items-center gap-2">
                                                     {c.code && <span className="text-[10px] text-muted-foreground bg-slate-100 dark:bg-white/5 px-1.5 rounded uppercase tracking-wider">{c.code}</span>}
                                                     <span className={`text-[10px] px-1.5 rounded border ${c.show_in_structure ? 'text-cyan-700 dark:text-cyan-300 border-cyan-500/30 bg-cyan-500/10' : 'text-gray-500 border-border bg-slate-100 dark:bg-white/5'}`}>
@@ -366,7 +366,7 @@ export default function SettingsPage() {
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className="flex gap-1">
+                                        <div className="flex shrink-0 gap-1">
                                             {can('settings.manage_companies') && (
                                                 <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-blue-400" onClick={() => { setEditCompId(c.id); setEditCompData({ name: c.name, code: c.code || '', show_in_structure: c.show_in_structure }) }}>
                                                     <Pencil className="w-3 h-3" />
@@ -387,12 +387,12 @@ export default function SettingsPage() {
                     {/* Добавление */}
                     {can('settings.manage_companies') && (
                     <div className="pt-4 mt-2 border-t border-border">
-                        <form onSubmit={handleAddCompany} className="flex gap-2">
+                        <form onSubmit={handleAddCompany} className="flex flex-wrap gap-2">
                             <input
                                 value={newComp.name}
                                 onChange={e => setNewComp({...newComp, name: e.target.value})}
                                 placeholder="Новая компания..."
-                                className="flex-1 bg-input border border-border rounded-lg px-3 py-2 text-sm focus:border-blue-500"
+                                className="min-w-[140px] flex-1 bg-input border border-border rounded-lg px-3 py-2 text-sm focus:border-blue-500"
                             />
                             <input
                                 value={newComp.code}
@@ -491,7 +491,7 @@ export default function SettingsPage() {
                                     </div>
                                 ) : (
                                     // РЕЖИМ ПРОСМОТРА
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex items-center justify-between gap-2">
                                         <div className="flex items-center gap-3 overflow-hidden">
                                             <div className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-foreground text-xs ${
                                               s.role === 'owner' ? 'bg-amber-600' :
@@ -519,7 +519,7 @@ export default function SettingsPage() {
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className="flex gap-1">
+                                        <div className="flex shrink-0 gap-1">
                                             <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-purple-400" onClick={() => { setEditStaffId(s.id); setEditStaffData({ name: s.full_name, phone: s.phone || '', email: s.email || '', role: s.role || 'other' }) }}>
                                                 <Pencil className="w-3 h-3" />
                                             </Button>

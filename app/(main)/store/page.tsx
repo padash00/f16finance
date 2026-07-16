@@ -175,7 +175,7 @@ export default function StoreOverviewPage() {
         <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Разделы</div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {HUBS.map((h) => (
-            <Link key={h.href} href={h.href} className={`${card} group flex items-start gap-3 p-4 transition-colors hover:border-slate-300 dark:hover:border-white/20 hover:bg-slate-50 dark:hover:bg-slate-900/80`}>
+            <Link key={h.href} href={h.href} className={`${card} group flex items-start gap-3 p-3 sm:p-4 transition-colors hover:border-slate-300 dark:hover:border-white/20 hover:bg-slate-50 dark:hover:bg-slate-900/80`}>
               <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-border bg-slate-100 dark:bg-white/5"><h.icon className={`h-5 w-5 ${h.color}`} /></div>
               <div className="min-w-0">
                 <div className="flex items-center gap-1 text-sm font-medium text-foreground">{h.label}<ArrowRight className="h-3.5 w-3.5 text-slate-400 dark:text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-slate-600 dark:group-hover:text-slate-300" /></div>
@@ -256,9 +256,9 @@ function activityMeta(entity: string, action: string): { phrase: string; icon: a
 function Kpi({ label, value, hint, tone, loaded, href }: { label: string; value: number; hint: string; tone: 'normal' | 'amber' | 'rose'; loaded: boolean; href?: string }) {
   const valueColor = tone === 'rose' ? 'text-rose-600 dark:text-rose-300' : tone === 'amber' ? 'text-amber-600 dark:text-amber-300' : 'text-foreground'
   const body = (
-    <div className={`${card} p-4 ${href ? 'transition-colors hover:border-slate-300 dark:hover:border-white/20' : ''}`}>
+    <div className={`${card} p-3 sm:p-4 ${href ? 'transition-colors hover:border-slate-300 dark:hover:border-white/20' : ''}`}>
       <p className="text-[11px] uppercase tracking-wider text-slate-500">{label}</p>
-      <p className={`mt-1.5 text-2xl font-bold tabular-nums ${valueColor}`}>{loaded ? value : '—'}</p>
+      <p className={`mt-1.5 text-xl font-bold tabular-nums sm:text-2xl ${valueColor}`}>{loaded ? value : '—'}</p>
       <p className="mt-0.5 text-[11px] text-slate-500">{hint}</p>
     </div>
   )

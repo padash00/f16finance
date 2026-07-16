@@ -504,13 +504,13 @@ export default function AccessPage() {
                       </button>
                     </div>
                   ) : (
-                    <div className="flex items-center justify-between gap-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="flex min-w-0 items-center gap-3">
                         <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-emerald-400/25 to-sky-400/15 text-emerald-700 dark:text-emerald-200">
                           <Briefcase className="h-5 w-5" />
                         </div>
                         <div className="min-w-0">
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <p className="text-sm font-semibold text-foreground">{posLabel(pos)}</p>
                             <span className="font-mono text-xs text-slate-500">{pos.name}</span>
                             {pos.is_builtin && (
@@ -560,7 +560,9 @@ export default function AccessPage() {
 
       {/* ============ TAB: PERMISSIONS (capabilities) ============ */}
       {tab === 'permissions' && (
-        <CapabilitiesPanel />
+        <div className="overflow-x-auto">
+          <CapabilitiesPanel />
+        </div>
       )}
 
       {/* ============ TAB: ACCOUNTS ============ */}

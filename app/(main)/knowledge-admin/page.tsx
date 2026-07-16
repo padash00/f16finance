@@ -1210,7 +1210,7 @@ export default function KnowledgeAdminPage() {
                             )}
                           </div>
 
-                          <div className="grid min-w-[320px] gap-2 sm:grid-cols-3">
+                          <div className="grid gap-2 grid-cols-1 sm:grid-cols-3 xl:min-w-[320px]">
                             <RunMetric
                               label="Ответы"
                               value={`${run.answered_count ?? 0}/${run.item_count ?? 0}`}

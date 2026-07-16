@@ -161,7 +161,7 @@ export function InventoryForecastPageContent({ embedded = false }: { embedded?: 
           <>
             {companies.length > 0 && !storeCompanyId && (
               <Select value={companyId || '__all'} onValueChange={v => setCompanyId(v === '__all' ? '' : v)}>
-                <SelectTrigger className="h-9 w-[180px]">
+                <SelectTrigger className="h-9 w-full sm:w-[180px]">
                   <SelectValue placeholder="Все компании" />
                 </SelectTrigger>
                 <SelectContent>
@@ -174,7 +174,7 @@ export function InventoryForecastPageContent({ embedded = false }: { embedded?: 
             )}
             {locations.length > 0 && (
               <Select value={locationId || '__all'} onValueChange={v => setLocationId(v === '__all' ? '' : v)}>
-                <SelectTrigger className="h-9 w-[180px]">
+                <SelectTrigger className="h-9 w-full sm:w-[180px]">
                   <SelectValue placeholder="Все локации" />
                 </SelectTrigger>
                 <SelectContent>
@@ -206,18 +206,18 @@ export function InventoryForecastPageContent({ embedded = false }: { embedded?: 
       })()}
 
       {/* Summary cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-4">
         <Card
           className="cursor-pointer hover:ring-1 hover:ring-red-500/40 transition-all"
           onClick={() => setFilterStatus(filterStatus === 'critical' ? 'all' : 'critical')}
         >
-          <CardContent className="p-4 flex items-center gap-3">
+          <CardContent className="p-3 sm:p-4 flex items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-500/10">
               <AlertTriangle className="h-5 w-5 text-red-400" />
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide">Критично (≤3 дней)</p>
-              <p className="mt-0.5 text-2xl font-bold text-red-400">{counts.critical}</p>
+              <p className="mt-0.5 text-xl sm:text-2xl font-bold text-red-400">{counts.critical}</p>
             </div>
           </CardContent>
         </Card>
@@ -225,13 +225,13 @@ export function InventoryForecastPageContent({ embedded = false }: { embedded?: 
           className="cursor-pointer hover:ring-1 hover:ring-yellow-500/40 transition-all"
           onClick={() => setFilterStatus(filterStatus === 'warning' ? 'all' : 'warning')}
         >
-          <CardContent className="p-4 flex items-center gap-3">
+          <CardContent className="p-3 sm:p-4 flex items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-yellow-500/10">
               <TrendingDown className="h-5 w-5 text-yellow-400" />
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide">Мало (≤7 дней)</p>
-              <p className="mt-0.5 text-2xl font-bold text-yellow-400">{counts.warning}</p>
+              <p className="mt-0.5 text-xl sm:text-2xl font-bold text-yellow-400">{counts.warning}</p>
             </div>
           </CardContent>
         </Card>
@@ -239,13 +239,13 @@ export function InventoryForecastPageContent({ embedded = false }: { embedded?: 
           className="cursor-pointer hover:ring-1 hover:ring-orange-500/40 transition-all"
           onClick={() => setFilterStatus(filterStatus === 'low' ? 'all' : 'low')}
         >
-          <CardContent className="p-4 flex items-center gap-3">
+          <CardContent className="p-3 sm:p-4 flex items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-orange-500/10">
               <Clock className="h-5 w-5 text-orange-400" />
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide">Предупреждение (≤14 дней)</p>
-              <p className="mt-0.5 text-2xl font-bold text-orange-400">{counts.low}</p>
+              <p className="mt-0.5 text-xl sm:text-2xl font-bold text-orange-400">{counts.low}</p>
             </div>
           </CardContent>
         </Card>
@@ -253,13 +253,13 @@ export function InventoryForecastPageContent({ embedded = false }: { embedded?: 
           className="cursor-pointer hover:ring-1 hover:ring-emerald-500/40 transition-all"
           onClick={() => setFilterStatus(filterStatus === 'ok' ? 'all' : 'ok')}
         >
-          <CardContent className="p-4 flex items-center gap-3">
+          <CardContent className="p-3 sm:p-4 flex items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-500/10">
               <CheckCircle2 className="h-5 w-5 text-emerald-400" />
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide">В порядке (&gt;14 дней)</p>
-              <p className="mt-0.5 text-2xl font-bold text-emerald-400">{counts.ok}</p>
+              <p className="mt-0.5 text-xl sm:text-2xl font-bold text-emerald-400">{counts.ok}</p>
             </div>
           </CardContent>
         </Card>
@@ -321,7 +321,7 @@ export function InventoryForecastPageContent({ embedded = false }: { embedded?: 
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[760px] text-sm">
                 <thead>
                   <tr className="border-b border-border">
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Наименование</th>

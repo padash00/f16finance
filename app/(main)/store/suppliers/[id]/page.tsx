@@ -506,8 +506,8 @@ export default function SupplierCardPage() {
                 Перенести все товары к поставщику
               </Button>
             </div>
-            <div className="overflow-auto">
-              <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[720px] text-sm">
                 <thead className="bg-surface-muted text-xs text-muted-foreground">
                   <tr className="text-left">
                     <th className="px-3 py-2 font-normal">Товар</th>
@@ -651,7 +651,7 @@ export default function SupplierCardPage() {
 
       {tab === 'aliases' ? (
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-muted-foreground">
               Алиасы — это запомненные «raw_name» из накладных, которые AI автоматически связывает с товарами каталога.
               Удалите неверный или добавьте недостающий вручную.
@@ -665,7 +665,7 @@ export default function SupplierCardPage() {
             <Card className="p-6 text-sm text-muted-foreground text-center">Алиасов нет — заведутся после первой приёмки от этого поставщика.</Card>
           ) : (
             <div className="overflow-x-auto rounded-xl border border-border">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[760px] text-sm">
                 <thead className="bg-slate-50 dark:bg-white/[0.04] text-left text-xs text-muted-foreground">
                   <tr>
                     <th className="px-3 py-2.5 font-normal">Имя из накладной (raw)</th>

@@ -126,7 +126,7 @@ export default function MessagesPage() {
   }, [threads, search])
 
   return (
-    <div className="app-page-wide max-w-6xl mx-auto flex flex-col" style={{ height: 'calc(100vh - 100px)' }}>
+    <div className="app-page-wide max-w-6xl mx-auto flex flex-col h-[calc(100dvh-100px)] md:h-[calc(100vh-100px)]">
       <AdminPageHeader
         title="Личные сообщения"
         description="Личные переписки внутри приложения"

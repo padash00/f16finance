@@ -456,7 +456,7 @@ function PosReceiptsPageContent({ embedded = false }: { embedded?: boolean }) {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[640px] text-sm">
                   <thead>
                     <tr className="border-b border-border">
                       <th className="px-4 py-3 text-left font-medium text-muted-foreground">Номер</th>
@@ -516,7 +516,7 @@ function PosReceiptsPageContent({ embedded = false }: { embedded?: boolean }) {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
             <span>
               Стр. {page} из {totalPages} · всего {total} чеков
             </span>

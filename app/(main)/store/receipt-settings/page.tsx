@@ -170,7 +170,7 @@ export default function ReceiptSettingsPage() {
           <>
             {!storeCompanyId && (
               <Select value={selectedCompanyId} onValueChange={setSelectedCompanyId}>
-                <SelectTrigger className="h-9 min-w-[220px]">
+                <SelectTrigger className="h-9 w-full sm:w-auto sm:min-w-[220px]">
                   <SelectValue placeholder="Выберите точку" />
                 </SelectTrigger>
                 <SelectContent>

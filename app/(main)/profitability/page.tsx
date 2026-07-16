@@ -990,7 +990,7 @@ export default function ProfitabilityPage() {
         backHref="/"
         toolbar={
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm">
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm">
               <CalendarDays className="h-4 w-4 text-emerald-400" />
               <input type="month" value={monthFrom} onChange={(e) => setMonthFrom(e.target.value)} className="cursor-pointer rounded bg-slate-100 dark:bg-white/[0.05] px-1.5 py-0.5 outline-none focus:bg-slate-200 dark:focus:bg-white/[0.1]" />
               <span className="text-muted-foreground">—</span>
@@ -1588,7 +1588,7 @@ export default function ProfitabilityPage() {
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <select
-                  className="rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground outline-none focus:border-emerald-500/40"
+                  className="w-full sm:w-auto rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground outline-none focus:border-emerald-500/40"
                   value={investorCompanyId}
                   onChange={(e) => setInvestorCompanyId(e.target.value)}
                 >

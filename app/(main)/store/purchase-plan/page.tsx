@@ -245,7 +245,7 @@ export default function PurchasePlanPage() {
       {/* Панель управления */}
       <Card className="p-4 bg-white dark:bg-slate-900/40 border-border">
         <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[220px] flex-1 space-y-1.5">
+          <div className="w-full sm:w-auto sm:min-w-[220px] flex-1 space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">Точка</label>
             <Select value={companyId || undefined} onValueChange={(v) => setCompanyId(v)}>
               <SelectTrigger><SelectValue placeholder="Выберите точку" /></SelectTrigger>
@@ -334,7 +334,7 @@ export default function PurchasePlanPage() {
                   <div className="text-sm font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">{money(g.total)}</div>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <table className="w-full min-w-[760px] text-sm">
                     <thead>
                       <tr className="text-xs uppercase tracking-wide text-muted-foreground border-b border-border">
                         <th className="text-left font-medium px-4 py-2">Товар</th>
