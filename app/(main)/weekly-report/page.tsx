@@ -1630,7 +1630,7 @@ function WeeklyReportContent() {
         <div className="app-page-wide space-y-6">
           {/* Toast */}
           {toast && (
-            <div className={`fixed top-5 right-5 z-50 px-4 py-3 rounded-2xl border backdrop-blur-xl shadow-xl animate-in slide-in-from-top-2 ${
+            <div className={`fixed top-5 right-5 z-50 max-w-[calc(100vw-2.5rem)] px-4 py-3 rounded-2xl border backdrop-blur-xl shadow-xl animate-in slide-in-from-top-2 ${
               toast.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
               toast.type === 'error' ? 'bg-rose-500/10 border-rose-500/20 text-rose-400' :
               'bg-white dark:bg-slate-900/80 border-border text-foreground'
@@ -1726,7 +1726,7 @@ function WeeklyReportContent() {
 
           {/* Week Navigation */}
           <Card className="p-4 border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/40 backdrop-blur-xl">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <Button
                 variant="ghost"
                 size="icon"
@@ -1761,7 +1761,7 @@ function WeeklyReportContent() {
                 <Button
                   size="sm"
                   variant="secondary"
-                  className="ml-4 bg-violet-500/20 text-violet-700 dark:text-violet-300 hover:bg-violet-500/30 border-0"
+                  className="w-full sm:w-auto sm:ml-4 bg-violet-500/20 text-violet-700 dark:text-violet-300 hover:bg-violet-500/30 border-0"
                   onClick={handleCurrentWeek}
                 >
                   Текущая неделя
@@ -1863,7 +1863,7 @@ function WeeklyReportContent() {
                   Разбивка по типам оплаты
                 </h3>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <table className="w-full min-w-[520px] text-sm">
                     <thead>
                       <tr className="border-b border-slate-200 dark:border-white/5">
                         <th className="text-left py-2 pr-4 text-xs text-slate-500 font-medium">Тип</th>
@@ -1987,7 +1987,7 @@ function WeeklyReportContent() {
                 <div className="h-80">
                   {mounted && <MemoizedBalanceChart data={totals.balanceHistory} />}
                 </div>
-                <div className="flex items-center justify-center gap-6 mt-4 text-xs">
+                <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-6 mt-4 text-xs">
                   <span className="flex items-center gap-2">
                     <span className="w-3 h-3 rounded-full bg-emerald-500" />
                     Сальдо наличных
@@ -2104,7 +2104,7 @@ function WeeklyReportContent() {
                       Ключевые метрики
                     </h3>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-2 sm:gap-4">
                       <div className="p-4 bg-surface-muted rounded-xl">
                         <p className="text-xs text-slate-500 mb-1">Расходы / Выручка</p>
                         <p className="text-2xl font-bold text-foreground">{totals.metrics.expenseRate.toFixed(1)}%</p>

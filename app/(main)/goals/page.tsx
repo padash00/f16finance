@@ -554,13 +554,13 @@ export default function GoalsPage() {
             </>
           }
           toolbar={
-            <div className="inline-flex items-center gap-1 rounded-2xl border border-border bg-white dark:bg-white/[0.03] p-1">
+            <div className="inline-flex max-w-full flex-wrap items-center gap-1 rounded-2xl border border-border bg-white dark:bg-white/[0.03] p-1">
               {(['year', 'h1', 'h2', 'month'] as PeriodKind[]).map((p) => (
                 <button
                   key={p}
                   type="button"
                   onClick={() => { setTab(p); setSelectedMonth(null) }}
-                  className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
+                  className={`rounded-xl px-3 py-2 text-sm font-medium transition sm:px-4 ${
                     tab === p
                       ? 'bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow shadow-amber-500/20'
                       : 'text-muted-foreground hover:text-foreground'
@@ -628,7 +628,7 @@ export default function GoalsPage() {
         ) : null}
 
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Новая цель</DialogTitle>
               <DialogDescription>
@@ -831,7 +831,7 @@ function KpiCard({
             <span className="ml-auto rounded-full border border-amber-500/30 bg-amber-500/[0.08] px-2 py-0.5 text-[9px] uppercase tracking-wider text-amber-700 dark:text-amber-300">{planLabel}</span>
           ) : null}
         </div>
-        <p className={`mt-2 font-bold tabular-nums ${large ? 'text-3xl' : compact ? 'text-lg' : 'text-2xl'} ${a.text}`}>
+        <p className={`mt-2 font-bold tabular-nums ${large ? 'text-2xl sm:text-3xl' : compact ? 'text-lg' : 'text-xl sm:text-2xl'} ${a.text}`}>
           {fmt(fact)} <span className="text-xs opacity-70">{meta.unit}</span>
         </p>
         {plan && plan > 0 ? (
@@ -1254,7 +1254,7 @@ function MonthDetailDialog({
         <DialogDescription className="sr-only">
           Факт и план по выбранному месяцу с разбивкой по точкам и динамикой по дням.
         </DialogDescription>
-        <div className="flex items-center justify-between border-b border-border bg-gradient-to-r from-amber-500/[0.08] to-amber-500/[0.04] px-6 py-4">
+        <div className="flex items-center justify-between gap-2 border-b border-border bg-gradient-to-r from-amber-500/[0.08] to-amber-500/[0.04] px-4 py-4 sm:px-6">
           <div className="flex items-center gap-3">
             <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-lg shadow-amber-500/30">
               <CalendarDays className="h-5 w-5" />
@@ -1271,7 +1271,7 @@ function MonthDetailDialog({
           </button>
         </div>
 
-        <div className="flex-1 overflow-auto p-6 space-y-5">
+        <div className="flex-1 overflow-auto p-4 sm:p-6 space-y-5">
           {/* KPI row */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             {METRICS.map((m) => {
@@ -1336,7 +1336,7 @@ function MonthDetailDialog({
 
           {/* Chart */}
           <div className="rounded-2xl border border-border bg-white dark:bg-white/[0.02] p-5">
-            <div className="mb-3 flex items-center justify-between">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-sm font-semibold">Динамика по дням: {metricMeta(activeMetric).label}</h2>
               {orgPlan ? (
                 <button onClick={() => onDelete(orgPlan.id)} className="inline-flex items-center gap-1 rounded-lg border border-rose-500/20 px-2 py-1 text-xs text-rose-700 dark:text-rose-300 hover:bg-rose-500/10">

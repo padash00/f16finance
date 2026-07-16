@@ -256,25 +256,25 @@ export default function ShiftReportPage() {
             <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
               <Card className="border-border bg-card p-4">
                 <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Выручка</div>
-                <div className="mt-2 text-3xl font-bold text-foreground tabular-nums">{fmt(totals!.amount)}</div>
+                <div className="mt-2 text-2xl sm:text-3xl font-bold text-foreground tabular-nums">{fmt(totals!.amount)}</div>
                 <div className="mt-1 text-xs text-muted-foreground">тенге</div>
               </Card>
 
               <Card className="border-border bg-card p-4">
                 <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Продаж</div>
-                <div className="mt-2 text-3xl font-bold text-foreground tabular-nums">{totals!.count}</div>
+                <div className="mt-2 text-2xl sm:text-3xl font-bold text-foreground tabular-nums">{totals!.count}</div>
                 <div className="mt-1 text-xs text-muted-foreground">ср. чек {fmt(totals!.avg_check)} ₸</div>
               </Card>
 
               <Card className="border-border bg-card p-4">
                 <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Наличные</div>
-                <div className="mt-2 text-3xl font-bold text-green-400 tabular-nums">{fmt(totals!.cash)}</div>
+                <div className="mt-2 text-2xl sm:text-3xl font-bold text-green-400 tabular-nums">{fmt(totals!.cash)}</div>
                 <div className="mt-1 text-xs text-muted-foreground">тенге</div>
               </Card>
 
               <Card className="border-border bg-card p-4">
                 <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Безнал</div>
-                <div className="mt-2 text-3xl font-bold text-blue-400 tabular-nums">{fmt(nonCash)}</div>
+                <div className="mt-2 text-2xl sm:text-3xl font-bold text-blue-400 tabular-nums">{fmt(nonCash)}</div>
                 <div className="mt-1 text-xs text-muted-foreground">Безналичный + Карта + Онлайн</div>
               </Card>
             </div>

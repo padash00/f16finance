@@ -821,7 +821,7 @@ function DocumentList({
               </div>
             )}
 
-            <div className="flex gap-2 mt-2">
+            <div className="flex flex-wrap gap-2 mt-2">
               <Button
                 size="sm"
                 variant="outline"
@@ -2275,7 +2275,7 @@ export default function OperatorProfilePage() {
           {/* История работы */}
           {activeTab === 'work' && (
             <Card className="p-6 bg-white dark:bg-gray-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
-              <div className="flex justify-between items-center mb-4">
+              <div className="flex flex-wrap justify-between items-center gap-2 mb-4">
                 <h3 className="text-lg font-semibold flex items-center gap-2">
                   <Briefcase className="w-5 h-5 text-amber-400" />
                   История работы
@@ -2531,7 +2531,7 @@ export default function OperatorProfilePage() {
           {/* Документы */}
           {activeTab === 'docs' && (
             <Card className="p-6 bg-white dark:bg-gray-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
-              <div className="flex justify-between items-center mb-4">
+              <div className="flex flex-wrap justify-between items-center gap-2 mb-4">
                 <h3 className="text-lg font-semibold flex items-center gap-2">
                   <FileText className="w-5 h-5 text-blue-400" />
                   Документы

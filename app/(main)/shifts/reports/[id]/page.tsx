@@ -680,13 +680,13 @@ export default function ShiftReportDetailPage({
                   <span className="text-slate-400"> из {sales.length}</span>
                 )}
               </span>
-              <div className="ml-auto relative">
+              <div className="relative w-full sm:ml-auto sm:w-auto">
                 <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
                 <input
                   value={salesSearch}
                   onChange={(e) => setSalesSearch(e.target.value)}
                   placeholder="Поиск по товару, клиенту, оператору…"
-                  className="h-8 w-72 rounded-md border border-border bg-white dark:bg-white/[0.03] pl-7 pr-2 text-xs text-body outline-none placeholder:text-slate-500 focus:border-emerald-500/40"
+                  className="h-8 w-full sm:w-72 rounded-md border border-border bg-white dark:bg-white/[0.03] pl-7 pr-2 text-xs text-body outline-none placeholder:text-slate-500 focus:border-emerald-500/40"
                 />
               </div>
             </div>
@@ -1419,7 +1419,7 @@ function ZReport({
       {incidentsSummary && incidentsSummary.count > 0 && (
         <div className="mt-4">
           <div className="text-xs uppercase tracking-wider text-amber-700 dark:text-amber-300/80 font-semibold mb-2">⚠ Инциденты</div>
-          <div className="rounded-lg border border-border bg-slate-50 dark:bg-white/[0.02] p-3 text-sm grid grid-cols-3 gap-3">
+          <div className="rounded-lg border border-border bg-slate-50 dark:bg-white/[0.02] p-3 text-sm grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3">
             <div>
               <div className="text-[10px] text-slate-500 uppercase">Всего</div>
               <div className="text-foreground font-semibold">{incidentsSummary.count}</div>

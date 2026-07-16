@@ -172,7 +172,7 @@ export default function ExpenseWhitelistPage() {
               className={inputCls}
             />
           </div>
-          <Button onClick={add} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700">
+          <Button onClick={add} disabled={saving} className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700">
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
             Добавить
           </Button>
