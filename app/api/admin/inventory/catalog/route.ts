@@ -70,6 +70,9 @@ export async function GET(request: Request) {
     const orgId = access.activeOrganization?.id || null
     const scopeOrg = access.isSuperAdmin ? null : (orgId || '00000000-0000-0000-0000-000000000000')
 
+    // Опциональный фильтр остатков по точке (company) — для инлайн-правки в каталоге
+    const companyFilter = String(new URL(request.url).searchParams.get('company_id') || '').trim() || null
+
     // Fetch all inventory items with their category. image_url читаем МЯГКО —
     // колонки может не быть, если миграция карточки не применена.
     const ITEM_COLS = 'id, name, barcode, category_id, sale_price, default_purchase_price, unit, notes, is_active, item_type, low_stock_threshold, requires_expiry, created_at, category:inventory_categories(id, name)'
@@ -92,7 +95,7 @@ export async function GET(request: Request) {
     const itemIds = (items || []).map((i: any) => String(i.id))
     let balancesQuery = supabase
       .from('inventory_balances')
-      .select('item_id, quantity, loc:inventory_locations(location_type)')
+      .select('item_id, quantity, loc:inventory_locations(location_type, company_id)')
     // Балансы только по товарам своей орг (inventory_balances не имеет org-колонки).
     if (scopeOrg) balancesQuery = balancesQuery.in('item_id', itemIds.length ? itemIds : ['00000000-0000-0000-0000-000000000000'])
     const { data: balances, error: balancesError } = await balancesQuery
@@ -102,7 +105,9 @@ export async function GET(request: Request) {
     const warehouseMap: Record<string, number> = {}
     const showcaseMap: Record<string, number> = {}
     for (const b of balances || []) {
-      const locType = (Array.isArray(b.loc) ? b.loc[0] : b.loc)?.location_type
+      const loc = Array.isArray(b.loc) ? b.loc[0] : b.loc
+      if (companyFilter && loc?.company_id !== companyFilter) continue
+      const locType = loc?.location_type
       const qty = b.quantity || 0
       if (locType === 'warehouse') {
         warehouseMap[b.item_id] = (warehouseMap[b.item_id] || 0) + qty

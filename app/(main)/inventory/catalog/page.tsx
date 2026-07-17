@@ -4,7 +4,7 @@ import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { downloadReportPdf } from '@/lib/client/download-pdf'
 import { useCapabilities } from '@/lib/client/use-capabilities'
-import { Package, Pencil, Plus, Search, Trash2, Upload, Download, Check, X, ChevronLeft, ChevronRight, ShoppingCart, TrendingUp, Warehouse, Store, Tag } from 'lucide-react'
+import { Package, Pencil, Plus, Search, Trash2, Upload, Download, Check, X, ChevronLeft, ChevronRight, ShoppingCart, TrendingUp, Warehouse, Store, Tag, Loader2 } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -461,6 +461,15 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
   const [page, setPage] = useState(1)
   const [highlightId, setHighlightId] = useState<string | null>(null)
 
+  // Инлайн-правка остатков (как на складе/витрине): нужна конкретная точка
+  const canEditStock = can('store-warehouse.edit')
+  const [companies, setCompanies] = useState<{ id: string; name: string }[]>([])
+  const [filterCompany, setFilterCompany] = useState('all')
+  const [editingQty, setEditingQty] = useState<{ id: string; field: 'wh' | 'sh' } | null>(null)
+  const [editQtyVal, setEditQtyVal] = useState('')
+  const [savingQty, setSavingQty] = useState(false)
+  const effectiveCompanyId = filterCompany !== 'all' ? filterCompany : (companies.length === 1 ? companies[0].id : null)
+
   // Edit / add
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<ItemFormData>(EMPTY_FORM)
@@ -493,7 +502,8 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/admin/inventory/catalog')
+      const qs = filterCompany !== 'all' ? `?company_id=${encodeURIComponent(filterCompany)}` : ''
+      const res = await fetch(`/api/admin/inventory/catalog${qs}`)
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Ошибка загрузки')
       setItems(json.data || [])
@@ -502,9 +512,46 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [filterCompany])
 
   useEffect(() => { loadItems() }, [loadItems])
+
+  useEffect(() => {
+    fetch('/api/admin/companies')
+      .then((r) => r.json())
+      .then((j) => setCompanies(j.data || []))
+      .catch(() => {})
+  }, [])
+
+  async function saveQty(itemId: string) {
+    if (!editingQty || !effectiveCompanyId) return
+    const qty = parseFloat(editQtyVal.replace(',', '.'))
+    if (!Number.isFinite(qty) || qty < 0) { showToast('Некорректное количество'); return }
+    setSavingQty(true)
+    try {
+      const isWh = editingQty.field === 'wh'
+      const res = await fetch(isWh ? '/api/admin/store/warehouse' : '/api/admin/store/showcase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: isWh ? 'setWarehouse' : 'setShowcase',
+          company_id: effectiveCompanyId,
+          item_id: itemId,
+          quantity: qty,
+        }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Ошибка сохранения')
+      setEditingQty(null)
+      setEditQtyVal('')
+      await loadItems()
+      showToast('Остаток обновлён')
+    } catch (e: any) {
+      showToast('Ошибка: ' + e.message)
+    } finally {
+      setSavingQty(false)
+    }
+  }
 
   // Derived data
   const categories = Array.from(
@@ -529,7 +576,7 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
   const totalPages = Math.ceil(sorted.length / PAGE_SIZE)
   const paginated = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
-  useEffect(() => { setPage(1) }, [search, filterCategory, filterType, sortBy])
+  useEffect(() => { setPage(1) }, [search, filterCategory, filterType, sortBy, filterCompany])
 
   // Totals across all filtered items (not just current page)
   const totals = filtered.reduce(
@@ -1008,6 +1055,19 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
                   <SelectItem value="consumable">Расходник</SelectItem>
                 </SelectContent>
               </Select>
+              {companies.length > 1 && (
+                <Select value={filterCompany} onValueChange={setFilterCompany}>
+                  <SelectTrigger className="h-8 text-sm w-[160px]">
+                    <SelectValue placeholder="Точка" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Все точки</SelectItem>
+                    {companies.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               <Select value={sortBy} onValueChange={(v) => setSortBy(v as 'newest' | 'name')}>
                 <SelectTrigger className="h-8 text-sm w-[150px]">
                   <SelectValue />
@@ -1092,22 +1152,90 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
                           <td className="px-3 py-2.5 text-right text-muted-foreground">{item.default_purchase_price.toLocaleString('ru-RU')} ₸</td>
                           <td className="px-3 py-2.5 text-center text-muted-foreground text-xs">{item.unit}</td>
                           <td className="px-3 py-2 text-right">
-                            {item.warehouse_qty > 0 ? (
-                              <div className="space-y-0.5">
-                                <div className="text-blue-400 font-medium">{item.warehouse_qty.toLocaleString('ru-RU')} {item.unit}</div>
-                                <div className="text-[10px] text-muted-foreground">зак: {(item.warehouse_qty * item.default_purchase_price).toLocaleString('ru-RU')} ₸</div>
-                                <div className="text-[10px] text-muted-foreground">пр: {(item.warehouse_qty * item.sale_price).toLocaleString('ru-RU')} ₸</div>
+                            {editingQty?.id === item.id && editingQty.field === 'wh' ? (
+                              <div className="flex items-center justify-end gap-1">
+                                <Input
+                                  value={editQtyVal}
+                                  onChange={(e) => setEditQtyVal(e.target.value)}
+                                  className="h-7 w-16 px-1 text-center text-xs"
+                                  autoFocus
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') void saveQty(item.id)
+                                    if (e.key === 'Escape') { setEditingQty(null); setEditQtyVal('') }
+                                  }}
+                                />
+                                <button onClick={() => void saveQty(item.id)} disabled={savingQty} className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 disabled:opacity-50">
+                                  {savingQty ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                </button>
+                                <button onClick={() => { setEditingQty(null); setEditQtyVal('') }} className="text-muted-foreground hover:text-rose-400">
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
                               </div>
-                            ) : <span className="text-muted-foreground">—</span>}
+                            ) : (
+                              <div className="space-y-0.5">
+                                {canEditStock && effectiveCompanyId ? (
+                                  <button
+                                    onClick={() => { setEditingQty({ id: item.id, field: 'wh' }); setEditQtyVal(String(item.warehouse_qty)) }}
+                                    className="inline-flex items-center gap-1 text-blue-400 font-medium hover:text-blue-500 transition-colors"
+                                    title="Изменить остаток подсобки"
+                                  >
+                                    {item.warehouse_qty.toLocaleString('ru-RU')} {item.unit}
+                                    <Pencil className="w-3 h-3 opacity-40" />
+                                  </button>
+                                ) : item.warehouse_qty > 0 ? (
+                                  <div className="text-blue-400 font-medium">{item.warehouse_qty.toLocaleString('ru-RU')} {item.unit}</div>
+                                ) : <span className="text-muted-foreground">—</span>}
+                                {item.warehouse_qty > 0 && (
+                                  <>
+                                    <div className="text-[10px] text-muted-foreground">зак: {(item.warehouse_qty * item.default_purchase_price).toLocaleString('ru-RU')} ₸</div>
+                                    <div className="text-[10px] text-muted-foreground">пр: {(item.warehouse_qty * item.sale_price).toLocaleString('ru-RU')} ₸</div>
+                                  </>
+                                )}
+                              </div>
+                            )}
                           </td>
                           <td className="px-3 py-2 text-right">
-                            {item.showcase_qty > 0 ? (
-                              <div className="space-y-0.5">
-                                <div className="text-amber-400 font-medium">{item.showcase_qty.toLocaleString('ru-RU')} {item.unit}</div>
-                                <div className="text-[10px] text-muted-foreground">зак: {(item.showcase_qty * item.default_purchase_price).toLocaleString('ru-RU')} ₸</div>
-                                <div className="text-[10px] text-muted-foreground">пр: {(item.showcase_qty * item.sale_price).toLocaleString('ru-RU')} ₸</div>
+                            {editingQty?.id === item.id && editingQty.field === 'sh' ? (
+                              <div className="flex items-center justify-end gap-1">
+                                <Input
+                                  value={editQtyVal}
+                                  onChange={(e) => setEditQtyVal(e.target.value)}
+                                  className="h-7 w-16 px-1 text-center text-xs"
+                                  autoFocus
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') void saveQty(item.id)
+                                    if (e.key === 'Escape') { setEditingQty(null); setEditQtyVal('') }
+                                  }}
+                                />
+                                <button onClick={() => void saveQty(item.id)} disabled={savingQty} className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 disabled:opacity-50">
+                                  {savingQty ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                </button>
+                                <button onClick={() => { setEditingQty(null); setEditQtyVal('') }} className="text-muted-foreground hover:text-rose-400">
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
                               </div>
-                            ) : <span className="text-muted-foreground">—</span>}
+                            ) : (
+                              <div className="space-y-0.5">
+                                {canEditStock && effectiveCompanyId ? (
+                                  <button
+                                    onClick={() => { setEditingQty({ id: item.id, field: 'sh' }); setEditQtyVal(String(item.showcase_qty)) }}
+                                    className="inline-flex items-center gap-1 text-amber-400 font-medium hover:text-amber-500 transition-colors"
+                                    title="Изменить остаток витрины"
+                                  >
+                                    {item.showcase_qty.toLocaleString('ru-RU')} {item.unit}
+                                    <Pencil className="w-3 h-3 opacity-40" />
+                                  </button>
+                                ) : item.showcase_qty > 0 ? (
+                                  <div className="text-amber-400 font-medium">{item.showcase_qty.toLocaleString('ru-RU')} {item.unit}</div>
+                                ) : <span className="text-muted-foreground">—</span>}
+                                {item.showcase_qty > 0 && (
+                                  <>
+                                    <div className="text-[10px] text-muted-foreground">зак: {(item.showcase_qty * item.default_purchase_price).toLocaleString('ru-RU')} ₸</div>
+                                    <div className="text-[10px] text-muted-foreground">пр: {(item.showcase_qty * item.sale_price).toLocaleString('ru-RU')} ₸</div>
+                                  </>
+                                )}
+                              </div>
+                            )}
                           </td>
                           <td className="px-3 py-2 text-right">
                             {(Number(item.catalog_qty ?? item.total_balance) || 0) > 0 ? (
