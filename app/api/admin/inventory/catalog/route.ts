@@ -72,7 +72,7 @@ export async function GET(request: Request) {
 
     // Fetch all inventory items with their category. image_url читаем МЯГКО —
     // колонки может не быть, если миграция карточки не применена.
-    const ITEM_COLS = 'id, name, barcode, category_id, sale_price, default_purchase_price, unit, notes, is_active, item_type, low_stock_threshold, requires_expiry, category:inventory_categories(id, name)'
+    const ITEM_COLS = 'id, name, barcode, category_id, sale_price, default_purchase_price, unit, notes, is_active, item_type, low_stock_threshold, requires_expiry, created_at, category:inventory_categories(id, name)'
     let items: any[] | null = null
     try {
       let q = supabase.from('inventory_items').select(`${ITEM_COLS}, image_url`).order('name', { ascending: true })

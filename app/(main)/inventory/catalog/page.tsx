@@ -45,6 +45,7 @@ type CatalogItem = {
   low_stock_threshold: number | null
   requires_expiry?: boolean
   image_url?: string | null
+  created_at?: string | null
 }
 
 type ImportRow = {
@@ -456,7 +457,9 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
   const [search, setSearch] = useState('')
   const [filterCategory, setFilterCategory] = useState('all')
   const [filterType, setFilterType] = useState('all')
+  const [sortBy, setSortBy] = useState<'newest' | 'name'>('newest')
   const [page, setPage] = useState(1)
+  const [highlightId, setHighlightId] = useState<string | null>(null)
 
   // Edit / add
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -518,10 +521,15 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
     return true
   })
 
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  // API отдаёт по алфавиту; «Сначала новые» сортируем на клиенте по created_at
+  const sorted = sortBy === 'newest'
+    ? [...filtered].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
+    : filtered
 
-  useEffect(() => { setPage(1) }, [search, filterCategory, filterType])
+  const totalPages = Math.ceil(sorted.length / PAGE_SIZE)
+  const paginated = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+
+  useEffect(() => { setPage(1) }, [search, filterCategory, filterType, sortBy])
 
   // Totals across all filtered items (not just current page)
   const totals = filtered.reduce(
@@ -620,17 +628,6 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
   async function saveAdd() {
     setSaving(true)
     try {
-      const res = await fetch('/api/admin/inventory/catalog', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'updateItem',
-          // We'll use a temp approach — insert via updateItem won't work, use direct insert
-          // Actually need to call createItem — but route doesn't have it. Use inventory main route.
-          action2: 'createItem',
-        }),
-      })
-      // Actually the catalog route doesn't have createItem. Use the main inventory route.
       const res2 = await fetch('/api/admin/inventory', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -667,6 +664,16 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
       setShowAdd(false)
       setAddForm(EMPTY_FORM)
       await loadItems()
+      // Показать новый товар сверху: сортировка «Сначала новые», сброс фильтров, подсветка строки
+      setSortBy('newest')
+      setSearch('')
+      setFilterCategory('all')
+      setFilterType('all')
+      setPage(1)
+      if (newItemId) {
+        setHighlightId(newItemId)
+        setTimeout(() => setHighlightId(null), 5000)
+      }
       showToast('Товар добавлен')
     } catch (e: any) {
       showToast('Ошибка: ' + e.message)
@@ -1001,6 +1008,15 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
                   <SelectItem value="consumable">Расходник</SelectItem>
                 </SelectContent>
               </Select>
+              <Select value={sortBy} onValueChange={(v) => setSortBy(v as 'newest' | 'name')}>
+                <SelectTrigger className="h-8 text-sm w-[150px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="newest">Сначала новые</SelectItem>
+                  <SelectItem value="name">По названию (А-Я)</SelectItem>
+                </SelectContent>
+              </Select>
               {(search || filterCategory !== 'all' || filterType !== 'all') && (
                 <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setSearch(''); setFilterCategory('all'); setFilterType('all') }}>
                   Сбросить
@@ -1045,7 +1061,7 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
                   <tbody className="divide-y divide-border/40">
                     {paginated.map((item) => (
                       <Fragment key={item.id}>
-                        <tr className={`hover:bg-muted/20 transition-colors ${!item.is_active ? 'opacity-50' : ''}`}>
+                        <tr className={`hover:bg-muted/20 transition-colors ${!item.is_active ? 'opacity-50' : ''} ${item.id === highlightId ? 'bg-emerald-500/10' : ''}`}>
                           <td className="px-3 py-2.5 font-medium max-w-[260px]">
                             <button
                               type="button"
