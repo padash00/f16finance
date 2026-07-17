@@ -436,7 +436,7 @@ function ItemForm({
 // ─── Main page ─────────────────────────────────────────────────────────────────
 
 export function CatalogPageContent({ embedded = false }: { embedded?: boolean } = {}) {
-  const { can } = useCapabilities()
+  const { can, isSuperAdmin } = useCapabilities()
   const canCreate = can('store-catalog.create')
   const canEdit = can('store-catalog.edit')
   const canDelete = can('store-catalog.delete')
@@ -461,8 +461,9 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
   const [page, setPage] = useState(1)
   const [highlightId, setHighlightId] = useState<string | null>(null)
 
-  // Инлайн-правка остатков (как на складе/витрине): нужна конкретная точка
-  const canEditStock = can('store-warehouse.edit')
+  // Инлайн-правка остатков из каталога — только суперадмин (на складе/витрине
+  // у сотрудников остаётся своя правка по праву store-warehouse.edit)
+  const canEditStock = isSuperAdmin
   const [companies, setCompanies] = useState<{ id: string; name: string }[]>([])
   const [filterCompany, setFilterCompany] = useState('all')
   const [editingQty, setEditingQty] = useState<{ id: string; field: 'wh' | 'sh' } | null>(null)
