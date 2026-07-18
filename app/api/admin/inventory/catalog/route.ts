@@ -75,32 +75,60 @@ export async function GET(request: Request) {
 
     // Fetch all inventory items with their category. image_url читаем МЯГКО —
     // колонки может не быть, если миграция карточки не применена.
+    // ВАЖНО: PostgREST режет ответ до 1000 строк — забираем постранично.
+    const PAGE = 1000
+    const fetchAllPages = async (buildQuery: (from: number, to: number) => any): Promise<any[]> => {
+      const out: any[] = []
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await buildQuery(from, from + PAGE - 1)
+        if (error) throw error
+        const rows = data || []
+        out.push(...rows)
+        if (rows.length < PAGE) break
+      }
+      return out
+    }
+
     const ITEM_COLS = 'id, name, barcode, category_id, sale_price, default_purchase_price, unit, notes, is_active, item_type, low_stock_threshold, requires_expiry, created_at, category:inventory_categories(id, name)'
-    let items: any[] | null = null
+    let items: any[] = []
     try {
-      let q = supabase.from('inventory_items').select(`${ITEM_COLS}, image_url`).order('name', { ascending: true })
-      if (scopeOrg) q = q.eq('organization_id', scopeOrg)
-      const r = await q
-      if (r.error) throw r.error
-      items = r.data as any[]
+      items = await fetchAllPages((from, to) => {
+        let q = supabase.from('inventory_items').select(`${ITEM_COLS}, image_url`).order('name', { ascending: true }).range(from, to)
+        if (scopeOrg) q = q.eq('organization_id', scopeOrg)
+        return q
+      })
     } catch {
-      let q = supabase.from('inventory_items').select(ITEM_COLS).order('name', { ascending: true })
-      if (scopeOrg) q = q.eq('organization_id', scopeOrg)
-      const r = await q
-      if (r.error) throw r.error
-      items = (r.data || []).map((i: any) => ({ ...i, image_url: null }))
+      items = (
+        await fetchAllPages((from, to) => {
+          let q = supabase.from('inventory_items').select(ITEM_COLS).order('name', { ascending: true }).range(from, to)
+          if (scopeOrg) q = q.eq('organization_id', scopeOrg)
+          return q
+        })
+      ).map((i: any) => ({ ...i, image_url: null }))
     }
 
     // v8: total = warehouse + showcase. catalog_total больше не используется.
-    const itemIds = (items || []).map((i: any) => String(i.id))
-    let balancesQuery = supabase
-      .from('inventory_balances')
-      .select('item_id, quantity, loc:inventory_locations(location_type, company_id)')
     // Балансы только по товарам своей орг (inventory_balances не имеет org-колонки).
-    if (scopeOrg) balancesQuery = balancesQuery.in('item_id', itemIds.length ? itemIds : ['00000000-0000-0000-0000-000000000000'])
-    const { data: balances, error: balancesError } = await balancesQuery
-
-    if (balancesError) throw balancesError
+    // Чанки по 200 id (лимит длины URL) + пагинация внутри чанка; чанки параллельно.
+    const itemIds = (items || []).map((i: any) => String(i.id))
+    const BAL_COLS = 'item_id, quantity, loc:inventory_locations(location_type, company_id)'
+    let balances: any[] = []
+    if (scopeOrg) {
+      if (itemIds.length) {
+        const chunkResults = await Promise.all(
+          chunkArray(itemIds, 200).map((ids) =>
+            fetchAllPages((from, to) =>
+              supabase.from('inventory_balances').select(BAL_COLS).in('item_id', ids).order('item_id').range(from, to),
+            ),
+          ),
+        )
+        balances = chunkResults.flat()
+      }
+    } else {
+      balances = await fetchAllPages((from, to) =>
+        supabase.from('inventory_balances').select(BAL_COLS).order('item_id').range(from, to),
+      )
+    }
 
     const warehouseMap: Record<string, number> = {}
     const showcaseMap: Record<string, number> = {}
