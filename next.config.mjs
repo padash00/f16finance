@@ -1,6 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   generateBuildId: async () => process.env.GITHUB_SHA ?? null,
+  experimental: {
+    // Плавные переходы между страницами (View Transitions API).
+    // Используется в app/(main)/template.tsx; в браузерах без поддержки — фолбэк-фейд из globals.css.
+    viewTransition: true,
+  },
   images: {
     unoptimized: true,
   },

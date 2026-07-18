@@ -266,8 +266,12 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .orda-main-enter {
-    animation: orda-fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  /* Фолбэк-фейд входа страницы — только там, где нет View Transitions API
+     (в поддерживающих браузерах кросс-фейд делает сам браузер, см. ниже). */
+  @supports not (view-transition-name: none) {
+    .orda-main-enter {
+      animation: orda-fade-up 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
   }
 
   .orda-drawer-panel {
@@ -276,6 +280,27 @@
 
   .orda-drawer-backdrop {
     animation: orda-backdrop-in 0.22s ease-out both;
+  }
+}
+
+/* ─── View Transitions: плавный кросс-фейд контента при навигации ──────────
+   Снимки старой/новой страницы живут в overlay-псевдоэлементах браузера,
+   transform на саму страницу не вешается — модалки в безопасности. */
+::view-transition-old(*) {
+  animation-duration: 0.25s;
+  animation-timing-function: ease-out;
+}
+::view-transition-new(*) {
+  animation-duration: 0.25s;
+  animation-timing-function: ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-image-pair(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
   }
 }
 
