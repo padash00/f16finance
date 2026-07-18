@@ -2109,7 +2109,166 @@ function ListTab({
 
   return (
     <Card className="border-0 bg-white dark:bg-gray-800/50 backdrop-blur-sm overflow-hidden">
-      <div ref={tableContainerRef} className="max-h-[72vh] overflow-auto">
+      {/* Мобильная версия: карточки расходов */}
+      {rows.length > 0 && (
+        <div className="space-y-3 p-3 max-h-[72vh] overflow-y-auto sm:hidden">
+          {rows.map((row: ExpenseRow) => {
+            const total = rowTotal(row)
+            const company = companyMap.get(row.company_id)
+            const isExtra = company?.code === 'extra' || company?.name === 'F16 Extra'
+            const statusLabel =
+              row.status === 'pending_approval'
+                ? 'Ожидает'
+                : row.status === 'approved'
+                ? 'Одобрен'
+                : row.status === 'declined'
+                ? 'Отклонен'
+                : 'Подтвержден'
+            const statusClass =
+              row.status === 'pending_approval'
+                ? 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-300 border-yellow-500/40'
+                : row.status === 'approved'
+                ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40'
+                : row.status === 'declined'
+                ? 'bg-red-500/20 text-red-700 dark:text-red-300 border-red-500/40'
+                : 'bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-500/40'
+            const docLabel =
+              row.document_kind === 'receipt'
+                ? 'Чек'
+                : row.document_kind === 'invoice'
+                ? 'Накладная'
+                : row.document_kind === 'bill'
+                ? 'Счет'
+                : row.document_kind === 'whitelist'
+                ? 'Доверенный'
+                : row.document_kind === 'one_off'
+                ? 'Разовый'
+                : '—'
+            const attachmentUrls = row.attachments?.length
+              ? row.attachments.map((item) => item.document_url).filter(Boolean)
+              : row.attachment_url
+                ? [row.attachment_url]
+                : []
+
+            return (
+              <div
+                key={row.id}
+                className={`rounded-xl border p-4 ${
+                  isExtra
+                    ? 'border-yellow-500/30 bg-yellow-500/5'
+                    : 'border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-900/40'
+                }`}
+              >
+                {/* Шапка: категория + дата */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 dark:bg-gray-800 text-slate-700 dark:text-gray-300 border border-slate-200 dark:border-gray-700 truncate">
+                        {row.category || 'Общее'}
+                      </span>
+                      {isExtra && (
+                        <span className="text-[9px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded border border-yellow-500/30">
+                          ДОП
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-1 text-[11px] text-gray-500 truncate">
+                      {company?.name ?? '—'} · {operatorName(row.operator_id)}
+                    </div>
+                  </div>
+                  <div className="text-xs text-slate-500 dark:text-gray-400 font-mono whitespace-nowrap">
+                    {DateUtils.formatDate(row.date)}
+                  </div>
+                </div>
+
+                {/* Сумма крупно */}
+                <div className="mt-2 text-2xl font-bold text-red-500 tabular-nums">
+                  {Formatters.moneyDetailed(total)}
+                </div>
+
+                {/* Вторичные поля */}
+                <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider text-gray-500">Нал</div>
+                    <div className={`font-mono ${row.cash_amount ? 'text-amber-400' : 'text-gray-500'}`}>
+                      {row.cash_amount ? Formatters.moneyDetailed(row.cash_amount) : '—'}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider text-gray-500">{cashLabels.providerName}</div>
+                    <div className={`font-mono ${row.kaspi_amount ? 'text-red-400' : 'text-gray-500'}`}>
+                      {row.kaspi_amount ? Formatters.moneyDetailed(row.kaspi_amount) : '—'}
+                    </div>
+                  </div>
+                  {showControlColumns ? (
+                    <>
+                      <div>
+                        <div className="text-[10px] uppercase tracking-wider text-gray-500">Статус</div>
+                        <span className={`mt-0.5 inline-flex items-center px-2 py-0.5 rounded text-[11px] border ${statusClass}`}>
+                          {statusLabel}
+                        </span>
+                      </div>
+                      <div>
+                        <div className="text-[10px] uppercase tracking-wider text-gray-500">Документ</div>
+                        <div className="text-xs text-slate-500 dark:text-gray-400">
+                          {docLabel}
+                          {row.one_off_payee ? (
+                            <div className="text-[10px] text-gray-500 truncate">{row.one_off_payee}</div>
+                          ) : null}
+                        </div>
+                      </div>
+                    </>
+                  ) : null}
+                </div>
+
+                {row.comment ? (
+                  <div className="mt-2 text-xs text-gray-500 break-words">{row.comment}</div>
+                ) : null}
+
+                {(attachmentUrls.length > 0 || canManageExpense) && (
+                  <div className="mt-3 flex items-center justify-between gap-2 border-t border-slate-100 dark:border-gray-800 pt-3">
+                    <div>
+                      {attachmentUrls.length > 0 ? (
+                        <button
+                          onClick={() => onPreview(attachmentUrls[0])}
+                          title="Посмотреть вложение"
+                          className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 transition-colors text-xs"
+                        >
+                          <Paperclip className="h-3.5 w-3.5" />
+                          Вложение
+                          {attachmentUrls.length > 1 ? <span className="text-[10px]">{attachmentUrls.length}</span> : null}
+                        </button>
+                      ) : null}
+                    </div>
+                    {canManageExpense ? (
+                      <div className="flex justify-end gap-2">
+                        {canEditExpense && (
+                          <Button variant="outline" size="icon-sm" onClick={() => openExpenseEditor(row)}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                        {canDeleteExpense && (
+                          <Button
+                            variant="destructive"
+                            size="icon-sm"
+                            onClick={() => deleteExpense(row)}
+                            disabled={deletingExpenseId === row.id}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Десктоп: таблица */}
+      <div ref={tableContainerRef} className="hidden sm:block max-h-[72vh] overflow-auto">
         <table className="w-full min-w-[820px]">
           <thead className="sticky top-0 z-10">
             <tr className="border-b border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-900/50 text-[10px] uppercase tracking-wider text-gray-500 font-semibold">

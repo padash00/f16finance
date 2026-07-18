@@ -20,7 +20,7 @@ import {
 } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { TableSkeleton } from '@/components/skeleton'
+import { Skeleton, TableSkeleton } from '@/components/skeleton'
 import { addDaysISO, formatRuDate, weekStartUtcISO } from '@/lib/core/date'
 import { formatMoney } from '@/lib/core/format'
 
@@ -471,6 +471,98 @@ export default function PointDebtsPage() {
         </Card>
       ) : null}
 
+      {/* Мобильная версия: карточки долгов сканера вместо широкой таблицы */}
+      <div className="space-y-3 sm:hidden">
+        {loading && items.length === 0 ? (
+          Array.from({ length: 4 }).map((_, idx) => (
+            <Card key={idx} className="border-border bg-white dark:bg-white/[0.03] p-4">
+              <div className="flex items-center gap-3">
+                <Skeleton className="h-5 w-5 rounded" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 w-36" />
+                  <Skeleton className="h-3 w-24" />
+                </div>
+              </div>
+              <Skeleton className="mt-3 h-8 w-32" />
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {Array.from({ length: 3 }).map((__, i) => (
+                  <Skeleton key={i} className="h-12" />
+                ))}
+              </div>
+            </Card>
+          ))
+        ) : items.length === 0 ? (
+          <Card className="border-border bg-white dark:bg-white/[0.03] p-8 text-center text-sm text-slate-400">
+            Нет активных позиций сканера (<code className="text-slate-500">point_debt_items</code>) за эту неделю.
+            {legacyRows.length > 0 ? (
+              <span className="mt-2 block text-slate-500">
+                Смотрите блок ниже — есть строки в <code className="text-slate-500">debts</code> (PyQt и др.).
+              </span>
+            ) : null}
+          </Card>
+        ) : filteredItems.length === 0 ? (
+          <Card className="border-border bg-white dark:bg-white/[0.03] p-8 text-center text-sm text-slate-400">
+            По текущим фильтрам ничего не найдено.
+          </Card>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={toggleAll}
+              className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-border bg-white dark:bg-white/5 py-2 text-xs text-body transition hover:bg-slate-50 dark:hover:bg-white/10"
+            >
+              {allSelected ? <CheckSquare className="h-4 w-4 text-amber-400" /> : <Square className="h-4 w-4" />}
+              {allSelected ? 'Снять выбор со всех' : 'Выбрать все'}
+            </button>
+            {filteredItems.map((r) => (
+              <Card key={r.id} className="border-border bg-white dark:bg-white/[0.03] p-4">
+                <button type="button" className="flex w-full min-w-0 items-start gap-2.5 text-left" onClick={() => toggleOne(r.id)}>
+                  <span className="mt-0.5 shrink-0 text-muted-foreground">
+                    {selected[r.id] ? <CheckSquare className="h-5 w-5 text-amber-400" /> : <Square className="h-5 w-5" />}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium text-foreground">{r.debtor_name}</span>
+                    <span className="mt-0.5 block truncate text-xs text-muted-foreground">{r.item_name}</span>
+                    {r.barcode ? <span className="block truncate font-mono text-[10px] text-slate-500">{r.barcode}</span> : null}
+                  </span>
+                </button>
+
+                <div className="mt-3 flex items-end justify-between gap-3">
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider text-slate-500">Сумма долга</div>
+                    <div className="text-2xl font-semibold tabular-nums text-amber-700 dark:text-amber-200">{money(r.total_amount)}</div>
+                  </div>
+                  <div className="pb-1 text-right text-xs text-slate-500">
+                    {r.created_at ? new Date(r.created_at).toLocaleString('ru-RU') : '—'}
+                  </div>
+                </div>
+
+                <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                  <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
+                    <div className="text-[10px] text-slate-500">Кол-во</div>
+                    <div className="mt-0.5 text-xs font-medium tabular-nums text-foreground">{r.quantity}</div>
+                  </div>
+                  <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
+                    <div className="text-[10px] text-slate-500">Цена</div>
+                    <div className="mt-0.5 text-xs font-medium tabular-nums text-foreground">{money(r.unit_price)}</div>
+                  </div>
+                  <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
+                    <div className="text-[10px] text-slate-500">Точка</div>
+                    <div className="mt-0.5 truncate text-xs font-medium text-foreground">{r.point_device_name || r.company_name}</div>
+                  </div>
+                </div>
+
+                <div className="mt-3 text-xs text-slate-500">
+                  {r.comment ? <div className="text-muted-foreground">{r.comment}</div> : null}
+                  <div className="mt-0.5">Оформил: {r.created_by_name} · {r.company_name}</div>
+                </div>
+              </Card>
+            ))}
+          </>
+        )}
+      </div>
+
+      <div className="hidden sm:block">
       <AdminTableViewport maxHeight="min(70vh, 40rem)">
           <table className="min-w-[900px] text-sm">
             <thead className={adminTableStickyTheadClass}>
@@ -561,6 +653,7 @@ export default function PointDebtsPage() {
             </tbody>
           </table>
       </AdminTableViewport>
+      </div>
 
       {legacyRows.length > 0 ? (
         <Card className="overflow-hidden border-violet-500/20 bg-white dark:bg-violet-950/20">
@@ -571,6 +664,53 @@ export default function PointDebtsPage() {
               строки сканера; списание здесь через отчётность / зарплату, не галочками на этой странице.
             </p>
           </div>
+          {/* Мобильная версия: карточки агрегата debts */}
+          <div className="space-y-3 p-4 sm:hidden">
+            {legacyRows.map((r) => {
+              const chain = r.rolled_over_chain || []
+              const origin = chain.length > 0 ? chain[chain.length - 1] : null
+              return (
+                <div key={r.id} className="rounded-2xl border border-border bg-white dark:bg-white/[0.03] p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="truncate font-medium text-foreground">{r.debtor_name}</div>
+                      <div className="mt-0.5 truncate text-xs text-muted-foreground">{r.company_name}</div>
+                    </div>
+                    {origin ? (
+                      <span
+                        className="inline-flex shrink-0 items-center gap-1 rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-amber-700 dark:text-amber-300"
+                        title={`Оригинал: ${origin.week_start} (${chain.length} переноса)`}
+                      >
+                        🔄 с {origin.week_start.slice(5)}
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <div className="mt-3">
+                    <div className="text-[10px] uppercase tracking-wider text-slate-500">Сумма долга</div>
+                    <div className="text-2xl font-semibold tabular-nums text-violet-700 dark:text-violet-200">{money(r.amount)}</div>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-center">
+                    <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
+                      <div className="text-[10px] text-slate-500">Источник</div>
+                      <div className="mt-0.5 truncate text-xs font-medium text-foreground">{r.source || '—'}</div>
+                    </div>
+                    <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
+                      <div className="text-[10px] text-slate-500">Создано</div>
+                      <div className="mt-0.5 text-xs font-medium tabular-nums text-foreground">
+                        {r.created_at ? new Date(r.created_at).toLocaleDateString('ru-RU') : '—'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {r.comment ? <div className="mt-2 text-xs text-muted-foreground">{r.comment}</div> : null}
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="hidden sm:block">
           <AdminTableViewport maxHeight="min(50vh, 22rem)">
             <table className="min-w-[720px] text-sm">
               <thead className={adminTableStickyTheadClass}>
@@ -617,6 +757,7 @@ export default function PointDebtsPage() {
               </tbody>
             </table>
           </AdminTableViewport>
+          </div>
         </Card>
       ) : null}
 

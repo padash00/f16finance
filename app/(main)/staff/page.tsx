@@ -7,6 +7,7 @@ import { useApiCache } from '@/lib/client/use-api-cache'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
 import { PageSkeleton, TableSkeleton } from '@/components/skeleton'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { DatePicker } from '@/components/ui/date-picker'
@@ -614,8 +615,56 @@ export default function StaffPageSmart() {
             {(searchTerm || showInactive || sortBy !== 'name' || sortDir !== 'asc') && <button onClick={resetFilters} className="text-sm text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors">Сбросить</button>}
           </div>
 
-          {/* Main Table */}
-          <Card className="overflow-hidden border-border bg-white dark:bg-white/[0.04] p-0">
+          {/* Мобильная версия: карточки сотрудников вместо широкой таблицы */}
+          <div className="space-y-3 sm:hidden">
+            {loading && !refreshing ? (
+              Array.from({ length: 4 }).map((_, idx) => (
+                <Card key={idx} className="border-border bg-white dark:bg-white/[0.04] p-4">
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="h-8 w-8 rounded-full" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-3 w-20" />
+                    </div>
+                  </div>
+                  <Skeleton className="mt-3 h-8 w-36" />
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    {Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-12" />)}
+                  </div>
+                </Card>
+              ))
+            ) : filteredStaff.length === 0 ? (
+              <Card className="border-border bg-white dark:bg-white/[0.04] p-8 text-center text-sm text-slate-500">
+                {staff.length === 0
+                  ? 'Список сотрудников пуст. Добавьте первого сотрудника.'
+                  : 'Нет сотрудников, соответствующих фильтрам'}
+              </Card>
+            ) : (
+              filteredStaff.map((s) => {
+                const roleStyle = ROLE_LABEL[s.role as StaffRole] || ROLE_LABEL.other
+                const RoleIcon = roleStyle.icon
+                return (
+                  <StaffCardMobile
+                    key={s.id}
+                    staff={s}
+                    roleStyle={roleStyle}
+                    RoleIcon={RoleIcon}
+                    onToggleStatus={() => toggleStaffStatus(s)}
+                    onInviteAccount={() => handleInviteStaffAccount(s)}
+                    onResetPassword={() => handleResetStaffPassword(s)}
+                    canInviteAccount={isSuperAdmin || canInvite}
+                    canToggleStatus={canToggleStatus}
+                    accountInfo={accountInfoByStaffId[s.id] || null}
+                    inviteBusy={accountActionBusyKey === `inviteStaffAccount:${s.id}`}
+                    resetBusy={accountActionBusyKey === `sendPasswordReset:${s.id}`}
+                  />
+                )
+              })
+            )}
+          </div>
+
+          {/* Main Table (десктоп) */}
+          <Card className="hidden sm:flex overflow-hidden border-border bg-white dark:bg-white/[0.04] p-0">
             <AdminTableViewport maxHeight="min(70vh, 40rem)" className="rounded-none border-0 bg-transparent">
               <table className="w-full min-w-[640px] text-sm">
                 <thead className={adminTableStickyTheadClass}>
@@ -819,6 +868,129 @@ function StaffRow({
   )
 }
 
+
+// --- Мобильная карточка сотрудника (те же данные и обработчики, что у StaffRow) ---
+function StaffCardMobile({
+  staff,
+  roleStyle,
+  RoleIcon,
+  onToggleStatus,
+  onInviteAccount,
+  onResetPassword,
+  canInviteAccount,
+  canToggleStatus: canToggleStatusProp,
+  accountInfo,
+  inviteBusy,
+  resetBusy,
+}: any) {
+  const effectiveEmail = accountInfo?.email || staff.email || null
+  const accountState = (accountInfo?.accountState || (!effectiveEmail ? 'no_email' : 'no_account')) as StaffAccountState
+  const accountStateLabel = ACCOUNT_STATE_LABEL[accountState]
+  const inviteBlockedReason = !effectiveEmail?.trim()
+    ? 'У сотрудника не заполнен email'
+    : !staff.is_active
+      ? 'Нельзя отправить приглашение архивному сотруднику'
+      : null
+  const canResetPassword = accountState === 'invited' || accountState === 'active'
+
+  return (
+    <Card className={cn('border-border bg-white dark:bg-white/[0.04] p-4', !staff.is_active && 'opacity-60')}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className={cn('flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full', roleStyle.color.split(' ')[1])}>
+            <RoleIcon className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <div className="truncate font-medium text-foreground">{staff.full_name}</div>
+            <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+              <span className={cn('rounded border px-1.5 py-0.5 text-[10px]', roleStyle.color)}>{roleStyle.label}</span>
+              {staff.short_name && <span className="text-[10px] text-slate-500">{staff.short_name}</span>}
+              {!staff.is_active && <span className="text-[10px] font-medium text-red-500">Архив</span>}
+            </div>
+          </div>
+        </div>
+        <span className={cn('flex-shrink-0 rounded border px-1.5 py-0.5 text-[10px]', accountStateLabel.className)}>
+          {accountStateLabel.label}
+        </span>
+      </div>
+
+      <div className="mt-3">
+        <div className="text-[10px] uppercase tracking-wider text-slate-500">Оклад</div>
+        <div className="text-2xl font-semibold tabular-nums text-foreground">{money(staff.monthly_salary || 0)}</div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2 text-center">
+        <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
+          <div className="text-[10px] text-slate-500">Email</div>
+          <div className={cn('mt-0.5 truncate px-1 text-xs font-medium', effectiveEmail?.trim() ? 'text-foreground' : 'text-amber-700 dark:text-amber-300')}>
+            {effectiveEmail?.trim() || 'не заполнен'}
+          </div>
+        </div>
+        <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
+          <div className="text-[10px] text-slate-500">Последний вход</div>
+          <div className="mt-0.5 text-xs font-medium text-foreground">
+            {accountInfo?.lastSignInAt ? new Date(accountInfo.lastSignInAt).toLocaleDateString('ru-RU') : '—'}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        {canInviteAccount && (
+          <Button
+            size="sm"
+            variant="outline"
+            className={cn(
+              'h-9 flex-1 gap-1.5 rounded-xl border-border bg-white text-xs dark:bg-white/[0.03]',
+              !effectiveEmail?.trim() && 'border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10',
+              !staff.is_active && 'border-border text-slate-500',
+            )}
+            onClick={onInviteAccount}
+            disabled={inviteBusy}
+            title={
+              inviteBlockedReason ||
+              (accountState === 'no_account'
+                ? `Создать аккаунт и отправить приглашение на ${effectiveEmail}`
+                : `Отправить письмо для повторной установки пароля на ${effectiveEmail}`)
+            }
+          >
+            <KeyRound className="h-3.5 w-3.5" />
+            {inviteBusy ? 'Отправка...' : inviteBlockedReason ? 'Проверить' : accountState === 'no_account' ? 'Пригласить' : 'Переотправить'}
+          </Button>
+        )}
+
+        {canInviteAccount && canResetPassword && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-9 flex-1 gap-1.5 rounded-xl border-border bg-white text-xs dark:bg-white/[0.03]"
+            onClick={onResetPassword}
+            disabled={resetBusy || !staff.is_active}
+            title={!staff.is_active ? 'Нельзя отправить письмо архивному сотруднику' : `Отправить письмо для смены пароля на ${effectiveEmail}`}
+          >
+            <Mail className="h-3.5 w-3.5" />
+            {resetBusy ? 'Отправка...' : 'Сменить пароль'}
+          </Button>
+        )}
+
+        {canToggleStatusProp && (
+          <Button
+            size="sm"
+            variant="outline"
+            className={cn(
+              'h-9 gap-1.5 rounded-xl border-border bg-white text-xs dark:bg-white/[0.03]',
+              staff.is_active ? 'text-slate-500 hover:bg-red-500/10 hover:text-red-400' : 'text-slate-500 hover:bg-emerald-500/10 hover:text-emerald-400',
+            )}
+            onClick={onToggleStatus}
+            title={staff.is_active ? 'В архив' : 'Активировать'}
+          >
+            {staff.is_active ? <Trash2 className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+            {staff.is_active ? 'В архив' : 'Активировать'}
+          </Button>
+        )}
+      </div>
+    </Card>
+  )
+}
 
 // --- Add Payment Dialog ---
 function AddPaymentDialog({ isOpen, onClose, staff, paidSoFar, dateDefault, onSuccess }: AddPaymentDialogProps) {

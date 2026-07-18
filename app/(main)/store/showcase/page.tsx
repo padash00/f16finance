@@ -27,7 +27,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { TableSkeleton } from '@/components/skeleton'
+import { Skeleton, TableSkeleton } from '@/components/skeleton'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -546,9 +546,28 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
       {/* Main table */}
       <Card className="overflow-hidden border-border bg-card/70 p-0">
         {loading && balances.length === 0 ? (
-          <div className="p-4">
-            <TableSkeleton rows={8} cols={5} />
-          </div>
+          <>
+            {/* Мобильный скелетон: карточки */}
+            <div className="space-y-3 p-3 sm:hidden">
+              {Array.from({ length: 5 }).map((_, idx) => (
+                <div key={idx} className="rounded-xl border border-border bg-white dark:bg-white/[0.03] p-3">
+                  <div className="flex items-center gap-2.5">
+                    <Skeleton className="h-4 w-4 rounded" />
+                    <div className="flex-1 space-y-1.5">
+                      <Skeleton className="h-4 w-40" />
+                      <Skeleton className="h-3 w-24" />
+                    </div>
+                  </div>
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-14" />)}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="hidden p-4 sm:block">
+              <TableSkeleton rows={8} cols={5} />
+            </div>
+          </>
         ) : !showcase ? (
           <div className="flex h-60 flex-col items-center justify-center gap-2 text-muted-foreground">
             <Store className="h-8 w-8 opacity-30" />
@@ -566,7 +585,100 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
             {stockSearch ? 'Ничего не найдено' : 'Витрина пустая — запросите товар со склада'}
           </div>
         ) : (
-          <div className="max-h-[calc(100vh-380px)] overflow-auto">
+          <>
+            {/* Мобильная версия: карточки товаров вместо широкой таблицы */}
+            <div className="space-y-3 p-3 sm:hidden">
+              {filteredBalances.map((b) => {
+                const qty = Number(b.quantity)
+                const threshold = b.item?.low_stock_threshold ?? null
+                const isLow = threshold !== null ? qty <= threshold : qty <= 0
+                const isZero = qty <= 0
+                const qtyColor = isZero ? 'text-rose-400' : isLow ? 'text-amber-400' : 'text-amber-700 dark:text-amber-300'
+                const checked = selectedIds.has(b.item_id)
+                const cardTone = checked
+                  ? 'border-amber-500/30 bg-amber-500/[0.06]'
+                  : isZero
+                    ? 'border-rose-500/20 bg-rose-500/[0.03]'
+                    : isLow
+                      ? 'border-amber-500/20 bg-amber-500/[0.03]'
+                      : 'border-border bg-white dark:bg-white/[0.03]'
+                return (
+                  <div key={b.item_id} className={`rounded-xl border p-3 transition ${cardTone}`}>
+                    <div className="flex items-start gap-2.5">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 h-4 w-4 shrink-0 accent-amber-500"
+                        checked={checked}
+                        onChange={() => setSelectedIds((prev) => { const n = new Set(prev); if (n.has(b.item_id)) n.delete(b.item_id); else n.add(b.item_id); return n })}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium leading-snug text-foreground">{b.item?.name || 'Товар'}</p>
+                        {isLow && !isZero && threshold !== null && (
+                          <p className="text-[10px] text-amber-400">⚠ мало (мин: {threshold})</p>
+                        )}
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
+                          <span className="font-mono">{b.item?.barcode || '—'}</span>
+                          {b.item?.category?.name ? <span>· {b.item.category.name}</span> : null}
+                          <span>· {b.item?.sale_price ? `${b.item.sale_price} ₸` : 'без цены'}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                      <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
+                        <div className="text-[10px] text-muted-foreground">Итого</div>
+                        <div className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">{b.catalog_quantity}</div>
+                      </div>
+                      <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.05] px-1 py-2">
+                        <div className="text-[10px] text-amber-700 dark:text-amber-300/70">Подсобка</div>
+                        <div className="mt-0.5 text-lg font-semibold tabular-nums text-amber-700 dark:text-amber-300">{b.warehouse_quantity}</div>
+                      </div>
+                      <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] px-1 py-2">
+                        <div className="text-[10px] text-emerald-700 dark:text-emerald-300/70">Витрина</div>
+                        {editingSc === b.item_id ? (
+                          <div className="mt-1 flex items-center justify-center gap-1">
+                            <Input
+                              value={editScVal}
+                              onChange={(e) => setEditScVal(e.target.value)}
+                              className="h-7 w-14 px-1 text-center text-xs"
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') void handleSetShowcase(b.item_id)
+                                if (e.key === 'Escape') { setEditingSc(null); setEditScVal('') }
+                              }}
+                            />
+                            <button
+                              onClick={() => void handleSetShowcase(b.item_id)}
+                              disabled={savingSc}
+                              className="text-emerald-600 dark:text-emerald-400 disabled:opacity-50"
+                            >
+                              {savingSc ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                            </button>
+                            <button
+                              onClick={() => { setEditingSc(null); setEditScVal('') }}
+                              className="text-muted-foreground hover:text-rose-400"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => { setEditingSc(b.item_id); setEditScVal(String(b.quantity)) }}
+                            className={`mt-0.5 inline-flex items-center justify-center gap-1 text-lg font-semibold tabular-nums ${qtyColor}`}
+                          >
+                            {b.quantity}
+                            <span className="text-[10px] font-normal text-muted-foreground">{b.item?.unit || 'шт'}</span>
+                            <Pencil className="h-3 w-3 opacity-40" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Десктоп: прежняя таблица */}
+            <div className="hidden max-h-[calc(100vh-380px)] overflow-auto sm:block">
             <table className="w-full min-w-[720px] text-sm">
               <thead className="sticky top-0 z-10 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur">
                 <tr className="border-b border-slate-200 dark:border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -676,7 +788,8 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
                 })}
               </tbody>
             </table>
-          </div>
+            </div>
+          </>
         )}
       </Card>
 

@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { AppModal } from '@/components/ui/app-modal'
 import { TableSkeleton } from '@/components/skeleton'
+import { Skeleton } from '@/components/ui/skeleton'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { 
   Users2, 
@@ -690,8 +691,172 @@ export default function OperatorsPage() {
             </div>
           </div>
 
-          {/* Таблица операторов */}
-          <Card className="overflow-hidden bg-white dark:bg-slate-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5 p-0">
+          {/* Мобильная версия: карточки операторов вместо широкой таблицы */}
+          <div className="space-y-3 sm:hidden">
+            {loading ? (
+              Array.from({ length: 4 }).map((_, idx) => (
+                <Card key={idx} className="border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/40 p-4">
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="h-10 w-10 rounded-xl" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-3 w-20" />
+                    </div>
+                  </div>
+                  <Skeleton className="mt-3 h-8 w-36" />
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12" />)}
+                  </div>
+                </Card>
+              ))
+            ) : filteredOperators.length === 0 ? (
+              <Card className="border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/40 p-8 text-center text-slate-500">
+                <Users2 className="mx-auto mb-3 h-12 w-12 opacity-20" />
+                <p className="mb-1 text-lg font-medium">Операторы не найдены</p>
+                <p className="text-sm text-slate-600">Добавьте первого оператора с помощью формы выше</p>
+              </Card>
+            ) : (
+              filteredOperators.map((op) => {
+                const profile = profiles.get(op.id)
+                const operatorStats = stats.get(op.id) || {
+                  totalShifts: 0,
+                  totalTurnover: 0,
+                  avgPerShift: 0,
+                  totalDebts: 0,
+                  totalBonuses: 0,
+                }
+                return (
+                  <Card key={op.id} className="border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/40 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <Link href={`/operators/${op.id}/profile`} className="flex min-w-0 items-center gap-3">
+                        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-amber-600">
+                          {profile?.photo_url ? (
+                            <img src={profile.photo_url} alt={op.name} className="h-full w-full rounded-xl object-cover" />
+                          ) : (
+                            <User className="h-5 w-5 text-white" />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">
+                            {getOperatorDisplayName({ ...op, full_name: profile?.full_name })}
+                          </p>
+                          <p className="truncate text-xs text-slate-500">
+                            {op.short_name || op.name || 'Нет краткого имени'}
+                            {profile?.position && ` • ${profile.position}`}
+                          </p>
+                        </div>
+                      </Link>
+                      <span className={`inline-flex flex-shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-1 text-xs ${
+                        op.is_active
+                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                          : 'bg-slate-500/20 text-slate-400 border border-slate-500/30'
+                      }`}>
+                        {op.is_active ? <CheckCircle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
+                        {op.is_active ? 'Активен' : 'Неактивен'}
+                      </span>
+                    </div>
+
+                    <div className="mt-3">
+                      <div className="text-[10px] uppercase tracking-wider text-slate-500">Оборот (30 дней)</div>
+                      <div className="text-2xl font-semibold tabular-nums text-emerald-500 dark:text-emerald-400">
+                        {formatMoney(operatorStats.totalTurnover)}
+                      </div>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                      <div className="rounded-xl border border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
+                        <div className="text-[10px] text-slate-500">Смен</div>
+                        <div className="mt-0.5 text-xs font-medium tabular-nums">{operatorStats.totalShifts}</div>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
+                        <div className="text-[10px] text-slate-500">Ср. смена</div>
+                        <div className="mt-0.5 text-xs font-medium tabular-nums">{formatMoney(operatorStats.avgPerShift)}</div>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
+                        <div className="text-[10px] text-slate-500">Премии</div>
+                        <div className="mt-0.5 text-xs font-medium tabular-nums text-emerald-600 dark:text-emerald-400">
+                          {operatorStats.totalBonuses > 0 ? `+${formatMoney(operatorStats.totalBonuses)}` : '—'}
+                        </div>
+                      </div>
+                    </div>
+
+                    {operatorStats.totalDebts > 0 && (
+                      <div className="mt-2 flex items-center gap-1.5 rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-500">
+                        <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                        Долги: {formatMoney(operatorStats.totalDebts)}
+                      </div>
+                    )}
+
+                    {(profile?.phone || profile?.email) && (
+                      <div className="mt-3 space-y-1">
+                        {profile?.phone && (
+                          <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Phone className="h-3 w-3 flex-shrink-0" />
+                            <span className="truncate">{profile.phone}</span>
+                          </p>
+                        )}
+                        {profile?.email && (
+                          <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Mail className="h-3 w-3 flex-shrink-0" />
+                            <span className="truncate">{profile.email}</span>
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Link
+                        href={`/operators/${op.id}/profile`}
+                        className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 px-3 text-xs transition hover:bg-slate-50 dark:hover:bg-white/10"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        Профиль
+                      </Link>
+                      {canManageOperators && canEdit && (
+                        <button
+                          onClick={() => handleEdit(op)}
+                          className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 px-3 text-xs transition hover:bg-slate-50 dark:hover:bg-white/10"
+                        >
+                          <Edit className="h-3.5 w-3.5" />
+                          Изменить
+                        </button>
+                      )}
+                      {canManageOperators && canToggleActive && (
+                        <button
+                          onClick={() => toggleActive(op)}
+                          className={`inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 px-3 text-xs transition hover:bg-slate-50 dark:hover:bg-white/10 ${
+                            op.is_active ? 'text-emerald-500' : 'text-slate-500'
+                          }`}
+                        >
+                          {op.is_active ? <ToggleRight className="h-3.5 w-3.5" /> : <ToggleLeft className="h-3.5 w-3.5" />}
+                          {op.is_active ? 'Выключить' : 'Включить'}
+                        </button>
+                      )}
+                      {canManageOperators && canDelete && (
+                        <button
+                          onClick={() => handleDelete(op.id)}
+                          className="inline-flex h-9 items-center justify-center rounded-xl border border-rose-500/30 bg-white dark:bg-white/5 px-3 text-xs text-rose-400 transition hover:bg-rose-500/10"
+                          aria-label="Удалить"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </Card>
+                )
+              })
+            )}
+            {!loading && filteredOperators.length > 0 && (
+              <div className="px-1 text-xs text-muted-foreground">
+                Всего: {filteredOperators.length} операторов
+                {filteredOperators.length !== operators.length && ` (отфильтровано из ${operators.length})`}
+                {' · '}активных: {operators.filter(o => o.is_active).length}
+              </div>
+            )}
+          </div>
+
+          {/* Таблица операторов (десктоп) */}
+          <Card className="hidden sm:flex overflow-hidden bg-white dark:bg-slate-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5 p-0">
             <AdminTableViewport
               maxHeight="min(70vh, 40rem)"
               className="rounded-none border-0 border-b border-border bg-transparent"

@@ -106,6 +106,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
   const [receiptSearch, setReceiptSearch] = useState('')
   const [selectedReceipt, setSelectedReceipt] = useState<InventoryReceipt | null>(null)
   const [receiptDetailsOpen, setReceiptDetailsOpen] = useState(false)
+  const [mobileExpandedReceipts, setMobileExpandedReceipts] = useState<Record<string, boolean>>({})
 
   const load = async (signal?: AbortSignal, opts?: { soft?: boolean }) => {
     const soft = Boolean(opts?.soft)
@@ -1077,14 +1078,166 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
       {/* Main table */}
       <Card className="overflow-hidden border-border bg-card/70 p-0">
         {loading && filteredReceipts.length === 0 ? (
-          <StoreDataTableSkeleton columns={7} />
+          <>
+            {/* Мобильный скелетон загрузки */}
+            <div className="space-y-3 p-3 sm:hidden">
+              {Array.from({ length: 4 }).map((_, idx) => (
+                <div key={idx} className="rounded-2xl border border-border bg-white dark:bg-white/[0.03] p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-4 w-36" />
+                      <Skeleton className="h-3 w-20" />
+                    </div>
+                    <Skeleton className="h-5 w-16 rounded-full" />
+                  </div>
+                  <Skeleton className="mt-3 h-8 w-32" />
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12" />)}
+                  </div>
+                  <Skeleton className="mt-3 h-9 w-full rounded-xl" />
+                </div>
+              ))}
+            </div>
+            <div className="hidden sm:block">
+              <StoreDataTableSkeleton columns={7} />
+            </div>
+          </>
         ) : filteredReceipts.length === 0 ? (
           <div className="flex h-60 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
             <Package className="h-8 w-8 opacity-50" />
             {receiptSearch ? 'Ничего не найдено' : 'Документов приёмки пока нет — нажмите «Новый документ»'}
           </div>
         ) : (
-          <div className="relative max-h-[calc(100vh-380px)] overflow-auto">
+          <>
+            {/* Мобильная версия: карточки приёмок вместо широкой таблицы */}
+            <div className="relative p-3 sm:hidden">
+              {refreshing ? (
+                <div className="absolute inset-0 z-20 flex items-start justify-center bg-background/35 pt-10 backdrop-blur-[0.5px]">
+                  <div className="flex items-center gap-2 rounded-lg border border-border bg-card/90 px-3 py-1.5 text-xs text-muted-foreground shadow-md">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Обновление…
+                  </div>
+                </div>
+              ) : null}
+              <div className={`space-y-3 ${refreshing ? 'pointer-events-none opacity-50' : ''}`}>
+                {filteredReceipts.map((receipt) => {
+                  const debt = debtByReceiptId.get(String(receipt.id))
+                  const itemsCount = (receipt.items || []).length
+                  const open = Boolean(mobileExpandedReceipts[receipt.id])
+                  return (
+                    <div
+                      key={receipt.id}
+                      className={`rounded-2xl border border-border bg-white dark:bg-white/[0.03] p-4 ${receipt.status === 'cancelled' ? 'opacity-60' : ''}`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className={`truncate text-sm font-medium text-foreground ${receipt.status === 'cancelled' ? 'line-through' : ''}`}>
+                            {receipt.kind === 'posting' ? 'Оприходование' : receipt.supplier?.name || 'Без поставщика'}
+                          </p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">{formatDate(receipt.received_at)}</p>
+                          {receipt.comment ? (
+                            <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{receipt.comment}</p>
+                          ) : null}
+                        </div>
+                        <div className="flex shrink-0 flex-col items-end gap-1">
+                          {receipt.status === 'cancelled' ? (
+                            <span className="inline-flex items-center rounded-full border border-rose-500/40 bg-rose-500/15 px-2 py-0.5 text-[10px] text-rose-700 dark:text-rose-200">
+                              Отменена
+                            </span>
+                          ) : null}
+                          {(() => {
+                            if (!debt) return null
+                            if (debt.status === 'paid') {
+                              return <span className="inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-700 dark:text-emerald-200">Оплачен</span>
+                            }
+                            if (debt.status === 'written_off') {
+                              return <span className="inline-flex items-center rounded-full border border-slate-500/30 bg-slate-500/15 px-2 py-0.5 text-[10px] text-body">Списан</span>
+                            }
+                            const overdue = debt.due_date ? new Date(debt.due_date).getTime() < Date.now() : false
+                            return (
+                              <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] ${overdue ? 'border-red-500/40 bg-red-500/15 text-red-700 dark:text-red-200' : 'border-amber-500/30 bg-amber-500/15 text-amber-700 dark:text-amber-200'}`}>
+                                {overdue ? 'Просрочен' : debt.is_consignment ? 'Реализация' : 'Долг'}
+                              </span>
+                            )
+                          })()}
+                        </div>
+                      </div>
+
+                      <div className="mt-3">
+                        <div className="text-[10px] uppercase tracking-wider text-slate-500">Сумма приёмки</div>
+                        <div className="text-2xl font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">{formatMoney(receipt.total_amount || 0)}</div>
+                      </div>
+
+                      <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                        <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
+                          <div className="text-[10px] text-slate-500">Позиций</div>
+                          <div className="mt-0.5 text-xs font-medium tabular-nums text-foreground">{itemsCount}</div>
+                        </div>
+                        <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
+                          <div className="text-[10px] text-slate-500">Локация</div>
+                          <div className="mt-0.5 truncate text-xs font-medium text-foreground">{receipt.location?.name || '—'}</div>
+                        </div>
+                        <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
+                          <div className="text-[10px] text-slate-500">Накладная</div>
+                          {receipt.invoice_file_url ? (
+                            <a href={receipt.invoice_file_url} target="_blank" rel="noreferrer" className="mt-0.5 block truncate font-mono text-xs text-emerald-700 dark:text-emerald-300 underline">
+                              {receipt.invoice_number || 'Открыть'}
+                            </a>
+                          ) : (
+                            <div className="mt-0.5 truncate font-mono text-xs text-rose-700 dark:text-rose-300">Нет файла</div>
+                          )}
+                        </div>
+                      </div>
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="mt-3 h-9 w-full rounded-xl"
+                        onClick={() => {
+                          setSelectedReceipt(receipt)
+                          setReceiptDetailsOpen(true)
+                        }}
+                      >
+                        Открыть
+                      </Button>
+
+                      {itemsCount > 0 ? (
+                        <>
+                          <button
+                            type="button"
+                            className="mt-2 flex w-full items-center justify-center gap-1 rounded-xl border border-dashed border-border py-1.5 text-[11px] text-slate-500"
+                            onClick={() => setMobileExpandedReceipts((p) => ({ ...p, [receipt.id]: !p[receipt.id] }))}
+                          >
+                            <ChevronDown className={`h-3.5 w-3.5 transition ${open ? 'rotate-180' : ''}`} />
+                            {open ? 'Скрыть состав' : `Состав (${itemsCount})`}
+                          </button>
+                          {open ? (
+                            <div className="mt-3 space-y-1.5 border-t border-border pt-3">
+                              {(receipt.items || []).map((item) => (
+                                <div key={item.id} className="flex items-center justify-between gap-2 text-xs">
+                                  <div className="flex min-w-0 items-center gap-1.5">
+                                    <span className="truncate text-body">{item.item?.name || 'Товар'}</span>
+                                    {item.is_bonus ? (
+                                      <span className="shrink-0 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-medium text-emerald-700 dark:text-emerald-300">Бонус</span>
+                                    ) : null}
+                                  </div>
+                                  <span className="shrink-0 tabular-nums text-slate-500">{formatQty(Number(item.quantity || 0))} × {item.is_bonus ? '—' : formatUnitCost(Number(item.unit_cost || 0))}</span>
+                                  <span className="shrink-0 font-medium tabular-nums text-foreground">{item.is_bonus ? '0' : formatMoney(Number(item.total_cost || 0))}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                        </>
+                      ) : null}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Десктоп: прежняя таблица */}
+            <div className="relative hidden max-h-[calc(100vh-380px)] overflow-auto sm:block">
             {refreshing ? (
               <div className="absolute inset-0 z-20 flex items-start justify-center bg-background/35 pt-10 backdrop-blur-[0.5px]">
                 <div className="flex items-center gap-2 rounded-lg border border-border bg-card/90 px-3 py-1.5 text-xs text-muted-foreground shadow-md">
@@ -1194,7 +1347,8 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
               </tbody>
             </table>
             </div>
-          </div>
+            </div>
+          </>
         )}
       </Card>
 

@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/input'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Printer, Search, ChevronLeft, ChevronRight, Receipt, RefreshCw } from 'lucide-react'
+import { Printer, Search, ChevronLeft, ChevronRight, ChevronDown, Receipt, RefreshCw } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useUrlState } from '@/lib/hooks/use-url-state'
 import { useApiCache } from '@/lib/client/use-api-cache'
 import { useCapabilities } from '@/lib/client/use-capabilities'
@@ -260,6 +261,8 @@ function PosReceiptsPageContent({ embedded = false }: { embedded?: boolean }) {
 
   // Selected receipt for modal
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null)
+  // Мобильные карточки: раскрытый состав чека (только презентация)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const pageSize = 20
   const page = Math.max(1, Number(filters.page || '1') || 1)
@@ -439,15 +442,107 @@ function PosReceiptsPageContent({ embedded = false }: { embedded?: boolean }) {
         <Card>
           <CardContent className="p-0">
             {loading && sales.length === 0 ? (
-              <div className="p-4">
-                <TableSkeleton rows={8} cols={7} />
-              </div>
+              <>
+                {/* Мобильный скелетон карточек */}
+                <div className="space-y-3 p-3 sm:hidden">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="rounded-xl border border-border p-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <Skeleton className="h-4 w-24" />
+                        <Skeleton className="h-5 w-20 rounded-full" />
+                      </div>
+                      <Skeleton className="mt-3 h-8 w-32" />
+                      <Skeleton className="mt-3 h-9 w-full" />
+                    </div>
+                  ))}
+                </div>
+                <div className="hidden p-4 sm:block">
+                  <TableSkeleton rows={8} cols={7} />
+                </div>
+              </>
             ) : sales.length === 0 ? (
               <div className="flex items-center justify-center py-16 text-muted-foreground text-sm">
                 Чеки не найдены
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <>
+              {/* Мобильная версия: карточки чеков вместо таблицы */}
+              <div className="space-y-3 p-3 sm:hidden">
+                {sales.map((sale) => {
+                  const method = detectPaymentMethod(sale)
+                  const pm = PAYMENT_LABELS[method] || PAYMENT_LABELS.mixed
+                  const open = expandedId === sale.id
+                  return (
+                    <div key={sale.id} className="rounded-xl border border-border bg-white dark:bg-white/[0.03] p-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="font-mono text-xs text-muted-foreground">#{sale.id.slice(-6).toUpperCase()}</div>
+                          <div className="mt-0.5 text-[11px] text-slate-500">{fmtDate(sale.sold_at)} · {fmtTime(sale.sold_at)}</div>
+                        </div>
+                        <span className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${pm.color}`}>
+                          {pm.label}
+                        </span>
+                      </div>
+
+                      <div className="mt-2 flex items-end justify-between gap-3">
+                        <div>
+                          <div className="text-[10px] uppercase tracking-wider text-slate-500">Сумма</div>
+                          <div className="text-2xl font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">{fmt(sale.total_amount)} ₸</div>
+                        </div>
+                        <div className="pb-1 text-xs text-slate-500">{sale.items.length} товаров</div>
+                      </div>
+
+                      {sale.discount_amount > 0 && (
+                        <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+                          <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
+                            <div className="text-[10px] text-slate-500">Скидка</div>
+                            <div className="mt-0.5 text-xs font-medium tabular-nums text-rose-600 dark:text-rose-400">−{fmt(sale.discount_amount)} ₸</div>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="mt-3 flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-9 flex-1 rounded-xl text-xs"
+                          onClick={() => setSelectedSale(sale)}
+                        >
+                          Просмотр
+                        </Button>
+                      </div>
+
+                      {sale.items.length > 0 && (
+                        <button
+                          type="button"
+                          className="mt-2 flex w-full items-center justify-center gap-1 rounded-xl border border-dashed border-border py-1.5 text-[11px] text-slate-500"
+                          onClick={() => setExpandedId(open ? null : sale.id)}
+                        >
+                          {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                          {open ? 'Скрыть состав' : 'Состав чека'}
+                        </button>
+                      )}
+
+                      {open && (
+                        <div className="mt-3 space-y-1.5 border-t border-border pt-3">
+                          {sale.items.map((item) => (
+                            <div key={item.id} className="flex items-center justify-between gap-2 text-xs">
+                              <span className="min-w-0 flex-1 truncate text-body">
+                                {item.inventory_items?.name || item.universal_name || '—'}
+                                <span className="ml-1 text-slate-500">× {item.quantity}</span>
+                              </span>
+                              <span className="shrink-0 font-medium tabular-nums text-foreground">{fmt(item.total_price)} ₸</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Десктоп: прежняя таблица */}
+              <div className="hidden overflow-x-auto sm:block">
                 <table className="w-full min-w-[640px] text-sm">
                   <thead>
                     <tr className="border-b border-border">
@@ -502,6 +597,7 @@ function PosReceiptsPageContent({ embedded = false }: { embedded?: boolean }) {
                   </tbody>
                 </table>
               </div>
+              </>
             )}
           </CardContent>
         </Card>

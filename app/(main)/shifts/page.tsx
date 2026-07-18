@@ -1643,9 +1643,83 @@ function ScheduleGrid({
             <span className="font-bold text-foreground">{company.name}</span>
           </div>
 
+          {/* Мобильная версия: транспонированная сетка (строки — дни, колонки — день/ночь).
+              Те же EditableShiftCell — редактирование смен работает как на десктопе. */}
+          <div className="sm:hidden">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr>
+                  <th className="w-24 border-b border-border bg-muted/10 p-2 text-left text-xs font-medium text-muted-foreground">
+                    Дата
+                  </th>
+                  <th className="border-b border-l border-border bg-yellow-500/5 p-2 text-center text-xs font-semibold text-yellow-500">
+                    <Sun className="mr-1 inline h-3.5 w-3.5" />День
+                  </th>
+                  {hasNightShift(company) && (
+                    <th className="border-b border-l border-border bg-blue-500/5 p-2 text-center text-xs font-semibold text-blue-400">
+                      <Moon className="mr-1 inline h-3.5 w-3.5" />Ночь
+                    </th>
+                  )}
+                </tr>
+              </thead>
+              <tbody className="[&>tr>td]:border-b [&>tr>td]:border-border">
+                {weekDays.map((day) => {
+                  const isToday = isSameDay(day.dateObj, new Date())
+                  const dayData = shiftsMap[company.id]?.[day.dateISO]
+                  return (
+                    <tr key={`m-${day.dateISO}`}>
+                      <td className={`p-2 ${isToday ? 'bg-accent/10' : ''}`}>
+                        <div className={`text-[10px] font-bold uppercase ${isToday ? 'text-accent' : 'text-muted-foreground'}`}>
+                          {day.dayName}
+                        </div>
+                        <div className={`text-xs ${isToday ? 'font-bold text-foreground' : 'text-muted-foreground/70'}`}>
+                          {day.dayShort}
+                        </div>
+                      </td>
+                      <EditableShiftCell
+                        key={`m-day-${day.dateISO}`}
+                        companyId={company.id}
+                        date={day.dateISO}
+                        shiftType="day"
+                        operators={operators}
+                        shiftData={dayData?.day}
+                        refetchData={refetchData}
+                        isSelectedOperator={
+                          selectedOperator !== 'all' &&
+                          normalizeOperatorName(dayData?.day?.name) === normalizeOperatorName(selectedOperator)
+                        }
+                        isConflict={conflictCellKeys.has(getCellKey(company.id, day.dateISO, 'day'))}
+                        workflowState={workflowStateByCell.get(getCellKey(company.id, day.dateISO, 'day')) || null}
+                        weekShiftCounts={weekShiftCounts}
+                      />
+                      {hasNightShift(company) && (
+                        <EditableShiftCell
+                          key={`m-night-${day.dateISO}`}
+                          companyId={company.id}
+                          date={day.dateISO}
+                          shiftType="night"
+                          operators={operators}
+                          shiftData={dayData?.night}
+                          refetchData={refetchData}
+                          isSelectedOperator={
+                            selectedOperator !== 'all' &&
+                            normalizeOperatorName(dayData?.night?.name) === normalizeOperatorName(selectedOperator)
+                          }
+                          isConflict={conflictCellKeys.has(getCellKey(company.id, day.dateISO, 'night'))}
+                          workflowState={workflowStateByCell.get(getCellKey(company.id, day.dateISO, 'night')) || null}
+                          weekShiftCounts={weekShiftCounts}
+                        />
+                      )}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+
           <AdminTableViewport
             maxHeight="min(56vh, 32rem)"
-            className="rounded-none border-0 border-t border-border bg-transparent"
+            className="hidden sm:block rounded-none border-0 border-t border-border bg-transparent"
           >
             <table className="w-full min-w-[760px] border-collapse text-sm">
               <thead className={`${adminTableStickyTheadClass} !normal-case [&_th]:align-middle`}>

@@ -1819,8 +1819,171 @@ export default function SalaryPage() {
                   const dismissedDateLabel = isDismissed
                     ? String(s.dismissal_date || s.dismissed_at || '').slice(0, 10)
                     : null
+                  const debtPays = (staffSalary.debtPayments || []).filter((p) => p.staff_id === s.id)
+                  const paidThisMonth = currentMonthPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0)
                   return (
-                    <div key={s.id} className={'p-5 ' + (isDismissed ? 'opacity-60' : '')}>
+                    <div key={s.id} className={'p-4 sm:p-5 ' + (isDismissed ? 'opacity-60' : '')}>
+                      {/* Мобильная версия: карточка сотрудника вместо широкой строки */}
+                      <div className="sm:hidden">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div className={'flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-sm font-semibold dark:text-white ' + (isDismissed ? 'bg-gradient-to-br from-slate-300 to-slate-400 dark:from-slate-600 dark:to-slate-700 text-slate-700' : 'bg-gradient-to-br from-violet-500 to-purple-600 text-white')}>
+                              {(s.short_name || s.full_name).charAt(0).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="truncate font-semibold text-foreground">{s.full_name}</div>
+                              <div className="mt-0.5 text-[11px] text-slate-400">
+                                {formatRoleLabel(s.role)}
+                                {isOperatorBased ? ' · из operators' : null}
+                              </div>
+                            </div>
+                          </div>
+                          {isDismissed ? (
+                            <span className="shrink-0 rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-200">
+                              Уволен{dismissedDateLabel ? ` · ${dismissedDateLabel}` : ''}
+                            </span>
+                          ) : isMonthClosed ? (
+                            <span className="shrink-0 rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-[11px] font-medium text-sky-700 dark:text-sky-300">месяц закрыт</span>
+                          ) : null}
+                        </div>
+
+                        <div className="mt-3 flex items-end justify-between gap-3">
+                          <div>
+                            <div className="text-[10px] uppercase tracking-wider text-slate-500">К выплате</div>
+                            <div className="text-2xl font-semibold tabular-nums text-foreground">{money(calc.toPay)}</div>
+                          </div>
+                          {!isOperatorBased ? <div className="pb-1 text-xs text-slate-500">Оклад: {money(s.monthly_salary)}/мес</div> : null}
+                        </div>
+
+                        <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                          <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
+                            <div className="text-[10px] text-slate-500">Пол-оклада</div>
+                            <div className="mt-0.5 text-xs font-medium tabular-nums text-foreground">{money(calc.half)}</div>
+                          </div>
+                          <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
+                            <div className="text-[10px] text-slate-500">Бонусы</div>
+                            <div className="mt-0.5 text-xs font-medium tabular-nums text-emerald-700 dark:text-emerald-300">+{money(calc.bonuses)}</div>
+                          </div>
+                          <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
+                            <div className="text-[10px] text-slate-500">Штрафы</div>
+                            <div className="mt-0.5 text-xs font-medium tabular-nums text-rose-700 dark:text-rose-300">−{money(calc.fines)}</div>
+                          </div>
+                          <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
+                            <div className="text-[10px] text-slate-500">Долги</div>
+                            <div className="mt-0.5 text-xs font-medium tabular-nums text-rose-700 dark:text-rose-300">−{money(calc.debts)}</div>
+                          </div>
+                          <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
+                            <div className="text-[10px] text-slate-500">Авансы</div>
+                            <div className="mt-0.5 text-xs font-medium tabular-nums text-amber-700 dark:text-amber-300">−{money(calc.advances)}</div>
+                          </div>
+                          <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
+                            <div className="text-[10px] text-slate-500">Выплачено</div>
+                            <div className="mt-0.5 text-xs font-medium tabular-nums text-sky-700 dark:text-sky-300">{money(paidThisMonth)}</div>
+                          </div>
+                        </div>
+
+                        {isMonthClosed ? (
+                          <div className="mt-2 text-[11px] text-amber-700 dark:text-amber-300">Месяц закрыт: оба слота выплаты уже проведены. Следующая выплата доступна в следующем месяце.</div>
+                        ) : null}
+
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {!isDismissed && canStaffAddAdjustment && (
+                            <Button type="button" disabled={!canEditStaffSalary || isOperatorBased} variant="outline" className="h-9 flex-1 rounded-xl border-border bg-white dark:bg-white/5 text-xs text-body hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffAdjModal(s); setStaffAdjKind('fine'); setStaffAdjCompanyId(data?.companies?.[0]?.id || ''); setStaffAdjAmount(''); setStaffAdjDate(todayISO()); setStaffAdjComment('') }}><Plus className="mr-1 h-3.5 w-3.5" />Корректировка</Button>
+                          )}
+                          {!isDismissed && canStaffAddExtraDay && (
+                            <Button type="button" disabled={!canEditStaffSalary || isOperatorBased} variant="outline" className="h-9 flex-1 rounded-xl border-border bg-white dark:bg-white/5 text-xs text-body hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50" onClick={() => void submitStaffExtraDay(s.id)}><CalendarDays className="mr-1 h-3.5 w-3.5" />Доп. выход</Button>
+                          )}
+                          {!isDismissed && !isOperatorBased && canEditStaffSalary && calc.debts > 0 && (
+                            <Button type="button" variant="outline" className="h-9 flex-1 rounded-xl border-rose-400/30 bg-rose-500/10 text-xs text-rose-700 dark:text-rose-200 hover:bg-rose-500/20" onClick={() => openPayDebt(s, calc.debts)}>
+                              <Wallet className="mr-1 h-3.5 w-3.5" />Долг ({money(calc.debts)})
+                            </Button>
+                          )}
+                          {!isDismissed && canStaffCreatePayment && (
+                            <Button type="button" disabled={!canEditStaffSalary || isOperatorBased || isMonthClosed} className="h-9 flex-1 rounded-xl bg-emerald-500 text-xs text-white hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffPayModal(s); setStaffPayDate(todayISO()); setStaffPaySlot(hasFirstPayoutThisMonth ? 'second' : 'first'); setStaffPayCash(calc.toPay > 0 ? String(calc.toPay) : ''); setStaffPayKaspi(''); setStaffPayComment(''); setStaffPayCompanyId(data?.companies?.[0]?.id || '') }}><Wallet className="mr-1 h-3.5 w-3.5" />Выплатить</Button>
+                          )}
+                        </div>
+
+                        {activeAdjs.length > 0 || debtPays.length > 0 || recentPayments.length > 0 ? (
+                          <details className="group mt-2">
+                            <summary className="flex cursor-pointer list-none items-center justify-center gap-1 rounded-xl border border-dashed border-border py-1.5 text-[11px] text-slate-500 [&::-webkit-details-marker]:hidden">
+                              <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
+                              Корректировки и выплаты
+                            </summary>
+                            <div className="mt-3 space-y-4 border-t border-border pt-3">
+                              {activeAdjs.length > 0 ? (
+                                <div>
+                                  <div className="mb-2 text-xs font-medium text-foreground">Активные корректировки</div>
+                                  <div className="space-y-1.5">
+                                    {activeAdjs.map((adj) => (
+                                      <div key={adj.id} className="flex items-center justify-between gap-2 text-xs">
+                                        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                                          <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${staffAdjustmentTone(adj.kind)}`}>{staffAdjustmentKindLabel(adj.kind)}</span>
+                                          <span className="text-slate-500">{adj.date}</span>
+                                          {adj.comment ? <span className="truncate text-muted-foreground">{adj.comment}</span> : null}
+                                        </div>
+                                        <div className="flex shrink-0 items-center gap-2">
+                                          <span className="font-medium tabular-nums text-foreground">{money(adj.amount)}</span>
+                                          {!adj.id.startsWith('operator-debt:') && canEditStaffSalary ? (
+                                            <button type="button" className="text-slate-500 transition hover:text-rose-600 dark:hover:text-rose-300" onClick={() => void removeStaffAdjustment(adj.id)}><X className="h-3.5 w-3.5" /></button>
+                                          ) : null}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : recentlyClosedAdjustmentsCount > 0 ? (
+                                <div className="rounded-xl border border-sky-500/20 bg-sky-500/[0.06] px-3 py-2 text-xs text-sky-700 dark:text-sky-200">
+                                  Корректировки закрыты выплатой — см. последние выплаты ниже.
+                                </div>
+                              ) : null}
+                              {debtPays.length > 0 ? (
+                                <div>
+                                  <div className="mb-2 text-xs font-medium text-foreground">Оплаченные долги</div>
+                                  <div className="space-y-1.5">
+                                    {debtPays.map((p) => (
+                                      <div key={p.id} className="flex items-center justify-between gap-2 text-xs">
+                                        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                                          <span className="text-slate-500">{String(p.paid_at || '').slice(0, 10)}</span>
+                                          {p.comment ? <span className="truncate text-muted-foreground">{p.comment}</span> : null}
+                                        </div>
+                                        <div className="flex shrink-0 items-center gap-2">
+                                          <span className="font-medium tabular-nums text-emerald-700 dark:text-emerald-300">{money(p.amount)}</span>
+                                          {canEditStaffSalary ? (
+                                            <button type="button" title="Аннулировать оплату долга" disabled={voidDebtPayId === p.id} className="text-slate-500 transition hover:text-rose-600 dark:hover:text-rose-300 disabled:opacity-50" onClick={() => void voidStaffDebtPayment(p.id)}>
+                                              {voidDebtPayId === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
+                                            </button>
+                                          ) : null}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : null}
+                              {recentPayments.length > 0 ? (
+                                <div>
+                                  <div className="mb-2 text-xs font-medium text-foreground">Последние выплаты</div>
+                                  <div className="space-y-1.5">
+                                    {recentPayments.map((p) => (
+                                      <div key={p.id} className="flex items-center justify-between gap-2 text-xs">
+                                        <span className="min-w-0 truncate text-body">{p.pay_date} · {staffPaymentSlotLabel(p.slot)}</span>
+                                        <div className="flex shrink-0 items-center gap-2">
+                                          <span className="font-medium tabular-nums text-foreground">{money(p.amount)}</span>
+                                          {canEditStaffSalary ? (
+                                            <button type="button" title="Аннулировать" onClick={() => void deleteStaffPayment(p.id, p.amount)} className="text-slate-600 transition hover:text-rose-400"><X className="h-3.5 w-3.5" /></button>
+                                          ) : null}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : null}
+                            </div>
+                          </details>
+                        ) : null}
+                      </div>
+
+                      {/* Десктоп: прежняя раскладка */}
+                      <div className="hidden sm:block">
                       <div className="flex flex-wrap items-start justify-between gap-4">
                         <div className="flex items-center gap-3">
                           <div className={'flex h-11 w-11 items-center justify-center rounded-2xl text-sm font-semibold dark:text-white ' + (isDismissed ? 'bg-gradient-to-br from-slate-300 to-slate-400 dark:from-slate-600 dark:to-slate-700 text-slate-700' : 'bg-gradient-to-br from-violet-500 to-purple-600 text-white')}>
@@ -1967,6 +2130,7 @@ export default function SalaryPage() {
                           </div>
                         </div>
                       ) : null}
+                      </div>
                     </div>
                   )
                 })}

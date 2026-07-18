@@ -402,23 +402,56 @@ function MonitorView({ data, loading, flashIds }: { data: MonData | null; loadin
             <span className="flex items-center gap-2 text-sm font-semibold text-foreground"><Activity className="h-4 w-4 text-emerald-600 dark:text-emerald-300" /> Лента продаж</span>
             <span className="text-xs text-slate-500">последние {data.recent.length}</span>
           </div>
-          <div className="max-h-[420px] divide-y divide-slate-100 dark:divide-white/5 overflow-y-auto">
-            {data.recent.length === 0 ? <div className="px-4 py-12 text-center text-sm text-slate-400">Продаж нет</div> : data.recent.map((s) => {
-              const time = new Date(s.sold_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
-              const chip = PAY_CHIP[s.payment_method] || PAY_CHIP.mixed
-              const isNew = flashIds.has(s.id)
-              return (
-                <div key={s.id} className={`flex items-center gap-3 px-4 py-2.5 transition-colors ${isNew ? 'bg-emerald-500/10' : 'hover:bg-slate-50 dark:hover:bg-white/[0.02]'}`}>
-                  <div className="w-11 shrink-0 text-xs tabular-nums text-muted-foreground">{time}</div>
-                  <span className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[11px] font-medium ${chip}`}>{PAY_LABEL[s.payment_method] || s.payment_method}</span>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm text-foreground">{s.items.length > 0 ? s.items.join(', ') : `${s.items_count} позиц.`}</div>
-                    {s.operator_name !== '—' && <div className="text-[11px] text-slate-500">{s.operator_name}</div>}
-                  </div>
-                  <div className="shrink-0 text-sm font-semibold tabular-nums text-foreground">{fmt(s.total_amount)} ₸</div>
+          <div className="max-h-[420px] overflow-y-auto">
+            {data.recent.length === 0 ? <div className="px-4 py-12 text-center text-sm text-slate-400">Продаж нет</div> : (
+              <>
+                {/* Мобильная версия: карточки продаж вместо компактных строк */}
+                <div className="divide-y divide-slate-100 dark:divide-white/5 sm:hidden">
+                  {data.recent.map((s) => {
+                    const time = new Date(s.sold_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+                    const chip = PAY_CHIP[s.payment_method] || PAY_CHIP.mixed
+                    const isNew = flashIds.has(s.id)
+                    return (
+                      <div key={s.id} className={`px-4 py-3 transition-colors ${isNew ? 'bg-emerald-500/10' : ''}`}>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium tabular-nums text-foreground">{time}</div>
+                            {s.company_name ? <div className="truncate text-[11px] text-slate-500">{s.company_name}</div> : null}
+                          </div>
+                          <span className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[11px] font-medium ${chip}`}>{PAY_LABEL[s.payment_method] || s.payment_method}</span>
+                        </div>
+                        <div className="mt-1.5 text-2xl font-semibold tabular-nums text-foreground">{fmt(s.total_amount)} ₸</div>
+                        <div className="mt-1.5 space-y-0.5">
+                          {s.items.length > 0
+                            ? s.items.map((name, i) => <div key={i} className="truncate text-xs text-body">{name}</div>)
+                            : <div className="text-xs text-slate-500">{s.items_count} позиц.</div>}
+                        </div>
+                        {s.operator_name !== '—' && <div className="mt-1 text-[11px] text-slate-500">{s.operator_name}</div>}
+                      </div>
+                    )
+                  })}
                 </div>
-              )
-            })}
+                {/* Десктоп: прежние компактные строки */}
+                <div className="hidden divide-y divide-slate-100 dark:divide-white/5 sm:block">
+                  {data.recent.map((s) => {
+                    const time = new Date(s.sold_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+                    const chip = PAY_CHIP[s.payment_method] || PAY_CHIP.mixed
+                    const isNew = flashIds.has(s.id)
+                    return (
+                      <div key={s.id} className={`flex items-center gap-3 px-4 py-2.5 transition-colors ${isNew ? 'bg-emerald-500/10' : 'hover:bg-slate-50 dark:hover:bg-white/[0.02]'}`}>
+                        <div className="w-11 shrink-0 text-xs tabular-nums text-muted-foreground">{time}</div>
+                        <span className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[11px] font-medium ${chip}`}>{PAY_LABEL[s.payment_method] || s.payment_method}</span>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm text-foreground">{s.items.length > 0 ? s.items.join(', ') : `${s.items_count} позиц.`}</div>
+                          {s.operator_name !== '—' && <div className="text-[11px] text-slate-500">{s.operator_name}</div>}
+                        </div>
+                        <div className="shrink-0 text-sm font-semibold tabular-nums text-foreground">{fmt(s.total_amount)} ₸</div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
           </div>
         </div>
         <div className={`${card} p-4`}>
