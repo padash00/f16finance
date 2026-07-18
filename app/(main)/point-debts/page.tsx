@@ -20,6 +20,7 @@ import {
 } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { TableSkeleton } from '@/components/skeleton'
 import { addDaysISO, formatRuDate, weekStartUtcISO } from '@/lib/core/date'
 import { formatMoney } from '@/lib/core/format'
 
@@ -502,11 +503,8 @@ export default function PointDebtsPage() {
             <tbody>
               {loading && items.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-16 text-center text-slate-400">
-                    <div className="inline-flex items-center gap-2">
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                      Загрузка…
-                    </div>
+                  <td colSpan={8} className="px-4 py-4">
+                    <TableSkeleton rows={8} cols={6} />
                   </td>
                 </tr>
               ) : null}

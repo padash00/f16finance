@@ -11,7 +11,7 @@ export function Skeleton({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        'animate-pulse rounded bg-white/[0.06]',
+        'animate-pulse rounded bg-slate-200/80 dark:bg-white/[0.06]',
         className,
       )}
     />
@@ -39,6 +39,19 @@ export function TableSkeleton({ rows = 5, cols = 4 }: { rows?: number; cols?: nu
           ))}
         </div>
       ))}
+    </div>
+  )
+}
+
+/** Скелетон типовой страницы портала: статкарточки + фильтры + таблица. Для loading-веток вместо «Загрузка...». */
+export function PageSkeleton({ stats = 4, rows = 8, cols = 5 }: { stats?: number; rows?: number; cols?: number }) {
+  return (
+    <div className="space-y-4">
+      {stats > 0 && <StatGridSkeleton count={stats} />}
+      <Skeleton className="h-9 w-full max-w-md" />
+      <div className="rounded-lg border border-border bg-card p-4">
+        <TableSkeleton rows={rows} cols={cols} />
+      </div>
     </div>
   )
 }

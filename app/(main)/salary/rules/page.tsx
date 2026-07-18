@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useCallback, useRef, Suspense } from 'rea
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
+import { PageSkeleton, TableSkeleton } from '@/components/skeleton'
 import { SalaryVariantsTab } from '@/components/admin/salary-variants-tab'
 import { SalaryPreviewTab } from '@/components/admin/salary-preview-tab'
 import { Card } from '@/components/ui/card'
@@ -265,16 +266,7 @@ const buildHistoryHighlights = (entry: RuleHistoryRow) => {
 // LOADING COMPONENT
 // =====================
 function SalaryRulesLoading() {
-  return (
-    <>
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center animate-pulse">
-            <Settings className="w-8 h-8 text-white" />
-          </div>
-          <p className="text-slate-500 dark:text-gray-400">Загрузка правил расчёта зарплаты...</p>
-        </div>
-    </>
-  )
+  return <PageSkeleton stats={0} rows={8} cols={6} />
 }
 
 // =====================
@@ -1371,8 +1363,8 @@ function SalaryRulesContent() {
                 <tbody>
                   {loading && (
                     <tr>
-                      <td colSpan={12} className="py-8 text-center text-gray-500">
-                        Загрузка правил...
+                      <td colSpan={12} className="px-4 py-4">
+                        <TableSkeleton rows={6} cols={6} />
                       </td>
                     </tr>
                   )}
@@ -2067,8 +2059,8 @@ function SalaryRulesContent() {
                     <tbody>
                       {loading && seniorityTiers.length === 0 ? (
                         <tr>
-                          <td colSpan={4} className="py-8 text-center text-gray-500">
-                            Загрузка правил стажа...
+                          <td colSpan={4} className="px-4 py-4">
+                            <TableSkeleton rows={4} cols={4} />
                           </td>
                         </tr>
                       ) : seniorityTiers.length === 0 ? (

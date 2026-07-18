@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { Skeleton } from '@/components/skeleton'
 import { Send, MessageSquare, Search, ArrowLeft, RefreshCw } from 'lucide-react'
 
 type Thread = {
@@ -152,7 +153,17 @@ export default function MessagesPage() {
           </div>
           <div className="flex-1 overflow-y-auto">
             {loading && threads.length === 0 ? (
-              <div className="p-6 text-center text-sm text-muted-foreground">Загрузка...</div>
+              <div className="p-3 space-y-4">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="flex items-start gap-3">
+                    <Skeleton className="w-10 h-10 rounded-full shrink-0" />
+                    <div className="flex-1 space-y-2 pt-1">
+                      <Skeleton className="h-3 w-2/3" />
+                      <Skeleton className="h-3 w-full" />
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : filteredThreads.length === 0 ? (
               <div className="p-6 text-center text-sm text-muted-foreground">Переписок ещё нет</div>
             ) : (

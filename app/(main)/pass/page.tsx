@@ -5,6 +5,7 @@ import { downloadReportPdf } from '@/lib/client/download-pdf'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { PageSkeleton } from '@/components/skeleton'
 import { getPublicAppUrl } from '@/lib/core/app-url'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import {
@@ -405,17 +406,7 @@ export default function AccessPage() {
   }
 
   if (loading && operators.length === 0) {
-    return (
-      <>
-          <div className="text-center">
-            <div className="relative">
-              <div className="animate-spin rounded-full h-16 w-16 border-4 border-violet-500/30 border-t-violet-500 mx-auto mb-6" />
-              <Key className="w-8 h-8 text-violet-400 absolute top-4 left-1/2 -translate-x-1/2" />
-            </div>
-            <p className="text-gray-400">Загрузка данных операторов...</p>
-          </div>
-      </>
-    )
+    return <PageSkeleton stats={3} rows={8} cols={5} />
   }
 
   return (

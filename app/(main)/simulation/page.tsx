@@ -20,6 +20,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatMoney } from '@/lib/core/format'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { CardSkeleton, Skeleton } from '@/components/skeleton'
 
 type Company = { id: string; name: string; code: string | null }
 type Tariff = {
@@ -198,8 +199,11 @@ export default function SimulationPage() {
 
   if (loading) {
     return (
-      <div className="app-page-wide flex items-center justify-center py-24">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      <div className="app-page-wide space-y-6">
+        <Skeleton className="h-14 w-full max-w-lg" />
+        <CardSkeleton rows={4} />
+        <CardSkeleton rows={5} />
+        <CardSkeleton rows={5} />
       </div>
     )
   }

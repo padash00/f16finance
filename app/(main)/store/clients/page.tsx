@@ -3,9 +3,10 @@
 import { useState } from 'react'
 import dynamic from 'next/dynamic'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
-import { Users2, Tags, Loader2 } from 'lucide-react'
+import { Users2, Tags } from 'lucide-react'
+import { PageSkeleton } from '@/components/skeleton'
 
-const fallback = () => <div className="app-page-wide flex items-center justify-center gap-2 py-16 text-slate-400"><Loader2 className="h-5 w-5 animate-spin" /> Загрузка…</div>
+const fallback = () => <div className="app-page-wide py-4"><PageSkeleton stats={4} rows={8} cols={5} /></div>
 
 const Customers = dynamic(() => import('@/app/(main)/customers/page'), { ssr: false, loading: fallback })
 const Discounts = dynamic(() => import('@/app/(main)/discounts/page'), { ssr: false, loading: fallback })

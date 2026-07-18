@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { CalendarDays, ChevronLeft, ChevronRight, Clock, Gift, Star, Megaphone } from 'lucide-react'
+import { CardSkeleton } from '@/components/skeleton'
 
 type Event = {
   date: string
@@ -96,7 +97,11 @@ export default function CalendarPage() {
       />
 
       {loading && events.length === 0 && (
-        <div className="text-center py-10 text-muted-foreground text-sm">Загрузка...</div>
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <CardSkeleton key={i} rows={2} />
+          ))}
+        </div>
       )}
 
       {!loading && events.length === 0 && (

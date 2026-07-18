@@ -8,6 +8,7 @@ import { downloadReportPdf } from '@/lib/client/download-pdf'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { AppModal } from '@/components/ui/app-modal'
+import { TableSkeleton } from '@/components/skeleton'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { 
   Users2, 
@@ -736,9 +737,8 @@ export default function OperatorsPage() {
                 <tbody>
                   {loading && (
                     <tr>
-                      <td colSpan={6} className="py-12 text-center text-slate-500">
-                        <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
-                        Загрузка операторов...
+                      <td colSpan={6} className="py-4 px-4">
+                        <TableSkeleton rows={8} cols={6} />
                       </td>
                     </tr>
                   )}

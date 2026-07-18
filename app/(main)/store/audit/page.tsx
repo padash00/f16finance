@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, Check, ClipboardList, Loader2, Lock, Plus, RefreshCw, Trash2, Undo2, Users } from 'lucide-react'
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { CardSkeleton, Skeleton, TableSkeleton } from '@/components/skeleton'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
@@ -272,7 +273,9 @@ export default function StoreAuditPage() {
         {error ? <Card className="border-red-500/30 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300">{error}</Card> : null}
 
         {loading ? (
-          <Card className="flex items-center gap-3 p-4 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Загрузка…</Card>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, i) => <CardSkeleton key={i} rows={3} />)}
+          </div>
         ) : acts.length === 0 ? (
           <Card className="p-8 text-center text-sm text-muted-foreground">Актов пока нет. Создайте первый аудит-акт.</Card>
         ) : (
@@ -360,7 +363,7 @@ export default function StoreAuditPage() {
             <p className="text-[11px] text-muted-foreground">{mode === 'double' ? 'Назначь 2 операторов на ОДНУ секцию — посчитают независимо, расхождение между ними пойдёт на пересчёт.' : 'Можно несколько операторов на одну секцию (считают вместе, видят друг друга) или каждому свою секцию.'}</p>
           </div>
 
-          {locationId && !formData ? <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Загрузка операторов…</div> : null}
+          {locationId && !formData ? <div className="space-y-2"><Skeleton className="h-9 w-full" /><Skeleton className="h-9 w-full" /></div> : null}
 
           {formData ? (
             <div className="space-y-3">
@@ -432,7 +435,10 @@ export default function StoreAuditPage() {
       {error ? <Card className="border-red-500/30 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300">{error}</Card> : null}
 
       {!detail ? (
-        <Card className="flex items-center gap-2 p-4 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Загрузка…</Card>
+        <div className="space-y-4">
+          <CardSkeleton rows={3} />
+          <Card className="p-4"><TableSkeleton rows={6} cols={5} /></Card>
+        </div>
       ) : (
         <>
           <Card className="space-y-3 p-4">

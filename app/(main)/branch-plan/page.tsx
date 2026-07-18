@@ -23,6 +23,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatMoney } from '@/lib/core/format'
+import { PageSkeleton } from '@/components/skeleton'
 
 const uid = () =>
   typeof crypto !== 'undefined' && crypto.randomUUID
@@ -707,8 +708,8 @@ export default function BranchPlanPage() {
 
   if (loading) {
     return (
-      <div className="app-page max-w-[1600px] flex items-center justify-center py-24">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      <div className="app-page max-w-[1600px]">
+        <PageSkeleton stats={4} rows={6} cols={4} />
       </div>
     )
   }

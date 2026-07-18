@@ -5,6 +5,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { Users, Plus, Search, Star, Edit2, Trash2, RefreshCw, Download, Clock } from 'lucide-react'
 import { downloadReportPdf } from '@/lib/client/download-pdf'
+import { CardSkeleton, TableSkeleton } from '@/components/skeleton'
 
 import { AdminPageHeader, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
 import { Badge } from '@/components/ui/badge'
@@ -401,9 +402,8 @@ export default function CustomersPage({ embedded = false }: { embedded?: boolean
       <Card className="overflow-hidden p-0">
         <CardContent className="p-0">
           {loading && customers.length === 0 ? (
-            <div className="flex items-center justify-center py-16 text-muted-foreground">
-              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-              Загрузка...
+            <div className="p-4">
+              <TableSkeleton rows={8} cols={8} />
             </div>
           ) : customers.length === 0 ? (
             <div className="flex items-center justify-center py-16 text-muted-foreground text-sm">
@@ -642,9 +642,10 @@ export default function CustomersPage({ embedded = false }: { embedded?: boolean
             <DialogTitle>История покупок: {historyCustomer?.name}</DialogTitle>
           </DialogHeader>
           {historyLoading ? (
-            <div className="flex items-center justify-center py-12 text-muted-foreground">
-              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-              Загрузка...
+            <div className="space-y-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <CardSkeleton key={i} rows={2} />
+              ))}
             </div>
           ) : historyError ? (
             <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">

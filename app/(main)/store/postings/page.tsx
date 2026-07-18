@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useModalEscape } from '@/lib/client/use-modal-escape'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { PageSkeleton, TableSkeleton } from '@/components/skeleton'
 
 type Item = {
   id: string
@@ -343,7 +344,7 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
   if (roleLoading || capsLoading) {
     return (
       <div className="app-page-wide space-y-6">
-        <p className="text-sm text-muted-foreground">Загрузка…</p>
+        <PageSkeleton stats={0} rows={6} cols={7} />
       </div>
     )
   }
@@ -771,7 +772,7 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
             <Package className="h-4 w-4 text-emerald-700 dark:text-emerald-300" /> Последние оприходования
           </div>
           {loading && recent.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Загрузка…</p>
+            <TableSkeleton rows={5} cols={7} />
           ) : recent.length === 0 ? (
             <p className="text-sm text-muted-foreground">Пока нет оприходований.</p>
           ) : (

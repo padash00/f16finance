@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { DatePicker } from '@/components/ui/date-picker'
 import { useCapabilities } from '@/lib/client/use-capabilities'
+import { CardSkeleton } from '@/components/skeleton'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -385,9 +386,10 @@ export default function DiscountsPage({ embedded = false }: { embedded?: boolean
       )}
 
       {loading && discounts.length === 0 ? (
-        <div className="flex items-center justify-center py-16 text-muted-foreground">
-          <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-          Загрузка...
+        <div className="space-y-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <CardSkeleton key={i} rows={2} />
+          ))}
         </div>
       ) : discounts.length === 0 ? (
         <Card>

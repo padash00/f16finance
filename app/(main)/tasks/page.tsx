@@ -44,6 +44,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { Skeleton } from '@/components/skeleton'
 import { DatePicker } from '@/components/ui/date-picker'
 import { getOperatorDisplayName, getOperatorShortLabel } from '@/lib/core/operator-name'
 import { useCapabilities } from '@/lib/client/use-capabilities'
@@ -334,14 +335,25 @@ const enrichTasks = (taskRows: TasksQueryTask[], operators: Operator[], staff: S
 // =====================
 function TasksLoading() {
   return (
-    <>
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center animate-pulse">
-            <Kanban className="w-8 h-8 text-white" />
+    <div className="app-page-wide space-y-6">
+      <Skeleton className="h-14 w-full max-w-lg" />
+      <div className="grid grid-cols-3 gap-2 sm:gap-4">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Skeleton key={i} className="h-20 rounded-lg" />
+        ))}
+      </div>
+      <Skeleton className="h-9 w-full max-w-md" />
+      <div className="flex gap-3 sm:gap-4 overflow-x-hidden pb-4">
+        {Array.from({ length: 4 }).map((_, col) => (
+          <div key={col} className="w-72 shrink-0 space-y-3 rounded-lg border border-border bg-card p-3">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-24 w-full rounded-lg" />
+            <Skeleton className="h-24 w-full rounded-lg" />
+            <Skeleton className="h-24 w-full rounded-lg" />
           </div>
-          <p className="text-muted-foreground">Загрузка задач...</p>
-        </div>
-    </>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -3023,7 +3035,11 @@ function TaskTemplatesModal({
         ) : (
           <div className="space-y-2">
             {loading && templates.length === 0 && (
-              <p className="py-6 text-center text-sm text-muted-foreground">Загрузка...</p>
+              <div className="space-y-2 py-2">
+                <Skeleton className="h-16 w-full rounded-xl" />
+                <Skeleton className="h-16 w-full rounded-xl" />
+                <Skeleton className="h-16 w-full rounded-xl" />
+              </div>
             )}
             {!loading && templates.length === 0 && (
               <p className="py-6 text-center text-sm italic text-muted-foreground">

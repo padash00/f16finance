@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { downloadReportPdf } from '@/lib/client/download-pdf'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
+import { PageSkeleton, TableSkeleton } from '@/components/skeleton'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { DatePicker } from '@/components/ui/date-picker'
@@ -195,16 +196,7 @@ const formatDate = (date: string) => {
 
 // --- Loading Component ---
 function StaffLoading() {
-  return (
-    <>
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center animate-pulse">
-            <Users2 className="w-8 h-8 text-white" />
-          </div>
-          <p className="text-muted-foreground">Загрузка сотрудников...</p>
-        </div>
-    </>
-  )
+  return <PageSkeleton stats={0} rows={8} cols={3} />
 }
 
 export default function StaffPageSmart() {
@@ -642,8 +634,8 @@ export default function StaffPageSmart() {
                 <tbody className="divide-y divide-slate-200 dark:divide-white/5">
                   {loading && !refreshing && (
                     <tr>
-                      <td colSpan={3} className="py-12 text-center text-slate-500">
-                        Загрузка данных...
+                      <td colSpan={3} className="py-4 px-4">
+                        <TableSkeleton rows={6} cols={3} />
                       </td>
                     </tr>
                   )}

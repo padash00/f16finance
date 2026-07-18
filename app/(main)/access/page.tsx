@@ -6,6 +6,7 @@ import { CapabilitiesPanel } from '@/components/admin/capabilities-panel'
 import { UserOverridesPanel } from '@/components/admin/user-overrides-panel'
 import { supabase } from '@/lib/supabaseClient'
 import { useCapabilities } from '@/lib/client/use-capabilities'
+import { CardSkeleton } from '@/components/skeleton'
 import {
   CheckCircle2, Copy, Eye, EyeOff, KeyRound, Loader2,
   Lock, Pencil, Plus, RefreshCw, Shield, Trash2, Users, X, Briefcase, Save, SlidersHorizontal,
@@ -473,8 +474,10 @@ export default function AccessPage() {
 
           {/* Positions list */}
           {positionsLoading ? (
-            <div className="flex h-32 items-center justify-center gap-2 text-slate-400">
-              <Loader2 className="h-5 w-5 animate-spin" /><span className="text-sm">Загрузка…</span>
+            <div className="space-y-2.5">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <CardSkeleton key={i} rows={2} />
+              ))}
             </div>
           ) : (
             <div className="space-y-2.5">
@@ -569,8 +572,10 @@ export default function AccessPage() {
       {tab === 'accounts' && (
         <>
           {accountsLoading ? (
-            <div className="flex h-32 items-center justify-center gap-2 text-slate-400">
-              <Loader2 className="h-5 w-5 animate-spin" /><span className="text-sm">Загрузка…</span>
+            <div className="space-y-2.5">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <CardSkeleton key={i} rows={2} />
+              ))}
             </div>
           ) : (
             <div className="space-y-2.5">

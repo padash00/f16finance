@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { CardSkeleton } from '@/components/skeleton'
 import { Newspaper, Plus, RefreshCw, Trash2 } from 'lucide-react'
 
 type Post = {
@@ -141,7 +142,11 @@ export default function NewsPage() {
       )}
 
       {loading && posts.length === 0 ? (
-        <div className="text-center py-10 text-muted-foreground text-sm">Загрузка...</div>
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <CardSkeleton key={i} rows={3} />
+          ))}
+        </div>
       ) : posts.length === 0 ? (
         <Card className="p-10 border-border bg-card text-center text-muted-foreground text-sm">
           Лента пуста — ещё нет постов

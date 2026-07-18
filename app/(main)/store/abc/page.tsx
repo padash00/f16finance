@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { TableSkeleton } from '@/components/skeleton'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -438,7 +439,7 @@ export default function StoreAbcPage({ embedded = false }: { embedded?: boolean 
       {/* Таблица */}
       <Card className="overflow-hidden border-border bg-card/70 p-0">
         {loading && rows.length === 0 ? (
-          <div className="p-6 text-sm text-muted-foreground">Загрузка...</div>
+          <div className="p-4"><TableSkeleton rows={8} cols={8} /></div>
         ) : filteredRows.length === 0 ? (
           <div className="p-6 text-sm text-muted-foreground">Нет данных по выбранным фильтрам.</div>
         ) : (

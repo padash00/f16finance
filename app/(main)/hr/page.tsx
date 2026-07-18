@@ -16,6 +16,7 @@ import PositionsOverview from './PositionsOverview'
 import HrAnalytics from './HrAnalytics'
 import Avatar from './Avatar'
 import { RowMenu, InlineRoleDropdown } from './RowMenu'
+import { Skeleton, TableSkeleton } from '@/components/skeleton'
 
 function formatRelative(iso: string | null | undefined): string {
   if (!iso) return ''
@@ -749,9 +750,8 @@ export default function HrPage() {
       </div>
 
       {loading && items.length === 0 ? (
-        <Card className="py-12 text-center text-muted-foreground bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
-          <Loader2 className="w-5 h-5 animate-spin mx-auto mb-3" />
-          Загрузка...
+        <Card className="p-4 bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
+          <TableSkeleton rows={8} cols={6} />
         </Card>
       ) : filtered.length === 0 ? (
         <Card className="p-8 text-center text-sm text-muted-foreground bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
@@ -978,7 +978,10 @@ export default function HrPage() {
                   {canViewHistory && historyOpen[`${emp.kind}-${emp.id}`] && (
                     <div className="mt-2 pl-2 border-l border-border text-xs space-y-1">
                       {historyLoading[`${emp.kind}-${emp.id}`] ? (
-                        <div className="text-slate-500 italic">Загрузка истории…</div>
+                        <div className="space-y-1.5 py-0.5">
+                          <Skeleton className="h-3 w-2/3" />
+                          <Skeleton className="h-3 w-1/2" />
+                        </div>
                       ) : (historyData[`${emp.kind}-${emp.id}`] || []).length === 0 ? (
                         <div className="text-slate-500 italic">Нет записей</div>
                       ) : (

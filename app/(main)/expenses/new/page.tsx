@@ -22,6 +22,7 @@ import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { DatePicker } from '@/components/ui/date-picker'
 import { getFinancialGroupLabel, type FinancialGroup } from '@/lib/core/financial-groups'
 import { useCapabilities } from '@/lib/client/use-capabilities'
+import { Skeleton, CardSkeleton } from '@/components/skeleton'
 
 type Category = { id: string; name: string; accounting_group: FinancialGroup | null }
 type Company = { id: string; name: string; code?: string | null }
@@ -673,7 +674,11 @@ function ExpenseWizardPageContent() {
               {isCompanyValid ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : null}
             </label>
             {loadingCatalogs ? (
-              <div className="text-sm text-muted-foreground">Загрузка...</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-10 w-full" />
+                ))}
+              </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {companies.map((c) => (
@@ -888,7 +893,7 @@ function ExpenseWizardPageContent() {
           <div>
             <label className="text-sm font-medium mb-1 block">Оператор смены (опционально)</label>
             {loadingOperators ? (
-              <div className="text-xs text-muted-foreground mb-1">Загружаю операторов...</div>
+              <Skeleton className="mb-1 h-3 w-44" />
             ) : null}
             {operatorsError ? (
               <div className="text-xs text-amber-500 mb-2 flex items-center gap-2">
@@ -1056,7 +1061,7 @@ function ExpenseWizardPageContent() {
                   Обновить список
                 </button>
               </div>
-              {loadingWhitelist ? <p className="text-xs text-muted-foreground mb-2">Загружаю доверенных поставщиков...</p> : null}
+              {loadingWhitelist ? <Skeleton className="mb-2 h-3 w-56" /> : null}
               {whitelistError ? (
                 <p className="text-xs text-amber-500 mb-2 flex items-center gap-2">
                   <span>{whitelistError}</span>
@@ -1211,10 +1216,9 @@ function ExpenseWizardPageContent() {
 
 function ExpenseWizardPageFallback() {
   return (
-    <div className="app-page-tight max-w-3xl mx-auto py-6">
-      <Card className="p-6">
-        <div className="text-sm text-muted-foreground">Загрузка мастера расхода...</div>
-      </Card>
+    <div className="app-page-tight max-w-3xl mx-auto py-6 space-y-4">
+      <Skeleton className="h-8 w-64" />
+      <CardSkeleton rows={6} />
     </div>
   )
 }

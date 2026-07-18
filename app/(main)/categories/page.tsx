@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useCapabilities } from '@/lib/client/use-capabilities'
+import { CardSkeleton } from '@/components/skeleton'
 import {
   FINANCIAL_GROUP_OPTIONS,
   PL_CHAIN,
@@ -233,7 +234,9 @@ export default function CategoriesPage() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
-              {loading && <div className="col-span-2 text-center py-10 text-muted-foreground animate-pulse">Загрузка...</div>}
+              {loading && Array.from({ length: 4 }).map((_, i) => (
+                <CardSkeleton key={i} rows={3} />
+              ))}
 
               {!loading && filteredCategories.map((cat) => (
                 <Card key={cat.id} className={`group relative overflow-hidden border-slate-200 bg-white dark:border-white/[0.08] dark:bg-white/[0.025] p-4 transition-all ${editingId === cat.id ? 'ring-2 ring-amber-500/40' : 'hover:border-slate-300 hover:bg-slate-50 dark:hover:border-white/20 dark:hover:bg-white/[0.05]'}`}>

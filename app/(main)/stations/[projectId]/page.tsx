@@ -8,6 +8,7 @@ import {
   AlertTriangle, RefreshCw, TrendingUp, Calendar, Map, Search, Download, Paintbrush, Gamepad2, Layers, LayoutGrid,
 } from 'lucide-react'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { PageSkeleton } from '@/components/skeleton'
 import {
   Dialog,
   DialogContent,
@@ -1790,8 +1791,8 @@ function StationsPageContent() {
   // ─── Render ───────────────────────────────────────────────────────────────
 
   if (loading) return (
-    <div className="flex h-64 items-center justify-center text-muted-foreground">
-      <Loader2 className="h-6 w-6 animate-spin mr-2" /> Загрузка...
+    <div className="app-page app-page-wide">
+      <PageSkeleton stats={0} rows={8} cols={4} />
     </div>
   )
 
@@ -2739,9 +2740,6 @@ function StationsPageContent() {
                 </div>
                 <div className="h-32 rounded-xl border border-slate-100 dark:border-white/5 bg-surface-muted" />
                 <div className="h-40 rounded-xl border border-slate-100 dark:border-white/5 bg-surface-muted" />
-                <p className="flex items-center justify-center gap-2 text-center text-xs text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Загружаем сессии…
-                </p>
               </div>
             ) : completedSessions.length === 0 ? (
               <div className="rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground text-sm">

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Bell, MessageSquare, Send, Bell as BellIcon } from 'lucide-react'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { CardSkeleton } from '@/components/skeleton'
 
 const EVENT_LABELS: Record<string, { label: string; subtitle?: string }> = {
   team_chat_message: { label: 'Сообщения в команд-чате', subtitle: 'Когда кто-то пишет в общем чате' },
@@ -82,7 +83,13 @@ export default function NotificationSettingsPage() {
         backHref="/settings"
       />
 
-      {loading && <Card className="p-6 text-center text-muted-foreground text-sm">Загрузка...</Card>}
+      {loading && (
+        <>
+          <CardSkeleton rows={2} />
+          <CardSkeleton rows={2} />
+          <CardSkeleton rows={2} />
+        </>
+      )}
 
       {!loading && events.map(eventType => {
         const meta = EVENT_LABELS[eventType] || { label: eventType }

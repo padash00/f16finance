@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { TableSkeleton } from '@/components/skeleton'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
 import { formatMoney } from '@/lib/core/format'
 
@@ -144,8 +145,8 @@ export default function SuppliersListPage({ embedded = false }: { embedded?: boo
       {error ? <Card className="p-3 border-red-500/30 bg-red-500/10 text-sm text-red-700 dark:text-red-200">{error}</Card> : null}
 
       {loading ? (
-        <div className="flex items-center justify-center py-12 text-muted-foreground">
-          <Loader2 className="w-5 h-5 animate-spin mr-2" /> Загрузка...
+        <div className="rounded-xl border border-border p-4">
+          <TableSkeleton rows={8} cols={8} />
         </div>
       ) : filtered.length === 0 ? (
         <Card className="p-6 text-sm text-muted-foreground text-center">Поставщиков нет.</Card>

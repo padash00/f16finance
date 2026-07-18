@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { CardSkeleton } from '@/components/skeleton'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import {
   Plus,
@@ -314,7 +315,13 @@ export default function SettingsPage() {
 
                     {/* Список */}
                     <div className="flex-1 overflow-y-auto space-y-3 pr-2">
-                        {loading && <p className="text-center text-sm text-muted-foreground py-10">Загрузка...</p>}
+                        {loading && (
+                            <>
+                                <CardSkeleton rows={1} />
+                                <CardSkeleton rows={1} />
+                                <CardSkeleton rows={1} />
+                            </>
+                        )}
                         {!loading && filteredCompanies.length === 0 && (
                             <p className="text-center text-sm text-muted-foreground py-10">Компаний пока нет. Добавьте первую ниже.</p>
                         )}
@@ -443,7 +450,13 @@ export default function SettingsPage() {
 
                     {/* Список */}
                     <div className="flex-1 overflow-y-auto space-y-3 pr-2">
-                        {loading && <p className="text-center text-sm text-muted-foreground py-10">Загрузка...</p>}
+                        {loading && (
+                            <>
+                                <CardSkeleton rows={1} />
+                                <CardSkeleton rows={1} />
+                                <CardSkeleton rows={1} />
+                            </>
+                        )}
                         {!loading && filteredStaff.length === 0 && (
                             <p className="text-center text-sm text-muted-foreground py-10">Сотрудников пока нет. Добавьте первого ниже.</p>
                         )}

@@ -4,9 +4,10 @@ import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import {
   AlertTriangle, ArrowRight, Boxes, ClipboardList, FileText, History, Package,
-  Search, Loader2, Warehouse, Building2, Activity, Receipt, Users2,
+  Search, Warehouse, Building2, Activity, Receipt, Users2,
   PackagePlus, ArchiveX, ScanSearch,
 } from 'lucide-react'
+import { Skeleton } from '@/components/skeleton'
 
 import { isAbortError } from '@/lib/is-abort-error'
 import { SupplierDebtsWidget } from '@/components/store/supplier-debts-widget'
@@ -192,7 +193,15 @@ export default function StoreOverviewPage() {
           <History className="h-4 w-4 text-violet-500 dark:text-violet-300" /> Последние действия
         </div>
         {!loaded ? (
-          <div className="flex items-center justify-center gap-2 py-10 text-slate-400"><Loader2 className="h-5 w-5 animate-spin" /> Загрузка…</div>
+          <div className="space-y-3 px-4 py-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <Skeleton className="h-8 w-8 rounded-lg" />
+                <Skeleton className="h-4 flex-1" />
+                <Skeleton className="h-3 w-16" />
+              </div>
+            ))}
+          </div>
         ) : timeline.length === 0 ? (
           <div className="px-4 py-10 text-center text-sm text-slate-400">Действий пока нет.</div>
         ) : (

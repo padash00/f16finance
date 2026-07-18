@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { CreditCard, Save, CheckCircle2 } from 'lucide-react'
+import { TableSkeleton } from '@/components/skeleton'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 
 interface Provider {
@@ -89,7 +90,7 @@ export default function PaymentProviderSettingsPage() {
 
       <Card className="p-4 sm:p-6">
         {loading ? (
-          <div className="text-sm text-muted-foreground">Загрузка...</div>
+          <TableSkeleton rows={4} cols={3} />
         ) : companies.length === 0 ? (
           <div className="text-sm text-muted-foreground">У вас нет ни одной компании.</div>
         ) : (

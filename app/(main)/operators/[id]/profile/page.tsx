@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { DatePicker } from '@/components/ui/date-picker'
 import { AppModal } from '@/components/ui/app-modal'
+import { PageSkeleton } from '@/components/skeleton'
 import { getPublicAppUrl } from '@/lib/core/app-url'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { supabase } from '@/lib/supabaseClient'
@@ -239,16 +240,7 @@ const COMPANY_ROLE_LABEL: Record<CompanyOperatorRole, string> = {
 
 // Компонент загрузки
 function ProfileLoading() {
-  return (
-    <>
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center animate-pulse">
-            <User className="w-8 h-8 text-white" />
-          </div>
-          <p className="text-slate-500 dark:text-gray-400">Загрузка профиля оператора...</p>
-        </div>
-    </>
-  )
+  return <PageSkeleton stats={4} rows={6} cols={4} />
 }
 
 // Компонент для отображения созданного аккаунта

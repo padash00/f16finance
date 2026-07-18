@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation'
 import { ArrowLeft, Building2, FileText, Loader2, Plus, Receipt, Tag, Trash2, Wallet } from 'lucide-react'
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { PageSkeleton } from '@/components/skeleton'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -342,8 +343,8 @@ export default function SupplierCardPage() {
 
   if (loading) {
     return (
-      <div className="app-page flex items-center justify-center py-20">
-        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+      <div className="app-page max-w-[1600px]">
+        <PageSkeleton stats={4} rows={8} cols={6} />
       </div>
     )
   }

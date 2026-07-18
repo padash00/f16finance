@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { Skeleton } from '@/components/skeleton'
 import { Settings, Store, Check, Loader2, Save } from 'lucide-react'
 
 type Company = { id: string; name: string; code: string | null }
@@ -67,7 +68,12 @@ export default function StoreSettingsPage() {
         </p>
 
         {loading ? (
-          <div className="flex items-center gap-2 py-8 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Загрузка…</div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <Skeleton className="h-[58px] w-full rounded-xl" />
+            <Skeleton className="h-[58px] w-full rounded-xl" />
+            <Skeleton className="h-[58px] w-full rounded-xl" />
+            <Skeleton className="h-[58px] w-full rounded-xl" />
+          </div>
         ) : companies.length === 0 ? (
           <div className="py-8 text-center text-sm text-muted-foreground">Нет доступных точек</div>
         ) : (

@@ -6,6 +6,7 @@ import { Plus, Trash2, AlertCircle, Loader2, ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { TableSkeleton } from '@/components/skeleton'
 
 type Vendor = {
   id: string
@@ -187,8 +188,8 @@ export default function ExpenseWhitelistPage() {
         </div>
 
         {loading && items.length === 0 ? (
-          <div className="flex items-center justify-center gap-2 py-12 text-slate-400">
-            <Loader2 className="h-5 w-5 animate-spin" /> <span className="text-sm">Загрузка…</span>
+          <div className="p-4">
+            <TableSkeleton rows={6} cols={3} />
           </div>
         ) : items.length === 0 ? (
           <div className="px-4 py-12 text-center text-sm text-slate-400">

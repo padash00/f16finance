@@ -7,6 +7,7 @@ import { CheckCircle2, XCircle, Clock, Loader2, AlertCircle } from 'lucide-react
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { CardSkeleton } from '@/components/skeleton'
 
 type PendingExpense = {
   id: string
@@ -118,7 +119,11 @@ export default function PendingExpensesPage() {
       )}
 
       {loading && items.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">Загрузка...</div>
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <CardSkeleton key={i} rows={2} />
+          ))}
+        </div>
       ) : items.length === 0 ? (
         <Card className="p-8 text-center">
           <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-3" />

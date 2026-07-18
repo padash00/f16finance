@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { TableSkeleton } from '@/components/skeleton'
 import { DatePicker } from '@/components/ui/date-picker'
 import { ChefHat, Loader2, Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react'
 
@@ -413,7 +414,7 @@ export default function ProductionPage() {
           <span className="rounded-full border border-border bg-slate-100 dark:bg-white/5 px-2 py-0.5 text-xs text-muted-foreground">{recipes.length}</span>
         </div>
         {loading && recipes.length === 0 ? (
-          <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Загрузка…</div>
+          <div className="p-4"><TableSkeleton rows={6} cols={4} /></div>
         ) : recipes.length === 0 ? (
           <div className="px-4 py-16 text-center text-sm text-muted-foreground">Техкарт нет. Создайте первую.</div>
         ) : (

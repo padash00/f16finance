@@ -9,6 +9,7 @@ import { useStoreScope } from '@/components/store/store-scope'
 import { downloadReportPdf } from '@/lib/client/download-pdf'
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { CardSkeleton } from '@/components/skeleton'
 import { ModalPortal } from '@/components/ui/modal-portal'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -674,8 +675,8 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
           ) : null}
 
           {loading && filteredDebts.length === 0 ? (
-            <div className="flex items-center justify-center py-12 text-muted-foreground">
-              <Loader2 className="w-5 h-5 animate-spin mr-2" /> Загрузка...
+            <div className="space-y-2">
+              {Array.from({ length: 3 }).map((_, i) => <CardSkeleton key={i} rows={2} />)}
             </div>
           ) : filteredDebts.length === 0 ? (
             <Card className="p-6 text-sm text-muted-foreground text-center">Долгов нет.</Card>
@@ -792,8 +793,8 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
       ) : (
         <>
           {loading && groupedReceipts.length === 0 ? (
-            <div className="flex items-center justify-center py-12 text-muted-foreground">
-              <Loader2 className="w-5 h-5 animate-spin mr-2" /> Загрузка...
+            <div className="space-y-2">
+              {Array.from({ length: 3 }).map((_, i) => <CardSkeleton key={i} rows={2} />)}
             </div>
           ) : groupedReceipts.length === 0 ? (
             <Card className="p-6 text-sm text-muted-foreground text-center">Накладных нет.</Card>

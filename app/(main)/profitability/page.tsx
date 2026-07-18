@@ -6,6 +6,7 @@ import { useCashlessLabels } from '@/lib/client/use-cashless-labels'
 import { useCompanies } from '@/hooks/use-companies'
 import { downloadReportPdf } from '@/lib/client/download-pdf'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { PageSkeleton } from '@/components/skeleton'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -1058,7 +1059,7 @@ export default function ProfitabilityPage() {
       </div>
 
       {loading && !selected ? (
-        <Card className="border-border bg-card p-12 text-center text-muted-foreground animate-pulse">Загружаем данные ОПиУ…</Card>
+        <PageSkeleton stats={4} rows={8} cols={4} />
       ) : selected ? (
         <>
           {tab === 'overview' && (<>

@@ -22,6 +22,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import ProductCardModal from '@/components/store/product-card-modal'
+import { TableSkeleton } from '@/components/skeleton'
 import { InventoryLegacyRedirect } from '../legacy-redirect'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -1096,7 +1097,9 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
           {/* Table */}
           <Card className="border-border/70 overflow-hidden">
             {loading ? (
-              <div className="flex items-center justify-center h-40 text-sm text-muted-foreground">Загрузка...</div>
+              <div className="p-4">
+                <TableSkeleton rows={8} cols={6} />
+              </div>
             ) : paginated.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-40 text-sm text-muted-foreground gap-2">
                 <Package className="w-8 h-8 opacity-30" />

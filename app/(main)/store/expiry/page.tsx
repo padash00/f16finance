@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, CalendarClock, Loader2 } from 'lucide-react'
+import { AlertTriangle, CalendarClock } from 'lucide-react'
+import { TableSkeleton } from '@/components/skeleton'
 
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -86,7 +87,7 @@ export default function StoreExpiryPage({ embedded = false }: { embedded?: boole
       <Card className="border-border bg-card/70 p-0">
         <CardContent className="p-4 sm:p-5">
           {loading ? (
-            <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Загрузка…</div>
+            <div className="py-2"><TableSkeleton rows={6} cols={6} /></div>
           ) : rows.length === 0 ? (
             <div className="py-10 text-center text-sm text-muted-foreground">
               {filter === 'all' ? 'Партий со сроком годности пока нет. Срок указывается при приёмке/оприходовании.' : 'Ничего не найдено по фильтру.'}

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, Loader2, Package, ScanLine, Search, X } from 'lucide-react'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { CameraScanner, scanFeedback } from '@/components/store/camera-scanner'
+import { Skeleton } from '@/components/skeleton'
 
 type Item = { id: string; name: string; barcode?: string | null; unit?: string }
 type Balance = { location_id: string; item_id: string; quantity: number; item?: Item | null }
@@ -302,8 +303,11 @@ export default function ScanRevisionPage() {
       {error ? <div className="border border-rose-500/40 bg-rose-500/[0.06] p-3 font-mono text-[12px] text-rose-300">{error}</div> : null}
 
       {loading ? (
-        <div className="flex items-center gap-3 border border-border bg-white dark:bg-white/[0.04] p-4 font-mono text-[13px] uppercase text-slate-500 dark:text-zinc-400">
-          <Loader2 className="h-4 w-4 animate-spin" /> Загрузка…
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-44" />
+          <Skeleton className="h-14 w-full" />
+          <Skeleton className="h-14 w-full" />
+          <Skeleton className="h-14 w-full" />
         </div>
       ) : !locationId ? (
         // ── Выбор локации ──────────────────────────────────────────────────────

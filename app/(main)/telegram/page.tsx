@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { Skeleton } from '@/components/skeleton'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { getStaffRoleLabel } from '@/lib/core/access'
 import {
@@ -456,8 +457,10 @@ create table if not exists telegram_allowed_users (
 
             {/* Users list */}
             {usersLoading ? (
-              <div className="flex items-center gap-2 text-sm text-slate-500">
-                <Loader2 className="w-4 h-4 animate-spin" /> Загрузка...
+              <div className="space-y-2">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Skeleton key={i} className="h-14 w-full rounded-xl" />
+                ))}
               </div>
             ) : users.length === 0 ? (
               <div className="text-center py-6 text-slate-600 text-sm">
@@ -537,8 +540,10 @@ create table if not exists telegram_allowed_users (
             </p>
 
             {staffLoading ? (
-              <div className="flex items-center gap-2 text-sm text-slate-500">
-                <Loader2 className="w-4 h-4 animate-spin" /> Загрузка...
+              <div className="space-y-2">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Skeleton key={i} className="h-14 w-full rounded-xl" />
+                ))}
               </div>
             ) : staffMembers.length === 0 ? (
               <p className="text-sm text-slate-600">Нет сотрудников в системе</p>

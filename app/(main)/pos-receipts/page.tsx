@@ -10,6 +10,7 @@ import { Printer, Search, ChevronLeft, ChevronRight, Receipt, RefreshCw } from '
 import { useUrlState } from '@/lib/hooks/use-url-state'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { TableSkeleton } from '@/components/skeleton'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -446,9 +447,8 @@ function PosReceiptsPageContent({ embedded = false }: { embedded?: boolean }) {
         <Card>
           <CardContent className="p-0">
             {loading && sales.length === 0 ? (
-              <div className="flex items-center justify-center py-16 text-muted-foreground">
-                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                Загрузка...
+              <div className="p-4">
+                <TableSkeleton rows={8} cols={7} />
               </div>
             ) : sales.length === 0 ? (
               <div className="flex items-center justify-center py-16 text-muted-foreground text-sm">

@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 
 import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
+import { PageSkeleton } from '@/components/skeleton'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { DatePicker } from '@/components/ui/date-picker'
@@ -304,9 +305,7 @@ function OperatorSalaryDetailPageContent() {
 
           {/* Weekly summary */}
           {loading ? (
-            <Card className="flex items-center justify-center gap-2 border-border bg-white dark:bg-white/[0.04] p-16 text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin" />Загрузка данных...
-            </Card>
+            <PageSkeleton stats={4} rows={7} cols={5} />
           ) : data ? (
             <>
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

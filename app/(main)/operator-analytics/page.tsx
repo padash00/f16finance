@@ -9,10 +9,10 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { PageSkeleton, TableSkeleton } from '@/components/skeleton'
 import { supabase } from '@/lib/supabaseClient'
 import {
   CalendarDays,
-  Users2,
   Search,
   X,
   TrendingUp,
@@ -902,16 +902,7 @@ OperatorDetailsModal.displayName = 'OperatorDetailsModal'
 // LOADING COMPONENT
 // =====================
 function OperatorAnalyticsLoading() {
-  return (
-    <>
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center animate-pulse">
-            <Users2 className="w-8 h-8 text-white" />
-          </div>
-          <p className="text-slate-400">Загрузка аналитики операторов...</p>
-        </div>
-    </>
-  )
+  return <PageSkeleton stats={5} rows={8} cols={6} />
 }
 
 // =====================
@@ -2014,8 +2005,8 @@ function OperatorAnalyticsContent() {
                 <tbody>
                   {(loading || refreshing) && (
                     <tr>
-                      <td colSpan={18} className="py-8 text-center text-slate-500">
-                        Загрузка данных...
+                      <td colSpan={18} className="py-4 px-2">
+                        <TableSkeleton rows={8} cols={6} />
                       </td>
                     </tr>
                   )}

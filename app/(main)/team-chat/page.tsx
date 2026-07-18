@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { DatePicker } from '@/components/ui/date-picker'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { CardSkeleton, Skeleton } from '@/components/skeleton'
 import {
   MessageSquare,
   Megaphone,
@@ -275,7 +276,11 @@ function ChatContent() {
       <Card className="p-4 border-border bg-card min-h-[400px]">
         {error && <div className="text-sm text-red-400 mb-3">{error}</div>}
         {loading && messages.length === 0 ? (
-          <div className="text-center py-10 text-muted-foreground text-sm">Загрузка...</div>
+          <div className="space-y-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-16 w-full rounded-lg" />
+            ))}
+          </div>
         ) : messages.length === 0 ? (
           <div className="text-center py-10 text-muted-foreground text-sm">
             {contextType ? 'Здесь ещё нет сообщений. Начни обсуждение.' : 'Чат пуст.'}
@@ -383,7 +388,14 @@ function ChatContent() {
 
 export default function TeamChatPage() {
   return (
-    <Suspense fallback={<div className="p-10 text-center text-sm text-muted-foreground">Загрузка...</div>}>
+    <Suspense
+      fallback={
+        <div className="app-page-tight space-y-4">
+          <Skeleton className="h-14 w-full max-w-lg" />
+          <CardSkeleton rows={6} />
+        </div>
+      }
+    >
       <ChatContent />
     </Suspense>
   )

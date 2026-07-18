@@ -2,8 +2,9 @@
 
 import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { ArrowLeft, Lock, Package, Puzzle, Sparkles, Loader2 } from 'lucide-react'
+import { ArrowLeft, Lock, Package, Puzzle, Sparkles } from 'lucide-react'
 import { SUPPORT_CONTACT } from '@/lib/core/site'
+import { CardSkeleton, Skeleton } from '@/components/skeleton'
 
 const money = (n: number) => `${(Number(n) || 0).toLocaleString('ru-RU')} ₸`
 const unitLabel = (u: string) => (u === 'company' ? 'за точку/мес' : u === 'device' ? 'за устройство/мес' : 'в месяц')
@@ -16,7 +17,14 @@ type Info = {
 
 export default function UpgradePage() {
   return (
-    <Suspense fallback={<div className="flex min-h-[50vh] items-center justify-center text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>}>
+    <Suspense
+      fallback={
+        <div className="mx-auto max-w-3xl px-4 py-10 space-y-6">
+          <Skeleton className="h-5 w-32" />
+          <CardSkeleton rows={6} className="rounded-[2rem]" />
+        </div>
+      }
+    >
       <UpgradeContent />
     </Suspense>
   )
@@ -59,7 +67,13 @@ function UpgradeContent() {
 
         <div className="space-y-6 p-5 sm:p-8">
           {loading ? (
-            <div className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" />Загрузка вариантов…</div>
+            <div className="space-y-3">
+              <Skeleton className="h-4 w-40" />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Skeleton className="h-24 rounded-2xl" />
+                <Skeleton className="h-24 rounded-2xl" />
+              </div>
+            </div>
           ) : (
             <>
               {info && info.packages.length > 0 && (

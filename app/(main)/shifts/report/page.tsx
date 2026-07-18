@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { supabase } from '@/lib/supabaseClient'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { PageSkeleton } from '@/components/skeleton'
 import { DatePicker } from '@/components/ui/date-picker'
 import { ChevronLeft, Printer, RefreshCw, Loader2, BarChart3, ChevronDown, ChevronUp } from 'lucide-react'
 
@@ -245,9 +246,7 @@ export default function ShiftReportPage() {
 
         {/* Loading skeleton */}
         {loading && !report && (
-          <div className="flex items-center justify-center py-20 text-muted-foreground">
-            <Loader2 className="h-6 w-6 animate-spin mr-2" /> Загрузка отчёта...
-          </div>
+          <PageSkeleton stats={4} rows={8} cols={5} />
         )}
 
         {report && (

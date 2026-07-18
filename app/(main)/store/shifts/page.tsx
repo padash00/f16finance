@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { PageSkeleton, StatGridSkeleton, TableSkeleton } from '@/components/skeleton'
 import { Clock, Loader2, RefreshCw, Settings, User, Wallet, CreditCard, X, ChevronRight, TrendingUp, RotateCcw } from 'lucide-react'
 
 type LiveTotals = { sales: number; cash: number; kaspi: number; count: number }
@@ -78,7 +79,7 @@ export default function StoreShiftsPage() {
   useEffect(() => { if (storeCompanyId) load() }, [storeCompanyId, load])
 
   if (storeCompanyId === undefined) {
-    return <div className="app-page-wide flex items-center justify-center gap-2 py-20 text-slate-400"><Loader2 className="h-5 w-5 animate-spin" /> Загрузка…</div>
+    return <div className="app-page-wide"><PageSkeleton stats={0} rows={8} cols={4} /></div>
   }
 
   if (!storeCompanyId) {
@@ -125,7 +126,7 @@ export default function StoreShiftsPage() {
           <span className="rounded-full border border-border bg-surface-muted px-2 py-0.5 text-xs text-muted-foreground">{shifts.length}</span>
         </div>
         {loading && shifts.length === 0 ? (
-          <div className="flex items-center justify-center gap-2 py-16 text-slate-400"><Loader2 className="h-5 w-5 animate-spin" /> Загрузка…</div>
+          <div className="p-4"><TableSkeleton rows={8} cols={4} /></div>
         ) : shifts.length === 0 ? (
           <div className="px-4 py-16 text-center text-sm text-slate-400">Смен нет</div>
         ) : (
@@ -224,7 +225,10 @@ function ShiftDetail({ id, onClose, onChanged }: { id: string; onClose: () => vo
         </div>
 
         {loading ? (
-          <div className="flex flex-1 items-center justify-center gap-2 text-slate-400"><Loader2 className="h-5 w-5 animate-spin" /> Загрузка…</div>
+          <div className="flex-1 space-y-3 overflow-y-auto p-4 sm:p-5">
+            <StatGridSkeleton count={4} />
+            <TableSkeleton rows={6} cols={3} />
+          </div>
         ) : err ? (
           <div className="m-5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-700 dark:text-rose-200">{err}</div>
         ) : (

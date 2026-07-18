@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { CardSkeleton } from '@/components/skeleton'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import {
   Building2,
@@ -772,7 +773,10 @@ export default function PointDevicesPage() {
       {/* Projects list */}
       <div className="space-y-4">
         {loading ? (
-          <Card className="border-border bg-card p-6 text-sm text-muted-foreground">Загрузка...</Card>
+          <>
+            <CardSkeleton rows={4} />
+            <CardSkeleton rows={4} />
+          </>
         ) : projects.length === 0 ? (
           <Card className="border-border bg-card p-6 text-sm text-muted-foreground">
             Проектов пока нет.

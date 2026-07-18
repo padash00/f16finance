@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { PageSkeleton } from '@/components/skeleton'
 import { useStoreScope } from '@/components/store/store-scope'
 import { DatePicker } from '@/components/ui/date-picker'
 import {
@@ -13,7 +14,7 @@ import {
 
 const REFRESH_MS = 12_000
 
-const embFallback = () => <div className="flex items-center justify-center gap-2 py-16 text-slate-400"><Loader2 className="h-5 w-5 animate-spin" /> Загрузка…</div>
+const embFallback = () => <PageSkeleton stats={0} rows={8} cols={5} />
 const AbcEmbed = dynamic(() => import('@/app/(main)/store/abc/page'), { ssr: false, loading: embFallback })
 const ForecastEmbed = dynamic(() => import('@/app/(main)/inventory/forecast/page').then((m) => m.InventoryForecastPageContent), { ssr: false, loading: embFallback })
 const PointsEmbed = dynamic(() => import('@/app/(main)/store/analytics/page'), { ssr: false, loading: embFallback })
@@ -580,7 +581,7 @@ function ProductView({ data, loading, tab, category, setCategory, q }: { data: P
 }
 
 function Loading() {
-  return <div className="flex items-center justify-center gap-2 py-20 text-slate-400"><Loader2 className="h-6 w-6 animate-spin" /> Загрузка…</div>
+  return <PageSkeleton stats={3} rows={8} cols={5} />
 }
 
 function Kpi({ label, value, sub, icon, accent, big }: { label: string; value: string; sub?: string; icon: React.ReactNode; accent: string; big?: boolean }) {

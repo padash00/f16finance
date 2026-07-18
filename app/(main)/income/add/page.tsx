@@ -28,6 +28,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { DatePicker } from '@/components/ui/date-picker'
+import { Skeleton } from '@/components/skeleton'
 
 type Company = {
   id: string
@@ -506,7 +507,11 @@ export default function AddIncomePage() {
               <div className="mt-6">
                 <label className="text-xs text-gray-500 uppercase mb-3 block">Точка (Компания)</label>
                 {loadingMeta ? (
-                  <div className="text-sm text-slate-500 dark:text-gray-400 animate-pulse">Загрузка списка...</div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <Skeleton key={i} className="h-16 rounded-xl" />
+                    ))}
+                  </div>
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                     {companies.map((c) => (
@@ -520,7 +525,11 @@ export default function AddIncomePage() {
               <div className="mt-6">
                 <label className="text-xs text-gray-500 uppercase mb-3 block">Оператор смены</label>
                 {loadingMeta ? (
-                  <div className="text-xs text-slate-500 dark:text-gray-400">Загрузка операторов...</div>
+                  <div className="flex flex-wrap gap-2">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <Skeleton key={i} className="h-10 w-32 rounded-xl" />
+                    ))}
+                  </div>
                 ) : operators.length === 0 ? (
                   <p className="text-xs text-yellow-500">Операторов нет. Добавьте их в разделе «Операторы».</p>
                 ) : (

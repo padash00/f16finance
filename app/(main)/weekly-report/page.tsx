@@ -15,6 +15,7 @@ import { WeeklyPurchasePlan, nextWeekMondayISO, planWeekLabel } from '@/componen
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { PageSkeleton } from '@/components/skeleton'
 import { WeeklyActPrint } from '@/components/admin/weekly-act-print'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -49,7 +50,6 @@ import {
   Lightbulb,
   Activity,
   Zap,
-  BarChart3,
   Calendar,
   ChevronDown,
   Building2,
@@ -1593,14 +1593,9 @@ function WeeklyReportContent() {
   // =====================
   if (loading && companies.length === 0) {
     return (
-      <>
-          <div className="flex flex-col items-center gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center animate-pulse">
-              <BarChart3 className="w-8 h-8 text-white" />
-            </div>
-            <p className="text-muted-foreground">Загрузка недельной аналитики...</p>
-          </div>
-      </>
+      <div className="app-page-wide">
+        <PageSkeleton stats={4} rows={7} cols={5} />
+      </div>
     )
   }
 
@@ -2525,14 +2520,9 @@ export default function WeeklyReportPage() {
   return (
     <Suspense
       fallback={
-        <>
-            <div className="flex flex-col items-center gap-4">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center animate-pulse">
-                <CalendarDays className="w-8 h-8 text-white" />
-              </div>
-              <p className="text-muted-foreground">Загрузка недельного баланса...</p>
-            </div>
-        </>
+        <div className="app-page-wide">
+          <PageSkeleton stats={4} rows={7} cols={5} />
+        </div>
       }
     >
       <WeeklyReportContent />
