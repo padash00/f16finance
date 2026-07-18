@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, FormEvent } from 'react'
 import Link from 'next/link'
 import { downloadReportPdf } from '@/lib/client/download-pdf'
+import { useApiCache } from '@/lib/client/use-api-cache'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
 import { PageSkeleton, TableSkeleton } from '@/components/skeleton'
@@ -212,16 +213,11 @@ export default function StaffPageSmart() {
   const today = new Date()
   const initialYM = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
 
-  // Data State
-  const [staff, setStaff] = useState<Staff[]>([])
-
   // UI State
-  const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [monthYM, setMonthYM] = useState(initialYM)
   const [isSuperAdmin, setIsSuperAdmin] = useState(false)
   const [accountActionBusyKey, setAccountActionBusyKey] = useState<string | null>(null)
-  const [accountInfoByStaffId, setAccountInfoByStaffId] = useState<Record<string, StaffAccountInfo>>({})
   const [pageNotice, setPageNotice] = useState<PageNotice | null>(null)
   const [showInactive, setShowInactive] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
@@ -233,6 +229,60 @@ export default function StaffPageSmart() {
     const { start, end } = getMonthDates(monthYM)
     return { monthFrom: start, monthTo: end }
   }, [monthYM])
+
+  // --- Fetching (SWR-кэш: повторное открытие показывает прошлые данные мгновенно) ---
+  const {
+    data: staffPayload,
+    loading,
+    error: staffError,
+    refresh: refreshStaff,
+  } = useApiCache<{ staff: Staff[] }>(`/api/admin/staff?from=${monthFrom}&to=${monthTo}`)
+  const baseStaff = useMemo(() => staffPayload?.staff || [], [staffPayload])
+
+  // Зависимый запрос: статусы аккаунтов по загруженным сотрудникам
+  const staffIdsParam = useMemo(() => baseStaff.map((item) => item.id).join(','), [baseStaff])
+  const { data: accountsPayload, refresh: refreshAccounts } = useApiCache<{ items: StaffAccountInfo[] }>(
+    staffIdsParam ? `/api/admin/staff-accounts?staffIds=${encodeURIComponent(staffIdsParam)}` : null,
+  )
+  const accountInfoByStaffId = useMemo<Record<string, StaffAccountInfo>>(() => {
+    const items = accountsPayload?.items
+    if (!Array.isArray(items)) return {}
+    return Object.fromEntries(items.map((item) => [item.staffId, item]))
+  }, [accountsPayload])
+
+  // Как и раньше: данные аккаунта (ФИО/телефон/email) уточняют строку сотрудника
+  const staff = useMemo(
+    () =>
+      baseStaff.map((item) => {
+        const accountInfo = accountInfoByStaffId[item.id]
+        if (!accountInfo) return item
+        return {
+          ...item,
+          full_name: accountInfo.full_name || item.full_name,
+          phone: accountInfo.phone || item.phone,
+          email: accountInfo.email || item.email,
+        }
+      }),
+    [baseStaff, accountInfoByStaffId],
+  )
+
+  useEffect(() => {
+    if (staffError) {
+      setPageNotice({ tone: 'error', text: `Ошибка загрузки сотрудников: ${staffError}` })
+    }
+  }, [staffError])
+
+  const loadData = useCallback(
+    async (showRefresh = false) => {
+      if (showRefresh) setRefreshing(true)
+      try {
+        await Promise.all([refreshStaff(), refreshAccounts()])
+      } finally {
+        setRefreshing(false)
+      }
+    },
+    [refreshStaff, refreshAccounts],
+  )
 
   // Statistics
   const stats = useMemo(() => {
@@ -292,62 +342,6 @@ export default function StaffPageSmart() {
     return filtered
   }, [staff, showInactive, searchTerm, sortBy, sortDir])
 
-  // --- Fetching ---
-  const loadData = useCallback(async (showRefresh = false) => {
-    if (showRefresh) setRefreshing(true)
-    else setLoading(true)
-
-    const response = await fetch(`/api/admin/staff?from=${monthFrom}&to=${monthTo}`, { cache: 'no-store' })
-    const body = await response.json().catch(() => null)
-
-    if (!response.ok) {
-      setPageNotice({ tone: 'error', text: `Ошибка загрузки сотрудников: ${body?.error || 'неизвестная ошибка'}` })
-      setLoading(false)
-      setRefreshing(false)
-      return
-    }
-
-    {
-      const staffRows = (body?.staff as Staff[]) || []
-      setStaff(staffRows)
-
-      if (staffRows.length > 0) {
-        const response = await fetch(`/api/admin/staff-accounts?staffIds=${encodeURIComponent(staffRows.map((item) => item.id).join(','))}`).catch(() => null)
-        const json = await response?.json().catch(() => null)
-
-        if (response?.ok && Array.isArray(json?.items)) {
-          const nextAccountInfoByStaffId = Object.fromEntries(
-            (json.items as StaffAccountInfo[]).map((item) => [item.staffId, item]),
-          )
-          setAccountInfoByStaffId(nextAccountInfoByStaffId)
-          setStaff((prev) =>
-            prev.map((item) => {
-              const accountInfo = nextAccountInfoByStaffId[item.id]
-              if (!accountInfo) return item
-              return {
-                ...item,
-                full_name: accountInfo.full_name || item.full_name,
-                phone: accountInfo.phone || item.phone,
-                email: accountInfo.email || item.email,
-              }
-            }),
-          )
-        } else if (staffRows.length > 0) {
-          setAccountInfoByStaffId({})
-        }
-      } else {
-        setAccountInfoByStaffId({})
-      }
-    }
-    
-    setLoading(false)
-    setRefreshing(false)
-  }, [monthFrom, monthTo])
-
-  useEffect(() => {
-    loadData()
-  }, [loadData])
-
   useEffect(() => {
     let ignore = false
 
@@ -387,7 +381,7 @@ export default function StaffPageSmart() {
       return
     }
 
-    setStaff(prev => prev.map(item => item.id === s.id ? { ...item, is_active: !item.is_active } : item))
+    await refreshStaff()
     showPageNotice({
       tone: 'success',
       text: !s.is_active ? 'Сотрудник активирован.' : 'Сотрудник отправлен в архив.',

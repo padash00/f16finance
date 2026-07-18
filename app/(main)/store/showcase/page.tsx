@@ -1,7 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
+import { useApiCache } from '@/lib/client/use-api-cache'
 import {
   AlertCircle,
   ArrowRight,
@@ -44,7 +45,6 @@ import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { useStoreScope } from '@/components/store/store-scope'
 import { LabelPrintDialog } from '@/components/store/label-print-dialog'
 import type { LabelItem } from '@/components/store/label-print-dialog'
-import { isAbortError } from '@/lib/is-abort-error'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -92,6 +92,16 @@ type PendingRequest = {
 type RequestLine = {
   item_id: string
   requested_qty: string
+}
+
+type ShowcaseData = {
+  companies: Company[]
+  selectedCompanyId: string | null
+  showcase: ShowcaseLocation
+  warehouse: WarehouseLocation
+  balances: BalanceItem[]
+  warehouseItems: WarehouseItem[]
+  pendingRequests: PendingRequest[]
 }
 
 function parseQty(v: string) {
@@ -209,18 +219,28 @@ function ItemSearchPicker({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ShowcasePage({ embedded = false }: { embedded?: boolean } = {}) {
-  const [companies, setCompanies] = useState<Company[]>([])
-  const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null)
   const { storeCompanyId } = useStoreScope()
-  const [showcase, setShowcase] = useState<ShowcaseLocation>(null)
-  const [warehouse, setWarehouse] = useState<WarehouseLocation>(null)
-  const [balances, setBalances] = useState<BalanceItem[]>([])
+  // Точка, выбранная пользователем (или из ?company_id= в URL); null → серверный дефолт
+  const [chosenCompanyId, setChosenCompanyId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null
+    try { return new URLSearchParams(window.location.search).get('company_id') } catch { return null }
+  })
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showPrintLabels, setShowPrintLabels] = useState(false)
-  const [warehouseItems, setWarehouseItems] = useState<WarehouseItem[]>([])
-  const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+
+  // SWR-кэш: повторное открытие витрины показывает прошлые данные мгновенно,
+  // свежие подтягиваются фоном; после мутаций зовём load() (refresh).
+  const showcaseUrl = chosenCompanyId
+    ? `/api/admin/store/showcase?company_id=${encodeURIComponent(chosenCompanyId)}`
+    : '/api/admin/store/showcase'
+  const { data: scData, loading, error, refresh: load } = useApiCache<ShowcaseData>(showcaseUrl)
+  const companies = scData?.companies || []
+  const selectedCompanyId = chosenCompanyId ?? scData?.selectedCompanyId ?? null
+  const showcase = scData?.showcase || null
+  const warehouse = scData?.warehouse || null
+  const balances = scData?.balances || []
+  const warehouseItems = scData?.warehouseItems || []
+  const pendingRequests = scData?.pendingRequests || []
 
   // Request panel
   const [showRequestPanel, setShowRequestPanel] = useState(false)
@@ -244,48 +264,6 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
   const [returning, setReturning] = useState(false)
   const [returnSuccess, setReturnSuccess] = useState(false)
   const [returnError, setReturnError] = useState<string | null>(null)
-
-  // ── Load ─────────────────────────────────────────────────────────────────────
-
-  const load = useCallback(async (companyId?: string | null, signal?: AbortSignal) => {
-    setLoading(true)
-    setError(null)
-    try {
-      const id = companyId ?? selectedCompanyId
-      const url = id ? `/api/admin/store/showcase?company_id=${id}` : '/api/admin/store/showcase'
-      const res = await fetch(url, { cache: 'no-store', signal })
-      const json = await res.json().catch(() => null)
-      if (signal?.aborted) return
-      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Ошибка загрузки')
-      const d = json.data
-      setCompanies(d.companies || [])
-      setSelectedCompanyId(d.selectedCompanyId)
-      setShowcase(d.showcase)
-      setWarehouse(d.warehouse)
-      setBalances(d.balances || [])
-      setWarehouseItems(d.warehouseItems || [])
-      setPendingRequests(d.pendingRequests || [])
-    } catch (e: any) {
-      if (isAbortError(e) || signal?.aborted) return
-      setError(e?.message || 'Ошибка')
-    } finally {
-      if (!signal?.aborted) setLoading(false)
-    }
-  }, [selectedCompanyId])
-
-  useEffect(() => {
-    const ac = new AbortController()
-    try {
-      const params = new URLSearchParams(window.location.search)
-      const companyId = params.get('company_id')
-      void load(companyId, ac.signal)
-    } catch {
-      void load(undefined, ac.signal)
-    }
-    return () => ac.abort()
-    // initial load + read company from URL; do not re-run when load/company changes
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   // ── Request form ─────────────────────────────────────────────────────────────
 
@@ -337,7 +315,7 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
       setRequestLines([{ item_id: '', requested_qty: '' }])
       setRequestComment('')
       setShowRequestPanel(false)
-      await load(selectedCompanyId)
+      await load()
       setTimeout(() => setSendSuccess(false), 3000)
     } catch (err: any) {
       setSendError(err?.message || 'Ошибка')
@@ -381,7 +359,7 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
       setReturnLines([{ item_id: '', requested_qty: '' }])
       setReturnComment('')
       setShowReturnPanel(false)
-      await load(selectedCompanyId)
+      await load()
       setTimeout(() => setReturnSuccess(false), 3000)
     } catch (err: any) {
       setReturnError(err?.message || 'Ошибка')
@@ -412,7 +390,7 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
       }
       setEditingSc(null)
       setEditScVal('')
-      await load(selectedCompanyId)
+      await load()
     } finally {
       setSavingSc(false)
     }
@@ -446,7 +424,7 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
               <div className="relative">
                 <select
                   value={selectedCompanyId || ''}
-                  onChange={(e) => { setSelectedCompanyId(e.target.value); void load(e.target.value) }}
+                  onChange={(e) => setChosenCompanyId(e.target.value)}
                   className="h-9 appearance-none rounded-lg border border-border bg-white dark:bg-white/[0.04] pl-3 pr-8 text-sm text-foreground outline-none focus:border-amber-400/50"
                 >
                   {companies.map((c) => (

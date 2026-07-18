@@ -1,7 +1,8 @@
 ﻿'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DatePicker } from '@/components/ui/date-picker'
+import { useApiCache } from '@/lib/client/use-api-cache'
 import { useCashlessLabels } from '@/lib/client/use-cashless-labels'
 import { splitIncomeKaspiByCalendarDay } from '@/lib/reports/income-calendar-kaspi'
 import type { ReactNode } from 'react'
@@ -365,15 +366,9 @@ export default function SmartDashboardPage() {
   const [calendarOpen, setCalendarOpen] = useState(false)
   const [showMovingAvg, setShowMovingAvg] = useState(true)
 
-  const [companies, setCompanies] = useState<Company[]>([])
-  const [incomes, setIncomes] = useState<IncomeRow[]>([])
-  const [expenses, setExpenses] = useState<ExpenseRow[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [todayStats, setTodayStats] = useState<{ income: number; expense: number; txCount: number } | null>(null)
   const [overdueCount, setOverdueCount] = useState<number | null>(null)
   const [overdueDismissed, setOverdueDismissed] = useState(false)
-  const [realtimeKey, setRealtimeKey] = useState(0)
   const [widgetData, setWidgetData] = useState<DashboardWidgetData | null>(null)
   const [monthPlans, setMonthPlans] = useState<{ revenue?: { target: number; fact: number; pct: number }; profit?: { target: number; fact: number; pct: number } } | null>(null)
 
@@ -424,55 +419,58 @@ export default function SmartDashboardPage() {
   }, [])
 
   // ---------- data load ----------
-  useEffect(() => {
-    if (!authResolved) return
-    if (!isAuthenticated) {
-      setLoading(false)
-      return
-    }
+  // SWR-кэш: повторное открытие дашборда показывает прошлые данные мгновенно,
+  // свежие подтягиваются фоном. URL меняется вместе с периодом — хук сам перезагрузит.
+  const dataEnabled = authResolved && isAuthenticated
+  const { prevFrom: prevFromForUrls } = DateUtils.calcPrevPeriod(dateFrom, dateTo)
+  const {
+    data: companiesData,
+    loading: companiesLoading,
+    error: companiesError,
+  } = useApiCache<Company[]>('/api/admin/companies', { enabled: dataEnabled })
+  const {
+    data: incomesData,
+    loading: incomesLoading,
+    error: incomesError,
+    refresh: refreshIncomes,
+  } = useApiCache<IncomeRow[]>(`/api/admin/incomes?from=${prevFromForUrls}&to=${dateTo}&page_size=5000`, {
+    enabled: dataEnabled,
+  })
+  // API по умолчанию отдаёт 200 строк; окно prevFrom…dateTo — два периода, иначе расходы за выбранный период обрезаются
+  const {
+    data: expensesData,
+    loading: expensesLoading,
+    error: expensesError,
+    refresh: refreshExpenses,
+  } = useApiCache<ExpenseRow[]>(`/api/admin/expenses?from=${prevFromForUrls}&to=${dateTo}&page_size=2000&page=0`, {
+    enabled: dataEnabled,
+  })
 
-    let mounted = true
-    ;(async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        const { prevFrom } = DateUtils.calcPrevPeriod(dateFrom, dateTo)
+  const companies = useMemo(() => companiesData || [], [companiesData])
+  // Как в отчётах: разбиваем kaspi ночных смен по календарным суткам (часть
+  // после полуночи → следующий день). Иначе доход на границе периода
+  // расходился с отчётами на сумму ночного безнала.
+  const incomes = useMemo(
+    () => splitIncomeKaspiByCalendarDay(incomesData || []) as IncomeRow[],
+    [incomesData],
+  )
+  const expenses = useMemo(() => expensesData || [], [expensesData])
+  const loading = companiesLoading || incomesLoading || expensesLoading
+  const error = companiesError || incomesError || expensesError
 
-        const [companiesBody, incomesBody, expensesBody] = await Promise.all([
-          fetchJson<{ data: Company[] }>('/api/admin/companies'),
-          fetchJson<{ data: IncomeRow[] }>(`/api/admin/incomes?from=${prevFrom}&to=${dateTo}&page_size=5000`),
-          // API по умолчанию отдаёт 200 строк; окно prevFrom…dateTo — два периода, иначе расходы за выбранный период обрезаются
-          fetchJson<{ data: ExpenseRow[] }>(
-            `/api/admin/expenses?from=${prevFrom}&to=${dateTo}&page_size=2000&page=0`,
-          ),
-        ])
-
-        if (!mounted) return
-
-        setCompanies(companiesBody.data || [])
-        // Как в отчётах: разбиваем kaspi ночных смен по календарным суткам (часть
-        // после полуночи → следующий день). Иначе доход на границе периода
-        // расходился с отчётами на сумму ночного безнала.
-        setIncomes(splitIncomeKaspiByCalendarDay(incomesBody.data || []) as IncomeRow[])
-        setExpenses(expensesBody.data || [])
-      } catch (e: any) {
-        setError(e?.message || 'Ошибка загрузки')
-      } finally {
-        if (mounted) setLoading(false)
-      }
-    })()
-    return () => {
-      mounted = false
-    }
-  }, [authResolved, isAuthenticated, dateFrom, dateTo, realtimeKey])
-
-  // Realtime subscription — refresh on new income/expense records
+  // Realtime subscription — refresh on new income/expense records.
+  // Через ref, чтобы не переподписываться при смене периода (refresh меняется вместе с url).
+  const realtimeRefreshRef = useRef<() => void>(() => {})
+  realtimeRefreshRef.current = () => {
+    void refreshIncomes()
+    void refreshExpenses()
+  }
   useEffect(() => {
     if (!isAuthenticated) return
     const channel = supabase
       .channel('dashboard-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'incomes' }, () => setRealtimeKey(k => k + 1))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, () => setRealtimeKey(k => k + 1))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'incomes' }, () => realtimeRefreshRef.current())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, () => realtimeRefreshRef.current())
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [isAuthenticated])

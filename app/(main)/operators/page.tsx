@@ -2,6 +2,7 @@
 
 import { useEffect, useState, FormEvent, useMemo, useCallback } from 'react'
 import Link from 'next/link'
+import { useApiCache } from '@/lib/client/use-api-cache'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
 import { downloadReportPdf } from '@/lib/client/download-pdf'
@@ -84,11 +85,8 @@ export default function OperatorsPage() {
   const canToggleActive = can('operators.toggle_active')
   const canBulkDelete = can('operators.bulk_delete')
 
-  const [operators, setOperators] = useState<Operator[]>([])
-  const [profiles, setProfiles] = useState<Map<string, OperatorProfile>>(new Map())
-  const [stats, setStats] = useState<Map<string, OperatorStats>>(new Map())
+  const { data: operatorRows, loading, error: loadError, refresh: load } = useApiCache<any[]>('/api/admin/operators')
   const [sessionRole, setSessionRole] = useState<SessionRoleInfo | null>(null)
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
@@ -119,17 +117,11 @@ export default function OperatorsPage() {
   // Гибкие права — у любой роли которой выдан operators.create
   const canManageOperators = canCreate || canDelete
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    
-    try {
-      const response = await fetch('/api/admin/operators', { cache: 'no-store' })
-      const json = await response.json().catch(() => null)
-      if (!response.ok) throw new Error(json?.error || `Ошибка запроса (${response.status})`)
+  const rows = useMemo(() => (Array.isArray(operatorRows) ? operatorRows : []), [operatorRows])
 
-      const rows = Array.isArray(json?.data) ? json.data : []
-      const operatorsList: Operator[] = rows.map((row: any) => ({
+  const operators = useMemo<Operator[]>(
+    () =>
+      rows.map((row: any) => ({
         id: row.id,
         name: row.name,
         short_name: row.short_name ?? null,
@@ -137,53 +129,43 @@ export default function OperatorsPage() {
         created_at: row.created_at,
         role: row.auth?.role || row.role || null,
         telegram_chat_id: row.telegram_chat_id ?? null,
-      }))
-      setOperators(operatorsList)
+      })),
+    [rows],
+  )
 
-      const profilesMap = new Map<string, OperatorProfile>()
-      const statsMap = new Map<string, OperatorStats>()
+  const { profiles, stats } = useMemo(() => {
+    const profilesMap = new Map<string, OperatorProfile>()
+    const statsMap = new Map<string, OperatorStats>()
 
-      rows.forEach((row: any) => {
-        const profile = Array.isArray(row.operator_profiles) ? row.operator_profiles[0] || null : row.operator_profiles || null
-        if (profile) {
-          profilesMap.set(String(row.id), {
-            id: profile.id || `${row.id}-profile`,
-            operator_id: String(row.id),
-            full_name: profile.full_name ?? null,
-            phone: profile.phone ?? null,
-            email: profile.email ?? null,
-            hire_date: profile.hire_date ?? null,
-            position: profile.position ?? null,
-            emergency_contact_name: profile.emergency_contact_name ?? null,
-            emergency_contact_phone: profile.emergency_contact_phone ?? null,
-            photo_url: profile.photo_url ?? null,
-          })
-        }
-
-        const rawStats = row.stats || {}
-        statsMap.set(String(row.id), {
-          totalShifts: Number(rawStats.totalShifts || 0),
-          totalTurnover: Number(rawStats.totalTurnover || 0),
-          avgPerShift: Number(rawStats.avgPerShift || 0),
-          totalDebts: Number(rawStats.totalDebts || 0),
-          totalBonuses: Number(rawStats.totalBonuses || 0),
+    rows.forEach((row: any) => {
+      const profile = Array.isArray(row.operator_profiles) ? row.operator_profiles[0] || null : row.operator_profiles || null
+      if (profile) {
+        profilesMap.set(String(row.id), {
+          id: profile.id || `${row.id}-profile`,
+          operator_id: String(row.id),
+          full_name: profile.full_name ?? null,
+          phone: profile.phone ?? null,
+          email: profile.email ?? null,
+          hire_date: profile.hire_date ?? null,
+          position: profile.position ?? null,
+          emergency_contact_name: profile.emergency_contact_name ?? null,
+          emergency_contact_phone: profile.emergency_contact_phone ?? null,
+          photo_url: profile.photo_url ?? null,
         })
+      }
+
+      const rawStats = row.stats || {}
+      statsMap.set(String(row.id), {
+        totalShifts: Number(rawStats.totalShifts || 0),
+        totalTurnover: Number(rawStats.totalTurnover || 0),
+        avgPerShift: Number(rawStats.avgPerShift || 0),
+        totalDebts: Number(rawStats.totalDebts || 0),
+        totalBonuses: Number(rawStats.totalBonuses || 0),
       })
+    })
 
-      setProfiles(profilesMap)
-      setStats(statsMap)
-
-    } catch (err: any) {
-      console.error(err)
-      setError(err.message || 'Ошибка при загрузке данных')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    load()
-  }, [load])
+    return { profiles: profilesMap, stats: statsMap }
+  }, [rows])
 
   useEffect(() => {
     const loadSessionRole = async () => {
@@ -534,10 +516,10 @@ export default function OperatorsPage() {
           />
 
           {/* Уведомления */}
-          {error && (
+          {(error || loadError) && (
             <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 p-4 flex items-center gap-3">
               <AlertCircle className="w-5 h-5 text-rose-400 flex-shrink-0" />
-              <p className="text-sm text-rose-700 dark:text-rose-200">{error}</p>
+              <p className="text-sm text-rose-700 dark:text-rose-200">{error || loadError}</p>
               <button onClick={() => setError(null)} className="ml-auto text-rose-400/50 hover:text-rose-400">
                 <X className="w-4 h-4" />
               </button>

@@ -1,8 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
-import * as XLSX from 'xlsx'
-import mammoth from 'mammoth'
+import { useEffect, useRef, useState } from 'react'
+import { useApiCache } from '@/lib/client/use-api-cache'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import {
   AlertCircle,
@@ -83,6 +82,14 @@ type BalanceItem = {
   } | null
 }
 
+type WarehouseData = {
+  companies: Company[]
+  selectedCompanyId: string | null
+  warehouse: LocationRef | null
+  balances: BalanceItem[]
+  categories: Category[]
+}
+
 type StockLine = {
   key: string
   item_id: string
@@ -135,14 +142,12 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
   const canUploadBackroom = can('store-warehouse.upload_backroom')
   const canPrintLabels = can('store-warehouse.print_labels')
 
-  const [companies, setCompanies] = useState<Company[]>([])
-  const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null)
   const { storeCompanyId } = useStoreScope()
-  const [warehouseLoc, setWarehouseLoc] = useState<LocationRef | null>(null)
-  const [balances, setBalances] = useState<BalanceItem[]>([])
-  const [categories, setCategories] = useState<Category[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  // Точка, выбранная пользователем (или из ?company_id= в URL); null → серверный дефолт
+  const [chosenCompanyId, setChosenCompanyId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null
+    try { return new URLSearchParams(window.location.search).get('company_id') } catch { return null }
+  })
 
   const [addMode, setAddMode] = useState<AddMode>('barcode')
   const [lines, setLines] = useState<StockLine[]>([])
@@ -194,42 +199,23 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
   const [warehouseFileDone, setWarehouseFileDone] = useState<string | null>(null)
   const warehouseFileRef = useRef<HTMLInputElement>(null)
 
-  const load = useCallback(async (companyId?: string | null, signal?: AbortSignal) => {
-    setLoading(true)
-    setError(null)
-    try {
-      const id = companyId ?? selectedCompanyId
-      const url = id ? `/api/admin/store/warehouse?company_id=${id}` : '/api/admin/store/warehouse'
-      const res = await fetch(url, { cache: 'no-store', signal })
-      const json = await res.json().catch(() => null)
-      if (signal?.aborted) return
-      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Ошибка загрузки')
-      const d = json.data
-      setCompanies(d.companies || [])
-      setSelectedCompanyId(d.selectedCompanyId)
-      setWarehouseLoc(d.warehouse)
-      setBalances(d.balances || [])
-      setCategories(d.categories || [])
-    } catch (e: any) {
-      if (isAbortError(e) || signal?.aborted) return
-      setError(e?.message || 'Ошибка')
-    } finally {
-      if (!signal?.aborted) setLoading(false)
-    }
-  }, [selectedCompanyId])
+  // SWR-кэш: повторное открытие склада показывает прошлые данные мгновенно,
+  // свежие подтягиваются фоном; после мутаций зовём load() (refresh).
+  const warehouseUrl = chosenCompanyId
+    ? `/api/admin/store/warehouse?company_id=${encodeURIComponent(chosenCompanyId)}`
+    : '/api/admin/store/warehouse'
+  const { data: whData, loading, error, refresh: load } = useApiCache<WarehouseData>(warehouseUrl)
+  const companies = whData?.companies || []
+  const selectedCompanyId = chosenCompanyId ?? whData?.selectedCompanyId ?? null
+  const warehouseLoc = whData?.warehouse || null
+  const balances = whData?.balances || []
+  const categories = whData?.categories || []
 
   useEffect(() => {
-    const ac = new AbortController()
     try {
-      const params = new URLSearchParams(window.location.search)
-      const companyId = params.get('company_id')
-      const q = params.get('q')
+      const q = new URLSearchParams(window.location.search).get('q')
       if (q) setStockSearch(q)
-      void load(companyId, ac.signal)
-    } catch {
-      void load(undefined, ac.signal)
-    }
-    return () => ac.abort()
+    } catch { /* noop */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -438,6 +424,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
 
     if (ext === 'docx') {
       try {
+        const { default: mammoth } = await import('mammoth')
         const arrayBuffer = await file.arrayBuffer()
         const result = await mammoth.convertToHtml({ arrayBuffer })
         const html = result.value
@@ -480,6 +467,8 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
       return
     }
 
+    // xlsx весит сотни КБ — грузим только когда пользователь реально выбрал файл
+    const XLSX = await import('xlsx')
     const reader = new FileReader()
     reader.onload = (ev) => {
       try {
@@ -524,6 +513,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
       const ext = file.name.split('.').pop()?.toLowerCase() || ''
       let rows: any[][] = []
       if (ext === 'docx') {
+        const { default: mammoth } = await import('mammoth')
         const arrayBuffer = await file.arrayBuffer()
         const result = await mammoth.convertToHtml({ arrayBuffer })
         const parser = new DOMParser()
@@ -540,6 +530,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
           })
         }
       } else {
+        const XLSX = await import('xlsx')
         const buf = await file.arrayBuffer()
         const wb = XLSX.read(new Uint8Array(buf), { type: 'array' })
         const ws = wb.Sheets[wb.SheetNames[0]]
@@ -596,7 +587,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
       const json = await res.json().catch(() => null)
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Ошибка применения')
       setWarehouseFileDone(`Обновлено: ${json.data?.updated ?? items.length}`)
-      await load(selectedCompanyId)
+      await load()
     } catch (err: any) {
       setWarehouseFileError(err?.message || 'Не удалось применить.')
     } finally {
@@ -641,7 +632,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
       setSaveSuccess(true)
       setLines([])
       setExcelRows([])
-      await load(selectedCompanyId)
+      await load()
       setTimeout(() => setSaveSuccess(false), 3000)
     } catch (err: any) {
       setSaveError(err?.message || 'Ошибка')
@@ -672,7 +663,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
       const json = await res.json().catch(() => null)
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Ошибка удаления')
       setSelectedIds(new Set())
-      await load(selectedCompanyId)
+      await load()
     } catch (err: any) {
       alert(err?.message || 'Ошибка удаления')
     } finally {
@@ -702,7 +693,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
       }
       setEditingWh(null)
       setEditWhVal('')
-      await load(selectedCompanyId)
+      await load()
     } finally {
       setSavingWh(false)
     }
@@ -738,7 +729,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
               <div className="relative">
                 <select
                   value={selectedCompanyId || ''}
-                  onChange={(e) => { setSelectedCompanyId(e.target.value); void load(e.target.value) }}
+                  onChange={(e) => setChosenCompanyId(e.target.value)}
                   className="h-9 appearance-none rounded-lg border border-border bg-white dark:bg-white/[0.04] pl-3 pr-8 text-sm text-foreground outline-none focus:border-amber-400/50"
                 >
                   {companies.map((c) => (

@@ -1,8 +1,9 @@
 'use client'
 
-import { FormEvent, Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { FormEvent, Fragment, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { downloadReportPdf } from '@/lib/client/download-pdf'
+import { useApiCache } from '@/lib/client/use-api-cache'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useCashlessLabels } from '@/lib/client/use-cashless-labels'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
@@ -369,8 +370,7 @@ export default function SalaryPage() {
 
   const currentWeek = toISODateLocal(mondayOfDate(new Date()))
   const [weekStart, setWeekStart] = useState(currentWeek)
-  const [data, setData] = useState<SalaryData | null>(null)
-  const [loading, setLoading] = useState(true)
+  // error — только для ошибок мутаций; ошибки загрузки отдаёт useApiCache (loadError)
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [showZero, setShowZero] = useState(true)
@@ -414,22 +414,11 @@ export default function SalaryPage() {
 
   const weekEnd = useMemo(() => addDaysISO(weekStart, 6), [weekStart])
 
-  const load = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true)
-    if (!silent) setError(null)
-    try {
-      const res = await fetch(`/api/admin/salary?view=weekly&weekStart=${encodeURIComponent(weekStart)}`, { cache: 'no-store' })
-      const json = await res.json().catch(() => null)
-      if (!res.ok) throw new Error(json?.error || `Ошибка загрузки (${res.status})`)
-      setData(json.data as SalaryData)
-    } catch (e: any) {
-      setError(e?.message || 'Не удалось загрузить данные')
-    } finally {
-      if (!silent) setLoading(false)
-    }
-  }, [weekStart])
+  // SWR-кэш: повторное открытие страницы мгновенно показывает прошлые данные,
+  // свежие подтягиваются фоном. После мутаций зовём load() (refresh — тихая перезагрузка при наличии кэша).
+  const salaryUrl = `/api/admin/salary?view=weekly&weekStart=${encodeURIComponent(weekStart)}`
+  const { data, loading, error: loadError, refresh: load } = useApiCache<SalaryData>(salaryUrl)
 
-  useEffect(() => { void load() }, [load])
   useEffect(() => { if (!error) return; const t = setTimeout(() => setError(null), 6000); return () => clearTimeout(t) }, [error])
   useEffect(() => { if (advanceTarget) { setAdvanceCompanyId(advanceTarget.week.companyAllocations[0]?.companyId || data?.companies[0]?.id || ''); setAdvanceDate(todayISO()); setAdvanceCash(''); setAdvanceKaspi(''); setAdvanceComment('') } }, [advanceTarget, data?.companies])
   useEffect(() => { if (payTarget) { setPayDate(todayISO()); setPayCash(String(Math.max(payTarget.week.remainingAmount, 0))); setPayKaspi(''); setPayComment(''); setPayAllowOverpayment(false) } }, [payTarget])
@@ -623,7 +612,7 @@ export default function SalaryPage() {
     return json
   }
 
-  const submitAdvance = async (e: FormEvent) => { e.preventDefault(); if (!advanceTarget) return; const cash = parseMoney(advanceCash), kaspi = parseMoney(advanceKaspi); if (!advanceCompanyId) return setError('Для аванса нужно выбрать точку'); if (cash + kaspi <= 0) return setError('Сумма аванса должна быть больше 0'); setAdvanceSaving(true); setError(null); try { await post({ action: 'createAdvance', payload: { operator_id: advanceTarget.operator.id, week_start: weekStart, company_id: advanceCompanyId, payment_date: advanceDate, cash_amount: cash, kaspi_amount: kaspi, comment: advanceComment.trim() || null } }); setAdvanceTarget(null); await load(true) } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось выдать аванс') } finally { setAdvanceSaving(false) } }
+  const submitAdvance = async (e: FormEvent) => { e.preventDefault(); if (!advanceTarget) return; const cash = parseMoney(advanceCash), kaspi = parseMoney(advanceKaspi); if (!advanceCompanyId) return setError('Для аванса нужно выбрать точку'); if (cash + kaspi <= 0) return setError('Сумма аванса должна быть больше 0'); setAdvanceSaving(true); setError(null); try { await post({ action: 'createAdvance', payload: { operator_id: advanceTarget.operator.id, week_start: weekStart, company_id: advanceCompanyId, payment_date: advanceDate, cash_amount: cash, kaspi_amount: kaspi, comment: advanceComment.trim() || null } }); setAdvanceTarget(null); await load() } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось выдать аванс') } finally { setAdvanceSaving(false) } }
   const submitPayment = async (e: FormEvent) => {
     e.preventDefault()
     if (!payTarget) return
@@ -650,7 +639,7 @@ export default function SalaryPage() {
         },
       })
       setPayTarget(null)
-      await load(true)
+      await load()
     } catch (e: any) {
       console.error(e)
       setError(e?.message || 'Не удалось провести выплату')
@@ -658,8 +647,8 @@ export default function SalaryPage() {
       setPaySaving(false)
     }
   }
-  const submitAdjustment = async (e: FormEvent) => { e.preventDefault(); const amount = parseMoney(adjAmount); if (!adjOperatorId) return setError('Выберите оператора'); if (amount <= 0) return setError('Сумма корректировки должна быть больше 0'); setAdjSaving(true); setError(null); try { await post({ action: 'createAdjustment', payload: { operator_id: adjOperatorId, date: adjDate, amount, kind: adjKind, comment: adjComment.trim() || null, company_id: adjCompanyId || null } }); setAdjAmount(''); setAdjComment(''); setAdjSuccess(true); setTimeout(() => setAdjSuccess(false), 3000); await load(true) } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось сохранить корректировку') } finally { setAdjSaving(false) } }
-  const saveChatId = async (e: FormEvent) => { e.preventDefault(); if (!chatTarget) return; const trimmed = chatValue.trim(); if (trimmed && !/^-?\d+$/.test(trimmed)) return setError('telegram_chat_id должен быть числом'); setChatSaving(true); setError(null); try { await post({ action: 'updateOperatorChatId', operatorId: chatTarget.operator.id, telegram_chat_id: trimmed || null }); setChatTarget(null); await load(true) } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось сохранить Telegram chat_id') } finally { setChatSaving(false) } }
+  const submitAdjustment = async (e: FormEvent) => { e.preventDefault(); const amount = parseMoney(adjAmount); if (!adjOperatorId) return setError('Выберите оператора'); if (amount <= 0) return setError('Сумма корректировки должна быть больше 0'); setAdjSaving(true); setError(null); try { await post({ action: 'createAdjustment', payload: { operator_id: adjOperatorId, date: adjDate, amount, kind: adjKind, comment: adjComment.trim() || null, company_id: adjCompanyId || null } }); setAdjAmount(''); setAdjComment(''); setAdjSuccess(true); setTimeout(() => setAdjSuccess(false), 3000); await load() } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось сохранить корректировку') } finally { setAdjSaving(false) } }
+  const saveChatId = async (e: FormEvent) => { e.preventDefault(); if (!chatTarget) return; const trimmed = chatValue.trim(); if (trimmed && !/^-?\d+$/.test(trimmed)) return setError('telegram_chat_id должен быть числом'); setChatSaving(true); setError(null); try { await post({ action: 'updateOperatorChatId', operatorId: chatTarget.operator.id, telegram_chat_id: trimmed || null }); setChatTarget(null); await load() } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось сохранить Telegram chat_id') } finally { setChatSaving(false) } }
   const sendOne = async (operatorId: string) => { setSendingId(operatorId); setError(null); try { const res = await fetch('/api/telegram/salary-snapshot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ operatorId, dateFrom: weekStart, dateTo: weekEnd, weekStart }) }); const json = await res.json().catch(() => null); if (!res.ok) throw new Error(json?.error || `Ошибка отправки (${res.status})`) } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось отправить расчёт в Telegram') } finally { setSendingId(null) } }
   const sendAll = async () => { if (loading || broadcastSending || !broadcastTargets.length) return; setBroadcastSending(true); setBroadcastDone(0); setBroadcastTotal(broadcastTargets.length); setBroadcastErrors([]); setError(null); try { for (let i = 0; i < broadcastTargets.length; i += 1) { const item = broadcastTargets[i]; try { const res = await fetch('/api/telegram/salary-snapshot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ operatorId: item.operator.id, dateFrom: weekStart, dateTo: weekEnd, weekStart }) }); const json = await res.json().catch(() => null); if (!res.ok) setBroadcastErrors((prev) => [...prev, `${getOperatorDisplayName(item.operator)}: ${json?.error || `HTTP ${res.status}`}`]) } catch (e: any) { setBroadcastErrors((prev) => [...prev, `${getOperatorDisplayName(item.operator)}: ${e?.message || 'ошибка'}`]) } setBroadcastDone(i + 1); await new Promise((r) => setTimeout(r, 250)) } } finally { setBroadcastSending(false) } }
   const [tab, setTab] = useState<'operators' | 'operator-events' | 'staff' | 'events'>('operators')
@@ -671,8 +660,11 @@ export default function SalaryPage() {
   const [voidDebtPayId, setVoidDebtPayId] = useState<string | null>(null)
 
   // ─── Admin staff salary state ───────────────────────────────────────────
-  const [staffSalary, setStaffSalary] = useState<StaffSalaryData | null>(null)
-  const [staffSalaryLoading, setStaffSalaryLoading] = useState(false)
+  const [showStaffArchived, setShowStaffArchived] = useState(false)
+  // SWR-кэш ЗП админ-состава: повторное открытие — мгновенно из кэша, свежие данные фоном.
+  // После мутаций зовём loadStaffSalary() (refresh). API отдаёт плоский объект — хук вернёт его целиком.
+  const staffSalaryUrl = showStaffArchived ? '/api/admin/staff-salary?include_archived=1' : '/api/admin/staff-salary'
+  const { data: staffSalary, loading: staffSalaryLoading, refresh: loadStaffSalary } = useApiCache<StaffSalaryData>(staffSalaryUrl)
   const [staffAdjModal, setStaffAdjModal] = useState<StaffMember | null>(null)
   const [staffPayModal, setStaffPayModal] = useState<StaffMember | null>(null)
   const [staffAdjKind, setStaffAdjKind] = useState<'debt' | 'fine' | 'bonus' | 'advance'>('fine')
@@ -817,20 +809,6 @@ export default function SalaryPage() {
     return { total, payments, deductions }
   }, [filteredStaffGlobalTimeline])
 
-  const [showStaffArchived, setShowStaffArchived] = useState(false)
-  const loadStaffSalary = useCallback(async (archived?: boolean) => {
-    setStaffSalaryLoading(true)
-    try {
-      const url = (archived ?? showStaffArchived)
-        ? '/api/admin/staff-salary?include_archived=1'
-        : '/api/admin/staff-salary'
-      const res = await fetch(url, { cache: 'no-store' })
-      const json = await res.json().catch(() => null)
-      if (res.ok) setStaffSalary(json)
-    } catch {}
-    finally { setStaffSalaryLoading(false) }
-  }, [showStaffArchived])
-  useEffect(() => { void loadStaffSalary() }, [loadStaffSalary])
   const canEditStaffSalary = staffSalary?.can_edit === true
 
   const submitStaffAdjustment = async (e: FormEvent) => {
@@ -950,7 +928,7 @@ export default function SalaryPage() {
     setError(null)
     try {
       await post({ action: 'markDebtsPaid', operatorId: item.operator.id, weekStart })
-      await load(true)
+      await load()
     } catch (e: any) {
       console.error(e)
       setError(e?.message || 'Не удалось отметить долг как оплаченный')
@@ -973,7 +951,7 @@ export default function SalaryPage() {
         weekStart,
         operatorId: item.operator.id,
       })
-      await load(true)
+      await load()
     } catch (e: any) {
       console.error(e)
       setError(e?.message || 'Не удалось аннулировать выплату')
@@ -1194,7 +1172,7 @@ export default function SalaryPage() {
             }
           />
 
-          {error ? <Card className="border-red-500/30 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-200">{error}</Card> : null}
+          {(error || loadError) ? <Card className="border-red-500/30 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-200">{error || loadError}</Card> : null}
 
           {/* ── OPERATORS TAB ───────────────────────────────────────────────── */}
           {tab === 'operators' && (<>

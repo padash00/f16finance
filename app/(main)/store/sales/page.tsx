@@ -1,7 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
+import { useApiCache } from '@/lib/client/use-api-cache'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { PageSkeleton } from '@/components/skeleton'
 import { useStoreScope } from '@/components/store/store-scope'
@@ -98,10 +99,6 @@ export default function SalesMonitorPage() {
   const [category, setCategory] = useState('')
   const [q, setQ] = useState('')
 
-  const [mon, setMon] = useState<MonData | null>(null)
-  const [prod, setProd] = useState<ProdData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [live, setLive] = useState(true)
   const [lastUpdated, setLastUpdated] = useState<number | null>(null)
   const [, forceTick] = useState(0)
@@ -111,6 +108,38 @@ export default function SalesMonitorPage() {
   const isToday = to === today
   const isEmbed = EMBED_TABS.includes(tab)
   const isProduct = tab === 'best' || tab === 'profit' || tab === 'stock'
+
+  // SWR-кэш: повторное открытие показывает прошлые данные мгновенно, свежие
+  // подтягиваются фоном. refresh() (loadMonitor/loadProducts) — перезагрузка;
+  // с живым кэшем она фоновая (без скелетона) — то же, что прежний silent=true.
+  const qsParams = new URLSearchParams({ from, to })
+  if (companyId) qsParams.set('company_id', companyId)
+  const qs = qsParams.toString()
+  const { data: mon, loading: monLoading, error: monError, refresh: loadMonitor } =
+    useApiCache<MonData>(`/api/admin/sales-monitor?${qs}`, { enabled: tab === 'monitor' })
+  const { data: prod, loading: prodLoading, error: prodError, refresh: loadProducts } =
+    useApiCache<ProdData>(`/api/admin/product-analytics?${qs}`, { enabled: isProduct })
+  const loading = tab === 'monitor' ? monLoading : prodLoading
+  const error = tab === 'monitor' ? monError : isProduct ? prodError : null
+
+  // Сброс «увиденных» продаж при входе на монитор — чтобы не мигала вся лента
+  useEffect(() => {
+    if (tab === 'monitor') seenIds.current = new Set()
+  }, [tab])
+
+  // Подсветка новых продаж в ленте — реагирует на каждое обновление данных
+  useEffect(() => {
+    if (!mon) return
+    const prevSeen = seenIds.current
+    const fresh = new Set<string>()
+    for (const r of mon.recent) if (!prevSeen.has(r.id)) fresh.add(r.id)
+    if (prevSeen.size > 0 && fresh.size > 0) {
+      setFlashIds(fresh)
+      setTimeout(() => setFlashIds(new Set()), 2500)
+    }
+    seenIds.current = new Set(mon.recent.map((r) => r.id))
+    setLastUpdated(Date.now())
+  }, [mon])
 
   function applyPreset(p: typeof preset) {
     setPreset(p)
@@ -125,47 +154,10 @@ export default function SalesMonitorPage() {
     fetch('/api/admin/companies', { cache: 'no-store' }).then((r) => r.json()).then((j) => setCompanies(j.data || [])).catch(() => {})
   }, [])
 
-  const loadMonitor = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true)
-    setError(null)
-    try {
-      const p = new URLSearchParams({ from, to }); if (companyId) p.set('company_id', companyId)
-      const res = await fetch(`/api/admin/sales-monitor?${p}`, { cache: 'no-store' })
-      const j = await res.json()
-      if (!res.ok || !j.ok) throw new Error(j.error || 'Ошибка загрузки')
-      const next = j.data as MonData
-      const prevSeen = seenIds.current
-      const fresh = new Set<string>()
-      for (const r of next.recent) if (!prevSeen.has(r.id)) fresh.add(r.id)
-      if (prevSeen.size > 0 && fresh.size > 0) { setFlashIds(fresh); setTimeout(() => setFlashIds(new Set()), 2500) }
-      seenIds.current = new Set(next.recent.map((r) => r.id))
-      setMon(next)
-      setLastUpdated(Date.now())
-    } catch (e: any) { setError(e?.message || 'Ошибка') } finally { setLoading(false) }
-  }, [from, to, companyId])
-
-  const loadProducts = useCallback(async () => {
-    setLoading(true); setError(null)
-    try {
-      const p = new URLSearchParams({ from, to }); if (companyId) p.set('company_id', companyId)
-      const res = await fetch(`/api/admin/product-analytics?${p}`, { cache: 'no-store' })
-      const j = await res.json()
-      if (!res.ok || !j.ok) throw new Error(j.error || 'Ошибка загрузки')
-      setProd(j.data as ProdData)
-    } catch (e: any) { setError(e?.message || 'Ошибка') } finally { setLoading(false) }
-  }, [from, to, companyId])
-
-  // Загрузка по активной вкладке (встраиваемые аналитики грузят себя сами)
-  useEffect(() => {
-    if (EMBED_TABS.includes(tab)) return
-    if (tab === 'monitor') { seenIds.current = new Set(); loadMonitor() }
-    else loadProducts()
-  }, [tab, loadMonitor, loadProducts])
-
-  // Авто-обновление монитора (только сегодня)
+  // Авто-обновление монитора (только сегодня); refresh с кэшем — фоновый
   useEffect(() => {
     if (tab !== 'monitor' || !live || !isToday) return
-    const id = setInterval(() => loadMonitor(true), REFRESH_MS)
+    const id = setInterval(() => void loadMonitor(), REFRESH_MS)
     return () => clearInterval(id)
   }, [tab, live, isToday, loadMonitor])
 

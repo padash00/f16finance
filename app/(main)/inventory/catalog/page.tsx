@@ -1,8 +1,8 @@
 'use client'
 
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
-import * as XLSX from 'xlsx'
 import { downloadReportPdf } from '@/lib/client/download-pdf'
+import { useApiCache } from '@/lib/client/use-api-cache'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { Package, Pencil, Plus, Search, Trash2, Upload, Download, Check, X, ChevronLeft, ChevronRight, ShoppingCart, TrendingUp, Warehouse, Store, Tag, Loader2 } from 'lucide-react'
 
@@ -142,7 +142,9 @@ function colIndex(headers: string[], ...aliases: string[]): number {
   return -1
 }
 
-function parseWiponExcel(file: File): Promise<ImportRow[]> {
+async function parseWiponExcel(file: File): Promise<ImportRow[]> {
+  // xlsx весит сотни КБ — грузим только когда пользователь реально выбрал файл
+  const XLSX = await import('xlsx')
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = (e) => {
@@ -449,9 +451,6 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
   const canBulkDeleteAll = can('store-catalog.bulk_delete_all')
 
   const [tab, setTab] = useState<'catalog' | 'import'>('catalog')
-  const [items, setItems] = useState<CatalogItem[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
 
   // Filters
@@ -500,23 +499,11 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
     setTimeout(() => setToast(null), 3000)
   }
 
-  const loadItems = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const qs = filterCompany !== 'all' ? `?company_id=${encodeURIComponent(filterCompany)}` : ''
-      const res = await fetch(`/api/admin/inventory/catalog${qs}`)
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error || 'Ошибка загрузки')
-      setItems(json.data || [])
-    } catch (e: any) {
-      setError(e.message)
-    } finally {
-      setLoading(false)
-    }
-  }, [filterCompany])
-
-  useEffect(() => { loadItems() }, [loadItems])
+  // SWR-кэш: повторное открытие каталога показывает прошлые данные мгновенно,
+  // свежие подтягиваются фоном; после мутаций зовём loadItems() (refresh).
+  const catalogUrl = `/api/admin/inventory/catalog${filterCompany !== 'all' ? `?company_id=${encodeURIComponent(filterCompany)}` : ''}`
+  const { data: itemsData, loading, error, refresh: loadItems } = useApiCache<CatalogItem[]>(catalogUrl)
+  const items = itemsData || []
 
   useEffect(() => {
     fetch('/api/admin/companies')

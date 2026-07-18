@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Printer, Search, ChevronLeft, ChevronRight, Receipt, RefreshCw } from 'lucide-react'
 import { useUrlState } from '@/lib/hooks/use-url-state'
+import { useApiCache } from '@/lib/client/use-api-cache'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { TableSkeleton } from '@/components/skeleton'
@@ -246,9 +247,16 @@ function PosReceiptsPageContent({ embedded = false }: { embedded?: boolean }) {
   const [filters, setFilters] = useUrlState(filterDefaults)
   const [searchInput, setSearchInput] = useState(filters.search)
 
-  // Companies & locations
-  const [companies, setCompanies] = useState<Company[]>([])
-  const [locations, setLocations] = useState<Location[]>([])
+  // Companies & locations (кэшируются — фильтры заполняются мгновенно при повторном заходе)
+  const { data: bootstrapData } = useApiCache<{ companies?: Company[]; locations?: Location[] }>('/api/pos/bootstrap')
+  const companies = useMemo(
+    () => (Array.isArray(bootstrapData?.companies) ? bootstrapData.companies : []),
+    [bootstrapData],
+  )
+  const locations = useMemo(
+    () => (Array.isArray(bootstrapData?.locations) ? bootstrapData.locations : []),
+    [bootstrapData],
+  )
 
   // Selected receipt for modal
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null)
@@ -256,22 +264,6 @@ function PosReceiptsPageContent({ embedded = false }: { embedded?: boolean }) {
   const pageSize = 20
   const page = Math.max(1, Number(filters.page || '1') || 1)
   const totalPages = Math.ceil(total / pageSize)
-
-  // Load companies & locations on mount
-  useEffect(() => {
-    async function loadBootstrap() {
-      try {
-        const res = await fetch('/api/pos/bootstrap')
-        const j = await res.json()
-        const payload = j?.data || {}
-        if (Array.isArray(payload.companies)) setCompanies(payload.companies)
-        if (Array.isArray(payload.locations)) setLocations(payload.locations)
-      } catch {
-        // non-critical, filters just won't be populated
-      }
-    }
-    void loadBootstrap()
-  }, [])
 
   useEffect(() => {
     setSearchInput(filters.search)
