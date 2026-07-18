@@ -1199,6 +1199,176 @@ export default function SalaryPage() {
             </div>
           </div>
 
+          {/* Мобильная версия: карточки операторов вместо 12-колоночной таблицы */}
+          <div className="space-y-3 sm:hidden">
+            {loading && operators.length === 0 ? (
+              Array.from({ length: 4 }).map((_, idx) => (
+                <Card key={idx} className="border-border bg-white dark:bg-white/[0.03] p-4">
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="h-10 w-10 rounded-2xl" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-3 w-20" />
+                    </div>
+                  </div>
+                  <Skeleton className="mt-3 h-8 w-36" />
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12" />)}
+                  </div>
+                </Card>
+              ))
+            ) : operators.length === 0 ? (
+              <Card className="border-border bg-white dark:bg-white/[0.03] p-8 text-center text-sm text-slate-400">В этой неделе пока нет строк для отображения.</Card>
+            ) : (
+              operators.map((item) => {
+                const st = statusMeta(item.week.status)
+                const open = Boolean(expanded[item.operator.id])
+                const canPay = item.week.remainingAmount > 0.009
+                const title = getOperatorDisplayName(item.operator)
+                return (
+                  <Card key={item.operator.id} className="border-border bg-white dark:bg-white/[0.03] p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <Link href={`/operators/${item.operator.id}/profile`} className="flex min-w-0 items-center gap-3">
+                        <div className="h-10 w-10 shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-500 to-cyan-500">
+                          {item.operator.photo_url ? <Image src={item.operator.photo_url} alt={title} width={40} height={40} className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center text-sm font-semibold text-white">{title.charAt(0).toUpperCase()}</div>}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="truncate font-medium text-foreground">{title}</div>
+                          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
+                            {item.operator.position ? <span>{item.operator.position}</span> : null}
+                            {!item.operator.is_active ? <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-700 dark:text-amber-300">неактивен</span> : null}
+                          </div>
+                        </div>
+                      </Link>
+                      <span className={`inline-flex shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${st.className}`}>{st.label}</span>
+                    </div>
+
+                    <div className="mt-3 flex items-end justify-between gap-3">
+                      <div>
+                        <div className="text-[10px] uppercase tracking-wider text-slate-500">К выплате</div>
+                        <div className="text-2xl font-semibold tabular-nums text-foreground">{money(item.week.remainingAmount)}</div>
+                      </div>
+                      <div className="pb-1 text-xs text-slate-500">{item.week.shiftsCount} смен</div>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                      <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
+                        <div className="text-[10px] text-slate-500">Начислено</div>
+                        <div className="mt-0.5 text-xs font-medium tabular-nums text-foreground">{money(item.week.grossAmount)}</div>
+                      </div>
+                      <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
+                        <div className="text-[10px] text-slate-500">Бонусы</div>
+                        <div className="mt-0.5 text-xs font-medium tabular-nums text-emerald-700 dark:text-emerald-300">{money(item.week.bonusAmount + item.week.autoBonusTotal)}</div>
+                      </div>
+                      <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
+                        <div className="text-[10px] text-slate-500">Штрафы</div>
+                        <div className="mt-0.5 text-xs font-medium tabular-nums text-rose-700 dark:text-rose-300">{money(item.week.fineAmount)}</div>
+                      </div>
+                      <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
+                        <div className="text-[10px] text-slate-500">Аванс</div>
+                        <div className="mt-0.5 text-xs font-medium tabular-nums text-amber-700 dark:text-amber-300">{money(item.week.advanceAmount)}</div>
+                      </div>
+                      <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
+                        <div className="text-[10px] text-slate-500">Выплачено</div>
+                        <div className="mt-0.5 text-xs font-medium tabular-nums text-sky-700 dark:text-sky-300">{money(item.week.paidAmount)}</div>
+                      </div>
+                      <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
+                        <div className="text-[10px] text-slate-500">Долг</div>
+                        <div className="mt-0.5 text-xs font-medium tabular-nums text-rose-700 dark:text-rose-300">{money(item.week.debtAmount)}</div>
+                        {item.week.debtAmount > 0 ? (
+                          <button
+                            type="button"
+                            disabled={markDebtSaving && markDebtId === item.operator.id}
+                            onClick={() => void markDebtsPaid(item)}
+                            className="mt-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-700 dark:text-emerald-300 disabled:opacity-50"
+                          >
+                            {markDebtSaving && markDebtId === item.operator.id ? '...' : 'Оплатил долг'}
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {canCreateAdvance && (
+                        <Button type="button" variant="outline" className="h-9 flex-1 rounded-xl border-border bg-white dark:bg-white/5 text-xs text-body hover:bg-surface-hover" onClick={() => setAdvanceTarget(item)}>
+                          <Plus className="mr-1 h-3.5 w-3.5" />Аванс
+                        </Button>
+                      )}
+                      {canCreatePayment && (
+                        <Button type="button" className="h-9 flex-1 rounded-xl bg-emerald-500 text-xs text-white hover:bg-emerald-400 disabled:opacity-50" disabled={!canPay} onClick={() => setPayTarget(item)}>
+                          <Wallet className="mr-1 h-3.5 w-3.5" />Выплатить
+                        </Button>
+                      )}
+                      <Link href={`/salary/${item.operator.id}?weekStart=${weekStart}`} className="inline-flex h-9 flex-1 items-center justify-center rounded-xl border border-border bg-white dark:bg-white/5 px-3 text-xs text-body transition hover:bg-surface-hover">Детали</Link>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="mt-2 flex w-full items-center justify-center gap-1 rounded-xl border border-dashed border-border py-1.5 text-[11px] text-slate-500"
+                      onClick={() => setExpanded((p) => ({ ...p, [item.operator.id]: !p[item.operator.id] }))}
+                    >
+                      {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                      {open ? 'Скрыть смены и платежи' : 'Смены и платежи'}
+                    </button>
+
+                    {open ? (
+                      <div className="mt-3 space-y-4 border-t border-border pt-3">
+                        <div>
+                          <div className="mb-2 text-xs font-medium text-foreground">Смены ({item.week.shiftsCount})</div>
+                          {item.week.shifts.length === 0 ? (
+                            <div className="text-xs text-muted-foreground">Смен за эту неделю нет.</div>
+                          ) : (
+                            <div className="space-y-1.5">
+                              {item.week.shifts.map((s) => (
+                                <div key={s.id} className="flex items-center justify-between gap-2 text-xs">
+                                  <div className="flex min-w-0 items-center gap-1.5">
+                                    <span className="tabular-nums text-body">{formatRuDate(s.date)}</span>
+                                    <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-medium ${s.shift === 'day' ? 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300' : 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300'}`}>{s.shift === 'day' ? 'день' : 'ночь'}</span>
+                                    <span className="truncate text-slate-500">{s.companyName || s.companyCode || ''}</span>
+                                  </div>
+                                  <span className="shrink-0 font-medium tabular-nums text-foreground">{money(s.salary)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <div className="mb-2 text-xs font-medium text-foreground">Платежи недели</div>
+                          {item.week.payments.length === 0 ? (
+                            <div className="text-xs text-muted-foreground">По этой неделе ещё нет платежей.</div>
+                          ) : (
+                            <div className="space-y-1.5">
+                              {item.week.payments.map((p) => (
+                                <div key={p.id} className="flex items-center justify-between gap-2 text-xs">
+                                  <span className="tabular-nums text-body">{formatRuDate(p.payment_date)}</span>
+                                  <span className={`shrink-0 font-medium tabular-nums ${p.status === 'voided' ? 'text-slate-400 line-through' : 'text-emerald-700 dark:text-emerald-300'}`}>{money(p.total_amount)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        {item.week.companyAllocations.length > 1 ? (
+                          <div>
+                            <div className="mb-2 text-xs font-medium text-foreground">По компаниям</div>
+                            <div className="space-y-1.5">
+                              {item.week.companyAllocations.map((a) => (
+                                <div key={a.companyId} className="flex items-center justify-between gap-2 text-xs">
+                                  <span className="truncate text-body">{a.companyName || a.companyCode || a.companyId}</span>
+                                  <span className="shrink-0 font-medium tabular-nums text-foreground">{money(a.netAmount)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </Card>
+                )
+              })
+            )}
+          </div>
+
+          <div className="hidden sm:block">
           <AdminTableViewport maxHeight="min(70vh, 40rem)">
               <table className="min-w-[900px] text-sm">
                 <thead className={adminTableStickyTheadClass}>
@@ -1309,6 +1479,7 @@ export default function SalaryPage() {
                 </tbody>
               </table>
           </AdminTableViewport>
+          </div>
 
           {canCreateAdjustment && (
           <Card className="border-border bg-white dark:bg-white/[0.04] p-5">
