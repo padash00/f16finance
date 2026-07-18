@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { downloadReportPdf } from '@/lib/client/download-pdf'
 import { useApiCache } from '@/lib/client/use-api-cache'
 import { useCapabilities } from '@/lib/client/use-capabilities'
@@ -542,10 +542,71 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
     }
   }
 
-  // Derived data
-  const categories = Array.from(
-    new Map(items.filter((i) => i.category).map((i) => [i.category!.id, i.category!])).values()
-  ).sort((a, b) => a.name.localeCompare(b.name, 'ru'))
+  // Категории: полный список из API (можно создавать до товаров) + категории,
+  // встречающиеся у товаров (легаси без organization_id)
+  const { data: allCategories, refresh: refreshCategories } = useApiCache<{ id: string; name: string }[]>('/api/admin/inventory/categories')
+  const categories = useMemo(() => {
+    const map = new Map<string, { id: string; name: string }>()
+    for (const c of allCategories || []) map.set(c.id, { id: c.id, name: c.name })
+    for (const i of items) if (i.category) map.set(i.category.id, i.category)
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'ru'))
+  }, [allCategories, items])
+
+  // Управление категориями (диалог)
+  const [showCatManager, setShowCatManager] = useState(false)
+  const [newCatName, setNewCatName] = useState('')
+  const [catEditId, setCatEditId] = useState<string | null>(null)
+  const [catEditName, setCatEditName] = useState('')
+  const [catDeleteId, setCatDeleteId] = useState<string | null>(null)
+  const [catBusy, setCatBusy] = useState(false)
+
+  async function catAction(body: Record<string, unknown>): Promise<boolean> {
+    setCatBusy(true)
+    try {
+      const res = await fetch('/api/admin/inventory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok || json?.error) throw new Error(json?.error || 'Ошибка')
+      await refreshCategories()
+      return true
+    } catch (e: any) {
+      showToast('Ошибка: ' + e.message)
+      return false
+    } finally {
+      setCatBusy(false)
+    }
+  }
+
+  async function addCategory() {
+    const name = newCatName.trim()
+    if (!name) return
+    if (await catAction({ action: 'createCategory', payload: { name } })) {
+      setNewCatName('')
+      showToast('Категория создана')
+    }
+  }
+
+  async function saveCatRename() {
+    const name = catEditName.trim()
+    if (!catEditId || !name) return
+    if (await catAction({ action: 'updateCategory', id: catEditId, payload: { name } })) {
+      setCatEditId(null)
+      setCatEditName('')
+      await loadItems()
+    }
+  }
+
+  async function deleteCategory(id: string) {
+    if (await catAction({ action: 'deleteCategory', id })) {
+      setCatDeleteId(null)
+      if (filterCategory === id) setFilterCategory('all')
+      await loadItems()
+      showToast('Категория удалена, товары — «Без категории»')
+    }
+  }
 
   const filtered = items.filter((item) => {
     if (filterType !== 'all' && item.item_type !== filterType) return false
@@ -1066,6 +1127,11 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
                   <SelectItem value="name">По названию (А-Я)</SelectItem>
                 </SelectContent>
               </Select>
+              {canEdit && (
+                <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setShowCatManager(true)}>
+                  <Tag className="mr-1.5 h-3.5 w-3.5" />Категории
+                </Button>
+              )}
               {(search || filterCategory !== 'all' || filterType !== 'all') && (
                 <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setSearch(''); setFilterCategory('all'); setFilterType('all') }}>
                   Сбросить
@@ -1618,6 +1684,81 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
       </Dialog>
 
       {/* Карточка товара — открывается по клику на название/иконку в таблице */}
+      {/* Диалог управления категориями */}
+      <Dialog open={showCatManager} onOpenChange={(v) => { if (!v) { setShowCatManager(false); setCatEditId(null); setCatDeleteId(null); setNewCatName('') } }}>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Tag className="h-4 w-4" />Категории товаров</DialogTitle>
+            <DialogDescription>Создание, переименование и удаление. При удалении категории её товары остаются «Без категории».</DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2">
+            <Input
+              value={newCatName}
+              onChange={(e) => setNewCatName(e.target.value)}
+              placeholder="Название новой категории"
+              onKeyDown={(e) => { if (e.key === 'Enter') void addCategory() }}
+            />
+            <Button onClick={() => void addCategory()} disabled={catBusy || !newCatName.trim()} className="shrink-0">
+              {catBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="mr-1 h-4 w-4" />}Добавить
+            </Button>
+          </div>
+          <div className="space-y-1.5">
+            {categories.length === 0 ? (
+              <div className="py-6 text-center text-sm text-muted-foreground">Категорий пока нет — создайте первую выше</div>
+            ) : (
+              categories.map((c) => {
+                const count = items.filter((i) => i.category?.id === c.id).length
+                return (
+                  <div key={c.id} className="flex items-center gap-2 rounded-lg border border-border px-3 py-2">
+                    {catEditId === c.id ? (
+                      <>
+                        <Input
+                          value={catEditName}
+                          onChange={(e) => setCatEditName(e.target.value)}
+                          className="h-8 text-sm"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') void saveCatRename()
+                            if (e.key === 'Escape') { setCatEditId(null); setCatEditName('') }
+                          }}
+                        />
+                        <button onClick={() => void saveCatRename()} disabled={catBusy} className="p-1 text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 disabled:opacity-50">
+                          {catBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                        </button>
+                        <button onClick={() => { setCatEditId(null); setCatEditName('') }} className="p-1 text-muted-foreground hover:text-rose-400">
+                          <X className="h-4 w-4" />
+                        </button>
+                      </>
+                    ) : catDeleteId === c.id ? (
+                      <>
+                        <span className="flex-1 truncate text-sm">Удалить «{c.name}»?</span>
+                        <Button size="sm" variant="outline" className="h-7 text-xs text-destructive border-destructive/40" disabled={catBusy} onClick={() => void deleteCategory(c.id)}>
+                          {catBusy ? '...' : 'Удалить'}
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setCatDeleteId(null)}>Отмена</Button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="flex-1 truncate text-sm text-foreground">{c.name}</span>
+                        <span className="text-xs tabular-nums text-muted-foreground">{count > 0 ? `${count} тов.` : '—'}</span>
+                        <button onClick={() => { setCatEditId(c.id); setCatEditName(c.name); setCatDeleteId(null) }} className="p-1 rounded text-muted-foreground hover:bg-muted hover:text-foreground" title="Переименовать">
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        {canDelete && (
+                          <button onClick={() => { setCatDeleteId(c.id); setCatEditId(null) }} className="p-1 rounded text-muted-foreground hover:bg-muted hover:text-destructive" title="Удалить">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <ProductCardModal
         itemId={cardItemId}
         open={cardItemId !== null}

@@ -850,6 +850,18 @@ export async function updateInventoryCategory(
   return data
 }
 
+export async function deleteInventoryCategory(
+  supabase: AnySupabase,
+  id: string,
+  scope?: InventoryScope,
+) {
+  // FK inventory_items.category_id — on delete set null: товары остаются «Без категории»
+  let query: any = supabase.from('inventory_categories').delete().eq('id', id)
+  if (hasOrganizationScope(scope)) query = query.eq('organization_id', String(scope?.organizationId || ''))
+  const { error } = await query
+  if (error) throw error
+}
+
 export async function updateInventorySupplier(
   supabase: AnySupabase,
   id: string,

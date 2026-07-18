@@ -12,6 +12,7 @@ import {
   ensureInventoryRequestAccess,
   createInventorySupplier,
   decideInventoryRequest,
+  deleteInventoryCategory,
   fetchOpenTransferRequestsForLocation,
   fetchInventoryOverview,
   postInventoryStocktake,
@@ -150,6 +151,11 @@ type UpdateCategoryBody = {
   payload: { name: string; description?: string | null }
 }
 
+type DeleteCategoryBody = {
+  action: 'deleteCategory'
+  id: string
+}
+
 type UpdateSupplierBody = {
   action: 'updateSupplier'
   id: string
@@ -192,6 +198,7 @@ type Body =
   | WriteoffBody
   | StocktakeBody
   | UpdateCategoryBody
+  | DeleteCategoryBody
   | UpdateSupplierBody
   | UpdateItemBody
 
@@ -694,6 +701,14 @@ export async function POST(request: Request) {
       }, inventoryScope)
       await writeAuditLog(supabase as any, { actorUserId, entityType: 'inventory-category', entityId: id, action: 'update', payload: category })
       return json({ ok: true, data: category })
+    }
+
+    if (body.action === 'deleteCategory') {
+      const id = String((body as any).id || '').trim()
+      if (!id) return json({ error: 'category-id-required' }, 400)
+      await deleteInventoryCategory(supabase as any, id, inventoryScope)
+      await writeAuditLog(supabase as any, { actorUserId, entityType: 'inventory-category', entityId: id, action: 'delete', payload: { id } })
+      return json({ ok: true })
     }
 
     if (body.action === 'updateSupplier') {
