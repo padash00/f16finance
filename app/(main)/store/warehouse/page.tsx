@@ -906,7 +906,8 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
                         onChange={(e) => {
                           setSelectedIds((prev) => {
                             const next = new Set(prev)
-                            e.target.checked ? next.add(b.item_id) : next.delete(b.item_id)
+                            if (e.target.checked) next.add(b.item_id)
+                            else next.delete(b.item_id)
                             return next
                           })
                         }}
@@ -1017,7 +1018,8 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
                         onChange={(e) => {
                           setSelectedIds((prev) => {
                             const next = new Set(prev)
-                            e.target.checked ? next.add(b.item_id) : next.delete(b.item_id)
+                            if (e.target.checked) next.add(b.item_id)
+                            else next.delete(b.item_id)
                             return next
                           })
                         }}

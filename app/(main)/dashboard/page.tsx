@@ -461,10 +461,12 @@ export default function SmartDashboardPage() {
   // Realtime subscription — refresh on new income/expense records.
   // Через ref, чтобы не переподписываться при смене периода (refresh меняется вместе с url).
   const realtimeRefreshRef = useRef<() => void>(() => {})
-  realtimeRefreshRef.current = () => {
-    void refreshIncomes()
-    void refreshExpenses()
-  }
+  useEffect(() => {
+    realtimeRefreshRef.current = () => {
+      void refreshIncomes()
+      void refreshExpenses()
+    }
+  }, [refreshIncomes, refreshExpenses])
   useEffect(() => {
     if (!isAuthenticated) return
     const channel = supabase
