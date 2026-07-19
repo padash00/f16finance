@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { usePersistentState } from '@/lib/client/use-persistent-state'
 import dynamic from 'next/dynamic'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { FileText, PackagePlus, Upload, ArchiveX, ScanSearch, CalendarClock } from 'lucide-react'
@@ -24,7 +24,7 @@ const TABS: { key: Tab; label: string; icon: any }[] = [
 ]
 
 export default function StoreDocumentsPage() {
-  const [tab, setTab] = useState<Tab>('receipts')
+  const [tab, setTab] = usePersistentState<Tab>('store.documents.tab', 'receipts')
 
   return (
     <div className="app-page-wide space-y-4">

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { usePersistentState } from '@/lib/client/use-persistent-state'
 import dynamic from 'next/dynamic'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Building2, Wallet, Package2 } from 'lucide-react'
@@ -20,7 +20,7 @@ const TABS: { key: Tab; label: string; icon: any }[] = [
 ]
 
 export default function StoreVendorsPage() {
-  const [tab, setTab] = useState<Tab>('suppliers')
+  const [tab, setTab] = usePersistentState<Tab>('store.vendors.tab', 'suppliers')
 
   return (
     <div className="app-page-wide space-y-4">

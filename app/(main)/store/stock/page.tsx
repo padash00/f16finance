@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { usePersistentState } from '@/lib/client/use-persistent-state'
 import dynamic from 'next/dynamic'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Warehouse, Store, History, Tags } from 'lucide-react'
@@ -22,7 +22,7 @@ const TABS: { key: Tab; label: string; icon: any }[] = [
 ]
 
 export default function StoreStockPage() {
-  const [tab, setTab] = useState<Tab>('warehouse')
+  const [tab, setTab] = usePersistentState<Tab>('store.stock.tab', 'warehouse')
 
   return (
     <div className="app-page-wide space-y-4">
