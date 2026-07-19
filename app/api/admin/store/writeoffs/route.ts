@@ -231,8 +231,10 @@ export async function POST(request: Request) {
             company_id: loc.company_id,
             operator_id: null,
             category: categoryName,
-            cash_amount: total,
-            kaspi_amount: 0,
+            // Неденежный убыток: кладём в безнал, чтобы не искажать сверку
+            // физической наличной кассы (реальных денег из ящика не уходило)
+            cash_amount: 0,
+            kaspi_amount: total,
             comment: `Автоматически: списание со склада по себестоимости. Причина: ${(woRow as any).reason || '—'} [auto-writeoff:${writeoffId}]`,
             status: 'confirmed',
           }])
