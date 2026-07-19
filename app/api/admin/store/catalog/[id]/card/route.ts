@@ -188,17 +188,19 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     let lastPurchasePrice: number | null = null
     let lastSupplier: string | null = null
     let lastReceivedAt: string | null = null
+    let purchaseRows: any[] = []
     {
       // История приёмок товара растёт без ограничения — постранично, иначе
       // «последняя закупочная» берётся из усечённой выборки.
       const recRows = await fetchAllPages((from, to) =>
         supabase
           .from('inventory_receipt_items')
-          .select('unit_cost, receipt:receipt_id(received_at, supplier:supplier_id(name, organization_name))')
+          .select('quantity, unit_cost, receipt:receipt_id(received_at, status, supplier:supplier_id(name, organization_name))')
           .eq('item_id', itemId)
           .order('id')
           .range(from, to),
       )
+      purchaseRows = recRows as any[]
       for (const r of (recRows || []) as any[]) {
         const receipt = r.receipt || {}
         const receivedAt = String(receipt.received_at || '')
@@ -219,6 +221,72 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     const purchase = lastPurchasePrice != null && lastPurchasePrice > 0 ? lastPurchasePrice : defaultPurchase
     const marginPct = salePrice > 0 ? round1(((salePrice - purchase) / salePrice) * 100) : 0
     const marginAbs = round2(salePrice - purchase)
+
+    // 7. История продаж — последние 30 движений-продаж
+    let salesHistory: Array<{ date: string; quantity: number; amount: number; location: string }> = []
+    if (locationIds.length > 0) {
+      const { data: shRows } = await supabase
+        .from('inventory_movements')
+        .select('quantity, total_amount, created_at, from_location:from_location_id(name, company:company_id(name))')
+        .eq('movement_type', 'sale')
+        .eq('item_id', itemId)
+        .in('from_location_id', locationIds)
+        .order('created_at', { ascending: false })
+        .limit(30)
+      salesHistory = ((shRows || []) as any[]).map((r) => {
+        const loc = Array.isArray(r.from_location) ? r.from_location[0] : r.from_location
+        const comp = loc ? (Array.isArray(loc.company) ? loc.company[0] : loc.company) : null
+        return {
+          date: String(r.created_at || ''),
+          quantity: round2(Number(r.quantity || 0)),
+          amount: round2(Number(r.total_amount || 0)),
+          location: String(comp?.name || loc?.name || '—'),
+        }
+      })
+    }
+
+    // 8. История закупок — из уже загруженных приёмок (без отменённых)
+    const purchaseHistory = purchaseRows
+      .map((r) => {
+        const receipt = (Array.isArray(r.receipt) ? r.receipt[0] : r.receipt) || {}
+        const supplier = (Array.isArray(receipt.supplier) ? receipt.supplier[0] : receipt.supplier) || {}
+        return {
+          date: String(receipt.received_at || ''),
+          status: String(receipt.status || ''),
+          quantity: round2(Number(r.quantity || 0)),
+          unit_cost: round2(Number(r.unit_cost || 0)),
+          supplier: String(supplier.organization_name || '').trim() || String(supplier.name || '').trim() || 'Оприходование',
+        }
+      })
+      .filter((r) => r.date && r.status !== 'cancelled')
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 30)
+      .map(({ status: _status, ...rest }) => rest)
+
+    // 9. История долгов — point_debt_items связаны с товаром только по имени
+    // (item_name пишется кассой из каталога) — матчим точным именем.
+    let debtHistory: Array<{ date: string; client: string; quantity: number; amount: number; status: string; company: string }> = []
+    {
+      let debtQuery = supabase
+        .from('point_debt_items')
+        .select('client_name, quantity, total_amount, created_at, status, company:company_id(name)')
+        .ilike('item_name', String(item.name || ''))
+        .order('created_at', { ascending: false })
+        .limit(30)
+      if (allowedCompanyIds) debtQuery = debtQuery.in('company_id', allowedCompanyIds)
+      const { data: debtRows } = await debtQuery
+      debtHistory = ((debtRows || []) as any[]).map((r) => {
+        const comp = Array.isArray(r.company) ? r.company[0] : r.company
+        return {
+          date: String(r.created_at || ''),
+          client: String(r.client_name || '—'),
+          quantity: round2(Number(r.quantity || 0)),
+          amount: round2(Number(r.total_amount || 0)),
+          status: String(r.status || 'active'),
+          company: String(comp?.name || '—'),
+        }
+      })
+    }
 
     return json({
       ok: true,
@@ -249,6 +317,10 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
         last_supplier: lastSupplier,
         last_purchase_price: lastPurchasePrice != null ? round2(lastPurchasePrice) : null,
         last_received_at: lastReceivedAt || null,
+        // Истории (последние 30 записей каждая)
+        sales_history: salesHistory,
+        purchase_history: purchaseHistory,
+        debt_history: debtHistory,
       },
     })
   } catch (error: any) {

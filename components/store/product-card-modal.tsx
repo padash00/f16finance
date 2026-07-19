@@ -55,6 +55,9 @@ type CardData = {
   last_supplier: string | null
   last_purchase_price: number | null
   last_received_at: string | null
+  sales_history?: Array<{ date: string; quantity: number; amount: number; location: string }>
+  purchase_history?: Array<{ date: string; quantity: number; unit_cost: number; supplier: string }>
+  debt_history?: Array<{ date: string; client: string; quantity: number; amount: number; status: string; company: string }>
 }
 
 const fmt = (n: number) => Number(n || 0).toLocaleString('ru-RU')
@@ -91,6 +94,7 @@ export default function ProductCardModal({
   const [searched, setSearched] = useState(false)
   const [savingDesc, setSavingDesc] = useState(false)
   const [editDesc, setEditDesc] = useState(false)
+  const [histTab, setHistTab] = useState<'sales' | 'purchases' | 'debts'>('sales')
   const [descDraft, setDescDraft] = useState('')
   const fileRef = useRef<HTMLInputElement | null>(null)
 
@@ -441,6 +445,75 @@ export default function ProductCardModal({
                   </div>
                 ) : (
                   <div className="mt-0.5 text-sm text-muted-foreground">Нет приёмок по этому товару.</div>
+                )}
+              </div>
+            </div>
+
+            {/* ── История: продажи / закупки / долги ── */}
+            <div className="rounded-lg border border-slate-200 bg-white p-3 dark:border-white/10 dark:bg-white/[0.02]">
+              <div className="flex gap-1 rounded-lg bg-slate-100 p-1 text-xs dark:bg-white/[0.05]">
+                {([
+                  ['sales', `Продажи (${data.sales_history?.length || 0})`],
+                  ['purchases', `Закупки (${data.purchase_history?.length || 0})`],
+                  ['debts', `Долги (${data.debt_history?.length || 0})`],
+                ] as const).map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setHistTab(key)}
+                    className={`flex-1 rounded-md px-2 py-1.5 font-medium transition ${histTab === key ? 'bg-white text-foreground shadow-sm dark:bg-white/[0.1]' : 'text-muted-foreground hover:text-foreground'}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-2 max-h-56 space-y-1 overflow-y-auto">
+                {histTab === 'sales' && (
+                  (data.sales_history?.length || 0) === 0 ? (
+                    <div className="py-4 text-center text-xs text-muted-foreground">Продаж пока не было.</div>
+                  ) : (
+                    data.sales_history!.map((s, i) => (
+                      <div key={i} className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs odd:bg-slate-50 dark:odd:bg-white/[0.03]">
+                        <span className="tabular-nums text-muted-foreground">
+                          {new Date(s.date).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}{' '}
+                          {new Date(s.date).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-muted-foreground">{s.location}</span>
+                        <span className="tabular-nums">{fmt(s.quantity)} {data.unit}</span>
+                        <span className="font-medium tabular-nums text-foreground">{fmtMoney(s.amount)}</span>
+                      </div>
+                    ))
+                  )
+                )}
+                {histTab === 'purchases' && (
+                  (data.purchase_history?.length || 0) === 0 ? (
+                    <div className="py-4 text-center text-xs text-muted-foreground">Приёмок пока не было.</div>
+                  ) : (
+                    data.purchase_history!.map((p, i) => (
+                      <div key={i} className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs odd:bg-slate-50 dark:odd:bg-white/[0.03]">
+                        <span className="tabular-nums text-muted-foreground">{new Date(p.date).toLocaleDateString('ru-RU')}</span>
+                        <span className="min-w-0 flex-1 truncate text-muted-foreground">{p.supplier}</span>
+                        <span className="tabular-nums">{fmt(p.quantity)} {data.unit}</span>
+                        <span className="font-medium tabular-nums text-foreground">{fmtMoney(p.unit_cost)}/шт</span>
+                      </div>
+                    ))
+                  )
+                )}
+                {histTab === 'debts' && (
+                  (data.debt_history?.length || 0) === 0 ? (
+                    <div className="py-4 text-center text-xs text-muted-foreground">В долг этот товар не брали.</div>
+                  ) : (
+                    data.debt_history!.map((d, i) => (
+                      <div key={i} className={`flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs odd:bg-slate-50 dark:odd:bg-white/[0.03] ${d.status === 'deleted' ? 'opacity-50' : ''}`}>
+                        <span className="tabular-nums text-muted-foreground">{new Date(d.date).toLocaleDateString('ru-RU')}</span>
+                        <span className="min-w-0 flex-1 truncate font-medium text-foreground">{d.client}</span>
+                        <span className="truncate text-muted-foreground">{d.company}</span>
+                        <span className="tabular-nums">{fmt(d.quantity)} {data.unit}</span>
+                        <span className="font-medium tabular-nums text-foreground">{fmtMoney(d.amount)}</span>
+                        {d.status === 'deleted' && <span className="text-[10px] text-muted-foreground">списан</span>}
+                      </div>
+                    ))
+                  )
                 )}
               </div>
             </div>
