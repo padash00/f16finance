@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useCapabilities } from '@/lib/client/use-capabilities'
-import { Users, Plus, Search, Star, Edit2, Trash2, RefreshCw, Download, Clock } from 'lucide-react'
+import { Users, Plus, Search, Star, Edit2, Trash2, RefreshCw, Download, Clock, Wallet } from 'lucide-react'
 import { downloadReportPdf } from '@/lib/client/download-pdf'
 import { CardSkeleton, TableSkeleton } from '@/components/skeleton'
 
@@ -132,6 +132,24 @@ export default function CustomersPage({ embedded = false }: { embedded?: boolean
   const totalVirtualSize = rowVirtualizer.getTotalSize()
   const paddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0
   const paddingBottom = virtualRows.length > 0 ? totalVirtualSize - virtualRows[virtualRows.length - 1].end : 0
+
+  const [walletBusyId, setWalletBusyId] = useState<string | null>(null)
+
+  const handleWalletLink = async (customer: { id: string; name: string }) => {
+    setWalletBusyId(customer.id)
+    try {
+      const res = await fetch(`/api/admin/customers/wallet-link?customer_id=${encodeURIComponent(customer.id)}`)
+      const j = await res.json().catch(() => null)
+      if (!res.ok || !j?.ok) throw new Error(j?.error || 'Не удалось создать ссылку')
+      await navigator.clipboard.writeText(j.data.url)
+      alert(`Ссылка «Добавить в Google Кошелёк» скопирована в буфер.\n\nКлиент: ${customer.name}\nКод карты: ${j.data.card_number}\n\nОтправьте ссылку клиенту (WhatsApp/Telegram) — он добавит карту одним нажатием.`)
+      await load()
+    } catch (e: any) {
+      alert(e?.message || 'Ошибка')
+    } finally {
+      setWalletBusyId(null)
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -482,6 +500,18 @@ export default function CustomersPage({ embedded = false }: { embedded?: boolean
                               onClick={() => { setAdjustCustomer(customer); setPointsDelta(''); setPointsReason(''); setFormError(null) }}
                             >
                               <Star className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                            </Button>
+                          )}
+                          {canEdit && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300"
+                              title="Карта Google Wallet — скопировать ссылку для клиента"
+                              disabled={walletBusyId === customer.id}
+                              onClick={() => void handleWalletLink(customer)}
+                            >
+                              {walletBusyId === customer.id ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}
                             </Button>
                           )}
                           {canEdit && (

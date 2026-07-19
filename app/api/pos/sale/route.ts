@@ -5,6 +5,7 @@ import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { checkAndNotifyLowStock } from '@/lib/server/low-stock-notifier'
+import { updateLoyaltyBalance } from '@/lib/server/google-wallet'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -421,6 +422,14 @@ export async function POST(request: Request) {
     if (!saleId) throw new Error('pos-sale-save-failed')
 
     checkAndNotifyLowStock(itemIds, pointDisplayLocId).catch(() => null)
+
+    // Синк баллов на карте Google Wallet (fire-and-forget, продажу не блокирует)
+    if (customerId && (loyaltyPointsEarned > 0 || loyaltyPointsSpent > 0)) {
+      void (async () => {
+        const { data: fresh } = await supabase.from('customers').select('loyalty_points').eq('id', customerId).maybeSingle()
+        if (fresh) await updateLoyaltyBalance(customerId, Number(fresh.loyalty_points || 0))
+      })().catch(() => null)
+    }
 
     const { data: receiptSale, error: receiptError } = await supabase
       .from('point_sales')

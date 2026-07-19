@@ -546,7 +546,20 @@ export default function PosPage() {
   // ── Barcode scanner ────────────────────────────────────────────────────────
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && search.length >= 8) {
+    if (e.key !== 'Enter') return
+    const code = search.trim()
+    // Карта лояльности (Google Wallet / пластик): сканер прислал card_number клиента
+    if (code.length >= 6 && bootstrapData) {
+      const cardCustomer = bootstrapData.customers.find(
+        (c) => c.card_number && c.card_number.toUpperCase() === code.toUpperCase(),
+      )
+      if (cardCustomer) {
+        setSelectedCustomer(cardCustomer)
+        setSearch('')
+        return
+      }
+    }
+    if (search.length >= 8) {
       const found = barcodeMap.get(search)
       if (found && itemLocationBalance(found, selectedLocationId) > 0) {
         addToCart(found)

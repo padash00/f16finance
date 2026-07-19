@@ -2,14 +2,6 @@
 
 Система управления игровым клубом / точкой продаж. Три клиента на одной БД Supabase через единый Next.js API.
 
-## Стек
-
-- **Web**: Next.js 15 + React 19 + Tailwind CSS 4 + Radix UI (shadcn/ui)
-- **Desktop operator**: Electron 33 + React 18 + Vite (`desktop/operator/`)
-- **Desktop kiosk**: Electron + Vite + React (`desktop/kiosk/`)
-- **DB**: Supabase (PostgreSQL + Auth + Realtime)
-- **Deploy**: Vercel (автодеплой из `main`), GitHub Releases для Electron
-
 ## Главное правило архитектуры
 
 > Supabase доступен ТОЛЬКО через Next.js API routes. Никакого прямого доступа к Supabase из Electron приложений.
@@ -30,55 +22,6 @@ Electron apps общаются с сервером через:
 
 `owner` > `manager` > `other` — проверяются в каждом API route через `canManage()` / `canView()`.
 SuperAdmin (`isSuperAdmin`) обходит все ограничения.
-
-## Структура проекта
-
-```
-/
-├── app/
-│   ├── (main)/           — веб-портал (60+ страниц, требует auth)
-│   │   ├── dashboard/    — главный дашборд
-│   │   ├── store/        — инвентарь (warehouse, showcase, catalog, receipts, requests...)
-│   │   ├── shifts/       — смены
-│   │   ├── salary/       — зарплата
-│   │   ├── operators/    — операторы
-│   │   ├── staff/        — сотрудники
-│   │   └── ...
-│   ├── api/
-│   │   ├── admin/        — API для веб-портала
-│   │   ├── point/        — API для operator desktop
-│   │   ├── kiosk/        — API для kiosk
-│   │   ├── pos/          — API для POS
-│   │   ├── operator/     — API для личного кабинета оператора
-│   │   ├── ai/           — AI (OpenAI gpt-4o-mini): чат-копилот, прогнозы, анализ
-│   │   └── cron/         — крон-джобы (Telegram отчёты, напоминания)
-│   ├── operator/         — страницы личного кабинета оператора
-│   ├── (client)/         — клиентский портал
-│   └── pos/              — POS-терминал
-├── components/
-│   ├── ui/               — shadcn/ui компоненты (70+)
-│   ├── admin/            — компоненты портала
-│   ├── ai/               — AI-ассистент
-│   ├── operator/         — компоненты оператора
-│   └── sidebar.tsx       — главная навигация
-├── lib/
-│   ├── core/             — типы, форматы, константы (shared)
-│   ├── server/           — только server-side утилиты
-│   │   ├── supabase.ts           — admin Supabase client (service role)
-│   │   ├── request-auth.ts       — getRequestAccessContext()
-│   │   ├── point-devices.ts      — requirePointDevice()
-│   │   ├── audit.ts              — writeAuditLog()
-│   │   ├── organizations.ts      — resolveCompanyScope()
-│   │   └── repositories/         — data-access функции
-│   ├── domain/           — бизнес-логика (salary.ts)
-│   ├── ai/               — AI-интеграция (OpenAI, провайдер в lib/ai/provider.ts)
-│   └── ...
-├── desktop/
-│   ├── operator/         — Electron operator app (v2.3.x)
-│   └── kiosk/            — Electron kiosk app (v0.2.x)
-└── supabase/
-    └── migrations/       — SQL миграции
-```
 
 ## Ключевые файлы
 
@@ -145,22 +88,6 @@ export async function POST(request: Request) {
 
 `inventory_decide_request` — Supabase функция, атомарно одобряет заявку (минусует со склада, плюсует витрину).
 
-## Что сделано (апрель 2026)
-
-### Веб-портал
-- Склад (`/store/warehouse`): остатки, добавление через штрихкод/каталог/Excel+DOCX, bulk/selective delete
-- Витрина (`/store/showcase`): остатки витрины, заявки со склада, история заявок
-- Все финансовые модули: смены, зарплата, расходы, доходы, дашборд
-
-### Operator Desktop
-- Заявки на инвентарь (`/api/point/inventory-requests`)
-- Полный POS: продажи, возвраты, долги
-
-### Kiosk Desktop
-- Экраны: Welcome, Tariff, Shell, Profile, Ended, Blocked, Setup
-- Realtime через Supabase (канал `kiosk:{stationId}`)
-- v0.2.5 (диагностика белого экрана — CSP meta tag удалён)
-
 ## Что не сделано / TODO
 
 - QR-логин в киоске (заглушка на WelcomeScreen)
@@ -182,4 +109,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY
 OPENAI_API_KEY             # для AI фич (provider: OpenAI, модель gpt-4o-mini; OPENAI_MODEL — опц.)
 TELEGRAM_BOT_TOKEN         # для Telegram отчётов
+GOOGLE_WALLET_ISSUER_ID    # опц.: карты лояльности Google Wallet (lib/server/google-wallet.ts)
+GOOGLE_WALLET_SA_EMAIL     # опц.: email сервис-аккаунта Google Cloud
+GOOGLE_WALLET_SA_KEY       # опц.: private_key сервис-аккаунта (PEM или base64)
 ```
