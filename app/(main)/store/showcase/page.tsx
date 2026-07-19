@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useApiCache } from '@/lib/client/use-api-cache'
 import {
@@ -43,6 +43,9 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { useStoreScope } from '@/components/store/store-scope'
+import { usePersistentState } from '@/lib/client/use-persistent-state'
+import { CopyText } from '@/components/ui/copy-text'
+import { toast } from '@/components/ui/use-toast'
 import { LabelPrintDialog } from '@/components/store/label-print-dialog'
 import type { LabelItem } from '@/components/store/label-print-dialog'
 
@@ -220,11 +223,18 @@ function ItemSearchPicker({
 
 export default function ShowcasePage({ embedded = false }: { embedded?: boolean } = {}) {
   const { storeCompanyId } = useStoreScope()
-  // Точка, выбранная пользователем (или из ?company_id= в URL); null → серверный дефолт
-  const [chosenCompanyId, setChosenCompanyId] = useState<string | null>(() => {
-    if (typeof window === 'undefined') return null
-    try { return new URLSearchParams(window.location.search).get('company_id') } catch { return null }
-  })
+  // Точка магазина с памятью — ключ 'store.companyId' общий со «Складом»,
+  // чтобы точка была одна на весь магазин; null → серверный дефолт.
+  // ?company_id= в URL имеет приоритет над сохранённым значением (эффект ниже
+  // срабатывает после загрузки из localStorage и перекрывает её).
+  const [chosenCompanyId, setChosenCompanyId] = usePersistentState<string | null>('store.companyId', null)
+  useEffect(() => {
+    try {
+      const fromUrl = new URLSearchParams(window.location.search).get('company_id')
+      if (fromUrl) setChosenCompanyId(fromUrl)
+    } catch { /* noop */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showPrintLabels, setShowPrintLabels] = useState(false)
 
@@ -385,7 +395,7 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
       })
       const json = await res.json().catch(() => null)
       if (!res.ok || !json?.ok) {
-        alert(json?.error || 'Ошибка сохранения')
+        toast({ description: json?.error || 'Ошибка сохранения' })
         return
       }
       setEditingSc(null)
@@ -617,7 +627,7 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
                           <p className="text-[10px] text-amber-400">⚠ мало (мин: {threshold})</p>
                         )}
                         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
-                          <span className="font-mono">{b.item?.barcode || '—'}</span>
+                          <CopyText value={b.item?.barcode} className="font-mono" />
                           {b.item?.category?.name ? <span>· {b.item.category.name}</span> : null}
                           <span>· {b.item?.sale_price ? `${b.item.sale_price} ₸` : 'без цены'}</span>
                         </div>
@@ -731,7 +741,7 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
                         )}
                       </td>
                       <td className="w-36 py-2.5 px-2 align-middle">
-                        <span className="truncate font-mono text-xs text-muted-foreground">{b.item?.barcode || '—'}</span>
+                        <CopyText value={b.item?.barcode} className="truncate font-mono text-xs text-muted-foreground" />
                       </td>
                       <td className="w-36 py-2.5 px-2 align-middle">
                         <span className="line-clamp-1 text-xs text-muted-foreground">{b.item?.category?.name || '—'}</span>

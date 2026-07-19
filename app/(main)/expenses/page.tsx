@@ -4,6 +4,9 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { downloadReportPdf } from '@/lib/client/download-pdf'
+import { usePersistentState } from '@/lib/client/use-persistent-state'
+import { deleteWithUndo } from '@/lib/client/undo-delete'
+import { MoneyInput } from '@/components/ui/money-input'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCapabilities } from '@/lib/client/use-capabilities'
@@ -140,11 +143,31 @@ const DateUtils = {
     const today = DateUtils.fromISO(DateUtils.todayISO())
     const date = DateUtils.fromISO(iso)
     const diffDays = Math.floor((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24))
-    
+
     if (diffDays === 0) return 'Сегодня'
     if (diffDays === 1) return 'Вчера'
     if (diffDays < 7) return `${diffDays} дня назад`
     return DateUtils.formatDate(iso)
+  },
+
+  /** Время создания записи в часовом поясе Алматы (UTC+5), «14:32» */
+  createdTime: (createdAt?: string | null): string | null => {
+    if (!createdAt) return null
+    const d = new Date(createdAt)
+    if (Number.isNaN(d.getTime())) return null
+    return d.toLocaleTimeString('ru-RU', { timeZone: 'Asia/Almaty', hour: '2-digit', minute: '2-digit' })
+  },
+
+  /**
+   * Подпись даты с временем создания: сегодня → «Сегодня 14:32»,
+   * вчера → «Вчера 09:15», старше → обычная дата + время отдельно (sub).
+   */
+  dateTimeLabel: (iso: string, createdAt?: string | null): { main: string; sub: string | null } => {
+    const time = DateUtils.createdTime(createdAt)
+    const today = DateUtils.todayISO()
+    if (iso === today) return { main: time ? `Сегодня ${time}` : 'Сегодня', sub: null }
+    if (iso === DateUtils.addDaysISO(today, -1)) return { main: time ? `Вчера ${time}` : 'Вчера', sub: null }
+    return { main: DateUtils.formatDate(iso), sub: time }
   },
 
   getDatesInRange: (from: string, to: string): string[] => {
@@ -249,11 +272,11 @@ function useDebouncedValue<T>(value: T, delayMs: number) {
 const rowTotal = (r: ExpenseRow) => (r.cash_amount || 0) + (r.kaspi_amount || 0)
 
 const parseMoneyInput = (raw: string): number | null => {
-  const cleaned = raw.replace(/[^\d]/g, '')
+  const cleaned = raw.replace(/\s/g, '').replace(',', '.').replace(/[^\d.]/g, '')
   if (cleaned === '') return null
   const numeric = Number(cleaned)
   if (!Number.isFinite(numeric)) return null
-  return Math.max(0, numeric)
+  return Math.max(0, Math.round(numeric))
 }
 
 const escapeCSV = (value: any) => {
@@ -288,25 +311,25 @@ export default function ExpensesPage() {
   const [isClient, setIsClient] = useState(false)
   const [sessionRole, setSessionRole] = useState<SessionRoleInfo | null>(null)
 
-  // Filters
-  const [dateFrom, setDateFrom] = useState(DateUtils.monthStartISO())
-  const [dateTo, setDateTo] = useState(DateUtils.todayISO())
-  const [activePreset, setActivePreset] = useState<DateRangePreset>('month')
+  // Filters — период/точка/категория/статус/сортировка/вкладка помнятся между визитами
+  const [dateFrom, setDateFrom] = usePersistentState('expenses.dateFrom', DateUtils.monthStartISO())
+  const [dateTo, setDateTo] = usePersistentState('expenses.dateTo', DateUtils.todayISO())
+  const [activePreset, setActivePreset] = usePersistentState<DateRangePreset>('expenses.preset', 'month')
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
 
-  const [companyFilter, setCompanyFilter] = useState<'all' | string>('all')
-  const [categoryFilter, setCategoryFilter] = useState<'all' | string>('all')
+  const [companyFilter, setCompanyFilter] = usePersistentState<'all' | string>('expenses.company', 'all')
+  const [categoryFilter, setCategoryFilter] = usePersistentState<'all' | string>('expenses.category', 'all')
   const [payFilter, setPayFilter] = useState<PayFilter>('all')
-  const [statusFilter, setStatusFilter] = useState<ExpenseStatusFilter>('all')
+  const [statusFilter, setStatusFilter] = usePersistentState<ExpenseStatusFilter>('expenses.status', 'all')
   const [documentFilter, setDocumentFilter] = useState<DocumentKindFilter>('all')
   const [searchTerm, setSearchTerm] = useState('')
   const searchDebounced = useDebouncedValue(searchTerm.trim(), 350)
   const [includeExtraInTotals, setIncludeExtraInTotals] = useState(false)
-  const [sortMode, setSortMode] = useState<SortMode>('date_desc')
+  const [sortMode, setSortMode] = usePersistentState<SortMode>('expenses.sortMode', 'date_desc')
   const [showFilters, setShowFilters] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'list'>('overview')
+  const [activeTab, setActiveTab] = usePersistentState<'overview' | 'analytics' | 'list'>('expenses.activeTab', 'overview')
   const [editingExpense, setEditingExpense] = useState<ExpenseRow | null>(null)
   const [editExpenseDate, setEditExpenseDate] = useState('')
   const [editExpenseCompanyId, setEditExpenseCompanyId] = useState('')
@@ -316,7 +339,6 @@ export default function ExpensesPage() {
   const [editExpenseKaspiDraft, setEditExpenseKaspiDraft] = useState('')
   const [editExpenseCommentDraft, setEditExpenseCommentDraft] = useState('')
   const [savingExpenseEdit, setSavingExpenseEdit] = useState(false)
-  const [deletingExpenseId, setDeletingExpenseId] = useState<string | null>(null)
   const [uploadingAttachment, setUploadingAttachment] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -398,6 +420,19 @@ export default function ExpensesPage() {
     sort: sortMode,
     pageSize: 2000,
   })
+
+  // Клиентский tie-break: сервер сортирует только по date, внутри одного дня
+  // упорядочиваем по created_at (в date_desc свежесозданные выше, в date_asc — наоборот)
+  const sortedRows = useMemo(() => {
+    if (sortMode !== 'date_desc' && sortMode !== 'date_asc') return rows
+    const asc = sortMode === 'date_asc'
+    return [...rows].sort((a, b) => {
+      const byDate = String(a.date).localeCompare(String(b.date))
+      if (byDate !== 0) return asc ? byDate : -byDate
+      const byCreated = String(a.created_at || '').localeCompare(String(b.created_at || ''))
+      return asc ? byCreated : -byCreated
+    })
+  }, [rows, sortMode])
 
   useEffect(() => {
     const handler = (event: MessageEvent) => {
@@ -1029,30 +1064,26 @@ export default function ExpensesPage() {
     setTemplates(prev => prev.filter(t => t.id !== id))
   }
 
-  const deleteExpense = async (row: ExpenseRow) => {
-    if (!confirm(`Удалить расход от ${DateUtils.formatDate(row.date)}?`)) return
-
-    setDeletingExpenseId(row.id)
+  // Удаление с undo: строка исчезает сразу, DELETE уходит через 5 сек, тост даёт «Отменить»
+  const deleteExpense = (row: ExpenseRow) => {
     setError(null)
-
-    try {
-      const response = await fetch('/api/admin/expenses', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'deleteExpense',
-          expenseId: row.id,
-        }),
-      })
-      const json = await response.json().catch(() => null)
-      if (!response.ok) throw new Error(json?.error || 'Не удалось удалить расход')
-
-      setRows((prev) => prev.filter((item) => item.id !== row.id))
-    } catch (err: any) {
-      setError(err?.message || 'Не удалось удалить расход')
-    } finally {
-      setDeletingExpenseId(null)
-    }
+    deleteWithUndo({
+      message: `Расход ${Formatters.moneyDetailed(rowTotal(row))} от ${DateUtils.formatDate(row.date)} удалён`,
+      hide: () => setRows((prev) => prev.filter((item) => item.id !== row.id)),
+      restore: () => setRows((prev) => [row, ...prev]),
+      commit: async () => {
+        const response = await fetch('/api/admin/expenses', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'deleteExpense',
+            expenseId: row.id,
+          }),
+        })
+        const json = await response.json().catch(() => null)
+        if (!response.ok) throw new Error(json?.error || 'Не удалось удалить расход')
+      },
+    })
   }
 
   // Пока компонент не смонтирован на клиенте — рендерим null чтобы избежать
@@ -1420,7 +1451,7 @@ export default function ExpensesPage() {
 
           {/* Content */}
           {activeTab === 'overview' && (
-            <OverviewTab analytics={analytics} trendIcon={trendIcon} rows={rows} companyName={companyName} extraCompanyId={extraCompanyId} categoryBudgets={categoryBudgets} dateFrom={dateFrom} dateTo={dateTo} />
+            <OverviewTab analytics={analytics} trendIcon={trendIcon} rows={sortedRows} companyName={companyName} extraCompanyId={extraCompanyId} categoryBudgets={categoryBudgets} dateFrom={dateFrom} dateTo={dateTo} />
           )}
 
           {activeTab === 'analytics' && (
@@ -1429,7 +1460,7 @@ export default function ExpensesPage() {
 
           {activeTab === 'list' && (
             <ListTab
-              rows={rows}
+              rows={sortedRows}
               sortMode={sortMode}
               setSortMode={setSortMode}
               loading={loading}
@@ -1443,8 +1474,8 @@ export default function ExpensesPage() {
               showControlColumns={canManageExpense}
               openExpenseEditor={openExpenseEditor}
               deleteExpense={deleteExpense}
-              deletingExpenseId={deletingExpenseId}
               onPreview={setPreviewUrl}
+              totals={{ count: sortedRows.length, cash: analytics.cash, kaspi: analytics.kaspi, total: analytics.total }}
             />
           )}
         </div>
@@ -1519,21 +1550,19 @@ export default function ExpensesPage() {
               </div>
               <div className="space-y-2">
                 <label className="text-xs uppercase tracking-[0.18em] text-slate-500">Наличные</label>
-                <input
-                  inputMode="numeric"
+                <MoneyInput
                   value={editExpenseCashDraft}
-                  onChange={(e) => setEditExpenseCashDraft(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-red-500/50"
+                  onValueChange={setEditExpenseCashDraft}
+                  className="h-11 w-full rounded-xl border-border bg-card px-3 text-sm text-foreground focus:border-red-500/50"
                   placeholder="0"
                 />
               </div>
               <div className="space-y-2">
                 <label className="text-xs uppercase tracking-[0.18em] text-slate-500">{cashLabels.providerName}</label>
-                <input
-                  inputMode="numeric"
+                <MoneyInput
                   value={editExpenseKaspiDraft}
-                  onChange={(e) => setEditExpenseKaspiDraft(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-red-500/50"
+                  onValueChange={setEditExpenseKaspiDraft}
+                  className="h-11 w-full rounded-xl border-border bg-card px-3 text-sm text-foreground focus:border-red-500/50"
                   placeholder="0"
                 />
               </div>
@@ -2071,8 +2100,8 @@ function ListTab({
   showControlColumns,
   openExpenseEditor,
   deleteExpense,
-  deletingExpenseId,
   onPreview,
+  totals,
 }: any) {
   const cashLabels = useCashlessLabels()
   const { can: canDoTbl } = useCapabilities()
@@ -2110,6 +2139,16 @@ function ListTab({
     observer.observe(sentinel)
     return () => observer.disconnect()
   }, [hasMore, loadMore, loading, loadingMore])
+
+  // Прилипающий итог периода — рендерится внутри каждого скролл-контейнера (мобилка/десктоп)
+  const totalsBar = totals && rows.length > 0 ? (
+    <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-200 dark:border-gray-700 bg-white/95 dark:bg-gray-900/95 backdrop-blur px-4 py-2.5 text-xs">
+      <span className="text-muted-foreground">За период: {totals.count} операций</span>
+      <span className="font-mono text-amber-500">Нал {Formatters.moneyDetailed(totals.cash)}</span>
+      <span className="font-mono text-red-400">Безнал {Formatters.moneyDetailed(totals.kaspi)}</span>
+      <span className="ml-auto font-mono font-bold text-foreground">Итого {Formatters.moneyDetailed(totals.total)}</span>
+    </div>
+  ) : null
 
   return (
     <Card className="border-0 bg-white dark:bg-gray-800/50 backdrop-blur-sm overflow-hidden">
@@ -2192,8 +2231,16 @@ function ListTab({
                       {company?.name ?? '—'} · {operatorName(row.operator_id)}
                     </div>
                   </div>
-                  <div className="text-xs text-slate-500 dark:text-gray-400 font-mono whitespace-nowrap">
-                    {DateUtils.formatDate(row.date)}
+                  <div className="text-xs text-slate-500 dark:text-gray-400 font-mono whitespace-nowrap text-right">
+                    {(() => {
+                      const dt = DateUtils.dateTimeLabel(row.date, row.created_at)
+                      return (
+                        <>
+                          {dt.main}
+                          {dt.sub ? <span className="ml-1 text-[10px] opacity-70">{dt.sub}</span> : null}
+                        </>
+                      )
+                    })()}
                   </div>
                 </div>
 
@@ -2268,7 +2315,6 @@ function ListTab({
                             variant="destructive"
                             size="icon-sm"
                             onClick={() => deleteExpense(row)}
-                            disabled={deletingExpenseId === row.id}
                           >
                             <X className="h-3.5 w-3.5" />
                           </Button>
@@ -2280,6 +2326,7 @@ function ListTab({
               </div>
             )
           })}
+          {totalsBar}
         </div>
       )}
 
@@ -2356,7 +2403,15 @@ function ListTab({
                   } ${isExtra ? 'bg-yellow-500/5 border-l-2 border-l-yellow-500/30' : ''}`}
                 >
                   <td className="px-4 py-3 whitespace-nowrap text-slate-500 dark:text-gray-400 font-mono text-xs">
-                    {DateUtils.formatDate(row.date)}
+                    {(() => {
+                      const dt = DateUtils.dateTimeLabel(row.date, row.created_at)
+                      return (
+                        <>
+                          {dt.main}
+                          {dt.sub ? <span className="ml-1 text-[10px] opacity-70">{dt.sub}</span> : null}
+                        </>
+                      )
+                    })()}
                   </td>
                   <td className="px-4 py-3 font-medium whitespace-nowrap text-slate-700 dark:text-gray-300">
                     {company?.name ?? '—'}
@@ -2418,7 +2473,6 @@ function ListTab({
                             variant="destructive"
                             size="icon-sm"
                             onClick={() => deleteExpense(row)}
-                            disabled={deletingExpenseId === row.id}
                           >
                             <X className="h-3.5 w-3.5" />
                           </Button>
@@ -2436,6 +2490,7 @@ function ListTab({
             ) : null}
           </tbody>
         </table>
+        {totalsBar}
       </div>
 
       {!loading && rows.length === 0 && (

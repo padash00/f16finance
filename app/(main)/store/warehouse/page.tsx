@@ -55,7 +55,10 @@ import { isAbortError } from '@/lib/is-abort-error'
 import { LabelPrintDialog } from '@/components/store/label-print-dialog'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { useStoreScope } from '@/components/store/store-scope'
-import { useModalEscape } from '@/lib/client/use-modal-escape'
+import { usePersistentState } from '@/lib/client/use-persistent-state'
+import { CopyText } from '@/components/ui/copy-text'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
+import { toast } from '@/components/ui/use-toast'
 import type { LabelItem } from '@/components/store/label-print-dialog'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -143,11 +146,18 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
   const canPrintLabels = can('store-warehouse.print_labels')
 
   const { storeCompanyId } = useStoreScope()
-  // Точка, выбранная пользователем (или из ?company_id= в URL); null → серверный дефолт
-  const [chosenCompanyId, setChosenCompanyId] = useState<string | null>(() => {
-    if (typeof window === 'undefined') return null
-    try { return new URLSearchParams(window.location.search).get('company_id') } catch { return null }
-  })
+  // Точка магазина с памятью — ключ 'store.companyId' общий со «Витриной»,
+  // чтобы точка была одна на весь магазин; null → серверный дефолт.
+  // ?company_id= в URL имеет приоритет над сохранённым значением (эффект ниже
+  // срабатывает после загрузки из localStorage и перекрывает её).
+  const [chosenCompanyId, setChosenCompanyId] = usePersistentState<string | null>('store.companyId', null)
+  useEffect(() => {
+    try {
+      const fromUrl = new URLSearchParams(window.location.search).get('company_id')
+      if (fromUrl) setChosenCompanyId(fromUrl)
+    } catch { /* noop */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const [addMode, setAddMode] = useState<AddMode>('barcode')
   const [lines, setLines] = useState<StockLine[]>([])
@@ -179,8 +189,6 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState(false)
-  const [deleteConfirm, setDeleteConfirm] = useState<'selected' | 'all' | null>(null)
-  useModalEscape(!!deleteConfirm, () => setDeleteConfirm(null))
   const [showPrintLabels, setShowPrintLabels] = useState(false)
 
   const [editingWh, setEditingWh] = useState<string | null>(null)
@@ -318,7 +326,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
       setBarcodeResult(null)
       setTimeout(() => barcodeRef.current?.focus(), 100)
     } catch (err: any) {
-      alert(err?.message || 'Ошибка создания товара')
+      toast({ description: err?.message || 'Ошибка создания товара' })
     } finally {
       setCreatingItem(false)
     }
@@ -643,8 +651,14 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
 
   async function handleDelete(mode: 'selected' | 'all') {
     if (!selectedCompanyId) return
+    const ok = await confirmDialog({
+      title: mode === 'all' ? 'Очистить весь каталог?' : `Удалить ${selectedIds.size} поз.?`,
+      description: 'Будут удалены остатки из каталога и склада. Это действие нельзя отменить.',
+      confirmLabel: 'Удалить',
+      destructive: true,
+    })
+    if (!ok) return
     setDeleting(true)
-    setDeleteConfirm(null)
     try {
       const body: Record<string, unknown> = {
         action: 'deleteStock',
@@ -664,8 +678,9 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Ошибка удаления')
       setSelectedIds(new Set())
       await load()
+      toast({ description: mode === 'all' ? 'Каталог очищен' : 'Позиции удалены' })
     } catch (err: any) {
-      alert(err?.message || 'Ошибка удаления')
+      toast({ description: err?.message || 'Ошибка удаления' })
     } finally {
       setDeleting(false)
     }
@@ -688,7 +703,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
       })
       const json = await res.json().catch(() => null)
       if (!res.ok || !json?.ok) {
-        alert(json?.error || 'Ошибка сохранения')
+        toast({ description: json?.error || 'Ошибка сохранения' })
         return
       }
       setEditingWh(null)
@@ -835,14 +850,14 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>Операции со складом</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem disabled={selectedIds.size === 0 || deleting} onClick={() => setDeleteConfirm('selected')}>
+              <DropdownMenuItem disabled={selectedIds.size === 0 || deleting} onClick={() => void handleDelete('selected')}>
                 <Trash2 className="h-3.5 w-3.5" />
                 Удалить выбранные ({selectedIds.size})
               </DropdownMenuItem>
               <DropdownMenuItem
                 variant="destructive"
                 disabled={balances.length === 0 || deleting}
-                onClick={() => setDeleteConfirm('all')}
+                onClick={() => void handleDelete('all')}
               >
                 <Trash2 className="h-3.5 w-3.5" />
                 Очистить весь склад
@@ -915,7 +930,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium leading-snug text-foreground">{b.item?.name || 'Товар'}</p>
                         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
-                          <span className="font-mono">{b.item?.barcode || '—'}</span>
+                          <CopyText value={b.item?.barcode} className="font-mono" />
                           {b.item?.category?.name ? <span>· {b.item.category.name}</span> : null}
                         </div>
                       </div>
@@ -1036,7 +1051,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
                       </Tooltip>
                     </td>
                     <td className="w-36 py-2.5 px-2 align-middle">
-                      <span className="truncate font-mono text-xs text-muted-foreground">{b.item?.barcode || '—'}</span>
+                      <CopyText value={b.item?.barcode} className="truncate font-mono text-xs text-muted-foreground" />
                     </td>
                     <td className="w-36 py-2.5 px-2 align-middle">
                       <span className="line-clamp-1 text-xs text-muted-foreground">{b.item?.category?.name || '—'}</span>
@@ -1483,41 +1498,6 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
           </div>
         </SheetContent>
       </Sheet>
-
-      {deleteConfirm && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm overflow-y-auto p-4"
-          onClick={(e) => { if (e.target === e.currentTarget) setDeleteConfirm(null) }}>
-          <div className="w-full max-w-sm max-h-[calc(100vh-2rem)] overflow-y-auto rounded-2xl border border-border bg-white dark:bg-[#111827] p-6 shadow-2xl space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-rose-500/15">
-                <Trash2 className="h-5 w-5 text-rose-400" />
-              </div>
-              <div>
-                <p className="font-semibold text-foreground">
-                  {deleteConfirm === 'all' ? 'Очистить весь каталог?' : `Удалить ${selectedIds.size} поз.?`}
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Будут удалены остатки из каталога и склада. Это действие нельзя отменить.
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-3 justify-end">
-              <Button variant="outline" size="sm" onClick={() => setDeleteConfirm(null)} disabled={deleting}>
-                Отмена
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => handleDelete(deleteConfirm)}
-                disabled={deleting}
-              >
-                {deleting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Trash2 className="mr-1.5 h-3.5 w-3.5" />}
-                Удалить
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {showPrintLabels && (
         <LabelPrintDialog

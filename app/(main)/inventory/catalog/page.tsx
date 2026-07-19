@@ -4,7 +4,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { downloadReportPdf } from '@/lib/client/download-pdf'
 import { useApiCache } from '@/lib/client/use-api-cache'
 import { useCapabilities } from '@/lib/client/use-capabilities'
-import { Package, Pencil, Plus, Search, Trash2, Upload, Download, Check, X, ChevronLeft, ChevronRight, ShoppingCart, TrendingUp, Warehouse, Store, Tag, Loader2 } from 'lucide-react'
+import { Package, Pencil, Plus, Printer, Search, Trash2, Upload, Download, Check, X, ChevronLeft, ChevronRight, ShoppingCart, TrendingUp, Warehouse, Store, Tag, Loader2 } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -22,6 +22,10 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import ProductCardModal from '@/components/store/product-card-modal'
+import { LabelPrintDialog, type LabelItem } from '@/components/store/label-print-dialog'
+import { CopyText } from '@/components/ui/copy-text'
+import { usePersistentState } from '@/lib/client/use-persistent-state'
+import { useUnsavedGuard } from '@/lib/client/use-unsaved-guard'
 import { TableSkeleton } from '@/components/skeleton'
 import { InventoryLegacyRedirect } from '../legacy-redirect'
 
@@ -250,6 +254,7 @@ function genBarcode() {
 
 function ItemForm({
   form, onChange, categories, onSave, onCancel, loading,
+  existingItems, excludeId, nameInputRef, autoFocusName,
 }: {
   form: ItemFormData
   onChange: (f: ItemFormData) => void
@@ -257,6 +262,12 @@ function ItemForm({
   onSave: () => void
   onCancel: () => void
   loading: boolean
+  /** Список товаров каталога для проверки дубля штрихкода на лету */
+  existingItems?: { id: string; barcode: string; name: string }[]
+  /** id редактируемого товара — не считать его собственный штрихкод дублем */
+  excludeId?: string | null
+  nameInputRef?: React.Ref<HTMLInputElement>
+  autoFocusName?: boolean
 }) {
   const f = (key: keyof ItemFormData, val: string) => onChange({ ...form, [key]: val })
   const sectionLabel = 'text-[11px] font-semibold uppercase tracking-wide text-muted-foreground'
@@ -291,6 +302,12 @@ function ItemForm({
     setRecog((r) => ({ ...r, data: { ...r.data, found: 'applied' } }))
   }
 
+  // Дубль штрихкода на лету: подсказка + блокировка сохранения
+  const trimmedBarcode = form.barcode.trim()
+  const duplicateItem = trimmedBarcode
+    ? (existingItems || []).find((x) => x.barcode === trimmedBarcode && x.id !== excludeId)
+    : undefined
+
   const purchase = parseFloat(form.purchase_price) || 0
   const sale = parseFloat(form.sale_price) || 0
   const markup = purchase > 0 ? String(Math.round(((sale / purchase - 1) * 100 + Number.EPSILON) * 10) / 10) : ''
@@ -309,7 +326,7 @@ function ItemForm({
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <Label className={fieldLabel}>Наименование *</Label>
-            <Input value={form.name} onChange={(e) => f('name', e.target.value)} placeholder="Название товара" />
+            <Input ref={nameInputRef} autoFocus={autoFocusName} value={form.name} onChange={(e) => f('name', e.target.value)} placeholder="Название товара" />
           </div>
           <div>
             <Label className={fieldLabel}>Штрихкод *</Label>
@@ -320,6 +337,11 @@ function ItemForm({
               </Button>
               <Button type="button" variant="ghost" size="sm" className="shrink-0" onClick={() => f('barcode', genBarcode())} title="Сгенерировать внутренний штрихкод">Сген.</Button>
             </div>
+            {duplicateItem && (
+              <div className="mt-1 text-xs font-medium text-rose-600 dark:text-rose-400">
+                ⚠ Штрихкод уже занят: {duplicateItem.name}
+              </div>
+            )}
           </div>
           <div>
             <Label className={fieldLabel}>Категория</Label>
@@ -424,7 +446,7 @@ function ItemForm({
       </div>
 
       <div className="flex gap-2 pt-1">
-        <Button size="sm" onClick={onSave} disabled={loading || !form.name.trim() || !form.barcode.trim()}>
+        <Button size="sm" onClick={onSave} disabled={loading || !form.name.trim() || !form.barcode.trim() || !!duplicateItem}>
           <Check className="w-3.5 h-3.5 mr-1" />
           {loading ? 'Сохранение...' : 'Сохранить'}
         </Button>
@@ -453,11 +475,11 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
   const [tab, setTab] = useState<'catalog' | 'import'>('catalog')
   const [toast, setToast] = useState<string | null>(null)
 
-  // Filters
+  // Filters (категория/тип/сортировка/точка — с памятью в localStorage; поиск не запоминаем)
   const [search, setSearch] = useState('')
-  const [filterCategory, setFilterCategory] = useState('all')
-  const [filterType, setFilterType] = useState('all')
-  const [sortBy, setSortBy] = useState<'newest' | 'name'>('newest')
+  const [filterCategory, setFilterCategory] = usePersistentState('catalog.filterCategory', 'all')
+  const [filterType, setFilterType] = usePersistentState('catalog.filterType', 'all')
+  const [sortBy, setSortBy] = usePersistentState<'newest' | 'name'>('catalog.sortBy', 'newest')
   const [page, setPage] = useState(1)
   const [highlightId, setHighlightId] = useState<string | null>(null)
 
@@ -465,7 +487,7 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
   // у сотрудников остаётся своя правка по праву store-warehouse.edit)
   const canEditStock = isSuperAdmin
   const [companies, setCompanies] = useState<{ id: string; name: string }[]>([])
-  const [filterCompany, setFilterCompany] = useState('all')
+  const [filterCompany, setFilterCompany] = usePersistentState('catalog.filterCompany', 'all')
   const [editingQty, setEditingQty] = useState<{ id: string; field: 'wh' | 'sh' } | null>(null)
   const [editQtyVal, setEditQtyVal] = useState('')
   const [savingQty, setSavingQty] = useState(false)
@@ -474,9 +496,23 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
   // Edit / add
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<ItemFormData>(EMPTY_FORM)
+  const [editInitial, setEditInitial] = useState<ItemFormData | null>(null)
   const [showAdd, setShowAdd] = useState(false)
   const [addForm, setAddForm] = useState<ItemFormData>(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
+  const addNameRef = useRef<HTMLInputElement>(null)
+
+  // Защита несохранённой формы (закрытие крестиком/кликом мимо/Отмена)
+  const addDirty = JSON.stringify(addForm) !== JSON.stringify(EMPTY_FORM)
+  const guardAddClose = useUnsavedGuard(showAdd && addDirty)
+  const editDirty = editingId !== null && editInitial !== null && JSON.stringify(editForm) !== JSON.stringify(editInitial)
+  const guardEditClose = useUnsavedGuard(editDirty)
+
+  // Массовые действия: выбор чекбоксами + смена категории + печать ценников
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set())
+  const [bulkCategoryId, setBulkCategoryId] = useState('')
+  const [bulkAssigning, setBulkAssigning] = useState(false)
+  const [labelItems, setLabelItems] = useState<LabelItem[] | null>(null)
 
   // Import
   const [importFile, setImportFile] = useState<File | null>(null)
@@ -551,6 +587,12 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
     for (const i of items) if (i.category) map.set(i.category.id, i.category)
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'ru'))
   }, [allCategories, items])
+
+  // Список штрихкодов для проверки дублей в ItemForm
+  const barcodeIndex = useMemo(
+    () => items.map((i) => ({ id: i.id, barcode: i.barcode, name: i.name })),
+    [items],
+  )
 
   // Управление категориями (диалог)
   const [showCatManager, setShowCatManager] = useState(false)
@@ -627,6 +669,8 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
   const paginated = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   useEffect(() => { setPage(1) }, [search, filterCategory, filterType, sortBy, filterCompany])
+  // Смена точки = другой набор данных — сбрасываем выбор чекбоксами
+  useEffect(() => { setSelectedItemIds(new Set()) }, [filterCompany])
 
   // Totals across all filtered items (not just current page)
   const totals = filtered.reduce(
@@ -654,8 +698,7 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
   // ── Edit handlers ────────────────────────────────────────────────────────────
 
   function startEdit(item: CatalogItem) {
-    setEditingId(item.id)
-    setEditForm({
+    const form: ItemFormData = {
       name: item.name,
       barcode: item.barcode,
       unit: item.unit,
@@ -666,7 +709,91 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
       notes: item.notes || '',
       low_stock_threshold: item.low_stock_threshold != null ? String(item.low_stock_threshold) : '',
       requires_expiry: item.requires_expiry !== false,
+    }
+    setEditingId(item.id)
+    setEditForm(form)
+    setEditInitial(form)
+  }
+
+  // ── Selection / bulk category / labels ──────────────────────────────────────
+
+  function toggleSelect(id: string) {
+    setSelectedItemIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
     })
+  }
+
+  const allOnPageSelected = paginated.length > 0 && paginated.every((i) => selectedItemIds.has(i.id))
+
+  function toggleSelectPage() {
+    setSelectedItemIds((prev) => {
+      const next = new Set(prev)
+      if (allOnPageSelected) paginated.forEach((i) => next.delete(i.id))
+      else paginated.forEach((i) => next.add(i.id))
+      return next
+    })
+  }
+
+  const selectedItems = items.filter((i) => selectedItemIds.has(i.id))
+
+  function openLabelsForSelection() {
+    const list = selectedItems.map((i): LabelItem => ({
+      item_id: i.id,
+      name: i.name,
+      barcode: i.barcode,
+      sale_price: i.sale_price ?? null,
+      unit: i.unit || 'шт',
+    }))
+    if (list.length) setLabelItems(list)
+  }
+
+  async function assignCategoryBulk() {
+    if (!bulkCategoryId || selectedItems.length === 0) return
+    const catId = bulkCategoryId === '__none__' ? null : bulkCategoryId
+    setBulkAssigning(true)
+    let ok = 0
+    let fail = 0
+    try {
+      // updateItem в /api/admin/inventory — полная замена карточки, поэтому шлём все поля товара
+      for (const item of selectedItems) {
+        try {
+          const res = await fetch('/api/admin/inventory', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'updateItem',
+              id: item.id,
+              payload: {
+                name: item.name,
+                barcode: item.barcode,
+                category_id: catId,
+                sale_price: item.sale_price,
+                default_purchase_price: item.default_purchase_price,
+                unit: item.unit || 'шт',
+                notes: item.notes,
+                item_type: item.item_type,
+                low_stock_threshold: item.low_stock_threshold,
+              },
+            }),
+          })
+          const j = await res.json().catch(() => null)
+          if (!res.ok || j?.error) throw new Error(j?.error || 'Ошибка')
+          ok++
+        } catch {
+          fail++
+        }
+      }
+      setSelectedItemIds(new Set())
+      setBulkCategoryId('')
+      await loadItems()
+      await refreshCategories()
+      showToast(fail > 0 ? `Категория назначена: ${ok}, ошибок: ${fail}` : `Категория назначена: ${ok}`)
+    } finally {
+      setBulkAssigning(false)
+    }
   }
 
   async function saveEdit() {
@@ -758,6 +885,16 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
           })
         } catch { /* фото опционально — не блокируем создание товара */ }
       }
+      // Ценник для нового товара — данные формы фиксируем до сброса
+      const newLabel: LabelItem | null = newItemId
+        ? {
+            item_id: newItemId,
+            name: String(json2?.data?.name || addForm.name.trim()),
+            barcode: String(json2?.data?.barcode || addForm.barcode.trim()),
+            sale_price: parseFloat(addForm.sale_price) || 0,
+            unit: addForm.unit.trim() || 'шт',
+          }
+        : null
       setShowAdd(false)
       setAddForm(EMPTY_FORM)
       await loadItems()
@@ -772,6 +909,8 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
         setTimeout(() => setHighlightId(null), 5000)
       }
       showToast('Товар добавлен')
+      // Сразу открываем печать ценника/штрихкода для нового товара
+      if (newLabel) setLabelItems([newLabel])
     } catch (e: any) {
       showToast('Ошибка: ' + e.message)
     } finally {
@@ -1055,8 +1194,11 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
       {tab === 'catalog' && (
         <div className="space-y-4">
           {/* Add form — модальное окно */}
-          <Dialog open={showAdd} onOpenChange={(open) => { if (!open) { setShowAdd(false); setAddForm(EMPTY_FORM) } }}>
-            <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-2xl">
+          <Dialog open={showAdd} onOpenChange={(open) => { if (!open) void guardAddClose(() => { setShowAdd(false); setAddForm(EMPTY_FORM) }) }}>
+            <DialogContent
+              className="max-h-[88vh] overflow-y-auto sm:max-w-2xl"
+              onOpenAutoFocus={(e) => { e.preventDefault(); addNameRef.current?.focus() }}
+            >
               <DialogHeader>
                 <DialogTitle>Добавить товар</DialogTitle>
                 <DialogDescription>Новая карточка товара в каталоге. Остаток добавляется через приёмку/оприходование.</DialogDescription>
@@ -1066,8 +1208,10 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
                 onChange={setAddForm}
                 categories={categories}
                 onSave={saveAdd}
-                onCancel={() => { setShowAdd(false); setAddForm(EMPTY_FORM) }}
+                onCancel={() => void guardAddClose(() => { setShowAdd(false); setAddForm(EMPTY_FORM) })}
                 loading={saving}
+                existingItems={barcodeIndex}
+                nameInputRef={addNameRef}
               />
             </DialogContent>
           </Dialog>
@@ -1082,6 +1226,17 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
                   placeholder="Поиск по названию или штрихкоду..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    // Сканер-поиск: Enter + точное совпадение штрихкода → сразу карточка товара
+                    if (e.key !== 'Enter') return
+                    const code = search.trim()
+                    if (!code) return
+                    const hit = items.find((i) => i.barcode === code)
+                    if (hit) {
+                      setCardItemId(hit.id)
+                      setSearch('')
+                    }
+                  }}
                 />
               </div>
               <Select value={filterCategory || 'all'} onValueChange={setFilterCategory}>
@@ -1147,6 +1302,41 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
             </div>
           )}
 
+          {/* Панель массовых действий — видна при выбранных чекбоксами товарах */}
+          {selectedItemIds.size > 0 && (
+            <Card className="border-emerald-500/30 bg-emerald-500/[0.05] p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-medium">Выбрано: {selectedItemIds.size}</span>
+                <Button variant="outline" size="sm" className="h-8 text-xs" onClick={openLabelsForSelection}>
+                  <Printer className="mr-1.5 h-3.5 w-3.5" />
+                  Ценники ({selectedItemIds.size})
+                </Button>
+                {canEdit && (
+                  <>
+                    <Select value={bulkCategoryId || undefined} onValueChange={setBulkCategoryId}>
+                      <SelectTrigger className="h-8 w-[180px] text-sm">
+                        <SelectValue placeholder="Категория" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">Без категории</SelectItem>
+                        {categories.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button size="sm" className="h-8 text-xs" disabled={!bulkCategoryId || bulkAssigning} onClick={() => void assignCategoryBulk()}>
+                      {bulkAssigning ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Tag className="mr-1.5 h-3.5 w-3.5" />}
+                      {bulkAssigning ? 'Назначаю...' : 'Назначить'}
+                    </Button>
+                  </>
+                )}
+                <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setSelectedItemIds(new Set())}>
+                  Снять выбор
+                </Button>
+              </div>
+            </Card>
+          )}
+
           {/* Table */}
           <Card className="border-border/70 overflow-hidden">
             {loading ? (
@@ -1163,6 +1353,15 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
                 <table className="w-full min-w-[1100px] text-sm">
                   <thead>
                     <tr className="border-b border-border/60 bg-muted/30">
+                      <th className="w-8 px-2 py-2.5 text-center">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 cursor-pointer accent-emerald-500"
+                          checked={allOnPageSelected}
+                          onChange={toggleSelectPage}
+                          title="Выбрать все на странице"
+                        />
+                      </th>
                       <th className="px-3 py-2.5 text-left font-medium text-muted-foreground text-xs">Название</th>
                       <th className="px-3 py-2.5 text-left font-medium text-muted-foreground text-xs">Штрихкод</th>
                       <th className="px-3 py-2.5 text-left font-medium text-muted-foreground text-xs">Категория</th>
@@ -1179,6 +1378,14 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
                     {paginated.map((item) => (
                       <Fragment key={item.id}>
                         <tr className={`hover:bg-muted/20 transition-colors ${!item.is_active ? 'opacity-50' : ''} ${item.id === highlightId ? 'bg-emerald-500/10' : ''}`}>
+                          <td className="w-8 px-2 py-2.5 text-center">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 cursor-pointer accent-emerald-500"
+                              checked={selectedItemIds.has(item.id)}
+                              onChange={() => toggleSelect(item.id)}
+                            />
+                          </td>
                           <td className="px-3 py-2.5 font-medium max-w-[260px]">
                             <button
                               type="button"
@@ -1197,7 +1404,9 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
                               <Badge variant="outline" className="text-[10px] mt-0.5 h-4">расходник</Badge>
                             )}
                           </td>
-                          <td className="px-3 py-2.5 text-muted-foreground font-mono text-xs">{item.barcode}</td>
+                          <td className="px-3 py-2.5 text-muted-foreground">
+                            <CopyText value={item.barcode} className="font-mono text-xs" />
+                          </td>
                           <td className="px-3 py-2.5">
                             {item.category ? (
                               <Badge variant="secondary" className="text-xs">{item.category.name}</Badge>
@@ -1335,14 +1544,17 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
                         </tr>
                         {editingId === item.id && (
                           <tr>
-                            <td colSpan={10} className="px-4 py-3 bg-muted/30 border-b border-primary/20">
+                            <td colSpan={11} className="px-4 py-3 bg-muted/30 border-b border-primary/20">
                               <ItemForm
                                 form={editForm}
                                 onChange={setEditForm}
                                 categories={categories}
                                 onSave={saveEdit}
-                                onCancel={() => setEditingId(null)}
+                                onCancel={() => void guardEditClose(() => setEditingId(null))}
                                 loading={saving}
+                                existingItems={barcodeIndex}
+                                excludeId={editingId}
+                                autoFocusName
                               />
                             </td>
                           </tr>
@@ -1353,7 +1565,7 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
                   {filtered.length > 0 && (
                     <tfoot>
                       <tr className="border-t-2 border-border/50 bg-muted/30">
-                        <td colSpan={6} className="px-3 py-2.5 text-xs text-muted-foreground font-medium text-right">
+                        <td colSpan={7} className="px-3 py-2.5 text-xs text-muted-foreground font-medium text-right">
                           Итого ({filtered.length} поз.):
                         </td>
                         <td className="px-3 py-2.5 text-right">
@@ -1766,6 +1978,11 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
         canEdit={canEdit}
         onSaved={() => void loadItems()}
       />
+
+      {/* Печать ценников: массово по чекбоксам и автоматически для нового товара */}
+      {labelItems && (
+        <LabelPrintDialog items={labelItems} onClose={() => setLabelItems(null)} />
+      )}
     </div>
   )
 }

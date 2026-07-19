@@ -4,6 +4,9 @@ import { useEffect, useMemo, useState, useCallback, useDeferredValue, useRef } f
 import { useRouter } from 'next/navigation'
 import { createPortal } from 'react-dom'
 import { downloadReportPdf } from '@/lib/client/download-pdf'
+import { usePersistentState } from '@/lib/client/use-persistent-state'
+import { deleteWithUndo } from '@/lib/client/undo-delete'
+import { MoneyInput } from '@/components/ui/money-input'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useCashlessLabels } from '@/lib/client/use-cashless-labels'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
@@ -274,11 +277,11 @@ const isExtraCompany = (c?: Company | null) => {
 const stripExtraSuffix = (s: string) => s.replace(/\s*•\s*(PS5|VR)\s*$/i, '').trim()
 
 const parseMoneyInput = (raw: string): number | null => {
-  const cleaned = raw.replace(/[^\d]/g, '')
+  const cleaned = raw.replace(/\s/g, '').replace(',', '.').replace(/[^\d.]/g, '')
   if (cleaned === '') return null
   const n = Number(cleaned)
   if (!Number.isFinite(n)) return null
-  return Math.max(0, n)
+  return Math.max(0, Math.round(n))
 }
 
 async function logIncomeEvent(event: {
@@ -303,11 +306,12 @@ async function logIncomeEvent(event: {
 export default function IncomePage() {
   const cashLabels = useCashlessLabels()
   // Фильтры (объявляем до хуков — они передаются в useIncome)
-  const [dateFrom, setDateFrom] = useState(DateUtils.monthStartISO())
-  const [dateTo, setDateTo] = useState(DateUtils.todayISO())
-  const [activePreset, setActivePreset] = useState<DateRangePreset>('month')
+  // Период/точка/вкладка/порядок ленты помнятся между визитами (URL-параметры имеют приоритет)
+  const [dateFrom, setDateFrom] = usePersistentState('income.dateFrom', DateUtils.monthStartISO())
+  const [dateTo, setDateTo] = usePersistentState('income.dateTo', DateUtils.todayISO())
+  const [activePreset, setActivePreset] = usePersistentState<DateRangePreset>('income.preset', 'month')
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
-  const [companyFilter, setCompanyFilter] = useState<'all' | string>('all')
+  const [companyFilter, setCompanyFilter] = usePersistentState<'all' | string>('income.company', 'all')
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -327,9 +331,9 @@ export default function IncomePage() {
   // Дополнительные настройки
   const [includeExtraInTotals, setIncludeExtraInTotals] = useState(false)
   // Порядок ленты операций: false = новые сверху (по умолчанию), true = с начала месяца
-  const [feedSortAsc, setFeedSortAsc] = useState(false)
+  const [feedSortAsc, setFeedSortAsc] = usePersistentState('income.feedSortAsc', false)
   const [hideExtraRows, setHideExtraRows] = useState(false)
-  const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'feed'>('overview')
+  const [activeTab, setActiveTab] = usePersistentState<'overview' | 'analytics' | 'feed'>('income.activeTab', 'overview')
 
   // Показ/скрытие фильтров
   const [showFilters, setShowFilters] = useState(false)
@@ -351,7 +355,6 @@ export default function IncomePage() {
   const [editCardDraft, setEditCardDraft] = useState('')
   const [editCommentDraft, setEditCommentDraft] = useState('')
   const [savingIncomeEdit, setSavingIncomeEdit] = useState(false)
-  const [deletingIncomeId, setDeletingIncomeId] = useState<string | null>(null)
 
   // Справочники и данные — через хуки, без прямых Supabase-запросов
   const { companies } = useCompanies()
@@ -759,28 +762,26 @@ export default function IncomePage() {
     editingIncome,
   ])
 
-  const deleteIncome = useCallback(async (row: IncomeRow) => {
-    if (!confirm('Удалить эту запись дохода?')) return
-
-    setDeletingIncomeId(row.id)
-    try {
-      const response = await fetch('/api/admin/incomes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'deleteIncome',
-          incomeId: row.id,
-        }),
-      })
-      const json = await response.json().catch(() => null)
-      if (!response.ok) throw new Error(json?.error || `Ошибка запроса (${response.status})`)
-
-      setRows((curr) => curr.filter((item) => item.id !== row.id))
-    } catch (err: any) {
-      setError(err?.message || 'Не удалось удалить доход')
-    } finally {
-      setDeletingIncomeId(null)
-    }
+  // Удаление с undo: строка исчезает сразу, DELETE уходит через 5 сек, тост даёт «Отменить»
+  const deleteIncome = useCallback((row: IncomeRow) => {
+    const total = (row.cash_amount || 0) + (row.kaspi_amount || 0) + (row.online_amount || 0) + (row.card_amount || 0)
+    deleteWithUndo({
+      message: `Доход ${Formatters.moneyDetailed(total)} от ${DateUtils.formatDate(row.date)} удалён`,
+      hide: () => setRows((curr) => curr.filter((item) => item.id !== row.id)),
+      restore: () => setRows((curr) => [row, ...curr]),
+      commit: async () => {
+        const response = await fetch('/api/admin/incomes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'deleteIncome',
+            incomeId: row.id,
+          }),
+        })
+        const json = await response.json().catch(() => null)
+        if (!response.ok) throw new Error(json?.error || `Ошибка запроса (${response.status})`)
+      },
+    })
   }, [])
 
   // Пресеты дат
@@ -1324,7 +1325,12 @@ export default function IncomePage() {
               skipBlurSaveRef={skipBlurSaveRef}
               openIncomeEditor={openIncomeEditor}
               deleteIncome={deleteIncome}
-              deletingIncomeId={deletingIncomeId}
+              totals={{
+                count: operationRows.length,
+                cash: analytics.cash,
+                cashless: analytics.kaspi + analytics.card + analytics.online,
+                total: analytics.total,
+              }}
             />
           )}
 
@@ -1370,12 +1376,12 @@ export default function IncomePage() {
 
                   <label className="space-y-2 text-sm text-body">
                     <span>Наличные</span>
-                    <input value={editCashDraft} onChange={(e) => setEditCashDraft(e.target.value)} className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground outline-none focus:border-amber-500/40" />
+                    <MoneyInput value={editCashDraft} onValueChange={setEditCashDraft} className="w-full rounded-lg border-border bg-card px-3 py-2 text-foreground focus:border-amber-500/40" />
                   </label>
 
                   <label className="space-y-2 text-sm text-body">
                     <span>{cashLabels.pos}</span>
-                    <input value={editKaspiDraft} onChange={(e) => setEditKaspiDraft(e.target.value)} className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground outline-none focus:border-amber-500/40" />
+                    <MoneyInput value={editKaspiDraft} onValueChange={setEditKaspiDraft} className="w-full rounded-lg border-border bg-card px-3 py-2 text-foreground focus:border-amber-500/40" />
                   </label>
 
                   {editingIncome?.shift === 'night' && (
@@ -1384,11 +1390,11 @@ export default function IncomePage() {
                         {cashLabels.providerName} до 00:00
                         <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] text-blue-300">только для ночных смен</span>
                       </span>
-                      <input
+                      <MoneyInput
                         value={editKaspiBeforeMidnightDraft}
-                        onChange={(e) => setEditKaspiBeforeMidnightDraft(e.target.value)}
+                        onValueChange={setEditKaspiBeforeMidnightDraft}
                         placeholder={`Из кабинета ${cashLabels.providerName} — сколько ${cashLabels.providerName} пришло до полуночи`}
-                        className="w-full rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2 text-foreground outline-none focus:border-blue-500/40"
+                        className="w-full rounded-lg border-blue-500/20 bg-blue-500/5 px-3 py-2 text-foreground focus:border-blue-500/40"
                       />
                       <p className="text-xs text-muted-foreground">Нужно для точного суточного расчёта в ОПиУ. Если не знаете — оставьте пустым.</p>
                     </label>
@@ -1396,12 +1402,12 @@ export default function IncomePage() {
 
                   <label className="space-y-2 text-sm text-body">
                     <span>Онлайн</span>
-                    <input value={editOnlineDraft} onChange={(e) => setEditOnlineDraft(e.target.value)} className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground outline-none focus:border-amber-500/40" />
+                    <MoneyInput value={editOnlineDraft} onValueChange={setEditOnlineDraft} className="w-full rounded-lg border-border bg-card px-3 py-2 text-foreground focus:border-amber-500/40" />
                   </label>
 
                   <label className="space-y-2 text-sm text-body">
                     <span>Карта</span>
-                    <input value={editCardDraft} onChange={(e) => setEditCardDraft(e.target.value)} className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground outline-none focus:border-amber-500/40" />
+                    <MoneyInput value={editCardDraft} onValueChange={setEditCardDraft} className="w-full rounded-lg border-border bg-card px-3 py-2 text-foreground focus:border-amber-500/40" />
                   </label>
 
                   <label className="space-y-2 text-sm text-body md:col-span-2">
@@ -1786,11 +1792,11 @@ function IncomeRowCompact({
           <span className="text-pink-400 font-mono">{row.online_amount ? Formatters.moneyDetailed(row.online_amount) : '—'}</span>
         ) : editingOnlineId === row.id ? (
           <div className="flex items-center gap-1">
-            <input
+            <MoneyInput
               autoFocus
               inputMode="numeric"
               value={onlineDraft}
-              onChange={(e) => setOnlineDraft(e.target.value)}
+              onValueChange={setOnlineDraft}
               onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
                 if (e.key === 'Escape') {
                   skipBlurSaveRef.current = true
@@ -1815,7 +1821,7 @@ function IncomeRowCompact({
                 setOnlineDraft('')
                 saveOnlineAmount(row, val)
               }}
-              className="w-20 h-6 text-right px-1 rounded border border-pink-500 bg-card text-foreground text-xs outline-none"
+              className="w-20 h-6 min-w-0 text-right px-1 py-0 rounded border-pink-500 bg-card text-foreground text-xs md:text-xs"
             />
           </div>
         ) : (
@@ -1930,14 +1936,15 @@ function FeedTab({
   skipBlurSaveRef,
   openIncomeEditor,
   deleteIncome,
-  deletingIncomeId,
+  totals,
 }: any) {
   const sortedRows = [...displayRows].sort((a: IncomeRow, b: IncomeRow) => {
     const cmp = String(a.date).localeCompare(String(b.date)) || String(a.id).localeCompare(String(b.id))
     return sortAsc ? cmp : -cmp
   })
   return (
-    <Card className="p-0 border-0 bg-white dark:bg-slate-800/50 backdrop-blur-sm overflow-hidden">
+    // overflow-hidden убран: он ломает position:sticky у прилипающего итога внизу
+    <Card className="p-0 border-0 bg-white dark:bg-slate-800/50 backdrop-blur-sm">
       <div className="flex items-center justify-between gap-2 p-4 border-b border-border">
         <h3 className="text-sm font-semibold text-foreground">Все операции ({displayRows.length})</h3>
         <button
@@ -1974,10 +1981,17 @@ function FeedTab({
               skipBlurSaveRef={skipBlurSaveRef}
               openIncomeEditor={openIncomeEditor}
               deleteIncome={deleteIncome}
-              deletingIncomeId={deletingIncomeId}
             />
           ))
         )}
+        {totals && displayRows.length > 0 ? (
+          <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-b-[1.4rem] border-t border-border bg-white/95 dark:bg-slate-900/95 backdrop-blur px-4 py-2.5 text-xs">
+            <span className="text-muted-foreground">За период: {totals.count} операций</span>
+            <span className="font-mono text-amber-500">Нал {Formatters.moneyDetailed(totals.cash)}</span>
+            <span className="font-mono text-blue-400">Безнал {Formatters.moneyDetailed(totals.cashless)}</span>
+            <span className="ml-auto font-mono font-bold text-foreground">Итого {Formatters.moneyDetailed(totals.total)}</span>
+          </div>
+        ) : null}
       </div>
     </Card>
   )
@@ -1998,7 +2012,6 @@ function IncomeRowFull({
   skipBlurSaveRef,
   openIncomeEditor,
   deleteIncome,
-  deletingIncomeId,
 }: any) {
   const cashLabels = useCashlessLabels()
   const total = (row.cash_amount || 0) + (row.kaspi_amount || 0) + (row.online_amount || 0) + (row.card_amount || 0)
@@ -2058,11 +2071,11 @@ function IncomeRowFull({
               ) : !canManageIncome ? (
                 <div className="text-pink-400 font-mono">{row.online_amount ? Formatters.moneyDetailed(row.online_amount) : '—'}</div>
               ) : editingOnlineId === row.id ? (
-                <input
+                <MoneyInput
                   autoFocus
                   inputMode="numeric"
                   value={onlineDraft}
-                  onChange={(e) => setOnlineDraft(e.target.value)}
+                  onValueChange={setOnlineDraft}
                   onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
                     if (e.key === 'Escape') {
                       skipBlurSaveRef.current = true
@@ -2087,7 +2100,7 @@ function IncomeRowFull({
                     setOnlineDraft('')
                     saveOnlineAmount(row, val)
                   }}
-                  className="w-24 h-7 text-right px-2 rounded border border-pink-500 bg-card text-foreground text-sm outline-none"
+                  className="w-24 h-7 min-w-0 text-right px-2 py-0 rounded border-pink-500 bg-card text-foreground text-sm md:text-sm"
                 />
               ) : (
                 <button
@@ -2120,7 +2133,6 @@ function IncomeRowFull({
                     variant="destructive"
                     size="icon-sm"
                     onClick={() => deleteIncome(row)}
-                    disabled={deletingIncomeId === row.id}
                   >
                     <X className="h-3.5 w-3.5" />
                   </Button>

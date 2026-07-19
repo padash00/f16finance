@@ -8,6 +8,10 @@ import { downloadReportPdf } from '@/lib/client/download-pdf'
 import { CardSkeleton, TableSkeleton } from '@/components/skeleton'
 
 import { AdminPageHeader, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
+import { usePersistentState } from '@/lib/client/use-persistent-state'
+import { CopyText } from '@/components/ui/copy-text'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
+import { toast } from '@/components/ui/use-toast'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -101,7 +105,7 @@ export default function CustomersPage({ embedded = false }: { embedded?: boolean
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [companyFilter, setCompanyFilter] = useState('')
+  const [companyFilter, setCompanyFilter] = usePersistentState('customers.companyFilter', '')
 
   // Dialogs
   const [showAdd, setShowAdd] = useState(false)
@@ -225,7 +229,13 @@ export default function CustomersPage({ embedded = false }: { embedded?: boolean
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Деактивировать клиента?')) return
+    const ok = await confirmDialog({
+      title: 'Деактивировать клиента?',
+      description: 'Клиент будет скрыт из списка. История покупок сохранится.',
+      confirmLabel: 'Деактивировать',
+      destructive: true,
+    })
+    if (!ok) return
     try {
       const res = await fetch('/api/admin/customers', {
         method: 'POST',
@@ -235,8 +245,9 @@ export default function CustomersPage({ embedded = false }: { embedded?: boolean
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Ошибка')
       await load()
+      toast({ description: 'Клиент деактивирован' })
     } catch (err: any) {
-      alert(err?.message || 'Ошибка удаления')
+      toast({ description: err?.message || 'Ошибка удаления' })
     }
   }
 
@@ -462,10 +473,14 @@ export default function CustomersPage({ embedded = false }: { embedded?: boolean
                         <p className="font-medium">{customer.name}</p>
                         {customer.email && <p className="text-xs text-muted-foreground">{customer.email}</p>}
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground">{customer.phone || '—'}</td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        <CopyText value={customer.phone} />
+                      </td>
                       <td className="px-4 py-3">
                         {customer.card_number ? (
-                          <Badge variant="outline" className="font-mono text-xs">{customer.card_number}</Badge>
+                          <CopyText value={customer.card_number}>
+                            <Badge variant="outline" className="font-mono text-xs">{customer.card_number}</Badge>
+                          </CopyText>
                         ) : '—'}
                       </td>
                       <td className="px-4 py-3 text-right">
@@ -738,11 +753,11 @@ export default function CustomersPage({ embedded = false }: { embedded?: boolean
               <div className="grid grid-cols-2 gap-2">
                 <div className="rounded-xl border border-border bg-surface-muted p-3">
                   <p className="text-xs text-muted-foreground">Телефон</p>
-                  <p className="mt-1 font-medium">{detailCustomer.phone || '—'}</p>
+                  <p className="mt-1 font-medium"><CopyText value={detailCustomer.phone} /></p>
                 </div>
                 <div className="rounded-xl border border-border bg-surface-muted p-3">
                   <p className="text-xs text-muted-foreground">Карта</p>
-                  <p className="mt-1 font-mono">{detailCustomer.card_number || '—'}</p>
+                  <p className="mt-1 font-mono"><CopyText value={detailCustomer.card_number} /></p>
                 </div>
                 <div className="rounded-xl border border-border bg-surface-muted p-3">
                   <p className="text-xs text-muted-foreground">Баллы</p>

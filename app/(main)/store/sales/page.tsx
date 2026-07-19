@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { useApiCache } from '@/lib/client/use-api-cache'
+import { usePersistentState } from '@/lib/client/use-persistent-state'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { PageSkeleton } from '@/components/skeleton'
 import { useStoreScope } from '@/components/store/store-scope'
@@ -59,6 +60,7 @@ type ProdData = {
 }
 type Company = { id: string; name: string }
 type Tab = 'monitor' | 'best' | 'profit' | 'stock' | 'abc' | 'forecast' | 'points'
+type Preset = 'today' | 'yesterday' | '7d' | '30d' | 'month' | 'custom'
 
 const card = 'rounded-2xl border border-border bg-white dark:bg-slate-900/60 shadow-lg shadow-black/20'
 const inputCls = 'rounded-xl border border-border bg-white dark:bg-slate-950/50 px-3 py-2 text-sm text-foreground placeholder-slate-500 [color-scheme:dark] focus:border-emerald-400/50 focus:outline-none'
@@ -89,11 +91,15 @@ const EMBED_TABS: Tab[] = ['abc', 'forecast', 'points']
 export default function SalesMonitorPage() {
   const today = almatyDate()
 
-  const [tab, setTab] = useState<Tab>('monitor')
-  const [preset, setPreset] = useState<'today' | 'yesterday' | '7d' | '30d' | 'month' | 'custom'>('today')
+  // Память фильтров: вкладка, точка, период. Даты (from/to) — обычный state:
+  // относительные пресеты («сегодня», «7 дней») пересчитываются от текущей даты
+  // эффектом ниже, а произвольный диапазон хранится в 'storeSales.range'.
+  const [tab, setTab] = usePersistentState<Tab>('storeSales.tab', 'monitor')
+  const [preset, setPreset] = usePersistentState<Preset>('storeSales.preset', 'today')
+  const [savedRange, setSavedRange] = usePersistentState<{ from: string; to: string } | null>('storeSales.range', null)
   const [from, setFrom] = useState(today)
   const [to, setTo] = useState(today)
-  const [companyId, setCompanyId] = useState('')
+  const [companyId, setCompanyId] = usePersistentState('storeSales.companyId', '')
   const { storeCompanyId } = useStoreScope()
   const [companies, setCompanies] = useState<Company[]>([])
   const [category, setCategory] = useState('')
@@ -141,7 +147,7 @@ export default function SalesMonitorPage() {
     setLastUpdated(Date.now())
   }, [mon])
 
-  function applyPreset(p: typeof preset) {
+  function applyPreset(p: Preset) {
     setPreset(p)
     if (p === 'today') { setFrom(today); setTo(today) }
     else if (p === 'yesterday') { setFrom(dateMinus(1)); setTo(dateMinus(1)) }
@@ -149,6 +155,19 @@ export default function SalesMonitorPage() {
     else if (p === '30d') { setFrom(dateMinus(29)); setTo(today) }
     else if (p === 'month') { setFrom(`${today.slice(0, 7)}-01`); setTo(today) }
   }
+
+  // Восстановление периода из памяти: относительные пресеты пересчитываются от
+  // сегодняшней даты (сохранённое «сегодня» не должно застрять на вчера),
+  // произвольный диапазон берётся из savedRange. Срабатывает после загрузки
+  // localStorage (usePersistentState меняет preset/savedRange) и при смене пресета.
+  useEffect(() => {
+    if (preset === 'custom') {
+      if (savedRange?.from && savedRange?.to) { setFrom(savedRange.from); setTo(savedRange.to) }
+      return
+    }
+    applyPreset(preset)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preset, savedRange])
 
   useEffect(() => {
     fetch('/api/admin/companies', { cache: 'no-store' }).then((r) => r.json()).then((j) => setCompanies(j.data || [])).catch(() => {})
@@ -213,9 +232,9 @@ export default function SalesMonitorPage() {
           </button>
         ))}
         <div className="flex items-center gap-1.5">
-          <DatePicker value={from} max={to} onChange={(v) => { setFrom(v); setPreset('custom') }} className={inputCls} />
+          <DatePicker value={from} max={to} onChange={(v) => { setFrom(v); setPreset('custom'); setSavedRange({ from: v, to }) }} className={inputCls} />
           <span className="text-slate-500">—</span>
-          <DatePicker value={to} max={today} onChange={(v) => { setTo(v); setPreset('custom') }} className={inputCls} />
+          <DatePicker value={to} max={today} onChange={(v) => { setTo(v); setPreset('custom'); setSavedRange({ from, to: v }) }} className={inputCls} />
         </div>
         {!storeCompanyId && (
           <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} className={`${inputCls} w-full sm:w-auto`}>
