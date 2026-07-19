@@ -8,7 +8,7 @@
  *   <CopyText value={phone}>{formattedPhone}</CopyText>
  */
 
-import { useToast } from '@/components/ui/use-toast'
+import { useToast } from '@/hooks/use-toast'
 
 export function CopyText({
   value,

@@ -11,7 +11,7 @@ import { AdminPageHeader, adminTableStickyTheadClass } from '@/components/admin/
 import { usePersistentState } from '@/lib/client/use-persistent-state'
 import { CopyText } from '@/components/ui/copy-text'
 import { confirmDialog } from '@/components/ui/confirm-dialog'
-import { toast } from '@/components/ui/use-toast'
+import { toast } from '@/hooks/use-toast'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'

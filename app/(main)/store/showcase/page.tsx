@@ -45,7 +45,7 @@ import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { useStoreScope } from '@/components/store/store-scope'
 import { usePersistentState } from '@/lib/client/use-persistent-state'
 import { CopyText } from '@/components/ui/copy-text'
-import { toast } from '@/components/ui/use-toast'
+import { toast } from '@/hooks/use-toast'
 import { LabelPrintDialog } from '@/components/store/label-print-dialog'
 import type { LabelItem } from '@/components/store/label-print-dialog'
 

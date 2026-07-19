@@ -17,7 +17,7 @@
  */
 
 import { ToastAction } from '@/components/ui/toast'
-import { toast } from '@/components/ui/use-toast'
+import { toast } from '@/hooks/use-toast'
 
 const UNDO_MS = 5000
 
