@@ -40,7 +40,9 @@ export async function GET(req: Request) {
       if (companyScope.allowedCompanyIds.length === 0) {
         return json({ ok: true, data: [] })
       }
-      query = query.in('company_id', companyScope.allowedCompanyIds)
+      // company_id null = общий клиент сети (создан без привязки к точке) —
+      // показываем вместе со своими точками, как это делает POS
+      query = query.or(`company_id.is.null,company_id.in.(${companyScope.allowedCompanyIds.join(',')})`)
     }
 
     const { data, error } = await query
