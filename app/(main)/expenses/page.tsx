@@ -1430,6 +1430,8 @@ export default function ExpensesPage() {
           {activeTab === 'list' && (
             <ListTab
               rows={rows}
+              sortMode={sortMode}
+              setSortMode={setSortMode}
               loading={loading}
               loadingMore={loadingMore}
               hasMore={hasMore}
@@ -2057,6 +2059,8 @@ function AnalyticsTab({ analytics }: any) {
 
 function ListTab({
   rows,
+  sortMode,
+  setSortMode,
   loading,
   loadingMore,
   hasMore,
@@ -2109,6 +2113,18 @@ function ListTab({
 
   return (
     <Card className="border-0 bg-white dark:bg-gray-800/50 backdrop-blur-sm overflow-hidden">
+      <div className="flex items-center justify-between gap-2 border-b border-border p-4">
+        <h3 className="text-sm font-semibold text-foreground">Все операции ({rows.length})</h3>
+        <button
+          type="button"
+          onClick={() => setSortMode(sortMode === 'date_asc' ? 'date_desc' : 'date_asc')}
+          title={sortMode === 'date_asc' ? 'Сейчас: с начала месяца. Нажмите — новые сверху' : 'Сейчас: новые сверху. Нажмите — с начала месяца'}
+          className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground transition hover:bg-surface-hover hover:text-foreground"
+        >
+          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${sortMode === 'date_asc' ? 'rotate-180' : ''}`} />
+          {sortMode === 'date_asc' ? 'Сначала старые' : 'Сначала новые'}
+        </button>
+      </div>
       {/* Мобильная версия: карточки расходов */}
       {rows.length > 0 && (
         <div className="space-y-3 p-3 max-h-[72vh] overflow-y-auto sm:hidden">

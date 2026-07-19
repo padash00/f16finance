@@ -326,6 +326,8 @@ export default function IncomePage() {
   
   // Дополнительные настройки
   const [includeExtraInTotals, setIncludeExtraInTotals] = useState(false)
+  // Порядок ленты операций: false = новые сверху (по умолчанию), true = с начала месяца
+  const [feedSortAsc, setFeedSortAsc] = useState(false)
   const [hideExtraRows, setHideExtraRows] = useState(false)
   const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'feed'>('overview')
 
@@ -1305,8 +1307,10 @@ export default function IncomePage() {
           )}
 
             {activeTab === 'feed' && (
-              <FeedTab 
+              <FeedTab
                 displayRows={operationRows}
+                sortAsc={feedSortAsc}
+                onToggleSort={() => setFeedSortAsc((v) => !v)}
                 companyName={companyName}
                 operatorName={operatorName}
                 isExtraRow={isExtraRow}
@@ -1909,8 +1913,10 @@ function AnalyticsTab({ analytics, dateFrom, dateTo }: any) {
   )
 }
 
-function FeedTab({ 
+function FeedTab({
   displayRows,
+  sortAsc,
+  onToggleSort,
   companyName,
   operatorName,
   isExtraRow,
@@ -1926,10 +1932,23 @@ function FeedTab({
   deleteIncome,
   deletingIncomeId,
 }: any) {
+  const sortedRows = [...displayRows].sort((a: IncomeRow, b: IncomeRow) => {
+    const cmp = String(a.date).localeCompare(String(b.date)) || String(a.id).localeCompare(String(b.id))
+    return sortAsc ? cmp : -cmp
+  })
   return (
     <Card className="p-0 border-0 bg-white dark:bg-slate-800/50 backdrop-blur-sm overflow-hidden">
-      <div className="p-4 border-b border-border">
+      <div className="flex items-center justify-between gap-2 p-4 border-b border-border">
         <h3 className="text-sm font-semibold text-foreground">Все операции ({displayRows.length})</h3>
+        <button
+          type="button"
+          onClick={onToggleSort}
+          title={sortAsc ? 'Сейчас: с начала месяца. Нажмите — новые сверху' : 'Сейчас: новые сверху. Нажмите — с начала месяца'}
+          className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground transition hover:bg-surface-hover hover:text-foreground"
+        >
+          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${sortAsc ? 'rotate-180' : ''}`} />
+          {sortAsc ? 'Сначала старые' : 'Сначала новые'}
+        </button>
       </div>
       <div className="divide-y divide-slate-100 dark:divide-slate-800">
         {displayRows.length === 0 ? (
@@ -1938,9 +1957,9 @@ function FeedTab({
             <p>Нет операций по выбранным фильтрам</p>
           </div>
         ) : (
-          displayRows.map((row: IncomeRow) => (
-            <IncomeRowFull 
-              key={row.id} 
+          sortedRows.map((row: IncomeRow) => (
+            <IncomeRowFull
+              key={row.id}
               row={row}
               companyName={companyName(row.company_id)}
               operatorName={operatorName(row.operator_id)}
