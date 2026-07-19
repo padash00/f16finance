@@ -162,6 +162,17 @@ export async function POST(request: Request) {
         },
       })
 
+      // Удаляем автосозданный расход этого списания (если был)
+      try {
+        const { error: delErr } = await supabase
+          .from('expenses')
+          .delete()
+          .like('comment', `%[auto-writeoff:${writeoffId}]%`)
+        if (delErr) throw delErr
+      } catch (autoExpErr: any) {
+        await writeSystemErrorLogSafe({ scope: 'server', area: 'store/writeoffs.autoExpenseCancel', message: autoExpErr?.message || 'error' })
+      }
+
       return json({ ok: true })
     }
 
@@ -191,6 +202,39 @@ export async function POST(request: Request) {
       action: 'create',
       payload: result,
     })
+
+    // Автозапись убытка в расходы: сумма по себестоимости, категория «Списание
+    // товаров», компания точки списания. При отмене списания расход удаляется
+    // по маркеру [auto-writeoff:id] в комментарии.
+    try {
+      const writeoffId = String(result?.writeoff_id || result?.id || '')
+      if (writeoffId) {
+        const { data: woRow } = await supabase
+          .from('inventory_writeoffs')
+          .select('total_amount, written_at, reason, location:location_id(company_id)')
+          .eq('id', writeoffId)
+          .maybeSingle()
+        const loc = Array.isArray((woRow as any)?.location) ? (woRow as any).location[0] : (woRow as any)?.location
+        const total = Number((woRow as any)?.total_amount || 0)
+        if (woRow && loc?.company_id && total > 0) {
+          const writtenDate = String((woRow as any).written_at || '').slice(0, 10)
+          const { error: expErr } = await supabase.from('expenses').insert([{
+            date: writtenDate || new Date().toISOString().slice(0, 10),
+            company_id: loc.company_id,
+            operator_id: null,
+            category: 'Списание товаров',
+            cash_amount: total,
+            kaspi_amount: 0,
+            comment: `Автоматически: списание со склада по себестоимости. Причина: ${(woRow as any).reason || '—'} [auto-writeoff:${writeoffId}]`,
+            status: 'confirmed',
+          }])
+          if (expErr) throw expErr
+        }
+      }
+    } catch (autoExpErr: any) {
+      // Расход — побочный эффект: списание уже проведено, не валим ответ
+      await writeSystemErrorLogSafe({ scope: 'server', area: 'store/writeoffs.autoExpense', message: autoExpErr?.message || 'error' })
+    }
 
     return json({ ok: true, data: result })
   } catch (error: any) {
