@@ -218,11 +218,19 @@ export async function POST(request: Request) {
         const total = Number((woRow as any)?.total_amount || 0)
         if (woRow && loc?.company_id && total > 0) {
           const writtenDate = String((woRow as any).written_at || '').slice(0, 10)
+          // Используем существующую категорию расходов вида «Списание / брак»,
+          // если она заведена в справочнике; иначе — дефолтное имя
+          let categoryName = 'Списание товаров'
+          const orgId = access.activeOrganization?.id || null
+          let catQuery = supabase.from('expense_categories').select('name').ilike('name', '%списан%').limit(1)
+          if (orgId) catQuery = catQuery.or(`organization_id.is.null,organization_id.eq.${orgId}`)
+          const { data: catRows } = await catQuery
+          if (catRows?.[0]?.name) categoryName = String(catRows[0].name)
           const { error: expErr } = await supabase.from('expenses').insert([{
             date: writtenDate || new Date().toISOString().slice(0, 10),
             company_id: loc.company_id,
             operator_id: null,
-            category: 'Списание товаров',
+            category: categoryName,
             cash_amount: total,
             kaspi_amount: 0,
             comment: `Автоматически: списание со склада по себестоимости. Причина: ${(woRow as any).reason || '—'} [auto-writeoff:${writeoffId}]`,
