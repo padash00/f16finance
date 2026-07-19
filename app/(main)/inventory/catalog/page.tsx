@@ -1216,6 +1216,30 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
             </DialogContent>
           </Dialog>
 
+          {/* Редактирование товара — модалка, как у добавления */}
+          <Dialog open={!!editingId} onOpenChange={(open) => { if (!open) void guardEditClose(() => setEditingId(null)) }}>
+            <DialogContent
+              className="max-h-[88vh] overflow-y-auto sm:max-w-2xl"
+              onOpenAutoFocus={(e) => e.preventDefault()}
+            >
+              <DialogHeader>
+                <DialogTitle>Редактировать товар</DialogTitle>
+                <DialogDescription>{editForm.name || 'Карточка товара'}</DialogDescription>
+              </DialogHeader>
+              <ItemForm
+                form={editForm}
+                onChange={setEditForm}
+                categories={categories}
+                onSave={saveEdit}
+                onCancel={() => void guardEditClose(() => setEditingId(null))}
+                loading={saving}
+                existingItems={barcodeIndex}
+                excludeId={editingId ?? undefined}
+                autoFocusName
+              />
+            </DialogContent>
+          </Dialog>
+
           {/* Filters */}
           <Card className="border-border/70 p-3">
             <div className="flex flex-wrap gap-2">
@@ -1542,23 +1566,6 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
                             </div>
                           </td>
                         </tr>
-                        {editingId === item.id && (
-                          <tr>
-                            <td colSpan={11} className="px-4 py-3 bg-muted/30 border-b border-primary/20">
-                              <ItemForm
-                                form={editForm}
-                                onChange={setEditForm}
-                                categories={categories}
-                                onSave={saveEdit}
-                                onCancel={() => void guardEditClose(() => setEditingId(null))}
-                                loading={saving}
-                                existingItems={barcodeIndex}
-                                excludeId={editingId}
-                                autoFocusName
-                              />
-                            </td>
-                          </tr>
-                        )}
                       </Fragment>
                     ))}
                   </tbody>
