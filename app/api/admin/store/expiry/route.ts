@@ -73,10 +73,13 @@ export async function GET(request: Request) {
         const status = daysLeft < 0 ? 'expired' : daysLeft <= 14 ? 'soon' : 'ok'
         return {
           id: String(r.id),
+          item_id: String(item?.id || ''),
+          company_id: loc?.company_id ? String(loc.company_id) : '',
           item_name: item?.name || 'Товар',
           barcode: item?.barcode || null,
           unit: item?.unit || null,
           quantity: Number(r.quantity || 0),
+          remaining: 0, // заполняется FIFO-раскладкой ниже
           production_date: r.production_date || null,
           expiry_date: r.expiry_date,
           days_left: daysLeft,
@@ -87,9 +90,66 @@ export async function GET(request: Request) {
         }
       })
 
+    // ── FIFO-оценка остатка партии ─────────────────────────────────────────
+    // Партионного учёта нет: продажа/списание не знают, из какой партии ушёл
+    // товар. Допущение FIFO: первым расходуется то, что пришло раньше — значит
+    // текущий остаток товара «сидит» в самых свежих партиях. Раскладываем
+    // остаток (склад+витрина, per company+item) по партиям от новых к старым.
+    const itemIds = Array.from(new Set(rows.map((r) => r.item_id).filter(Boolean)))
+    const stockMap = new Map<string, number>() // `${company_id}:${item_id}` → остаток
+    if (itemIds.length) {
+      const PAGE = 1000
+      const chunks: string[][] = []
+      for (let i = 0; i < itemIds.length; i += 200) chunks.push(itemIds.slice(i, i + 200))
+      const chunkResults = await Promise.all(
+        chunks.map(async (ids) => {
+          const out: any[] = []
+          for (let from = 0; ; from += PAGE) {
+            const { data: page, error: balErr } = await supabase
+              .from('inventory_balances')
+              .select('item_id, quantity, loc:inventory_locations(location_type, company_id)')
+              .in('item_id', ids)
+              .order('item_id')
+              .range(from, from + PAGE - 1)
+            if (balErr) throw balErr
+            out.push(...(page || []))
+            if ((page || []).length < PAGE) break
+          }
+          return out
+        }),
+      )
+      for (const b of chunkResults.flat()) {
+        const bloc = Array.isArray(b.loc) ? b.loc[0] : b.loc
+        if (!bloc || !['warehouse', 'point_display'].includes(String(bloc.location_type || ''))) continue
+        const companyId = String(bloc.company_id || '')
+        if (allowed !== null && !allowed.has(companyId)) continue
+        const key = `${companyId}:${b.item_id}`
+        stockMap.set(key, (stockMap.get(key) || 0) + Number(b.quantity || 0))
+      }
+    }
+
+    // Группируем партии по company+item, новые первыми, раздаём остаток
+    const groups = new Map<string, typeof rows>()
+    for (const r of rows) {
+      const key = `${r.company_id}:${r.item_id}`
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key)!.push(r)
+    }
+    for (const [key, group] of groups) {
+      group.sort((a, b) => String(b.received_at || '').localeCompare(String(a.received_at || '')))
+      let left = stockMap.get(key) || 0
+      for (const r of group) {
+        const take = Math.min(r.quantity, Math.max(0, left))
+        r.remaining = Math.round(take * 1000) / 1000
+        left -= take
+      }
+    }
+
     const summary = {
-      expired: rows.filter((r) => r.status === 'expired').length,
-      soon: rows.filter((r) => r.status === 'soon').length,
+      // Тревожные счётчики — только по партиям, у которых по FIFO ещё есть остаток
+      expired: rows.filter((r) => r.status === 'expired' && r.remaining > 0.0005).length,
+      soon: rows.filter((r) => r.status === 'soon' && r.remaining > 0.0005).length,
+      depleted: rows.filter((r) => r.remaining <= 0.0005).length,
       total: rows.length,
     }
 

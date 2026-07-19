@@ -14,6 +14,7 @@ type Row = {
   barcode: string | null
   unit: string | null
   quantity: number
+  remaining: number
   production_date: string | null
   expiry_date: string
   days_left: number
@@ -22,7 +23,7 @@ type Row = {
   kind: 'supplier' | 'posting'
   location_name: string
 }
-type Data = { rows: Row[]; summary: { expired: number; soon: number; total: number } }
+type Data = { rows: Row[]; summary: { expired: number; soon: number; depleted?: number; total: number } }
 
 const fmtDate = (s: string | null) => (s ? new Date(s).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—')
 
@@ -37,6 +38,7 @@ export default function StoreExpiryPage({ embedded = false }: { embedded?: boole
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | 'expired' | 'soon'>('all')
+  const [showDepleted, setShowDepleted] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -55,11 +57,15 @@ export default function StoreExpiryPage({ embedded = false }: { embedded?: boole
     return () => { cancelled = true }
   }, [])
 
+  const depletedCount = useMemo(() => (data?.rows || []).filter((r) => (r.remaining ?? 0) <= 0.0005).length, [data?.rows])
+
   const rows = useMemo(() => {
-    const all = data?.rows || []
+    let all = data?.rows || []
+    // По FIFO партия израсходована — прячем, если не попросили показать
+    if (!showDepleted) all = all.filter((r) => (r.remaining ?? 0) > 0.0005)
     if (filter === 'all') return all
     return all.filter((r) => r.status === filter)
-  }, [data?.rows, filter])
+  }, [data?.rows, filter, showDepleted])
 
   const body = (
     <div className="space-y-4">
@@ -84,6 +90,18 @@ export default function StoreExpiryPage({ embedded = false }: { embedded?: boole
 
       {error ? <Card className="border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-600 dark:text-rose-300">{error}</Card> : null}
 
+      {depletedCount > 0 && (
+        <label className="flex w-fit cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+          <input
+            type="checkbox"
+            className="h-3.5 w-3.5 accent-emerald-600"
+            checked={showDepleted}
+            onChange={(e) => setShowDepleted(e.target.checked)}
+          />
+          Показать израсходованные партии ({depletedCount}) — по FIFO их остаток уже продан или списан
+        </label>
+      )}
+
       <Card className="border-border bg-card/70 p-0">
         <CardContent className="p-4 sm:p-5">
           {loading ? (
@@ -99,25 +117,35 @@ export default function StoreExpiryPage({ embedded = false }: { embedded?: boole
                   <tr className="border-b border-slate-200 dark:border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
                     <th className="py-2 pl-2 pr-2 font-normal">Товар</th>
                     <th className="py-2 px-2 font-normal">Где</th>
-                    <th className="py-2 px-2 text-right font-normal">Кол-во</th>
+                    <th className="py-2 px-2 text-right font-normal">Остаток партии</th>
                     <th className="py-2 px-2 font-normal">Изготовлен</th>
                     <th className="py-2 px-2 font-normal">Годен до</th>
                     <th className="py-2 px-2 font-normal">Осталось</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
-                  {rows.map((r) => (
-                    <tr key={r.id} className={r.status === 'expired' ? 'bg-rose-500/[0.04]' : ''}>
+                  {rows.map((r) => {
+                    const depleted = (r.remaining ?? 0) <= 0.0005
+                    return (
+                    <tr key={r.id} className={depleted ? 'opacity-50' : r.status === 'expired' ? 'bg-rose-500/[0.04]' : ''}>
                       <td className="py-2 pl-2 pr-2">
                         <div className="font-medium text-foreground">{r.item_name}</div>
                         {r.barcode ? <div className="font-mono text-[10px] text-muted-foreground tabular-nums">{r.barcode}</div> : null}
                       </td>
                       <td className="py-2 px-2 text-xs text-muted-foreground">{r.location_name}</td>
-                      <td className="py-2 px-2 text-right text-xs tabular-nums">{r.quantity}{r.unit ? ` ${r.unit}` : ''}</td>
+                      <td className="py-2 px-2 text-right text-xs tabular-nums">
+                        {depleted ? (
+                          <span className="text-muted-foreground">израсходована · было {r.quantity}{r.unit ? ` ${r.unit}` : ''}</span>
+                        ) : (
+                          <span className="font-medium text-foreground">{r.remaining} из {r.quantity}{r.unit ? ` ${r.unit}` : ''}</span>
+                        )}
+                      </td>
                       <td className="py-2 px-2 text-xs text-muted-foreground tabular-nums">{fmtDate(r.production_date)}</td>
                       <td className="py-2 px-2 text-xs tabular-nums">{fmtDate(r.expiry_date)}</td>
                       <td className="py-2 px-2">
-                        {r.status === 'expired' ? (
+                        {depleted ? (
+                          <span className="text-xs text-muted-foreground">{daysLabel(r.days_left)}</span>
+                        ) : r.status === 'expired' ? (
                           <Badge variant="outline" className="border-rose-500/40 bg-rose-500/15 text-rose-700 dark:text-rose-200"><AlertTriangle className="mr-1 h-3 w-3" />{daysLabel(r.days_left)}</Badge>
                         ) : r.status === 'soon' ? (
                           <Badge variant="outline" className="border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-200">{daysLabel(r.days_left)}</Badge>
@@ -126,7 +154,8 @@ export default function StoreExpiryPage({ embedded = false }: { embedded?: boole
                         )}
                       </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
