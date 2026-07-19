@@ -10,7 +10,7 @@ import { CardSkeleton, TableSkeleton } from '@/components/skeleton'
 import { AdminPageHeader, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
 import { usePersistentState } from '@/lib/client/use-persistent-state'
 import { CopyText } from '@/components/ui/copy-text'
-import { confirmDialog } from '@/components/ui/confirm-dialog'
+import { deleteWithUndo } from '@/lib/client/undo-delete'
 import { toast } from '@/hooks/use-toast'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -121,6 +121,9 @@ export default function CustomersPage({ embedded = false }: { embedded?: boolean
   const [form, setForm] = useState<CustomerFormData>(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  // Автофокус на «Имя» при открытии модалок добавления/редактирования
+  const addNameRef = useRef<HTMLInputElement>(null)
+  const editNameRef = useRef<HTMLInputElement>(null)
 
   // Points adjust
   const [pointsDelta, setPointsDelta] = useState('')
@@ -228,27 +231,32 @@ export default function CustomersPage({ embedded = false }: { embedded?: boolean
     }
   }
 
-  async function handleDelete(id: string) {
-    const ok = await confirmDialog({
-      title: 'Деактивировать клиента?',
-      description: 'Клиент будет скрыт из списка. История покупок сохранится.',
-      confirmLabel: 'Деактивировать',
-      destructive: true,
+  function handleDelete(customer: Customer) {
+    // Позиция строки — чтобы «Отменить» вернул клиента на прежнее место
+    const index = customers.findIndex((c) => c.id === customer.id)
+    deleteWithUndo({
+      message: 'Клиент деактивирован',
+      hide: () => setCustomers((prev) => prev.filter((c) => c.id !== customer.id)),
+      restore: () =>
+        setCustomers((prev) => {
+          if (prev.some((c) => c.id === customer.id)) return prev
+          const next = [...prev]
+          next.splice(Math.min(Math.max(index, 0), next.length), 0, customer)
+          return next
+        }),
+      commit: async () => {
+        const res = await fetch('/api/admin/customers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'deleteCustomer', customerId: customer.id }),
+        })
+        const json = await res.json()
+        if (!res.ok) throw new Error(json.error || 'Ошибка')
+        await load()
+      },
+      onCommitError: (err: any) =>
+        toast({ description: `Не удалось деактивировать — клиент восстановлен${err?.message ? `: ${err.message}` : ''}` }),
     })
-    if (!ok) return
-    try {
-      const res = await fetch('/api/admin/customers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'deleteCustomer', customerId: id }),
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error || 'Ошибка')
-      await load()
-      toast({ description: 'Клиент деактивирован' })
-    } catch (err: any) {
-      toast({ description: err?.message || 'Ошибка удаления' })
-    }
   }
 
   async function handleAdjustPoints(e: React.FormEvent) {
@@ -546,7 +554,7 @@ export default function CustomersPage({ embedded = false }: { embedded?: boolean
                             size="icon"
                             className="h-8 w-8 text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300"
                             title="Деактивировать"
-                            onClick={() => void handleDelete(customer.id)}
+                            onClick={() => handleDelete(customer)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -571,14 +579,17 @@ export default function CustomersPage({ embedded = false }: { embedded?: boolean
 
       {/* Add Customer Dialog */}
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
-        <DialogContent className="max-h-[90dvh] overflow-y-auto">
+        <DialogContent
+          className="max-h-[90dvh] overflow-y-auto"
+          onOpenAutoFocus={(e) => { e.preventDefault(); addNameRef.current?.focus() }}
+        >
           <DialogHeader>
             <DialogTitle>Добавить клиента</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-4">
             <div className="space-y-1.5">
               <Label>Имя *</Label>
-              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Иван Иванов" autoComplete="name" />
+              <Input ref={addNameRef} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Иван Иванов" autoComplete="name" />
             </div>
             <div className="space-y-1.5">
               <Label>Телефон</Label>
@@ -607,14 +618,17 @@ export default function CustomersPage({ embedded = false }: { embedded?: boolean
 
       {/* Edit Customer Dialog */}
       <Dialog open={!!editCustomer} onOpenChange={(open) => { if (!open) { setEditCustomer(null); setForm(EMPTY_FORM) } }}>
-        <DialogContent className="max-h-[90dvh] overflow-y-auto">
+        <DialogContent
+          className="max-h-[90dvh] overflow-y-auto"
+          onOpenAutoFocus={(e) => { e.preventDefault(); editNameRef.current?.focus() }}
+        >
           <DialogHeader>
             <DialogTitle>Редактировать клиента</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleUpdate} className="space-y-4">
             <div className="space-y-1.5">
               <Label>Имя *</Label>
-              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoComplete="name" />
+              <Input ref={editNameRef} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoComplete="name" />
             </div>
             <div className="space-y-1.5">
               <Label>Телефон</Label>

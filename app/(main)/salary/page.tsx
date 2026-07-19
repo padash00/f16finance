@@ -14,6 +14,7 @@ import { Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, Credi
 import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Skeleton } from '@/components/ui/skeleton'
 import { addDaysISO, formatRuDate, mondayOfDate, toISODateLocal, todayISO } from '@/lib/core/date'
@@ -865,7 +866,13 @@ export default function SalaryPage() {
 
   const removeStaffAdjustment = async (id: string) => {
     if (!canEditStaffSalary) return setError('Доступ только для просмотра')
-    if (!window.confirm('Аннулировать корректировку?')) return
+    const ok = await confirmDialog({
+      title: 'Аннулировать корректировку?',
+      description: 'Корректировка будет исключена из расчёта зарплаты.',
+      confirmLabel: 'Аннулировать',
+      destructive: true,
+    })
+    if (!ok) return
     try {
       await fetch('/api/admin/staff-salary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'removeAdjustment', id }) })
       await loadStaffSalary()
@@ -899,7 +906,13 @@ export default function SalaryPage() {
   }
   const voidStaffDebtPayment = async (id: string) => {
     if (!canEditStaffSalary) return setError('Доступ только для просмотра')
-    if (!window.confirm('Аннулировать оплату долга? Долг снова станет активным.')) return
+    const ok = await confirmDialog({
+      title: 'Аннулировать оплату долга?',
+      description: 'Долг снова станет активным.',
+      confirmLabel: 'Аннулировать',
+      destructive: true,
+    })
+    if (!ok) return
     setVoidDebtPayId(id)
     try {
       const res = await fetch('/api/admin/staff-salary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'voidStaffDebtPayment', id }) })
@@ -912,7 +925,13 @@ export default function SalaryPage() {
 
   const deleteStaffPayment = async (id: string, amount: number) => {
     if (!canEditStaffSalary) return setError('Доступ только для просмотра')
-    if (!window.confirm(`Аннулировать выплату ${money(amount)}?`)) return
+    const ok = await confirmDialog({
+      title: `Аннулировать выплату ${money(amount)}?`,
+      description: 'Выплата будет исключена из ведомости.',
+      confirmLabel: 'Аннулировать',
+      destructive: true,
+    })
+    if (!ok) return
     try {
       const res = await fetch('/api/admin/staff-salary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'deletePayment', id }) })
       const json = await res.json().catch(() => null)
@@ -922,7 +941,12 @@ export default function SalaryPage() {
   }
 
   const markDebtsPaid = async (item: WeeklyOperator) => {
-    if (!window.confirm(`Отметить долг ${money(item.week.debtAmount)} оператора ${getOperatorDisplayName(item.operator)} как оплаченный?`)) return
+    const ok = await confirmDialog({
+      title: 'Отметить долг как оплаченный?',
+      description: `Долг ${money(item.week.debtAmount)} оператора ${getOperatorDisplayName(item.operator)} будет закрыт.`,
+      confirmLabel: 'Отметить оплаченным',
+    })
+    if (!ok) return
     setMarkDebtId(item.operator.id)
     setMarkDebtSaving(true)
     setError(null)
@@ -940,7 +964,12 @@ export default function SalaryPage() {
 
   const voidPayment = async (item: WeeklyOperator, payment: Payment) => {
     if (payment.status === 'voided' || voidingPaymentId) return
-    const confirmed = window.confirm(`Аннулировать выплату ${money(payment.total_amount)} для ${getOperatorDisplayName(item.operator)}?`)
+    const confirmed = await confirmDialog({
+      title: `Аннулировать выплату ${money(payment.total_amount)}?`,
+      description: `Выплата для ${getOperatorDisplayName(item.operator)} будет аннулирована.`,
+      confirmLabel: 'Аннулировать',
+      destructive: true,
+    })
     if (!confirmed) return
     setVoidingPaymentId(payment.id)
     setError(null)

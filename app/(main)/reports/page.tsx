@@ -28,6 +28,7 @@ import { Input } from '@/components/ui/input'
 import type { PageSnapshot } from '@/lib/ai/types'
 import { supabase } from '@/lib/supabaseClient'
 import { useCapabilities } from '@/lib/client/use-capabilities'
+import { usePersistentState } from '@/lib/client/use-persistent-state'
 import { useCashlessLabels } from '@/lib/client/use-cashless-labels'
 
 import {
@@ -973,9 +974,10 @@ function ReportsContent() {
   const [dateTo, setDateTo] = useState(() => todayISO())
   const [datePreset, setDatePreset] = useState<DatePreset>('last7')
 
-  const [companyFilter, setCompanyFilter] = useState<'all' | string>('all')
+  // Точка и группировка помнятся между визитами (URL-параметры имеют приоритет, даты не персистим)
+  const [companyFilter, setCompanyFilter] = usePersistentState<'all' | string>('reports.company', 'all')
   const [shiftFilter, setShiftFilter] = useState<'all' | Shift>('all')
-  const [groupMode, setGroupMode] = useState<GroupMode>('day')
+  const [groupMode, setGroupMode] = usePersistentState<GroupMode>('reports.group', 'day')
   const [includeExtraInTotals, setIncludeExtraInTotals] = useState(false)
   const [minAmountFilter, setMinAmountFilter] = useState<string>('')
   const [maxAmountFilter, setMaxAmountFilter] = useState<string>('')
@@ -1021,6 +1023,12 @@ function ReportsContent() {
   }, [companies])
 
   const companyName = useCallback((id: string) => companyById.get(id)?.name ?? 'Неизвестно', [companyById])
+
+  // Сохранённая точка могла быть удалена/недоступна — тихо откатываемся на «все»
+  useEffect(() => {
+    if (!companiesLoaded || companyFilter === 'all') return
+    if (!companyById.has(companyFilter)) setCompanyFilter('all')
+  }, [companiesLoaded, companyFilter, companyById, setCompanyFilter])
 
   // =====================
   // PRESET HANDLERS

@@ -1,5 +1,5 @@
 'use client'
-import { Suspense, useState, useEffect, useCallback, useMemo } from 'react'
+import { Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Printer, Search, ChevronLeft, ChevronRight, ChevronDown, Receipt, RefreshCw } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useUrlState } from '@/lib/hooks/use-url-state'
+import { usePersistentState } from '@/lib/client/use-persistent-state'
 import { useApiCache } from '@/lib/client/use-api-cache'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
@@ -69,6 +70,35 @@ function fmtDate(d: string) {
 
 function fmtTime(d: string) {
   return new Date(d).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+}
+
+// Периодные пресеты: персистим сам пресет, даты пересчитываются от текущей даты при загрузке
+type PeriodPreset = 'today' | 'yesterday' | '7d'
+
+const PERIOD_PRESETS: { key: PeriodPreset; label: string }[] = [
+  { key: 'today', label: 'Сегодня' },
+  { key: 'yesterday', label: 'Вчера' },
+  { key: '7d', label: '7 дней' },
+]
+
+function isoDateLocal(d: Date): string {
+  const t = d.getTime() - d.getTimezoneOffset() * 60_000
+  return new Date(t).toISOString().slice(0, 10)
+}
+
+function presetRange(preset: PeriodPreset): { date_from: string; date_to: string } {
+  const now = new Date()
+  const today = isoDateLocal(now)
+  if (preset === 'today') return { date_from: today, date_to: today }
+  if (preset === 'yesterday') {
+    const y = new Date(now)
+    y.setDate(y.getDate() - 1)
+    const iso = isoDateLocal(y)
+    return { date_from: iso, date_to: iso }
+  }
+  const from = new Date(now)
+  from.setDate(from.getDate() - 6)
+  return { date_from: isoDateLocal(from), date_to: today }
 }
 
 function detectPaymentMethod(sale: Sale): string {
@@ -248,6 +278,33 @@ function PosReceiptsPageContent({ embedded = false }: { embedded?: boolean }) {
   const [filters, setFilters] = useUrlState(filterDefaults)
   const [searchInput, setSearchInput] = useState(filters.search)
 
+  // Память фильтров: точка (компания/локация) и периодный пресет переживают уход со страницы.
+  // Кастомные даты не персистим; URL-параметры имеют приоритет над сохранёнными.
+  const [savedCompany, setSavedCompany] = usePersistentState<string>('posReceipts.company', '')
+  const [savedLocation, setSavedLocation] = usePersistentState<string>('posReceipts.location', '')
+  const [savedPreset, setSavedPreset] = usePersistentState<PeriodPreset | ''>('posReceipts.periodPreset', '')
+
+  const filtersRef = useRef(filters)
+  filtersRef.current = filters
+
+  const seededRef = useRef(false)
+  useEffect(() => {
+    if (seededRef.current) return
+    // Пока все сохранённые значения пустые — либо восстанавливать нечего, либо localStorage ещё не подтянулся
+    if (!savedCompany && !savedLocation && !savedPreset) return
+    seededRef.current = true
+    const current = filtersRef.current
+    const patch: Partial<Record<'company_id' | 'location_id' | 'date_from' | 'date_to', string>> = {}
+    if (savedCompany && !current.company_id) patch.company_id = savedCompany
+    if (savedLocation && !current.location_id) patch.location_id = savedLocation
+    if (savedPreset && !current.date_from && !current.date_to) {
+      const range = presetRange(savedPreset)
+      patch.date_from = range.date_from
+      patch.date_to = range.date_to
+    }
+    if (Object.keys(patch).length > 0) setFilters(patch)
+  }, [savedCompany, savedLocation, savedPreset, setFilters])
+
   // Companies & locations (кэшируются — фильтры заполняются мгновенно при повторном заходе)
   const { data: bootstrapData } = useApiCache<{ companies?: Company[]; locations?: Location[] }>('/api/pos/bootstrap')
   const companies = useMemo(
@@ -341,12 +398,34 @@ function PosReceiptsPageContent({ embedded = false }: { embedded?: boolean }) {
           )
           const hdrToolbar = (
             <div className="flex flex-wrap gap-3">
+              {/* Периодные пресеты */}
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-muted-foreground">Период</label>
+                <div className="flex gap-1">
+                  {PERIOD_PRESETS.map((p) => (
+                    <Button
+                      key={p.key}
+                      size="sm"
+                      variant={savedPreset === p.key ? 'default' : 'outline'}
+                      onClick={() => {
+                        setSavedPreset(p.key)
+                        setFilters({ ...presetRange(p.key), page: '1' })
+                      }}
+                    >
+                      {p.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
               {/* Date from */}
               <div className="flex flex-col gap-1 min-w-[140px]">
                 <label className="text-xs text-muted-foreground">Дата от</label>
                 <DatePicker
                   value={filters.date_from}
-                  onChange={(v) => setFilters({ date_from: v, page: '1' })}
+                  onChange={(v) => {
+                    setSavedPreset('') // кастомные даты — пресет сбрасывается и не персистится
+                    setFilters({ date_from: v, page: '1' })
+                  }}
                 />
               </div>
               {/* Date to */}
@@ -354,7 +433,10 @@ function PosReceiptsPageContent({ embedded = false }: { embedded?: boolean }) {
                 <label className="text-xs text-muted-foreground">Дата до</label>
                 <DatePicker
                   value={filters.date_to}
-                  onChange={(v) => setFilters({ date_to: v, page: '1' })}
+                  onChange={(v) => {
+                    setSavedPreset('')
+                    setFilters({ date_to: v, page: '1' })
+                  }}
                 />
               </div>
               {/* Company */}
@@ -364,6 +446,8 @@ function PosReceiptsPageContent({ embedded = false }: { embedded?: boolean }) {
                   <select
                     value={filters.company_id}
                     onChange={(e) => {
+                      setSavedCompany(e.target.value)
+                      setSavedLocation('')
                       setFilters({ company_id: e.target.value, location_id: '', page: '1' })
                     }}
                     className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
@@ -381,7 +465,10 @@ function PosReceiptsPageContent({ embedded = false }: { embedded?: boolean }) {
                   <label className="text-xs text-muted-foreground">Точка</label>
                   <select
                     value={filters.location_id}
-                    onChange={(e) => setFilters({ location_id: e.target.value, page: '1' })}
+                    onChange={(e) => {
+                      setSavedLocation(e.target.value)
+                      setFilters({ location_id: e.target.value, page: '1' })
+                    }}
                     className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   >
                     <option value="">Все точки</option>

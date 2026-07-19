@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp, AlertCircle, CheckSquare, ChevronDown, ChevronRight
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
 import { DatePicker } from '@/components/ui/date-picker'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { useCapabilities } from '@/lib/client/use-capabilities'
@@ -268,7 +269,12 @@ export default function HrPage() {
   // Bulk-смена роли
   const bulkChangeRole = async (newRole: string) => {
     if (selectedIds.size === 0) return
-    if (!confirm(`Сменить должность на "${newRole}" для ${selectedIds.size} сотрудников?`)) return
+    const ok = await confirmDialog({
+      title: `Сменить должность на "${newRole}"?`,
+      description: `Новая должность будет назначена ${selectedIds.size} сотрудникам.`,
+      confirmLabel: 'Сменить',
+    })
+    if (!ok) return
     setBulkBusy(true)
     setError(null)
     try {
@@ -378,7 +384,12 @@ export default function HrPage() {
   }
 
   async function restore(emp: HrEmployee) {
-    if (!window.confirm(`Восстановить ${emp.full_name}? Сотрудник снова станет активным.`)) return
+    const ok = await confirmDialog({
+      title: `Восстановить ${emp.full_name}?`,
+      description: 'Сотрудник снова станет активным.',
+      confirmLabel: 'Восстановить',
+    })
+    if (!ok) return
     setBusyId(emp.id)
     setError(null)
     try {
@@ -419,7 +430,12 @@ export default function HrPage() {
   const bulkDismiss = async () => {
     const reason = window.prompt('Причина увольнения (≥ 5 символов):')
     if (!reason || reason.trim().length < 5) return
-    if (!confirm(`Уволить ${selectedIds.size} ${selectedIds.size === 1 ? 'сотрудника' : 'сотрудников'}?`)) return
+    const ok = await confirmDialog({
+      title: `Уволить ${selectedIds.size} ${selectedIds.size === 1 ? 'сотрудника' : 'сотрудников'}?`,
+      confirmLabel: 'Уволить',
+      destructive: true,
+    })
+    if (!ok) return
     setBulkBusy(true)
     setError(null)
     try {

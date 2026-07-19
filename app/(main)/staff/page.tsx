@@ -10,6 +10,8 @@ import { PageSkeleton, TableSkeleton } from '@/components/skeleton'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
+import { usePersistentState } from '@/lib/client/use-persistent-state'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Input } from '@/components/ui/input'
 import {
@@ -220,10 +222,10 @@ export default function StaffPageSmart() {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false)
   const [accountActionBusyKey, setAccountActionBusyKey] = useState<string | null>(null)
   const [pageNotice, setPageNotice] = useState<PageNotice | null>(null)
-  const [showInactive, setShowInactive] = useState(false)
+  const [showInactive, setShowInactive] = usePersistentState('staff.showInactive', false)
   const [searchTerm, setSearchTerm] = useState('')
-  const [sortBy, setSortBy] = useState<'name' | 'salary'>('name')
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  const [sortBy, setSortBy] = usePersistentState<'name' | 'salary'>('staff.sortBy', 'name')
+  const [sortDir, setSortDir] = usePersistentState<'asc' | 'desc'>('staff.sortDir', 'asc')
 
   // --- Derived Data ---
   const { monthFrom, monthTo } = useMemo(() => {
@@ -363,6 +365,15 @@ export default function StaffPageSmart() {
 
   // --- Actions ---
   const toggleStaffStatus = async (s: Staff) => {
+    if (s.is_active) {
+      const ok = await confirmDialog({
+        title: 'Отправить сотрудника в архив?',
+        description: `${s.full_name || s.short_name || 'Сотрудник'} станет неактивным: не будет учитываться в бюджете и не сможет войти в портал.`,
+        confirmLabel: 'В архив',
+        destructive: true,
+      })
+      if (!ok) return
+    }
     const response = await fetch('/api/admin/staff', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -480,6 +491,12 @@ export default function StaffPageSmart() {
   }
 
   const handleResetStaffPassword = async (staffMember: Staff) => {
+    const ok = await confirmDialog({
+      title: 'Отправить письмо для смены пароля?',
+      description: `На ${staffMember.email || 'email сотрудника'} придёт ссылка для смены пароля.`,
+      confirmLabel: 'Отправить',
+    })
+    if (!ok) return
     await runStaffAccountAction('sendPasswordReset', staffMember)
   }
 

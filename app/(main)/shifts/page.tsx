@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/card'
 import { TableSkeleton } from '@/components/skeleton'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { supabase } from '@/lib/supabaseClient'
+import { toast } from '@/hooks/use-toast'
 import {
   ChevronLeft,
   ChevronRight,
@@ -1873,7 +1874,7 @@ function EditableShiftCell({
     } catch (e: any) {
       console.error('❌ Ошибка при сохранении:', e?.message || e)
       setStatus('error')
-      alert(`Ошибка: ${e?.message || 'Не удалось сохранить смену'}`)
+      toast({ description: `Ошибка: ${e?.message || 'Не удалось сохранить смену'}`, variant: 'destructive' })
       setVal(oldName)
     } finally {
       setIsEditing(false)

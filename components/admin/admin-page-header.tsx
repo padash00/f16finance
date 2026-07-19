@@ -39,6 +39,8 @@ export function AdminPageHeader(props: {
   icon: ReactNode
   accent?: AdminPageAccent
   backHref?: string
+  /** Вместо ссылки — обработчик (например, guardClose несохранённой формы) */
+  onBack?: () => void
   actions?: ReactNode
   /** Вторая строка: табы, фильтры, чипы */
   toolbar?: ReactNode
@@ -58,13 +60,24 @@ export function AdminPageHeader(props: {
       <div className={cn('pointer-events-none absolute -right-10 -top-16 h-40 w-40 rounded-full blur-3xl', a.glow2)} />
       <div className="relative flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3.5">
-          <Link
-            href={back}
-            className="shrink-0 text-slate-500 transition hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
-            aria-label="Назад"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
+          {props.onBack ? (
+            <button
+              type="button"
+              onClick={props.onBack}
+              className="shrink-0 text-slate-500 transition hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+              aria-label="Назад"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+          ) : (
+            <Link
+              href={back}
+              className="shrink-0 text-slate-500 transition hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+              aria-label="Назад"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+          )}
           <div className={cn('grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-border bg-gradient-to-br', a.chip)}>
             {props.icon}
           </div>

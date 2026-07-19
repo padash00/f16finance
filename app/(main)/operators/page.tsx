@@ -3,6 +3,8 @@
 import { useEffect, useState, FormEvent, useMemo, useCallback } from 'react'
 import Link from 'next/link'
 import { useApiCache } from '@/lib/client/use-api-cache'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
+import { usePersistentState } from '@/lib/client/use-persistent-state'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
 import { downloadReportPdf } from '@/lib/client/download-pdf'
@@ -102,7 +104,7 @@ export default function OperatorsPage() {
 
   // Поиск и фильтры
   const [search, setSearch] = useState('')
-  const [showInactive, setShowInactive] = useState(false)
+  const [showInactive, setShowInactive] = usePersistentState('operators.showInactive', false)
   const [selectedOperators, setSelectedOperators] = useState<Set<string>>(new Set())
   const [selectAll, setSelectAll] = useState(false)
 
@@ -288,6 +290,15 @@ export default function OperatorsPage() {
   }
 
   const toggleActive = async (op: Operator) => {
+    if (op.is_active) {
+      const ok = await confirmDialog({
+        title: 'Деактивировать оператора?',
+        description: `${getOperatorDisplayName(op)} не сможет открывать смены, пока не будет активирован снова.`,
+        confirmLabel: 'Деактивировать',
+        destructive: true,
+      })
+      if (!ok) return
+    }
     try {
       const response = await fetch('/api/admin/operators', {
         method: 'POST',
@@ -313,9 +324,13 @@ export default function OperatorsPage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Вы уверены, что хотите удалить оператора? Это действие нельзя отменить.')) {
-      return
-    }
+    const ok = await confirmDialog({
+      title: 'Удалить оператора?',
+      description: 'Это действие нельзя отменить.',
+      confirmLabel: 'Удалить',
+      destructive: true,
+    })
+    if (!ok) return
 
     try {
       const response = await fetch('/api/admin/operators', {
@@ -343,9 +358,13 @@ export default function OperatorsPage() {
   const handleBulkDelete = async () => {
     if (selectedOperators.size === 0) return
     
-    if (!confirm(`Вы уверены, что хотите удалить ${selectedOperators.size} операторов?`)) {
-      return
-    }
+    const ok = await confirmDialog({
+      title: `Удалить операторов: ${selectedOperators.size}?`,
+      description: 'Выбранные операторы будут удалены. Это действие нельзя отменить.',
+      confirmLabel: 'Удалить',
+      destructive: true,
+    })
+    if (!ok) return
 
     try {
       const response = await fetch('/api/admin/operators', {

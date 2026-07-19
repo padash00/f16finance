@@ -24,6 +24,7 @@ import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import ProductCardModal from '@/components/store/product-card-modal'
 import { LabelPrintDialog, type LabelItem } from '@/components/store/label-print-dialog'
 import { CopyText } from '@/components/ui/copy-text'
+import { deleteWithUndo } from '@/lib/client/undo-delete'
 import { usePersistentState } from '@/lib/client/use-persistent-state'
 import { useUnsavedGuard } from '@/lib/client/use-unsaved-guard'
 import { TableSkeleton } from '@/components/skeleton'
@@ -539,7 +540,12 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
   // свежие подтягиваются фоном; после мутаций зовём loadItems() (refresh).
   const catalogUrl = `/api/admin/inventory/catalog${filterCompany !== 'all' ? `?company_id=${encodeURIComponent(filterCompany)}` : ''}`
   const { data: itemsData, loading, error, refresh: loadItems } = useApiCache<CatalogItem[]>(catalogUrl)
-  const items = itemsData || []
+  // Undo-удаление: скрытые id (строка исчезает сразу, сервер — через 5 сек)
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set())
+  const items = useMemo(
+    () => (itemsData || []).filter((i) => !hiddenIds.has(i.id)),
+    [itemsData, hiddenIds],
+  )
 
   useEffect(() => {
     fetch('/api/admin/companies')
@@ -832,21 +838,35 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
     }
   }
 
-  async function deleteItem(item: CatalogItem) {
-    if (!window.confirm(`Удалить «${item.name}»?\n\nЭто действие нельзя отменить.`)) return
-    try {
-      const res = await fetch('/api/admin/inventory/catalog', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'deleteItem', item_id: item.id }),
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error)
-      await loadItems()
-      showToast('Товар удалён')
-    } catch (e: any) {
-      showToast('Ошибка: ' + e.message)
-    }
+  function deleteItem(item: CatalogItem) {
+    deleteWithUndo({
+      message: `Товар «${item.name}» удалён`,
+      hide: () => setHiddenIds((prev) => new Set(prev).add(item.id)),
+      restore: () =>
+        setHiddenIds((prev) => {
+          const next = new Set(prev)
+          next.delete(item.id)
+          return next
+        }),
+      commit: async () => {
+        const res = await fetch('/api/admin/inventory/catalog', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'deleteItem', item_id: item.id }),
+        })
+        const json = await res.json()
+        if (!res.ok) throw new Error(json.error)
+        await loadItems()
+        // Товара больше нет в данных — чистим id из скрытых, чтобы set не рос
+        setHiddenIds((prev) => {
+          const next = new Set(prev)
+          next.delete(item.id)
+          return next
+        })
+      },
+      onCommitError: (e: any) =>
+        showToast(`Не удалось удалить — товар восстановлен${e?.message ? `: ${e.message}` : ''}`),
+    })
   }
 
   async function saveAdd() {

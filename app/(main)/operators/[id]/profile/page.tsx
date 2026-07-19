@@ -7,6 +7,7 @@ import Image from 'next/image'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
 import { DatePicker } from '@/components/ui/date-picker'
 import { AppModal } from '@/components/ui/app-modal'
 import { PageSkeleton } from '@/components/skeleton'
@@ -708,7 +709,13 @@ function DocumentList({
   }
 
   const handleDelete = async (documentId: string) => {
-    if (!confirm('Вы уверены, что хотите удалить этот документ?')) return
+    const ok = await confirmDialog({
+      title: 'Удалить документ?',
+      description: 'Файл будет удалён из профиля оператора. Это действие нельзя отменить.',
+      confirmLabel: 'Удалить',
+      destructive: true,
+    })
+    if (!ok) return
 
     try {
       setDeleting(documentId)

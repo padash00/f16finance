@@ -20,6 +20,7 @@ import {
 } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
 import { Skeleton, TableSkeleton } from '@/components/skeleton'
 import { addDaysISO, formatRuDate, weekStartUtcISO } from '@/lib/core/date'
 import { formatMoney } from '@/lib/core/format'
@@ -280,9 +281,11 @@ export default function PointDebtsPage() {
       setError('Отметьте галочками позиции для списания')
       return
     }
-    const ok = window.confirm(
-      `Списать ${selectedIds.length} поз. на сумму ${money(selectedTotal)}? Позиции исчезнут только с этой страницы (долги с точки). Зарплата и колонка "Долги" не изменятся.`,
-    )
+    const ok = await confirmDialog({
+      title: `Списать ${selectedIds.length} поз. на сумму ${money(selectedTotal)}?`,
+      description: 'Позиции исчезнут только с этой страницы (долги с точки). Зарплата и колонка "Долги" не изменятся.',
+      confirmLabel: 'Списать',
+    })
     if (!ok) return
     setSettling(true)
     setError(null)

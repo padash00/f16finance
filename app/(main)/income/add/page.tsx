@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useMemo, useState, FormEvent, useCallback } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   Calendar,
@@ -26,6 +25,9 @@ import {
 
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { MoneyInput } from '@/components/ui/money-input'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
+import { useUnsavedGuard } from '@/lib/client/use-unsaved-guard'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Skeleton } from '@/components/skeleton'
@@ -179,6 +181,10 @@ export default function AddIncomePage() {
     return parseAmount(cash) + parseAmount(kaspi) + parseAmount(online) + parseAmount(card)
   }, [isExtra, ps5Cash, ps5Безналичный, vrCash, vrKaspi, cash, kaspi, online, card])
 
+  // Защита несохранённой формы: есть введённые суммы или комментарий и запись ещё не сохранена
+  const isDirty = !showSuccess && (previewTotal > 0 || comment.trim().length > 0)
+  const guardClose = useUnsavedGuard(isDirty)
+
   // ---- валидация ----
   const validation = useMemo(() => {
     if (!companyId) return { ok: false, msg: 'Выберите компанию' }
@@ -319,11 +325,17 @@ export default function AddIncomePage() {
 
         if (response.status === 409 && json?.duplicate) {
           const d = json.duplicate
-          const msg =
-            `Уже есть доход за ${d.date}, смена "${d.shift === 'day' ? 'день' : 'ночь'}" на ${formatMoney(d.total)}` +
-            (d.comment ? ` (${d.comment})` : '') +
-            `.\n\nВсё равно создать дубль?`
-          if (!window.confirm(msg)) {
+          const ok = await confirmDialog({
+            title: 'Похожий доход уже есть',
+            description:
+              `Уже есть доход за ${d.date}, смена "${d.shift === 'day' ? 'день' : 'ночь'}" на ${formatMoney(d.total)}` +
+              (d.comment ? ` (${d.comment})` : '') +
+              '. Всё равно создать дубль?',
+            confirmLabel: 'Создать дубль',
+            cancelLabel: 'Отмена',
+            destructive: true,
+          })
+          if (!ok) {
             setSaving(false)
             return
           }
@@ -439,7 +451,7 @@ export default function AddIncomePage() {
               description="AI-помощник внесения выручки"
               icon={<Brain className="h-5 w-5" />}
               accent="emerald"
-              backHref="/income"
+              onBack={() => guardClose(() => router.push('/income'))}
               className="mb-6"
             />
           )}
@@ -596,14 +608,11 @@ export default function AddIncomePage() {
                           <Wallet className="w-4 h-4 text-amber-400" /> Наличные
                         </label>
                         <div className="relative">
-                          <input
-                            inputMode="numeric"
-                            type="number"
+                          <MoneyInput
                             placeholder="0"
-                            min="0"
                             value={ps5Cash}
-                            onChange={(e) => setPs5Cash(e.target.value)}
-                            className="w-full text-lg bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-4 px-4 text-foreground focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
+                            onValueChange={setPs5Cash}
+                            className="h-auto w-full text-lg md:text-lg bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-4 px-4 text-foreground focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
                           />
                           <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₸</span>
                         </div>
@@ -614,14 +623,11 @@ export default function AddIncomePage() {
                           <CreditCard className="w-4 h-4 text-blue-400" /> Безналичный QR / POS
                         </label>
                         <div className="relative">
-                          <input
-                            inputMode="numeric"
-                            type="number"
+                          <MoneyInput
                             placeholder="0"
-                            min="0"
                             value={ps5Безналичный}
-                            onChange={(e) => setPs5Безналичный(e.target.value)}
-                            className="w-full text-lg bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-4 px-4 text-foreground focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                            onValueChange={setPs5Безналичный}
+                            className="h-auto w-full text-lg md:text-lg bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-4 px-4 text-foreground focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                           />
                           <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₸</span>
                         </div>
@@ -644,14 +650,11 @@ export default function AddIncomePage() {
                           <Wallet className="w-4 h-4 text-amber-400" /> Наличные
                         </label>
                         <div className="relative">
-                          <input
-                            inputMode="numeric"
-                            type="number"
+                          <MoneyInput
                             placeholder="0"
-                            min="0"
                             value={vrCash}
-                            onChange={(e) => setVrCash(e.target.value)}
-                            className="w-full text-lg bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-4 px-4 text-foreground focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
+                            onValueChange={setVrCash}
+                            className="h-auto w-full text-lg md:text-lg bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-4 px-4 text-foreground focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
                           />
                           <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₸</span>
                         </div>
@@ -662,14 +665,11 @@ export default function AddIncomePage() {
                           <CreditCard className="w-4 h-4 text-blue-400" /> Безналичный QR / POS
                         </label>
                         <div className="relative">
-                          <input
-                            inputMode="numeric"
-                            type="number"
+                          <MoneyInput
                             placeholder="0"
-                            min="0"
                             value={vrKaspi}
-                            onChange={(e) => setVrKaspi(e.target.value)}
-                            className="w-full text-lg bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-4 px-4 text-foreground focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                            onValueChange={setVrKaspi}
+                            className="h-auto w-full text-lg md:text-lg bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-4 px-4 text-foreground focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                           />
                           <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₸</span>
                         </div>
@@ -684,14 +684,11 @@ export default function AddIncomePage() {
                       <Wallet className="w-4 h-4 text-amber-400" /> Наличные (Cash)
                     </label>
                     <div className="relative">
-                      <input
-                        inputMode="numeric"
-                        type="number"
+                      <MoneyInput
                         placeholder="0"
-                        min="0"
                         value={cash}
-                        onChange={(e) => setCash(e.target.value)}
-                        className="w-full text-lg bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-4 px-4 text-foreground focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
+                        onValueChange={setCash}
+                        className="h-auto w-full text-lg md:text-lg bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-4 px-4 text-foreground focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
                       />
                       <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₸</span>
                     </div>
@@ -702,14 +699,11 @@ export default function AddIncomePage() {
                       <CreditCard className="w-4 h-4 text-blue-400" /> Безналичный POS / переводы
                     </label>
                     <div className="relative">
-                      <input
-                        inputMode="numeric"
-                        type="number"
+                      <MoneyInput
                         placeholder="0"
-                        min="0"
                         value={kaspi}
-                        onChange={(e) => setKaspi(e.target.value)}
-                        className="w-full text-lg bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-4 px-4 text-foreground focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                        onValueChange={setKaspi}
+                        className="h-auto w-full text-lg md:text-lg bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-4 px-4 text-foreground focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                       />
                       <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₸</span>
                     </div>
@@ -721,14 +715,11 @@ export default function AddIncomePage() {
                         <Smartphone className="w-4 h-4 text-pink-400" /> Безналичный Online (Senet)
                       </label>
                       <div className="relative">
-                        <input
-                          inputMode="numeric"
-                          type="number"
+                        <MoneyInput
                           placeholder="0"
-                          min="0"
                           value={online}
-                          onChange={(e) => setOnline(e.target.value)}
-                          className="w-full text-lg bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-4 px-4 text-foreground focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 outline-none transition-all"
+                          onValueChange={setOnline}
+                          className="h-auto w-full text-lg md:text-lg bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-4 px-4 text-foreground focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 outline-none transition-all"
                         />
                         <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₸</span>
                       </div>
@@ -740,14 +731,11 @@ export default function AddIncomePage() {
                       <CreditCard className="w-4 h-4 text-purple-400" /> Карта (если используется)
                     </label>
                     <div className="relative">
-                      <input
-                        inputMode="numeric"
-                        type="number"
+                      <MoneyInput
                         placeholder="0"
-                        min="0"
                         value={card}
-                        onChange={(e) => setCard(e.target.value)}
-                        className="w-full bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-3 px-4 text-foreground focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none transition-all"
+                        onValueChange={setCard}
+                        className="h-auto w-full bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-3 px-4 text-foreground focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none transition-all"
                       />
                       <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₸</span>
                     </div>
@@ -793,15 +781,14 @@ export default function AddIncomePage() {
 
             {/* Кнопки */}
             <div className="flex gap-4 pt-4">
-              <Link href="/income" className="flex-1">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full h-14 border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 hover:bg-slate-100 dark:hover:bg-gray-700 text-slate-700 dark:text-gray-300 rounded-xl"
-                >
-                  Отмена
-                </Button>
-              </Link>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => guardClose(() => router.push('/income'))}
+                className="flex-1 h-14 border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 hover:bg-slate-100 dark:hover:bg-gray-700 text-slate-700 dark:text-gray-300 rounded-xl"
+              >
+                Отмена
+              </Button>
 
               <Button
                 type="submit"

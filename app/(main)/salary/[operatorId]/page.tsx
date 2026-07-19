@@ -28,6 +28,7 @@ import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from 
 import { PageSkeleton } from '@/components/skeleton'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Input } from '@/components/ui/input'
 import { addDaysISO, formatRuDate, mondayOfDate, toISODateLocal, todayISO } from '@/lib/core/date'
@@ -149,7 +150,13 @@ function OperatorSalaryDetailPageContent() {
   const [unlocking, setUnlocking] = useState(false)
   const unlockWeek = async () => {
     if (!data) return
-    if (!confirm('Разблокировать эту неделю и пересчитать сумму по актуальным правилам? Старые зафиксированные значения будут перезаписаны.')) return
+    const ok = await confirmDialog({
+      title: 'Разблокировать неделю?',
+      description: 'Сумма будет пересчитана по актуальным правилам. Старые зафиксированные значения будут перезаписаны.',
+      confirmLabel: 'Разблокировать',
+      destructive: true,
+    })
+    if (!ok) return
     setUnlocking(true)
     try {
       await post({ action: 'unlockSalaryWeek', operatorId, weekStart: data.week.weekStart })

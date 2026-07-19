@@ -9,6 +9,7 @@ import { SalaryVariantsTab } from '@/components/admin/salary-variants-tab'
 import { SalaryPreviewTab } from '@/components/admin/salary-preview-tab'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import {
@@ -587,9 +588,11 @@ function SalaryRulesContent() {
 
       const warnings = collectWarnings(row, payload)
       if (warnings.length > 0) {
-        const ok = window.confirm(
-          'Предупреждения:\n\n' + warnings.map((w, i) => `${i + 1}. ${w}`).join('\n\n') + '\n\nВсё равно сохранить?',
-        )
+        const ok = await confirmDialog({
+          title: 'Сохранить несмотря на предупреждения?',
+          description: warnings.map((w, i) => `${i + 1}. ${w}`).join(' '),
+          confirmLabel: 'Всё равно сохранить',
+        })
         if (!ok) {
           setSavingId(null)
           return
@@ -816,7 +819,13 @@ function SalaryRulesContent() {
   }
 
   const handleDeleteVersion = async (versionId: string) => {
-    if (!confirm('Удалить эту версию правила? Прошлые смены, которые на неё опирались, могут пересчитаться.')) return
+    const ok = await confirmDialog({
+      title: 'Удалить версию правила?',
+      description: 'Прошлые смены, которые на неё опирались, могут пересчитаться.',
+      confirmLabel: 'Удалить',
+      destructive: true,
+    })
+    if (!ok) return
     setError(null); setSuccessMsg(null); setDeletingVersionId(versionId)
     try {
       const response = await fetch('/api/admin/salary-rules', {
@@ -909,7 +918,13 @@ function SalaryRulesContent() {
   }
 
   const handleDeleteRule = async (id: number) => {
-    if (!confirm('Удалить правило? Это действие нельзя отменить.')) return
+    const ok = await confirmDialog({
+      title: 'Удалить правило?',
+      description: 'Это действие нельзя отменить.',
+      confirmLabel: 'Удалить',
+      destructive: true,
+    })
+    if (!ok) return
 
     setError(null)
     setSuccessMsg(null)
@@ -1030,7 +1045,13 @@ function SalaryRulesContent() {
   }
 
   const handleDeleteSeniorityTier = async (id: string) => {
-    if (!confirm('Отключить правило стажа?')) return
+    const ok = await confirmDialog({
+      title: 'Отключить правило стажа?',
+      description: 'Надбавка за стаж перестанет начисляться по этому правилу.',
+      confirmLabel: 'Отключить',
+      destructive: true,
+    })
+    if (!ok) return
     setError(null)
     setSuccessMsg(null)
     setDeletingTierId(id)

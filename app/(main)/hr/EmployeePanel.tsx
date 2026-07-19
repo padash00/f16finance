@@ -28,6 +28,7 @@ import {
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
 import { DatePicker } from '@/components/ui/date-picker'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
 
@@ -179,7 +180,12 @@ export default function EmployeePanel({ employee, onClose, onUpdated }: Props) {
   }
 
   const promote = async () => {
-    if (!confirm(`Повысить ${employee.full_name} до администратора?\nУ него появится оклад ${monthlySalary || 0} ₸ и доступ к админ-разделам.`)) return
+    const ok = await confirmDialog({
+      title: `Повысить ${employee.full_name} до администратора?`,
+      description: `У него появится оклад ${monthlySalary || 0} ₸ и доступ к админ-разделам.`,
+      confirmLabel: 'Повысить',
+    })
+    if (!ok) return
     setActing('promote')
     setError(null)
     try {
@@ -207,7 +213,13 @@ export default function EmployeePanel({ employee, onClose, onUpdated }: Props) {
   }
 
   const demote = async () => {
-    if (!confirm(`Понизить ${employee.full_name} до обычного оператора?\nОклад/админ-доступ снимутся.`)) return
+    const ok = await confirmDialog({
+      title: `Понизить ${employee.full_name} до обычного оператора?`,
+      description: 'Оклад/админ-доступ снимутся.',
+      confirmLabel: 'Понизить',
+      destructive: true,
+    })
+    if (!ok) return
     setActing('demote')
     setError(null)
     try {

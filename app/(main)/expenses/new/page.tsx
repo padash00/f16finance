@@ -18,6 +18,8 @@ import {
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { MoneyInput } from '@/components/ui/money-input'
+import { useUnsavedGuard } from '@/lib/client/use-unsaved-guard'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { DatePicker } from '@/components/ui/date-picker'
 import { getFinancialGroupLabel, type FinancialGroup } from '@/lib/core/financial-groups'
@@ -110,6 +112,9 @@ function ExpenseWizardPageContent() {
   const [step, setStep] = useState<1 | 2 | 3>(1)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [payload, setPayload] = useState<WizardPayload>(emptyPayload)
+  // Строковые «зеркала» сумм для MoneyInput (в payload по-прежнему числа — контракт API не меняется)
+  const [amountCashStr, setAmountCashStr] = useState('')
+  const [amountKaspiStr, setAmountKaspiStr] = useState('')
   const [categories, setCategories] = useState<Category[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
   const [operators, setOperators] = useState<Operator[]>([])
@@ -184,6 +189,8 @@ function ExpenseWizardPageContent() {
           : []
       const nextStep = Number(saved.step || 1)
       setPayload((prev) => ({ ...prev, ...saved.payload, document_urls: documentUrls, document_url: documentUrls[0] || saved.payload?.document_url || null }))
+      if (saved.payload.amount_cash) setAmountCashStr(String(saved.payload.amount_cash))
+      if (saved.payload.amount_kaspi) setAmountKaspiStr(String(saved.payload.amount_kaspi))
       if (nextStep === 2 || nextStep === 3) {
         setStep(nextStep)
       }
@@ -317,6 +324,13 @@ function ExpenseWizardPageContent() {
   }, [step])
 
   const total = payload.amount_cash + payload.amount_kaspi
+
+  // Защита несохранённой формы: суммы, название или комментарий заполнены и расход ещё не создан
+  const isDirty =
+    !done
+    && (total > 0 || payload.item_name.trim().length > 0 || payload.comment.trim().length > 0)
+  const guardClose = useUnsavedGuard(isDirty)
+
   const dateMs = useMemo(() => new Date(payload.date).getTime(), [payload.date])
   const isBackdated = useMemo(() => dateMs < Date.now() - 7 * 24 * 60 * 60 * 1000, [dateMs])
 
@@ -623,7 +637,7 @@ function ExpenseWizardPageContent() {
         description={`Шаг ${step} из 3`}
         icon={<Receipt className="h-5 w-5" />}
         accent="emerald"
-        backHref="/expenses"
+        onBack={() => guardClose(() => router.push('/expenses'))}
         className="mb-6"
       />
 
@@ -707,6 +721,7 @@ function ExpenseWizardPageContent() {
                 {isCategoryValid ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : null}
               </label>
               <input
+                autoFocus
                 value={categoryQuery}
                 onChange={(e) => setCategoryQuery(e.target.value)}
                 placeholder="Поиск категории (например: зарплата, хоз, закуп)"
@@ -839,21 +854,25 @@ function ExpenseWizardPageContent() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-sm font-medium mb-1 block">Наличные ₸</label>
-              <input
-                type="number"
-                min="0"
-                value={payload.amount_cash || ''}
-                onChange={(e) => setPayload((p) => ({ ...p, amount_cash: Math.max(0, Number(e.target.value) || 0) }))}
+              <MoneyInput
+                placeholder="0"
+                value={amountCashStr}
+                onValueChange={(v) => {
+                  setAmountCashStr(v)
+                  setPayload((p) => ({ ...p, amount_cash: Math.max(0, Number(v) || 0) }))
+                }}
                 className={`${inputBaseClass} ${(payload.amount_cash + payload.amount_kaspi) <= 0 ? inputErrorClass : ''}`}
               />
             </div>
             <div>
               <label className="text-sm font-medium mb-1 block">Безналичный / Карта ₸</label>
-              <input
-                type="number"
-                min="0"
-                value={payload.amount_kaspi || ''}
-                onChange={(e) => setPayload((p) => ({ ...p, amount_kaspi: Math.max(0, Number(e.target.value) || 0) }))}
+              <MoneyInput
+                placeholder="0"
+                value={amountKaspiStr}
+                onValueChange={(v) => {
+                  setAmountKaspiStr(v)
+                  setPayload((p) => ({ ...p, amount_kaspi: Math.max(0, Number(v) || 0) }))
+                }}
                 className={`${inputBaseClass} ${(payload.amount_cash + payload.amount_kaspi) <= 0 ? inputErrorClass : ''}`}
               />
             </div>
@@ -1186,9 +1205,9 @@ function ExpenseWizardPageContent() {
             <ChevronLeft className="w-4 h-4 mr-1" /> Назад
           </Button>
         ) : (
-          <Link href="/expenses">
-            <Button variant="outline">Отмена</Button>
-          </Link>
+          <Button variant="outline" onClick={() => guardClose(() => router.push('/expenses'))}>
+            Отмена
+          </Button>
         )}
 
         <div className="flex-1" />

@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog'
 import { supabase } from '@/lib/supabaseClient'
 import { useToast } from '@/hooks/use-toast'
+import { confirmDialog } from '@/components/ui/confirm-dialog'
 import {
   Plus,
   Search,
@@ -1986,7 +1987,13 @@ function TaskDetailModal({
   }
 
   const handleDelete = async () => {
-    if (!window.confirm(`Удалить задачу #${task.task_number} "${task.title}"? Это действие нельзя отменить.`)) return
+    const ok = await confirmDialog({
+      title: `Удалить задачу #${task.task_number}?`,
+      description: `«${task.title}». Это действие нельзя отменить.`,
+      confirmLabel: 'Удалить',
+      destructive: true,
+    })
+    if (!ok) return
     setDeleting(true)
     const response = await fetch('/api/admin/tasks', {
       method: 'POST',
@@ -2843,7 +2850,12 @@ function TaskTemplatesModal({
   }
 
   const removeTemplate = async (template: TaskTemplate) => {
-    if (!window.confirm(`Удалить шаблон «${template.title}»?`)) return
+    const ok = await confirmDialog({
+      title: `Удалить шаблон «${template.title}»?`,
+      confirmLabel: 'Удалить',
+      destructive: true,
+    })
+    if (!ok) return
     setBusyId(template.id)
     try {
       const response = await fetch('/api/admin/tasks', {

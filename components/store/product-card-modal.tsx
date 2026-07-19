@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { CopyText } from '@/components/ui/copy-text'
 import {
   Dialog,
   DialogContent,
@@ -339,7 +340,7 @@ export default function ProductCardModal({
                 <div>
                   <div className="text-lg font-semibold text-foreground">{data.name}</div>
                   <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                    <span className="font-mono">{data.barcode || '—'}</span>
+                    <CopyText value={data.barcode} className="font-mono" />
                     {data.category && <span>· {data.category}</span>}
                     {data.brand && <span>· {data.brand}</span>}
                     <span>· {data.unit}</span>
