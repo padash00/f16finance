@@ -81,7 +81,7 @@ export function buildLoyaltySaveUrl(params: {
     issuerName: programName,
     programName: `${programName} — карта лояльности`,
     programLogo: {
-      sourceUri: { uri: 'https://ordaops.kz/icon-192.png' },
+      sourceUri: { uri: 'https://ordaops.kz/apple-icon.png' },
       contentDescription: { defaultValue: { language: 'ru', value: programName } },
     },
     hexBackgroundColor: '#0f766e',
