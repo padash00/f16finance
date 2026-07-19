@@ -4,7 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { companyOptions } from '../../query-helpers'
+import { companyOptions, fetchAllPages } from '../../query-helpers'
 
 export const getKpiProgressTool: CopilotTool = {
   name: 'get_kpi_progress',
@@ -39,12 +39,18 @@ export const getKpiProgressTool: CopilotTool = {
       .eq('kind', 'monthly_revenue')
       .maybeSingle()
 
-    const { data: incomes } = await ctx.supabase
-      .from('incomes')
-      .select('cash_amount, kaspi_amount, card_amount, online_amount')
-      .eq('company_id', companyId)
-      .gte('date', periodStart)
-      .lte('date', periodEnd)
+    // Месяц доходов может быть >1000 строк — постранично, иначе «факт» занижен.
+    const incomes = await fetchAllPages((from, to) =>
+      ctx.supabase
+        .from('incomes')
+        .select('cash_amount, kaspi_amount, card_amount, online_amount')
+        .eq('company_id', companyId)
+        .gte('date', periodStart)
+        .lte('date', periodEnd)
+        .order('date', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to),
+    ).catch(() => [] as any[])
 
     const fact = (incomes || []).reduce((s: number, r: any) =>
       s + Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0) + Number(r.card_amount || 0) + Number(r.online_amount || 0), 0)

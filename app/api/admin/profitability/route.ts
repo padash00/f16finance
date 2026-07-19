@@ -193,26 +193,41 @@ export async function GET(req: Request) {
     let deviceQuery = supabase.from('point_devices').select('company_id, feature_flags').eq('is_active', true)
     if (scope.allowedCompanyIds) deviceQuery = deviceQuery.in('company_id', scope.allowedCompanyIds)
 
-    let incomeQuery = supabase
-      .from('incomes')
-      .select('company_id,date,shift,kaspi_amount,kaspi_before_midnight')
-      .gte('date', previousDate)
-      .lte('date', dateTo)
-    if (scope.allowedCompanyIds) incomeQuery = incomeQuery.in('company_id', scope.allowedCompanyIds)
+    // PostgREST режет ответ до 1000 строк — период может покрывать много месяцев,
+    // поэтому incomes забираем постранично, иначе дневная серия Kaspi обрезается.
+    const PAGE = 1000
+    const fetchAllIncomes = async (): Promise<any[]> => {
+      const out: any[] = []
+      for (let from = 0; ; from += PAGE) {
+        let q = supabase
+          .from('incomes')
+          .select('company_id,date,shift,kaspi_amount,kaspi_before_midnight')
+          .gte('date', previousDate)
+          .lte('date', dateTo)
+          .order('date', { ascending: true }).order('id', { ascending: true })
+          .range(from, from + PAGE - 1)
+        if (scope.allowedCompanyIds) q = q.in('company_id', scope.allowedCompanyIds)
+        const { data: pageRows, error: pageError } = await q
+        if (pageError) throw pageError
+        const rows = pageRows || []
+        out.push(...rows)
+        if (rows.length < PAGE) break
+      }
+      return out
+    }
 
-    const [{ data: deviceRows, error: devicesError }, { data: projectRows, error: projectsError }, { data: incomeRows, error: incomesError }] =
+    const [{ data: deviceRows, error: devicesError }, { data: projectRows, error: projectsError }, incomeRows] =
       await Promise.all([
         deviceQuery,
         supabase
           .from('point_projects')
           .select('point_project_companies(company_id, feature_flags)')
           .eq('is_active', true),
-        incomeQuery,
+        fetchAllIncomes(),
       ])
 
     if (devicesError) throw devicesError
     if (projectsError) throw projectsError
-    if (incomesError) throw incomesError
 
     const splitCompanyIds = collectKaspiDailySplitCompanyIds(deviceRows as any[], projectRows as any[])
 

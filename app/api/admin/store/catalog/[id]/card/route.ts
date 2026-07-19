@@ -36,6 +36,20 @@ function canManageCatalog(access: { isSuperAdmin: boolean; staffRole: string }) 
   return access.isSuperAdmin || !!access.staffRole
 }
 
+// PostgREST молча режет ответ до 1000 строк — продажи/приёмки товара постранично.
+const PAGE_SIZE = 1000
+async function fetchAllPages<T = any>(buildQuery: (from: number, to: number) => any): Promise<T[]> {
+  const out: T[] = []
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    const rows = data || []
+    out.push(...rows)
+    if (rows.length < PAGE_SIZE) break
+  }
+  return out
+}
+
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const access = await getRequestAccessContext(request)
@@ -151,14 +165,18 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     const since30 = new Date(Date.now() - 30 * DAY_MS).toISOString()
     let sold30 = 0
     if (locationIds.length > 0) {
-      const { data: saleRows, error: saleErr } = await supabase
-        .from('inventory_movements')
-        .select('quantity')
-        .eq('movement_type', 'sale')
-        .eq('item_id', itemId)
-        .in('from_location_id', locationIds)
-        .gte('created_at', since30)
-      if (saleErr) throw saleErr
+      // Ходовой товар может иметь >1000 продаж за 30 дней — это сумма, забираем всё.
+      const saleRows = await fetchAllPages((from, to) =>
+        supabase
+          .from('inventory_movements')
+          .select('quantity')
+          .eq('movement_type', 'sale')
+          .eq('item_id', itemId)
+          .in('from_location_id', locationIds)
+          .gte('created_at', since30)
+          .order('id')
+          .range(from, to),
+      )
       for (const s of saleRows || []) {
         const q = Number((s as any).quantity || 0)
         if (q > 0) sold30 += q
@@ -171,11 +189,16 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     let lastSupplier: string | null = null
     let lastReceivedAt: string | null = null
     {
-      const { data: recRows, error: recErr } = await supabase
-        .from('inventory_receipt_items')
-        .select('unit_cost, receipt:receipt_id(received_at, supplier:supplier_id(name, organization_name))')
-        .eq('item_id', itemId)
-      if (recErr) throw recErr
+      // История приёмок товара растёт без ограничения — постранично, иначе
+      // «последняя закупочная» берётся из усечённой выборки.
+      const recRows = await fetchAllPages((from, to) =>
+        supabase
+          .from('inventory_receipt_items')
+          .select('unit_cost, receipt:receipt_id(received_at, supplier:supplier_id(name, organization_name))')
+          .eq('item_id', itemId)
+          .order('id')
+          .range(from, to),
+      )
       for (const r of (recRows || []) as any[]) {
         const receipt = r.receipt || {}
         const receivedAt = String(receipt.received_at || '')

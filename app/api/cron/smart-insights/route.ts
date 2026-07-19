@@ -25,6 +25,20 @@ function fmtMoney(v: number) {
   return Math.round(v).toLocaleString('ru-RU') + ' ₸'
 }
 
+// PostgREST режет ответ до 1000 строк — забираем постранично.
+const PAGE = 1000
+async function fetchAllPages(build: (from: number, to: number) => any): Promise<any[]> {
+  const out: any[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await build(from, from + PAGE - 1)
+    if (error) throw error
+    const rows = data || []
+    out.push(...rows)
+    if (rows.length < PAGE) break
+  }
+  return out
+}
+
 export async function GET(req: Request) {
   const auth = req.headers.get('authorization') || ''
   const cronSecret = requiredEnv('CRON_SECRET')
@@ -105,12 +119,17 @@ export async function GET(req: Request) {
     }
 
     // 3. Низкие остатки (скоуп по орг через товар — inventory_items.organization_id NOT NULL)
-    let balQ = supabase
-      .from('inventory_balances')
-      .select('quantity, item:item_id!inner(name, low_stock_threshold, organization_id)')
-      .order('quantity')
-    if (ownerOrgId) balQ = balQ.eq('item.organization_id', ownerOrgId)
-    const { data: balances } = await balQ
+    // Балансов может быть >1000 (товары × локации) — постранично, иначе счёт «на исходе» врёт.
+    const balances = await fetchAllPages((from, to) => {
+      let balQ = supabase
+        .from('inventory_balances')
+        .select('quantity, item:item_id!inner(name, low_stock_threshold, organization_id)')
+        .order('quantity')
+        .order('item_id')
+        .range(from, to)
+      if (ownerOrgId) balQ = balQ.eq('item.organization_id', ownerOrgId)
+      return balQ
+    }).catch(() => null)
     if (balances) {
       let lowCount = 0
       const examples: string[] = []

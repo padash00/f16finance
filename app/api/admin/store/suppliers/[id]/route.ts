@@ -17,6 +17,27 @@ function canManageStore(access: {
   return access.isSuperAdmin || !!access.staffRole
 }
 
+// PostgREST молча режет ответ до 1000 строк — товары/остатки поставщика постранично.
+const PAGE_SIZE = 1000
+async function fetchAllPages<T = any>(buildQuery: (from: number, to: number) => any): Promise<T[]> {
+  const out: T[] = []
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    const rows = data || []
+    out.push(...rows)
+    if (rows.length < PAGE_SIZE) break
+  }
+  return out
+}
+
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  if (size <= 0) return [arr]
+  const out: T[][] = []
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
+  return out
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -93,33 +114,51 @@ export async function GET(
     }
 
     // Товары, закреплённые за этим поставщиком, с текущим остатком (сумма по всем локациям).
-    const { data: productRows, error: productsError } = await supabase
-      .from('inventory_items')
-      .select('id, name, barcode, unit, default_purchase_price, low_stock_threshold, is_active')
-      .eq('primary_supplier_id', id)
-      .order('name', { ascending: true })
-    if (productsError) throw productsError
+    // Постранично: у крупного дистрибьютора может быть >1000 позиций.
+    const productRows = await fetchAllPages((from, to) =>
+      supabase
+        .from('inventory_items')
+        .select('id, name, barcode, unit, default_purchase_price, low_stock_threshold, is_active')
+        .eq('primary_supplier_id', id)
+        .order('name', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to),
+    )
     const productItemIds = (productRows || []).map((p: any) => p.id)
     const stockByItem = new Map<string, number>()
     const consumptionByItem = new Map<string, number>()
     if (productItemIds.length > 0) {
-      const [balanceRes, consumptionRes] = await Promise.all([
-        supabase
-          .from('inventory_balances')
-          .select('item_id, quantity')
-          .in('item_id', productItemIds),
-        supabase
-          .from('inventory_consumption_rates')
-          .select('item_id, avg_daily_consumption')
-          .in('item_id', productItemIds),
+      // Чанки по 200 id (лимит длины URL) + пагинация остатков внутри чанка.
+      const [balanceChunks, consumptionChunks] = await Promise.all([
+        Promise.all(
+          chunkArray(productItemIds, 200).map((ids) =>
+            fetchAllPages((from, to) =>
+              supabase
+                .from('inventory_balances')
+                .select('item_id, quantity')
+                .in('item_id', ids)
+                .order('item_id')
+                .order('location_id')
+                .range(from, to),
+            ),
+          ),
+        ),
+        Promise.all(
+          chunkArray(productItemIds, 200).map(async (ids) => {
+            const { data, error } = await supabase
+              .from('inventory_consumption_rates')
+              .select('item_id, avg_daily_consumption')
+              .in('item_id', ids)
+            if (error) throw error
+            return data || []
+          }),
+        ),
       ])
-      if (balanceRes.error) throw balanceRes.error
-      if (consumptionRes.error) throw consumptionRes.error
-      for (const row of (balanceRes.data || []) as any[]) {
+      for (const row of balanceChunks.flat() as any[]) {
         const key = String(row.item_id)
         stockByItem.set(key, (stockByItem.get(key) || 0) + Number(row.quantity || 0))
       }
-      for (const row of (consumptionRes.data || []) as any[]) {
+      for (const row of consumptionChunks.flat() as any[]) {
         consumptionByItem.set(String(row.item_id), Number(row.avg_daily_consumption || 0))
       }
     }

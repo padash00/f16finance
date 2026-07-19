@@ -98,10 +98,13 @@ export async function GET(req: Request) {
 
     const supabase = createAdminSupabaseClient()
 
-    const [{ data: companyRows }, { data: rawItems, error: itemsError }, { data: rawDebts, error: debtsError }] =
-      await Promise.all([
-        supabase.from('companies').select('id, name, code').in('id', companyIds),
-        supabase
+    // PostgREST режет ответ до 1000 строк (прежний .limit(3000) молча обрезался) —
+    // позиции долгов за неделю забираем постранично.
+    const PAGE = 1000
+    const fetchAllDebtItems = async (): Promise<any[]> => {
+      const out: any[] = []
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await supabase
           .from('point_debt_items')
           .select(
             'id, company_id, operator_id, created_by_operator_id, point_device_id, client_name, item_name, barcode, quantity, unit_price, total_amount, comment, week_start, source, local_ref, status, created_at',
@@ -110,7 +113,20 @@ export async function GET(req: Request) {
           .eq('status', 'active')
           .in('company_id', companyIds)
           .order('created_at', { ascending: false })
-          .limit(3000),
+          .order('id')
+          .range(from, from + PAGE - 1)
+        if (error) throw error
+        const rows = data || []
+        out.push(...rows)
+        if (rows.length < PAGE) break
+      }
+      return out
+    }
+
+    const [{ data: companyRows }, rawItems, { data: rawDebts, error: debtsError }] =
+      await Promise.all([
+        supabase.from('companies').select('id, name, code').in('id', companyIds),
+        fetchAllDebtItems(),
         supabase
           .from('debts')
           .select('id, company_id, operator_id, client_name, amount, comment, week_start, status, source, created_at, rolled_over_from_id, rolled_over_to_id, rolled_over_at')
@@ -119,7 +135,6 @@ export async function GET(req: Request) {
           .in('company_id', companyIds),
       ])
 
-    if (itemsError) throw itemsError
     if (debtsError) throw debtsError
 
     const items = (rawItems || []) as any[]

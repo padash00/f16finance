@@ -11,7 +11,10 @@ import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/serv
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 
-const PAGE_SIZE = 5000
+// ВАЖНО: PostgREST (Supabase) режет любой ответ до max-rows = 1000, даже если
+// .range() запрашивает больше. При PAGE_SIZE > 1000 цикл получал 1000 строк,
+// решал что это «неполная страница» и останавливался → данные молча обрезались.
+const PAGE_SIZE = 1000
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -62,7 +65,7 @@ async function fetchAllIncomes(
       .select('id, date, company_id, cash_amount, kaspi_amount, online_amount, card_amount')
       .gte('date', from)
       .lte('date', to)
-      .order('date', { ascending: true })
+      .order('date', { ascending: true }).order('id', { ascending: true })
       .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
     if (allowedCompanyIds !== null) {
       if (allowedCompanyIds.length === 0) return []
@@ -92,7 +95,7 @@ async function fetchAllExpenses(
       .select('id, date, company_id, category, cash_amount, kaspi_amount')
       .gte('date', from)
       .lte('date', to)
-      .order('date', { ascending: true })
+      .order('date', { ascending: true }).order('id', { ascending: true })
       .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
     if (allowedCompanyIds !== null) {
       if (allowedCompanyIds.length === 0) return []

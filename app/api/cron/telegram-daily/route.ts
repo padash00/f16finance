@@ -24,6 +24,20 @@ function fmtMoney(v: number) {
   return Math.round(v).toLocaleString('ru-RU') + ' ₸'
 }
 
+// PostgREST режет ответ до 1000 строк — забираем постранично.
+const PAGE = 1000
+async function fetchAllPages(build: (from: number, to: number) => any): Promise<any[]> {
+  const out: any[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await build(from, from + PAGE - 1)
+    if (error) throw error
+    const rows = data || []
+    out.push(...rows)
+    if (rows.length < PAGE) break
+  }
+  return out
+}
+
 export async function GET(req: Request) {
   const auth = req.headers.get('authorization') || ''
   const cronSecret = requiredEnv('CRON_SECRET')
@@ -111,14 +125,20 @@ export async function GET(req: Request) {
     const past = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - 31))
     return `${past.getUTCFullYear()}-${String(past.getUTCMonth() + 1).padStart(2, '0')}-${String(past.getUTCDate()).padStart(2, '0')}`
   })()
-  const avgRes = await supabase
-    .from('incomes')
-    .select('date, cash_amount, kaspi_amount, online_amount, card_amount')
-    .gte('date', thirtyDaysAgo)
-    .lt('date', date)
+  // 30 дней доходов может быть >1000 строк — постранично, иначе средняя занижается.
+  const avgRows = await fetchAllPages((from, to) =>
+    supabase
+      .from('incomes')
+      .select('date, cash_amount, kaspi_amount, online_amount, card_amount')
+      .gte('date', thirtyDaysAgo)
+      .lt('date', date)
+      .order('date', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to),
+  ).catch(() => [] as any[])
 
   const dayTotals = new Map<string, number>()
-  for (const row of (avgRes.data ?? []) as any[]) {
+  for (const row of (avgRows ?? []) as any[]) {
     const t = safeNum(row.cash_amount) + safeNum(row.kaspi_amount) + safeNum(row.online_amount) + safeNum(row.card_amount)
     dayTotals.set(row.date, (dayTotals.get(row.date) || 0) + t)
   }

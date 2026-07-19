@@ -6,6 +6,21 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
+// PostgREST молча режет ответ до 1000 строк — продажи/возвраты смены забираем
+// постранично, иначе итоги смены (деньги) считаются по обрезанным данным.
+const PAGE = 1000
+async function fetchAllPages(buildQuery: (from: number, to: number) => any): Promise<any[]> {
+  const out: any[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await buildQuery(from, from + PAGE - 1)
+    if (error) throw error
+    const rows = data || []
+    out.push(...rows)
+    if (rows.length < PAGE) break
+  }
+  return out
+}
+
 export async function GET(request: Request) {
   const ctx = await requireOperator(request)
   if ('response' in ctx) return ctx.response
@@ -34,15 +49,23 @@ export async function GET(request: Request) {
 
   const shiftId = (shift as any).id as string
 
-  const [salesRes, returnsRes, templatesRes, runsRes] = await Promise.all([
-    supabase
-      .from('point_sales')
-      .select('id, total_amount, cash_amount, kaspi_amount, sold_at')
-      .eq('shift_id', shiftId),
-    supabase
-      .from('point_returns')
-      .select('id, total_amount, cash_amount, kaspi_amount, returned_at')
-      .eq('shift_id', shiftId),
+  const [salesRows, returnsRows, templatesRes, runsRes] = await Promise.all([
+    fetchAllPages((from, to) =>
+      supabase
+        .from('point_sales')
+        .select('id, total_amount, cash_amount, kaspi_amount, sold_at')
+        .eq('shift_id', shiftId)
+        .order('id')
+        .range(from, to),
+    ),
+    fetchAllPages((from, to) =>
+      supabase
+        .from('point_returns')
+        .select('id, total_amount, cash_amount, kaspi_amount, returned_at')
+        .eq('shift_id', shiftId)
+        .order('id')
+        .range(from, to),
+    ),
     supabase
       .from('checklist_templates')
       .select(
@@ -60,8 +83,8 @@ export async function GET(request: Request) {
       .order('started_at', { ascending: false }),
   ])
 
-  const sales = (salesRes.data || []) as any[]
-  const returns = (returnsRes.data || []) as any[]
+  const sales = (salesRows || []) as any[]
+  const returns = (returnsRows || []) as any[]
   const templates = (templatesRes.data || []) as any[]
   const runs = (runsRes.data || []) as any[]
 

@@ -5,7 +5,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { scopedOperatorIds } from '../../query-helpers'
+import { scopedOperatorIds, fetchAllPages } from '../../query-helpers'
 
 function todayISO(): string {
   const d = new Date()
@@ -74,19 +74,24 @@ export const getSalaryAdjustmentsTool: CopilotTool = {
     else if (period === 'all') { from = null; to = null }
     else from = addDaysISO(today, -29) // month
 
-    let q = ctx.supabase
-      .from('operator_salary_adjustments')
-      .select('date, kind, amount, comment, status, operator_id')
-      .order('date', { ascending: false }).range(0, 9999)
-    if (from) q = q.gte('date', from)
-    if (to) q = q.lte('date', to)
-    if (kind) q = q.eq('kind', kind)
-    if (operatorId) q = q.eq('operator_id', operatorId)
     const allowedOpIds = await scopedOperatorIds(ctx)
-    if (allowedOpIds) q = q.in('operator_id', allowedOpIds)
-
-    const { data, error } = await q
-    if (error) return { ok: false, message: `Ошибка: ${error.message}` }
+    let data: any[]
+    try {
+      data = await fetchAllPages((rFrom, rTo) => {
+        let q = ctx.supabase
+          .from('operator_salary_adjustments')
+          .select('date, kind, amount, comment, status, operator_id')
+          .order('date', { ascending: false }).order('id', { ascending: false }).range(rFrom, rTo)
+        if (from) q = q.gte('date', from)
+        if (to) q = q.lte('date', to)
+        if (kind) q = q.eq('kind', kind)
+        if (operatorId) q = q.eq('operator_id', operatorId)
+        if (allowedOpIds) q = q.in('operator_id', allowedOpIds)
+        return q
+      })
+    } catch (e: any) {
+      return { ok: false, message: `Ошибка: ${e?.message || 'unknown'}` }
+    }
 
     // Активные (не отменённые)
     const rows = (data || []).filter((a: any) => a.status !== 'voided')

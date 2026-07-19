@@ -9,6 +9,30 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
+const PAGE = 1000
+
+/** PostgREST режет ответ до 1000 строк — забираем постранично (.range) до неполной страницы. */
+async function fetchAllPages(buildQuery: (from: number, to: number) => any): Promise<any[]> {
+  const out: any[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await buildQuery(from, from + PAGE - 1)
+    if (error) throw error
+    const rows = data || []
+    out.push(...rows)
+    if (rows.length < PAGE) break
+  }
+  return out
+}
+
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  if (size <= 0) return [arr]
+  const out: T[][] = []
+  for (let i = 0; i < arr.length; i += size) {
+    out.push(arr.slice(i, i + size))
+  }
+  return out
+}
+
 function canManageInventory(access: {
   isSuperAdmin: boolean
   staffRole: string
@@ -66,12 +90,16 @@ export async function GET(request: Request) {
         })
       }
 
-      const { data: balanceRows, error: balancesError } = await supabase
-        .from('inventory_balances')
-        .select('item_id, quantity')
-        .in('location_id', locationIds)
-        .gt('quantity', 0)
-      if (balancesError) throw balancesError
+      const balanceRows = await fetchAllPages((from, to) =>
+        supabase
+          .from('inventory_balances')
+          .select('item_id, quantity')
+          .in('location_id', locationIds)
+          .gt('quantity', 0)
+          .order('location_id', { ascending: true })
+          .order('item_id', { ascending: true })
+          .range(from, to),
+      )
 
       const qtyByItem: Record<string, number> = {}
       for (const row of balanceRows || []) {
@@ -91,11 +119,19 @@ export async function GET(request: Request) {
         })
       }
 
-      const { data: itemRows, error: itemRowsError } = await supabase
-        .from('inventory_items')
-        .select('id, name, sale_price, default_purchase_price, category:inventory_categories(name)')
-        .in('id', itemIds)
-      if (itemRowsError) throw itemRowsError
+      // itemIds может быть >1000 (каталог большой) — чанки по 200 id (лимит длины URL),
+      // каждый чанк возвращает ≤200 строк, пагинация внутри не нужна.
+      const itemRowChunks = await Promise.all(
+        chunkArray(itemIds, 200).map(async (ids) => {
+          const { data, error } = await supabase
+            .from('inventory_items')
+            .select('id, name, sale_price, default_purchase_price, category:inventory_categories(name)')
+            .in('id', ids)
+          if (error) throw error
+          return data || []
+        }),
+      )
+      const itemRows = itemRowChunks.flat()
 
       const rows = (itemRows || []).map((item: any) => {
         const qty = Number(qtyByItem[String(item.id)] || 0)
@@ -144,16 +180,16 @@ export async function GET(request: Request) {
     dateFrom.setDate(dateFrom.getDate() - days)
     const dateFromStr = dateFrom.toISOString().split('T')[0]
 
-    // Fetch all sale items in period
-    let saleItemsQuery = supabase
-      .from('point_sale_items')
-      .select('item_id, quantity, unit_price, total_price, point_sales!inner(sale_date, company_id)')
-      .gte('point_sales.sale_date', dateFromStr)
-    if (companyId) saleItemsQuery = saleItemsQuery.eq('point_sales.company_id', companyId)
-    if (scopedCompanyIds) saleItemsQuery = saleItemsQuery.in('point_sales.company_id', scopedCompanyIds)
-    const { data: saleItems, error: saleItemsError } = await saleItemsQuery
-
-    if (saleItemsError) throw saleItemsError
+    // Fetch all sale items in period (за 30-365 дней строк легко >1000 — постранично)
+    const saleItems = await fetchAllPages((from, to) => {
+      let saleItemsQuery = supabase
+        .from('point_sale_items')
+        .select('item_id, quantity, unit_price, total_price, point_sales!inner(sale_date, company_id)')
+        .gte('point_sales.sale_date', dateFromStr)
+      if (companyId) saleItemsQuery = saleItemsQuery.eq('point_sales.company_id', companyId)
+      if (scopedCompanyIds) saleItemsQuery = saleItemsQuery.in('point_sales.company_id', scopedCompanyIds)
+      return saleItemsQuery.order('id', { ascending: true }).range(from, to)
+    })
 
     const filtered = saleItems || []
 
@@ -199,14 +235,16 @@ export async function GET(request: Request) {
     const itemIds = Object.keys(itemMap).filter((id) => id && id !== 'null' && id !== 'undefined')
     void itemIds // используется только для документации scope; реальный лукап — через allItems ниже
 
-    // Also fetch items with zero sales (C-class candidates) — только своя орг
-    let allItemsQuery = supabase
-      .from('inventory_items')
-      .select('id, name, sale_price, default_purchase_price, category_id, is_active, category:inventory_categories(name)')
-      .eq('is_active', true)
-    if (!access.isSuperAdmin) allItemsQuery = allItemsQuery.eq('organization_id', access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
-    const { data: allItems, error: allItemsError } = await allItemsQuery
-    if (allItemsError) throw allItemsError
+    // Also fetch items with zero sales (C-class candidates) — только своя орг.
+    // Каталог может быть >1000 позиций — постранично.
+    const allItems = await fetchAllPages((from, to) => {
+      let allItemsQuery = supabase
+        .from('inventory_items')
+        .select('id, name, sale_price, default_purchase_price, category_id, is_active, category:inventory_categories(name)')
+        .eq('is_active', true)
+      if (!access.isSuperAdmin) allItemsQuery = allItemsQuery.eq('organization_id', access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+      return allItemsQuery.order('id', { ascending: true }).range(from, to)
+    })
 
     // Загружаем остатки складов (warehouse) этой точки/области — для stock_value и slow-movers.
     let stockLocationsQuery = supabase
@@ -224,12 +262,16 @@ export async function GET(request: Request) {
 
     const stockQtyByItem: Record<string, number> = {}
     if (stockLocationIds.length > 0) {
-      const { data: stockBalances, error: stockBalancesError } = await supabase
-        .from('inventory_balances')
-        .select('item_id, quantity')
-        .in('location_id', stockLocationIds)
-        .gt('quantity', 0)
-      if (stockBalancesError) throw stockBalancesError
+      const stockBalances = await fetchAllPages((from, to) =>
+        supabase
+          .from('inventory_balances')
+          .select('item_id, quantity')
+          .in('location_id', stockLocationIds)
+          .gt('quantity', 0)
+          .order('location_id', { ascending: true })
+          .order('item_id', { ascending: true })
+          .range(from, to),
+      )
       for (const row of stockBalances || []) {
         const id = (row as any)?.item_id
         if (!id || typeof id !== 'string') continue

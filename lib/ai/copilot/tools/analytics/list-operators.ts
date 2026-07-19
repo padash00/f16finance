@@ -5,7 +5,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { companyOptions, scopedOperatorIds } from '../../query-helpers'
+import { companyOptions, scopedOperatorIds, fetchAllPages } from '../../query-helpers'
 
 export const listOperatorsTool: CopilotTool = {
   name: 'list_operators',
@@ -31,24 +31,32 @@ export const listOperatorsTool: CopilotTool = {
     // Если указана точка — берём операторов из её смен (связь оператор↔точка через shifts).
     let operatorIdsFilter: Set<string> | null = null
     if (companyId) {
-      const { data: shifts } = await ctx.supabase
-        .from('shifts').select('operator_id').eq('company_id', companyId).not('operator_id', 'is', null).range(0, 9999)
+      const shifts = await fetchAllPages((rFrom, rTo) =>
+        ctx.supabase
+          .from('shifts').select('operator_id').eq('company_id', companyId).not('operator_id', 'is', null)
+          .order('id', { ascending: true }).range(rFrom, rTo),
+      ).catch(() => [] as any[])
       operatorIdsFilter = new Set((shifts || []).map((s: any) => String(s.operator_id)).filter(Boolean))
       if (operatorIdsFilter.size === 0) {
         return { ok: true, message: 'На этой точке пока нет операторов в сменах.', data: { operators: [] } }
       }
     }
 
-    let q = ctx.supabase.from('operators').select('id, name, short_name, is_active').order('name').range(0, 9999)
-    if (onlyActive) q = q.eq('is_active', true)
     // ОРГ-СКОУП: если точка не указана — ограничиваем операторами своей организации
     // (иначе утечка операторов чужих клубов). С точкой фильтр уже по сменам этой точки.
-    if (!operatorIdsFilter) {
-      const orgOpIds = await scopedOperatorIds(ctx)
-      if (orgOpIds) q = q.in('id', orgOpIds)
+    const orgOpIds = operatorIdsFilter ? null : await scopedOperatorIds(ctx)
+    let data: any[]
+    try {
+      data = await fetchAllPages((rFrom, rTo) => {
+        let q = ctx.supabase.from('operators').select('id, name, short_name, is_active')
+          .order('name').order('id', { ascending: true }).range(rFrom, rTo)
+        if (onlyActive) q = q.eq('is_active', true)
+        if (orgOpIds) q = q.in('id', orgOpIds)
+        return q
+      })
+    } catch (e: any) {
+      return { ok: false, message: `Ошибка: ${e?.message || 'unknown'}` }
     }
-    const { data, error } = await q
-    if (error) return { ok: false, message: `Ошибка: ${error.message}` }
 
     let ops = (data || []) as Array<{ id: string; name: string; short_name: string | null; is_active: boolean }>
     if (operatorIdsFilter) ops = ops.filter((o) => operatorIdsFilter!.has(String(o.id)))

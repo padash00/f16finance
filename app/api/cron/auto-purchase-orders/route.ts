@@ -26,6 +26,27 @@ export const runtime = 'nodejs'
 
 const SAFETY_FACTOR = 1.5
 
+// PostgREST режет ответ до 1000 строк — забираем постранично.
+const PAGE = 1000
+async function fetchAllPages(build: (from: number, to: number) => any): Promise<any[]> {
+  const out: any[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await build(from, from + PAGE - 1)
+    if (error) throw error
+    const rows = data || []
+    out.push(...rows)
+    if (rows.length < PAGE) break
+  }
+  return out
+}
+
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  if (size <= 0) return [arr]
+  const out: T[][] = []
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
+  return out
+}
+
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url)
@@ -45,13 +66,16 @@ export async function GET(req: Request) {
 
     const supabase = createAdminSupabaseClient()
 
-    // 1. Товары с закреплённым поставщиком.
-    const { data: itemRows, error: itemsError } = await supabase
-      .from('inventory_items')
-      .select('id, name, barcode, unit, low_stock_threshold, primary_supplier_id, is_active')
-      .not('primary_supplier_id', 'is', null)
-      .eq('is_active', true)
-    if (itemsError) throw itemsError
+    // 1. Товары с закреплённым поставщиком (постранично — каталог может быть >1000).
+    const itemRows = await fetchAllPages((from, to) =>
+      supabase
+        .from('inventory_items')
+        .select('id, name, barcode, unit, low_stock_threshold, primary_supplier_id, is_active')
+        .not('primary_supplier_id', 'is', null)
+        .eq('is_active', true)
+        .order('id', { ascending: true })
+        .range(from, to),
+    )
 
     const items = (itemRows || []) as Array<{
       id: string
@@ -69,9 +93,18 @@ export async function GET(req: Request) {
     const supplierIds = Array.from(new Set(items.map((i) => i.primary_supplier_id)))
 
     // 2. Остатки, скорость расхода, поставщики — параллельно.
-    const [balanceRes, consumptionRes, suppliersRes, openAutoRes] = await Promise.all([
-      supabase.from('inventory_balances').select('item_id, quantity').in('item_id', itemIds),
-      supabase.from('inventory_consumption_rates').select('item_id, avg_daily_consumption').in('item_id', itemIds),
+    // Балансы/расход по чанкам id (лимит длины URL) + пагинация внутри чанка.
+    const fetchByItemChunks = async (build: (ids: string[]) => (from: number, to: number) => any) => {
+      const chunks = await Promise.all(chunkArray(itemIds, 200).map((ids) => fetchAllPages(build(ids))))
+      return chunks.flat()
+    }
+    const [balanceRows, consumptionRows, suppliersRes, openAutoRes] = await Promise.all([
+      fetchByItemChunks((ids) => (from, to) =>
+        supabase.from('inventory_balances').select('item_id, quantity').in('item_id', ids).order('item_id').range(from, to),
+      ),
+      fetchByItemChunks((ids) => (from, to) =>
+        supabase.from('inventory_consumption_rates').select('item_id, avg_daily_consumption').in('item_id', ids).order('item_id').range(from, to),
+      ),
       supabase
         .from('inventory_suppliers')
         .select('id, name, organization_name, organization_id, lead_time_days, sales_rep_name')
@@ -83,18 +116,16 @@ export async function GET(req: Request) {
         .eq('status', 'draft')
         .in('supplier_id', supplierIds),
     ])
-    if (balanceRes.error) throw balanceRes.error
-    if (consumptionRes.error) throw consumptionRes.error
     if (suppliersRes.error) throw suppliersRes.error
     if (openAutoRes.error) throw openAutoRes.error
 
     const stockByItem = new Map<string, number>()
-    for (const row of (balanceRes.data || []) as any[]) {
+    for (const row of balanceRows as any[]) {
       const key = String(row.item_id)
       stockByItem.set(key, (stockByItem.get(key) || 0) + Number(row.quantity || 0))
     }
     const consumptionByItem = new Map<string, number>()
-    for (const row of (consumptionRes.data || []) as any[]) {
+    for (const row of consumptionRows as any[]) {
       consumptionByItem.set(String(row.item_id), Number(row.avg_daily_consumption || 0))
     }
     const supplierById = new Map<string, any>()

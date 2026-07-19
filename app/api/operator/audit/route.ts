@@ -25,6 +25,28 @@ async function fetchItemsByIds(supabase: any, ids: string[], columns: string) {
   return out
 }
 
+// PostgREST молча режет ответ до 1000 строк — снимок акта и подсчёты могут
+// содержать весь каталог (>1000 позиций), забираем постранично.
+const PAGE = 1000
+async function fetchAllPages(buildQuery: (from: number, to: number) => any): Promise<any[]> {
+  const out: any[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await buildQuery(from, from + PAGE - 1)
+    if (error) throw error
+    const rows = data || []
+    out.push(...rows)
+    if (rows.length < PAGE) break
+  }
+  return out
+}
+
+async function fetchAuditSnapshotItemIds(supabase: any, actId: string): Promise<Set<string>> {
+  const snap = await fetchAllPages((from, to) =>
+    supabase.from('inventory_audit_snapshot').select('item_id').eq('act_id', actId).order('item_id').range(from, to),
+  )
+  return new Set(snap.map((r: any) => String(r.item_id)))
+}
+
 // Секции оператора в акте: набор category_id; null => вся локация.
 function operatorSection(assignments: Array<{ category_id: string | null }>) {
   const cats = new Set<string>()
@@ -59,8 +81,7 @@ export async function GET(request: Request) {
       if (forAct.length === 0) return json({ error: 'not-assigned' }, 403)
       const section = operatorSection(forAct)
 
-      const { data: snap } = await supabase.from('inventory_audit_snapshot').select('item_id').eq('act_id', actId)
-      const snapIds = new Set(((snap as any[]) || []).map((r: any) => String(r.item_id)))
+      const snapIds = await fetchAuditSnapshotItemIds(supabase, actId)
       if (snapIds.size === 0) return json({ ok: true, data: { act_id: actId, items: [] } })
 
       const items = await fetchItemsByIds(supabase, Array.from(snapIds), 'id, name, barcode, unit, category_id')
@@ -75,10 +96,15 @@ export async function GET(request: Request) {
       const actObj = Array.isArray(act0) ? act0[0] : act0
       const isDouble = String(actObj?.mode || 'single') === 'double'
 
-      const { data: counts } = await supabase
-        .from('inventory_audit_counts')
-        .select('item_id, counted_qty, counted_by')
-        .eq('act_id', actId)
+      const counts = await fetchAllPages((from, to) =>
+        supabase
+          .from('inventory_audit_counts')
+          .select('item_id, counted_qty, counted_by')
+          .eq('act_id', actId)
+          .order('item_id')
+          .order('counted_by')
+          .range(from, to),
+      )
       const myCount = new Map<string, number>()
       const otherCount = new Map<string, { qty: number; by: string | null }>()
       for (const c of ((counts as any[]) || [])) {
@@ -177,8 +203,7 @@ export async function POST(request: Request) {
     const section = operatorSection((assign as any[]).map((a) => ({ category_id: a.category_id ? String(a.category_id) : null })))
 
     // Разрешённые товары: только из снимка акта и (если не «вся локация») из своих категорий.
-    const { data: snap } = await supabase.from('inventory_audit_snapshot').select('item_id').eq('act_id', actId)
-    const snapIds = new Set(((snap as any[]) || []).map((r: any) => String(r.item_id)))
+    const snapIds = await fetchAuditSnapshotItemIds(supabase, actId)
     let allowedItems: Set<string> = snapIds
     if (!section.all) {
       const catItems = snapIds.size ? await fetchItemsByIds(supabase, Array.from(snapIds), 'id, category_id') : []

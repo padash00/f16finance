@@ -56,6 +56,21 @@ const num = (v: unknown) => {
   return Number.isFinite(n) ? Math.round((n + Number.EPSILON) * 1000) / 1000 : 0
 }
 
+// PostgREST молча режет ответ до 1000 строк — снимки/счёты/остатки больших
+// локаций (каталог >1000 позиций) забираем постранично.
+const PAGE_SIZE = 1000
+async function fetchAllPages<T = any>(buildQuery: (from: number, to: number) => any): Promise<T[]> {
+  const out: T[] = []
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    const rows = data || []
+    out.push(...rows)
+    if (rows.length < PAGE_SIZE) break
+  }
+  return out
+}
+
 // Чтение товаров чанками: один .in() на сотни UUID превышает лимит URL шлюза.
 async function fetchItemsByIds(supabase: any, ids: string[], columns: string) {
   const out: any[] = []
@@ -145,14 +160,16 @@ export async function GET(request: Request) {
       const guarded = await loadActWithGuard(supabase, actId, inventoryScope)
       if ('response' in guarded) return guarded.response
       const act = guarded.act
-      const [assigns, snap, counts, loc] = await Promise.all([
+      const [assigns, snapRows, countRows, loc] = await Promise.all([
         supabase.from('inventory_audit_assignments').select('id, operator_id, category_id, label').eq('act_id', actId),
-        supabase.from('inventory_audit_snapshot').select('item_id, expected_qty').eq('act_id', actId),
-        supabase.from('inventory_audit_counts').select('item_id, counted_qty, counted_by, counted_at').eq('act_id', actId),
+        fetchAllPages((from, to) =>
+          supabase.from('inventory_audit_snapshot').select('item_id, expected_qty').eq('act_id', actId).order('item_id').range(from, to),
+        ),
+        fetchAllPages((from, to) =>
+          supabase.from('inventory_audit_counts').select('item_id, counted_qty, counted_by, counted_at').eq('act_id', actId).order('item_id').order('counted_at').range(from, to),
+        ),
         supabase.from('inventory_locations').select('id, name, location_type, company_id').eq('id', (act as any).location_id).maybeSingle(),
       ])
-      const snapRows = (snap.data || []) as any[]
-      const countRows = (counts.data || []) as any[]
       const itemIds = Array.from(new Set([...snapRows.map((r) => String(r.item_id)), ...countRows.map((r) => String(r.item_id))]))
       const opIds = Array.from(new Set([...((assigns.data || []) as any[]).map((r) => String(r.operator_id)), ...countRows.map((r) => String(r.counted_by || '')).filter(Boolean)]))
       const catIds = Array.from(new Set(((assigns.data || []) as any[]).map((r) => String(r.category_id || '')).filter(Boolean)))
@@ -260,16 +277,26 @@ export async function GET(request: Request) {
     const actRows = (acts || []) as any[]
     const locIds = Array.from(new Set(actRows.map((a) => String(a.location_id))))
     const actIds = actRows.map((a) => String(a.id))
+    // Снимки/счёты 50 актов легко превышают 1000 строк суммарно — постранично,
+    // иначе totalItems/countedItems в списке молча занижаются.
     const [locs, snapCounts, cntCounts] = await Promise.all([
       locIds.length ? supabase.from('inventory_locations').select('id, name, location_type, company_id, companies(name)').in('id', locIds) : Promise.resolve({ data: [] as any[] }),
-      actIds.length ? supabase.from('inventory_audit_snapshot').select('act_id').in('act_id', actIds) : Promise.resolve({ data: [] as any[] }),
-      actIds.length ? supabase.from('inventory_audit_counts').select('act_id').in('act_id', actIds) : Promise.resolve({ data: [] as any[] }),
+      actIds.length
+        ? fetchAllPages((from, to) =>
+            supabase.from('inventory_audit_snapshot').select('act_id').in('act_id', actIds).order('act_id').order('item_id').range(from, to),
+          )
+        : Promise.resolve([] as any[]),
+      actIds.length
+        ? fetchAllPages((from, to) =>
+            supabase.from('inventory_audit_counts').select('act_id').in('act_id', actIds).order('act_id').order('item_id').order('counted_at').range(from, to),
+          )
+        : Promise.resolve([] as any[]),
     ])
     const locById = new Map(((locs as any).data || []).map((l: any) => [String(l.id), l]))
     const totalByAct = new Map<string, number>()
-    for (const r of ((snapCounts as any).data || []) as any[]) totalByAct.set(String(r.act_id), (totalByAct.get(String(r.act_id)) || 0) + 1)
+    for (const r of (snapCounts || []) as any[]) totalByAct.set(String(r.act_id), (totalByAct.get(String(r.act_id)) || 0) + 1)
     const countedByAct = new Map<string, number>()
-    for (const r of ((cntCounts as any).data || []) as any[]) countedByAct.set(String(r.act_id), (countedByAct.get(String(r.act_id)) || 0) + 1)
+    for (const r of (cntCounts || []) as any[]) countedByAct.set(String(r.act_id), (countedByAct.get(String(r.act_id)) || 0) + 1)
 
     return json({
       ok: true,
@@ -358,8 +385,11 @@ export async function POST(request: Request) {
         if (error) throw error
       }
 
-      // снимок текущих остатков локации
-      const { data: balances } = await supabase.from('inventory_balances').select('item_id, quantity').eq('location_id', locationId)
+      // снимок текущих остатков локации (локация >1000 позиций — постранично,
+      // иначе часть товаров молча не попадёт в снимок ревизии)
+      const balances = await fetchAllPages((from, to) =>
+        supabase.from('inventory_balances').select('item_id, quantity').eq('location_id', locationId).order('item_id').range(from, to),
+      )
       const snapRows = ((balances as any[]) || []).map((b: any) => ({ act_id: actId, item_id: String(b.item_id), expected_qty: num(b.quantity) }))
       for (let i = 0; i < snapRows.length; i += 500) {
         const { error } = await supabase.from('inventory_audit_snapshot').insert(snapRows.slice(i, i + 500))
@@ -407,12 +437,18 @@ export async function POST(request: Request) {
         return json({ error: 'inventory-stocktake-open-transfers', message: 'Есть заявки склад ↔ витрина в пути. Сначала завершите их.' }, 409)
       }
 
-      const [snap, counts] = await Promise.all([
-        supabase.from('inventory_audit_snapshot').select('item_id, expected_qty').eq('act_id', actId),
-        supabase.from('inventory_audit_counts').select('item_id, counted_qty, counted_at, counted_by').eq('act_id', actId),
+      // Снимок/счёты акта могут быть >1000 строк — постранично, иначе закрытие
+      // молча потеряет позиции (особенно опасно с zero_uncounted).
+      const [snapData, countsData] = await Promise.all([
+        fetchAllPages((from, to) =>
+          supabase.from('inventory_audit_snapshot').select('item_id, expected_qty').eq('act_id', actId).order('item_id').range(from, to),
+        ),
+        fetchAllPages((from, to) =>
+          supabase.from('inventory_audit_counts').select('item_id, counted_qty, counted_at, counted_by').eq('act_id', actId).order('item_id').order('counted_at').range(from, to),
+        ),
       ])
-      const expectedBy = new Map(((snap.data || []) as any[]).map((r) => [String(r.item_id), num(r.expected_qty)]))
-      const countRows = (counts.data || []) as any[]
+      const expectedBy = new Map((snapData as any[]).map((r) => [String(r.item_id), num(r.expected_qty)]))
+      const countRows = countsData as any[]
       if (!force && countRows.length === 0) return json({ error: 'nothing-counted' }, 400)
 
       // движения локации с момента открытия — для учёта продаж/приходов во время счёта
@@ -723,10 +759,15 @@ export async function POST(request: Request) {
       let reversedItems = 0
       try {
         if (stocktakeId) {
-          const { data: stItems } = await supabase
-            .from('inventory_stocktake_items')
-            .select('item_id, delta_qty')
-            .eq('stocktake_id', stocktakeId)
+          // Стоктейк большой ревизии >1000 строк — постранично, иначе откат вернёт не всё.
+          const stItems = await fetchAllPages((from, to) =>
+            supabase
+              .from('inventory_stocktake_items')
+              .select('item_id, delta_qty')
+              .eq('stocktake_id', stocktakeId)
+              .order('id')
+              .range(from, to),
+          )
           const changed = ((stItems as any[]) || []).filter((r) => num(r.delta_qty) !== 0)
           if (changed.length) {
             // Текущие остатки локации — для клампа ≥ 0 (нельзя уйти в минус).

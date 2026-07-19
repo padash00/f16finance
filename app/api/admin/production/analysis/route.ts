@@ -17,6 +17,21 @@ function canManage(access: any) {
   return role === 'owner' || role === 'manager'
 }
 
+// PostgREST режет ответ до 1000 строк — продажи за период забираем постранично,
+// иначе food cost и расход ингредиентов занижаются.
+const PAGE = 1000
+async function fetchAllPages(buildQuery: (from: number, to: number) => any): Promise<any[]> {
+  const out: any[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await buildQuery(from, from + PAGE - 1)
+    if (error) throw error
+    const rows = data || []
+    out.push(...rows)
+    if (rows.length < PAGE) break
+  }
+  return out
+}
+
 // GET ?from=YYYY-MM-DD&to=YYYY-MM-DD — теоретический food cost и расход ингредиентов
 // из продаж блюд (point_sale_items), связанных с техкартами через recipes.sale_item_id.
 export async function GET(request: Request) {
@@ -84,20 +99,26 @@ export async function GET(request: Request) {
 
     // 2) Продажи за период по точкам своей орг
     const scope = await resolveCompanyScope({ activeOrganizationId: orgId, isSuperAdmin: access.isSuperAdmin })
-    let salesQ = supabase.from('point_sales').select('id').gte('sale_date', from).lte('sale_date', to)
-    if (scope.allowedCompanyIds) salesQ = salesQ.in('company_id', scope.allowedCompanyIds)
-    const { data: sales } = await salesQ
+    const sales = await fetchAllPages((f, t) => {
+      let salesQ = supabase.from('point_sales').select('id').gte('sale_date', from).lte('sale_date', to).order('id').range(f, t)
+      if (scope.allowedCompanyIds) salesQ = salesQ.in('company_id', scope.allowedCompanyIds)
+      return salesQ
+    })
     const saleIds = (sales || []).map((s: any) => String(s.id))
     const soldByItem = new Map<string, { qty: number; revenue: number }>()
     if (saleIds.length) {
-      // чанки по 500 sale_id
-      for (let i = 0; i < saleIds.length; i += 500) {
-        const chunk = saleIds.slice(i, i + 500)
-        const { data: items } = await supabase
-          .from('point_sale_items')
-          .select('item_id, quantity, total_price, unit_price')
-          .in('sale_id', chunk)
-          .in('item_id', saleItemIds)
+      // чанки по 200 sale_id (лимит длины URL) + пагинация внутри чанка
+      for (let i = 0; i < saleIds.length; i += 200) {
+        const chunk = saleIds.slice(i, i + 200)
+        const items = await fetchAllPages((f, t) =>
+          supabase
+            .from('point_sale_items')
+            .select('item_id, quantity, total_price, unit_price')
+            .in('sale_id', chunk)
+            .in('item_id', saleItemIds)
+            .order('id')
+            .range(f, t),
+        )
         for (const it of items || []) {
           const k = String(it.item_id)
           const cur = soldByItem.get(k) || { qty: 0, revenue: 0 }

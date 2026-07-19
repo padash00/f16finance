@@ -11,6 +11,21 @@ function json(data: unknown, status = 200) {
 }
 const round = (n: number) => Math.round(Number(n) || 0)
 
+const PAGE = 1000
+
+/** PostgREST режет ответ до 1000 строк — забираем постранично (.range) до неполной страницы. */
+async function fetchAllPages(buildQuery: (from: number, to: number) => any): Promise<any[]> {
+  const out: any[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await buildQuery(from, from + PAGE - 1)
+    if (error) throw error
+    const rows = data || []
+    out.push(...rows)
+    if (rows.length < PAGE) break
+  }
+  return out
+}
+
 /**
  * Аналитика по товарам (как Wipon): продаваемые, доходные, остатки.
  * Одна выборка → строки по товарам с qty/revenue/profit/stock + цены/категория.
@@ -46,16 +61,17 @@ export async function GET(request: Request) {
     const fromIso = new Date(`${from}T00:00:00+05:00`).toISOString()
     const toIso = new Date(new Date(`${to}T00:00:00+05:00`).getTime() + 24 * 3_600_000).toISOString()
 
-    // ── Продажи по товарам за период ──
-    let salesQuery = supabase
-      .from('point_sale_items')
-      .select('item_id, quantity, unit_price, total_price, point_sales!inner(sold_at, company_id)')
-      .gte('point_sales.sold_at', fromIso)
-      .lt('point_sales.sold_at', toIso)
-    if (companyId) salesQuery = salesQuery.eq('point_sales.company_id', companyId)
-    if (scoped) salesQuery = salesQuery.in('point_sales.company_id', scoped)
-    const { data: saleItems, error: salesError } = await salesQuery
-    if (salesError) throw salesError
+    // ── Продажи по товарам за период (за неделю/месяц строк >1000 — постранично) ──
+    const saleItems = await fetchAllPages((from, to) => {
+      let salesQuery = supabase
+        .from('point_sale_items')
+        .select('item_id, quantity, unit_price, total_price, point_sales!inner(sold_at, company_id)')
+        .gte('point_sales.sold_at', fromIso)
+        .lt('point_sales.sold_at', toIso)
+      if (companyId) salesQuery = salesQuery.eq('point_sales.company_id', companyId)
+      if (scoped) salesQuery = salesQuery.in('point_sales.company_id', scoped)
+      return salesQuery.order('id', { ascending: true }).range(from, to)
+    })
 
     const soldByItem = new Map<string, { qty: number; revenue: number }>()
     for (const si of (saleItems || []) as any[]) {
@@ -67,14 +83,15 @@ export async function GET(request: Request) {
       soldByItem.set(id, row)
     }
 
-    // ── Каталог (активные товары) — только своя орг ──
-    let itemsQuery = supabase
-      .from('inventory_items')
-      .select('id, name, barcode, unit, sale_price, default_purchase_price, is_active, category:inventory_categories(name)')
-      .eq('is_active', true)
-    if (!access.isSuperAdmin) itemsQuery = itemsQuery.eq('organization_id', access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
-    const { data: itemsRaw, error: itemsError } = await itemsQuery
-    if (itemsError) throw itemsError
+    // ── Каталог (активные товары) — только своя орг (может быть >1000 — постранично) ──
+    const itemsRaw = await fetchAllPages((from, to) => {
+      let itemsQuery = supabase
+        .from('inventory_items')
+        .select('id, name, barcode, unit, sale_price, default_purchase_price, is_active, category:inventory_categories(name)')
+        .eq('is_active', true)
+      if (!access.isSuperAdmin) itemsQuery = itemsQuery.eq('organization_id', access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+      return itemsQuery.order('id', { ascending: true }).range(from, to)
+    })
 
     // ── Остатки по локациям компании ──
     let locQuery = supabase
@@ -90,12 +107,16 @@ export async function GET(request: Request) {
 
     const stockByItem = new Map<string, number>()
     if (locationIds.length > 0) {
-      const { data: balances, error: balError } = await supabase
-        .from('inventory_balances')
-        .select('item_id, quantity')
-        .in('location_id', locationIds)
-        .gt('quantity', 0)
-      if (balError) throw balError
+      const balances = await fetchAllPages((from, to) =>
+        supabase
+          .from('inventory_balances')
+          .select('item_id, quantity')
+          .in('location_id', locationIds)
+          .gt('quantity', 0)
+          .order('location_id', { ascending: true })
+          .order('item_id', { ascending: true })
+          .range(from, to),
+      )
       for (const b of (balances || []) as any[]) {
         const id = b.item_id
         if (!id || typeof id !== 'string') continue

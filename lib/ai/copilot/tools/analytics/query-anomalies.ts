@@ -5,7 +5,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { scopedCompanyIds } from '../../query-helpers'
+import { scopedCompanyIds, fetchAllPages } from '../../query-helpers'
 
 function todayISO(): string {
   const d = new Date()
@@ -66,14 +66,18 @@ export const queryAnomaliesTool: CopilotTool = {
 
     // Мультитенантная изоляция: только выручка точек своей организации.
     const ids = await scopedCompanyIds(ctx)
-    let rowsQ = ctx.supabase
-      .from('incomes')
-      .select('date, cash_amount, kaspi_amount, card_amount, online_amount')
-      .gte('date', from)
-      .lte('date', to)
-      .range(0, 19999)
-    if (ids) rowsQ = rowsQ.in('company_id', ids)
-    const { data: rows } = await rowsQ
+    const rows = await fetchAllPages((rFrom, rTo) => {
+      let rowsQ = ctx.supabase
+        .from('incomes')
+        .select('date, cash_amount, kaspi_amount, card_amount, online_amount')
+        .gte('date', from)
+        .lte('date', to)
+        .order('date', { ascending: true })
+        .order('id', { ascending: true })
+        .range(rFrom, rTo)
+      if (ids) rowsQ = rowsQ.in('company_id', ids)
+      return rowsQ
+    }).catch(() => [] as any[])
 
     if (!rows || rows.length === 0) return { ok: true, message: 'Нет данных за период.' }
 

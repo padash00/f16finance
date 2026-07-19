@@ -4,7 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { companyOptions, scopedCompanyIds } from '../../query-helpers'
+import { companyOptions, scopedCompanyIds, fetchAllPages } from '../../query-helpers'
 
 function todayISO(): string {
   const d = new Date()
@@ -19,17 +19,21 @@ function addDaysISO(iso: string, diff: number): string {
 }
 
 async function sumRevenue(supabase: any, from: string, to: string, companyId?: string, companyIds?: string[] | null): Promise<number> {
-  let q = supabase
-    .from('incomes')
-    .select('cash_amount, kaspi_amount, card_amount, online_amount')
-    .gte('date', from)
-    .lte('date', to)
-    .range(0, 9999)
-  if (companyId) q = q.eq('company_id', companyId)
-  else if (companyIds) q = q.in('company_id', companyIds)
-  const { data } = await q
+  const rows = await fetchAllPages((rFrom, rTo) => {
+    let q = supabase
+      .from('incomes')
+      .select('cash_amount, kaspi_amount, card_amount, online_amount')
+      .gte('date', from)
+      .lte('date', to)
+      .order('date', { ascending: true })
+      .order('id', { ascending: true })
+      .range(rFrom, rTo)
+    if (companyId) q = q.eq('company_id', companyId)
+    else if (companyIds) q = q.in('company_id', companyIds)
+    return q
+  }).catch(() => [] as any[])
   let total = 0
-  for (const r of (data || []) as any[]) {
+  for (const r of rows as any[]) {
     total += Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0) + Number(r.card_amount || 0) + Number(r.online_amount || 0)
   }
   return total

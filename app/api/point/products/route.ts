@@ -38,6 +38,21 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
+// PostgREST молча режет ответ до 1000 строк — каталог точки (point_products) и
+// inventory_items забираем постранично, иначе касса не видит товары после 1000-го.
+const PAGE = 1000
+async function fetchAllPages(buildQuery: (from: number, to: number) => any): Promise<any[]> {
+  const out: any[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await buildQuery(from, from + PAGE - 1)
+    if (error) throw error
+    const rows = data || []
+    out.push(...rows)
+    if (rows.length < PAGE) break
+  }
+  return out
+}
+
 function normalizeMoney(value: unknown) {
   const amount = Number(value || 0)
   if (!Number.isFinite(amount)) return 0
@@ -54,21 +69,26 @@ async function ensureCompanyPointProductsFromInventory(params: {
   supabase: any
   companyId: string
 }) {
-  const [{ data: existing, error: existingError }, { data: inventoryItems, error: inventoryError }] = await Promise.all([
-    params.supabase
-      .from('point_products')
-      .select('barcode')
-      .eq('company_id', params.companyId),
-    params.supabase
-      .from('inventory_items')
-      .select('name, barcode, sale_price, is_active, item_type')
-      .eq('is_active', true)
-      .neq('item_type', 'consumable')
-      .order('name', { ascending: true }),
+  const [existing, inventoryItems] = await Promise.all([
+    fetchAllPages((from, to) =>
+      params.supabase
+        .from('point_products')
+        .select('id, barcode')
+        .eq('company_id', params.companyId)
+        .order('id')
+        .range(from, to),
+    ),
+    fetchAllPages((from, to) =>
+      params.supabase
+        .from('inventory_items')
+        .select('id, name, barcode, sale_price, is_active, item_type')
+        .eq('is_active', true)
+        .neq('item_type', 'consumable')
+        .order('name', { ascending: true })
+        .order('id')
+        .range(from, to),
+    ),
   ])
-
-  if (existingError) throw existingError
-  if (inventoryError) throw inventoryError
 
   const existingBarcodes = new Set((existing || []).map((row: any) => normalizeBarcode(row.barcode)))
   const missingRows = (inventoryItems || [])
@@ -101,13 +121,15 @@ export async function GET(request: Request) {
 
     const { supabase, device } = point
     await ensureCompanyPointProductsFromInventory({ supabase, companyId: device.company_id })
-    const { data, error } = await supabase
-      .from('point_products')
-      .select('id, company_id, name, barcode, price, is_active, created_at, updated_at')
-      .eq('company_id', device.company_id)
-      .order('name', { ascending: true })
-
-    if (error) throw error
+    const data = await fetchAllPages((from, to) =>
+      supabase
+        .from('point_products')
+        .select('id, company_id, name, barcode, price, is_active, created_at, updated_at')
+        .eq('company_id', device.company_id)
+        .order('name', { ascending: true })
+        .order('id')
+        .range(from, to),
+    )
 
     return json({
       ok: true,

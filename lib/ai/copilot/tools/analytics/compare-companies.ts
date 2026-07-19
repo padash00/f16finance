@@ -4,7 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { companyOptions, scopedCompanyIds } from '../../query-helpers'
+import { companyOptions, scopedCompanyIds, fetchAllPages } from '../../query-helpers'
 
 function todayISO(): string {
   const d = new Date()
@@ -19,28 +19,36 @@ function addDaysISO(iso: string, diff: number): string {
 }
 
 async function getStats(supabase: any, companyId: string, from: string, to: string) {
-  const [incRes, expRes] = await Promise.all([
-    supabase
-      .from('incomes')
-      .select('cash_amount, kaspi_amount, card_amount, online_amount')
-      .eq('company_id', companyId)
-      .gte('date', from)
-      .lte('date', to)
-      .range(0, 9999),
-    supabase
-      .from('expenses')
-      .select('cash_amount, kaspi_amount')
-      .eq('company_id', companyId)
-      .gte('date', from)
-      .lte('date', to)
-      .range(0, 9999),
+  const [incRows, expRows] = await Promise.all([
+    fetchAllPages((rFrom, rTo) =>
+      supabase
+        .from('incomes')
+        .select('cash_amount, kaspi_amount, card_amount, online_amount')
+        .eq('company_id', companyId)
+        .gte('date', from)
+        .lte('date', to)
+        .order('date', { ascending: true })
+        .order('id', { ascending: true })
+        .range(rFrom, rTo),
+    ).catch(() => [] as any[]),
+    fetchAllPages((rFrom, rTo) =>
+      supabase
+        .from('expenses')
+        .select('cash_amount, kaspi_amount')
+        .eq('company_id', companyId)
+        .gte('date', from)
+        .lte('date', to)
+        .order('date', { ascending: true })
+        .order('id', { ascending: true })
+        .range(rFrom, rTo),
+    ).catch(() => [] as any[]),
   ])
   let income = 0
-  for (const r of (incRes.data || []) as any[]) {
+  for (const r of incRows as any[]) {
     income += Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0) + Number(r.card_amount || 0) + Number(r.online_amount || 0)
   }
   let expense = 0
-  for (const r of (expRes.data || []) as any[]) {
+  for (const r of expRows as any[]) {
     expense += Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0)
   }
   return { income, expense, profit: income - expense }

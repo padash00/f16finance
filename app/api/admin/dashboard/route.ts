@@ -55,6 +55,21 @@ export async function GET(request: Request) {
       return query
     }
 
+    // PostgREST режет ответ до 1000 строк — агрегатные выборки (день/неделя/месяц
+    // продаж) забираем постранично, иначе суммы на дашборде занижаются.
+    const PAGE = 1000
+    const fetchAllPages = async (buildQuery: (from: number, to: number) => any): Promise<{ data: any[]; error: any }> => {
+      const out: any[] = []
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await buildQuery(from, from + PAGE - 1)
+        if (error) return { data: out, error }
+        const rows = data || []
+        out.push(...rows)
+        if (rows.length < PAGE) break
+      }
+      return { data: out, error: null }
+    }
+
     // Run all queries in parallel
     const [
       todaySalesRes,
@@ -66,17 +81,25 @@ export async function GET(request: Request) {
       topItemsRes,
     ] = await Promise.all([
       // Today totals
-      applyPointSaleCompanyScope(
-        supabase.from('point_sales').select('total_amount, cash_amount, kaspi_amount, card_amount, online_amount').eq('sale_date', todayStr),
+      fetchAllPages((from, to) =>
+        applyPointSaleCompanyScope(
+          supabase.from('point_sales').select('total_amount, cash_amount, kaspi_amount, card_amount, online_amount').eq('sale_date', todayStr).order('id').range(from, to),
+        ),
       ),
       // Yesterday totals
-      applyPointSaleCompanyScope(supabase.from('point_sales').select('total_amount').eq('sale_date', yesterdayStr)),
+      fetchAllPages((from, to) =>
+        applyPointSaleCompanyScope(supabase.from('point_sales').select('total_amount').eq('sale_date', yesterdayStr).order('id').range(from, to)),
+      ),
       // Week sales by day
-      applyPointSaleCompanyScope(
-        supabase.from('point_sales').select('sale_date, total_amount').gte('sale_date', weekAgoStr).lte('sale_date', todayStr).order('sale_date'),
+      fetchAllPages((from, to) =>
+        applyPointSaleCompanyScope(
+          supabase.from('point_sales').select('sale_date, total_amount').gte('sale_date', weekAgoStr).lte('sale_date', todayStr).order('sale_date').order('id').range(from, to),
+        ),
       ),
       // Month total
-      applyPointSaleCompanyScope(supabase.from('point_sales').select('total_amount').gte('sale_date', monthStart)),
+      fetchAllPages((from, to) =>
+        applyPointSaleCompanyScope(supabase.from('point_sales').select('total_amount').gte('sale_date', monthStart).order('id').range(from, to)),
+      ),
       // Recent 10 sales
       applyPointSaleCompanyScope(
         supabase
@@ -87,20 +110,27 @@ export async function GET(request: Request) {
       ),
       // Low stock items (balance <= threshold)
       access.isSuperAdmin || allowedCompanyIds === null
-        ? supabase
-            .from('inventory_items')
-            .select('id, name, low_stock_threshold, total_balance:inventory_balances(quantity)')
-            .eq('is_active', true)
-            .not('low_stock_threshold', 'is', null)
-            .then((r) => r)
+        ? fetchAllPages((from, to) =>
+            supabase
+              .from('inventory_items')
+              .select('id, name, low_stock_threshold, total_balance:inventory_balances(quantity)')
+              .eq('is_active', true)
+              .not('low_stock_threshold', 'is', null)
+              .order('id')
+              .range(from, to),
+          )
         : Promise.resolve({ data: [], error: null } as const),
       // Top items this week
-      applyPointSaleCompanyScope(
-        supabase
-          .from('point_sales')
-          .select('sale_date, items:point_sale_items(item_id, quantity, inventory_items(name))')
-          .gte('sale_date', weekAgoStr)
-          .lte('sale_date', todayStr),
+      fetchAllPages((from, to) =>
+        applyPointSaleCompanyScope(
+          supabase
+            .from('point_sales')
+            .select('sale_date, items:point_sale_items(item_id, quantity, inventory_items(name))')
+            .gte('sale_date', weekAgoStr)
+            .lte('sale_date', todayStr)
+            .order('id')
+            .range(from, to),
+        ),
       ),
     ])
 

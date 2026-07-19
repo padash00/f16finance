@@ -9,6 +9,21 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
+const PAGE = 1000
+
+/** PostgREST режет ответ до 1000 строк — забираем постранично (.range) до неполной страницы. */
+async function fetchAllPages(buildQuery: (from: number, to: number) => any): Promise<any[]> {
+  const out: any[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await buildQuery(from, from + PAGE - 1)
+    if (error) throw error
+    const rows = data || []
+    out.push(...rows)
+    if (rows.length < PAGE) break
+  }
+  return out
+}
+
 function canManageInventory(access: {
   isSuperAdmin: boolean
   staffRole: string
@@ -60,13 +75,17 @@ export async function GET(request: Request) {
     dateFrom.setDate(dateFrom.getDate() - days)
     const dateFromStr = dateFrom.toISOString().split('T')[0]
 
-    // Fetch sales velocity (last 30 days)
-    const { data: saleItems, error: siError } = await supabase
-      .from('point_sale_items')
-      .select('item_id, quantity, point_sales!inner(sale_date, company_id, location_id)')
-      .gte('point_sales.sale_date', dateFromStr)
-
-    if (siError) throw siError
+    // Fetch sales velocity (last 30 days).
+    // Фильтр по компании идёт ниже в JS — на уровне БД выборка широкая,
+    // за 30 дней строк легко >1000, поэтому постранично.
+    const saleItems = await fetchAllPages((from, to) =>
+      supabase
+        .from('point_sale_items')
+        .select('item_id, quantity, point_sales!inner(sale_date, company_id, location_id)')
+        .gte('point_sales.sale_date', dateFromStr)
+        .order('id', { ascending: true })
+        .range(from, to),
+    )
 
     // Filter by company/location
     const filtered = (saleItems || []).filter((si: any) => {
@@ -87,16 +106,19 @@ export async function GET(request: Request) {
       velocityMap[id] = velocityMap[id] / days
     }
 
-    // Fetch current balances
-    let balanceQuery = supabase
-      .from('inventory_balances')
-      .select('item_id, quantity, location_id')
-    if (locationId) balanceQuery = balanceQuery.eq('location_id', locationId)
-    else if (scopedLocationIds.size > 0) balanceQuery = balanceQuery.in('location_id', Array.from(scopedLocationIds))
-    else balanceQuery = balanceQuery.eq('location_id', '__none__')
-
-    const { data: balances, error: balError } = await balanceQuery
-    if (balError) throw balError
+    // Fetch current balances (остатков может быть >1000 — постранично)
+    const balances = await fetchAllPages((from, to) => {
+      let balanceQuery = supabase
+        .from('inventory_balances')
+        .select('item_id, quantity, location_id')
+      if (locationId) balanceQuery = balanceQuery.eq('location_id', locationId)
+      else if (scopedLocationIds.size > 0) balanceQuery = balanceQuery.in('location_id', Array.from(scopedLocationIds))
+      else balanceQuery = balanceQuery.eq('location_id', '__none__')
+      return balanceQuery
+        .order('location_id', { ascending: true })
+        .order('item_id', { ascending: true })
+        .range(from, to)
+    })
 
     // Sum balance per item
     const balanceMap: Record<string, number> = {}
@@ -104,14 +126,15 @@ export async function GET(request: Request) {
       balanceMap[b.item_id] = (balanceMap[b.item_id] || 0) + Number(b.quantity || 0)
     }
 
-    // Fetch item details — только своя орг
-    let itemsQuery = supabase
-      .from('inventory_items')
-      .select('id, name, low_stock_threshold, is_active, category:inventory_categories(name)')
-      .eq('is_active', true)
-    if (!access.isSuperAdmin) itemsQuery = itemsQuery.eq('organization_id', access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
-    const { data: items, error: itemsError } = await itemsQuery
-    if (itemsError) throw itemsError
+    // Fetch item details — только своя орг (каталог может быть >1000 — постранично)
+    const items = await fetchAllPages((from, to) => {
+      let itemsQuery = supabase
+        .from('inventory_items')
+        .select('id, name, low_stock_threshold, is_active, category:inventory_categories(name)')
+        .eq('is_active', true)
+      if (!access.isSuperAdmin) itemsQuery = itemsQuery.eq('organization_id', access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+      return itemsQuery.order('id', { ascending: true }).range(from, to)
+    })
 
     // Build forecast
     const forecast = (items || []).map((item: any) => {

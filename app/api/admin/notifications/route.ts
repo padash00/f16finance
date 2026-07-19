@@ -18,6 +18,21 @@ function chunk<T>(items: T[], size = 50): T[][] {
   return chunks
 }
 
+// PostgREST режет ответ до 1000 строк — большие справочники (локации, товары,
+// остатки) забираем постранично, иначе «низкие остатки» теряют товары.
+const PAGE = 1000
+async function fetchAllPages(buildQuery: (from: number, to: number) => any): Promise<any[]> {
+  const out: any[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await buildQuery(from, from + PAGE - 1)
+    if (error) throw error
+    const rows = data || []
+    out.push(...rows)
+    if (rows.length < PAGE) break
+  }
+  return out
+}
+
 type NotificationItem = {
   id: string
   title: string
@@ -221,13 +236,16 @@ export async function GET(request: Request) {
 
       // Showcase activated only for points that have an active point_display location.
       lowStockStage = 'enabled-point-display-locations'
-      const { data: enabledPoints, error: enabledErr } = await supabase
-        .from('inventory_locations')
-        .select('company_id')
-        .eq('location_type', 'point_display')
-        .eq('is_active', true)
-        .not('company_id', 'is', null)
-      if (enabledErr) throw enabledErr
+      const enabledPoints = await fetchAllPages((from, to) =>
+        supabase
+          .from('inventory_locations')
+          .select('id, company_id')
+          .eq('location_type', 'point_display')
+          .eq('is_active', true)
+          .not('company_id', 'is', null)
+          .order('id')
+          .range(from, to),
+      )
       const enabledCompanyIds = Array.from(
         new Set(
           (enabledPoints || [])
@@ -240,11 +258,14 @@ export async function GET(request: Request) {
         const enabledCompanySet = new Set(enabledCompanyIds)
 
         lowStockStage = 'catalog-and-warehouse-locations'
-        const { data: allLocations, error: locationsError } = await supabase
-          .from('inventory_locations')
-          .select('id, company_id, location_type')
-          .in('location_type', ['warehouse', 'point_display'])
-        if (locationsError) throw locationsError
+        const allLocations = await fetchAllPages((from, to) =>
+          supabase
+            .from('inventory_locations')
+            .select('id, company_id, location_type')
+            .in('location_type', ['warehouse', 'point_display'])
+            .order('id')
+            .range(from, to),
+        )
 
         const locations = (allLocations || []).filter((row: any) =>
           enabledCompanySet.has(String(row.company_id || '')),
@@ -274,11 +295,15 @@ export async function GET(request: Request) {
           lowStockStage = 'inventory-balances'
           const balanceRows: any[] = []
           for (const locationChunk of chunk(locationIds)) {
-            const { data, error: balancesError } = await supabase
-              .from('inventory_balances')
-              .select('item_id, location_id, quantity')
-              .in('location_id', locationChunk)
-            if (balancesError) throw balancesError
+            const data = await fetchAllPages((from, to) =>
+              supabase
+                .from('inventory_balances')
+                .select('item_id, location_id, quantity')
+                .in('location_id', locationChunk)
+                .order('location_id')
+                .order('item_id')
+                .range(from, to),
+            )
             balanceRows.push(...(data || []))
           }
 
@@ -287,10 +312,13 @@ export async function GET(request: Request) {
           )
           if (itemIds.length > 0) {
             lowStockStage = 'inventory-items'
-            const { data: allItems, error: itemsError } = await supabase
-              .from('inventory_items')
-              .select('id, name, low_stock_threshold')
-            if (itemsError) throw itemsError
+            const allItems = await fetchAllPages((from, to) =>
+              supabase
+                .from('inventory_items')
+                .select('id, name, low_stock_threshold')
+                .order('id')
+                .range(from, to),
+            )
             const itemIdSet = new Set(itemIds)
             const items = (allItems || []).filter((row: any) => itemIdSet.has(String(row.id || '')))
 

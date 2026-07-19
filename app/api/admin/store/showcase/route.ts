@@ -29,6 +29,20 @@ function normalizeQty(v: unknown) {
   return Number.isFinite(n) ? Math.round((n + Number.EPSILON) * 1000) / 1000 : 0
 }
 
+// PostgREST молча режет ответ до 1000 строк — большие выборки забираем постранично.
+const PAGE_SIZE = 1000
+async function fetchAllPages<T = any>(buildQuery: (from: number, to: number) => any): Promise<T[]> {
+  const out: T[] = []
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    const rows = data || []
+    out.push(...rows)
+    if (rows.length < PAGE_SIZE) break
+  }
+  return out
+}
+
 async function ensureCompanyLocation(
   supabase: any,
   companyId: string,
@@ -148,11 +162,16 @@ export async function GET(request: Request) {
       ensureCompanyLocation(supabase, companyId, 'point_display'),
     ])
 
-    const { data: balanceRows, error: balErr } = await supabase
-      .from('inventory_balances')
-      .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, sale_price, default_purchase_price, low_stock_threshold, category_id, category:category_id(id, name))')
-      .in('location_id', [warehouseLoc.id, showcaseLoc.id])
-    if (balErr) throw balErr
+    // Каталог точки может быть >1000 позиций — постранично, иначе PostgREST молча обрежет остатки.
+    const balanceRows = await fetchAllPages((from, to) =>
+      supabase
+        .from('inventory_balances')
+        .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, sale_price, default_purchase_price, low_stock_threshold, category_id, category:category_id(id, name))')
+        .in('location_id', [warehouseLoc.id, showcaseLoc.id])
+        .order('item_id', { ascending: true })
+        .order('location_id', { ascending: true })
+        .range(from, to),
+    )
 
     // v2: showcase читается напрямую из point_display.
     // Старая формула catalog - warehouse оставлена в полях для совместимости с UI,

@@ -212,11 +212,22 @@ export async function computePurchasePlan(
   const lastReceiptByItem = new Map<string, { unitCost: number; supplierName: string; receivedAt: string }>()
   for (let i = 0; i < itemIds.length; i += 300) {
     const chunk = itemIds.slice(i, i + 300)
-    const { data, error } = await supabase
-      .from('inventory_receipt_items')
-      .select('item_id, unit_cost, receipt:receipt_id(received_at, supplier:supplier_id(name, organization_name))')
-      .in('item_id', chunk)
-    if (error) throw error
+    // Пагинация внутри чанка: у 300 товаров за всю историю легко >1000 строк
+    // приёмок — без range PostgREST молча обрежет, и «последняя закупочная»
+    // возьмётся из усечённой выборки (искажение сумм плана).
+    const data: any[] = []
+    for (let from = 0; ; from += PAGE) {
+      const { data: part, error } = await supabase
+        .from('inventory_receipt_items')
+        .select('item_id, unit_cost, receipt:receipt_id(received_at, supplier:supplier_id(name, organization_name))')
+        .in('item_id', chunk)
+        .order('id', { ascending: true })
+        .range(from, from + PAGE - 1)
+      if (error) throw error
+      const batch = (part || []) as any[]
+      data.push(...batch)
+      if (batch.length < PAGE) break
+    }
     for (const r of (data || []) as any[]) {
       const itemId = String(r.item_id || '')
       if (!itemId) continue

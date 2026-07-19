@@ -56,22 +56,32 @@ export async function GET(req: Request) {
       isSuperAdmin: access.isSuperAdmin,
     })
 
-    let spentQuery = supabase
-      .from('expenses')
-      .select('category, cash_amount, kaspi_amount')
-      .gte('date', from)
-      .lte('date', to)
-    if (allowedCompanyIds) {
-      if (allowedCompanyIds.length === 0) {
-        return json({
-          data: categories.map((c: any) => ({ ...c, spent_this_month: 0 })),
-          period: { from, to },
-        })
-      }
-      spentQuery = spentQuery.in('company_id', allowedCompanyIds)
+    if (allowedCompanyIds && allowedCompanyIds.length === 0) {
+      return json({
+        data: categories.map((c: any) => ({ ...c, spent_this_month: 0 })),
+        period: { from, to },
+      })
     }
-    const { data: spentRows, error: spentError } = await spentQuery
-    if (spentError) throw spentError
+
+    // PostgREST режет ответ до 1000 строк — расходы за месяц забираем постранично,
+    // иначе «потрачено за месяц» по категориям занижается.
+    const PAGE = 1000
+    const spentRows: any[] = []
+    for (let pageFrom = 0; ; pageFrom += PAGE) {
+      let spentQuery = supabase
+        .from('expenses')
+        .select('id, category, cash_amount, kaspi_amount')
+        .gte('date', from)
+        .lte('date', to)
+        .order('id')
+        .range(pageFrom, pageFrom + PAGE - 1)
+      if (allowedCompanyIds) spentQuery = spentQuery.in('company_id', allowedCompanyIds)
+      const { data: pageRows, error: spentError } = await spentQuery
+      if (spentError) throw spentError
+      const rows = pageRows || []
+      spentRows.push(...rows)
+      if (rows.length < PAGE) break
+    }
 
     const byCategory = new Map<string, number>()
     for (const row of spentRows || []) {

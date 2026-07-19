@@ -8,6 +8,21 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
+// PostgREST молча режет ответ до 1000 строк — большие таблицы (каталог, клиенты,
+// остатки витрин) забираем постранично, иначе POS не видит товары после 1000-го.
+const PAGE = 1000
+async function fetchAllPages(buildQuery: (from: number, to: number) => any): Promise<any[]> {
+  const out: any[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await buildQuery(from, from + PAGE - 1)
+    if (error) throw error
+    const rows = data || []
+    out.push(...rows)
+    if (rows.length < PAGE) break
+  }
+  return out
+}
+
 export async function GET(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
@@ -42,37 +57,50 @@ export async function GET(request: Request) {
       .eq('location_type', 'point_display')
       .eq('is_active', true)
       .order('name')
-    let itemsQuery = supabase
-      .from('inventory_items')
-      .select('id, name, barcode, sale_price, unit, organization_id, category:category_id(id, name)')
-      .eq('is_active', true)
-      .order('name')
-    let customersQuery = supabase
-      .from('customers')
-      .select('id, name, phone, card_number, loyalty_points, company_id')
-      .order('name')
 
     if (allowedCompanyIds !== null) {
       companiesQuery = companiesQuery.in('id', allowedCompanyIds)
       locationsQuery = locationsQuery.in('company_id', allowedCompanyIds)
-      customersQuery = customersQuery.in('company_id', allowedCompanyIds)
     }
 
-    if (access.activeOrganization?.id && !access.isSuperAdmin) {
-      itemsQuery = itemsQuery.or(`organization_id.eq.${access.activeOrganization.id},organization_id.is.null`)
+    const buildItemsQuery = (from: number, to: number) => {
+      let q = supabase
+        .from('inventory_items')
+        .select('id, name, barcode, sale_price, unit, organization_id, category:category_id(id, name)')
+        .eq('is_active', true)
+        .order('name')
+        .order('id')
+        .range(from, to)
+      if (access.activeOrganization?.id && !access.isSuperAdmin) {
+        q = q.or(`organization_id.eq.${access.activeOrganization.id},organization_id.is.null`)
+      }
+      return q
+    }
+
+    const buildCustomersQuery = (from: number, to: number) => {
+      let q = supabase
+        .from('customers')
+        .select('id, name, phone, card_number, loyalty_points, company_id')
+        .order('name')
+        .order('id')
+        .range(from, to)
+      if (allowedCompanyIds !== null) {
+        q = q.in('company_id', allowedCompanyIds)
+      }
+      return q
     }
 
     const [
       { data: companies, error: companiesError },
       { data: locations, error: locationsError },
-      { data: items, error: itemsError },
-      { data: customers, error: customersError },
+      items,
+      customers,
       { data: discounts, error: discountsError },
     ] = await Promise.all([
       companiesQuery,
       locationsQuery,
-      itemsQuery,
-      customersQuery,
+      fetchAllPages(buildItemsQuery),
+      fetchAllPages(buildCustomersQuery),
       supabase
         .from('discounts')
         .select('id, name, type, value, promo_code, min_order_amount, valid_from, valid_to, company_id')
@@ -81,21 +109,23 @@ export async function GET(request: Request) {
 
     if (companiesError) throw companiesError
     if (locationsError) throw locationsError
-    if (itemsError) throw itemsError
-    if (customersError) throw customersError
     if (discountsError) throw discountsError
 
     // v2: showcase читается напрямую из point_display.
     // pdLocIds — все активные локации витрин
     const pdLocIds = new Set((locations || []).map((l) => String(l.id)))
-    const { data: balances, error: balancesError } =
+    const balances: any[] =
       pdLocIds.size > 0
-        ? await supabase
-            .from('inventory_balances')
-            .select('item_id, location_id, quantity')
-            .in('location_id', Array.from(pdLocIds))
-        : { data: [], error: null }
-    if (balancesError) throw balancesError
+        ? await fetchAllPages((from, to) =>
+            supabase
+              .from('inventory_balances')
+              .select('item_id, location_id, quantity')
+              .in('location_id', Array.from(pdLocIds))
+              .order('location_id')
+              .order('item_id')
+              .range(from, to),
+          )
+        : []
 
     const loyaltyCompanyId = String(
       (locations || [])[0]?.company_id || (companies || [])[0]?.id || '',

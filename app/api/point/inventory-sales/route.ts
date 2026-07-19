@@ -52,6 +52,31 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
+// PostgREST молча режет ответ до 1000 строк — каталог, остатки витрины и строки
+// смены забираем постранично, иначе касса не видит товары после 1000-го и
+// сводка смены (деньги) считается по обрезанным данным.
+const PAGE = 1000
+async function fetchAllPages(buildQuery: (from: number, to: number) => any): Promise<any[]> {
+  const out: any[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await buildQuery(from, from + PAGE - 1)
+    if (error) throw error
+    const rows = data || []
+    out.push(...rows)
+    if (rows.length < PAGE) break
+  }
+  return out
+}
+
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  if (size <= 0) return [arr]
+  const out: T[][] = []
+  for (let i = 0; i < arr.length; i += size) {
+    out.push(arr.slice(i, i + size))
+  }
+  return out
+}
+
 function canUseInventorySales(pointMode: string | null | undefined) {
   const normalized = String(pointMode || '').trim().toLowerCase()
   return new Set(['cash-desk', 'universal', 'debts']).has(normalized)
@@ -295,13 +320,16 @@ async function fetchShowcaseBalances(params: {
 }) {
   // v2: читаем напрямую из point_display, без формулы.
   if (params.showcaseId) {
-    const q = params.supabase
-      .from('inventory_balances')
-      .select('item_id, quantity')
-      .eq('location_id', params.showcaseId)
-    if (params.itemIds?.length) q.in('item_id', params.itemIds)
-    const { data, error } = await q
-    if (error) throw error
+    const data = await fetchAllPages((from, to) => {
+      const q = params.supabase
+        .from('inventory_balances')
+        .select('item_id, quantity')
+        .eq('location_id', params.showcaseId)
+        .order('item_id')
+        .range(from, to)
+      if (params.itemIds?.length) q.in('item_id', params.itemIds)
+      return q
+    })
     const map = new Map<string, number>(
       (data || []).map((row: any) => [row.item_id, Number(row.quantity || 0)]),
     )
@@ -599,45 +627,68 @@ async function fetchShiftSummary(params: {
   shift: 'day' | 'night'
   shiftId?: string | null
 }) {
-  const salesQuery = params.supabase
-    .from('point_sales')
-    .select('id, total_amount, cash_amount, kaspi_amount, kaspi_before_midnight_amount, kaspi_after_midnight_amount')
-    .eq('location_id', params.locationId)
-  const returnsQuery = params.supabase
-    .from('point_returns')
-    .select('id, total_amount, cash_amount, kaspi_amount, kaspi_before_midnight_amount, kaspi_after_midnight_amount')
-    .eq('location_id', params.locationId)
-
-  if (params.shiftId) {
-    salesQuery.eq('shift_id', params.shiftId)
-    returnsQuery.eq('shift_id', params.shiftId)
-  } else {
-    salesQuery.eq('sale_date', params.saleDate).eq('shift', params.shift)
-    returnsQuery.eq('return_date', params.saleDate).eq('shift', params.shift)
+  const buildSalesQuery = (from: number, to: number) => {
+    const q = params.supabase
+      .from('point_sales')
+      .select('id, total_amount, cash_amount, kaspi_amount, kaspi_before_midnight_amount, kaspi_after_midnight_amount')
+      .eq('location_id', params.locationId)
+      .order('id')
+      .range(from, to)
+    if (params.shiftId) q.eq('shift_id', params.shiftId)
+    else q.eq('sale_date', params.saleDate).eq('shift', params.shift)
+    return q
+  }
+  const buildReturnsQuery = (from: number, to: number) => {
+    const q = params.supabase
+      .from('point_returns')
+      .select('id, total_amount, cash_amount, kaspi_amount, kaspi_before_midnight_amount, kaspi_after_midnight_amount')
+      .eq('location_id', params.locationId)
+      .order('id')
+      .range(from, to)
+    if (params.shiftId) q.eq('shift_id', params.shiftId)
+    else q.eq('return_date', params.saleDate).eq('shift', params.shift)
+    return q
   }
 
-  const [{ data: sales, error: salesError }, { data: returns, error: returnsError }] = await Promise.all([
-    salesQuery,
-    returnsQuery,
+  const [sales, returns] = await Promise.all([
+    fetchAllPages(buildSalesQuery),
+    fetchAllPages(buildReturnsQuery),
   ])
-
-  if (salesError) throw salesError
-  if (returnsError) throw returnsError
 
   const saleIds = (sales || []).map((row: any) => row.id)
   const returnIds = (returns || []).map((row: any) => row.id)
 
-  const [{ data: saleItems, error: saleItemsError }, { data: returnItems, error: returnItemsError }] = await Promise.all([
+  // Чанки по 200 id (лимит длины URL у PostgREST) + пагинация внутри чанка.
+  const [saleItems, returnItems] = await Promise.all([
     saleIds.length
-      ? params.supabase.from('point_sale_items').select('sale_id, quantity').in('sale_id', saleIds)
-      : Promise.resolve({ data: [], error: null } as any),
+      ? Promise.all(
+          chunkArray(saleIds, 200).map((ids) =>
+            fetchAllPages((from, to) =>
+              params.supabase
+                .from('point_sale_items')
+                .select('sale_id, quantity')
+                .in('sale_id', ids)
+                .order('id')
+                .range(from, to),
+            ),
+          ),
+        ).then((parts) => parts.flat())
+      : Promise.resolve([] as any[]),
     returnIds.length
-      ? params.supabase.from('point_return_items').select('return_id, quantity').in('return_id', returnIds)
-      : Promise.resolve({ data: [], error: null } as any),
+      ? Promise.all(
+          chunkArray(returnIds, 200).map((ids) =>
+            fetchAllPages((from, to) =>
+              params.supabase
+                .from('point_return_items')
+                .select('return_id, quantity')
+                .in('return_id', ids)
+                .order('id')
+                .range(from, to),
+            ),
+          ),
+        ).then((parts) => parts.flat())
+      : Promise.resolve([] as any[]),
   ])
-
-  if (saleItemsError) throw saleItemsError
-  if (returnItemsError) throw returnItemsError
 
   const list = sales || []
   const items = saleItems || []
@@ -731,14 +782,18 @@ export async function GET(request: Request) {
 
     const stock = await resolveStockLocations(supabase, device.company_id)
 
-    const [{ data: items, error: itemsError }, showcaseMap, { data: sales, error: salesError }] =
+    const [items, showcaseMap, { data: sales, error: salesError }] =
       await Promise.all([
-        supabase
-          .from('inventory_items')
-          .select('id, name, barcode, unit, sale_price, item_type, category:category_id(id, name)')
-          .eq('is_active', true)
-          .neq('item_type', 'consumable')
-          .order('name', { ascending: true }),
+        fetchAllPages((from, to) =>
+          supabase
+            .from('inventory_items')
+            .select('id, name, barcode, unit, sale_price, item_type, category:category_id(id, name)')
+            .eq('is_active', true)
+            .neq('item_type', 'consumable')
+            .order('name', { ascending: true })
+            .order('id')
+            .range(from, to),
+        ),
         fetchShowcaseBalances({ supabase, catalogId: stock.catalogId, warehouseId: stock.warehouseId, showcaseId: stock.showcaseId }),
         supabase
           .from('point_sales')
@@ -750,7 +805,6 @@ export async function GET(request: Request) {
           .limit(20),
       ])
 
-    if (itemsError) throw itemsError
     if (salesError) throw salesError
 
     return json({

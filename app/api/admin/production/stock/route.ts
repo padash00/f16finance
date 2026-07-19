@@ -17,6 +17,21 @@ function canManage(access: any) {
   return role === 'owner' || role === 'manager'
 }
 
+// PostgREST режет ответ до 1000 строк — продажи за период забираем постранично,
+// иначе списание по продажам считается по обрезанным данным.
+const PAGE = 1000
+async function fetchAllPages(buildQuery: (from: number, to: number) => any): Promise<any[]> {
+  const out: any[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await buildQuery(from, from + PAGE - 1)
+    if (error) throw error
+    const rows = data || []
+    out.push(...rows)
+    if (rows.length < PAGE) break
+  }
+  return out
+}
+
 // Теоретический расход ингредиентов за период (по продажам связанных блюд).
 async function theoreticalUsage(supabase: any, orgId: string | null, isSuperAdmin: boolean, scopeOrg: string, from: string, to: string) {
   const { data: recipes } = await supabase.from('recipes').select('id, output_qty, yield_factor, sale_item_id').eq('organization_id', scopeOrg)
@@ -45,14 +60,18 @@ async function theoreticalUsage(supabase: any, orgId: string | null, isSuperAdmi
   if (!saleItemIds.length) return usage
 
   const scope = await resolveCompanyScope({ activeOrganizationId: orgId, isSuperAdmin })
-  let salesQ = supabase.from('point_sales').select('id').gte('sale_date', from).lte('sale_date', to)
-  if (scope.allowedCompanyIds) salesQ = salesQ.in('company_id', scope.allowedCompanyIds)
-  const { data: sales } = await salesQ
+  const sales = await fetchAllPages((f, t) => {
+    let salesQ = supabase.from('point_sales').select('id').gte('sale_date', from).lte('sale_date', to).order('id').range(f, t)
+    if (scope.allowedCompanyIds) salesQ = salesQ.in('company_id', scope.allowedCompanyIds)
+    return salesQ
+  })
   const saleIds = (sales || []).map((s: any) => String(s.id))
   const soldByItem = new Map<string, number>()
-  for (let i = 0; i < saleIds.length; i += 500) {
-    const chunk = saleIds.slice(i, i + 500)
-    const { data: items } = await supabase.from('point_sale_items').select('item_id, quantity').in('sale_id', chunk).in('item_id', saleItemIds)
+  for (let i = 0; i < saleIds.length; i += 200) {
+    const chunk = saleIds.slice(i, i + 200)
+    const items = await fetchAllPages((f, t) =>
+      supabase.from('point_sale_items').select('item_id, quantity').in('sale_id', chunk).in('item_id', saleItemIds).order('id').range(f, t),
+    )
     for (const it of items || []) soldByItem.set(String(it.item_id), (soldByItem.get(String(it.item_id)) || 0) + Number(it.quantity || 0))
   }
   for (const [saleItemId, recipe] of recipeBySaleItem.entries()) {

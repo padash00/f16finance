@@ -4,7 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { scopedCompanyIds, resolveDateRange, dateRangeParams } from '../../query-helpers'
+import { scopedCompanyIds, resolveDateRange, dateRangeParams, fetchAllPages } from '../../query-helpers'
 
 export const getPaymentBreakdownTool: CopilotTool = {
   name: 'get_payment_breakdown',
@@ -18,14 +18,18 @@ export const getPaymentBreakdownTool: CopilotTool = {
 
     // Мультитенантная изоляция: только выручка точек своей организации.
     const ids = await scopedCompanyIds(ctx)
-    let query = ctx.supabase
-      .from('incomes')
-      .select('cash_amount, kaspi_amount, card_amount, online_amount')
-      .range(0, 19999)
-    if (from) query = query.gte('date', from)
-    if (to) query = query.lte('date', to)
-    if (ids) query = query.in('company_id', ids)
-    const { data } = await query
+    const data = await fetchAllPages((rFrom, rTo) => {
+      let query = ctx.supabase
+        .from('incomes')
+        .select('cash_amount, kaspi_amount, card_amount, online_amount')
+        .order('date', { ascending: true })
+        .order('id', { ascending: true })
+        .range(rFrom, rTo)
+      if (from) query = query.gte('date', from)
+      if (to) query = query.lte('date', to)
+      if (ids) query = query.in('company_id', ids)
+      return query
+    }).catch(() => [] as any[])
 
     let cash = 0
     let kaspi = 0

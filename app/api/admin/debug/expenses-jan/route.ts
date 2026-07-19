@@ -17,6 +17,20 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
+// PostgREST режет ЛЮБОЙ запрос до 1000 строк — большие выборки только страницами по 1000.
+const FETCH_PAGE = 1000
+async function fetchAllPages(build: (from: number, to: number) => any): Promise<any[]> {
+  const out: any[] = []
+  for (let from = 0; ; from += FETCH_PAGE) {
+    const { data, error } = await build(from, from + FETCH_PAGE - 1)
+    if (error) throw error
+    const rows = data || []
+    out.push(...rows)
+    if (rows.length < FETCH_PAGE) break
+  }
+  return out
+}
+
 export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
@@ -67,14 +81,18 @@ export async function GET(req: Request) {
     }
 
     // Категории за период (агрегировано в БД)
-    let catQ = supabase
-      .from('expenses')
-      .select('category, cash_amount, kaspi_amount')
-      .gte('date', start)
-      .lte('date', end)
-      .range(0, 49999)
-    if (scope.allowedCompanyIds !== null) catQ = catQ.in('company_id', scope.allowedCompanyIds)
-    const { data: catRows } = await catQ
+    const catRows = await fetchAllPages((rFrom, rTo) => {
+      let catQ = supabase
+        .from('expenses')
+        .select('category, cash_amount, kaspi_amount')
+        .gte('date', start)
+        .lte('date', end)
+        .order('date', { ascending: true })
+        .order('id', { ascending: true })
+        .range(rFrom, rTo)
+      if (scope.allowedCompanyIds !== null) catQ = catQ.in('company_id', scope.allowedCompanyIds)
+      return catQ
+    }).catch(() => [] as any[])
     const categoryTotals: Record<string, number> = {}
     for (const r of (catRows || []) as any[]) {
       const cat = r.category || 'Без категории'
@@ -82,14 +100,18 @@ export async function GET(req: Request) {
     }
 
     // Per-company breakdown
-    let coQ = supabase
-      .from('expenses')
-      .select('company_id, cash_amount, kaspi_amount')
-      .gte('date', start)
-      .lte('date', end)
-      .range(0, 49999)
-    if (scope.allowedCompanyIds !== null) coQ = coQ.in('company_id', scope.allowedCompanyIds)
-    const { data: coRows } = await coQ
+    const coRows = await fetchAllPages((rFrom, rTo) => {
+      let coQ = supabase
+        .from('expenses')
+        .select('company_id, cash_amount, kaspi_amount')
+        .gte('date', start)
+        .lte('date', end)
+        .order('date', { ascending: true })
+        .order('id', { ascending: true })
+        .range(rFrom, rTo)
+      if (scope.allowedCompanyIds !== null) coQ = coQ.in('company_id', scope.allowedCompanyIds)
+      return coQ
+    }).catch(() => [] as any[])
     const companyTotals: Record<string, number> = {}
     for (const r of (coRows || []) as any[]) {
       const cid = String(r.company_id || 'NULL')

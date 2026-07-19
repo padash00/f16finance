@@ -22,6 +22,20 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10)
 }
 
+// PostgREST молча режет ответ до 1000 строк — черновик большой ревизии забираем постранично.
+const PAGE_SIZE = 1000
+async function fetchAllPages<T = any>(buildQuery: (from: number, to: number) => any): Promise<T[]> {
+  const out: T[] = []
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    const rows = data || []
+    out.push(...rows)
+    if (rows.length < PAGE_SIZE) break
+  }
+  return out
+}
+
 async function setup(request: Request) {
   const access = await getRequestAccessContext(request)
   if ('response' in access) return { response: access.response as Response }
@@ -54,12 +68,17 @@ export async function GET(request: Request) {
     if (!locationId) return json({ error: 'location_id обязателен' }, 400)
     await ensureInventoryLocationAccess(s.supabase as any, locationId, s.inventoryScope)
 
-    const { data, error } = await s.supabase
-      .from(TABLE)
-      .select('item_id, actual_qty, counted_by, updated_at')
-      .eq('location_id', locationId)
-      .eq('draft_date', date)
-    if (error) return json({ error: error.message }, 500)
+    // Ревизия большой локации — >1000 посчитанных позиций: постранично,
+    // иначе часть подсчётов молча пропадает из общего черновика.
+    const data = await fetchAllPages((from, to) =>
+      s.supabase
+        .from(TABLE)
+        .select('item_id, actual_qty, counted_by, updated_at')
+        .eq('location_id', locationId)
+        .eq('draft_date', date)
+        .order('item_id')
+        .range(from, to),
+    )
 
     const counts: Record<string, number> = {}
     for (const r of data || []) counts[String((r as any).item_id)] = Number((r as any).actual_qty || 0)

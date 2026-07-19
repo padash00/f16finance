@@ -8,6 +8,21 @@ export type InvoiceSessionData = {
   items: MatchedInvoiceItem[]
 }
 
+// PostgREST молча режет ответ до 1000 строк — каталог/алиасы для матчинга
+// накладных забираем постранично, иначе AI-разбор перестаёт находить товары.
+const PAGE_SIZE = 1000
+async function fetchAllPagesRows(buildQuery: (from: number, to: number) => any): Promise<any[]> {
+  const out: any[] = []
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    const rows = data || []
+    out.push(...rows)
+    if (rows.length < PAGE_SIZE) break
+  }
+  return out
+}
+
 // ─── Name mappings ─────────────────────────────────────────────────────────────
 
 export type InvoiceMappingRow = {
@@ -23,22 +38,25 @@ export async function fetchInvoiceNameMappings(
   supabase: AnySupabase,
   scope?: { organizationId?: string | null; supplierId?: string | null },
 ): Promise<InvoiceMappingRow[]> {
-  let query: any = supabase
-    .from('invoice_name_mappings')
-    .select('invoice_name, item_id, supplier_id, last_unit_cost, last_sale_price, item:item_id(name)')
-    .order('last_seen_at', { ascending: false, nullsFirst: false })
-    .order('usage_count', { ascending: false })
+  const buildQuery = (from: number, to: number) => {
+    let query: any = supabase
+      .from('invoice_name_mappings')
+      .select('invoice_name, item_id, supplier_id, last_unit_cost, last_sale_price, item:item_id(name)')
+      .order('last_seen_at', { ascending: false, nullsFirst: false })
+      .order('usage_count', { ascending: false })
+      .order('id', { ascending: true })
 
-  if (scope?.organizationId) {
-    query = query.eq('organization_id', scope.organizationId)
-  }
-  // Supplier filter: if provided, fetch this supplier's mappings + global (null) ones as fallback.
-  if (scope?.supplierId) {
-    query = query.or(`supplier_id.eq.${scope.supplierId},supplier_id.is.null`)
+    if (scope?.organizationId) {
+      query = query.eq('organization_id', scope.organizationId)
+    }
+    // Supplier filter: if provided, fetch this supplier's mappings + global (null) ones as fallback.
+    if (scope?.supplierId) {
+      query = query.or(`supplier_id.eq.${scope.supplierId},supplier_id.is.null`)
+    }
+    return query.range(from, to)
   }
 
-  const { data, error } = await query
-  if (error) throw error
+  const data = await fetchAllPagesRows(buildQuery)
   return (data || []).map((row: any) => ({
     invoice_name: row.invoice_name as string,
     item_id: row.item_id as string,
@@ -117,19 +135,22 @@ export async function fetchInventoryItemsForMatching(
   supabase: AnySupabase,
   scope?: { organizationId?: string | null },
 ) {
-  let query: any = supabase
-    .from('inventory_items')
-    .select('id, name, barcode, unit, organization_id')
-    .eq('is_active', true)
-    .order('name', { ascending: true })
+  const buildQuery = (from: number, to: number) => {
+    let query: any = supabase
+      .from('inventory_items')
+      .select('id, name, barcode, unit, organization_id')
+      .eq('is_active', true)
+      .order('name', { ascending: true })
+      .order('id', { ascending: true })
 
-  if (scope?.organizationId) {
-    // Match org items + legacy null-org rows (kept for backward-compatibility).
-    query = query.or(`organization_id.eq.${scope.organizationId},organization_id.is.null`)
+    if (scope?.organizationId) {
+      // Match org items + legacy null-org rows (kept for backward-compatibility).
+      query = query.or(`organization_id.eq.${scope.organizationId},organization_id.is.null`)
+    }
+    return query.range(from, to)
   }
 
-  const { data, error } = await query
-  if (error) throw error
+  const data = await fetchAllPagesRows(buildQuery)
   return (data || []).map((row: any) => ({
     id: row.id as string,
     name: row.name as string,

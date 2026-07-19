@@ -4,7 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { companyOptions, scopedCompanyIds } from '../../query-helpers'
+import { chunkArray, companyOptions, fetchAllPages, scopedCompanyIds } from '../../query-helpers'
 
 export const queryLowStockTool: CopilotTool = {
   name: 'query_low_stock',
@@ -44,20 +44,43 @@ export const queryLowStockTool: CopilotTool = {
     const locationIds = (locations || []).map((l: any) => String(l.id))
     if (locationIds.length === 0) return { ok: true, message: 'Нет активных витрин.' }
 
-    const { data: balances, error: balErr } = await ctx.supabase
-      .from('inventory_balances')
-      .select('item_id, location_id, quantity')
-      .in('location_id', locationIds)
-    if (balErr) return { ok: false, message: `Ошибка: ${balErr.message}` }
+    // Балансов может быть >1000 — постранично, иначе часть низких остатков теряется.
+    let balances: any[]
+    try {
+      balances = await fetchAllPages((from, to) =>
+        ctx.supabase
+          .from('inventory_balances')
+          .select('item_id, location_id, quantity')
+          .in('location_id', locationIds)
+          .order('item_id', { ascending: true })
+          .range(from, to),
+      )
+    } catch (balErr: any) {
+      return { ok: false, message: `Ошибка: ${balErr?.message || 'запрос остатков не удался'}` }
+    }
 
     const itemIds = Array.from(new Set((balances || []).map((b: any) => String(b.item_id))))
     if (itemIds.length === 0) return { ok: true, message: 'Витрина пуста.' }
 
-    const { data: items, error: itemErr } = await ctx.supabase
-      .from('inventory_items')
-      .select('id, name, low_stock_threshold')
-      .in('id', itemIds)
-    if (itemErr) return { ok: false, message: `Ошибка: ${itemErr.message}` }
+    // Товары чанками по 200 id (лимит длины URL при большом каталоге).
+    let items: any[]
+    try {
+      const chunks = await Promise.all(
+        chunkArray(itemIds, 200).map((ids) =>
+          fetchAllPages((from, to) =>
+            ctx.supabase
+              .from('inventory_items')
+              .select('id, name, low_stock_threshold')
+              .in('id', ids)
+              .order('id', { ascending: true })
+              .range(from, to),
+          ),
+        ),
+      )
+      items = chunks.flat()
+    } catch (itemErr: any) {
+      return { ok: false, message: `Ошибка: ${itemErr?.message || 'запрос товаров не удался'}` }
+    }
 
     type ItemRow = { id: string; name: string; low_stock_threshold: number | null }
     const itemMap = new Map<string, ItemRow>((items || []).map((i: any) => [String(i.id), i as ItemRow]))

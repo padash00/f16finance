@@ -5,7 +5,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { scopedOperatorIds, scopedOperatorRows, resolveDateRange, dateRangeParams } from '../../query-helpers'
+import { scopedOperatorIds, scopedOperatorRows, resolveDateRange, dateRangeParams, fetchAllPages } from '../../query-helpers'
 
 export const getOperatorInfoTool: CopilotTool = {
   name: 'get_operator_info',
@@ -42,14 +42,18 @@ export const getOperatorInfoTool: CopilotTool = {
     const { data: op } = await ctx.supabase.from('operators').select('id, name, short_name').eq('id', operatorId).single()
     if (!op) return { ok: false, message: 'Оператор не найден.' }
 
-    let incQ = ctx.supabase
-      .from('incomes')
-      .select('cash_amount, kaspi_amount, card_amount, online_amount, date, shift_id')
-      .eq('operator_id', operatorId)
-      .range(0, 9999)
-    if (from) incQ = incQ.gte('date', from)
-    if (to) incQ = incQ.lte('date', to)
-    const { data: incomes } = await incQ
+    const incomes = await fetchAllPages((rFrom, rTo) => {
+      let incQ = ctx.supabase
+        .from('incomes')
+        .select('cash_amount, kaspi_amount, card_amount, online_amount, date, shift_id')
+        .eq('operator_id', operatorId)
+        .order('date', { ascending: true })
+        .order('id', { ascending: true })
+        .range(rFrom, rTo)
+      if (from) incQ = incQ.gte('date', from)
+      if (to) incQ = incQ.lte('date', to)
+      return incQ
+    }).catch(() => [] as any[])
 
     const rows = incomes || []
     let totalRev = 0

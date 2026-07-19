@@ -43,21 +43,31 @@ export async function GET(request: Request) {
     const { data: articles, error: articleError } = await articleQuery
     if (articleError) throw articleError
 
-    let confirmQuery = supabase
-      .from('knowledge_article_confirmations')
-      .select(
-        `id, article_id, article_version, staff_id, shift_id, confirmed_at,
-         staff:staff_id ( id, full_name, short_name, role ),
-         article:article_id ( id, title, slug, version )`,
-      )
-      .order('confirmed_at', { ascending: false })
-      .limit(2000)
-    if (articleId) confirmQuery = confirmQuery.eq('article_id', articleId)
-    if (staffId) confirmQuery = confirmQuery.eq('staff_id', staffId)
-    if (orgScope) confirmQuery = confirmQuery.or(orgScope)
+    // PostgREST режет ответ до 1000 строк (прежний .limit(2000) молча обрезался) —
+    // подтверждения забираем постранично, иначе статусы «pending» ложные.
+    const PAGE = 1000
+    const confirmations: any[] = []
+    for (let from = 0; ; from += PAGE) {
+      let confirmQuery = supabase
+        .from('knowledge_article_confirmations')
+        .select(
+          `id, article_id, article_version, staff_id, shift_id, confirmed_at,
+           staff:staff_id ( id, full_name, short_name, role ),
+           article:article_id ( id, title, slug, version )`,
+        )
+        .order('confirmed_at', { ascending: false })
+        .order('id')
+        .range(from, from + PAGE - 1)
+      if (articleId) confirmQuery = confirmQuery.eq('article_id', articleId)
+      if (staffId) confirmQuery = confirmQuery.eq('staff_id', staffId)
+      if (orgScope) confirmQuery = confirmQuery.or(orgScope)
 
-    const { data: confirmations, error: confirmError } = await confirmQuery
-    if (confirmError) throw confirmError
+      const { data: pageRows, error: confirmError } = await confirmQuery
+      if (confirmError) throw confirmError
+      const rows = pageRows || []
+      confirmations.push(...rows)
+      if (rows.length < PAGE) break
+    }
 
     return json({
       ok: true,

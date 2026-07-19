@@ -4,7 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { scopedCompanyIds } from '../../query-helpers'
+import { fetchAllPages, scopedCompanyIds } from '../../query-helpers'
 
 export const getTopSellingTool: CopilotTool = {
   name: 'get_top_selling',
@@ -22,13 +22,22 @@ export const getTopSellingTool: CopilotTool = {
     // Мультитенантная изоляция: продажи только точек своей организации
     // (point_sale_items не имеет company_id — фильтруем через родителя point_sales).
     const ids = await scopedCompanyIds(ctx)
-    let query = ctx.supabase
-      .from('point_sale_items')
-      .select('quantity, total_amount, item:item_id(name), sale:sale_id!inner(created_at, company_id)')
-      .gte('sale.created_at', since)
-    if (ids) query = query.in('sale.company_id', ids)
-    const { data, error } = await query
-    if (error) return { ok: false, message: `Ошибка: ${error.message}` }
+    // Строк продаж за период может быть >1000 — постранично, иначе топ считается по обрезку.
+    let data: any[]
+    try {
+      data = await fetchAllPages((from, to) => {
+        let query = ctx.supabase
+          .from('point_sale_items')
+          .select('quantity, total_amount, item:item_id(name), sale:sale_id!inner(created_at, company_id)')
+          .gte('sale.created_at', since)
+          .order('id', { ascending: true })
+          .range(from, to)
+        if (ids) query = query.in('sale.company_id', ids)
+        return query
+      })
+    } catch (error: any) {
+      return { ok: false, message: `Ошибка: ${error?.message || 'запрос продаж не удался'}` }
+    }
     if (!data?.length) return { ok: true, message: '🛍 Продаж за период нет.' }
 
     const byItem = new Map<string, { name: string; qty: number; sum: number }>()

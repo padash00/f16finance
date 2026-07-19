@@ -32,15 +32,32 @@ export async function GET(req: Request) {
 
     const supabase = createAdminSupabaseClient()
 
-    const [orgsR, subsR, invR] = await Promise.all([
-      supabase.from('organizations').select('id, name, status, created_at'),
-      supabase.from('organization_subscriptions').select('organization_id, status, plan:plan_id(price_monthly)'),
-      supabase.from('invoices').select('organization_id, amount, paid_at, status'),
-    ])
+    // PostgREST режет ответ до 1000 строк — счета (растут каждый месяц) и списки
+    // организаций/подписок забираем постранично, иначе MRR/выручка занижаются.
+    const PAGE = 1000
+    const fetchAllPages = async (buildQuery: (from: number, to: number) => any): Promise<any[]> => {
+      const out: any[] = []
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await buildQuery(from, from + PAGE - 1)
+        if (error) throw error
+        const rows = data || []
+        out.push(...rows)
+        if (rows.length < PAGE) break
+      }
+      return out
+    }
 
-    const orgs = (orgsR as any).data || []
-    const subs = (subsR as any).data || []
-    const invoices = (invR as any).data || []
+    const [orgs, subs, invoices] = await Promise.all([
+      fetchAllPages((from, to) =>
+        supabase.from('organizations').select('id, name, status, created_at').order('id').range(from, to),
+      ),
+      fetchAllPages((from, to) =>
+        supabase.from('organization_subscriptions').select('id, organization_id, status, plan:plan_id(price_monthly)').order('id').range(from, to),
+      ),
+      fetchAllPages((from, to) =>
+        supabase.from('invoices').select('id, organization_id, amount, paid_at, status').order('id').range(from, to),
+      ),
+    ])
     const orgName = new Map<string, string>(orgs.map((o: any) => [String(o.id), String(o.name || '—')]))
 
     // Статусы организаций

@@ -604,22 +604,32 @@ export async function POST(request: Request) {
         })
       }
 
-      let query = supabase
-        .from('arena_sessions')
-        .select('id, station_id, tariff_id, started_at, ends_at, ended_at, amount, status, payment_method, cash_amount, kaspi_amount, discount_percent, station:station_id(name, zone_id), tariff:tariff_id(name, duration_minutes, price)')
-        .eq('point_project_id', projectId)
-        .in('status', ['completed', 'active'])
-        .order('started_at', { ascending: false })
-        .limit(1000)
+      // PostgREST режет ответ до 1000 строк — сессии за период забираем
+      // постранично, иначе аналитика арены занижает выручку/загрузку.
+      const PAGE = 1000
+      const sessions: any[] = []
+      for (let pageFrom = 0; ; pageFrom += PAGE) {
+        let query = supabase
+          .from('arena_sessions')
+          .select('id, station_id, tariff_id, started_at, ends_at, ended_at, amount, status, payment_method, cash_amount, kaspi_amount, discount_percent, station:station_id(name, zone_id), tariff:tariff_id(name, duration_minutes, price)')
+          .eq('point_project_id', projectId)
+          .in('status', ['completed', 'active'])
+          .order('started_at', { ascending: false })
+          .order('id')
+          .range(pageFrom, pageFrom + PAGE - 1)
 
-      if (analyticsCompanyId) query = query.eq('company_id', analyticsCompanyId)
-      if (from) query = query.gte('started_at', from)
-      if (to) query = query.lte('started_at', to)
+        if (analyticsCompanyId) query = query.eq('company_id', analyticsCompanyId)
+        if (from) query = query.gte('started_at', from)
+        if (to) query = query.lte('started_at', to)
 
-      const { data: sessions, error } = await query
-      if (error) throw error
+        const { data: pageRows, error } = await query
+        if (error) throw error
+        const rows = pageRows || []
+        sessions.push(...rows)
+        if (rows.length < PAGE) break
+      }
 
-      return json({ ok: true, data: { sessions: sessions || [] } })
+      return json({ ok: true, data: { sessions } })
     }
 
     // ─── BULK UPSERT ZONE GAMES ──────────────────────────────────────

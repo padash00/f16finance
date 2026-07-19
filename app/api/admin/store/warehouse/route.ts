@@ -28,6 +28,28 @@ function normalizeQty(v: unknown) {
   return Number.isFinite(n) ? Math.round((n + Number.EPSILON) * 1000) / 1000 : 0
 }
 
+// PostgREST молча режет ответ до 1000 строк — большие выборки забираем постранично.
+const PAGE_SIZE = 1000
+async function fetchAllPages<T = any>(buildQuery: (from: number, to: number) => any): Promise<T[]> {
+  const out: T[] = []
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    const rows = data || []
+    out.push(...rows)
+    if (rows.length < PAGE_SIZE) break
+  }
+  return out
+}
+
+// Чанки по 200 id для .in() — иначе упираемся в лимит длины URL.
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  if (size <= 0) return [arr]
+  const out: T[][] = []
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
+  return out
+}
+
 async function ensureCompanyLocation(
   supabase: any,
   companyId: string,
@@ -156,11 +178,16 @@ export async function GET(request: Request) {
       ensureCompanyLocation(supabase, companyId, 'point_display'),
     ])
 
-    const { data: balanceRows, error: balErr } = await supabase
-      .from('inventory_balances')
-      .select('location_id, item_id, quantity, quantity_reserved, updated_at, item:item_id(id, name, barcode, unit, sale_price, default_purchase_price, category_id, category:category_id(id, name))')
-      .in('location_id', [warehouse.id, showcase.id])
-    if (balErr) throw balErr
+    // Каталог точки может быть >1000 позиций — постранично, иначе PostgREST молча обрежет остатки.
+    const balanceRows = await fetchAllPages((from, to) =>
+      supabase
+        .from('inventory_balances')
+        .select('location_id, item_id, quantity, quantity_reserved, updated_at, item:item_id(id, name, barcode, unit, sale_price, default_purchase_price, category_id, category:category_id(id, name))')
+        .in('location_id', [warehouse.id, showcase.id])
+        .order('item_id', { ascending: true })
+        .order('location_id', { ascending: true })
+        .range(from, to),
+    )
 
     // v8: только склад и витрина. Каталог вычисляется как сумма (warehouse + showcase).
     const byItem = new Map<string, any>()
@@ -326,12 +353,15 @@ export async function POST(request: Request) {
 
       let itemByBarcode: Record<string, string> = {}
       if (barcodes.length > 0) {
-        const { data: found } = await supabase
-          .from('inventory_items')
-          .select('id, barcode')
-          .in('barcode', barcodes)
-          .eq('is_active', true)
-        ;(found || []).forEach((row: any) => { itemByBarcode[row.barcode] = row.id })
+        // Чанки по 200 штрихкодов — лимит длины URL + лимит 1000 строк ответа.
+        for (const bcChunk of chunkArray(barcodes, 200)) {
+          const { data: found } = await supabase
+            .from('inventory_items')
+            .select('id, barcode')
+            .in('barcode', bcChunk)
+            .eq('is_active', true)
+          ;(found || []).forEach((row: any) => { itemByBarcode[row.barcode] = row.id })
+        }
       }
 
       const orgId = access.activeOrganization?.id || null
@@ -548,14 +578,20 @@ export async function POST(request: Request) {
       const orgId = company?.organization_id || access.activeOrganization?.id || null
 
       const barcodes = [...new Set(rawItems.map((i) => i.barcode))]
-      let itemsQuery = supabase
-        .from('inventory_items')
-        .select('id, name, barcode, unit')
-        .eq('is_active', true)
-        .in('barcode', barcodes)
-      if (orgId) itemsQuery = itemsQuery.eq('organization_id', orgId)
-      const { data: foundItems, error: itemsErr } = await itemsQuery
-      if (itemsErr) throw itemsErr
+      // Excel подсобки может содержать тысячи строк: чанки по 200 штрихкодов,
+      // иначе лимит длины URL/1000 строк молча превратит товары в «несматченные».
+      const foundItems: any[] = []
+      for (const bcChunk of chunkArray(barcodes, 200)) {
+        let itemsQuery = supabase
+          .from('inventory_items')
+          .select('id, name, barcode, unit')
+          .eq('is_active', true)
+          .in('barcode', bcChunk)
+        if (orgId) itemsQuery = itemsQuery.eq('organization_id', orgId)
+        const { data: part, error: itemsErr } = await itemsQuery
+        if (itemsErr) throw itemsErr
+        foundItems.push(...(part || []))
+      }
 
       const byBarcode = new Map<string, { id: string; name: string; barcode: string; unit: string }>()
       for (const it of foundItems || []) {
@@ -576,16 +612,19 @@ export async function POST(request: Request) {
       const curWarehouse = new Map<string, number>()
       const curShowcase = new Map<string, number>()
       if (matchedItemIds.length) {
-        const { data: bal } = await supabase
-          .from('inventory_balances')
-          .select('location_id, item_id, quantity')
-          .in('location_id', [warehouse.id, showcase.id])
-          .in('item_id', matchedItemIds)
-        for (const row of bal || []) {
-          const q = Number((row as any).quantity || 0)
-          const iid = String((row as any).item_id)
-          if ((row as any).location_id === warehouse.id) curWarehouse.set(iid, q)
-          else if ((row as any).location_id === showcase.id) curShowcase.set(iid, q)
+        // Чанки по 200 id: лимит длины URL; 200 товаров × 2 локации ≤ 400 строк на чанк.
+        for (const idChunk of chunkArray(matchedItemIds, 200)) {
+          const { data: bal } = await supabase
+            .from('inventory_balances')
+            .select('location_id, item_id, quantity')
+            .in('location_id', [warehouse.id, showcase.id])
+            .in('item_id', idChunk)
+          for (const row of bal || []) {
+            const q = Number((row as any).quantity || 0)
+            const iid = String((row as any).item_id)
+            if ((row as any).location_id === warehouse.id) curWarehouse.set(iid, q)
+            else if ((row as any).location_id === showcase.id) curShowcase.set(iid, q)
+          }
         }
       }
 

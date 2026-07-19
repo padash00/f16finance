@@ -38,6 +38,21 @@ type GenerateBody = {
 const COMPANIES: CompanyCode[] = ['arena', 'ramen', 'extra']
 const WEEKS_IN_MONTH = 4.345
 
+// PostgREST режет ответ до 1000 строк — периодные выборки incomes забираем
+// постранично, иначе планы/факты KPI считаются по обрезанным данным.
+const PAGE = 1000
+async function fetchAllPages(buildQuery: (from: number, to: number) => any): Promise<any[]> {
+  const out: any[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await buildQuery(from, from + PAGE - 1)
+    if (error) throw error
+    const rows = data || []
+    out.push(...rows)
+    if (rows.length < PAGE) break
+  }
+  return out
+}
+
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
@@ -114,39 +129,49 @@ export async function GET(req: Request) {
       isSuperAdmin: access.isSuperAdmin,
     })
 
-    const incomesMonthQuery = supabase
-      .from('incomes')
-      .select('date, cash_amount, kaspi_amount, card_amount, operator_id, companies!inner(code)')
-      .gte('date', monthStart)
-      .lte('date', monthEnd)
-    const incomesWeekQuery = supabase
-      .from('incomes')
-      .select('date, cash_amount, kaspi_amount, card_amount, operator_id, companies!inner(code)')
-      .gte('date', weekStart)
-      .lte('date', weekEnd)
-    const histQuery = supabase
-      .from('incomes')
-      .select('date, cash_amount, kaspi_amount, card_amount, companies!inner(code)')
-      .gte('date', fetchStart)
-      .lte('date', fetchEnd)
-    if (scope.allowedCompanyIds) {
-      incomesMonthQuery.in('company_id', scope.allowedCompanyIds)
-      incomesWeekQuery.in('company_id', scope.allowedCompanyIds)
-      histQuery.in('company_id', scope.allowedCompanyIds)
+    const buildIncomesMonthQuery = (from: number, to: number) => {
+      let q = supabase
+        .from('incomes')
+        .select('date, cash_amount, kaspi_amount, card_amount, operator_id, companies!inner(code)')
+        .gte('date', monthStart)
+        .lte('date', monthEnd)
+        .order('date', { ascending: true }).order('id', { ascending: true })
+        .range(from, to)
+      if (scope.allowedCompanyIds) q = q.in('company_id', scope.allowedCompanyIds)
+      return q
+    }
+    const buildIncomesWeekQuery = (from: number, to: number) => {
+      let q = supabase
+        .from('incomes')
+        .select('date, cash_amount, kaspi_amount, card_amount, operator_id, companies!inner(code)')
+        .gte('date', weekStart)
+        .lte('date', weekEnd)
+        .order('date', { ascending: true }).order('id', { ascending: true })
+        .range(from, to)
+      if (scope.allowedCompanyIds) q = q.in('company_id', scope.allowedCompanyIds)
+      return q
+    }
+    const buildHistQuery = (from: number, to: number) => {
+      let q = supabase
+        .from('incomes')
+        .select('date, cash_amount, kaspi_amount, card_amount, companies!inner(code)')
+        .gte('date', fetchStart)
+        .lte('date', fetchEnd)
+        .order('date', { ascending: true }).order('id', { ascending: true })
+        .range(from, to)
+      if (scope.allowedCompanyIds) q = q.in('company_id', scope.allowedCompanyIds)
+      return q
     }
 
-    const [{ data: plans, error: plansError }, { data: incomesMonth, error: monthError }, { data: incomesWeek, error: weekError }, { data: hist, error: histError }] =
+    const [{ data: plans, error: plansError }, incomesMonth, incomesWeek, hist] =
       await Promise.all([
         supabase.from('kpi_plans').select('*').eq('month_start', monthStart).eq('entity_type', 'collective'),
-        incomesMonthQuery,
-        incomesWeekQuery,
-        histQuery,
+        fetchAllPages(buildIncomesMonthQuery),
+        fetchAllPages(buildIncomesWeekQuery),
+        fetchAllPages(buildHistQuery),
       ])
 
     if (plansError) throw plansError
-    if (monthError) throw monthError
-    if (weekError) throw weekError
-    if (histError) throw histError
 
     const operatorIds = new Set<string>()
     for (const row of ((incomesWeek || []) as IncomeRow[])) {
@@ -244,16 +269,17 @@ export async function POST(req: Request) {
       isSuperAdmin: access.isSuperAdmin,
     })
 
-    const incomesQuery = supabase
-      .from('incomes')
-      .select('date, cash_amount, kaspi_amount, card_amount, companies!inner(code)')
-      .gte('date', `${prev2Key}-01`)
-      .lte('date', iso(new Date(prev1.getFullYear(), prev1.getMonth() + 1, 0)))
-    if (scope.allowedCompanyIds) incomesQuery.in('company_id', scope.allowedCompanyIds)
-
-    const { data: incomes, error } = await incomesQuery
-
-    if (error) throw error
+    const incomes = await fetchAllPages((from, to) => {
+      let q = supabase
+        .from('incomes')
+        .select('date, cash_amount, kaspi_amount, card_amount, companies!inner(code)')
+        .gte('date', `${prev2Key}-01`)
+        .lte('date', iso(new Date(prev1.getFullYear(), prev1.getMonth() + 1, 0)))
+        .order('date', { ascending: true }).order('id', { ascending: true })
+        .range(from, to)
+      if (scope.allowedCompanyIds) q = q.in('company_id', scope.allowedCompanyIds)
+      return q
+    })
 
     const sums: Record<CompanyCode, { t1: number; t2: number }> = {
       arena: { t1: 0, t2: 0 },

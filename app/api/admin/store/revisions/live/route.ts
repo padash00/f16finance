@@ -14,6 +14,27 @@ function json(data: unknown, status = 200) {
 
 const UUID_RE = /^[0-9a-fA-F-]{36}$/
 
+// PostgREST молча режет ответ до 1000 строк — остатки большой локации постранично.
+const PAGE_SIZE = 1000
+async function fetchAllPages<T = any>(buildQuery: (from: number, to: number) => any): Promise<T[]> {
+  const out: T[] = []
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    const rows = data || []
+    out.push(...rows)
+    if (rows.length < PAGE_SIZE) break
+  }
+  return out
+}
+
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  if (size <= 0) return [arr]
+  const out: T[][] = []
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
+  return out
+}
+
 // Живые изменения остатка локации с момента `since` — для «живой» ревизии.
 // Возвращает свежие остатки локации + движения (со знаком: приход +, расход -),
 // чтобы фронт мог обновить «Систему» и подкорректировать «Факт» по уже посчитанным
@@ -60,8 +81,11 @@ export async function GET(request: Request) {
     const itemIds = Array.from(new Set(rows.map((r) => String(r.item_id)).filter(Boolean)))
     const nameById = new Map<string, string>()
     if (itemIds.length) {
-      const { data: items } = await supabase.from('inventory_items').select('id, name').in('id', itemIds)
-      for (const it of items || []) nameById.set(String((it as any).id), String((it as any).name || ''))
+      // Чанки по 200 id — один .in() на сотни UUID превышает лимит длины URL.
+      for (const idChunk of chunkArray(itemIds, 200)) {
+        const { data: items } = await supabase.from('inventory_items').select('id, name').in('id', idChunk)
+        for (const it of items || []) nameById.set(String((it as any).id), String((it as any).name || ''))
+      }
     }
 
     const movements = rows
@@ -81,10 +105,15 @@ export async function GET(request: Request) {
       })
       .filter((m) => m.delta !== 0)
 
-    const { data: balances } = await supabase
-      .from('inventory_balances')
-      .select('item_id, quantity')
-      .eq('location_id', locationId)
+    // Локация >1000 позиций — постранично, иначе «Система» в живой ревизии обрежется.
+    const balances = await fetchAllPages((from, to) =>
+      supabase
+        .from('inventory_balances')
+        .select('item_id, quantity')
+        .eq('location_id', locationId)
+        .order('item_id')
+        .range(from, to),
+    )
 
     return json({ ok: true, data: { now: nowIso, movements, balances: balances || [] } })
   } catch (error: any) {

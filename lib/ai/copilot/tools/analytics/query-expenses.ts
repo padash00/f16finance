@@ -4,7 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { companyOptions, scopedCompanyIds } from '../../query-helpers'
+import { companyOptions, scopedCompanyIds, fetchAllPages } from '../../query-helpers'
 
 function todayISO(): string {
   const d = new Date()
@@ -67,23 +67,25 @@ export const queryExpensesTool: CopilotTool = {
     else if (period === 'month') from = addDaysISO(today, -29)
     else if (period === 'today' || !period) { /* today */ }
 
-    let query = ctx.supabase
-      .from('expenses')
-      .select('cash_amount, kaspi_amount, category')
-      .gte('date', from)
-      .lte('date', to)
-      .range(0, 9999)
-    if (companyId) {
-      query = query.eq('company_id', companyId)
-    } else {
-      const ids = await scopedCompanyIds(ctx)
-      if (ids) query = query.in('company_id', ids)
+    const ids = companyId ? null : await scopedCompanyIds(ctx)
+    let rows: any[]
+    try {
+      rows = await fetchAllPages((rFrom, rTo) => {
+        let query = ctx.supabase
+          .from('expenses')
+          .select('cash_amount, kaspi_amount, category')
+          .gte('date', from)
+          .lte('date', to)
+          .order('date', { ascending: true })
+          .order('id', { ascending: true })
+          .range(rFrom, rTo)
+        if (companyId) query = query.eq('company_id', companyId)
+        else if (ids) query = query.in('company_id', ids)
+        return query
+      })
+    } catch (e: any) {
+      return { ok: false, message: `Ошибка: ${e?.message || 'unknown'}` }
     }
-
-    const { data, error } = await query
-    if (error) return { ok: false, message: `Ошибка: ${error.message}` }
-
-    const rows = data || []
     let total = 0
     const byCategory = new Map<string, number>()
     for (const r of rows) {

@@ -4,7 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { resolveOperatorNames, scopedOperatorIds } from '../../query-helpers'
+import { fetchAllPages, resolveOperatorNames, scopedOperatorIds } from '../../query-helpers'
 
 export const getEmployeeRatingTool: CopilotTool = {
   name: 'get_employee_rating',
@@ -22,14 +22,24 @@ export const getEmployeeRatingTool: CopilotTool = {
     // Мультитенантная изоляция: корректировки только операторов своей организации
     // (operator_salary_adjustments ключуется по operator_id).
     const opIds = await scopedOperatorIds(ctx)
-    let query = ctx.supabase
-      .from('operator_salary_adjustments')
-      .select('operator_id, kind, amount')
-      .eq('status', 'active')
-      .gte('date', since)
-    if (opIds) query = query.in('operator_id', opIds)
-    const { data, error } = await query
-    if (error) return { ok: false, message: `Ошибка: ${error.message}` }
+    // Корректировок за период (до года) может быть >1000 — постранично, иначе рейтинг врёт.
+    let data: any[]
+    try {
+      data = await fetchAllPages((from, to) => {
+        let query = ctx.supabase
+          .from('operator_salary_adjustments')
+          .select('operator_id, kind, amount')
+          .eq('status', 'active')
+          .gte('date', since)
+          .order('date', { ascending: true })
+          .order('id', { ascending: true })
+          .range(from, to)
+        if (opIds) query = query.in('operator_id', opIds)
+        return query
+      })
+    } catch (error: any) {
+      return { ok: false, message: `Ошибка: ${error?.message || 'запрос корректировок не удался'}` }
+    }
     if (!data?.length) return { ok: true, message: 'Корректировок зарплаты за период нет.' }
 
     const operatorMap = await resolveOperatorNames(ctx.supabase, data as any)

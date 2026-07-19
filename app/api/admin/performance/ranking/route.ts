@@ -126,7 +126,7 @@ export async function GET(req: Request) {
         supabase
           .from('incomes')
           .select('date')
-          .order('date', { ascending: true })
+          .order('date', { ascending: true }).order('id', { ascending: true })
           .limit(1),
       )
       const { data: earliestRows, error: earliestErr } = await earliestQuery
@@ -158,18 +158,26 @@ export async function GET(req: Request) {
     const operatorMap = new Map(operators.map((o) => [o.id, o]))
 
     // ── 2. Загружаем incomes за объединённый период (baseline + period) ───
-    let incomesQuery = scopeIncomes(
-      supabase
-        .from('incomes')
-        .select('date, operator_id, company_id, shift, cash_amount, kaspi_amount, card_amount, online_amount')
-        .gte('date', baselineFrom)
-        .lte('date', to)
-        .range(0, 49999),
-    )
-
-    const { data: incomesData, error: incomesErr } = await incomesQuery
-    if (incomesErr) throw incomesErr
-    const allIncomes = (incomesData || []) as IncomeRow[]
+    // ВАЖНО: PostgREST режет любой ответ до 1000 строк, даже .range(0, 49999) —
+    // забираем постранично, иначе baseline-медианы считаются по обрезанной истории.
+    const PAGE = 1000
+    const allIncomes: IncomeRow[] = []
+    for (let pageFrom = 0; ; pageFrom += PAGE) {
+      const incomesQuery = scopeIncomes(
+        supabase
+          .from('incomes')
+          .select('date, operator_id, company_id, shift, cash_amount, kaspi_amount, card_amount, online_amount')
+          .gte('date', baselineFrom)
+          .lte('date', to)
+          .order('date', { ascending: true }).order('id', { ascending: true })
+          .range(pageFrom, pageFrom + PAGE - 1),
+      )
+      const { data: incomesData, error: incomesErr } = await incomesQuery
+      if (incomesErr) throw incomesErr
+      const rows = (incomesData || []) as IncomeRow[]
+      allIncomes.push(...rows)
+      if (rows.length < PAGE) break
+    }
 
     // ── 3. Делим на baseline и target периоды ─────────────────────────────
     const baseline = allIncomes.filter((r) => r.date >= baselineFrom && r.date <= baselineTo)

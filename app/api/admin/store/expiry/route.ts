@@ -33,14 +33,21 @@ export async function GET(request: Request) {
     })
     const allowed = companyScope.allowedCompanyIds === null ? null : new Set(companyScope.allowedCompanyIds.map(String))
 
-    const { data, error } = await supabase
+    // Лимит 1000 применяется ДО фильтра по арендатору: без серверного скоупа партии
+    // чужих (крупных) организаций вытесняют строки текущей — свои сроки молча
+    // пропадают. Для скоупнутого пользователя фильтруем по company_id в самом
+    // запросе через !inner-join (пустой список компаний → 0 строк, NEVER-pattern).
+    const itemCols = 'id, quantity, production_date, expiry_date, item:item_id(id, name, barcode, unit)'
+    const receiptEmbed = (inner: boolean) =>
+      `receipt:receipt_id${inner ? '!inner' : ''}(id, received_at, status, kind, location:location_id${inner ? '!inner' : ''}(id, name, location_type, company_id, organization_id, company:company_id(name)))`
+    let expiryQuery = supabase
       .from('inventory_receipt_items')
-      .select(
-        'id, quantity, production_date, expiry_date, item:item_id(id, name, barcode, unit), receipt:receipt_id(id, received_at, status, kind, location:location_id(id, name, location_type, company_id, organization_id, company:company_id(name)))',
-      )
+      .select(`${itemCols}, ${receiptEmbed(allowed !== null)}`)
       .not('expiry_date', 'is', null)
-      .order('expiry_date', { ascending: true })
-      .limit(1000)
+    if (allowed !== null) {
+      expiryQuery = expiryQuery.in('receipt.location.company_id', companyScope.allowedCompanyIds || [])
+    }
+    const { data, error } = await expiryQuery.order('expiry_date', { ascending: true }).limit(1000)
     if (error) throw error
 
     // Almaty (UTC+5) — дата без времени

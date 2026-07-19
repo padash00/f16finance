@@ -4,7 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { companyOptions, scopedCompanyIds } from '../../query-helpers'
+import { companyOptions, scopedCompanyIds, fetchAllPages } from '../../query-helpers'
 import { buildMonthlyForecast, type ForecastIncomeRow, type ForecastExpenseRow } from '@/lib/analysis/monthly-forecast'
 
 function todayISO(): string {
@@ -31,25 +31,18 @@ export const getForecastTool: CopilotTool = {
     const to = todayISO()
     const from = '2020-01-01'
 
-    const fetchAll = async (table: 'incomes' | 'expenses', select: string) => {
-      const all: any[] = []
-      let page = 0
-      while (true) {
-        let q = ctx.supabase.from(table).select(select).gte('date', from).lte('date', to)
-          .order('date', { ascending: true }).range(page * 5000, page * 5000 + 4999)
-        if (companyId) q = q.eq('company_id', companyId)
-        else { const ids = await scopedCompanyIds(ctx); if (ids) q = q.in('company_id', ids) }
-        const { data, error } = await q
-        if (error) throw new Error(error.message)
-        const rows = data || []
-        all.push(...rows)
-        if (rows.length < 5000) break
-        page++
-      }
-      return all
-    }
-
     try {
+      // PostgREST режет ЛЮБОЙ запрос до 1000 строк — только страницы по 1000.
+      const scopeIds = companyId ? null : await scopedCompanyIds(ctx)
+      const fetchAll = (table: 'incomes' | 'expenses', select: string) =>
+        fetchAllPages((rFrom, rTo) => {
+          let q = ctx.supabase.from(table).select(select).gte('date', from).lte('date', to)
+            .order('date', { ascending: true }).order('id', { ascending: true }).range(rFrom, rTo)
+          if (companyId) q = q.eq('company_id', companyId)
+          else if (scopeIds) q = q.in('company_id', scopeIds)
+          return q
+        })
+
       const [inc, exp] = await Promise.all([
         fetchAll('incomes', 'date, cash_amount, kaspi_amount, card_amount, online_amount'),
         fetchAll('expenses', 'date, category, cash_amount, kaspi_amount'),

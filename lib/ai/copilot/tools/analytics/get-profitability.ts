@@ -13,7 +13,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { companyOptions, scopedCompanyIds, resolveDateRange, dateRangeParams } from '../../query-helpers'
+import { companyOptions, scopedCompanyIds, resolveDateRange, dateRangeParams, fetchAllPages } from '../../query-helpers'
 import { inferFinancialGroup, type FinancialGroup } from '@/lib/core/financial-groups'
 
 export const getProfitabilityTool: CopilotTool = {
@@ -37,29 +37,35 @@ export const getProfitabilityTool: CopilotTool = {
     const companyId = String(input.company_id || '')
     const { from, to, label } = resolveDateRange(input, { defaultPeriod: 'month' })
 
-    let incQ = ctx.supabase.from('incomes').select('cash_amount, kaspi_amount, card_amount, online_amount').range(0, 9999)
-    let expQ = ctx.supabase.from('expenses').select('cash_amount, kaspi_amount, category').range(0, 9999)
-    if (from) { incQ = incQ.gte('date', from); expQ = expQ.gte('date', from) }
-    if (to) { incQ = incQ.lte('date', to); expQ = expQ.lte('date', to) }
-    if (companyId) {
-      incQ = incQ.eq('company_id', companyId)
-      expQ = expQ.eq('company_id', companyId)
-    } else {
-      const ids = await scopedCompanyIds(ctx)
-      if (ids) { incQ = incQ.in('company_id', ids); expQ = expQ.in('company_id', ids) }
+    const ids = companyId ? null : await scopedCompanyIds(ctx)
+    const buildQ = (table: 'incomes' | 'expenses', select: string) => (rFrom: number, rTo: number) => {
+      let q = ctx.supabase.from(table).select(select)
+        .order('date', { ascending: true }).order('id', { ascending: true }).range(rFrom, rTo)
+      if (from) q = q.gte('date', from)
+      if (to) q = q.lte('date', to)
+      if (companyId) q = q.eq('company_id', companyId)
+      else if (ids) q = q.in('company_id', ids)
+      return q
     }
 
-    const [incRes, expRes] = await Promise.all([incQ, expQ])
-    if (incRes.error) return { ok: false, message: `Ошибка: ${incRes.error.message}` }
-    if (expRes.error) return { ok: false, message: `Ошибка: ${expRes.error.message}` }
+    let incRows: any[]
+    let expRows: any[]
+    try {
+      ;[incRows, expRows] = await Promise.all([
+        fetchAllPages(buildQ('incomes', 'cash_amount, kaspi_amount, card_amount, online_amount')),
+        fetchAllPages(buildQ('expenses', 'cash_amount, kaspi_amount, category')),
+      ])
+    } catch (e: any) {
+      return { ok: false, message: `Ошибка: ${e?.message || 'unknown'}` }
+    }
 
     let revenue = 0
-    for (const r of (incRes.data || []) as any[]) {
+    for (const r of incRows as any[]) {
       revenue += Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0) + Number(r.card_amount || 0) + Number(r.online_amount || 0)
     }
 
     const byGroup = new Map<FinancialGroup, number>()
-    for (const r of (expRes.data || []) as any[]) {
+    for (const r of expRows as any[]) {
       const sum = Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0)
       const g = inferFinancialGroup(r.category)
       byGroup.set(g, (byGroup.get(g) || 0) + sum)

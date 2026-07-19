@@ -32,6 +32,20 @@ function fmtMoney(v: number) {
   return Math.round(v).toLocaleString('ru-RU') + ' ₸'
 }
 
+// PostgREST режет ответ до 1000 строк — забираем постранично.
+const PAGE = 1000
+async function fetchAllPages(build: (from: number, to: number) => any): Promise<any[]> {
+  const out: any[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await build(from, from + PAGE - 1)
+    if (error) throw error
+    const rows = data || []
+    out.push(...rows)
+    if (rows.length < PAGE) break
+  }
+  return out
+}
+
 interface InsightData {
   yesterday: string
   yesterdayIncome: number
@@ -143,10 +157,14 @@ async function collectInsights(
         .map(([name, qty]) => ({ name, qty }))
     }
 
-    // Низкие остатки
-    const { data: balances } = await supabase
-      .from('inventory_balances')
-      .select('quantity, item:item_id(name, low_stock_threshold)')
+    // Низкие остатки (балансов может быть >1000 — постранично, иначе часть теряется)
+    const balances = await fetchAllPages((from, to) =>
+      supabase
+        .from('inventory_balances')
+        .select('quantity, item:item_id(name, low_stock_threshold)')
+        .order('item_id', { ascending: true })
+        .range(from, to),
+    ).catch(() => null)
     if (balances) {
       for (const b of balances as any[]) {
         const item = Array.isArray(b.item) ? b.item[0] : b.item

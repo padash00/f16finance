@@ -4,7 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { scopedCompanyRows, resolveDateRange, dateRangeParams } from '../../query-helpers'
+import { scopedCompanyRows, resolveDateRange, dateRangeParams, fetchAllPages } from '../../query-helpers'
 
 export const queryByCompanyTool: CopilotTool = {
   name: 'query_by_company',
@@ -19,20 +19,26 @@ export const queryByCompanyTool: CopilotTool = {
     const companies = await scopedCompanyRows(ctx)
     if (!companies || companies.length === 0) return { ok: true, message: 'Точек нет.' }
 
-    let incBase = ctx.supabase.from('incomes').select('company_id, cash_amount, kaspi_amount, card_amount, online_amount').range(0, 19999)
-    let expBase = ctx.supabase.from('expenses').select('company_id, cash_amount, kaspi_amount').range(0, 19999)
-    if (from) { incBase = incBase.gte('date', from); expBase = expBase.gte('date', from) }
-    if (to) { incBase = incBase.lte('date', to); expBase = expBase.lte('date', to) }
-    const [incRes, expRes] = await Promise.all([incBase, expBase])
+    const buildQ = (table: 'incomes' | 'expenses', select: string) => (rFrom: number, rTo: number) => {
+      let q = ctx.supabase.from(table).select(select)
+        .order('date', { ascending: true }).order('id', { ascending: true }).range(rFrom, rTo)
+      if (from) q = q.gte('date', from)
+      if (to) q = q.lte('date', to)
+      return q
+    }
+    const [incRows, expRows] = await Promise.all([
+      fetchAllPages(buildQ('incomes', 'company_id, cash_amount, kaspi_amount, card_amount, online_amount')).catch(() => [] as any[]),
+      fetchAllPages(buildQ('expenses', 'company_id, cash_amount, kaspi_amount')).catch(() => [] as any[]),
+    ])
 
     const stats = new Map<string, { name: string; income: number; expense: number }>()
     for (const c of companies as any[]) stats.set(String(c.id), { name: c.name, income: 0, expense: 0 })
 
-    for (const r of (incRes.data || []) as any[]) {
+    for (const r of incRows as any[]) {
       const s = stats.get(String(r.company_id))
       if (s) s.income += Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0) + Number(r.card_amount || 0) + Number(r.online_amount || 0)
     }
-    for (const r of (expRes.data || []) as any[]) {
+    for (const r of expRows as any[]) {
       const s = stats.get(String(r.company_id))
       if (s) s.expense += Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0)
     }

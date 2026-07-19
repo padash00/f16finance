@@ -123,20 +123,43 @@ export async function GET(req: Request) {
     const staffQuery = supabase.from('staff').select('id, full_name, created_at, dismissed_at, monthly_salary')
     if (scopedStaffIds) staffQuery.in('id', scopedStaffIds)
 
+    // PostgREST режет ответ до 1000 строк — периодные incomes/expenses забираем
+    // постранично, иначе оборот и расходы точки занижаются на длинных периодах.
+    const PAGE = 1000
+    const fetchAllPages = async (buildQuery: (from: number, to: number) => any): Promise<{ data: any[]; error: any }> => {
+      const out: any[] = []
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await buildQuery(from, from + PAGE - 1)
+        if (error) return { data: out, error }
+        const rows = data || []
+        out.push(...rows)
+        if (rows.length < PAGE) break
+      }
+      return { data: out, error: null }
+    }
+
     const [companyRes, incomesRes, expensesRes, categoriesRes, staffRes, staffPeriodsRes, salaryAdjustmentsRes, salaryReference] = await Promise.all([
       supabase.from('companies').select('id, name, code').eq('id', companyId).maybeSingle(),
-      supabase
-        .from('incomes')
-        .select('cash_amount, kaspi_amount, online_amount, card_amount, date, company_id, shift, operator_id, operator_name')
-        .eq('company_id', companyId)
-        .gte('date', fromDate)
-        .lte('date', toDate),
-      supabase
-        .from('expenses')
-        .select('category, cash_amount, kaspi_amount, comment, date')
-        .eq('company_id', companyId)
-        .gte('date', fromDate)
-        .lte('date', toDate),
+      fetchAllPages((from, to) =>
+        supabase
+          .from('incomes')
+          .select('cash_amount, kaspi_amount, online_amount, card_amount, date, company_id, shift, operator_id, operator_name')
+          .eq('company_id', companyId)
+          .gte('date', fromDate)
+          .lte('date', toDate)
+          .order('date', { ascending: true }).order('id', { ascending: true })
+          .range(from, to),
+      ),
+      fetchAllPages((from, to) =>
+        supabase
+          .from('expenses')
+          .select('category, cash_amount, kaspi_amount, comment, date')
+          .eq('company_id', companyId)
+          .gte('date', fromDate)
+          .lte('date', toDate)
+          .order('date', { ascending: true }).order('id', { ascending: true })
+          .range(from, to),
+      ),
       supabase.from('expense_categories').select('name, accounting_group'),
       staffQuery,
       supabase.from('staff_salary_periods').select('staff_id, effective_from, monthly_salary'),
@@ -185,7 +208,7 @@ export async function GET(req: Request) {
         // Скоуп организации: "общая выручка" не должна выходить за пределы
         // компаний активной организации (no-op пока allowedCompanyIds === null).
         if (scope.allowedCompanyIds) totalQuery = totalQuery.in('company_id', scope.allowedCompanyIds)
-        const { data, error } = await totalQuery.range(page * 1000, page * 1000 + 999)
+        const { data, error } = await totalQuery.order('id', { ascending: true }).range(page * 1000, page * 1000 + 999)
         if (error) throw error
         const chunk = (data || []) as any[]
         for (const r of chunk) {

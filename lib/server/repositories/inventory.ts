@@ -63,6 +63,29 @@ export type StoreRevisionsData = {
   stocktakes: any[]
 }
 
+const PAGE_SIZE = 1000
+
+/**
+ * PostgREST молча режет любой select до 1000 строк — забираем постранично
+ * (.range) до первой неполной страницы. buildQuery обязан включать .order()
+ * с детерминированной сортировкой (уникальный tiebreaker), иначе страницы
+ * могут пересекаться. Возвращает { data, error } для совместимости
+ * с деструктуризацией в Promise.all.
+ */
+async function fetchAllPagesResult(
+  buildQuery: (from: number, to: number) => any,
+): Promise<{ data: any[]; error: any }> {
+  const out: any[] = []
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1)
+    if (error) return { data: out, error }
+    const rows = data || []
+    out.push(...rows)
+    if (rows.length < PAGE_SIZE) break
+  }
+  return { data: out, error: null }
+}
+
 function isRestrictedScope(scope?: InventoryScope) {
   return Boolean(scope && !scope.isSuperAdmin && scope.allowedCompanyIds !== null)
 }
@@ -236,13 +259,16 @@ export async function fetchStoreOverview(supabase: AnySupabase, scope?: Inventor
     { data: receipts, error: receiptsError },
     { data: movements, error: movementsError },
   ] = await Promise.all([
-    applyOrganizationFilter(
-      supabase
-      .from('inventory_items')
-      .select('id, name, barcode, sale_price, unit, item_type, low_stock_threshold, is_active, category:category_id(id, name)')
-      .eq('is_active', true)
-      .order('name', { ascending: true }),
-      scope,
+    fetchAllPagesResult((from, to) =>
+      applyOrganizationFilter(
+        supabase
+        .from('inventory_items')
+        .select('id, name, barcode, sale_price, unit, item_type, low_stock_threshold, is_active, category:category_id(id, name)')
+        .eq('is_active', true)
+        .order('name', { ascending: true })
+        .order('id', { ascending: true }),
+        scope,
+      ).range(from, to),
     ),
     applyOrganizationFilter(
       supabase
@@ -253,11 +279,16 @@ export async function fetchStoreOverview(supabase: AnySupabase, scope?: Inventor
       .order('name', { ascending: true }),
       scope,
     ),
-    supabase
-      .from('inventory_balances')
-      .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, low_stock_threshold), location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code))')
-      .gt('quantity', 0)
-      .order('updated_at', { ascending: false }),
+    fetchAllPagesResult((from, to) =>
+      supabase
+        .from('inventory_balances')
+        .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, low_stock_threshold), location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code))')
+        .gt('quantity', 0)
+        .order('updated_at', { ascending: false })
+        .order('location_id', { ascending: true })
+        .order('item_id', { ascending: true })
+        .range(from, to),
+    ),
     supabase
       .from('inventory_requests')
       .select('id, requesting_company_id, status, comment, decision_comment, created_at, approved_at, company:requesting_company_id(id, name, code), source_location:source_location_id(id, name, code, location_type, organization_id), target_location:target_location_id(id, name, code, location_type, organization_id), items:inventory_request_items(id, item_id, requested_qty, approved_qty, comment, item:item_id(id, name, barcode, unit))')
@@ -307,11 +338,16 @@ export async function fetchStoreAnalytics(supabase: AnySupabase, scope?: Invento
       .order('name', { ascending: true }),
       scope,
     ),
-    supabase
-      .from('inventory_balances')
-      .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, low_stock_threshold), location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code))')
-      .gt('quantity', 0)
-      .order('updated_at', { ascending: false }),
+    fetchAllPagesResult((from, to) =>
+      supabase
+        .from('inventory_balances')
+        .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, low_stock_threshold), location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code))')
+        .gt('quantity', 0)
+        .order('updated_at', { ascending: false })
+        .order('location_id', { ascending: true })
+        .order('item_id', { ascending: true })
+        .range(from, to),
+    ),
     supabase
       .from('inventory_movements')
       .select('id, movement_type, quantity, total_amount, created_at, item:item_id(id, name, barcode, unit), from_location:from_location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code)), to_location:to_location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code))')
@@ -331,15 +367,19 @@ export async function fetchStoreAnalytics(supabase: AnySupabase, scope?: Invento
 }
 
 export async function fetchStoreReceipts(supabase: AnySupabase, scope?: InventoryScope): Promise<StoreReceiptsData> {
-  let itemsQuery: any = supabase
-    .from('inventory_items')
-    .select('id, name, barcode, unit, sale_price, default_purchase_price, item_type, requires_expiry, category:category_id(id, name), organization_id')
-    .eq('is_active', true)
-    .order('name', { ascending: true })
-  if (hasOrganizationScope(scope)) {
-    const orgId = String(scope?.organizationId || '')
-    // Keep legacy shared catalog rows (organization_id is null) visible to org-scoped managers.
-    itemsQuery = itemsQuery.or(`organization_id.eq.${orgId},organization_id.is.null`)
+  const buildItemsQuery = () => {
+    let itemsQuery: any = supabase
+      .from('inventory_items')
+      .select('id, name, barcode, unit, sale_price, default_purchase_price, item_type, requires_expiry, category:category_id(id, name), organization_id')
+      .eq('is_active', true)
+      .order('name', { ascending: true })
+      .order('id', { ascending: true })
+    if (hasOrganizationScope(scope)) {
+      const orgId = String(scope?.organizationId || '')
+      // Keep legacy shared catalog rows (organization_id is null) visible to org-scoped managers.
+      itemsQuery = itemsQuery.or(`organization_id.eq.${orgId},organization_id.is.null`)
+    }
+    return itemsQuery
   }
 
   const [
@@ -348,7 +388,7 @@ export async function fetchStoreReceipts(supabase: AnySupabase, scope?: Inventor
     { data: locations, error: locationsError },
     { data: receipts, error: receiptsError },
   ] = await Promise.all([
-    itemsQuery,
+    fetchAllPagesResult((from, to) => buildItemsQuery().range(from, to)),
     applyOrganizationFilter(supabase.from('inventory_suppliers').select('*').order('name', { ascending: true }), scope),
     applyOrganizationFilter(
       supabase
@@ -413,13 +453,16 @@ export async function fetchStoreWriteoffs(supabase: AnySupabase, scope?: Invento
     { data: balances, error: balancesError },
     { data: writeoffs, error: writeoffsError },
   ] = await Promise.all([
-    applyOrganizationFilter(
-      supabase
-      .from('inventory_items')
-      .select('id, name, barcode, unit, item_type, is_active, category:category_id(id, name)')
-      .eq('is_active', true)
-      .order('name', { ascending: true }),
-      scope,
+    fetchAllPagesResult((from, to) =>
+      applyOrganizationFilter(
+        supabase
+        .from('inventory_items')
+        .select('id, name, barcode, unit, item_type, is_active, category:category_id(id, name)')
+        .eq('is_active', true)
+        .order('name', { ascending: true })
+        .order('id', { ascending: true }),
+        scope,
+      ).range(from, to),
     ),
     applyOrganizationFilter(
       supabase
@@ -431,11 +474,16 @@ export async function fetchStoreWriteoffs(supabase: AnySupabase, scope?: Invento
       .order('name', { ascending: true }),
       scope,
     ),
-    supabase
-      .from('inventory_balances')
-      .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, item_type), location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code))')
-      .gt('quantity', 0)
-      .order('updated_at', { ascending: false }),
+    fetchAllPagesResult((from, to) =>
+      supabase
+        .from('inventory_balances')
+        .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, item_type), location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code))')
+        .gt('quantity', 0)
+        .order('updated_at', { ascending: false })
+        .order('location_id', { ascending: true })
+        .order('item_id', { ascending: true })
+        .range(from, to),
+    ),
     supabase
       .from('inventory_writeoffs')
       .select('id, location_id, written_at, reason, comment, total_amount, status, cancelled_at, cancel_reason, created_at, location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code)), items:inventory_writeoff_items(id, item_id, quantity, unit_cost, total_cost, comment, item:item_id(id, name, barcode, unit))')
@@ -463,13 +511,16 @@ export async function fetchStoreRevisions(supabase: AnySupabase, scope?: Invento
     { data: balances, error: balancesError },
     { data: stocktakes, error: stocktakesError },
   ] = await Promise.all([
-    applyOrganizationFilter(
-      supabase
-      .from('inventory_items')
-      .select('id, name, barcode, unit, item_type, is_active, category:category_id(id, name)')
-      .eq('is_active', true)
-      .order('name', { ascending: true }),
-      scope,
+    fetchAllPagesResult((from, to) =>
+      applyOrganizationFilter(
+        supabase
+        .from('inventory_items')
+        .select('id, name, barcode, unit, item_type, is_active, category:category_id(id, name)')
+        .eq('is_active', true)
+        .order('name', { ascending: true })
+        .order('id', { ascending: true }),
+        scope,
+      ).range(from, to),
     ),
     applyOrganizationFilter(
       supabase
@@ -481,10 +532,15 @@ export async function fetchStoreRevisions(supabase: AnySupabase, scope?: Invento
       .order('name', { ascending: true }),
       scope,
     ),
-    supabase
-      .from('inventory_balances')
-      .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, item_type), location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code))')
-      .order('updated_at', { ascending: false }),
+    fetchAllPagesResult((from, to) =>
+      supabase
+        .from('inventory_balances')
+        .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, item_type), location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code))')
+        .order('updated_at', { ascending: false })
+        .order('location_id', { ascending: true })
+        .order('item_id', { ascending: true })
+        .range(from, to),
+    ),
     supabase
       .from('inventory_stocktakes')
       .select('id, location_id, counted_at, comment, created_by, created_at, location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code)), items:inventory_stocktake_items(id, item_id, expected_qty, actual_qty, delta_qty, comment, item:item_id(id, name, barcode, unit, sale_price, default_purchase_price))')
@@ -521,12 +577,15 @@ export async function fetchInventoryOverview(supabase: AnySupabase, scope?: Inve
   ] = await Promise.all([
     applyOrganizationFilter(supabase.from('inventory_categories').select('*').order('name', { ascending: true }), scope),
     applyOrganizationFilter(supabase.from('inventory_suppliers').select('*').order('name', { ascending: true }), scope),
-    applyOrganizationFilter(
-      supabase
-      .from('inventory_items')
-      .select('id, name, barcode, organization_id, category_id, sale_price, default_purchase_price, unit, notes, is_active, created_at, updated_at, category:category_id(id, name)')
-      .order('name', { ascending: true }),
-      scope,
+    fetchAllPagesResult((from, to) =>
+      applyOrganizationFilter(
+        supabase
+        .from('inventory_items')
+        .select('id, name, barcode, organization_id, category_id, sale_price, default_purchase_price, unit, notes, is_active, created_at, updated_at, category:category_id(id, name)')
+        .order('name', { ascending: true })
+        .order('id', { ascending: true }),
+        scope,
+      ).range(from, to),
     ),
     applyOrganizationFilter(
       supabase
@@ -536,10 +595,15 @@ export async function fetchInventoryOverview(supabase: AnySupabase, scope?: Inve
       .order('name', { ascending: true }),
       scope,
     ),
-    supabase
-      .from('inventory_balances')
-      .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode), location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code))')
-      .order('updated_at', { ascending: false }),
+    fetchAllPagesResult((from, to) =>
+      supabase
+        .from('inventory_balances')
+        .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode), location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code))')
+        .order('updated_at', { ascending: false })
+        .order('location_id', { ascending: true })
+        .order('item_id', { ascending: true })
+        .range(from, to),
+    ),
     supabase
       .from('inventory_receipts')
       .select('id, location_id, supplier_id, received_at, invoice_number, invoice_file_url, comment, total_amount, status, created_by, created_at, location:location_id(id, name, code, location_type, company_id, organization_id), supplier:supplier_id(id, name, bin_iin, organization_name), items:inventory_receipt_items(id, item_id, quantity, unit_cost, total_cost, comment, item:item_id(id, name, barcode))')
@@ -1228,10 +1292,15 @@ export async function fetchConsumableDashboard(supabase: AnySupabase, scope?: In
     supabase
       .from('inventory_point_limits')
       .select('id, item_id, company_id, monthly_limit_qty'),
-    supabase
-      .from('inventory_balances')
-      .select('location_id, item_id, quantity, item:item_id(id, name), location:location_id(id, name, location_type, company_id, organization_id)')
-      .gt('quantity', 0),
+    fetchAllPagesResult((from, to) =>
+      supabase
+        .from('inventory_balances')
+        .select('location_id, item_id, quantity, item:item_id(id, name), location:location_id(id, name, location_type, company_id, organization_id)')
+        .gt('quantity', 0)
+        .order('location_id', { ascending: true })
+        .order('item_id', { ascending: true })
+        .range(from, to),
+    ),
     applyOrganizationFilter(
       supabase
       .from('inventory_locations')

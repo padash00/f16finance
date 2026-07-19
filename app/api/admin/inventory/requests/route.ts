@@ -23,6 +23,30 @@ function normalizeQty(value: unknown) {
   return Math.round((amount + Number.EPSILON) * 1000) / 1000
 }
 
+const PAGE = 1000
+
+/** PostgREST режет ответ до 1000 строк — забираем постранично (.range) до неполной страницы. */
+async function fetchAllPages(buildQuery: (from: number, to: number) => any): Promise<any[]> {
+  const out: any[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await buildQuery(from, from + PAGE - 1)
+    if (error) throw error
+    const rows = data || []
+    out.push(...rows)
+    if (rows.length < PAGE) break
+  }
+  return out
+}
+
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  if (size <= 0) return [arr]
+  const out: T[][] = []
+  for (let i = 0; i < arr.length; i += size) {
+    out.push(arr.slice(i, i + size))
+  }
+  return out
+}
+
 function humanizeDecisionError(raw: string | null | undefined): string {
   const code = String(raw || '').trim()
   const lowered = code.toLowerCase()
@@ -90,12 +114,23 @@ export async function GET(request: Request) {
       // Берём quantity И quantity_reserved чтобы показать РЕАЛЬНО доступное.
       // Иначе UI пишет «Хватает 5» а сервер при approve считает 5-reserved
       // и падает с inventory-insufficient-stock.
-      const { data: balanceRows, error: balanceErr } = await supabase
-        .from('inventory_balances')
-        .select('location_id, item_id, quantity, quantity_reserved')
-        .in('location_id', sourceLocationIds)
-        .in('item_id', itemIds)
-      if (balanceErr) throw balanceErr
+      // itemIds может быть большим (100 заявок × позиции) — чанки по 200 id
+      // (лимит длины URL) + пагинация внутри чанка (строк может быть >1000).
+      const balanceChunks = await Promise.all(
+        chunkArray(itemIds, 200).map((ids) =>
+          fetchAllPages((from, to) =>
+            supabase
+              .from('inventory_balances')
+              .select('location_id, item_id, quantity, quantity_reserved')
+              .in('location_id', sourceLocationIds)
+              .in('item_id', ids)
+              .order('location_id', { ascending: true })
+              .order('item_id', { ascending: true })
+              .range(from, to),
+          ),
+        ),
+      )
+      const balanceRows = balanceChunks.flat()
       for (const row of balanceRows || []) {
         const locationId = String((row as any)?.location_id || '').trim()
         const itemId = String((row as any)?.item_id || '').trim()

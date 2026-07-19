@@ -4,7 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { scopedCompanyIds } from '../../query-helpers'
+import { scopedCompanyIds, fetchAllPages } from '../../query-helpers'
 
 function todayISO(): string {
   const d = new Date()
@@ -57,13 +57,17 @@ export const getKpiStatusTool: CopilotTool = {
       const target = Number(plan.target_amount || 0)
 
       // Факт за период
-      const { data: incomes } = await ctx.supabase
-        .from('incomes')
-        .select('cash_amount, kaspi_amount, card_amount, online_amount')
-        .eq('company_id', plan.company_id)
-        .gte('date', monthStart)
-        .lte('date', today)
-        .range(0, 9999)
+      const incomes = await fetchAllPages((rFrom, rTo) =>
+        ctx.supabase
+          .from('incomes')
+          .select('cash_amount, kaspi_amount, card_amount, online_amount')
+          .eq('company_id', plan.company_id)
+          .gte('date', monthStart)
+          .lte('date', today)
+          .order('date', { ascending: true })
+          .order('id', { ascending: true })
+          .range(rFrom, rTo),
+      ).catch(() => [] as any[])
 
       let fact = 0
       for (const r of (incomes || []) as any[]) {

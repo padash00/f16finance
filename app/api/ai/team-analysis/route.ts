@@ -31,6 +31,20 @@ function addDaysISO(iso: string, diff: number) {
   return new Date(t).toISOString().slice(0, 10)
 }
 const n = (v: any) => Number(v || 0)
+
+// PostgREST режет ответ до 1000 строк — за длинный период забираем постранично.
+const PAGE = 1000
+async function fetchAllPages(build: (from: number, to: number) => any): Promise<any[]> {
+  const out: any[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await build(from, from + PAGE - 1)
+    if (error) throw error
+    const rows = data || []
+    out.push(...rows)
+    if (rows.length < PAGE) break
+  }
+  return out
+}
 const incomeOf = (r: any) => n(r.cash_amount) + n(r.kaspi_amount) + n(r.online_amount) + n(r.card_amount)
 const r0 = (v: number) => Math.round(v)
 const r1 = (v: number) => Math.round(v * 10) / 10
@@ -128,44 +142,63 @@ export async function GET(request: Request) {
     }
 
     // 2) Доходы (смены/выручка) за период по операторам.
-    let incomesQ = supabase
-      .from('incomes')
-      .select('operator_id, company_id, date, cash_amount, kaspi_amount, online_amount, card_amount')
-      .in('operator_id', operatorIds)
-      .gte('date', dateFrom)
-      .lte('date', dateTo)
-    if (companyFilter) incomesQ = incomesQ.in('company_id', companyFilter)
+    // Период может быть до 90 дней / произвольным — постранично, иначе суммы врут.
+    const incomesP = fetchAllPages((from, to) => {
+      let incomesQ = supabase
+        .from('incomes')
+        .select('operator_id, company_id, date, cash_amount, kaspi_amount, online_amount, card_amount')
+        .in('operator_id', operatorIds)
+        .gte('date', dateFrom)
+        .lte('date', dateTo)
+        .order('date', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to)
+      if (companyFilter) incomesQ = incomesQ.in('company_id', companyFilter)
+      return incomesQ
+    })
 
     // 3) Зарплатные недели (gross/net/paid/remaining) за период.
-    let weeksQ = supabase
-      .from('operator_salary_weeks')
-      .select('operator_id, week_start, gross_amount, bonus_amount, fine_amount, debt_amount, advance_amount, net_amount, paid_amount, remaining_amount')
-      .in('operator_id', operatorIds)
-      .gte('week_start', dateFrom)
-      .lte('week_start', dateTo)
+    const weeksP = fetchAllPages((from, to) =>
+      supabase
+        .from('operator_salary_weeks')
+        .select('operator_id, week_start, gross_amount, bonus_amount, fine_amount, debt_amount, advance_amount, net_amount, paid_amount, remaining_amount')
+        .in('operator_id', operatorIds)
+        .gte('week_start', dateFrom)
+        .lte('week_start', dateTo)
+        .order('week_start', { ascending: true })
+        .order('operator_id', { ascending: true })
+        .range(from, to),
+    )
 
     // 4) Корректировки (bonus / fine / advance) за период.
-    let adjQ = supabase
-      .from('operator_salary_adjustments')
-      .select('operator_id, company_id, amount, kind, status')
-      .in('operator_id', operatorIds)
-      .gte('date', dateFrom)
-      .lte('date', dateTo)
-    if (companyFilter) adjQ = adjQ.in('company_id', companyFilter)
+    const adjP = fetchAllPages((from, to) => {
+      let adjQ = supabase
+        .from('operator_salary_adjustments')
+        .select('operator_id, company_id, amount, kind, status')
+        .in('operator_id', operatorIds)
+        .gte('date', dateFrom)
+        .lte('date', dateTo)
+        .order('date', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to)
+      if (companyFilter) adjQ = adjQ.in('company_id', companyFilter)
+      return adjQ
+    })
 
     // 5) Активные долги (текущие, без даты — общий хвост).
-    let debtsQ = supabase
-      .from('debts')
-      .select('operator_id, company_id, amount, status')
-      .in('operator_id', operatorIds)
-      .eq('status', 'active')
-    if (companyFilter) debtsQ = debtsQ.in('company_id', companyFilter)
+    const debtsP = fetchAllPages((from, to) => {
+      let debtsQ = supabase
+        .from('debts')
+        .select('operator_id, company_id, amount, status')
+        .in('operator_id', operatorIds)
+        .eq('status', 'active')
+        .order('id', { ascending: true })
+        .range(from, to)
+      if (companyFilter) debtsQ = debtsQ.in('company_id', companyFilter)
+      return debtsQ
+    })
 
-    const [incomesR, weeksR, adjR, debtsR] = await Promise.all([incomesQ, weeksQ, adjQ, debtsQ])
-    if (incomesR.error) throw incomesR.error
-    if (weeksR.error) throw weeksR.error
-    if (adjR.error) throw adjR.error
-    if (debtsR.error) throw debtsR.error
+    const [incomesRows, weeksRows, adjRows, debtsRows] = await Promise.all([incomesP, weeksP, adjP, debtsP])
 
     type Agg = {
       id: string
@@ -198,7 +231,7 @@ export async function GET(request: Request) {
     }
 
     // incomes: 1 строка = 1 смена (как в admin/operators).
-    for (const row of (incomesR.data || []) as any[]) {
+    for (const row of (incomesRows || []) as any[]) {
       const a = byOperator.get(String(row.operator_id))
       if (!a) continue
       a.shifts += 1
@@ -206,7 +239,7 @@ export async function GET(request: Request) {
     }
 
     // salary weeks: начислено / к выплате / выплачено / остаток.
-    for (const row of (weeksR.data || []) as any[]) {
+    for (const row of (weeksRows || []) as any[]) {
       const a = byOperator.get(String(row.operator_id))
       if (!a) continue
       a.gross += n(row.gross_amount)
@@ -216,7 +249,7 @@ export async function GET(request: Request) {
     }
 
     // adjustments: bonus / fine (advance — не штраф, в долю не считаем отдельно).
-    for (const row of (adjR.data || []) as any[]) {
+    for (const row of (adjRows || []) as any[]) {
       if (String(row.status || 'active') !== 'active') continue
       const a = byOperator.get(String(row.operator_id))
       if (!a) continue
@@ -226,7 +259,7 @@ export async function GET(request: Request) {
     }
 
     // debts: активные долги.
-    for (const row of (debtsR.data || []) as any[]) {
+    for (const row of (debtsRows || []) as any[]) {
       const a = byOperator.get(String(row.operator_id))
       if (!a) continue
       a.debt += n(row.amount)

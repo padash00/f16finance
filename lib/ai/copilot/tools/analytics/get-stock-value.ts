@@ -4,7 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { scopedCompanyIds } from '../../query-helpers'
+import { fetchAllPages, scopedCompanyIds } from '../../query-helpers'
 
 export const getStockValueTool: CopilotTool = {
   name: 'get_stock_value',
@@ -28,12 +28,21 @@ export const getStockValueTool: CopilotTool = {
       allowedLocationIds = locIds
     }
 
-    let balancesQ = ctx.supabase
-      .from('inventory_balances')
-      .select('quantity, item:item_id(name, sale_price), location:location_id(name, kind)')
-    if (allowedLocationIds) balancesQ = balancesQ.in('location_id', allowedLocationIds)
-    const { data: balances, error } = await balancesQ
-    if (error) return { ok: false, message: `Ошибка: ${error.message}` }
+    // Балансов может быть >1000 (товары × локации) — постранично, иначе сумма врёт.
+    let balances: any[]
+    try {
+      balances = await fetchAllPages((from, to) => {
+        let balancesQ = ctx.supabase
+          .from('inventory_balances')
+          .select('quantity, item:item_id(name, sale_price), location:location_id(name, kind)')
+          .order('item_id', { ascending: true })
+          .range(from, to)
+        if (allowedLocationIds) balancesQ = balancesQ.in('location_id', allowedLocationIds)
+        return balancesQ
+      })
+    } catch (error: any) {
+      return { ok: false, message: `Ошибка: ${error?.message || 'запрос остатков не удался'}` }
+    }
     if (!balances?.length) return { ok: true, message: '📦 Остатков нет.' }
 
     let warehouseValue = 0

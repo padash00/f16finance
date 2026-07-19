@@ -68,6 +68,31 @@ export function dateRangeParams(): any[] {
   ]
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// PostgREST режет ответ до 1000 строк — большие выборки забираем постранично.
+// build должен строить НОВЫЙ запрос на каждую страницу и включать .order(...).
+// ─────────────────────────────────────────────────────────────────────────
+const FETCH_PAGE = 1000
+export async function fetchAllPages(build: (from: number, to: number) => any): Promise<any[]> {
+  const out: any[] = []
+  for (let from = 0; ; from += FETCH_PAGE) {
+    const { data, error } = await build(from, from + FETCH_PAGE - 1)
+    if (error) throw error
+    const rows = data || []
+    out.push(...rows)
+    if (rows.length < FETCH_PAGE) break
+  }
+  return out
+}
+
+/** Чанки для `.in(...)`-фильтров по большим спискам id (лимит длины URL). */
+export function chunkArray<T>(arr: T[], size: number): T[][] {
+  if (size <= 0) return [arr]
+  const out: T[][] = []
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
+  return out
+}
+
 export async function resolveCompanyNames(
   supabase: any,
   rows: Array<{ company_id?: string | null }>,

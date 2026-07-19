@@ -17,6 +17,45 @@ function canManageStore(access: {
   return access.isSuperAdmin || !!access.staffRole
 }
 
+// PostgREST молча режет ответ до 1000 строк — статистику по поставщикам
+// (все приёмки/долги/алиасы) забираем постранично, чанками id по 200 (лимит URL).
+const PAGE_SIZE = 1000
+async function fetchAllPages<T = any>(buildQuery: (from: number, to: number) => any): Promise<T[]> {
+  const out: T[] = []
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    const rows = data || []
+    out.push(...rows)
+    if (rows.length < PAGE_SIZE) break
+  }
+  return out
+}
+
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  if (size <= 0) return [arr]
+  const out: T[][] = []
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
+  return out
+}
+
+async function fetchAllByChunkedIn(
+  supabase: any,
+  table: string,
+  columns: string,
+  inColumn: string,
+  ids: string[],
+): Promise<any[]> {
+  const chunkResults = await Promise.all(
+    chunkArray(ids, 200).map((chunk) =>
+      fetchAllPages((from, to) =>
+        supabase.from(table).select(columns).in(inColumn, chunk).order('id').range(from, to),
+      ),
+    ),
+  )
+  return chunkResults.flat()
+}
+
 export async function GET(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
@@ -46,22 +85,14 @@ export async function GET(request: Request) {
     let aliasCounts = new Map<string, number>()
 
     if (supplierIds.length > 0) {
-      const [receiptsRes, debtsRes, aliasesRes] = await Promise.all([
-        supabase
-          .from('inventory_receipts')
-          .select('supplier_id, total_amount, received_at')
-          .in('supplier_id', supplierIds),
-        supabase
-          .from('supplier_debts')
-          .select('supplier_id, total_amount, status')
-          .in('supplier_id', supplierIds),
-        supabase
-          .from('invoice_name_mappings')
-          .select('supplier_id')
-          .in('supplier_id', supplierIds),
+      // Это агрегация (суммы/количества) — забираем ВСЕ строки, не первые 1000.
+      const [receiptRows, debtRows, aliasRows] = await Promise.all([
+        fetchAllByChunkedIn(supabase, 'inventory_receipts', 'supplier_id, total_amount, received_at', 'supplier_id', supplierIds),
+        fetchAllByChunkedIn(supabase, 'supplier_debts', 'supplier_id, total_amount, status', 'supplier_id', supplierIds),
+        fetchAllByChunkedIn(supabase, 'invoice_name_mappings', 'supplier_id', 'supplier_id', supplierIds),
       ])
 
-      for (const row of (receiptsRes.data || []) as any[]) {
+      for (const row of receiptRows as any[]) {
         const key = String(row.supplier_id)
         const cur = receiptStats.get(key) || { count: 0, total: 0, last: null }
         cur.count += 1
@@ -69,7 +100,7 @@ export async function GET(request: Request) {
         if (!cur.last || (row.received_at && row.received_at > cur.last)) cur.last = row.received_at
         receiptStats.set(key, cur)
       }
-      for (const row of (debtsRes.data || []) as any[]) {
+      for (const row of debtRows as any[]) {
         const key = String(row.supplier_id)
         const cur = debtStats.get(key) || { open: 0, openSum: 0 }
         if (row.status === 'open') {
@@ -78,7 +109,7 @@ export async function GET(request: Request) {
         }
         debtStats.set(key, cur)
       }
-      for (const row of (aliasesRes.data || []) as any[]) {
+      for (const row of aliasRows as any[]) {
         const key = String(row.supplier_id)
         aliasCounts.set(key, (aliasCounts.get(key) || 0) + 1)
       }

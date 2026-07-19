@@ -26,6 +26,21 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
+// PostgREST молча режет ответ до 1000 строк — каталог и остатки склада забираем
+// постранично, иначе в заявке не видно товары после 1000-го.
+const PAGE = 1000
+async function fetchAllPages(buildQuery: (from: number, to: number) => any): Promise<any[]> {
+  const out: any[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await buildQuery(from, from + PAGE - 1)
+    if (error) throw error
+    const rows = data || []
+    out.push(...rows)
+    if (rows.length < PAGE) break
+  }
+  return out
+}
+
 function canUseInventoryRequests(pointMode: string | null | undefined) {
   const normalized = String(pointMode || '').trim().toLowerCase()
   return new Set(['cash-desk', 'universal', 'debts']).has(normalized)
@@ -117,12 +132,16 @@ export async function GET(request: Request) {
 
     const { sourceLocation, targetLocation } = await resolvePointInventoryContext(supabase, device.company_id)
 
-    const [{ data: balances, error: balancesError }, { data: requests, error: requestsError }] =
+    const [balances, { data: requests, error: requestsError }] =
       await Promise.all([
-        supabase
-          .from('inventory_balances')
-          .select('item_id, quantity')
-          .eq('location_id', sourceLocation.id),
+        fetchAllPages((from, to) =>
+          supabase
+            .from('inventory_balances')
+            .select('item_id, quantity')
+            .eq('location_id', sourceLocation.id)
+            .order('item_id')
+            .range(from, to),
+        ),
         supabase
           .from('inventory_requests')
           .select(
@@ -133,20 +152,21 @@ export async function GET(request: Request) {
           .limit(20),
       ])
 
-    if (balancesError) throw balancesError
     if (requestsError) throw requestsError
 
     const balanceRows = (balances || [])
       .map((row: any) => ({ item_id: String(row.item_id || ''), quantity: Number(row.quantity || 0) }))
       .filter((row: any) => row.item_id && row.quantity > 0)
 
-    const { data: fetchedItems, error: itemsError } = await supabase
-      .from('inventory_items')
-      .select('id, name, barcode, unit, sale_price, category:category_id(id, name)')
-      .eq('is_active', true)
-      .order('name', { ascending: true })
-    if (itemsError) throw itemsError
-    const items: any[] = fetchedItems || []
+    const items: any[] = await fetchAllPages((from, to) =>
+      supabase
+        .from('inventory_items')
+        .select('id, name, barcode, unit, sale_price, category:category_id(id, name)')
+        .eq('is_active', true)
+        .order('name', { ascending: true })
+        .order('id')
+        .range(from, to),
+    )
 
     const balanceMap = new Map<string, number>(balanceRows.map((row) => [row.item_id, row.quantity]))
 

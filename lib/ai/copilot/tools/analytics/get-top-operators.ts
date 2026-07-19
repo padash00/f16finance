@@ -4,7 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { scopedOperatorIds, scopedOperatorRows, resolveDateRange, dateRangeParams } from '../../query-helpers'
+import { scopedOperatorIds, scopedOperatorRows, resolveDateRange, dateRangeParams, fetchAllPages } from '../../query-helpers'
 
 export const getTopOperatorsTool: CopilotTool = {
   name: 'get_top_operators',
@@ -21,15 +21,19 @@ export const getTopOperatorsTool: CopilotTool = {
 
     // Мультитенантная изоляция: только выручка операторов своей организации.
     const opIds = await scopedOperatorIds(ctx)
-    let incomesQ = ctx.supabase
-      .from('incomes')
-      .select('operator_id, cash_amount, kaspi_amount, card_amount, online_amount, shift_id, date')
-      .not('operator_id', 'is', null)
-      .range(0, 19999)
-    if (from) incomesQ = incomesQ.gte('date', from)
-    if (to) incomesQ = incomesQ.lte('date', to)
-    if (opIds) incomesQ = incomesQ.in('operator_id', opIds)
-    const { data: incomes } = await incomesQ
+    const incomes = await fetchAllPages((rFrom, rTo) => {
+      let incomesQ = ctx.supabase
+        .from('incomes')
+        .select('operator_id, cash_amount, kaspi_amount, card_amount, online_amount, shift_id, date')
+        .not('operator_id', 'is', null)
+        .order('date', { ascending: true })
+        .order('id', { ascending: true })
+        .range(rFrom, rTo)
+      if (from) incomesQ = incomesQ.gte('date', from)
+      if (to) incomesQ = incomesQ.lte('date', to)
+      if (opIds) incomesQ = incomesQ.in('operator_id', opIds)
+      return incomesQ
+    }).catch(() => [] as any[])
 
     const stats = new Map<string, { rev: number; shifts: Set<string> }>()
     for (const r of (incomes || []) as any[]) {
