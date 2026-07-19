@@ -1,5 +1,7 @@
 import { Breadcrumbs } from '@/components/breadcrumbs'
+import { ConfirmDialogHost } from '@/components/ui/confirm-dialog'
 import { DocumentTitle } from '@/components/document-title'
+import { ScrollToTop } from '@/components/scroll-to-top'
 import { KeyboardShortcuts } from '@/components/keyboard-shortcuts'
 import { PageEntitlementGuard } from '@/components/page-entitlement-guard'
 import { Sidebar } from '@/components/sidebar'
@@ -25,6 +27,8 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
             {children}
           </div>
         </main>
+        <ConfirmDialogHost />
+        <ScrollToTop />
       </div>
     </CashlessProvider>
   )
