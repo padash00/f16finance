@@ -466,8 +466,29 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
     setSelectedIds((prev) => (checked ? Array.from(new Set([...prev, ...pendingIds])) : prev.filter((id) => !pendingIds.includes(id))))
   }
 
-  const runBulkAction = async (action: 'approve-full' | 'reject') => {
-    if (!selectedIds.length) return
+  const toggleSelectAllIn = (list: InventoryRequest[], checked: boolean) => {
+    const ids = list.map((request) => request.id)
+    setSelectedIds((prev) => (checked ? Array.from(new Set([...prev, ...ids])) : prev.filter((id) => !ids.includes(id))))
+  }
+
+  // Каждое массовое действие применяется только к заявкам «своей» секции —
+  // из смешанного выбора берём подходящие по статусу
+  const bulkIdsFor = (action: 'approve-full' | 'reject' | 'issue' | 'receive') => {
+    if (action === 'issue') return selectedIds.filter((id) => readyToIssueRequests.some((r) => r.id === id))
+    if (action === 'receive') return selectedIds.filter((id) => issuedAwaitingReceiveRequests.some((r) => r.id === id))
+    return selectedIds.filter((id) => pendingRequests.some((r) => r.id === id))
+  }
+
+  const BULK_LABEL: Record<string, [string, string]> = {
+    'approve-full': ['Одобрено', 'одобрить'],
+    reject: ['Отклонено', 'отклонить'],
+    issue: ['Выдано', 'выдать'],
+    receive: ['Получено', 'получить'],
+  }
+
+  const runBulkAction = async (action: 'approve-full' | 'reject' | 'issue' | 'receive') => {
+    const ids = bulkIdsFor(action)
+    if (!ids.length) return
     setBulkSaving(true)
     setError(null)
     setSuccess(null)
@@ -475,18 +496,14 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
       const response = await fetch('/api/admin/inventory/requests/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requestIds: selectedIds, action }),
+        body: JSON.stringify({ requestIds: ids, action }),
       })
       const json = await response.json().catch(() => null)
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось выполнить массовое действие')
       const succeeded = Array.isArray(json?.data?.succeeded) ? json.data.succeeded.length : 0
       const failed = Array.isArray(json?.data?.failed) ? json.data.failed.length : 0
-      setSuccess(
-        action === 'approve-full'
-          ? `Одобрено ${succeeded} из ${selectedIds.length}${failed ? `, не удалось ${failed}` : ''}.`
-          : `Отклонено ${succeeded} из ${selectedIds.length}${failed ? `, не удалось ${failed}` : ''}.`,
-      )
-      setSelectedIds([])
+      setSuccess(`${BULK_LABEL[action][0]} ${succeeded} из ${ids.length}${failed ? `, не удалось ${failed}` : ''}.`)
+      setSelectedIds((prev) => prev.filter((id) => !ids.includes(id)))
       await load(undefined, { soft: true })
     } catch (err: any) {
       setError(err?.message || 'Не удалось выполнить массовое действие')
@@ -831,6 +848,15 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
       {/* Одобрено — отметить выдачу со склада (статус «Выдана») */}
       <div className="space-y-3">
         <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+          {canIssue && (
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-amber-500"
+              checked={readyToIssueRequests.length > 0 && readyToIssueRequests.every((request) => selectedIds.includes(request.id))}
+              onChange={(event) => toggleSelectAllIn(readyToIssueRequests, event.target.checked)}
+              title="Выбрать все для выдачи"
+            />
+          )}
           <PackageCheck className="h-4 w-4 text-amber-700 dark:text-amber-300" />
           Одобрено — отметьте выдачу со склада
           <span className="text-xs text-muted-foreground">({readyToIssueRequests.length})</span>
@@ -851,6 +877,14 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
             return (
               <Card key={request.id} className="overflow-hidden border-amber-500/20 bg-card/70">
                 <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 dark:border-white/5 px-4 py-3">
+                  {canIssue && (
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-amber-500"
+                      checked={selectedIds.includes(request.id)}
+                      onChange={(event) => toggleSelected(request.id, event.target.checked)}
+                    />
+                  )}
                   <RequestStatusBadge status={request.status} />
                   <span className="text-base font-semibold text-foreground">{pointName}</span>
                   <div className="ml-auto flex flex-wrap items-center gap-2">
@@ -898,6 +932,15 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
       {/* Выдано — подтвердить получение на точке */}
       <div className="space-y-3">
         <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+          {canReceive && (
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-teal-500"
+              checked={issuedAwaitingReceiveRequests.length > 0 && issuedAwaitingReceiveRequests.every((request) => selectedIds.includes(request.id))}
+              onChange={(event) => toggleSelectAllIn(issuedAwaitingReceiveRequests, event.target.checked)}
+              title="Выбрать все для получения"
+            />
+          )}
           <PackageCheck className="h-4 w-4 text-teal-700 dark:text-teal-300" />
           Выдано — отметьте получение на точке
           <span className="text-xs text-muted-foreground">({issuedAwaitingReceiveRequests.length})</span>
@@ -917,6 +960,14 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
             return (
               <Card key={request.id} className="overflow-hidden border-teal-500/20 bg-card/70">
                 <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 dark:border-white/5 px-4 py-3">
+                  {canReceive && (
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-teal-500"
+                      checked={selectedIds.includes(request.id)}
+                      onChange={(event) => toggleSelected(request.id, event.target.checked)}
+                    />
+                  )}
                   <RequestStatusBadge status={request.status} />
                   <span className="text-base font-semibold text-foreground">{pointName}</span>
                   <div className="ml-auto flex flex-wrap items-center gap-2">
@@ -950,16 +1001,28 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
             Выбрано заявок: <span className="font-semibold">{selectedIds.length}</span>
           </div>
           <div className="flex flex-wrap gap-2">
-            {canBulkApprove && (
+            {canBulkApprove && bulkIdsFor('approve-full').length > 0 && (
               <Button size="sm" onClick={() => runBulkAction('approve-full')} disabled={bulkSaving} className="gap-2">
                 {bulkSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                Одобрить
+                Одобрить ({bulkIdsFor('approve-full').length})
               </Button>
             )}
-            {canBulkReject && (
+            {canBulkReject && bulkIdsFor('reject').length > 0 && (
               <Button size="sm" variant="destructive" onClick={() => runBulkAction('reject')} disabled={bulkSaving} className="gap-2">
                 <XCircle className="h-4 w-4" />
-                Отклонить
+                Отклонить ({bulkIdsFor('reject').length})
+              </Button>
+            )}
+            {canIssue && bulkIdsFor('issue').length > 0 && (
+              <Button size="sm" variant="secondary" onClick={() => runBulkAction('issue')} disabled={bulkSaving} className="gap-2 bg-amber-600/90 text-foreground hover:bg-amber-600">
+                {bulkSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackageCheck className="h-4 w-4" />}
+                Выдать ({bulkIdsFor('issue').length})
+              </Button>
+            )}
+            {canReceive && bulkIdsFor('receive').length > 0 && (
+              <Button size="sm" variant="secondary" onClick={() => runBulkAction('receive')} disabled={bulkSaving} className="gap-2 bg-teal-600/90 text-foreground hover:bg-teal-600">
+                {bulkSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                Получить ({bulkIdsFor('receive').length})
               </Button>
             )}
             <Button size="sm" variant="outline" onClick={() => setSelectedIds([])} disabled={bulkSaving}>
