@@ -1434,15 +1434,15 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
                             <button
                               type="button"
                               onClick={() => setCardItemId(item.id)}
-                              className="flex items-center gap-2 text-left hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
-                              title="Открыть карточку товара"
+                              className="flex w-full min-w-0 max-w-[260px] items-center gap-2 text-left hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
+                              title={item.name}
                             >
                               {item.image_url ? (
                                 <img src={item.image_url} alt="" className="h-8 w-8 shrink-0 rounded object-cover border border-border" />
                               ) : (
                                 <span className="h-8 w-8 shrink-0 rounded bg-slate-100 dark:bg-white/[0.05]" />
                               )}
-                              <span className="truncate hover:underline">{item.name}</span>
+                              <span className="min-w-0 flex-1 truncate hover:underline">{item.name}</span>
                             </button>
                             {item.item_type === 'consumable' && (
                               <Badge variant="outline" className="text-[10px] mt-0.5 h-4">расходник</Badge>
