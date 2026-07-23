@@ -1039,18 +1039,40 @@ export async function GET(req: Request) {
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
 
+    // Мультитенантная изоляция (NEVER-pattern): супер видит все арендаторы
+    // (scopeOrgId=null → без фильтра), не-супер — только свою орг; не-супер без
+    // активной орг → нулевой uuid → 0 строк (fail-closed).
+    const scopeOrgId = access.isSuperAdmin
+      ? null
+      : (access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+
+    // audit_log имеет organization_id (см. 20260611_audit_log_org.sql). Legacy-строки
+    // без орг видны своей орг — как в store/audit-timeline (повторяем тот же паттерн).
+    let auditQuery = supabase
+      .from('audit_log')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(300)
+    if (scopeOrgId) auditQuery = auditQuery.or(`organization_id.is.null,organization_id.eq.${scopeOrgId}`)
+
+    // notification_log и ai_usage_log НЕ имеют колонки организации — их нельзя
+    // отфильтровать по арендатору. Для не-супера отдаём пусто (fail-closed), чтобы
+    // журналы уведомлений/AI всех арендаторов не утекали; супер видит всё.
+    const notificationQuery: PromiseLike<{ data: any[] | null; error: any }> = scopeOrgId
+      ? Promise.resolve({ data: [] as any[], error: null })
+      : supabase.from('notification_log').select('*').order('created_at', { ascending: false }).limit(300)
+    const aiUsageQuery: PromiseLike<{ data: any[] | null; error: any }> = scopeOrgId
+      ? Promise.resolve({ data: [] as any[], error: null })
+      : supabase.from('ai_usage_log').select('*').order('created_at', { ascending: false }).limit(300).then(
+          (res: any) => res,
+          (error: any) => ({ data: [], error }),
+        )
+
     const [
       { data: auditRows, error: auditError },
       { data: notificationRows, error: notificationError },
       aiUsageResult,
-    ] = await Promise.all([
-      supabase.from('audit_log').select('*').order('created_at', { ascending: false }).limit(300),
-      supabase.from('notification_log').select('*').order('created_at', { ascending: false }).limit(300),
-      supabase.from('ai_usage_log').select('*').order('created_at', { ascending: false }).limit(300).then(
-        (res: any) => res,
-        (error: any) => ({ data: [], error }),
-      ),
-    ])
+    ] = await Promise.all([auditQuery, notificationQuery, aiUsageQuery])
 
     if (auditError) throw auditError
     if (notificationError) throw notificationError

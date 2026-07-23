@@ -7,6 +7,7 @@ import {
   resolveCompanyScope,
   listOrganizationStaffIds,
   listOrganizationOperatorIds,
+  listOrganizationCompanyCodes,
 } from '@/lib/server/organizations'
 
 function json(data: unknown, status = 200) {
@@ -272,6 +273,14 @@ export async function GET(req: Request) {
           includeInactive: true,
         })
       : null
+    // operator_salary_rules скоупятся по company_code (нет organization_id) — как в
+    // app/api/admin/salary-rules. null (супер) → без фильтра; [] (не-супер без орг) → пусто.
+    const allowedCompanyCodes = scope.allowedCompanyIds
+      ? await listOrganizationCompanyCodes({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+        })
+      : null
 
     const staffQuery = supabase
       .from('staff')
@@ -306,14 +315,17 @@ export async function GET(req: Request) {
       .in('source_type', ['salary_payment', 'salary_advance'])
     if (scope.allowedCompanyIds) expensesQuery.in('company_id', scope.allowedCompanyIds)
 
+    const rulesQuery = supabase
+      .from('operator_salary_rules')
+      .select('company_code, shift_type, base_per_shift')
+      .eq('is_active', true)
+    if (allowedCompanyCodes) rulesQuery.in('company_code', allowedCompanyCodes)
+
     const [staffRes, adjRes, paymentsRes, rulesRes, adminOpsRes, expensesRes] = await Promise.all([
       staffQuery,
       adjQuery,
       paymentsQuery,
-      supabase
-        .from('operator_salary_rules')
-        .select('company_code, shift_type, base_per_shift')
-        .eq('is_active', true),
+      rulesQuery,
       adminOpsQuery,
       expensesQuery,
     ])
@@ -475,11 +487,14 @@ export async function GET(req: Request) {
     const missingAdvanceExpenseCount = [...expectedAdvanceSourceIds].filter((id) => !actualAdvanceSourceIds.has(id)).length
     const orphanAdvanceExpenseCount = [...actualAdvanceSourceIds].filter((id) => !expectedAdvanceSourceIds.has(id)).length
 
-    const { data: debtPaymentsData } = await supabase
+    const debtPaymentsQuery = supabase
       .from('staff_debt_payments')
       .select('id, staff_id, amount, comment, paid_at, status')
       .eq('status', 'active')
       .order('paid_at', { ascending: false })
+    // Изоляция: платежи только по сотрудникам своей орг (staff_debt_payments.staff_id).
+    if (allowedStaffIds) debtPaymentsQuery.in('staff_id', allowedStaffIds)
+    const { data: debtPaymentsData } = await debtPaymentsQuery
 
     return json({
       ...(debugMode
@@ -548,6 +563,10 @@ export async function POST(req: Request) {
     // Returns true only when scoping is active AND the staff_id is out of scope.
     const staffOutOfScope = (staffId: string | null | undefined) =>
       !!allowedStaffIds && !allowedStaffIds.includes(String(staffId || ''))
+    // Returns true only when scoping is active AND the company_id is out of scope.
+    // Защищает вставки expenses с company_id из body от чужого арендатора.
+    const companyOutOfScope = (companyId: string | null | undefined) =>
+      !!scope.allowedCompanyIds && !scope.allowedCompanyIds.includes(String(companyId || ''))
 
     // ── Add adjustment (debt / fine / bonus / advance) ──────────────────────
     if (action === 'addAdjustment') {
@@ -559,6 +578,10 @@ export async function POST(req: Request) {
 
       if (kind === 'advance' && !company_id) {
         return json({ error: 'Для аванса нужно выбрать компанию' }, 400)
+      }
+      // company_id из body уходит в expenses ниже — валидируем против скоупа орг.
+      if (kind === 'advance' && companyOutOfScope(company_id)) {
+        return json({ error: 'Компания вне вашей организации' }, 403)
       }
 
       const { data, error } = await supabase
@@ -659,27 +682,34 @@ export async function POST(req: Request) {
         adjIds = (ad || []).map((a: any) => String(a.id))
       }
 
-      // Валидация + сумма: оставляем только реально активные строки.
+      // Валидация + сумма: оставляем только реально активные строки. IDOR-защита:
+      // id-массивы из body фильтруем по скоупу арендатора (debts/point_debt_items —
+      // по company_id ∈ allowedCompanyIds; staff_adjustments — по staff_id должника),
+      // иначе чужие долги можно было пометить оплаченными/удалёнными.
       let total = 0
       if (debtIds.length) {
-        const { data: dd } = await supabase.from('debts').select('id, amount').in('id', debtIds).eq('status', 'active')
+        let dq = supabase.from('debts').select('id, amount').in('id', debtIds).eq('status', 'active')
+        if (scope.allowedCompanyIds) dq = dq.in('company_id', scope.allowedCompanyIds)
+        const { data: dd } = await dq
         debtIds = (dd || []).map((d: any) => String(d.id))
         total += (dd || []).reduce((s: number, d: any) => s + Number(d.amount || 0), 0)
       }
       let activeItemRows: any[] = []
       if (itemIds.length) {
-        const { data: ii } = await supabase
+        let iq = supabase
           .from('point_debt_items')
           .select('id, total_amount, company_id, week_start, operator_id, client_name')
           .in('id', itemIds)
           .eq('status', 'active')
+        if (scope.allowedCompanyIds) iq = iq.in('company_id', scope.allowedCompanyIds)
+        const { data: ii } = await iq
         activeItemRows = (ii || []) as any[]
         itemIds = activeItemRows.map((i: any) => String(i.id))
         // Синтетика больше не несёт зеркальные debt_ids — сумма считается по позициям.
         if (debtIds.length === 0) total += activeItemRows.reduce((s: number, i: any) => s + Number(i.total_amount || 0), 0)
       }
       if (adjIds.length) {
-        const { data: aa } = await supabase.from('staff_adjustments').select('id, amount').in('id', adjIds).eq('kind', 'debt').or('status.is.null,status.eq.active')
+        const { data: aa } = await supabase.from('staff_adjustments').select('id, amount').in('id', adjIds).eq('kind', 'debt').eq('staff_id', staff_id).or('status.is.null,status.eq.active')
         adjIds = (aa || []).map((a: any) => String(a.id))
         total += (aa || []).reduce((s: number, a: any) => s + Number(a.amount || 0), 0)
       }
@@ -792,6 +822,8 @@ export async function POST(req: Request) {
       if (!staff_id || !pay_date) return json({ error: 'staff_id и pay_date обязательны' }, 400)
       if (staffOutOfScope(staff_id)) return json({ error: 'forbidden' }, 403)
       if (!company_id) return json({ error: 'company_id обязателен' }, 400)
+      // company_id из body уходит в expenses ниже — валидируем против скоупа орг.
+      if (companyOutOfScope(company_id)) return json({ error: 'Компания вне вашей организации' }, 403)
       const total = Math.round((cash_amount || 0) + (kaspi_amount || 0))
       if (total <= 0) return json({ error: 'Сумма выплаты должна быть > 0' }, 400)
       if (slot !== 'first' && slot !== 'second') {

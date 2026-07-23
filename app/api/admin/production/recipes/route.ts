@@ -214,14 +214,18 @@ export async function PATCH(request: Request) {
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
 
+    // NEVER-pattern: не-супер без орг → нулевой uuid → 0 строк (fail-closed).
+    // Иначе при null-орг у не-супера гейт пропускался и мутация шла без изоляции.
+    const scopeOrg = access.isSuperAdmin ? null : (orgId || '00000000-0000-0000-0000-000000000000')
+
     // Изоляция: рецепт обязан принадлежать орг — иначе ниже мы стёрли бы/подменили
     // состав (recipe_components) чужой техкарты, даже если сам update затронул 0 строк.
-    if (!access.isSuperAdmin && orgId) {
+    if (scopeOrg) {
       const { data: ownRecipe } = await supabase
         .from('recipes')
         .select('id')
         .eq('id', id)
-        .eq('organization_id', orgId)
+        .eq('organization_id', scopeOrg)
         .maybeSingle()
       if (!ownRecipe) return json({ error: 'forbidden' }, 403)
     }
@@ -240,7 +244,7 @@ export async function PATCH(request: Request) {
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)
-    if (!access.isSuperAdmin && orgId) upd = upd.eq('organization_id', orgId) // нельзя править чужую
+    if (scopeOrg) upd = upd.eq('organization_id', scopeOrg) // нельзя править чужую
     const { error } = await upd
     if (error) throw error
 
@@ -282,8 +286,10 @@ export async function DELETE(request: Request) {
     const id = new URL(request.url).searchParams.get('id')
     if (!id) return json({ error: 'id обязателен' }, 400)
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
+    // NEVER-pattern: не-супер без орг → нулевой uuid → удаление затронет 0 строк.
+    const scopeOrg = access.isSuperAdmin ? null : (orgId || '00000000-0000-0000-0000-000000000000')
     let del = supabase.from('recipes').delete().eq('id', id)
-    if (!access.isSuperAdmin && orgId) del = del.eq('organization_id', orgId) // нельзя удалить чужую
+    if (scopeOrg) del = del.eq('organization_id', scopeOrg) // нельзя удалить чужую
     const { error } = await del
     if (error) throw error
     return json({ ok: true })
