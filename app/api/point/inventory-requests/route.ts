@@ -20,6 +20,9 @@ type Body = {
 } | {
   action: 'receiveRequest'
   requestId?: string | null
+} | {
+  action: 'cancelRequest'
+  requestId?: string | null
 }
 
 function json(data: unknown, status = 200) {
@@ -255,6 +258,40 @@ export async function POST(request: Request) {
       return json({ ok: true, data: { status: 'received' } })
     }
 
+    // v2.10: отмена своей заявки, пока склад её не рассмотрел (status='new')
+    if (body.action === 'cancelRequest') {
+      const requestId = String((body as any).requestId || '').trim()
+      if (!requestId) return json({ error: 'request-id-required' }, 400)
+
+      const actor = await resolveActor({ request, supabase, companyId: device.company_id })
+      const { data: req, error: reqError } = await supabase
+        .from('inventory_requests')
+        .select('id, status')
+        .eq('id', requestId)
+        .eq('requesting_company_id', device.company_id)
+        .maybeSingle()
+      if (reqError) throw reqError
+      if (!req?.id) return json({ error: 'inventory-request-not-found' }, 404)
+      if (req.status !== 'new') return json({ error: 'Заявку уже рассмотрел склад — отмена только через администратора' }, 409)
+
+      const { error: updErr } = await supabase
+        .from('inventory_requests')
+        .update({ status: 'rejected', decision_comment: 'Отменена кассиром', updated_at: new Date().toISOString() })
+        .eq('id', requestId)
+        .eq('status', 'new')
+      if (updErr) throw updErr
+
+      await writeAuditLog(supabase, {
+        actorUserId: actor.actorUserId,
+        entityType: 'point-inventory-request',
+        entityId: requestId,
+        action: 'cancel',
+        payload: { point_device_id: device.id, company_id: device.company_id, operator_id: actor.operatorId },
+      })
+
+      return json({ ok: true, data: { status: 'rejected' } })
+    }
+
     if (body.action !== 'createRequest') return json({ error: 'invalid-action' }, 400)
 
     const { sourceLocation, targetLocation } = await resolvePointInventoryContext(supabase, device.company_id)
@@ -271,6 +308,29 @@ export async function POST(request: Request) {
       : []
 
     if (items.length === 0) return json({ error: 'inventory-request-items-required' }, 400)
+
+    // v2.10: жёсткий кап — нельзя заявить больше, чем лежит на складе.
+    // Клиент тоже ограничивает, но его каталог может быть устаревшим.
+    {
+      const itemIds = items.map((i) => i.item_id)
+      const { data: balRows, error: balErr } = await supabase
+        .from('inventory_balances')
+        .select('item_id, quantity')
+        .eq('location_id', sourceLocation.id)
+        .in('item_id', itemIds)
+      if (balErr) throw balErr
+      const balMap = new Map<string, number>()
+      for (const b of balRows || []) balMap.set(String((b as any).item_id), Number((b as any).quantity || 0))
+      const over = items.find((i) => i.requested_qty > (balMap.get(i.item_id) || 0) + 0.0005)
+      if (over) {
+        const { data: itemRow } = await supabase.from('inventory_items').select('name').eq('id', over.item_id).maybeSingle()
+        const available = balMap.get(over.item_id) || 0
+        return json(
+          { error: `Недостаточно на складе: «${(itemRow as any)?.name || 'товар'}» — доступно ${available}, запрошено ${over.requested_qty}` },
+          400,
+        )
+      }
+    }
 
     const requestId = await createInventoryRequest(supabase, {
       source_location_id: sourceLocation.id,

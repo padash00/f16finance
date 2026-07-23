@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import ScreenBackdrop, { screenBgClass } from '@/components/ScreenBackdrop'
 import { Card } from '@/components/ui/card'
 import { getQueueItems, retryAll, retryItem, QUEUE_CHANGED_EVENT } from '@/lib/offline'
 import { toastError, toastSuccess } from '@/lib/toast'
@@ -120,7 +121,8 @@ export default function QueuePage({ config, onClose }: Props) {
   const busy = sendingAll || sendingId !== null
 
   return (
-    <div className="fixed inset-0 z-[80] flex flex-col bg-background">
+    <div className={`fixed inset-0 z-[80] flex flex-col overflow-hidden ${screenBgClass}`}>
+      <ScreenBackdrop />
       {/* Header */}
       <header className="drag-region flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border px-3">
         <div className="no-drag flex items-center gap-2">

@@ -36,6 +36,7 @@ type Settings = {
   ofd_check_url: string
   receipt_language: 'ru' | 'kk' | 'both'
   receipt_footer_text: string
+  review_url: string
   require_buyer_iin: boolean
   marking_enabled: boolean
   nkt_enabled: boolean
@@ -63,6 +64,7 @@ const emptySettings = (companyId: string): Settings => ({
   ofd_check_url: '',
   receipt_language: 'ru',
   receipt_footer_text: '',
+  review_url: '',
   require_buyer_iin: false,
   marking_enabled: false,
   nkt_enabled: false,
@@ -393,6 +395,15 @@ export default function ReceiptSettingsPage() {
                   rows={2}
                   placeholder="Например: «Спасибо за покупку! Возврат в течение 14 дней по чеку.»"
                 />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label>Ссылка на отзывы (2GIS / Google Maps)</Label>
+                <Input
+                  value={settings.review_url}
+                  onChange={(e) => patch('review_url', e.target.value)}
+                  placeholder="https://2gis.kz/almaty/firm/..."
+                />
+                <p className="text-xs text-muted-foreground">QR «Оцените нас» на экране покупателя после оплаты. Пусто — QR не показывается.</p>
               </div>
             </div>
           </Card>

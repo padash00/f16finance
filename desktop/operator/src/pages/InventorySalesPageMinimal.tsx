@@ -37,6 +37,7 @@ import {
 } from 'lucide-react'
 
 import WorkModeSwitch from '@/components/WorkModeSwitch'
+import ScreenBackdrop, { screenBgClass } from '@/components/ScreenBackdrop'
 import { ChangeCalculator } from '@/components/ChangeCalculator'
 import { PreferencesModal } from '@/components/PreferencesModal'
 import { SyncIndicator } from '@/components/SyncIndicator'
@@ -83,6 +84,7 @@ type Props = {
   onSwitchToScanner?: () => void
   onSwitchToRequest?: () => void
   onSwitchToHistory?: () => void
+  onSwitchToArena?: () => void
   onOpenCabinet?: () => void
 }
 
@@ -115,6 +117,7 @@ export default function InventorySalesPageMinimal({
   onSwitchToScanner,
   onSwitchToRequest,
   onSwitchToHistory,
+  onSwitchToArena,
   onOpenCabinet,
 }: Props) {
   const runtimeShift = useMemo(() => resolveRuntimeShift(), [])
@@ -460,6 +463,8 @@ export default function InventorySalesPageMinimal({
   // Customer display: пушим текущее состояние корзины в окно клиента (если открыто).
   // lastAddedId — id последней позиции в корзине, чтобы на экране клиента подсветить
   // только что добавленное.
+  // ВАЖНО: канал аддитивный — старые поля не менять/не удалять (окна могут быть
+  // разных версий при рассинхроне обновлений). Новые поля: image_url, reviewUrl.
   useEffect(() => {
     try {
       window.electron.customerDisplay.push({
@@ -473,6 +478,8 @@ export default function InventorySalesPageMinimal({
             quantity: l.quantity,
             unit_price: l.unit_price,
             comment: l.comment || null,
+            // Фото товара для карточной сетки на экране клиента (null для универсальных)
+            image_url: (l.item_id ? itemsById.get(l.item_id)?.image_url : null) || null,
           })),
           lastAddedId: cart[cart.length - 1]?.id || null,
           subtotal,
@@ -487,10 +494,12 @@ export default function InventorySalesPageMinimal({
               }
             : null,
           playlist: adPlaylist,
+          // Ссылка «Оцените нас» (2GIS/Google Maps) — QR в заставке и на экране «Спасибо»
+          reviewUrl: receiptSettings?.review_url?.trim() || null,
         },
       })
     } catch { /* customerDisplay API может отсутствовать в старых сборках */ }
-  }, [cart, subtotal, discountAmount, loyaltyDiscountAmount, finalTotal, paymentMethod, session.company?.name, selectedCustomer, adPlaylist, pushTick])
+  }, [cart, subtotal, discountAmount, loyaltyDiscountAmount, finalTotal, paymentMethod, session.company?.name, selectedCustomer, adPlaylist, pushTick, itemsById, receiptSettings])
 
   // Авто-добавление по штрихкоду / Enter
   function handleSearchSubmit() {
@@ -905,7 +914,17 @@ export default function InventorySalesPageMinimal({
     const customerSnapshot = selectedCustomer
     const commentSnapshot = comment
     showReceiptPreview(ref) // чек с временным local_ref
-    // Customer display: показать «Спасибо!»
+    // Customer display: показать «Спасибо!».
+    // Начисление баллов считаем той же формулой, что сервер
+    // (app/api/point/inventory-sales: floor(total/100 * points_per_100_tenge)) —
+    // пуш уходит оптимистично, до ответа сервера.
+    const paidLoyalty = (() => {
+      if (!customerSnapshot || !loyaltyConfig?.is_active) return null
+      const currentPoints = Math.max(0, Number(customerSnapshot.loyalty_points || 0))
+      const earned = Math.max(0, Math.floor((finalTotal / 100) * Number(loyaltyConfig.points_per_100_tenge || 1)))
+      const spent = Math.max(0, Math.min(loyaltyPointsToSpend, currentPoints))
+      return { earned, spent, totalAfter: Math.max(0, currentPoints + earned - spent) }
+    })()
     try {
       window.electron.customerDisplay.push({
         kind: 'paid',
@@ -920,7 +939,11 @@ export default function InventorySalesPageMinimal({
           name: l.name,
           quantity: l.quantity,
           unit_price: l.unit_price,
+          image_url: (l.item_id ? itemsById.get(l.item_id)?.image_url : null) || null,
         })),
+        // Новые аддитивные поля (старый экран клиента их просто игнорирует)
+        loyalty: paidLoyalty,
+        reviewUrl: receiptSettings?.review_url?.trim() || null,
       })
     } catch { /* customerDisplay API недоступен — игнорируем */ }
     clearAll()
@@ -969,10 +992,9 @@ export default function InventorySalesPageMinimal({
   const timeStr = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
 
   return (
-    <div className="relative flex h-screen flex-col overflow-hidden bg-background text-foreground">
-      {/* Декоративные акценты */}
-      <div className="pointer-events-none absolute -top-32 right-0 h-64 w-64 rounded-full bg-primary/5 blur-3xl" />
-      <div className="pointer-events-none absolute bottom-0 -left-32 h-64 w-64 rounded-full bg-primary/5 blur-3xl" />
+    <div className={`relative flex h-screen flex-col overflow-hidden ${screenBgClass} text-foreground`}>
+      {/* Декоративные акценты — единый фон рабочих экранов (как на «Смене») */}
+      <ScreenBackdrop />
       <div className="h-9 shrink-0 drag-region bg-card/80 backdrop-blur" />
 
       {/* Шапка */}
@@ -1006,12 +1028,14 @@ export default function InventorySalesPageMinimal({
             showHistory={!!onSwitchToHistory}
             showScanner={!!onSwitchToScanner}
             showRequest={!!onSwitchToRequest}
+            showArena={!!onSwitchToArena}
             onShift={onSwitchToShift}
             onSale={() => undefined}
             onReturn={onSwitchToReturn}
             onHistory={onSwitchToHistory}
             onScanner={onSwitchToScanner}
             onRequest={onSwitchToRequest}
+            onArena={onSwitchToArena}
             onCabinet={onOpenCabinet}
           />
           <SyncIndicator status={syncStatus} lastSyncedAt={lastSyncedAt} />

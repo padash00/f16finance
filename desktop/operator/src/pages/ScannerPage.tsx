@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import WorkModeSwitch from '@/components/WorkModeSwitch'
+import ScreenBackdrop, { screenBgClass } from '@/components/ScreenBackdrop'
 import { formatMoney, localRef } from '@/lib/utils'
 import { toastSuccess, toastError } from '@/lib/toast'
 import * as api from '@/lib/api'
@@ -49,12 +50,14 @@ interface Props {
   onLogout: () => void
   onSwitchToShift: () => void
   onSwitchToSale?: () => void
+  onSwitchToReturn?: () => void
+  onSwitchToHistory?: () => void
   onSwitchToRequest?: () => void
   onSwitchToArena?: () => void
   onOpenCabinet?: () => void
 }
 
-export default function ScannerPage({ config, bootstrap, session, isOffline: initOffline, onLogout, onSwitchToShift, onSwitchToSale, onSwitchToRequest, onSwitchToArena, onOpenCabinet }: Props) {
+export default function ScannerPage({ config, bootstrap, session, isOffline: initOffline, onLogout, onSwitchToShift, onSwitchToSale, onSwitchToReturn, onSwitchToHistory, onSwitchToRequest, onSwitchToArena, onOpenCabinet }: Props) {
   const [products, setProducts] = useState<Product[]>([])
   const [debts, setDebts] = useState<DebtItem[]>([])
   const [allOperators, setAllOperators] = useState<OperatorBasic[]>([])
@@ -393,9 +396,8 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
   }
 
   return (
-    <div className="relative flex h-screen flex-col overflow-hidden bg-background text-foreground">
-      <div className="pointer-events-none absolute -top-40 -right-40 h-80 w-80 rounded-full bg-primary/5 blur-3xl dark:bg-primary/10" />
-      <div className="pointer-events-none absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-primary/5 blur-3xl dark:bg-primary/10" />
+    <div className={`relative flex h-screen flex-col overflow-hidden ${screenBgClass} text-foreground`}>
+      <ScreenBackdrop />
       <div className="h-9 shrink-0 drag-region bg-card/80 backdrop-blur" />
       <header className="relative z-10 flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border bg-card/80 px-5 py-2 backdrop-blur-xl no-drag">
         <div className="flex items-center gap-3">
@@ -427,11 +429,15 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
           <WorkModeSwitch
             active="scanner"
             showSale={!!onSwitchToSale}
+            showReturn={!!onSwitchToReturn}
+            showHistory={!!onSwitchToHistory}
             showScanner
             showRequest={!!onSwitchToRequest}
             showArena={!!onSwitchToArena}
             onShift={onSwitchToShift}
             onSale={onSwitchToSale}
+            onReturn={onSwitchToReturn}
+            onHistory={onSwitchToHistory}
             onRequest={onSwitchToRequest}
             onArena={onSwitchToArena}
             onCabinet={onOpenCabinet}

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 
 import WorkModeSwitch from '@/components/WorkModeSwitch'
+import ScreenBackdrop, { screenBgClass } from '@/components/ScreenBackdrop'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import * as api from '@/lib/api'
@@ -38,8 +39,10 @@ interface Props {
   onLogout: () => void
   onSwitchToShift: () => void
   onSwitchToSale?: () => void
+  onSwitchToHistory?: () => void
   onSwitchToScanner?: () => void
   onSwitchToRequest?: () => void
+  onSwitchToArena?: () => void
   onOpenCabinet?: () => void
 }
 
@@ -74,8 +77,10 @@ export default function InventoryReturnsPage({
   onLogout,
   onSwitchToShift,
   onSwitchToSale,
+  onSwitchToHistory,
   onSwitchToScanner,
   onSwitchToRequest,
+  onSwitchToArena,
   onOpenCabinet,
 }: Props) {
   const runtimeShift = useMemo(() => resolveRuntimeShift(), [])
@@ -371,9 +376,8 @@ export default function InventoryReturnsPage({
   const salesCount = useMemo(() => currentShiftSales.length, [currentShiftSales])
 
   return (
-    <div className="relative flex h-screen flex-col overflow-hidden bg-background text-foreground">
-      <div className="pointer-events-none absolute -top-40 -right-40 h-80 w-80 rounded-full bg-destructive/5 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-primary/5 blur-3xl" />
+    <div className={`relative flex h-screen flex-col overflow-hidden ${screenBgClass} text-foreground`}>
+      <ScreenBackdrop accent="rose" />
       <div className="h-9 shrink-0 drag-region bg-card/80 backdrop-blur" />
       <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-card/80 backdrop-blur-xl px-4 pb-2 no-drag">
         <div className="flex items-center gap-2">
@@ -390,13 +394,17 @@ export default function InventoryReturnsPage({
             active="return"
             showSale={!!onSwitchToSale}
             showReturn
+            showHistory={!!onSwitchToHistory}
             showScanner={!!onSwitchToScanner}
             showRequest={!!onSwitchToRequest}
+            showArena={!!onSwitchToArena}
             onShift={onSwitchToShift}
             onSale={onSwitchToSale}
             onReturn={() => undefined}
+            onHistory={onSwitchToHistory}
             onScanner={onSwitchToScanner}
             onRequest={onSwitchToRequest}
+            onArena={onSwitchToArena}
             onCabinet={onOpenCabinet}
           />
           <Button variant="ghost" size="sm" onClick={() => void load(selectedSaleId)} disabled={loading} className="h-9 w-9 p-0 text-muted-foreground">

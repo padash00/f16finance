@@ -59,6 +59,7 @@ interface Props {
   onSwitchToScanner?: () => void
   onSwitchToRequest?: () => void
   onSwitchToHistory?: () => void
+  onSwitchToArena?: () => void
   onOpenCabinet?: () => void
 }
 
@@ -312,6 +313,7 @@ export default function InventorySalesPage({
   onSwitchToScanner,
   onSwitchToRequest,
   onSwitchToHistory,
+  onSwitchToArena,
   onOpenCabinet,
 }: Props) {
   const cashLabels = useCashlessLabels(session)
@@ -901,12 +903,14 @@ export default function InventorySalesPage({
             showHistory={!!onSwitchToHistory}
             showScanner={!!onSwitchToScanner}
             showRequest={!!onSwitchToRequest}
+            showArena={!!onSwitchToArena}
             onShift={onSwitchToShift}
             onSale={() => undefined}
             onReturn={onSwitchToReturn}
             onHistory={onSwitchToHistory}
             onScanner={onSwitchToScanner}
             onRequest={onSwitchToRequest}
+            onArena={onSwitchToArena}
             onCabinet={onOpenCabinet}
           />
           <Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading} className="h-9 w-9 p-0 text-muted-foreground">

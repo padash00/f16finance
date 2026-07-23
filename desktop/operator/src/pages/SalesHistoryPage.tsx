@@ -11,11 +11,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ArrowLeft,
   Banknote,
   CloudOff,
   History,
   Loader2,
+  LogOut,
   Printer,
   ReceiptText,
   RefreshCw,
@@ -26,6 +26,8 @@ import {
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import WorkModeSwitch from '@/components/WorkModeSwitch'
+import ScreenBackdrop, { screenBgClass } from '@/components/ScreenBackdrop'
 import * as api from '@/lib/api'
 import type { PointSalesHistorySale } from '@/lib/api'
 import { getQueueItems } from '@/lib/offline'
@@ -48,7 +50,14 @@ import type {
 interface Props {
   config: AppConfig
   session: OperatorSession
-  onBack: () => void
+  onLogout?: () => void
+  onSwitchToShift?: () => void
+  onSwitchToSale?: () => void
+  onSwitchToReturn?: () => void
+  onSwitchToScanner?: () => void
+  onSwitchToRequest?: () => void
+  onSwitchToArena?: () => void
+  onOpenCabinet?: () => void
 }
 
 /** Продажа в списке: серверная или локальная (из офлайн-очереди) */
@@ -165,7 +174,18 @@ async function loadLocalSales(): Promise<HistorySale[]> {
   return result
 }
 
-export default function SalesHistoryPage({ config, session, onBack }: Props) {
+export default function SalesHistoryPage({
+  config,
+  session,
+  onLogout,
+  onSwitchToShift,
+  onSwitchToSale,
+  onSwitchToReturn,
+  onSwitchToScanner,
+  onSwitchToRequest,
+  onSwitchToArena,
+  onOpenCabinet,
+}: Props) {
   const cashLabels = useCashlessLabels(session)
   const [sales, setSales] = useState<HistorySale[] | null>(null)
   const [loading, setLoading] = useState(true)
@@ -289,43 +309,67 @@ export default function SalesHistoryPage({ config, session, onBack }: Props) {
   }
 
   const list = sales || []
+  const operatorName = session.operator.full_name || session.operator.name || session.operator.username
 
   return (
-    <div className="relative flex h-screen flex-col overflow-hidden bg-background text-foreground">
-      <div className="pointer-events-none absolute -top-40 -right-40 h-80 w-80 rounded-full bg-primary/5 blur-3xl" />
+    <div className={`relative flex h-screen flex-col overflow-hidden ${screenBgClass} text-foreground`}>
+      <ScreenBackdrop />
       <div className="h-9 shrink-0 drag-region bg-card/80 backdrop-blur" />
 
-      {/* Шапка */}
-      <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-card/80 px-3 pb-2 backdrop-blur-xl no-drag sm:px-4">
-        <div className="flex min-w-0 items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={onBack} className="h-9 gap-2 px-3 text-muted-foreground">
-            <ArrowLeft className="h-4 w-4" />
-            <span className="hidden sm:inline">Назад</span>
-          </Button>
-          <div className="flex items-center gap-2">
-            <History className="h-4 w-4 text-primary" />
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold leading-none">История продаж</p>
-              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                {session.company.name} · последние 7 дней · все кассиры
-              </p>
-            </div>
+      {/* Шапка — как на соседних рабочих экранах (Продажа/Возврат) */}
+      <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-card/80 backdrop-blur-xl px-4 pb-2 no-drag">
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary shadow-md shadow-primary/30">
+            <span className="text-[9px] font-bold tracking-tight text-primary-foreground">OP</span>
+          </div>
+          <div>
+            <p className="text-sm font-semibold leading-none">{session.company.name}</p>
+            <p className="text-[10px] text-muted-foreground">{operatorName}</p>
           </div>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => void load(query)}
-          disabled={loading}
-          className="h-9 w-9 p-0 text-muted-foreground"
-          title="Обновить историю"
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-        </Button>
+        <div className="flex items-center gap-1.5 no-drag">
+          <WorkModeSwitch
+            active="history"
+            showSale={!!onSwitchToSale}
+            showReturn={!!onSwitchToReturn}
+            showHistory
+            showScanner={!!onSwitchToScanner}
+            showRequest={!!onSwitchToRequest}
+            showArena={!!onSwitchToArena}
+            onShift={onSwitchToShift}
+            onSale={onSwitchToSale}
+            onReturn={onSwitchToReturn}
+            onHistory={() => undefined}
+            onScanner={onSwitchToScanner}
+            onRequest={onSwitchToRequest}
+            onArena={onSwitchToArena}
+            onCabinet={onOpenCabinet}
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => void load(query)}
+            disabled={loading}
+            className="h-9 w-9 p-0 text-muted-foreground"
+            title="Обновить историю"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          </Button>
+          {onLogout ? (
+            <Button variant="ghost" size="sm" onClick={onLogout} className="h-9 w-9 p-0 text-muted-foreground" title="Выйти">
+              <LogOut className="h-4 w-4" />
+            </Button>
+          ) : null}
+        </div>
       </header>
 
       {/* Поиск по сумме чека */}
       <div className="shrink-0 border-b border-border bg-card/60 p-3 sm:px-4">
+        <div className="mx-auto mb-2 flex w-full max-w-3xl items-center gap-1.5 text-xs text-muted-foreground">
+          <History className="h-4 w-4 shrink-0 text-primary" />
+          <span className="font-semibold text-foreground">История продаж</span>
+          <span className="truncate">· последние 7 дней · все кассиры</span>
+        </div>
         <div className="relative mx-auto w-full max-w-3xl">
           <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
           <input

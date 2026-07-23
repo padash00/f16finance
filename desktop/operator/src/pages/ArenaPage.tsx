@@ -36,6 +36,8 @@ interface Props {
   onLogout: () => void
   onSwitchToShift?: () => void
   onSwitchToSale?: () => void
+  onSwitchToReturn?: () => void
+  onSwitchToHistory?: () => void
   onSwitchToScanner?: () => void
   onSwitchToRequest?: () => void
   onOpenCabinet?: () => void
@@ -1170,6 +1172,8 @@ export default function ArenaPage({
   onLogout,
   onSwitchToShift,
   onSwitchToSale,
+  onSwitchToReturn,
+  onSwitchToHistory,
   onSwitchToScanner,
   onSwitchToRequest,
   onOpenCabinet,
@@ -1579,11 +1583,15 @@ export default function ArenaPage({
           <WorkModeSwitch
             active="arena"
             showSale={!!onSwitchToSale}
+            showReturn={!!onSwitchToReturn}
+            showHistory={!!onSwitchToHistory}
             showScanner={!!onSwitchToScanner}
             showRequest={!!onSwitchToRequest}
             showArena
             onShift={onSwitchToShift}
             onSale={onSwitchToSale}
+            onReturn={onSwitchToReturn}
+            onHistory={onSwitchToHistory}
             onScanner={onSwitchToScanner}
             onRequest={onSwitchToRequest}
             onCabinet={onOpenCabinet}

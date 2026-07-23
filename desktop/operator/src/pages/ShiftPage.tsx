@@ -26,6 +26,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import WorkModeSwitch from '@/components/WorkModeSwitch'
+import ScreenBackdrop, { screenBgClass } from '@/components/ScreenBackdrop'
 import { useCashlessLabels } from '@/lib/use-cashless-labels'
 import { formatMoney, parseMoney, todayISO, localRef } from '@/lib/utils'
 import { toastSuccess, toastError } from '@/lib/toast'
@@ -709,10 +710,9 @@ export default function ShiftPage({
   const totalEntered = vCash + vCoins + vKaspiTotal + vKaspiOnline + vDebts + vStart + vWipon
 
   return (
-    <div className="relative flex h-screen flex-col overflow-hidden bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100">
+    <div className={`relative flex h-screen flex-col overflow-hidden ${screenBgClass} text-slate-900 dark:text-slate-100`}>
       {/* Декоративные акценты — тонкий градиент для глубины (в обеих темах) */}
-      <div className="pointer-events-none absolute -top-40 -right-40 h-80 w-80 rounded-full bg-emerald-500/5 blur-3xl dark:bg-emerald-500/10" />
-      <div className="pointer-events-none absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-blue-500/5 blur-3xl dark:bg-blue-500/10" />
+      <ScreenBackdrop />
       <div className="h-9 shrink-0 drag-region bg-white/80 backdrop-blur dark:bg-slate-900/80" />
       <header className="relative z-10 flex shrink-0 flex-wrap items-center justify-between gap-3 border-b bg-white/80 backdrop-blur-xl dark:bg-slate-900/80 px-5 pb-3 no-drag">
         <div className="flex items-center gap-3">
@@ -765,11 +765,13 @@ export default function ShiftPage({
           <WorkModeSwitch
             active="shift"
             showSale={hasInventorySale}
+            showReturn={!!onSwitchToReturn}
             showHistory={!!onOpenSalesHistory}
             showScanner={!!hasScanner}
             showRequest={hasInventoryRequest}
             showArena={!!onSwitchToArena}
             onSale={onSwitchToSale}
+            onReturn={onSwitchToReturn}
             onHistory={onOpenSalesHistory}
             onScanner={hasScanner ? onSwitchToScanner : undefined}
             onRequest={onSwitchToRequest}

@@ -101,6 +101,12 @@ export interface CompanyOption {
   role_in_company: string
 }
 
+/**
+ * Рабочие экраны оператора как значения returnTo (кабинет/история помнят, откуда открыты).
+ * Совпадает со вкладками WorkModeSwitch.
+ */
+export type WorkReturnTo = 'shift' | 'sale' | 'return' | 'scanner' | 'request' | 'arena' | 'history'
+
 export type AppView =
   | { screen: 'setup' }
   | { screen: 'booting' }
@@ -113,8 +119,8 @@ export type AppView =
   | { screen: 'inventory-request'; bootstrap: BootstrapData; session: OperatorSession }
   | { screen: 'arena'; bootstrap: BootstrapData; session: OperatorSession }
   | { screen: 'checklists'; bootstrap: BootstrapData; session: OperatorSession }
-  | { screen: 'operator-cabinet'; bootstrap: BootstrapData; session: OperatorSession; returnTo: 'shift' | 'sale' | 'return' | 'scanner' | 'checklists' }
-  | { screen: 'sales-history'; bootstrap: BootstrapData; session: OperatorSession; returnTo: 'shift' | 'sale' }
+  | { screen: 'operator-cabinet'; bootstrap: BootstrapData; session: OperatorSession; returnTo: WorkReturnTo | 'checklists' }
+  | { screen: 'sales-history'; bootstrap: BootstrapData; session: OperatorSession; returnTo: WorkReturnTo }
   | { screen: 'admin'; session: AdminSession; bootstrap?: BootstrapData }
 
 export interface AppUpdateProgress {
@@ -610,6 +616,8 @@ export interface PointReceiptSettings {
   receipt_language: 'ru' | 'kk' | 'both'
   receipt_footer_text: string
   require_buyer_iin: boolean
+  /** Ссылка на страницу отзывов точки (2GIS/Google Maps) — QR на экране покупателя. Optional: старый кэш может её не иметь. */
+  review_url?: string | null
 }
 
 // Отложка корзины (parked cart) — локальный черновик чека.

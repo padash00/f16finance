@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 
 import WorkModeSwitch from '@/components/WorkModeSwitch'
+import ScreenBackdrop, { screenBgClass } from '@/components/ScreenBackdrop'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -29,15 +30,23 @@ import type {
   OperatorTaskComment,
   PointKnowledgeArticle,
   PointKnowledgeContext,
+  WorkReturnTo,
 } from '@/types'
 
 interface Props {
   config: AppConfig
   bootstrap: BootstrapData
   session: OperatorSession
-  returnTo: 'shift' | 'sale' | 'return' | 'scanner' | 'checklists'
+  returnTo: WorkReturnTo | 'checklists'
   onBackToWork: () => void
   onLogout: () => void
+  onSwitchToShift?: () => void
+  onSwitchToSale?: () => void
+  onSwitchToReturn?: () => void
+  onSwitchToHistory?: () => void
+  onSwitchToScanner?: () => void
+  onSwitchToRequest?: () => void
+  onSwitchToArena?: () => void
 }
 
 type CabinetTab = 'knowledge' | 'shifts' | 'tasks' | 'debts' | 'profile'
@@ -134,6 +143,13 @@ export default function OperatorCabinetPage({
   returnTo,
   onBackToWork,
   onLogout,
+  onSwitchToShift,
+  onSwitchToSale,
+  onSwitchToReturn,
+  onSwitchToHistory,
+  onSwitchToScanner,
+  onSwitchToRequest,
+  onSwitchToArena,
 }: Props) {
   const CACHE_KEY = `cabinet_cache_${session.operator.operator_id}`
 
@@ -309,6 +325,13 @@ export default function OperatorCabinetPage({
   )
   const profileName = session.operator.full_name || session.operator.name || session.operator.username
 
+  // Полный набор вкладок WorkModeSwitch (как на рабочих экранах).
+  // Фолбэк на onBackToWork — на случай, если App передал только returnTo (старый контракт).
+  const goShift = onSwitchToShift ?? (returnTo === 'shift' ? onBackToWork : undefined)
+  const goSale = onSwitchToSale ?? (returnTo === 'sale' ? onBackToWork : undefined)
+  const goReturn = onSwitchToReturn ?? (returnTo === 'return' ? onBackToWork : undefined)
+  const goScanner = onSwitchToScanner ?? (returnTo === 'scanner' ? onBackToWork : undefined)
+
   async function handleConfirmArticle(articleId: string) {
     setConfirmingArticleId(articleId)
     setError(null)
@@ -364,9 +387,8 @@ export default function OperatorCabinetPage({
   }
 
   return (
-    <div className="relative flex h-screen flex-col overflow-hidden bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100">
-      <div className="pointer-events-none absolute -top-40 -right-40 h-80 w-80 rounded-full bg-violet-500/5 blur-3xl dark:bg-violet-500/10" />
-      <div className="pointer-events-none absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-emerald-500/5 blur-3xl dark:bg-emerald-500/10" />
+    <div className={`relative flex h-screen flex-col overflow-hidden ${screenBgClass} text-slate-900 dark:text-slate-100`}>
+      <ScreenBackdrop accent="violet" />
       <div className="h-9 shrink-0 drag-region bg-white/80 backdrop-blur dark:bg-slate-900/80" />
       <header className="relative z-10 flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 bg-white/80 px-5 py-2 backdrop-blur-xl no-drag dark:border-slate-800/70 dark:bg-slate-900/80">
         <div className="flex items-center gap-3">
@@ -382,13 +404,19 @@ export default function OperatorCabinetPage({
         <div className="flex items-center gap-2 no-drag">
           <WorkModeSwitch
             active="cabinet"
-            showSale={returnTo === 'sale'}
-            showReturn={returnTo === 'return'}
-            showScanner={returnTo === 'scanner'}
-            onShift={returnTo === 'shift' ? onBackToWork : undefined}
-            onSale={returnTo === 'sale' ? onBackToWork : undefined}
-            onReturn={returnTo === 'return' ? onBackToWork : undefined}
-            onScanner={returnTo === 'scanner' ? onBackToWork : undefined}
+            showSale={!!goSale}
+            showReturn={!!goReturn}
+            showHistory={!!onSwitchToHistory}
+            showScanner={!!goScanner}
+            showRequest={!!onSwitchToRequest}
+            showArena={!!onSwitchToArena}
+            onShift={goShift}
+            onSale={goSale}
+            onReturn={goReturn}
+            onHistory={onSwitchToHistory}
+            onScanner={goScanner}
+            onRequest={onSwitchToRequest}
+            onArena={onSwitchToArena}
           />
           {returnTo === 'checklists' ? (
             <Button variant="outline" size="sm" onClick={onBackToWork}>

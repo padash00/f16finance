@@ -20,6 +20,7 @@ const TEXT_FIELDS = [
   'ofd_name',
   'ofd_check_url',
   'receipt_footer_text',
+  'review_url',
 ] as const
 
 const BOOL_FIELDS = ['is_vat_payer', 'require_buyer_iin', 'marking_enabled', 'nkt_enabled'] as const
@@ -42,6 +43,7 @@ type Settings = {
   require_buyer_iin: boolean
   marking_enabled: boolean
   nkt_enabled: boolean
+  review_url: string
 }
 
 function defaultSettings(companyId: string, organizationId: string | null): Settings {
@@ -62,6 +64,7 @@ function defaultSettings(companyId: string, organizationId: string | null): Sett
     require_buyer_iin: false,
     marking_enabled: false,
     nkt_enabled: false,
+    review_url: '',
   }
 }
 

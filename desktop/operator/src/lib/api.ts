@@ -785,6 +785,24 @@ export async function receivePointInventoryRequest(
   return data.data
 }
 
+export async function cancelPointInventoryRequest(
+  config: AppConfig,
+  session: OperatorSession,
+  requestId: string,
+): Promise<{ status: string }> {
+  const data = await request<{ ok: boolean; data: { status: string } }>(
+    config,
+    'POST',
+    '/api/point/inventory-requests',
+    {
+      action: 'cancelRequest',
+      requestId,
+    },
+    operatorHeaders(session),
+  )
+  return data.data
+}
+
 export async function getPointInventorySales(
   config: AppConfig,
   session: OperatorSession,

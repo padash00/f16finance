@@ -7,7 +7,7 @@ import type { OpenShiftInfo } from '@/lib/api'
 import { toastInfo } from '@/lib/toast'
 import { applyBranding } from '@/lib/branding'
 import { getQueueCounts, QUEUE_CHANGED_EVENT, OPEN_QUEUE_EVENT } from '@/lib/offline'
-import type { AppConfig, AppView, CompanyOption, OperatorSession, AdminSession, BootstrapData, AppUpdateState, QueueCounts } from '@/types'
+import type { AppConfig, AppView, CompanyOption, OperatorSession, AdminSession, BootstrapData, AppUpdateState, QueueCounts, WorkReturnTo } from '@/types'
 
 const LoginPage = lazy(() => import('@/pages/LoginPage'))
 const PointSelectPage = lazy(() => import('@/pages/PointSelectPage'))
@@ -149,6 +149,32 @@ function getActiveOperatorSession(view: AppView): OperatorSession | null {
     return view.session
   }
   return null
+}
+
+/** Обратный переход из кабинета/истории: собирает AppView для сохранённого returnTo. */
+function viewForReturnTo(
+  returnTo: WorkReturnTo | 'checklists',
+  bootstrap: BootstrapData,
+  session: OperatorSession,
+): AppView {
+  switch (returnTo) {
+    case 'sale':
+      return { screen: 'inventory-sale', bootstrap, session }
+    case 'return':
+      return { screen: 'inventory-return', bootstrap, session }
+    case 'scanner':
+      return { screen: 'scanner', bootstrap, session }
+    case 'request':
+      return { screen: 'inventory-request', bootstrap, session }
+    case 'arena':
+      return { screen: 'arena', bootstrap, session }
+    case 'history':
+      return { screen: 'sales-history', bootstrap, session, returnTo: 'shift' }
+    case 'checklists':
+      return { screen: 'checklists', bootstrap, session }
+    default:
+      return { screen: 'shift', bootstrap, session }
+  }
 }
 
 function isTaskOpen(status: string) {
@@ -495,6 +521,8 @@ export default function App() {
                         ? 'return'
                       : currentView.screen === 'inventory-sale'
                         ? 'sale'
+                        : currentView.screen === 'inventory-request'
+                          ? 'request'
                         : currentView.screen === 'checklists'
                           ? 'checklists'
                         : 'shift',
@@ -740,14 +768,32 @@ export default function App() {
     window.electron.updater.openReleases().catch(() => null)
   }
 
-  function handleOpenOperatorCabinet(returnTo: 'shift' | 'sale' | 'return' | 'scanner') {
-    if (
-      view.screen !== 'shift' &&
-      view.screen !== 'inventory-sale' &&
-      view.screen !== 'inventory-return' &&
-      view.screen !== 'scanner'
-    ) return
-    setView({ screen: 'operator-cabinet', bootstrap: view.bootstrap, session: view.session, returnTo })
+  /**
+   * Единая раздача навигации по вкладкам WorkModeSwitch.
+   *
+   * На КАЖДОМ рабочем экране набор вкладок одинаковый: фича-гейты
+   * (продажи/возвраты/история — canUseInventorySalesForSession, долги — canUseScannerForSession,
+   * заявки — canUseInventoryRequestsForSession, зал — canUseArenaForSession) применяются здесь
+   * один раз, поэтому вкладка либо видна на всех экранах, либо нигде.
+   */
+  function buildWorkNav(bootstrap: BootstrapData, session: OperatorSession, current: WorkReturnTo | 'checklists') {
+    const go =
+      (screen: 'shift' | 'inventory-sale' | 'inventory-return' | 'scanner' | 'inventory-request' | 'arena') => () =>
+        setView({ screen, bootstrap, session })
+    const hasSales = canUseInventorySalesForSession(session)
+    const historyReturnTo: WorkReturnTo = current === 'checklists' || current === 'history' ? 'shift' : current
+    return {
+      onSwitchToShift: go('shift'),
+      onSwitchToSale: hasSales ? go('inventory-sale') : undefined,
+      onSwitchToReturn: hasSales ? go('inventory-return') : undefined,
+      onSwitchToHistory: hasSales
+        ? () => setView({ screen: 'sales-history', bootstrap, session, returnTo: historyReturnTo })
+        : undefined,
+      onSwitchToScanner: canUseScannerForSession(session) ? go('scanner') : undefined,
+      onSwitchToRequest: canUseInventoryRequestsForSession(session) ? go('inventory-request') : undefined,
+      onSwitchToArena: canUseArenaForSession(session) ? go('arena') : undefined,
+      onOpenCabinet: () => setView({ screen: 'operator-cabinet', bootstrap, session, returnTo: current }),
+    }
   }
 
   function withUpdateBanner(content: ReactNode) {
@@ -823,6 +869,7 @@ export default function App() {
   }
 
   if (view.screen === 'shift') {
+    const nav = buildWorkNav(view.bootstrap, view.session, 'shift')
     return withUpdateBanner(
       <ShiftPage
         config={config!}
@@ -832,74 +879,78 @@ export default function App() {
         openShift={openShift}
         onOpenShiftChange={setOpenShift}
         onLogout={handleLogout}
-        onSwitchToSale={canUseInventorySalesForSession(view.session) ? () => setView({ ...view, screen: 'inventory-sale' }) : undefined}
-        onSwitchToReturn={canUseInventorySalesForSession(view.session) ? () => setView({ ...view, screen: 'inventory-return' }) : undefined}
-        onSwitchToScanner={canUseScannerForSession(view.session) ? () => setView({ ...view, screen: 'scanner' }) : undefined}
-        onSwitchToRequest={canUseInventoryRequestsForSession(view.session) ? () => setView({ ...view, screen: 'inventory-request' }) : undefined}
-        onSwitchToArena={canUseArenaForSession(view.session) ? () => setView({ ...view, screen: 'arena' }) : undefined}
+        onSwitchToSale={nav.onSwitchToSale}
+        onSwitchToReturn={nav.onSwitchToReturn}
+        onSwitchToScanner={nav.onSwitchToScanner}
+        onSwitchToRequest={nav.onSwitchToRequest}
+        onSwitchToArena={nav.onSwitchToArena}
         onOpenChecklists={() => setView({ ...view, screen: 'checklists' })}
-        onOpenSalesHistory={
-          canUseInventorySalesForSession(view.session)
-            ? () => setView({ screen: 'sales-history', bootstrap: view.bootstrap, session: view.session, returnTo: 'shift' })
-            : undefined
-        }
-        onOpenCabinet={() => handleOpenOperatorCabinet('shift')}
+        onOpenSalesHistory={nav.onSwitchToHistory}
+        onOpenCabinet={nav.onOpenCabinet}
       />,
     )
   }
 
   if (view.screen === 'inventory-sale') {
+    const nav = buildWorkNav(view.bootstrap, view.session, 'sale')
     return withUpdateBanner(
       <InventorySalesPage
         config={config!}
         bootstrap={view.bootstrap}
         session={view.session}
         onLogout={handleLogout}
-        onSwitchToShift={() => setView({ ...view, screen: 'shift' })}
-        onSwitchToReturn={() => setView({ ...view, screen: 'inventory-return' })}
-        onSwitchToScanner={canUseScannerForSession(view.session) ? () => setView({ ...view, screen: 'scanner' }) : undefined}
-        onSwitchToRequest={canUseInventoryRequestsForSession(view.session) ? () => setView({ ...view, screen: 'inventory-request' }) : undefined}
-        onSwitchToHistory={() => setView({ screen: 'sales-history', bootstrap: view.bootstrap, session: view.session, returnTo: 'sale' })}
-        onOpenCabinet={() => handleOpenOperatorCabinet('sale')}
+        onSwitchToShift={nav.onSwitchToShift}
+        onSwitchToReturn={nav.onSwitchToReturn}
+        onSwitchToScanner={nav.onSwitchToScanner}
+        onSwitchToRequest={nav.onSwitchToRequest}
+        onSwitchToHistory={nav.onSwitchToHistory}
+        onSwitchToArena={nav.onSwitchToArena}
+        onOpenCabinet={nav.onOpenCabinet}
       />,
     )
   }
 
   if (view.screen === 'sales-history') {
+    const nav = buildWorkNav(view.bootstrap, view.session, 'history')
     return withUpdateBanner(
       <ErrorBoundary pageName="sales-history">
         <SalesHistoryPage
           config={config!}
           session={view.session}
-          onBack={() =>
-            setView({
-              screen: view.returnTo === 'shift' ? 'shift' : 'inventory-sale',
-              bootstrap: view.bootstrap,
-              session: view.session,
-            })
-          }
+          onLogout={handleLogout}
+          onSwitchToShift={nav.onSwitchToShift}
+          onSwitchToSale={nav.onSwitchToSale}
+          onSwitchToReturn={nav.onSwitchToReturn}
+          onSwitchToScanner={nav.onSwitchToScanner}
+          onSwitchToRequest={nav.onSwitchToRequest}
+          onSwitchToArena={nav.onSwitchToArena}
+          onOpenCabinet={nav.onOpenCabinet}
         />
       </ErrorBoundary>,
     )
   }
 
   if (view.screen === 'inventory-return') {
+    const nav = buildWorkNav(view.bootstrap, view.session, 'return')
     return withUpdateBanner(
       <InventoryReturnsPage
         config={config!}
         bootstrap={view.bootstrap}
         session={view.session}
         onLogout={handleLogout}
-        onSwitchToShift={() => setView({ ...view, screen: 'shift' })}
-        onSwitchToSale={() => setView({ ...view, screen: 'inventory-sale' })}
-        onSwitchToScanner={canUseScannerForSession(view.session) ? () => setView({ ...view, screen: 'scanner' }) : undefined}
-        onSwitchToRequest={canUseInventoryRequestsForSession(view.session) ? () => setView({ ...view, screen: 'inventory-request' }) : undefined}
-        onOpenCabinet={() => handleOpenOperatorCabinet('return')}
+        onSwitchToShift={nav.onSwitchToShift}
+        onSwitchToSale={nav.onSwitchToSale}
+        onSwitchToHistory={nav.onSwitchToHistory}
+        onSwitchToScanner={nav.onSwitchToScanner}
+        onSwitchToRequest={nav.onSwitchToRequest}
+        onSwitchToArena={nav.onSwitchToArena}
+        onOpenCabinet={nav.onOpenCabinet}
       />,
     )
   }
 
   if (view.screen === 'scanner') {
+    const nav = buildWorkNav(view.bootstrap, view.session, 'scanner')
     return withUpdateBanner(
       <ErrorBoundary pageName="scanner">
         <ScannerPage
@@ -908,17 +959,20 @@ export default function App() {
           session={view.session}
           isOffline={isOffline}
           onLogout={handleLogout}
-          onSwitchToShift={() => setView({ ...view, screen: 'shift' })}
-          onSwitchToSale={canUseInventorySalesForSession(view.session) ? () => setView({ ...view, screen: 'inventory-sale' }) : undefined}
-          onSwitchToRequest={canUseInventoryRequestsForSession(view.session) ? () => setView({ ...view, screen: 'inventory-request' }) : undefined}
-          onSwitchToArena={canUseArenaForSession(view.session) ? () => setView({ ...view, screen: 'arena' }) : undefined}
-          onOpenCabinet={() => handleOpenOperatorCabinet('scanner')}
+          onSwitchToShift={nav.onSwitchToShift}
+          onSwitchToSale={nav.onSwitchToSale}
+          onSwitchToReturn={nav.onSwitchToReturn}
+          onSwitchToHistory={nav.onSwitchToHistory}
+          onSwitchToRequest={nav.onSwitchToRequest}
+          onSwitchToArena={nav.onSwitchToArena}
+          onOpenCabinet={nav.onOpenCabinet}
         />
       </ErrorBoundary>,
     )
   }
 
   if (view.screen === 'arena') {
+    const nav = buildWorkNav(view.bootstrap, view.session, 'arena')
     return withUpdateBanner(
       <ErrorBoundary pageName="arena">
         <ArenaPage
@@ -926,33 +980,39 @@ export default function App() {
           bootstrap={view.bootstrap}
           session={view.session}
           onLogout={handleLogout}
-          onSwitchToShift={() => setView({ ...view, screen: 'shift' })}
-          onSwitchToSale={canUseInventorySalesForSession(view.session) ? () => setView({ ...view, screen: 'inventory-sale' }) : undefined}
-          onSwitchToScanner={canUseScannerForSession(view.session) ? () => setView({ ...view, screen: 'scanner' }) : undefined}
-          onSwitchToRequest={canUseInventoryRequestsForSession(view.session) ? () => setView({ ...view, screen: 'inventory-request' }) : undefined}
-          onOpenCabinet={() => handleOpenOperatorCabinet('shift')}
+          onSwitchToShift={nav.onSwitchToShift}
+          onSwitchToSale={nav.onSwitchToSale}
+          onSwitchToReturn={nav.onSwitchToReturn}
+          onSwitchToHistory={nav.onSwitchToHistory}
+          onSwitchToScanner={nav.onSwitchToScanner}
+          onSwitchToRequest={nav.onSwitchToRequest}
+          onOpenCabinet={nav.onOpenCabinet}
         />
       </ErrorBoundary>,
     )
   }
 
   if (view.screen === 'inventory-request') {
+    const nav = buildWorkNav(view.bootstrap, view.session, 'request')
     return withUpdateBanner(
       <InventoryRequestPage
         config={config!}
         bootstrap={view.bootstrap}
         session={view.session}
         onLogout={handleLogout}
-        onSwitchToShift={() => setView({ ...view, screen: 'shift' })}
-        onSwitchToSale={canUseInventorySalesForSession(view.session) ? () => setView({ ...view, screen: 'inventory-sale' }) : undefined}
-        onSwitchToReturn={canUseInventorySalesForSession(view.session) ? () => setView({ ...view, screen: 'inventory-return' }) : undefined}
-        onSwitchToScanner={canUseScannerForSession(view.session) ? () => setView({ ...view, screen: 'scanner' }) : undefined}
-        onOpenCabinet={() => handleOpenOperatorCabinet('shift')}
+        onSwitchToShift={nav.onSwitchToShift}
+        onSwitchToSale={nav.onSwitchToSale}
+        onSwitchToReturn={nav.onSwitchToReturn}
+        onSwitchToHistory={nav.onSwitchToHistory}
+        onSwitchToScanner={nav.onSwitchToScanner}
+        onSwitchToArena={nav.onSwitchToArena}
+        onOpenCabinet={nav.onOpenCabinet}
       />,
     )
   }
 
   if (view.screen === 'operator-cabinet') {
+    const nav = buildWorkNav(view.bootstrap, view.session, view.returnTo)
     return withUpdateBanner(
       <ErrorBoundary pageName="cabinet">
         <OperatorCabinetPage
@@ -960,19 +1020,15 @@ export default function App() {
           bootstrap={view.bootstrap}
           session={view.session}
           returnTo={view.returnTo}
-          onBackToWork={() =>
-            setView({
-              screen:
-                view.returnTo === 'sale'
-                  ? 'inventory-sale'
-                  : view.returnTo === 'return'
-                    ? 'inventory-return'
-                    : view.returnTo,
-              bootstrap: view.bootstrap,
-              session: view.session,
-            })
-          }
+          onBackToWork={() => setView(viewForReturnTo(view.returnTo, view.bootstrap, view.session))}
           onLogout={handleLogout}
+          onSwitchToShift={nav.onSwitchToShift}
+          onSwitchToSale={nav.onSwitchToSale}
+          onSwitchToReturn={nav.onSwitchToReturn}
+          onSwitchToHistory={nav.onSwitchToHistory}
+          onSwitchToScanner={nav.onSwitchToScanner}
+          onSwitchToRequest={nav.onSwitchToRequest}
+          onSwitchToArena={nav.onSwitchToArena}
         />
       </ErrorBoundary>,
     )
