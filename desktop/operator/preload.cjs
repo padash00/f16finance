@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('electron', {
     update: (data) => ipcRenderer.invoke('queue:update', data),
     done: (data) => ipcRenderer.invoke('queue:done', data),
     count: () => ipcRenderer.invoke('queue:count'),
+    counts: () => ipcRenderer.invoke('queue:counts'),
   },
   dialog: {
     openFile: (opts) => ipcRenderer.invoke('dialog:openFile', opts),

@@ -553,7 +553,18 @@ function readQueue() {
   try {
     const data = JSON.parse(fs.readFileSync(queuePath(), 'utf-8'))
     if (data.length > 0) _nextId = Math.max(...data.map((i) => i.id)) + 1
+    // Миграция v2.9: раньше после 10 попыток item помечался 'failed' и навсегда
+    // выпадал из синка. Теперь такого статуса нет — конвертируем старые 'failed'
+    // в 'attention', чтобы застрявшие операции снова стали видны оператору.
+    let migrated = false
+    for (const item of data) {
+      if (item.status === 'failed') {
+        item.status = 'attention'
+        migrated = true
+      }
+    }
     _queueCache = data
+    if (migrated) writeQueue(data)
     return data
   } catch {
     _queueCache = []
@@ -592,13 +603,16 @@ ipcMain.handle('queue:list', (_, opts = {}) => {
   return items.filter((i) => i.status !== 'done')
 })
 
-ipcMain.handle('queue:update', (_, { id, status, error }) => {
+ipcMain.handle('queue:update', (_, { id, status, error, lastAttemptAt, countAttempt }) => {
   const items = readQueue()
   const item = items.find((i) => i.id === id)
   if (item) {
     item.status = status
     item.last_error = error || null
-    item.attempts = (item.attempts || 0) + 1
+    // countAttempt !== false → старое поведение (каждый update = попытка).
+    // false используется при ручном переводе attention → pending («Повторить»).
+    if (countAttempt !== false) item.attempts = (item.attempts || 0) + 1
+    if (lastAttemptAt !== undefined) item.last_attempt_at = lastAttemptAt || null
     writeQueue(items)
   }
   return { ok: true }
@@ -612,6 +626,14 @@ ipcMain.handle('queue:done', (_, { id }) => {
 
 ipcMain.handle('queue:count', () => {
   return readQueue().filter((i) => i.status === 'pending').length
+})
+
+ipcMain.handle('queue:counts', () => {
+  const items = readQueue()
+  return {
+    pending: items.filter((i) => i.status === 'pending').length,
+    attention: items.filter((i) => i.status === 'attention').length,
+  }
 })
 
 // ─── File dialog + Excel import ───────────────────────────────────────────────

@@ -82,6 +82,7 @@ type Props = {
   onSwitchToReturn?: () => void
   onSwitchToScanner?: () => void
   onSwitchToRequest?: () => void
+  onSwitchToHistory?: () => void
   onOpenCabinet?: () => void
 }
 
@@ -97,6 +98,13 @@ type CartLine = {
 
 const UNIVERSAL_PRODUCT_PREFIX = 'universal:'
 
+/**
+ * Порог «подозрительного» количества в одной позиции чека: при quantity >= порога
+ * перед проведением продажи показываем подтверждение («Проверьте количество»).
+ * Защита от опечаток кассира (25 вместо 2–5, скан штрихкода в поле количества).
+ */
+const QTY_CONFIRM_THRESHOLD = 10
+
 export default function InventorySalesPageMinimal({
   config,
   bootstrap,
@@ -106,6 +114,7 @@ export default function InventorySalesPageMinimal({
   onSwitchToReturn,
   onSwitchToScanner,
   onSwitchToRequest,
+  onSwitchToHistory,
   onOpenCabinet,
 }: Props) {
   const runtimeShift = useMemo(() => resolveRuntimeShift(), [])
@@ -169,6 +178,11 @@ export default function InventorySalesPageMinimal({
 
   // Подтверждение оплаты
   const [showPayConfirm, setShowPayConfirm] = useState(false)
+
+  // Подтверждение подозрительного количества (quantity >= QTY_CONFIRM_THRESHOLD)
+  const [qtyConfirmLines, setQtyConfirmLines] = useState<
+    Array<{ name: string; quantity: number; unit: string | null }> | null
+  >(null)
 
   // Превью чека после успешной продажи (в iframe внутри программы)
   const [lastReceipt, setLastReceipt] = useState<SaleReceiptPreview | null>(null)
@@ -799,6 +813,13 @@ export default function InventorySalesPageMinimal({
         return
       }
     }
+    // Подозрительно большое количество в позиции — просим подтвердить
+    const suspicious = cart.filter((l) => l.quantity >= QTY_CONFIRM_THRESHOLD)
+    if (suspicious.length > 0) {
+      beep('error')
+      setQtyConfirmLines(suspicious.map((l) => ({ name: l.name, quantity: l.quantity, unit: l.unit || null })))
+      return
+    }
     setShowPayConfirm(true)
   }
 
@@ -982,11 +1003,13 @@ export default function InventorySalesPageMinimal({
             active="sale"
             showSale
             showReturn={!!onSwitchToReturn}
+            showHistory={!!onSwitchToHistory}
             showScanner={!!onSwitchToScanner}
             showRequest={!!onSwitchToRequest}
             onShift={onSwitchToShift}
             onSale={() => undefined}
             onReturn={onSwitchToReturn}
+            onHistory={onSwitchToHistory}
             onScanner={onSwitchToScanner}
             onRequest={onSwitchToRequest}
             onCabinet={onOpenCabinet}
@@ -1201,7 +1224,12 @@ export default function InventorySalesPageMinimal({
                       }}
                       className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-accent"
                     >
-                      <div className="min-w-0">
+                      {item.image_url ? (
+                        <img src={item.image_url} alt="" className="h-10 w-10 shrink-0 rounded-lg border border-border object-cover" loading="lazy" />
+                      ) : (
+                        <span className="h-10 w-10 shrink-0 rounded-lg bg-muted" />
+                      )}
+                      <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium">{item.name}</p>
                         <p className="truncate text-xs text-muted-foreground">
                           {item.barcode || '—'} · <span className={isLow ? 'text-amber-600 dark:text-amber-400 font-medium' : ''}>{qty} шт{isLow ? ' (мало!)' : ''}</span>
@@ -1852,6 +1880,50 @@ export default function InventorySalesPageMinimal({
                 disabled={correctionSaving || !correctionReason.trim()}
               >
                 {correctionSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Исправить'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Модалка подтверждения подозрительного количества */}
+      {qtyConfirmLines && (
+        <div className="fixed inset-0 z-[55] grid place-items-center bg-black/60 p-4" onClick={() => setQtyConfirmLines(null)}>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-2xl bg-card text-card-foreground shadow-xl"
+          >
+            <div className="border-b border-amber-500/30 bg-amber-500/10 px-5 py-4">
+              <h3 className="text-base font-bold text-amber-700 dark:text-amber-300">Проверьте количество</h3>
+              <p className="mt-1 text-xs text-amber-700/80 dark:text-amber-300/80">
+                В чеке есть позиции с необычно большим количеством ({QTY_CONFIRM_THRESHOLD}+ шт).
+              </p>
+            </div>
+            <div className="max-h-56 space-y-2 overflow-auto px-5 py-4">
+              {qtyConfirmLines.map((line, idx) => (
+                <p key={idx} className="rounded-xl border border-border bg-muted px-3 py-2 text-sm">
+                  «{line.name}» × <span className="font-bold">{line.quantity}</span> {line.unit || 'шт'}. Всё верно?
+                </p>
+              ))}
+            </div>
+            <div className="flex flex-col gap-2 border-t border-border p-4 sm:flex-row sm:justify-end sm:gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setQtyConfirmLines(null)}
+                className="h-12 sm:order-1 sm:px-6"
+              >
+                Исправить
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  setQtyConfirmLines(null)
+                  setShowPayConfirm(true)
+                }}
+                className="h-12 rounded-xl text-base font-semibold sm:order-2 sm:px-8"
+              >
+                Да, продать
               </Button>
             </div>
           </div>

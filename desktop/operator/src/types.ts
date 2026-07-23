@@ -114,6 +114,7 @@ export type AppView =
   | { screen: 'arena'; bootstrap: BootstrapData; session: OperatorSession }
   | { screen: 'checklists'; bootstrap: BootstrapData; session: OperatorSession }
   | { screen: 'operator-cabinet'; bootstrap: BootstrapData; session: OperatorSession; returnTo: 'shift' | 'sale' | 'return' | 'scanner' | 'checklists' }
+  | { screen: 'sales-history'; bootstrap: BootstrapData; session: OperatorSession; returnTo: 'shift' | 'sale' }
   | { screen: 'admin'; session: AdminSession; bootstrap?: BootstrapData }
 
 export interface AppUpdateProgress {
@@ -181,11 +182,23 @@ export interface QueueItem {
     | 'inventory_request'
     | 'checklist_run'
   payload: Record<string, unknown>
-  status: 'pending' | 'processing' | 'failed'
+  /**
+   * pending — ждёт отправки (ретраится автоматически, без лимита попыток)
+   * attention — сервер отклонил по существу (4xx), нужен человек
+   * failed — legacy-статус (< v2.9), при старте main конвертирует в attention
+   */
+  status: 'pending' | 'processing' | 'attention' | 'failed'
   local_ref: string | null
   attempts: number
   last_error: string | null
+  /** Время последней попытки отправки (для backoff после 5 неудач) */
+  last_attempt_at?: string | null
   created_at: string
+}
+
+export interface QueueCounts {
+  pending: number
+  attention: number
 }
 
 // Shift report form
@@ -399,6 +412,7 @@ export interface PointInventorySaleItem {
   unit: string
   sale_price: number
   display_qty: number
+  image_url?: string | null
   category?: { id: string; name: string } | null
 }
 

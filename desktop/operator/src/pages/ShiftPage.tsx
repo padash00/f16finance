@@ -30,9 +30,8 @@ import { useCashlessLabels } from '@/lib/use-cashless-labels'
 import { formatMoney, parseMoney, todayISO, localRef } from '@/lib/utils'
 import { toastSuccess, toastError } from '@/lib/toast'
 import * as api from '@/lib/api'
-import { syncQueue, getPendingCount, queueClosePointShift, queueShiftReport } from '@/lib/offline'
+import { syncQueue, getPendingCount, queueClosePointShift, queueShiftReport, openQueueScreen } from '@/lib/offline'
 import { clearParkedCarts } from '@/lib/parked-carts'
-import QueueViewer from '@/components/QueueViewer'
 import type { OpenShiftInfo } from '@/lib/api'
 import type {
   AppConfig,
@@ -60,6 +59,7 @@ interface Props {
   onSwitchToRequest?: () => void
   onSwitchToArena?: () => void
   onOpenChecklists?: () => void
+  onOpenSalesHistory?: () => void
   onOpenCabinet?: () => void
 }
 
@@ -138,6 +138,7 @@ export default function ShiftPage({
   onSwitchToRequest,
   onSwitchToArena,
   onOpenChecklists,
+  onOpenSalesHistory,
   onOpenCabinet,
 }: Props) {
   const [draftLost, setDraftLost] = useState(false)
@@ -168,7 +169,6 @@ export default function ShiftPage({
   const [error, setError] = useState<string | null>(null)
   const [pendingCount, setPendingCount] = useState(0)
   const [syncing, setSyncing] = useState(false)
-  const [showQueue, setShowQueue] = useState(false)
 
   const [confirmDialog, setConfirmDialog] = useState(false)
   const [splitDialog, setSplitDialog] = useState(false)
@@ -755,7 +755,7 @@ export default function ShiftPage({
             <Badge
               variant="secondary"
               className="cursor-pointer gap-1 hover:opacity-80"
-              onClick={() => setShowQueue(true)}
+              onClick={openQueueScreen}
             >
               <Clock className="h-3 w-3" />
               {pendingCount} в очереди
@@ -765,10 +765,12 @@ export default function ShiftPage({
           <WorkModeSwitch
             active="shift"
             showSale={hasInventorySale}
+            showHistory={!!onOpenSalesHistory}
             showScanner={!!hasScanner}
             showRequest={hasInventoryRequest}
             showArena={!!onSwitchToArena}
             onSale={onSwitchToSale}
+            onHistory={onOpenSalesHistory}
             onScanner={hasScanner ? onSwitchToScanner : undefined}
             onRequest={onSwitchToRequest}
             onArena={onSwitchToArena}
@@ -849,7 +851,7 @@ export default function ShiftPage({
                 label="Очередь"
                 value={pendingCount > 0 ? `${pendingCount} в очереди` : 'Пусто'}
                 tone={pendingCount > 0 ? 'warning' : 'neutral'}
-                onClick={pendingCount > 0 ? () => setShowQueue(true) : undefined}
+                onClick={pendingCount > 0 ? openQueueScreen : undefined}
               />
               <TerminalStatusChip
                 icon={isOffline ? <WifiOff className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
@@ -1641,7 +1643,7 @@ export default function ShiftPage({
                   <QuickActionButton
                     icon={<Clock className="h-4 w-4" />}
                     label={pendingCount > 0 ? `Очередь: ${pendingCount}` : 'Очередь пуста'}
-                    onClick={() => setShowQueue(true)}
+                    onClick={openQueueScreen}
                   />
                   {onSwitchToSale ? (
                     <QuickActionButton
@@ -1847,8 +1849,6 @@ export default function ShiftPage({
           </Card>
         </div>
       ) : null}
-
-      <QueueViewer open={showQueue} onClose={() => setShowQueue(false)} />
 
       {splitDialog ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-100/70 dark:bg-slate-950/70 backdrop-blur-sm">

@@ -6,7 +6,8 @@ import * as api from '@/lib/api'
 import type { OpenShiftInfo } from '@/lib/api'
 import { toastInfo } from '@/lib/toast'
 import { applyBranding } from '@/lib/branding'
-import type { AppConfig, AppView, CompanyOption, OperatorSession, AdminSession, BootstrapData, AppUpdateState } from '@/types'
+import { getQueueCounts, QUEUE_CHANGED_EVENT, OPEN_QUEUE_EVENT } from '@/lib/offline'
+import type { AppConfig, AppView, CompanyOption, OperatorSession, AdminSession, BootstrapData, AppUpdateState, QueueCounts } from '@/types'
 
 const LoginPage = lazy(() => import('@/pages/LoginPage'))
 const PointSelectPage = lazy(() => import('@/pages/PointSelectPage'))
@@ -27,6 +28,8 @@ const ChecklistPage = lazy(() => import('@/pages/ChecklistPage'))
 const ArenaPage = lazy(() => import('@/pages/ArenaPage'))
 const SetupPage = lazy(() => import('@/pages/SetupPage'))
 const AdminLayout = lazy(() => import('@/pages/admin/AdminLayout'))
+const QueuePage = lazy(() => import('@/pages/QueuePage'))
+const SalesHistoryPage = lazy(() => import('@/pages/SalesHistoryPage'))
 
 // Типизируем window.electron (из preload.cjs)
 declare global {
@@ -39,9 +42,16 @@ declare global {
       queue: {
         add: (data: { type: string; payload: unknown; localRef?: string }) => Promise<{ id: number }>
         list: (opts?: { status?: string }) => Promise<unknown[]>
-        update: (data: { id: number; status: string; error?: string }) => Promise<{ ok: boolean }>
+        update: (data: {
+          id: number
+          status: string
+          error?: string
+          lastAttemptAt?: string | null
+          countAttempt?: boolean
+        }) => Promise<{ ok: boolean }>
         done: (data: { id: number }) => Promise<{ ok: boolean }>
         count: () => Promise<number>
+        counts: () => Promise<{ pending: number; attention: number }>
       }
       cache: {
         get: () => Promise<Record<string, unknown>>
@@ -133,6 +143,7 @@ function getActiveOperatorSession(view: AppView): OperatorSession | null {
     view.screen === 'inventory-request' ||
     view.screen === 'arena' ||
     view.screen === 'checklists' ||
+    view.screen === 'sales-history' ||
     view.screen === 'operator-cabinet'
   ) {
     return view.session
@@ -296,12 +307,50 @@ function UpdateBanner({
   )
 }
 
+/**
+ * Глобальный бейдж офлайн-очереди (шапка приложения, поверх всех экранов):
+ *  жёлтый «⏳ N» — есть операции, ждущие отправки;
+ *  красный «⚠ N» — есть операции, отклонённые сервером (нужен человек).
+ * Клик — открывает экран очереди.
+ */
+function QueueBadge({ counts, onClick }: { counts: QueueCounts; onClick: () => void }) {
+  const total = counts.pending + counts.attention
+  if (total <= 0) return null
+  const hasAttention = counts.attention > 0
+  return (
+    <div className="no-drag pointer-events-none fixed inset-x-0 top-1.5 z-[90] flex justify-center">
+      <button
+        type="button"
+        onClick={onClick}
+        title={
+          hasAttention
+            ? `Отклонено сервером: ${counts.attention} · ждут отправки: ${counts.pending}. Нажмите, чтобы открыть очередь.`
+            : `Ждут отправки: ${counts.pending}. Нажмите, чтобы открыть очередь.`
+        }
+        className={`pointer-events-auto inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold shadow-lg transition hover:brightness-110 ${
+          hasAttention
+            ? 'border-rose-500/40 bg-rose-600 text-white shadow-rose-500/30'
+            : 'border-amber-500/40 bg-amber-500 text-black shadow-amber-500/30'
+        }`}
+      >
+        <span>{hasAttention ? '⚠' : '⏳'}</span>
+        <span>{total}</span>
+        <span className="hidden sm:inline font-medium">
+          {hasAttention ? 'требует внимания' : 'в очереди'}
+        </span>
+      </button>
+    </div>
+  )
+}
+
 export default function App() {
   const [view, setView] = useState<AppView>({ screen: 'booting' })
   const [config, setConfig] = useState<AppConfig | null>(null)
   const [isOffline, setIsOffline] = useState(false)
   const [updateState, setUpdateState] = useState<AppUpdateState | null>(null)
   const [openShift, setOpenShift] = useState<OpenShiftInfo | null>(null)
+  const [queueCounts, setQueueCounts] = useState<QueueCounts>({ pending: 0, attention: 0 })
+  const [queueOpen, setQueueOpen] = useState(false)
   const seenTaskIdsRef = useRef<Set<string> | null>(null)
   const latestViewRef = useRef<AppView>({ screen: 'booting' })
   const bootstrapNonce = useRef(0)
@@ -326,6 +375,35 @@ export default function App() {
   }, [config])
 
   useEffect(() => { init() }, [])
+
+  // Счётчики офлайн-очереди: поллинг раз в 10с + мгновенно по событию синка/добавления
+  useEffect(() => {
+    let cancelled = false
+    const refresh = async () => {
+      try {
+        const counts = await getQueueCounts()
+        if (!cancelled) setQueueCounts(counts)
+      } catch {
+        /* ipc недоступен — оставляем прежние значения */
+      }
+    }
+    void refresh()
+    const interval = window.setInterval(() => void refresh(), 10_000)
+    const onChanged = () => void refresh()
+    window.addEventListener(QUEUE_CHANGED_EVENT, onChanged)
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+      window.removeEventListener(QUEUE_CHANGED_EVENT, onChanged)
+    }
+  }, [])
+
+  // Любой экран может попросить открыть очередь (window event из offline.ts)
+  useEffect(() => {
+    const onOpenQueue = () => setQueueOpen(true)
+    window.addEventListener(OPEN_QUEUE_EVENT, onOpenQueue)
+    return () => window.removeEventListener(OPEN_QUEUE_EVENT, onOpenQueue)
+  }, [])
 
   useEffect(() => {
     let unsubscribe = () => {}
@@ -676,6 +754,14 @@ export default function App() {
     return (
       <>
         <Suspense fallback={null}>{content}</Suspense>
+        {config && view.screen !== 'booting' && view.screen !== 'setup' ? (
+          <QueueBadge counts={queueCounts} onClick={() => setQueueOpen(true)} />
+        ) : null}
+        {config && queueOpen ? (
+          <Suspense fallback={null}>
+            <QueuePage config={config} onClose={() => setQueueOpen(false)} />
+          </Suspense>
+        ) : null}
         <UpdateBanner
           state={updateState}
           onCheck={handleCheckForUpdates}
@@ -752,6 +838,11 @@ export default function App() {
         onSwitchToRequest={canUseInventoryRequestsForSession(view.session) ? () => setView({ ...view, screen: 'inventory-request' }) : undefined}
         onSwitchToArena={canUseArenaForSession(view.session) ? () => setView({ ...view, screen: 'arena' }) : undefined}
         onOpenChecklists={() => setView({ ...view, screen: 'checklists' })}
+        onOpenSalesHistory={
+          canUseInventorySalesForSession(view.session)
+            ? () => setView({ screen: 'sales-history', bootstrap: view.bootstrap, session: view.session, returnTo: 'shift' })
+            : undefined
+        }
         onOpenCabinet={() => handleOpenOperatorCabinet('shift')}
       />,
     )
@@ -768,8 +859,27 @@ export default function App() {
         onSwitchToReturn={() => setView({ ...view, screen: 'inventory-return' })}
         onSwitchToScanner={canUseScannerForSession(view.session) ? () => setView({ ...view, screen: 'scanner' }) : undefined}
         onSwitchToRequest={canUseInventoryRequestsForSession(view.session) ? () => setView({ ...view, screen: 'inventory-request' }) : undefined}
+        onSwitchToHistory={() => setView({ screen: 'sales-history', bootstrap: view.bootstrap, session: view.session, returnTo: 'sale' })}
         onOpenCabinet={() => handleOpenOperatorCabinet('sale')}
       />,
+    )
+  }
+
+  if (view.screen === 'sales-history') {
+    return withUpdateBanner(
+      <ErrorBoundary pageName="sales-history">
+        <SalesHistoryPage
+          config={config!}
+          session={view.session}
+          onBack={() =>
+            setView({
+              screen: view.returnTo === 'shift' ? 'shift' : 'inventory-sale',
+              bootstrap: view.bootstrap,
+              session: view.session,
+            })
+          }
+        />
+      </ErrorBoundary>,
     )
   }
 

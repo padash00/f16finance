@@ -787,7 +787,7 @@ export async function GET(request: Request) {
         fetchAllPages((from, to) =>
           supabase
             .from('inventory_items')
-            .select('id, name, barcode, unit, sale_price, item_type, category:category_id(id, name)')
+            .select('id, name, barcode, unit, sale_price, item_type, image_url, category:category_id(id, name)')
             .eq('is_active', true)
             .neq('item_type', 'consumable')
             .order('name', { ascending: true })

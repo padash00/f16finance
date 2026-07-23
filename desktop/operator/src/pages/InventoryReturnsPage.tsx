@@ -331,8 +331,8 @@ export default function InventoryReturnsPage({
         paymentMethod: refund.paymentMethod,
         cashAmount: refund.cashAmount,
         kaspiAmount: refund.kaspiAmount,
-        totalAmount: refund.totalAmount,
-        subtotal: refund.totalAmount,
+        totalAmount: refund.cashAmount + refund.kaspiAmount,
+        subtotal: refund.cashAmount + refund.kaspiAmount,
         discountAmount: 0,
         loyaltyDiscountAmount: 0,
         customer: null,
@@ -351,7 +351,7 @@ export default function InventoryReturnsPage({
           quantity: line.quantity,
           unit_price: line.unit_price,
           total: line.quantity * line.unit_price,
-          unit: line.saleLine.item?.unit || null,
+          unit: (line.saleLine.item as { unit?: string | null } | null)?.unit || null,
         })),
       }
       setLastReceipt(returnPreview)

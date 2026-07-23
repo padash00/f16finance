@@ -916,6 +916,54 @@ export async function correctPointInventorySalePayment(
   return data.data
 }
 
+// ─── Sales history (v2.9) ─────────────────────────────────────────────────────
+// История продаж точки за последние дни: клиент пришёл за чеком назавтра —
+// кассир находит продажу по сумме и печатает КОПИЮ чека.
+
+export type PointSalesHistoryLine = {
+  name: string
+  unit: string
+  quantity: number
+  unit_price: number
+  total_price: number
+}
+
+export type PointSalesHistorySale = {
+  id: string
+  sold_at: string | null
+  sale_date: string
+  shift: 'day' | 'night' | string
+  payment_method: 'cash' | 'kaspi' | 'mixed' | string
+  cash_amount: number
+  kaspi_amount: number
+  card_amount: number
+  online_amount: number
+  total_amount: number
+  discount_amount: number
+  comment: string | null
+  operator_name: string | null
+  items: PointSalesHistoryLine[]
+}
+
+export async function getPointSalesHistory(
+  config: AppConfig,
+  opts: { days?: number; q?: string; limit?: number } = {},
+  companyId?: string | null,
+): Promise<PointSalesHistorySale[]> {
+  const params = new URLSearchParams()
+  params.set('days', String(opts.days ?? 7))
+  params.set('limit', String(opts.limit ?? 100))
+  if (opts.q?.trim()) params.set('q', opts.q.trim())
+  const data = await request<{ ok: boolean; data: { sales: PointSalesHistorySale[] } }>(
+    config,
+    'GET',
+    `/api/point/sales-history?${params.toString()}`,
+    undefined,
+    companyHeader(companyId),
+  )
+  return data.data?.sales || []
+}
+
 export async function getPointInventoryReturns(
   config: AppConfig,
   session: OperatorSession,
@@ -1300,9 +1348,20 @@ export interface SyncVersions {
 /**
  * Лёгкий poll: возвращает timestamps maxUpdated по ключевым таблицам +
  * pending push-сообщения от админа.
+ * queueCounts — счётчики локальной офлайн-очереди: сервер видит, что на точке
+ * копятся неотправленные продажи (заголовки x-pending-sales / x-attention-sales).
  */
-export async function checkSync(config: AppConfig): Promise<SyncVersions> {
-  return request<SyncVersions>(config, 'GET', '/api/point/sync-check')
+export async function checkSync(
+  config: AppConfig,
+  queueCounts?: { pending: number; attention: number },
+): Promise<SyncVersions> {
+  const headers = queueCounts
+    ? {
+        'x-pending-sales': String(queueCounts.pending),
+        'x-attention-sales': String(queueCounts.attention),
+      }
+    : undefined
+  return request<SyncVersions>(config, 'GET', '/api/point/sync-check', undefined, headers)
 }
 
 /** Operator подтверждает что показал push-сообщение */

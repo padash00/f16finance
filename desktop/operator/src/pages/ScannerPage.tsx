@@ -14,9 +14,8 @@ import WorkModeSwitch from '@/components/WorkModeSwitch'
 import { formatMoney, localRef } from '@/lib/utils'
 import { toastSuccess, toastError } from '@/lib/toast'
 import * as api from '@/lib/api'
-import { queueCreateDebt, queueDeleteDebt, syncQueue, getPendingCount } from '@/lib/offline'
+import { queueCreateDebt, queueDeleteDebt, syncQueue, getPendingCount, openQueueScreen } from '@/lib/offline'
 import { getCachedProducts, saveProductsCache } from '@/lib/cache'
-import QueueViewer from '@/components/QueueViewer'
 import type { AppConfig, BootstrapData, OperatorBasic, OperatorSession, Product, DebtItem } from '@/types'
 
 /** Подпись в списке должников: роль не дублируем, если уже есть в ФИО (напр. «Руководитель Иванов»). */
@@ -90,7 +89,6 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
 
   const [pendingCount, setPendingCount] = useState(0)
   const [syncing, setSyncing] = useState(false)
-  const [showQueue, setShowQueue] = useState(false)
 
   const operatorName = session.operator.full_name || session.operator.name || session.operator.username
 
@@ -420,7 +418,7 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
             <Badge
               variant="secondary"
               className="gap-1 cursor-pointer hover:opacity-80"
-              onClick={() => setShowQueue(true)}
+              onClick={openQueueScreen}
             >
               <Clock className="h-3 w-3" /> {pendingCount} в очереди
             </Badge>
@@ -698,8 +696,6 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
           )}
         </div>
       </div>
-
-      <QueueViewer open={showQueue} onClose={() => setShowQueue(false)} />
 
       {/* ─── Админ-модал ─── */}
       {adminTarget && (

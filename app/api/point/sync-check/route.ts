@@ -25,6 +25,33 @@ export async function GET(request: Request) {
 
     const { supabase, device } = point
     const companyId = device.company_id
+
+    // v2.9: касса сообщает размер локальной офлайн-очереди — сохраняем на
+    // устройстве, крон offline-sales-alert алертит владельца при зависании.
+    // Колонок может не быть до миграции 20260722 — пишем мягко.
+    const pendingHeader = request.headers.get('x-pending-sales')
+    const attentionHeader = request.headers.get('x-attention-sales')
+    if (pendingHeader !== null || attentionHeader !== null) {
+      const pending = Math.max(0, Math.floor(Number(pendingHeader || 0))) || 0
+      const attention = Math.max(0, Math.floor(Number(attentionHeader || 0))) || 0
+      const patch: Record<string, unknown> = {
+        pending_sales_count: pending,
+        attention_sales_count: attention,
+        last_seen_at: new Date().toISOString(),
+      }
+      if (pending + attention === 0) patch.pending_since = null
+      void (async () => {
+        try {
+          if (pending + attention > 0) {
+            // pending_since ставим только при переходе 0 → >0
+            const { data: cur } = await supabase.from('point_devices').select('pending_since').eq('id', device.id).maybeSingle()
+            if (!(cur as any)?.pending_since) patch.pending_since = new Date().toISOString()
+          }
+          await supabase.from('point_devices').update(patch).eq('id', device.id)
+        } catch { /* колонки нет до миграции — не мешаем sync-check */ }
+      })()
+    }
+
     if (!companyId) return json({ catalog: null, tariffs: null, prices: null, serverTime: new Date().toISOString() })
 
     // inventory_items скоупится по organization_id, а не company_id —

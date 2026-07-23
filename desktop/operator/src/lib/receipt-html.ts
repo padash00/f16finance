@@ -30,6 +30,8 @@ export type SaleReceiptPreview = {
   // Признак возврата: чек печатается как «ВОЗВРАТ ПРИХОДА» со ссылкой
   // на оригинальный чек (originalSaleId / originalSaleDate).
   isReturn?: boolean
+  // Повторная печать из истории продаж: на чеке крупная пометка «КОПИЯ».
+  isCopy?: boolean
   originalSaleId?: string | null
   originalSaleDate?: string | null
   originalSaleTime?: string | null
@@ -117,6 +119,14 @@ export function buildReceiptHtml(preview: SaleReceiptPreview) {
     : '<div class="muted" style="margin-top:6px;">Сохраните чек до выхода</div><div class="muted" style="margin-top:4px;">Возврат: 14 дней</div>'
 
   const isReturn = !!preview.isReturn
+  const isCopy = !!preview.isCopy
+  // Заметная пометка «КОПИЯ» — сразу под типом документа и в подвале
+  const copyBlock = isCopy
+    ? `<div style="margin-top:6px;"><span style="display:inline-block;border:2px dashed #000;padding:3px 12px;font-weight:800;font-size:16px;letter-spacing:4px;">КОПИЯ</span></div>`
+    : ''
+  const copyFooter = isCopy
+    ? `<div style="margin-top:6px;font-weight:700;letter-spacing:2px;">*** КОПИЯ ЧЕКА — ПОВТОРНАЯ ПЕЧАТЬ ***</div>`
+    : ''
   const docTitle = isReturn ? 'ВОЗВРАТ ПРИХОДА' : 'ЧЕК ПРИХОДА'
   const docTitleColor = isReturn ? '#b91c1c' : '#000'
   const totalLabel = isReturn ? 'К возврату' : 'К оплате'
@@ -172,6 +182,7 @@ export function buildReceiptHtml(preview: SaleReceiptPreview) {
       <div class="center">
         <div class="header-title">ORDA POINT</div>
         <div class="doc-type">${escapeHtml(docTitle)}</div>
+        ${copyBlock}
         <div class="header-sub" style="margin-top:6px;">${escapeHtml(preview.companyName)}</div>
         <div class="muted">${escapeHtml(preview.locationName)}</div>
         ${taxPayerBlock}
@@ -245,6 +256,7 @@ export function buildReceiptHtml(preview: SaleReceiptPreview) {
       ${ofdBlock}
       <div class="footer center">
         <div class="thanks">${escapeHtml(thanksText)}</div>
+        ${copyFooter}
         <div class="fiscal">ФП: ${fiscalSign}</div>
         <div class="placeholder-note">фискализация: тестовый режим</div>
         ${footerExtra}

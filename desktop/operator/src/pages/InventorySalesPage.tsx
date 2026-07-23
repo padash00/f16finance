@@ -42,6 +42,13 @@ import type {
   PointInventorySaleRow,
 } from '@/types'
 
+/**
+ * Порог «подозрительного» количества в одной позиции чека: при quantity >= порога
+ * перед проведением продажи показываем подтверждение («Проверьте количество»).
+ * Защита от опечаток кассира (25 вместо 2–5, скан штрихкода в поле количества).
+ */
+const QTY_CONFIRM_THRESHOLD = 10
+
 interface Props {
   config: AppConfig
   bootstrap: BootstrapData
@@ -51,6 +58,7 @@ interface Props {
   onSwitchToReturn?: () => void
   onSwitchToScanner?: () => void
   onSwitchToRequest?: () => void
+  onSwitchToHistory?: () => void
   onOpenCabinet?: () => void
 }
 
@@ -303,6 +311,7 @@ export default function InventorySalesPage({
   onSwitchToReturn,
   onSwitchToScanner,
   onSwitchToRequest,
+  onSwitchToHistory,
   onOpenCabinet,
 }: Props) {
   const cashLabels = useCashlessLabels(session)
@@ -321,6 +330,10 @@ export default function InventorySalesPage({
   const [mixedKaspi, setMixedKaspi] = useState('')
   const [cart, setCart] = useState<CartLine[]>([])
   const [receiptPreview, setReceiptPreview] = useState<SaleReceiptPreview | null>(null)
+  // Подтверждение подозрительного количества (quantity >= QTY_CONFIRM_THRESHOLD)
+  const [qtyConfirmLines, setQtyConfirmLines] = useState<
+    Array<{ name: string; quantity: number; unit: string | null }> | null
+  >(null)
   const [correctionSale, setCorrectionSale] = useState<PointInventorySaleRow | null>(null)
   const [correctionMethod, setCorrectionMethod] = useState<'cash' | 'kaspi' | 'mixed'>('cash')
   const [correctionCash, setCorrectionCash] = useState('')
@@ -656,6 +669,31 @@ export default function InventorySalesPage({
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
+    if (saving) return
+
+    if (cartDetailed.length === 0) {
+      toastError('Добавьте хотя бы один товар в продажу')
+      return
+    }
+
+    // Подозрительно большое количество в позиции — просим подтвердить
+    const suspicious = cartDetailed.filter((line) => line.quantity >= QTY_CONFIRM_THRESHOLD)
+    if (suspicious.length > 0) {
+      beep('error')
+      setQtyConfirmLines(
+        suspicious.map((line) => ({
+          name: line.item?.name || 'Товар',
+          quantity: line.quantity,
+          unit: line.item?.unit || null,
+        })),
+      )
+      return
+    }
+
+    await doSubmitSale()
+  }
+
+  async function doSubmitSale() {
     // Защита от двойного клика — сразу блокируем кнопку
     if (saving) return
     setSaving(true)
@@ -860,11 +898,13 @@ export default function InventorySalesPage({
             active="sale"
             showSale
             showReturn={!!onSwitchToReturn}
+            showHistory={!!onSwitchToHistory}
             showScanner={!!onSwitchToScanner}
             showRequest={!!onSwitchToRequest}
             onShift={onSwitchToShift}
             onSale={() => undefined}
             onReturn={onSwitchToReturn}
+            onHistory={onSwitchToHistory}
             onScanner={onSwitchToScanner}
             onRequest={onSwitchToRequest}
             onCabinet={onOpenCabinet}
@@ -1529,6 +1569,48 @@ export default function InventorySalesPage({
                   </Button>
                 </div>
               </form>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+
+      {qtyConfirmLines ? (
+        <div className="fixed inset-0 z-[55] flex items-center justify-center bg-black/60 p-4">
+          <Card className="w-full max-w-md border-border shadow-2xl">
+            <CardHeader className="border-b border-amber-500/30 bg-amber-500/10 pb-4">
+              <CardTitle className="text-base text-amber-700 dark:text-amber-300">Проверьте количество</CardTitle>
+              <p className="mt-1 text-xs text-amber-700/80 dark:text-amber-300/80">
+                В чеке есть позиции с необычно большим количеством ({QTY_CONFIRM_THRESHOLD}+ шт).
+              </p>
+            </CardHeader>
+            <CardContent className="p-5">
+              <div className="max-h-56 space-y-2 overflow-auto">
+                {qtyConfirmLines.map((line, idx) => (
+                  <p key={idx} className="rounded-xl border border-border bg-muted px-3 py-2 text-sm">
+                    «{line.name}» × <span className="font-bold">{line.quantity}</span> {line.unit || 'шт'}. Всё верно?
+                  </p>
+                ))}
+              </div>
+              <div className="mt-5 flex flex-wrap gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1 min-w-[140px]"
+                  onClick={() => setQtyConfirmLines(null)}
+                >
+                  Исправить
+                </Button>
+                <Button
+                  type="button"
+                  className="flex-1 min-w-[140px]"
+                  onClick={() => {
+                    setQtyConfirmLines(null)
+                    void doSubmitSale()
+                  }}
+                >
+                  Да, продать
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import * as api from '@/lib/api'
+import { getQueueCounts } from '@/lib/offline'
 import type { AppConfig } from '@/types'
 
 const POLL_INTERVAL_MS = 30_000 // 30 секунд
@@ -50,7 +51,9 @@ export function useSyncWatcher({ config, watch, onSyncNeeded, onPushMessage, ena
 
     const tick = async () => {
       try {
-        const versions = await api.checkSync(config)
+        // Сообщаем серверу счётчики офлайн-очереди (x-pending-sales / x-attention-sales)
+        const queueCounts = await getQueueCounts().catch(() => undefined)
+        const versions = await api.checkSync(config, queueCounts)
         if (cancelled) return
 
         const prev = lastVersionsRef.current

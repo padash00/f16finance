@@ -1,17 +1,19 @@
-import { ClipboardList, Gamepad2, ReceiptText, RotateCcw, ScanBarcode, ShoppingBasket, UserCircle2, type LucideIcon } from 'lucide-react'
+import { ClipboardList, Gamepad2, History, ReceiptText, RotateCcw, ScanBarcode, ShoppingBasket, UserCircle2, type LucideIcon } from 'lucide-react'
 
-type WorkMode = 'shift' | 'sale' | 'return' | 'scanner' | 'request' | 'cabinet' | 'arena'
+type WorkMode = 'shift' | 'sale' | 'return' | 'history' | 'scanner' | 'request' | 'cabinet' | 'arena'
 
 interface Props {
   active: WorkMode
   showSale?: boolean
   showReturn?: boolean
+  showHistory?: boolean
   showScanner?: boolean
   showRequest?: boolean
   showArena?: boolean
   onShift?: () => void
   onSale?: () => void
   onReturn?: () => void
+  onHistory?: () => void
   onScanner?: () => void
   onRequest?: () => void
   onCabinet?: () => void
@@ -54,12 +56,14 @@ export default function WorkModeSwitch({
   active,
   showSale,
   showReturn,
+  showHistory,
   showScanner,
   showRequest,
   showArena,
   onShift,
   onSale,
   onReturn,
+  onHistory,
   onScanner,
   onRequest,
   onCabinet,
@@ -92,6 +96,16 @@ export default function WorkModeSwitch({
           icon={RotateCcw}
           onClick={onReturn}
           disabled={!onReturn || active === 'return'}
+        />
+      ) : null}
+
+      {showHistory ? (
+        <ModeButton
+          active={active === 'history'}
+          label="История"
+          icon={History}
+          onClick={onHistory}
+          disabled={!onHistory || active === 'history'}
         />
       ) : null}
 
