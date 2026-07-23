@@ -9,6 +9,7 @@
 
 import { NextResponse } from 'next/server'
 import { requiredEnv } from '@/lib/server/env'
+import { listOrgReportTargets } from '@/lib/server/report-targets'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { sendTelegramMessage } from '@/lib/telegram/send'
 
@@ -104,13 +105,14 @@ export async function GET(request: Request) {
   const supabase = createAdminSupabaseClient()
   const { data: operators, error } = await supabase
     .from('operators')
-    .select('id, name, short_name, telegram_chat_id, is_active, operator_profiles(full_name)')
+    .select('id, name, short_name, telegram_chat_id, is_active, organization_id, operator_profiles(full_name)')
     .eq('is_active', true)
     .not('telegram_chat_id', 'is', null)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   const sent: { name: string }[] = []
+  const sentByOrg = new Map<string | null, number>() // orgId → сколько поздравлено
   for (const op of (operators as any[]) || []) {
     const profile = Array.isArray(op.operator_profiles) ? op.operator_profiles[0] : op.operator_profiles
     const displayName = profile?.full_name || op.short_name || op.name || 'друг'
@@ -120,21 +122,39 @@ export async function GET(request: Request) {
     try {
       await sendTelegramMessage(chat, holiday.greeting.replace('{name}', displayName), { parseMode: 'HTML' })
       sent.push({ name: displayName })
+      const orgId = op.organization_id || null
+      sentByOrg.set(orgId, (sentByOrg.get(orgId) || 0) + 1)
     } catch (e: any) {
       console.error(`[holiday-greetings] failed for ${displayName}:`, e?.message)
     }
   }
 
-  // Уведомляем владельца
-  const ownerChatId = process.env.TELEGRAM_OWNER_CHAT_ID || process.env.TELEGRAM_ADMIN_CHAT_ID
-  if (ownerChatId) {
-    try {
-      await sendTelegramMessage(
-        ownerChatId,
-        `${holiday.emoji} Сегодня <b>${holiday.name}</b>. Команде разослано поздравление (${sent.length} человек).`,
-        { parseMode: 'HTML' },
-      )
-    } catch {}
+  // Уведомляем владельца. Изоляция: каждой организации — счётчик по её команде в её чат.
+  // Нет per-org целей → прежнее поведение (единый env-чат, общий счётчик, F16).
+  const orgTargets = await listOrgReportTargets()
+  if (orgTargets.length > 0) {
+    for (const t of orgTargets) {
+      const count = sentByOrg.get(t.organizationId) || 0
+      if (count === 0) continue
+      try {
+        await sendTelegramMessage(
+          t.chatId,
+          `${holiday.emoji} Сегодня <b>${holiday.name}</b>. Команде разослано поздравление (${count} человек).`,
+          { parseMode: 'HTML' },
+        )
+      } catch {}
+    }
+  } else {
+    const ownerChatId = process.env.TELEGRAM_OWNER_CHAT_ID || process.env.TELEGRAM_ADMIN_CHAT_ID
+    if (ownerChatId) {
+      try {
+        await sendTelegramMessage(
+          ownerChatId,
+          `${holiday.emoji} Сегодня <b>${holiday.name}</b>. Команде разослано поздравление (${sent.length} человек).`,
+          { parseMode: 'HTML' },
+        )
+      } catch {}
+    }
   }
 
   return NextResponse.json({ ok: true, holiday: holiday.name, sent: sent.length })

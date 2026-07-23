@@ -9,6 +9,7 @@
 
 import { NextResponse } from 'next/server'
 import { requiredEnv } from '@/lib/server/env'
+import { listOrgReportTargets } from '@/lib/server/report-targets'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { sendTelegramMessage } from '@/lib/telegram/send'
 
@@ -46,27 +47,15 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const ownerChatId = process.env.TELEGRAM_OWNER_CHAT_ID || process.env.TELEGRAM_ADMIN_CHAT_ID
-  if (!ownerChatId) {
-    return NextResponse.json({ ok: true, skipped: 'no TELEGRAM_OWNER_CHAT_ID' })
-  }
-
   const supabase = createAdminSupabaseClient()
   const today = todayISO()
   const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
   const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
-  const insights: string[] = []
 
-  // Мультитенант: TELEGRAM_OWNER_ORG_ID → отчёт только по точкам этой орг.
-  // Не задан → по всем (текущее поведение для единственного тенанта).
-  const ownerOrgId = process.env.TELEGRAM_OWNER_ORG_ID || null
-  let ownerCompanyIds: string[] | null = null
-  if (ownerOrgId) {
-    const { data: cos } = await supabase.from('companies').select('id').eq('organization_id', ownerOrgId)
-    ownerCompanyIds = (cos || []).map((c: any) => String(c.id))
-  }
-
-  try {
+  // Собирает список инсайтов по заданному скоупу.
+  // companyIds/ownerOrgId === null → без фильтра (env-фолбэк single-tenant F16).
+  async function buildInsights(ownerCompanyIds: string[] | null, ownerOrgId: string | null): Promise<string[]> {
+    const insights: string[] = []
     // 1. Сравнение выручки (вчера vs средняя за 7 дней)
     let incQ = supabase
       .from('incomes')
@@ -147,13 +136,15 @@ export async function GET(req: Request) {
     }
 
     // 4. Просроченные задачи
-    const { data: overdueTasks } = await supabase
+    let tasksQ = supabase
       .from('tasks')
       .select('id, title, due_date')
       .neq('status', 'done')
       .lt('due_date', today)
       .order('due_date')
       .limit(5)
+    if (ownerCompanyIds) tasksQ = tasksQ.in('company_id', ownerCompanyIds)
+    const { data: overdueTasks } = await tasksQ
     if (overdueTasks && overdueTasks.length > 0) {
       const titles = (overdueTasks as any[]).slice(0, 3).map((t) => t.title).join(', ')
       insights.push(`⚠️ <b>${overdueTasks.length} просроченных задач</b>: ${titles}`)
@@ -180,14 +171,44 @@ export async function GET(req: Request) {
       }
     }
 
-    if (insights.length === 0) {
-      return NextResponse.json({ ok: true, sent: false, reason: 'no insights' })
+    return insights
+  }
+
+  // Изоляция: каждой организации с настроенным telegram_owner_chat_id — свои инсайты
+  // в её чат. Если per-org целей нет — прежнее env-поведение (F16 single-tenant).
+  async function sendInsights(chatId: string, insights: string[]): Promise<boolean> {
+    if (insights.length === 0) return false
+    const text = `🔮 <b>Подсказки на сегодня:</b>\n\n${insights.join('\n\n')}\n\n<i>Можешь ответить боту: "выдай Айгерим бонус 5к", "поставь задачу заказать колу", и т.п.</i>`
+    await sendTelegramMessage(chatId, text, { parseMode: 'HTML' })
+    return true
+  }
+
+  try {
+    const orgTargets = await listOrgReportTargets()
+    if (orgTargets.length > 0) {
+      const results = []
+      for (const t of orgTargets) {
+        const insights = await buildInsights(t.companyIds, t.organizationId)
+        const sent = await sendInsights(t.chatId, insights)
+        results.push({ org: t.organizationId, sent, count: insights.length })
+      }
+      return NextResponse.json({ ok: true, perOrg: true, results })
     }
 
-    const text = `🔮 <b>Подсказки на сегодня:</b>\n\n${insights.join('\n\n')}\n\n<i>Можешь ответить боту: "выдай Айгерим бонус 5к", "поставь задачу заказать колу", и т.п.</i>`
-    await sendTelegramMessage(ownerChatId, text, { parseMode: 'HTML' })
-
-    return NextResponse.json({ ok: true, sent: true, count: insights.length })
+    // Env-фолбэк (F16): скоуп по TELEGRAM_OWNER_ORG_ID, отправка в общий env-чат.
+    const ownerChatId = process.env.TELEGRAM_OWNER_CHAT_ID || process.env.TELEGRAM_ADMIN_CHAT_ID
+    if (!ownerChatId) {
+      return NextResponse.json({ ok: true, skipped: 'no TELEGRAM_OWNER_CHAT_ID' })
+    }
+    const ownerOrgId = process.env.TELEGRAM_OWNER_ORG_ID || null
+    let ownerCompanyIds: string[] | null = null
+    if (ownerOrgId) {
+      const { data: cos } = await supabase.from('companies').select('id').eq('organization_id', ownerOrgId)
+      ownerCompanyIds = (cos || []).map((c: any) => String(c.id))
+    }
+    const insights = await buildInsights(ownerCompanyIds, ownerOrgId)
+    const sent = await sendInsights(ownerChatId, insights)
+    return NextResponse.json({ ok: true, perOrg: false, sent, count: insights.length })
   } catch (e: any) {
     console.error('[smart-insights] error:', e?.message)
     return NextResponse.json({ ok: false, error: e?.message }, { status: 500 })

@@ -10,6 +10,7 @@ import { NextResponse } from 'next/server'
 
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { listOrgReportTargets } from '@/lib/server/report-targets'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { sendTelegramMessage } from '@/lib/telegram/send'
 
@@ -86,23 +87,27 @@ export async function GET(req: Request) {
     const totalCost = rows.reduce((sum, r) => sum + Number(r.total_shortage_cost || 0), 0)
 
     if (isCron && !dry && rows.length > 0) {
-      const chatId = process.env.TELEGRAM_ADMIN_CHAT_ID || process.env.TELEGRAM_CHAT_ID
-      if (chatId) {
-        const top = rows
+      const buildMessage = (list: ShortageRow[]) => {
+        const cost = list.reduce((sum, r) => sum + Number(r.total_shortage_cost || 0), 0)
+        const top = list
           .slice(0, 10)
           .map((r) => {
             const locations = (r.affected_locations || []).filter(Boolean).join(', ') || '—'
             return `• <b>${r.item_name}</b> (${r.item_barcode}): ${r.shortage_count} раз, всего ${r.total_shortage_qty} шт (${fmtMoney(r.total_shortage_cost)}) — ${locations}`
           })
           .join('\n')
-        const more = rows.length > 10 ? `\n…ещё ${rows.length - 10} позиций` : ''
-        const message =
+        const more = list.length > 10 ? `\n…ещё ${list.length - 10} позиций` : ''
+        return (
           `⚠ <b>Регулярная недостача за ${days} дней</b>\n` +
-          `Товаров: <b>${rows.length}</b> · Общий ущерб: <b>${fmtMoney(totalCost)}</b>\n\n` +
+          `Товаров: <b>${list.length}</b> · Общий ущерб: <b>${fmtMoney(cost)}</b>\n\n` +
           top + more +
           `\n\nКандидаты для расследования возможного воровства.`
+        )
+      }
+      const notify = async (chatId: string, list: ShortageRow[]) => {
+        if (list.length === 0) return
         try {
-          await sendTelegramMessage(chatId, message, { parseMode: 'HTML' })
+          await sendTelegramMessage(chatId, buildMessage(list), { parseMode: 'HTML' })
         } catch (tgError: any) {
           await writeSystemErrorLogSafe({
             scope: 'server',
@@ -110,6 +115,28 @@ export async function GET(req: Request) {
             message: tgError?.message || 'telegram failed',
           })
         }
+      }
+
+      // Изоляция: каждой организации — недостачи только по её товарам в её чат.
+      // Нет per-org целей → прежнее поведение (единый env-чат по всем, F16).
+      const orgTargets = await listOrgReportTargets()
+      if (orgTargets.length > 0) {
+        // Карта item_id → organization_id для группировки строк RPC по орг.
+        const itemIds = Array.from(new Set(rows.map((r) => r.item_id).filter(Boolean)))
+        const itemOrg = new Map<string, string | null>()
+        if (itemIds.length > 0) {
+          const { data: items } = await supabase
+            .from('inventory_items')
+            .select('id, organization_id')
+            .in('id', itemIds)
+          for (const it of (items || []) as any[]) itemOrg.set(String(it.id), it.organization_id ? String(it.organization_id) : null)
+        }
+        for (const t of orgTargets) {
+          await notify(t.chatId, rows.filter((r) => itemOrg.get(String(r.item_id)) === t.organizationId))
+        }
+      } else {
+        const chatId = process.env.TELEGRAM_ADMIN_CHAT_ID || process.env.TELEGRAM_CHAT_ID
+        if (chatId) await notify(chatId, rows)
       }
     }
 

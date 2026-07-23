@@ -19,6 +19,8 @@ type RequestSupabaseClient = ReturnType<typeof createRequestSupabaseClient>
 type AssistantRunContext = {
   supabase: RequestSupabaseClient
   currentSnapshot?: PageSnapshot | null
+  /** Изоляция арендатора: компании вызывающего (null → суперадмин / без фильтра). */
+  allowedCompanyIds?: string[] | null
 }
 
 type AssistantUsage = NonNullable<AssistantResponse['usage']>
@@ -75,34 +77,35 @@ function snapshotToText(snapshot: PageSnapshot | null | undefined) {
 
 async function collectServerSnapshots(request: AssistantRequest, context: AssistantRunContext) {
   const range = normalizeDateArgs(context.currentSnapshot)
+  const scope = { allowedCompanyIds: context.allowedCompanyIds ?? null }
   const snapshots: PageSnapshot[] = []
 
   if (request.page === 'global') {
-    snapshots.push(await getAnalysisServerSnapshot(context.supabase, range))
-    snapshots.push(await getReportsServerSnapshot(context.supabase, range))
-    snapshots.push(await getExpensesServerSnapshot(context.supabase, range))
+    snapshots.push(await getAnalysisServerSnapshot(context.supabase, range, scope))
+    snapshots.push(await getReportsServerSnapshot(context.supabase, range, scope))
+    snapshots.push(await getExpensesServerSnapshot(context.supabase, range, scope))
     return snapshots
   }
 
   if (request.page === 'analysis') {
-    snapshots.push(await getAnalysisServerSnapshot(context.supabase, range))
+    snapshots.push(await getAnalysisServerSnapshot(context.supabase, range, scope))
   }
 
   if (request.page === 'reports') {
-    snapshots.push(await getReportsServerSnapshot(context.supabase, range))
+    snapshots.push(await getReportsServerSnapshot(context.supabase, range, scope))
   }
 
   if (request.page === 'expenses') {
-    snapshots.push(await getExpensesServerSnapshot(context.supabase, range))
+    snapshots.push(await getExpensesServerSnapshot(context.supabase, range, scope))
   }
 
   if (request.page === 'cashflow') {
-    snapshots.push(await getCashFlowServerSnapshot(context.supabase, range))
+    snapshots.push(await getCashFlowServerSnapshot(context.supabase, range, scope))
   }
 
   if (request.page === 'weekly-report') {
-    snapshots.push(await getAnalysisServerSnapshot(context.supabase, range))
-    snapshots.push(await getReportsServerSnapshot(context.supabase, range))
+    snapshots.push(await getAnalysisServerSnapshot(context.supabase, range, scope))
+    snapshots.push(await getReportsServerSnapshot(context.supabase, range, scope))
   }
 
   return snapshots

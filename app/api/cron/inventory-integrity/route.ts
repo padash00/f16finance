@@ -15,6 +15,7 @@ import { NextResponse } from 'next/server'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { resolveCompanyScope } from '@/lib/server/organizations'
+import { listOrgReportTargets } from '@/lib/server/report-targets'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { sendTelegramMessage } from '@/lib/telegram/send'
 
@@ -105,18 +106,27 @@ export async function GET(req: Request) {
 
     // Telegram-уведомление: только при cron-вызове и если есть проблемы
     if (isCron && !dry && rows.length > 0) {
-      const chatId = process.env.TELEGRAM_ADMIN_CHAT_ID || process.env.TELEGRAM_CHAT_ID
-      if (chatId) {
-        const top = rows.slice(0, 15).map(formatRow).join('\n')
-        const more = rows.length > 15 ? `\n…ещё ${rows.length - 15} расхождений` : ''
-        const message =
+      const buildMessage = (list: IntegrityRow[]) => {
+        const c = {
+          total: list.length,
+          critical: list.filter((r) => r.severity === 'critical').length,
+          error: list.filter((r) => r.severity === 'error').length,
+          warning: list.filter((r) => r.severity === 'warning').length,
+        }
+        const top = list.slice(0, 15).map(formatRow).join('\n')
+        const more = list.length > 15 ? `\n…ещё ${list.length - 15} расхождений` : ''
+        return (
           `⚠ <b>Инвентарь — расхождения</b>\n` +
-          `Всего: <b>${counts.total}</b> ` +
-          `(критичных: ${counts.critical}, ошибок: ${counts.error}, предупреждений: ${counts.warning})\n\n` +
+          `Всего: <b>${c.total}</b> ` +
+          `(критичных: ${c.critical}, ошибок: ${c.error}, предупреждений: ${c.warning})\n\n` +
           top +
           more
+        )
+      }
+      const notify = async (chatId: string, list: IntegrityRow[]) => {
+        if (list.length === 0) return
         try {
-          await sendTelegramMessage(chatId, message, { parseMode: 'HTML' })
+          await sendTelegramMessage(chatId, buildMessage(list), { parseMode: 'HTML' })
         } catch (tgError: any) {
           await writeSystemErrorLogSafe({
             scope: 'server',
@@ -124,6 +134,35 @@ export async function GET(req: Request) {
             message: tgError?.message || 'telegram failed',
           })
         }
+      }
+
+      // Изоляция: каждой организации — расхождения только по её локациям в её чат.
+      // Нет per-org целей → прежнее поведение (единый env-чат по всем, F16).
+      const orgTargets = await listOrgReportTargets()
+      if (orgTargets.length > 0) {
+        // Карта location_id → company_id для группировки строк RPC по орг.
+        const locIds = Array.from(new Set(rows.map((r) => r.location_id).filter(Boolean))) as string[]
+        const locCompany = new Map<string, string | null>()
+        if (locIds.length > 0) {
+          const { data: locs } = await supabase
+            .from('inventory_locations')
+            .select('id, company_id')
+            .in('id', locIds)
+          for (const l of (locs || []) as any[]) locCompany.set(String(l.id), l.company_id ? String(l.company_id) : null)
+        }
+        for (const t of orgTargets) {
+          const allowed = new Set(t.companyIds || [])
+          await notify(
+            t.chatId,
+            rows.filter((r) => {
+              const comp = r.location_id ? locCompany.get(String(r.location_id)) : null
+              return comp && allowed.has(comp)
+            }),
+          )
+        }
+      } else {
+        const chatId = process.env.TELEGRAM_ADMIN_CHAT_ID || process.env.TELEGRAM_CHAT_ID
+        if (chatId) await notify(chatId, rows)
       }
     }
 

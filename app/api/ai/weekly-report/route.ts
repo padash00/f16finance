@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { logAiUsageSafe } from '@/lib/ai/usage-tracker'
 import { generateAiText, streamAiText, type AiMessage } from '@/lib/ai/provider'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { resolveCompanyScope } from '@/lib/server/organizations'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 import { getAnalysisServerSnapshot, getReportsServerSnapshot, getCashFlowServerSnapshot } from '@/lib/ai/server-snapshots'
 
@@ -51,10 +52,17 @@ export async function POST(request: Request) {
     const dateTo = body.dateTo || todayISO()
     const dateFrom = body.dateFrom || addDaysISO(dateTo, -6)
 
+    // Изоляция арендатора: срезы ограничиваем компаниями вызывающего.
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+    const scope = { allowedCompanyIds: companyScope.allowedCompanyIds }
+
     const [analysisSnap, reportsSnap, cashflowSnap] = await Promise.all([
-      getAnalysisServerSnapshot(access.supabase, { dateFrom, dateTo }),
-      getReportsServerSnapshot(access.supabase, { dateFrom, dateTo }),
-      getCashFlowServerSnapshot(access.supabase, { dateFrom, dateTo }),
+      getAnalysisServerSnapshot(access.supabase, { dateFrom, dateTo }, scope),
+      getReportsServerSnapshot(access.supabase, { dateFrom, dateTo }, scope),
+      getCashFlowServerSnapshot(access.supabase, { dateFrom, dateTo }, scope),
     ])
 
     const dataContext = [snapshotToText(analysisSnap), snapshotToText(reportsSnap), snapshotToText(cashflowSnap)].join('\n\n')

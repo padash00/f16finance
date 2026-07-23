@@ -1462,27 +1462,38 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
   const monthFrom = addDaysISO(today, -29)
   const quarterFrom = addDaysISO(today, -89)
 
-  // Загружаем максимум данных для глубокого анализа (с кэшем 3 мин)
-  const cacheKey = `ai_snapshot_${today}`
+  // Изоляция арендатора: данные ограничиваем компаниями/орг вызывающего.
+  // companyIds === null → super_admin / без орг (весь снапшот, как раньше).
+  const companyIds = botUser ? await botCompanyScope(botUser) : null
+  const scopeOrgId = botUser?.organizationId || null
+
+  // Загружаем максимум данных для глубокого анализа (с кэшем 3 мин).
+  // Ключ кэша включает орг, чтобы срезы разных арендаторов не смешивались.
+  const cacheKey = `ai_snapshot_${scopeOrgId || 'all'}_${today}`
   const cached = getCachedSnapshot(cacheKey)
   const [incomesWeekRes, expensesWeekRes, incomesPrevWeekRes, incomesMonthRes, incomesQuarterRes, expensesMonthRes, companiesRes, operatorsRes, staffRes, operatorProfilesRes] = cached ?? await (async () => {
+    const scopeInc = (q: any) => (companyIds ? q.in('company_id', companyIds) : q)
     const results = await Promise.all([
-      supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date, company_id, zone').gte('date', weekFrom).lte('date', today),
-      supabase.from('expenses').select('cash_amount, kaspi_amount, category, date, company_id').gte('date', weekFrom).lte('date', today),
-      supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date').gte('date', prevWeekFrom).lte('date', prevWeekTo),
+      scopeInc(supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date, company_id, zone').gte('date', weekFrom).lte('date', today)),
+      scopeInc(supabase.from('expenses').select('cash_amount, kaspi_amount, category, date, company_id').gte('date', weekFrom).lte('date', today)),
+      scopeInc(supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date, company_id').gte('date', prevWeekFrom).lte('date', prevWeekTo)),
       // Месяц/квартал могут быть >1000 строк — постранично, иначе суммы для AI занижены.
       fetchAllPages((from, to) =>
-        supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date, company_id').gte('date', monthFrom).lte('date', today).order('date').order('id').range(from, to),
+        scopeInc(supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date, company_id').gte('date', monthFrom).lte('date', today).order('date').order('id').range(from, to)),
       ).then((data) => ({ data })),
       fetchAllPages((from, to) =>
-        supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date').gte('date', quarterFrom).lte('date', today).order('date').order('id').range(from, to),
+        scopeInc(supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date, company_id').gte('date', quarterFrom).lte('date', today).order('date').order('id').range(from, to)),
       ).then((data) => ({ data })),
       fetchAllPages((from, to) =>
-        supabase.from('expenses').select('cash_amount, kaspi_amount, category, date, company_id').gte('date', monthFrom).lte('date', today).order('date').order('id').range(from, to),
+        scopeInc(supabase.from('expenses').select('cash_amount, kaspi_amount, category, date, company_id').gte('date', monthFrom).lte('date', today).order('date').order('id').range(from, to)),
       ).then((data) => ({ data })),
-      supabase.from('companies').select('id, name, code'),
-      supabase.from('operators').select('id, name, short_name, operator_profiles(full_name)').eq('is_active', true).limit(200),
-      supabase.from('staff').select('id, full_name, role').eq('is_active', true),
+      companyIds ? supabase.from('companies').select('id, name, code').in('id', companyIds) : supabase.from('companies').select('id, name, code'),
+      (scopeOrgId
+        ? supabase.from('operators').select('id, name, short_name, operator_profiles(full_name)').eq('is_active', true).eq('organization_id', scopeOrgId).limit(200)
+        : supabase.from('operators').select('id, name, short_name, operator_profiles(full_name)').eq('is_active', true).limit(200)),
+      (scopeOrgId
+        ? supabase.from('staff').select('id, full_name, role').eq('is_active', true).eq('organization_id', scopeOrgId)
+        : supabase.from('staff').select('id, full_name, role').eq('is_active', true)),
       supabase.from('operator_profiles').select('operator_id, full_name, birth_date').not('birth_date', 'is', null),
     ])
     setCachedSnapshot(cacheKey, results)
@@ -1590,7 +1601,13 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
   const operatorsLines = operatorsList.length > 0 ? `  • Операторы (${operatorCount}): ${operatorsList.join(', ')}` : ''
 
   // --- Дни рождения ---
-  const allProfiles = (operatorProfilesRes.data || []) as Array<{ operator_id: string; full_name: string | null; birth_date: string | null }>
+  // operator_profiles тянется без орг-колонки, поэтому при скоупе оставляем только
+  // профили операторов текущего арендатора (operatorsRes уже ограничен по орг).
+  let allProfiles = (operatorProfilesRes.data || []) as Array<{ operator_id: string; full_name: string | null; birth_date: string | null }>
+  if (scopeOrgId) {
+    const scopedOperatorIds = new Set((operatorsRes.data || []).map((op: any) => String(op.id)))
+    allProfiles = allProfiles.filter((p) => scopedOperatorIds.has(String(p.operator_id)))
+  }
   const upcomingBirthdays: string[] = []
   const todayParts = today.split('-').map(Number)
   const todayMD = todayParts[1] * 100 + todayParts[2]

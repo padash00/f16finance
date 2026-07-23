@@ -4,6 +4,7 @@ import { runAssistant, streamAssistant } from '@/lib/ai/assistant'
 import type { AssistantRequest } from '@/lib/ai/types'
 import { logAiUsageSafe } from '@/lib/ai/usage-tracker'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { resolveCompanyScope } from '@/lib/server/organizations'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini'
@@ -33,6 +34,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'page и prompt обязательны.' }, { status: 400 })
     }
 
+    // Изоляция арендатора: серверные срезы данных ограничиваем компаниями вызывающего.
+    const scope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+    const allowedCompanyIds = scope.allowedCompanyIds
+
     const wantsStream = request.headers.get('accept')?.includes('text/event-stream')
     if (wantsStream) {
       const stream = streamAssistant(
@@ -40,6 +48,7 @@ export async function POST(request: Request) {
         {
           supabase: access.supabase,
           currentSnapshot: body.snapshot || null,
+          allowedCompanyIds,
         },
         {
           signal: request.signal,
@@ -73,6 +82,7 @@ export async function POST(request: Request) {
     const result = await runAssistant(body, {
       supabase: access.supabase,
       currentSnapshot: body.snapshot || null,
+      allowedCompanyIds,
     })
 
     if (result.error) {

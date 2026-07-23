@@ -35,6 +35,13 @@ type FinanceDataBundle = {
   companies: CompanyRow[]
 }
 
+/**
+ * Скоуп изоляции по арендатору.
+ * allowedCompanyIds === null → суперадмин / без фильтра (все компании).
+ * allowedCompanyIds === [...] → только эти компании (пустой массив → нет данных).
+ */
+export type SnapshotScope = { allowedCompanyIds: string[] | null }
+
 function safeNumber(value: number | null | undefined) {
   return Number(value || 0)
 }
@@ -69,27 +76,36 @@ function addDaysISO(iso: string, diff: number) {
 async function fetchFinanceBundle(
   supabase: RequestSupabase,
   params?: { dateFrom?: string; dateTo?: string },
+  scope?: SnapshotScope,
 ): Promise<FinanceDataBundle> {
   const dateTo = clampDate(params?.dateTo, todayISO())
   const dateFrom = clampDate(params?.dateFrom, addDaysISO(dateTo, -29))
 
-  const [incomesRes, expensesRes, companiesRes] = await Promise.all([
-    supabase
-      .from('incomes')
-      .select('date, company_id, cash_amount, kaspi_amount, online_amount, card_amount')
-      .gte('date', dateFrom)
-      .lte('date', dateTo)
-      .order('date', { ascending: true })
-      .range(0, 4999),
-    supabase
-      .from('expenses')
-      .select('date, company_id, category, cash_amount, kaspi_amount')
-      .gte('date', dateFrom)
-      .lte('date', dateTo)
-      .order('date', { ascending: true })
-      .range(0, 4999),
-    supabase.from('companies').select('id, name, code'),
-  ])
+  // Изоляция арендатора: фильтруем по компаниям вызывающего (null → без фильтра).
+  const allowedCompanyIds = scope?.allowedCompanyIds ?? null
+
+  let incomesQ = supabase
+    .from('incomes')
+    .select('date, company_id, cash_amount, kaspi_amount, online_amount, card_amount')
+    .gte('date', dateFrom)
+    .lte('date', dateTo)
+    .order('date', { ascending: true })
+    .range(0, 4999)
+  let expensesQ = supabase
+    .from('expenses')
+    .select('date, company_id, category, cash_amount, kaspi_amount')
+    .gte('date', dateFrom)
+    .lte('date', dateTo)
+    .order('date', { ascending: true })
+    .range(0, 4999)
+  let companiesQ = supabase.from('companies').select('id, name, code')
+  if (allowedCompanyIds) {
+    incomesQ = incomesQ.in('company_id', allowedCompanyIds)
+    expensesQ = expensesQ.in('company_id', allowedCompanyIds)
+    companiesQ = companiesQ.in('id', allowedCompanyIds)
+  }
+
+  const [incomesRes, expensesRes, companiesRes] = await Promise.all([incomesQ, expensesQ, companiesQ])
 
   if (incomesRes.error) throw incomesRes.error
   if (expensesRes.error) throw expensesRes.error
@@ -241,8 +257,9 @@ function buildSharedAggregates(bundle: FinanceDataBundle) {
 export async function getAnalysisServerSnapshot(
   supabase: RequestSupabase,
   params?: { dateFrom?: string; dateTo?: string },
+  scope?: SnapshotScope,
 ): Promise<PageSnapshot> {
-  const data = buildSharedAggregates(await fetchFinanceBundle(supabase, params))
+  const data = buildSharedAggregates(await fetchFinanceBundle(supabase, params, scope))
   const riskLevel =
     data.totals.margin < 10 ? 'Высокий' : data.totals.margin < 20 || data.expenseTrend > 0 ? 'Средний' : 'Низкий'
 
@@ -301,8 +318,9 @@ export async function getAnalysisServerSnapshot(
 export async function getReportsServerSnapshot(
   supabase: RequestSupabase,
   params?: { dateFrom?: string; dateTo?: string },
+  scope?: SnapshotScope,
 ): Promise<PageSnapshot> {
-  const data = buildSharedAggregates(await fetchFinanceBundle(supabase, params))
+  const data = buildSharedAggregates(await fetchFinanceBundle(supabase, params, scope))
 
   return {
     page: 'reports',
@@ -343,8 +361,9 @@ export async function getReportsServerSnapshot(
 export async function getCashFlowServerSnapshot(
   supabase: RequestSupabase,
   params?: { dateFrom?: string; dateTo?: string },
+  scope?: SnapshotScope,
 ): Promise<PageSnapshot> {
-  const bundle = await fetchFinanceBundle(supabase, params)
+  const bundle = await fetchFinanceBundle(supabase, params, scope)
   const data = buildSharedAggregates(bundle)
 
   // Build daily cash flow
@@ -419,8 +438,9 @@ export async function getCashFlowServerSnapshot(
 export async function getExpensesServerSnapshot(
   supabase: RequestSupabase,
   params?: { dateFrom?: string; dateTo?: string },
+  scope?: SnapshotScope,
 ): Promise<PageSnapshot> {
-  const data = buildSharedAggregates(await fetchFinanceBundle(supabase, params))
+  const data = buildSharedAggregates(await fetchFinanceBundle(supabase, params, scope))
   const trendLabel = data.expenseTrend > 0 ? 'Рост расходов' : data.expenseTrend < 0 ? 'Снижение расходов' : 'Стабильно'
 
   return {

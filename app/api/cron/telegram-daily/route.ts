@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requiredEnv } from '@/lib/server/env'
+import { listOrgReportTargets } from '@/lib/server/report-targets'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { escapeTelegramHtml } from '@/lib/telegram/message-kit'
 import { sendTelegramMessage } from '@/lib/telegram/send'
@@ -38,36 +39,21 @@ async function fetchAllPages(build: (from: number, to: number) => any): Promise<
   return out
 }
 
-export async function GET(req: Request) {
-  const auth = req.headers.get('authorization') || ''
-  const cronSecret = requiredEnv('CRON_SECRET')
-  if (auth !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 })
-  }
-
-  const chatId = process.env.TELEGRAM_CHAT_ID
-  if (!chatId) return NextResponse.json({ ok: false, error: 'TELEGRAM_CHAT_ID not set' })
-
-  const supabase = createAdminSupabaseClient()
-  const date = yesterdayKZISO()
-
-  // Мультитенант: если задан TELEGRAM_OWNER_ORG_ID — отчёт только по его точкам.
-  // Не задан → по всем (текущее поведение для единственного тенанта F16).
-  const ownerOrgId = process.env.TELEGRAM_OWNER_ORG_ID || null
-  let ownerCompanyIds: string[] | null = null
-  if (ownerOrgId) {
-    const { data: cos } = await supabase.from('companies').select('id').eq('organization_id', ownerOrgId)
-    ownerCompanyIds = (cos || []).map((c: any) => String(c.id))
-  }
-
+// Собирает текст дневного отчёта по заданному скоупу компаний.
+// companyIds === null → без фильтра (env-фолбэк single-tenant F16).
+async function buildDailyReport(
+  supabase: ReturnType<typeof createAdminSupabaseClient>,
+  date: string,
+  companyIds: string[] | null,
+): Promise<{ messageText: string; totalIncome: number; totalExpense: number; profit: number }> {
   let incQ = supabase
     .from('incomes')
     .select('cash_amount, kaspi_amount, online_amount, card_amount, operator_id, company_id, companies(name, code)')
     .eq('date', date)
-  let expQ = supabase.from('expenses').select('cash_amount, kaspi_amount, category').eq('date', date)
-  if (ownerCompanyIds) {
-    incQ = incQ.in('company_id', ownerCompanyIds)
-    expQ = expQ.in('company_id', ownerCompanyIds)
+  let expQ = supabase.from('expenses').select('cash_amount, kaspi_amount, category, company_id').eq('date', date)
+  if (companyIds) {
+    incQ = incQ.in('company_id', companyIds)
+    expQ = expQ.in('company_id', companyIds)
   }
   const [incomesRes, expensesRes] = await Promise.all([incQ, expQ])
 
@@ -126,16 +112,18 @@ export async function GET(req: Request) {
     return `${past.getUTCFullYear()}-${String(past.getUTCMonth() + 1).padStart(2, '0')}-${String(past.getUTCDate()).padStart(2, '0')}`
   })()
   // 30 дней доходов может быть >1000 строк — постранично, иначе средняя занижается.
-  const avgRows = await fetchAllPages((from, to) =>
-    supabase
+  const avgRows = await fetchAllPages((from, to) => {
+    let q = supabase
       .from('incomes')
-      .select('date, cash_amount, kaspi_amount, online_amount, card_amount')
+      .select('date, cash_amount, kaspi_amount, online_amount, card_amount, company_id')
       .gte('date', thirtyDaysAgo)
       .lt('date', date)
       .order('date', { ascending: true })
       .order('id', { ascending: true })
-      .range(from, to),
-  ).catch(() => [] as any[])
+      .range(from, to)
+    if (companyIds) q = q.in('company_id', companyIds)
+    return q
+  }).catch(() => [] as any[])
 
   const dayTotals = new Map<string, number>()
   for (const row of (avgRows ?? []) as any[]) {
@@ -197,11 +185,58 @@ export async function GET(req: Request) {
   }
 
   const messageText = lines.join('\n')
+  return { messageText, totalIncome, totalExpense, profit }
+}
+
+export async function GET(req: Request) {
+  const auth = req.headers.get('authorization') || ''
+  const cronSecret = requiredEnv('CRON_SECRET')
+  if (auth !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 })
+  }
+
+  const supabase = createAdminSupabaseClient()
+  const date = yesterdayKZISO()
+
+  // Изоляция: каждой организации с настроенным telegram_owner_chat_id — только её
+  // точки в её чат. Если per-org целей нет — прежнее env-поведение (F16 single-tenant).
+  const orgTargets = await listOrgReportTargets()
+  if (orgTargets.length > 0) {
+    const results = []
+    for (const t of orgTargets) {
+      const report = await buildDailyReport(supabase, date, t.companyIds)
+      await sendTelegramMessage(t.chatId, report.messageText).then(() => null).catch(() => null)
+      results.push({ org: t.organizationId, totalIncome: report.totalIncome, profit: report.profit })
+    }
+    return NextResponse.json({ ok: true, perOrg: true, date, results })
+  }
+
+  // Env-фолбэк (F16): скоуп по TELEGRAM_OWNER_ORG_ID (если задан), рассылка в общий
+  // отчётный чат + владельцу — как было раньше.
+  const chatId = process.env.TELEGRAM_CHAT_ID
+  if (!chatId) return NextResponse.json({ ok: false, error: 'TELEGRAM_CHAT_ID not set' })
+
+  const ownerOrgId = process.env.TELEGRAM_OWNER_ORG_ID || null
+  let ownerCompanyIds: string[] | null = null
+  if (ownerOrgId) {
+    const { data: cos } = await supabase.from('companies').select('id').eq('organization_id', ownerOrgId)
+    ownerCompanyIds = (cos || []).map((c: any) => String(c.id))
+  }
+
+  const report = await buildDailyReport(supabase, date, ownerCompanyIds)
   const recipients = [chatId, process.env.TELEGRAM_OWNER_CHAT_ID].filter(Boolean) as string[]
   const uniqueRecipients = [...new Set(recipients)]
   await Promise.all(
-    uniqueRecipients.map((id) => sendTelegramMessage(id, messageText).then(() => null).catch(() => null)),
+    uniqueRecipients.map((id) => sendTelegramMessage(id, report.messageText).then(() => null).catch(() => null)),
   )
 
-  return NextResponse.json({ ok: true, date, totalIncome, totalExpense, profit, recipients: uniqueRecipients.length })
+  return NextResponse.json({
+    ok: true,
+    perOrg: false,
+    date,
+    totalIncome: report.totalIncome,
+    totalExpense: report.totalExpense,
+    profit: report.profit,
+    recipients: uniqueRecipients.length,
+  })
 }

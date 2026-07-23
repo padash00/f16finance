@@ -19,6 +19,7 @@ import { NextResponse } from 'next/server'
 
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { listOrgReportTargets } from '@/lib/server/report-targets'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { sendTelegramMessage } from '@/lib/telegram/send'
 
@@ -174,14 +175,15 @@ export async function GET(req: Request) {
     }
 
     // 4. Создаём авто-заявки.
-    const created: Array<{ supplier_id: string; supplier_name: string; order_id: string | null; item_count: number }> = []
+    const created: Array<{ supplier_id: string; supplier_name: string; organization_id: string | null; order_id: string | null; item_count: number }> = []
     for (const [supplierId, lowItems] of bySupplier.entries()) {
       if (lowItems.length === 0) continue
       const supplier = supplierById.get(supplierId)
       const supplierName = supplier?.organization_name || supplier?.name || 'Поставщик'
+      const supplierOrgId = supplier?.organization_id ? String(supplier.organization_id) : null
 
       if (dry) {
-        created.push({ supplier_id: supplierId, supplier_name: supplierName, order_id: null, item_count: lowItems.length })
+        created.push({ supplier_id: supplierId, supplier_name: supplierName, organization_id: supplierOrgId, order_id: null, item_count: lowItems.length })
         continue
       }
 
@@ -228,23 +230,24 @@ export async function GET(req: Request) {
         })
         continue
       }
-      created.push({ supplier_id: supplierId, supplier_name: supplierName, order_id: orderId, item_count: lowItems.length })
+      created.push({ supplier_id: supplierId, supplier_name: supplierName, organization_id: supplierOrgId, order_id: orderId, item_count: lowItems.length })
     }
 
     // 5. Telegram-пинг владельцу.
     if (isCron && !dry && created.length > 0) {
-      const chatId = process.env.TELEGRAM_ADMIN_CHAT_ID || process.env.TELEGRAM_CHAT_ID
-      if (chatId) {
-        const lines = created
-          .map((c) => `• <b>${c.supplier_name}</b> — ${c.item_count} позиций`)
-          .join('\n')
-        const message =
+      const buildMessage = (list: typeof created) => {
+        const lines = list.map((c) => `• <b>${c.supplier_name}</b> — ${c.item_count} позиций`).join('\n')
+        return (
           `🛒 <b>Автозаявки поставщикам</b>\n` +
-          `Создано черновиков: <b>${created.length}</b>\n\n` +
+          `Создано черновиков: <b>${list.length}</b>\n\n` +
           lines +
           `\n\nОткройте «Заявки поставщикам» и отправьте торгпредам.`
+        )
+      }
+      const notify = async (chatId: string, list: typeof created) => {
+        if (list.length === 0) return
         try {
-          await sendTelegramMessage(chatId, message, { parseMode: 'HTML' })
+          await sendTelegramMessage(chatId, buildMessage(list), { parseMode: 'HTML' })
         } catch (tgError: any) {
           await writeSystemErrorLogSafe({
             scope: 'server',
@@ -252,6 +255,18 @@ export async function GET(req: Request) {
             message: tgError?.message || 'telegram failed',
           })
         }
+      }
+
+      // Изоляция: каждой организации — её автозаявки в её чат. Нет per-org целей →
+      // прежнее поведение (единый админ-чат по всем поставщикам, F16 single-tenant).
+      const orgTargets = await listOrgReportTargets()
+      if (orgTargets.length > 0) {
+        for (const t of orgTargets) {
+          await notify(t.chatId, created.filter((c) => c.organization_id && c.organization_id === t.organizationId))
+        }
+      } else {
+        const chatId = process.env.TELEGRAM_ADMIN_CHAT_ID || process.env.TELEGRAM_CHAT_ID
+        if (chatId) await notify(chatId, created)
       }
     }
 
