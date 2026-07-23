@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { humanizeDbError } from '@/lib/server/db-error-humanize'
 import { createPointInventorySale } from '@/lib/server/repositories/inventory'
-import { requirePointDevice } from '@/lib/server/point-devices'
+import { requirePointDevice, resolveCompanyOrganizationId } from '@/lib/server/point-devices'
 import { requireCurrentOpenShiftId } from '@/lib/server/point-shifts'
 import { checkAndNotifyLowStock } from '@/lib/server/low-stock-notifier'
 
@@ -781,6 +781,8 @@ export async function GET(request: Request) {
     }
 
     const stock = await resolveStockLocations(supabase, device.company_id)
+    // Изоляция арендатора: каталог кассы — только товары своей организации
+    const catalogOrgId = await resolveCompanyOrganizationId(supabase, device.company_id)
 
     const [items, showcaseMap, { data: sales, error: salesError }] =
       await Promise.all([
@@ -788,6 +790,7 @@ export async function GET(request: Request) {
           supabase
             .from('inventory_items')
             .select('id, name, barcode, unit, sale_price, item_type, image_url, category:category_id(id, name)')
+            .eq('organization_id', catalogOrgId)
             .eq('is_active', true)
             .neq('item_type', 'consumable')
             .order('name', { ascending: true })
@@ -911,10 +914,13 @@ export async function POST(request: Request) {
     }
 
     const [{ data: dbItems, error: itemError }, showcaseBalances, customerContext] = await Promise.all([
-      supabase
-        .from('inventory_items')
-        .select('id, name, sale_price, is_active, item_type')
-        .in('id', itemIds),
+      resolveCompanyOrganizationId(supabase, device.company_id).then((orgId) =>
+        supabase
+          .from('inventory_items')
+          .select('id, name, sale_price, is_active, item_type')
+          .eq('organization_id', orgId)
+          .in('id', itemIds),
+      ),
       fetchShowcaseBalances({
         supabase,
         catalogId: stock.catalogId,

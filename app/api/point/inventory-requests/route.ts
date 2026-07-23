@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { humanizeDbError } from '@/lib/server/db-error-humanize'
 import { createInventoryRequest } from '@/lib/server/repositories/inventory'
-import { requirePointDevice } from '@/lib/server/point-devices'
+import { requirePointDevice, resolveCompanyOrganizationId } from '@/lib/server/point-devices'
 import { requireCurrentOpenShiftId } from '@/lib/server/point-shifts'
 import { notifyInventoryRequestCreated } from '@/lib/server/telegram'
 
@@ -161,10 +161,12 @@ export async function GET(request: Request) {
       .map((row: any) => ({ item_id: String(row.item_id || ''), quantity: Number(row.quantity || 0) }))
       .filter((row: any) => row.item_id && row.quantity > 0)
 
+    const requestCatalogOrgId = await resolveCompanyOrganizationId(supabase, device.company_id)
     const items: any[] = await fetchAllPages((from, to) =>
       supabase
         .from('inventory_items')
         .select('id, name, barcode, unit, sale_price, category:category_id(id, name)')
+        .eq('organization_id', requestCatalogOrgId)
         .eq('is_active', true)
         .order('name', { ascending: true })
         .order('id')

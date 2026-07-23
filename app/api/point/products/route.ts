@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { validateAdminToken } from '@/lib/server/admin-tokens'
-import { requirePointDevice } from '@/lib/server/point-devices'
+import { requirePointDevice, resolveCompanyOrganizationId } from '@/lib/server/point-devices'
 
 type ProductPayload = {
   name?: string | null
@@ -78,15 +78,18 @@ async function ensureCompanyPointProductsFromInventory(params: {
         .order('id')
         .range(from, to),
     ),
-    fetchAllPages((from, to) =>
-      params.supabase
-        .from('inventory_items')
-        .select('id, name, barcode, sale_price, is_active, item_type')
-        .eq('is_active', true)
-        .neq('item_type', 'consumable')
-        .order('name', { ascending: true })
-        .order('id')
-        .range(from, to),
+    resolveCompanyOrganizationId(params.supabase, params.companyId).then((orgId) =>
+      fetchAllPages((from, to) =>
+        params.supabase
+          .from('inventory_items')
+          .select('id, name, barcode, sale_price, is_active, item_type')
+          .eq('organization_id', orgId)
+          .eq('is_active', true)
+          .neq('item_type', 'consumable')
+          .order('name', { ascending: true })
+          .order('id')
+          .range(from, to),
+      ),
     ),
   ])
 

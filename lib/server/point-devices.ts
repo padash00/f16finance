@@ -168,3 +168,18 @@ export async function requirePointDevice(request: Request): Promise<
     device: deviceFromPointProjectRow(data, requestedCompanyId),
   }
 }
+
+/**
+ * organization_id компании точки — для изоляции каталога арендатора в point-API.
+ * NEVER-паттерн: компании нет / орг не проставлена → нулевой uuid, чтобы
+ * скоуп-фильтр .eq('organization_id', …) дал пустой список, а не чужой каталог.
+ */
+export async function resolveCompanyOrganizationId(
+  supabase: { from: (t: string) => any },
+  companyId: string | null | undefined,
+): Promise<string> {
+  const id = String(companyId || '').trim()
+  if (!id) return '00000000-0000-0000-0000-000000000000'
+  const { data } = await supabase.from('companies').select('organization_id').eq('id', id).maybeSingle()
+  return String((data as any)?.organization_id || '') || '00000000-0000-0000-0000-000000000000'
+}
