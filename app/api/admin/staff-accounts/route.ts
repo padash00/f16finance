@@ -170,14 +170,19 @@ export async function GET(req: Request) {
     // Tenant scoping: restrict to staff within the active organization.
     // In LEGACY_SINGLE_TENANT_MODE this returns all staff ids (no-op filter).
     let scopedStaffIds = staffIds
-    if (!access.isSuperAdmin && access.activeOrganization?.id) {
-      const allowedStaffIds = await listOrganizationStaffIds({
-        activeOrganizationId: access.activeOrganization.id,
-        isSuperAdmin: access.isSuperAdmin,
-      })
-      if (allowedStaffIds) {
-        const allowedSet = new Set(allowedStaffIds)
-        scopedStaffIds = staffIds.filter((id) => allowedSet.has(id))
+    if (!access.isSuperAdmin) {
+      // Не-супер без активной орг → пустой скоуп (fail-closed), не все staff
+      if (!access.activeOrganization?.id) {
+        scopedStaffIds = []
+      } else {
+        const allowedStaffIds = await listOrganizationStaffIds({
+          activeOrganizationId: access.activeOrganization.id,
+          isSuperAdmin: access.isSuperAdmin,
+        })
+        if (allowedStaffIds) {
+          const allowedSet = new Set(allowedStaffIds)
+          scopedStaffIds = staffIds.filter((id) => allowedSet.has(id))
+        }
       }
     }
 
@@ -263,7 +268,9 @@ export async function POST(req: Request) {
 
     // Tenant scoping: reject mutations on staff outside the active organization.
     // In LEGACY_SINGLE_TENANT_MODE listOrganizationStaffIds returns all staff (no-op).
-    if (!access.isSuperAdmin && access.activeOrganization?.id) {
+    if (!access.isSuperAdmin) {
+      // Не-супер без активной орг → отказ (fail-closed)
+      if (!access.activeOrganization?.id) return json({ error: 'forbidden' }, 403)
       const allowedStaffIds = await listOrganizationStaffIds({
         activeOrganizationId: access.activeOrganization.id,
         isSuperAdmin: access.isSuperAdmin,

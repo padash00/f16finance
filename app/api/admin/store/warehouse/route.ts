@@ -352,19 +352,25 @@ export async function POST(request: Request) {
       const barcodes = [...new Set(needLookup.map((i) => i.barcode!))]
 
       let itemByBarcode: Record<string, string> = {}
+      const orgId = access.activeOrganization?.id || null
+      // Изоляция: штрихкод теперь уникален per-org, поэтому lookup ОБЯЗАН
+      // скоупиться по орг — иначе приход зачислился бы на товар чужого
+      // арендатора с тем же штрихкодом (NEVER: не-супер без орг → нулевой uuid).
+      const lookupOrg = access.isSuperAdmin ? null : (orgId || '00000000-0000-0000-0000-000000000000')
       if (barcodes.length > 0) {
         // Чанки по 200 штрихкодов — лимит длины URL + лимит 1000 строк ответа.
         for (const bcChunk of chunkArray(barcodes, 200)) {
-          const { data: found } = await supabase
+          let lq = supabase
             .from('inventory_items')
             .select('id, barcode')
             .in('barcode', bcChunk)
             .eq('is_active', true)
+          if (lookupOrg) lq = lq.eq('organization_id', lookupOrg)
+          const { data: found } = await lq
           ;(found || []).forEach((row: any) => { itemByBarcode[row.barcode] = row.id })
         }
       }
 
-      const orgId = access.activeOrganization?.id || null
       const toCreate = needLookup.filter((i) => i.barcode && !itemByBarcode[i.barcode!] && i.name)
 
       if (toCreate.length > 0) {

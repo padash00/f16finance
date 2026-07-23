@@ -51,8 +51,10 @@ export async function POST(request: Request) {
     if (companyError) throw companyError
     if (!company?.id) return json({ error: 'company-not-found' }, 404)
 
-    if (!access.isSuperAdmin && access.activeOrganization?.id) {
-      if (String(company.organization_id || '') !== String(access.activeOrganization.id)) {
+    // Fail-closed: не-супер без активной орг тоже отсекается (пустой activeOrg
+    // не совпадёт с реальной organization_id компании).
+    if (!access.isSuperAdmin) {
+      if (String(company.organization_id || '') !== String(access.activeOrganization?.id || '\0')) {
         return json({ error: 'forbidden' }, 403)
       }
     }
