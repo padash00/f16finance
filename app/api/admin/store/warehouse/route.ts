@@ -377,9 +377,11 @@ export async function POST(request: Request) {
           organization_id: orgId,
           is_active: true,
         }))
+        // Изоляция: onConflict по (organization_id, barcode), иначе upsert по
+        // одному barcode переписал бы товар другого арендатора.
         const { data: created } = await supabase
           .from('inventory_items')
-          .upsert(inserts, { onConflict: 'barcode', ignoreDuplicates: false })
+          .upsert(inserts, { onConflict: 'organization_id,barcode', ignoreDuplicates: false })
           .select('id, barcode')
         ;(created || []).forEach((row: any) => { itemByBarcode[row.barcode] = row.id })
       }

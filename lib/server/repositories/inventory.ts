@@ -777,6 +777,13 @@ export async function syncInventoryItemToPointProducts(
   const normalizedName = String(payload.name || '').trim()
   if (!normalizedBarcode || !normalizedName) return { syncedCompanyIds: [] as string[] }
 
+  // Изоляция (fail-closed): синк POS-каталога только в витрины СВОЕЙ орг.
+  // Не суперадмин без организации → синкать некуда (иначе имя/цена товара
+  // затирали бы point_products всех арендаторов с тем же штрихкодом).
+  if (!payload.isSuperAdmin && !payload.organizationId) {
+    return { syncedCompanyIds: [] as string[] }
+  }
+
   let locationsQuery = supabase
     .from('inventory_locations')
     .select('company_id')

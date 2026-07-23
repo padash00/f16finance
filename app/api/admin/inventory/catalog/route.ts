@@ -1017,6 +1017,8 @@ export async function POST(request: Request) {
 
       if (String(fields.item_type || 'product') !== 'consumable') {
         await syncInventoryItemToPointProducts(supabase as any, {
+          organizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
           name: String(fields.name || '').trim(),
           barcode: String(fields.barcode || '').trim(),
           sale_price: Number(fields.sale_price || 0),
