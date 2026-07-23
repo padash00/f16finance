@@ -52,8 +52,10 @@ export async function GET(request: Request) {
       .select('id, supplier_id, status, is_auto, comment, sent_at, received_at, cancelled_at, created_at, supplier:supplier_id(id, name, organization_name, sales_rep_name, sales_rep_phone), items:inventory_purchase_order_items(id)')
       .order('created_at', { ascending: false })
       .limit(300)
-    if (!access.isSuperAdmin && access.activeOrganization?.id) {
-      query = query.eq('organization_id', access.activeOrganization.id)
+    // NEVER-pattern: не-супер без орг → нулевой uuid → 0 строк (fail-closed).
+    const scopeOrg = access.isSuperAdmin ? null : (access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+    if (scopeOrg) {
+      query = query.eq('organization_id', scopeOrg)
     }
     if (statusParam) query = query.eq('status', statusParam)
 
@@ -113,8 +115,10 @@ export async function POST(request: Request) {
       .select('id, organization_id, name')
       .eq('id', supplierId)
       .limit(1)
-    if (!access.isSuperAdmin && access.activeOrganization?.id) {
-      supplierQuery = supplierQuery.eq('organization_id', access.activeOrganization.id)
+    // NEVER-pattern: не-супер без орг → нулевой uuid → чужой supplier не совпадёт.
+    const scopeOrgSup = access.isSuperAdmin ? null : (access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+    if (scopeOrgSup) {
+      supplierQuery = supplierQuery.eq('organization_id', scopeOrgSup)
     }
     const { data: supplier, error: supplierError } = await supplierQuery.maybeSingle()
     if (supplierError) throw supplierError

@@ -73,8 +73,10 @@ export async function GET(request: Request) {
       .select('id, name, organization_name, bin_iin, contact_name, phone, organization_id, preferred_expense_category_id, created_at')
       .order('name', { ascending: true })
       .limit(500)
-    if (!access.isSuperAdmin && access.activeOrganization?.id) {
-      query = query.eq('organization_id', access.activeOrganization.id)
+    // NEVER-pattern: не-супер без орг → нулевой uuid → 0 строк (fail-closed).
+    const scopeOrg = access.isSuperAdmin ? null : (access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+    if (scopeOrg) {
+      query = query.eq('organization_id', scopeOrg)
     }
     const { data: suppliers, error } = await query
     if (error) throw error

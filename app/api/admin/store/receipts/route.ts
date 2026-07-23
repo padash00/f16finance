@@ -162,8 +162,10 @@ export async function GET(request: Request) {
       .eq('status', 'draft')
       .order('updated_at', { ascending: false })
       .limit(30)
-    if (!access.isSuperAdmin && access.activeOrganization?.id) {
-      draftsQuery = draftsQuery.eq('organization_id', access.activeOrganization.id)
+    // NEVER-pattern: не-супер без орг → нулевой uuid → 0 строк (fail-closed).
+    const scopeOrg = access.isSuperAdmin ? null : (access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+    if (scopeOrg) {
+      draftsQuery = draftsQuery.eq('organization_id', scopeOrg)
     }
     // Эти три запроса независимы (не используют результат друг друга) — параллелим,
     // чтобы не складывать round-trip'ы до БД в Токио.
@@ -228,8 +230,10 @@ export async function POST(request: Request) {
         .eq('id', draftId)
         .eq('status', 'draft')
         .maybeSingle()
-      if (!access.isSuperAdmin && access.activeOrganization?.id) {
-        currentDraftQuery = currentDraftQuery.eq('organization_id', access.activeOrganization.id)
+      // NEVER-pattern: не-супер без орг → нулевой uuid → чужой draft не совпадёт.
+      const scopeOrgCur = access.isSuperAdmin ? null : (access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+      if (scopeOrgCur) {
+        currentDraftQuery = currentDraftQuery.eq('organization_id', scopeOrgCur)
       }
       const { data: currentDraft, error: currentDraftError } = await currentDraftQuery
       if (currentDraftError) throw currentDraftError
@@ -238,8 +242,10 @@ export async function POST(request: Request) {
         .update({ status: 'cancelled' })
         .eq('id', draftId)
         .eq('status', 'draft')
-      if (!access.isSuperAdmin && access.activeOrganization?.id) {
-        query = query.eq('organization_id', access.activeOrganization.id)
+      // NEVER-pattern: не-супер без орг → нулевой uuid → чужой draft не совпадёт.
+      const scopeOrgDel = access.isSuperAdmin ? null : (access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+      if (scopeOrgDel) {
+        query = query.eq('organization_id', scopeOrgDel)
       }
       const { error: deleteDraftError } = await query
       if (deleteDraftError) throw deleteDraftError
@@ -432,8 +438,10 @@ export async function POST(request: Request) {
           .eq('id', row.item_id)
           .select('name, barcode, sale_price, is_active')
           .single()
-        if (!access.isSuperAdmin && access.activeOrganization?.id) {
-          priceQuery = priceQuery.eq('organization_id', access.activeOrganization.id)
+        // NEVER-pattern: не-супер без орг → нулевой uuid → чужой item не совпадёт.
+        const scopeOrgPrice = access.isSuperAdmin ? null : (access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+        if (scopeOrgPrice) {
+          priceQuery = priceQuery.eq('organization_id', scopeOrgPrice)
         }
         const { data: itemRow, error: priceErr } = await priceQuery
         if (priceErr) throw priceErr
@@ -502,8 +510,10 @@ export async function POST(request: Request) {
           })
           .eq('id', draftId)
           .eq('status', 'draft')
-        if (!access.isSuperAdmin && access.activeOrganization?.id) {
-          updateQuery = updateQuery.eq('organization_id', access.activeOrganization.id)
+        // NEVER-pattern: не-супер без орг → нулевой uuid → чужой draft не совпадёт.
+        const scopeOrgUpd = access.isSuperAdmin ? null : (access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+        if (scopeOrgUpd) {
+          updateQuery = updateQuery.eq('organization_id', scopeOrgUpd)
         }
         const { data: updatedDraft, error: updateDraftError } = await updateQuery.select('id').single()
         if (updateDraftError) throw updateDraftError
@@ -882,8 +892,10 @@ export async function POST(request: Request) {
           .eq('id', row.item_id)
           .select('name, barcode, sale_price, is_active')
           .single()
-        if (!access.isSuperAdmin && access.activeOrganization?.id) {
-          query = query.eq('organization_id', access.activeOrganization.id)
+        // NEVER-pattern: не-супер без орг → нулевой uuid → чужой item не совпадёт.
+        const scopeOrgItem = access.isSuperAdmin ? null : (access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+        if (scopeOrgItem) {
+          query = query.eq('organization_id', scopeOrgItem)
         }
         const { data: itemRow, error: upErr } = await query
         if (upErr) throw upErr
@@ -958,8 +970,10 @@ export async function POST(request: Request) {
         })
         .eq('id', draftId)
         .eq('status', 'draft')
-      if (!access.isSuperAdmin && access.activeOrganization?.id) {
-        draftUpdateQuery = draftUpdateQuery.eq('organization_id', access.activeOrganization.id)
+      // NEVER-pattern: не-супер без орг → нулевой uuid → чужой draft не совпадёт.
+      const scopeOrgDraftUpd = access.isSuperAdmin ? null : (access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+      if (scopeOrgDraftUpd) {
+        draftUpdateQuery = draftUpdateQuery.eq('organization_id', scopeOrgDraftUpd)
       }
       const { error: draftMarkError } = await draftUpdateQuery
       if (draftMarkError) throw draftMarkError

@@ -54,8 +54,12 @@ export async function GET(request: Request) {
     if (entityId) query = query.eq('entity_id', entityId)
 
     // Изоляция по организации (старые строки без org — видны своей орг).
+    // NEVER-pattern: не-супер без орг → нулевой uuid → 0 строк (fail-closed).
     const orgId = access.activeOrganization?.id || null
-    if (orgId) query = query.or(`organization_id.is.null,organization_id.eq.${orgId}`)
+    if (!access.isSuperAdmin) {
+      if (orgId) query = query.or(`organization_id.is.null,organization_id.eq.${orgId}`)
+      else query = query.eq('organization_id', '00000000-0000-0000-0000-000000000000')
+    }
 
     const { data: rows, error } = await query
     if (error) throw error
@@ -66,7 +70,9 @@ export async function GET(request: Request) {
       // Изоляция: имена актёров — только из staff своей орг (иначе через legacy-NULL
       // строки audit_log утекали бы ФИО/роли сотрудников чужой орг).
       let staffQuery: any = supabase.from('staff').select('id, full_name, role').in('id', actorIds)
-      if (orgId) staffQuery = staffQuery.eq('organization_id', orgId)
+      // NEVER-pattern: не-супер без орг → нулевой uuid → ничего.
+      const scopeOrg = access.isSuperAdmin ? null : (orgId || '00000000-0000-0000-0000-000000000000')
+      if (scopeOrg) staffQuery = staffQuery.eq('organization_id', scopeOrg)
       const { data: staffRows } = await staffQuery
       for (const s of staffRows || []) {
         staffMap[String((s as any).id)] = {

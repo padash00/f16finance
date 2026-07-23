@@ -39,8 +39,10 @@ export async function GET(
       .select('id, supplier_id, organization_id, status, is_auto, comment, sent_at, received_at, cancelled_at, cancel_reason, created_at, supplier:supplier_id(id, name, organization_name, bin_iin, phone, sales_rep_name, sales_rep_phone, lead_time_days), items:inventory_purchase_order_items(id, item_id, current_qty, threshold, suggested_qty, comment, item:item_id(id, name, barcode, unit))')
       .eq('id', id)
       .limit(1)
-    if (!access.isSuperAdmin && access.activeOrganization?.id) {
-      orderQuery = orderQuery.eq('organization_id', access.activeOrganization.id)
+    // NEVER-pattern: не-супер без орг → нулевой uuid → чужой id не совпадёт.
+    const scopeOrg = access.isSuperAdmin ? null : (access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+    if (scopeOrg) {
+      orderQuery = orderQuery.eq('organization_id', scopeOrg)
     }
     const { data: order, error } = await orderQuery.maybeSingle()
     if (error) throw error
@@ -81,8 +83,10 @@ export async function PATCH(
       .select('id, status, organization_id')
       .eq('id', id)
       .limit(1)
-    if (!access.isSuperAdmin && access.activeOrganization?.id) {
-      currentQuery = currentQuery.eq('organization_id', access.activeOrganization.id)
+    // NEVER-pattern: не-супер без орг → нулевой uuid → чужой id не совпадёт.
+    const scopeOrg = access.isSuperAdmin ? null : (access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+    if (scopeOrg) {
+      currentQuery = currentQuery.eq('organization_id', scopeOrg)
     }
     const { data: current, error: currentError } = await currentQuery.maybeSingle()
     if (currentError) throw currentError

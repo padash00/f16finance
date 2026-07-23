@@ -39,8 +39,10 @@ export async function GET(
       .eq('debt_id', id)
       .order('created_at', { ascending: false })
       .limit(100)
-    if (!access.isSuperAdmin && access.activeOrganization?.id) {
-      query = query.eq('organization_id', access.activeOrganization.id)
+    // NEVER-pattern: не-супер без орг → нулевой uuid → чужой id не совпадёт.
+    const scopeOrg = access.isSuperAdmin ? null : (access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+    if (scopeOrg) {
+      query = query.eq('organization_id', scopeOrg)
     }
 
     const { data, error } = await query

@@ -44,8 +44,10 @@ export async function PATCH(
       .select('id, status, organization_id, due_date, supplier_id, receipt_id')
       .eq('id', id)
       .limit(1)
-    if (!access.isSuperAdmin && access.activeOrganization?.id) {
-      debtQuery = debtQuery.eq('organization_id', access.activeOrganization.id)
+    // NEVER-pattern: не-супер без орг → нулевой uuid → чужой id не совпадёт.
+    const scopeOrg = access.isSuperAdmin ? null : (access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+    if (scopeOrg) {
+      debtQuery = debtQuery.eq('organization_id', scopeOrg)
     }
     const { data: debt, error: debtError } = await debtQuery.maybeSingle()
     if (debtError) throw debtError

@@ -56,8 +56,10 @@ export async function GET(request: Request) {
       .order('created_at', { ascending: false })
       .limit(500)
 
-    if (!access.isSuperAdmin && access.activeOrganization?.id) {
-      debtsQuery = debtsQuery.eq('organization_id', access.activeOrganization.id)
+    // NEVER-pattern: не-супер без орг → нулевой uuid → 0 строк (fail-closed).
+    const scopeOrg = access.isSuperAdmin ? null : (access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+    if (scopeOrg) {
+      debtsQuery = debtsQuery.eq('organization_id', scopeOrg)
     }
     if (statusParam === 'open' || statusParam === 'paid' || statusParam === 'written_off') {
       debtsQuery = debtsQuery.eq('status', statusParam)

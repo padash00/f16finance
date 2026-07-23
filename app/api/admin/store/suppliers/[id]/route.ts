@@ -59,8 +59,10 @@ export async function GET(
       .select('id, name, organization_name, bin_iin, contact_name, phone, notes, sales_rep_name, sales_rep_phone, lead_time_days, organization_id, preferred_expense_category_id, created_at')
       .eq('id', id)
       .limit(1)
-    if (!access.isSuperAdmin && access.activeOrganization?.id) {
-      supplierQuery = supplierQuery.eq('organization_id', access.activeOrganization.id)
+    // NEVER-pattern: не-супер без орг → нулевой uuid → чужой id не совпадёт.
+    const scopeOrg = access.isSuperAdmin ? null : (access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+    if (scopeOrg) {
+      supplierQuery = supplierQuery.eq('organization_id', scopeOrg)
     }
     const { data: supplier, error: supplierError } = await supplierQuery.maybeSingle()
     if (supplierError) throw supplierError

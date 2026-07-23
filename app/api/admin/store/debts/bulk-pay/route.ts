@@ -63,8 +63,10 @@ export async function POST(request: Request) {
          category:expense_category_id(id, name, accounting_group)`,
       )
       .in('id', debtIds)
-    if (!access.isSuperAdmin && access.activeOrganization?.id) {
-      debtsQuery = debtsQuery.eq('organization_id', access.activeOrganization.id)
+    // NEVER-pattern: не-супер без орг → нулевой uuid → чужие id не совпадут.
+    const scopeOrg = access.isSuperAdmin ? null : (access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+    if (scopeOrg) {
+      debtsQuery = debtsQuery.eq('organization_id', scopeOrg)
     }
     const { data: debts, error: debtsError } = await debtsQuery
     if (debtsError) throw debtsError

@@ -40,8 +40,10 @@ export async function POST(
       .select('id, organization_id')
       .eq('id', supplierId)
       .limit(1)
-    if (!access.isSuperAdmin && access.activeOrganization?.id) {
-      supplierQuery = supplierQuery.eq('organization_id', access.activeOrganization.id)
+    // NEVER-pattern: не-супер без орг → нулевой uuid → чужой id не совпадёт.
+    const scopeOrg = access.isSuperAdmin ? null : (access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+    if (scopeOrg) {
+      supplierQuery = supplierQuery.eq('organization_id', scopeOrg)
     }
     const { data: supplier } = await supplierQuery.maybeSingle()
     if (!supplier?.id) return json({ error: 'Поставщик не найден' }, 404)
@@ -87,8 +89,10 @@ export async function DELETE(
       .select('id, organization_id')
       .eq('id', supplierId)
       .limit(1)
-    if (!access.isSuperAdmin && access.activeOrganization?.id) {
-      supplierQuery = supplierQuery.eq('organization_id', access.activeOrganization.id)
+    // NEVER-pattern: не-супер без орг → нулевой uuid → чужой id не совпадёт.
+    const scopeOrg = access.isSuperAdmin ? null : (access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+    if (scopeOrg) {
+      supplierQuery = supplierQuery.eq('organization_id', scopeOrg)
     }
     const { data: supplier } = await supplierQuery.maybeSingle()
     if (!supplier?.id) return json({ error: 'Поставщик не найден' }, 404)
