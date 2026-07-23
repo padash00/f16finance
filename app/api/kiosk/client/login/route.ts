@@ -46,8 +46,11 @@ export async function POST(req: NextRequest) {
     .eq('is_active', true)
     .or(`phone.eq.${sanitizeOrFilterValue(username)},card_number.eq.${sanitizeOrFilterValue(username)}`)
     .limit(1)
+  // Изоляция: клиент только организации станции (null-company = сетевой своей орг)
   if ((station as any).company_id) {
-    customersQuery = customersQuery.or(`company_id.eq.${(station as any).company_id},company_id.is.null`)
+    const { data: stCo } = await admin.from('companies').select('organization_id').eq('id', (station as any).company_id).maybeSingle()
+    const stOrg = (stCo as any)?.organization_id || null
+    customersQuery = customersQuery.eq('organization_id', stOrg || '00000000-0000-0000-0000-000000000000')
   }
   const { data: customers, error: searchErr } = await customersQuery
 

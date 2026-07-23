@@ -19,17 +19,22 @@ function isUuid(value: string) {
 async function findCustomerByLogin(admin: any, username: string, companyId: string | null) {
   const select = 'id, name, phone, kiosk_balance, auth_user_id, card_number'
 
-  // Изоляция: ищем клиента в компании станции (NULL company_id допускаем — legacy;
-  // после бэкфилла customers.company_id станет строгим).
+  // Изоляция: клиент только организации станции (null-company = сетевой своей орг)
+  let orgFilter: string | null = null
+  if (companyId) {
+    const { data: co } = await admin.from('companies').select('organization_id').eq('id', companyId).maybeSingle()
+    orgFilter = (co as any)?.organization_id || '00000000-0000-0000-0000-000000000000'
+  }
+
   let byPhoneQ = admin.from('customers').select(select).eq('phone', username).eq('is_active', true).limit(1)
-  if (companyId) byPhoneQ = byPhoneQ.or(`company_id.eq.${companyId},company_id.is.null`)
+  if (orgFilter) byPhoneQ = byPhoneQ.eq('organization_id', orgFilter)
   const { data: byPhone, error: phoneErr } = await byPhoneQ.maybeSingle()
 
   if (phoneErr) throw phoneErr
   if (byPhone) return byPhone
 
   let byCardQ = admin.from('customers').select(select).eq('card_number', username).eq('is_active', true).limit(1)
-  if (companyId) byCardQ = byCardQ.or(`company_id.eq.${companyId},company_id.is.null`)
+  if (orgFilter) byCardQ = byCardQ.eq('organization_id', orgFilter)
   const { data: byCard, error: cardErr } = await byCardQ.maybeSingle()
 
   if (cardErr) throw cardErr

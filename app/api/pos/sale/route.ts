@@ -281,7 +281,7 @@ export async function POST(request: Request) {
       const [{ data: config, error: configError }, { data: customer, error: customerError }] = await Promise.all([
         supabase.from('loyalty_config').select('*').eq('company_id', companyId).maybeSingle(),
         customerId
-          ? supabase.from('customers').select('id, loyalty_points, name').eq('id', customerId).or(`company_id.eq.${companyId},company_id.is.null`).maybeSingle()
+          ? supabase.from('customers').select('id, loyalty_points, name, organization_id').eq('id', customerId).maybeSingle()
           : Promise.resolve({ data: null, error: null } as any),
       ])
       if (configError) throw configError
@@ -292,6 +292,15 @@ export async function POST(request: Request) {
 
     if (customerId && !customerRow) {
       return json({ error: 'customer-not-found' }, 400)
+    }
+
+    // Изоляция лояльности: клиент должен принадлежать организации этой компании
+    // (иначе арендатор B начислял/списывал баллы клиенту арендатора A).
+    if (customerRow?.organization_id) {
+      const { data: compOrg } = await supabase.from('companies').select('organization_id').eq('id', companyId).maybeSingle()
+      if (String(compOrg?.organization_id || '') !== String(customerRow.organization_id)) {
+        return json({ error: 'customer-not-found' }, 400)
+      }
     }
 
     let loyaltyDiscountAmount = 0
