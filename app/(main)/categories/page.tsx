@@ -30,6 +30,8 @@ import {
   Lock,
   PieChart,
   Wallet,
+  Sparkles,
+  Loader2,
 } from 'lucide-react'
 
 // Цвет по финансовой группе — чтобы категории читались с первого взгляда.
@@ -75,6 +77,34 @@ export default function CategoriesPage() {
   const [newType, setNewType] = useState('')
   const [newAccountingGroup, setNewAccountingGroup] = useState<FinancialGroup>('operating')
   const [newBudget, setNewBudget] = useState('')
+
+  // AI-подсказка финансовой группы по названию
+  const [aiHinting, setAiHinting] = useState(false)
+  const [aiHint, setAiHint] = useState<string | null>(null)
+
+  const suggestGroup = async () => {
+    const name = newName.trim()
+    if (name.length < 2) return
+    setAiHinting(true)
+    setAiHint(null)
+    try {
+      const res = await fetch('/api/admin/categories/ai-group-hint', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      })
+      const body = await res.json().catch(() => null)
+      if (res.ok && body?.data?.group) {
+        setNewAccountingGroup(body.data.group as FinancialGroup)
+        setAiHint(`${body.data.label} — ${body.data.reason}`)
+      } else {
+        setAiHint(body?.error || 'Не удалось определить группу')
+      }
+    } catch {
+      setAiHint('Ошибка сети')
+    }
+    setAiHinting(false)
+  }
 
   // Редактирование
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -389,16 +419,34 @@ export default function CategoriesPage() {
                     className="w-full bg-input border border-border rounded-lg px-3 py-2.5 text-sm focus:border-accent transition-colors" />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Финансовая группа</label>
-                  <Select value={newAccountingGroup} onValueChange={(v) => setNewAccountingGroup(v as FinancialGroup)}>
+                  <div className="mb-1.5 flex items-center justify-between gap-2">
+                    <label className="text-xs font-medium text-muted-foreground">Финансовая группа</label>
+                    <button
+                      type="button"
+                      onClick={suggestGroup}
+                      disabled={newName.trim().length < 2 || aiHinting}
+                      title="ИИ определит группу по названию"
+                      className="inline-flex items-center gap-1 rounded-md border border-violet-400/30 bg-violet-500/10 px-2 py-0.5 text-[11px] font-medium text-violet-600 dark:text-violet-300 transition hover:bg-violet-500/20 disabled:opacity-40"
+                    >
+                      {aiHinting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                      Определить (AI)
+                    </button>
+                  </div>
+                  <Select value={newAccountingGroup} onValueChange={(v) => { setNewAccountingGroup(v as FinancialGroup); setAiHint(null) }}>
                     <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {FINANCIAL_GROUP_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
-                  <p className="mt-1 text-[11px] text-muted-foreground">
-                    {FINANCIAL_GROUP_OPTIONS.find(o => o.value === newAccountingGroup)?.description}
-                  </p>
+                  {aiHint ? (
+                    <p className="mt-1 flex items-start gap-1 text-[11px] text-violet-600 dark:text-violet-300">
+                      <Sparkles className="mt-0.5 h-3 w-3 shrink-0" /> {aiHint}
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      {FINANCIAL_GROUP_OPTIONS.find(o => o.value === newAccountingGroup)?.description}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Месячный бюджет (₸)</label>
