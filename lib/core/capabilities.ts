@@ -83,7 +83,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
       {
         id: 'income',
         path: '/income',
-        extraPaths: ['/income/add', '/income/analytics'],
+        extraPaths: ['/income/add', '/income/analytics', '/income-embed/add'],
         label: 'Доходы',
         capabilities: [
           ...crud('income', { exportData: true }),
