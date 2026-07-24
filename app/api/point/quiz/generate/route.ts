@@ -55,6 +55,7 @@ export async function POST(request: Request) {
     .from('knowledge_articles')
     .select('id, title, content')
     .eq('is_published', true)
+    .eq('organization_id', device.company?.organization_id || '00000000-0000-0000-0000-000000000000')
     .or(`company_id.is.null,company_id.eq.${device.company_id}`)
     .limit(50)
 

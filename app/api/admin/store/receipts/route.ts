@@ -169,12 +169,16 @@ export async function GET(request: Request) {
     }
     // Эти три запроса независимы (не используют результат друг друга) — параллелим,
     // чтобы не складывать round-trip'ы до БД в Токио.
+    // COGS-категории — строго своей орг (иначе категории F16 текли в приёмку
+    // других клиентов). NEVER-pattern через scopeOrg выше.
+    let categoriesQuery: any = supabase
+      .from('expense_categories')
+      .select('id, name, accounting_group')
+      .order('name', { ascending: true })
+    if (scopeOrg) categoriesQuery = categoriesQuery.eq('organization_id', scopeOrg)
     const [data, expenseCategoriesResult, draftsResult] = await Promise.all([
       fetchStoreReceipts(supabase as any, inventoryScope),
-      supabase
-        .from('expense_categories')
-        .select('id, name, accounting_group')
-        .order('name', { ascending: true }),
+      categoriesQuery,
       draftsQuery,
     ])
     const { data: expenseCategories, error: expenseCategoriesError } = expenseCategoriesResult

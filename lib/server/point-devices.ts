@@ -20,6 +20,7 @@ export type PointDeviceContext = {
       id: string
       name: string
       code: string | null
+      organization_id?: string | null
       brand_color?: string | null
       brand_logo_url?: string | null
       payment_provider?: {
@@ -35,7 +36,7 @@ export type PointDeviceContext = {
 }
 
 const POINT_PROJECT_SELECT =
-  'id, name, project_token, shift_report_chat_id, point_mode, feature_flags, is_active, notes, point_project_companies(company_id, point_mode, feature_flags, company:company_id(id, name, code, brand_color, brand_logo_url, payment_provider:payment_provider_id(id, code, name, country_code, supports_midnight_split)))'
+  'id, name, project_token, shift_report_chat_id, point_mode, feature_flags, is_active, notes, point_project_companies(company_id, point_mode, feature_flags, company:company_id(id, name, code, organization_id, brand_color, brand_logo_url, payment_provider:payment_provider_id(id, code, name, country_code, supports_midnight_split)))'
 
 /** Company JSONB flags override project; `null` / missing per key inherits from project (empty `{}` does not wipe project). */
 function mergePointFeatureFlags(

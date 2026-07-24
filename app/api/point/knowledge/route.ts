@@ -23,6 +23,11 @@ export async function GET(request: Request) {
   if ('response' in point) return point.response
   const { supabase, device } = point
 
+  // Изоляция тенанта: статьи/чек-листы только СВОЕЙ организации. Иначе легаси-
+  // строки с organization_id/company_id = null (напр. база знаний F16) утекали
+  // бы в операторские других клиентов. NEVER-паттерн: нет орг → нулевой uuid.
+  const orgId = device.company?.organization_id || '00000000-0000-0000-0000-000000000000'
+
   const url = new URL(request.url)
   const staffId =
     url.searchParams.get('staff_id') ||
@@ -41,6 +46,7 @@ export async function GET(request: Request) {
        category_id, category:category_id ( id, title, slug, kind )`,
     )
     .eq('is_published', true)
+    .eq('organization_id', orgId)
     .or(`company_id.is.null,company_id.eq.${device.company_id}`)
     .order('sort_order', { ascending: true })
 
@@ -54,6 +60,7 @@ export async function GET(request: Request) {
       'id, company_id, title, description, role_scope, shift_scope, schedule_type, recurrence_minutes, blocks_shift, sort_order, is_active',
     )
     .eq('is_active', true)
+    .eq('organization_id', orgId)
     .or(`company_id.is.null,company_id.eq.${device.company_id}`)
     .order('sort_order', { ascending: true })
     .order('title', { ascending: true })

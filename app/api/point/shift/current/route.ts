@@ -109,6 +109,7 @@ export async function GET(request: Request) {
       .select('id, title, slug, severity, version, summary, company_id')
       .eq('is_published', true)
       .eq('requires_confirmation', true)
+      .eq('organization_id', device.company?.organization_id || '00000000-0000-0000-0000-000000000000')
       .or(`company_id.is.null,company_id.eq.${device.company_id}`)
 
     const critArr = (critArticles || []) as any[]

@@ -37,10 +37,14 @@ export async function GET(req: Request) {
       .from('expense_categories')
       .select('id, name, accounting_group, monthly_budget')
       .order('name')
-    // Скоуп по активной организации (+ глобальные дефолты с organization_id IS NULL).
-    // Супер-админ тоже скоупится по активной орг (изоляция в контексте орг).
-    const orgId = access.activeOrganization?.id || null
-    if (orgId) catQuery = catQuery.or(`organization_id.is.null,organization_id.eq.${orgId}`)
+    // Строгий скоуп по активной орг (БЕЗ null-share: категории с organization_id
+    // IS NULL — легаси F16 — иначе текли бы всем клиентам). NEVER-pattern:
+    // не-супер без орг → нулевой uuid → 0 строк. Супер без активной орг → без
+    // фильтра (платформенный обзор), с орг — скоуп по ней.
+    const orgId = access.isSuperAdmin
+      ? (access.activeOrganization?.id || null)
+      : (access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+    if (orgId) catQuery = catQuery.eq('organization_id', orgId)
     const result = await catQuery
     if (result.error) throw result.error
     const categories = result.data ?? []
