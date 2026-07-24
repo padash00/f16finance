@@ -169,6 +169,13 @@ export async function requireCapability(
     return NextResponse.json({ error: 'forbidden', reason: 'staff-only' }, { status: 403 })
   }
 
+  // Владелец организации = верхняя роль тенанта → обходит capability-проверки
+  // (как супер-админ, но данные всё равно скоупятся его орг в самих запросах).
+  // Иначе право, используемое в роуте, но отсутствующее в каталоге, ложно
+  // блокировало бы владельца.
+  const ownerRole = access.staffRole || access.staffMember?.role || null
+  if (ownerRole === 'owner') return null
+
   const userId = access.user?.id
   if (!userId) {
     return NextResponse.json(
@@ -228,9 +235,10 @@ export async function hasCapability(
   capability: string,
 ): Promise<boolean> {
   if (access.isSuperAdmin) return true
+  const role = access.staffRole || access.staffMember?.role || null
+  if (role === 'owner') return true // владелец = полный доступ в своей орг
   const userId = access.user?.id
   if (!userId) return false
-  const role = access.staffRole || access.staffMember?.role || null
   const capabilities = await loadUserCapabilities(userId, role, access.activeOrganization?.id || null)
   return capabilities.has(capability)
 }
