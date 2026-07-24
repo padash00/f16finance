@@ -34,8 +34,11 @@ function severityBadge(sev: Capability['severity']) {
   return null
 }
 
-export function CapabilitiesPanel() {
+export function CapabilitiesPanel({ scope = 'global' }: { scope?: 'global' | 'org' } = {}) {
   const { can } = useCapabilities()
+  // Слой прав: global → role_capabilities (суперадмин), org → org_role_capabilities
+  // (владелец режет свои роли внутри своей организации).
+  const endpoint = scope === 'org' ? '/api/admin/org-role-capabilities' : '/api/admin/role-capabilities'
   const [items, setItems] = useState<RoleCapability[]>([])
   const [roles, setRoles] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
@@ -59,7 +62,7 @@ export function CapabilitiesPanel() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/admin/role-capabilities', { cache: 'no-store' })
+      const res = await fetch(endpoint, { cache: 'no-store' })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       setItems(data.items || [])
@@ -101,7 +104,7 @@ export function CapabilitiesPanel() {
     })
 
     try {
-      const res = await fetch('/api/admin/role-capabilities', {
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ action: 'set', role, capability, granted }),
@@ -138,7 +141,7 @@ export function CapabilitiesPanel() {
     })
 
     try {
-      const res = await fetch('/api/admin/role-capabilities', {
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ action: 'bulk_set', role, capabilities, granted }),
@@ -166,7 +169,7 @@ export function CapabilitiesPanel() {
     if (!confirm(confirmText)) return
     setSavingKey(`preset:${role}:${preset}`)
     try {
-      const res = await fetch('/api/admin/role-capabilities', {
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ action: preset, role, ...(extraBody || {}) }),
@@ -262,6 +265,11 @@ export function CapabilitiesPanel() {
 
   return (
     <div className="space-y-4">
+      {scope === 'org' && (
+        <div className="rounded-2xl border border-sky-400/30 bg-sky-500/[0.06] p-4 text-sm text-sky-800 dark:text-sky-200">
+          Здесь вы настраиваете права ролей <b>только для своей организации</b>. Платформенные значения по умолчанию задаёт поставщик; ваши изменения не влияют на другие компании. «Сбросить к дефолту» вернёт роль к платформенному значению.
+        </div>
+      )}
       {/* Сводка по ролям */}
       <div className={`${card} p-4`}>
         <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -369,9 +377,11 @@ export function CapabilitiesPanel() {
                 <button
                   className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-emerald-700 dark:text-emerald-200 transition-colors hover:bg-emerald-500/20 disabled:opacity-50"
                   disabled={savingKey?.startsWith(`preset:${role}:`)}
-                  onClick={() => applyPreset(role, 'reset_role', `Включить ВСЁ для роли «${roleLabel(role)}»?`)}
+                  onClick={() => applyPreset(role, 'reset_role', scope === 'org'
+                    ? `Сбросить роль «${roleLabel(role)}» к платформенному дефолту (снять ваши изменения)?`
+                    : `Включить ВСЁ для роли «${roleLabel(role)}»?`)}
                 >
-                  ✓ Включить всё
+                  {scope === 'org' ? '↩ Сбросить к дефолту' : '✓ Включить всё'}
                 </button>
                 <button
                   className="inline-flex items-center gap-1.5 rounded-xl border border-sky-400/30 bg-sky-500/10 px-3 py-1.5 text-sky-700 dark:text-sky-200 transition-colors hover:bg-sky-500/20 disabled:opacity-50"

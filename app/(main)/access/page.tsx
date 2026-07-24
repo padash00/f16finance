@@ -86,6 +86,15 @@ function posLabel(pos: Position) {
 export default function AccessPage() {
   const { can } = useCapabilities()
   const [tab, setTab] = useState<'positions' | 'permissions' | 'accounts'>('positions')
+  // Суперадмин правит глобальный дефолт (role_capabilities), владелец орг — свой
+  // слой (org_role_capabilities). Определяем по session-role.
+  const [isSuperAdmin, setIsSuperAdmin] = useState<boolean | null>(null)
+  useEffect(() => {
+    fetch('/api/auth/session-role')
+      .then((r) => r.json())
+      .then((d) => setIsSuperAdmin(!!d?.isSuperAdmin))
+      .catch(() => setIsSuperAdmin(false))
+  }, [])
 
   // --- Positions state ---
   const [positions, setPositions] = useState<Position[]>([])
@@ -564,7 +573,11 @@ export default function AccessPage() {
       {/* ============ TAB: PERMISSIONS (capabilities) ============ */}
       {tab === 'permissions' && (
         <div className="overflow-x-auto">
-          <CapabilitiesPanel />
+          {isSuperAdmin === null ? (
+            <div className="flex items-center gap-2 p-6 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Загрузка…</div>
+          ) : (
+            <CapabilitiesPanel scope={isSuperAdmin ? 'global' : 'org'} />
+          )}
         </div>
       )}
 
