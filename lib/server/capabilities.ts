@@ -69,6 +69,16 @@ export async function loadUserCapabilities(
   const isStaffRole = !!role && role !== 'other'
   const result = new Set<string>(isStaffRole ? getAllCapabilityIds() : [])
 
+  // Владелец организации = верхняя роль тенанта → ВСЕГДА полный набор прав.
+  // Страницы ограничивает ПАКЕТ (orgFeatures), а не права владельца. Снятия из
+  // глобальной role_capabilities к owner НЕ применяем: иначе платформенная
+  // правка роли «owner» на одном арендаторе (таблица общая) урезала бы
+  // владельцев ВСЕХ клиентов (напр. пропадала бы страница токенов /point-devices).
+  if (role === 'owner') {
+    cache.set(key, { capabilities: result, loadedAt: Date.now() })
+    return result
+  }
+
   // 1) role_capabilities — что ОТНЯТО у роли (granted=false). granted=true — no-op.
   if (role) {
     const { data: roleRows } = await supabase
