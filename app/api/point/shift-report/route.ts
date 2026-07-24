@@ -73,7 +73,7 @@ function resolveIncomeZone(params: {
   return 'pc'
 }
 
-async function getMissingBlockingChecklists(supabase: any, companyId: string) {
+async function getMissingBlockingChecklists(supabase: any, companyId: string, orgId: string) {
   const { data: openShift, error: shiftError } = await supabase
     .from('point_shifts')
     .select('id')
@@ -90,6 +90,9 @@ async function getMissingBlockingChecklists(supabase: any, companyId: string) {
     .select('id, title, schedule_type, recurrence_minutes, blocks_shift, is_active')
     .eq('is_active', true)
     .eq('blocks_shift', true)
+    // Изоляция: только чек-листы своей орг (иначе блокирующий чек-лист F16
+    // с organization_id/company_id = null не давал отправить отчёт).
+    .eq('organization_id', orgId)
     .or(`company_id.is.null,company_id.eq.${companyId}`)
 
   if (templatesError) {
@@ -171,7 +174,7 @@ export async function POST(request: Request) {
     if (assignmentError) throw assignmentError
     if (!assignment) return json({ error: 'operator-not-assigned-to-point' }, 403)
 
-    const checklistGuard = await getMissingBlockingChecklists(supabase, device.company_id)
+    const checklistGuard = await getMissingBlockingChecklists(supabase, device.company_id, device.company?.organization_id || '00000000-0000-0000-0000-000000000000')
     if (checklistGuard.error) {
       return json({ error: 'shift-report-checklist-guard-failed', detail: checklistGuard.error }, 400)
     }

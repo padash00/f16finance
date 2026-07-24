@@ -38,12 +38,16 @@ async function resolveStaffIdForOperator(supabase: any, operatorId: string | nul
   return link?.staff_id || null
 }
 
-async function getMissingBlockingChecklists(supabase: any, companyId: string, shiftId: string) {
+async function getMissingBlockingChecklists(supabase: any, companyId: string, orgId: string, shiftId: string) {
   const { data: templates, error: templatesError } = await supabase
     .from('checklist_templates')
     .select('id, title, schedule_type, recurrence_minutes, blocks_shift, is_active')
     .eq('is_active', true)
     .eq('blocks_shift', true)
+    // Изоляция: только чек-листы своей орг. Иначе блокирующий чек-лист F16
+    // (organization_id/company_id = null) не давал закрыть смену другим клиентам
+    // → и отчёт не уходил, т.к. смена не закрывалась.
+    .eq('organization_id', orgId)
     .or(`company_id.is.null,company_id.eq.${companyId}`)
 
   if (templatesError) {
@@ -130,7 +134,8 @@ export async function POST(request: Request) {
     return json({ error: 'point-shift-no-open' }, 409)
   }
 
-  const checklistGuard = await getMissingBlockingChecklists(supabase as any, device.company_id, shiftId)
+  const orgId = device.company?.organization_id || '00000000-0000-0000-0000-000000000000'
+  const checklistGuard = await getMissingBlockingChecklists(supabase as any, device.company_id, orgId, shiftId)
   if (checklistGuard.error) {
     return json({ error: 'point-shift-checklist-guard-failed', detail: checklistGuard.error }, 400)
   }
