@@ -317,10 +317,10 @@ export function buildOwnerNavSections(): NavSection[] {
   if (storeSection) sections.push(storeSection)
 
   if (teamSection) {
-    sections.push({
-      ...teamSection,
-      items: teamSection.items.filter((item) => item.href !== '/pass'),
-    })
+    // Раньше /pass («Доступы») вырезали у владельца — но это базовая страница
+    // (список учёток/паролей команды), владельцу она нужна. Показываем как есть;
+    // видимость дальше решают пакет (базовая → всегда) и права роли.
+    sections.push(teamSection)
   }
 
   if (opsSection) {
