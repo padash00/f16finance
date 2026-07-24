@@ -7,7 +7,7 @@ import { canAccessPath, type StaffRole, type SubscriptionFeature } from '@/lib/c
 import { findCapabilityPageByPath } from '@/lib/core/capabilities'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import type { SessionRoleInfo } from '@/lib/core/types'
-import type { NavSection } from '@/lib/nav/sections'
+import { getPathFeature, type NavSection } from '@/lib/nav/sections'
 
 export type NavSession = {
   userEmail: string | null
@@ -127,18 +127,17 @@ export function useNavSession(): NavSession {
 
   const filterSection = useCallback((section: NavSection): NavSection => ({
     ...section,
-    // Секция скрыта целиком, если у орг нет нужной фичи (feature) или ни одной из
-    // featuresAny — и не allAccess.
-    items: (!featuresAllAccess && (
-      (!!section.feature && !orgFeatures.includes(section.feature)) ||
-      (!!section.featuresAny?.length && !section.featuresAny.some((f) => orgFeatures.includes(f)))
-    ))
-      ? []
-      : section.items.filter((item) => {
+    // Секции больше не гейтятся целиком — каждый пункт проверяет свою
+    // пер-страничную фичу (модель «1 фича = 1 страница»).
+    items: section.items.filter((item) => {
       if (item.href === '/operator-lead' && !isLeadOperator) return false
 
-      // Гейтинг по фиче пакета (company_features). allAccess → не гейтим.
-      if (item.feature && !featuresAllAccess && !orgFeatures.includes(item.feature)) return false
+      // Гейтинг по фиче ПАКЕТА (пер-страничная). allAccess → не гейтим.
+      // getPathFeature вернёт null для базовых страниц (всегда доступны).
+      if (!featuresAllAccess) {
+        const feat = getPathFeature(item.href)
+        if (feat && !orgFeatures.includes(feat)) return false
+      }
 
       // Если страница есть в каталоге capabilities — приоритет у новой модели.
       // Capabilities ещё не загружены — fallback на старую логику;

@@ -30,6 +30,7 @@ import { SITE_NAME } from '@/lib/core/site'
 import {
   badgeColors,
   buildOwnerNavSections,
+  getPathFeature,
   navSections,
   sectionStyles,
   type NavItem,
@@ -494,13 +495,10 @@ export function Sidebar({ desktopEnabled = true }: { desktopEnabled?: boolean } 
     const query = searchQuery.trim().toLowerCase()
 
     return baseSections
-      // Секция скрыта, если у орг нет feature или ни одной из featuresAny (и не allAccess).
-      .filter((section) => {
-        if (featuresAllAccess) return true
-        if (section.feature && !orgFeatures.includes(section.feature)) return false
-        if (section.featuresAny?.length && !section.featuresAny.some((f) => orgFeatures.includes(f))) return false
-        return true
-      })
+      // Секции больше НЕ гейтятся целиком: каждый пункт сам проверяет свою
+      // пер-страничную фичу (модель «1 фича = 1 страница»). Пустая секция
+      // отсеивается ниже. Это убирает «слишком широкий» featuresAny, из-за
+      // которого пакет одной ниши открывал целые чужие разделы.
       .map((section) => ({
         ...section,
         items: section.items
@@ -509,9 +507,11 @@ export function Sidebar({ desktopEnabled = true }: { desktopEnabled?: boolean } 
               return false
             }
 
-            // Гейтинг по фиче пакета (company_features). allAccess → не гейтим.
-            if (item.feature && !featuresAllAccess && !orgFeatures.includes(item.feature)) {
-              return false
+            // Гейтинг по фиче ПАКЕТА (пер-страничная). allAccess → не гейтим.
+            // getPathFeature вернёт null для базовых страниц (всегда доступны).
+            if (!featuresAllAccess) {
+              const feat = getPathFeature(item.href)
+              if (feat && !orgFeatures.includes(feat)) return false
             }
 
             // Если страница есть в каталоге capabilities — приоритет у новой модели.

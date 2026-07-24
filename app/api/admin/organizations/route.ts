@@ -437,6 +437,10 @@ export async function POST(req: Request) {
     const name = String(body?.name || '').trim()
     const slug = String(body?.slug || '').trim().toLowerCase()
     const planCode = String(body?.planCode || 'starter').trim()
+    // Пакет (новая модель доступа): при создании сразу задаёт, какие страницы
+    // есть у клиента. Без пакета орг получит полный доступ (allAccess) — поэтому
+    // онбординг должен назначать пакет.
+    const packageCode = String(body?.packageCode || '').trim()
     const trialDays = Math.max(0, Math.min(90, Number(body?.trialDays) || 0))
     const createPrimaryDomain = body?.createPrimaryDomain !== false
     const ownerEmail = String(body?.ownerEmail || '').trim().toLowerCase()
@@ -488,6 +492,14 @@ export async function POST(req: Request) {
         created_by_user_id: access.user?.id || null,
         payload: { plan_code: planCode, trial_days: trialDays },
       }]).then(() => {}, () => {})
+    }
+
+    // Назначаем пакет (новая модель доступа). Меню/страницы клиента = пакет.
+    if (packageCode) {
+      await supabase.from('organization_packages').upsert(
+        { organization_id: orgId, package_code: packageCode, updated_at: new Date().toISOString() },
+        { onConflict: 'organization_id' },
+      ).then(() => {}, () => {})
     }
 
     if (createPrimaryDomain) {

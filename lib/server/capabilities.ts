@@ -36,8 +36,8 @@ type CapabilitiesCache = {
 const CACHE_TTL_MS = 60_000
 const cache = new Map<string, CapabilitiesCache>()
 
-function cacheKey(userId: string, role: string | null): string {
-  return `${userId}:${role || ''}`
+function cacheKey(userId: string, role: string | null, organizationId?: string | null): string {
+  return `${userId}:${role || ''}:${organizationId || ''}`
 }
 
 /**
@@ -49,10 +49,11 @@ function cacheKey(userId: string, role: string | null): string {
 export async function loadUserCapabilities(
   userId: string,
   role: string | null,
+  organizationId?: string | null,
 ): Promise<Set<string>> {
   if (!hasAdminSupabaseCredentials()) return new Set()
 
-  const key = cacheKey(userId, role)
+  const key = cacheKey(userId, role, organizationId)
   const cached = cache.get(key)
   if (cached && Date.now() - cached.loadedAt < CACHE_TTL_MS) {
     return cached.capabilities
@@ -81,7 +82,27 @@ export async function loadUserCapabilities(
     }
   }
 
-  // 2) user_capability_overrides — точечно по человеку (имеет приоритет над ролью).
+  // 2) org_role_capabilities — правка роли ВНУТРИ организации (слой 2).
+  //    Суперадмин рулит глобальным дефолтом (слой 1 выше), а каждая орг режет/
+  //    включает свои роли только у себя. Пусто/нет таблицы → no-op.
+  if (role && organizationId) {
+    try {
+      const { data: orgRoleRows } = await supabase
+        .from('org_role_capabilities')
+        .select('capability, granted')
+        .eq('organization_id', organizationId)
+        .eq('role', role)
+        .range(0, 999)
+      for (const row of (orgRoleRows || []) as Array<{ capability: string; granted: boolean }>) {
+        if (row.granted) result.add(row.capability)
+        else result.delete(row.capability)
+      }
+    } catch {
+      // Таблицы org_role_capabilities может ещё не быть (миграция не применена).
+    }
+  }
+
+  // 3) user_capability_overrides — точечно по человеку (высший приоритет).
   const { data: overrideRows } = await supabase
     .from('user_capability_overrides')
     .select('capability, granted')
@@ -116,6 +137,7 @@ type AccessLike = {
   isSuperAdmin?: boolean
   staffRole?: string | null
   staffMember?: { role?: string | null } | null
+  activeOrganization?: { id?: string | null } | null
 }
 
 /**
@@ -146,7 +168,7 @@ export async function requireCapability(
   }
 
   const role = access.staffRole || access.staffMember?.role || null
-  const capabilities = await loadUserCapabilities(userId, role)
+  const capabilities = await loadUserCapabilities(userId, role, access.activeOrganization?.id || null)
 
   if (!capabilities.has(capability)) {
     return NextResponse.json(
@@ -199,7 +221,7 @@ export async function hasCapability(
   const userId = access.user?.id
   if (!userId) return false
   const role = access.staffRole || access.staffMember?.role || null
-  const capabilities = await loadUserCapabilities(userId, role)
+  const capabilities = await loadUserCapabilities(userId, role, access.activeOrganization?.id || null)
   return capabilities.has(capability)
 }
 
@@ -212,6 +234,6 @@ export async function getEffectiveCapabilities(access: AccessLike): Promise<stri
   const userId = access.user?.id
   if (!userId) return []
   const role = access.staffRole || access.staffMember?.role || null
-  const capabilities = await loadUserCapabilities(userId, role)
+  const capabilities = await loadUserCapabilities(userId, role, access.activeOrganization?.id || null)
   return Array.from(capabilities)
 }

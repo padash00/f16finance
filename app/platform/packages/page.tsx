@@ -95,9 +95,18 @@ function PagePicker({ grouped, selected, toggle, setMany }: { grouped: [string, 
     .map(([group, items]) => [group, q ? items.filter((p) => norm(p.label).includes(norm(q)) || norm(p.path).includes(norm(q))) : items] as [string, PageFeature[]])
     .filter(([, items]) => items.length > 0)
 
+  // Все продаваемые фичи каталога (без базовых) — для «выбрать всё / снять всё».
+  const allSellable = grouped.flatMap(([, items]) => items.filter((p) => !p.base).map((p) => p.feature))
+  const allSelected = allSellable.length > 0 && allSellable.every((f) => selected.has(f))
+
   return (
     <div className="space-y-3">
-      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Поиск страницы…" className="w-full rounded-xl border border-border bg-white px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground dark:bg-white/5" />
+      <div className="flex items-center gap-2">
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Поиск страницы…" className="min-w-0 flex-1 rounded-xl border border-border bg-white px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground dark:bg-white/5" />
+        <button type="button" onClick={() => setMany(allSellable, !allSelected)} className="shrink-0 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
+          {allSelected ? 'Снять всё' : 'Выбрать всё'}
+        </button>
+      </div>
       <div className="max-h-[400px] space-y-4 overflow-y-auto rounded-xl border border-border bg-surface-muted p-4">
         {filtered.map(([group, items]) => {
           const sellable = items.filter((p) => !p.base)

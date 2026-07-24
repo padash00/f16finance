@@ -1,16 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, ArrowRight, Building2, CheckCircle2, ExternalLink, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
-const PLANS = [
-  { code: 'starter', name: 'Старт', description: 'До 2 точек, базовые отчёты', price: 'Бесплатно / Триал' },
-  { code: 'growth', name: 'Рост', description: 'До 10 точек, AI-отчёты, инвентарь', price: '49 900 ₸/мес' },
-  { code: 'enterprise', name: 'Предприятие', description: 'Без лимитов, white-label, поддержка', price: 'Договорная' },
-]
+type Pkg = { code: string; name: string; description: string | null; feature_codes: string[]; price_kzt: number }
+const money = (n: number) => `${(Number(n) || 0).toLocaleString('ru-RU')} ₸/мес`
 
 function slugify(value: string) {
   return value
@@ -46,10 +43,18 @@ export default function NewOrganizationPage() {
   const [ownerFullName, setOwnerFullName] = useState('')
   const [ownerEmail, setOwnerEmail] = useState('')
   const [trialDays, setTrialDays] = useState('14')
-  const [planCode, setPlanCode] = useState('starter')
+  const [packages, setPackages] = useState<Pkg[]>([])
+  const [packageCode, setPackageCode] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [createdOrg, setCreatedOrg] = useState<CreatedOrg | null>(null)
+
+  useEffect(() => {
+    fetch('/api/admin/platform/packages')
+      .then((r) => r.json())
+      .then((d) => setPackages((d?.packages || []).filter((p: any) => p.status !== 'archived')))
+      .catch(() => {})
+  }, [])
 
   const handleNameChange = (v: string) => {
     setName(v)
@@ -66,7 +71,7 @@ export default function NewOrganizationPage() {
         body: JSON.stringify({
           name: name.trim(),
           slug: slug.trim(),
-          planCode,
+          packageCode: packageCode || null,
           trialDays: Number(trialDays) || 14,
           createPrimaryDomain: true,
           ownerFullName: ownerFullName.trim() || null,
@@ -92,7 +97,7 @@ export default function NewOrganizationPage() {
     setOwnerFullName('')
     setOwnerEmail('')
     setTrialDays('14')
-    setPlanCode('starter')
+    setPackageCode('')
     setError(null)
   }
 
@@ -275,26 +280,32 @@ export default function NewOrganizationPage() {
 
         {step === 2 && (
           <div className="space-y-4">
-            {/* Тариф */}
+            {/* Пакет (тариф) — задаёт доступные страницы клиента */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900/40">
-              <h2 className="text-sm font-semibold">Тариф</h2>
+              <h2 className="text-sm font-semibold">Пакет</h2>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Определяет, какие страницы будут у клиента. Позже можно сменить на карточке организации.</p>
               <div className="mt-4 space-y-2">
-                {PLANS.map(plan => (
+                {packages.length === 0 && (
+                  <p className="rounded-xl border border-amber-500/30 bg-amber-500/[0.06] px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                    Пакетов пока нет. Создай их в «Конструкторе тарифов» — или заведи без пакета (полный доступ).
+                  </p>
+                )}
+                {packages.map(pkg => (
                   <button
-                    key={plan.code}
+                    key={pkg.code}
                     type="button"
-                    onClick={() => setPlanCode(plan.code)}
+                    onClick={() => setPackageCode(packageCode === pkg.code ? '' : pkg.code)}
                     className={`w-full rounded-xl border p-4 text-left transition ${
-                      planCode === plan.code
+                      packageCode === pkg.code
                         ? 'border-violet-500/50 bg-violet-500/10'
                         : 'border-slate-200 bg-white hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.02] dark:hover:bg-white/[0.04]'
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <p className="font-medium text-slate-900 dark:text-white">{plan.name}</p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">{plan.price}</p>
+                      <p className="font-medium text-slate-900 dark:text-white">{pkg.name}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">{money(pkg.price_kzt)}</p>
                     </div>
-                    <p className="mt-1 text-xs text-slate-400">{plan.description}</p>
+                    <p className="mt-1 text-xs text-slate-400">{pkg.description || `${pkg.feature_codes?.length || 0} страниц`}</p>
                   </button>
                 ))}
               </div>
@@ -318,6 +329,10 @@ export default function NewOrganizationPage() {
                     <span className="font-medium">{ownerFullName || ownerEmail}</span>
                   </div>
                 )}
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 dark:text-slate-400">Пакет</span>
+                  <span className="font-medium">{packages.find(p => p.code === packageCode)?.name || 'Без пакета (полный доступ)'}</span>
+                </div>
                 <div className="flex items-center justify-between">
                   <span className="text-slate-500 dark:text-slate-400">Пробный период</span>
                   <span className="font-medium tabular-nums">{trialDays} дней</span>
