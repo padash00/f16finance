@@ -293,7 +293,7 @@ export default function SettingsPage() {
             {/* 🏢 КОМПАНИИ */}
             <div className="space-y-6">
                 <div className="flex items-center justify-between">
-                    <h2 className="text-xl font-bold flex items-center gap-2">
+                    <h2 data-tour="settings-companies" className="text-xl font-bold flex items-center gap-2">
                         <Building2 className="w-5 h-5 text-blue-400" /> Компании
                     </h2>
                     <span className="text-xs bg-card border border-border px-2 py-1 rounded-full text-muted-foreground">

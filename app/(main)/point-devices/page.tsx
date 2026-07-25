@@ -434,7 +434,7 @@ function ProjectFormPanel({
         </label>
       </div>
 
-      <div className="space-y-2 text-sm">
+      <div data-tour="pd-points" className="space-y-2 text-sm">
         <span className="text-muted-foreground">Точки в проекте</span>
         <CompanyAssignmentEditor
           allCompanies={allCompanies}
@@ -757,7 +757,7 @@ export default function PointDevicesPage() {
         <Card className="border-border bg-card p-5">
           <div className="mb-4 flex items-center gap-2">
             <Plus className="h-4 w-4 text-amber-300" />
-            <h2 className="text-lg font-semibold text-foreground">Новый проект</h2>
+            <h2 data-tour="pd-new-project" className="text-lg font-semibold text-foreground">Новый проект</h2>
           </div>
           <ProjectFormPanel
             title=""
