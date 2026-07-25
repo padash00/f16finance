@@ -302,6 +302,52 @@ export function printReceiptFromIframe(iframe: HTMLIFrameElement | null) {
   }
 }
 
+/** Чековый сменный отчёт (80мм) — печать при закрытии смены. */
+export function printShiftReportHtml(r: any) {
+  if (!r) return
+  const esc = (s: any) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string))
+  const money = (n: number) => `${Math.round(Number(n || 0)).toLocaleString('ru-RU')} ₸`
+  const dts = (s: string | null) => (s ? new Date(s).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—')
+  const req = r.requisites || {}
+  const w = window.open('', '_blank', 'width=380,height=720')
+  if (!w) return
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Сменный отчёт</title>
+    <style>@page{size:80mm auto;margin:4mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;font-size:13px;color:#000;padding:6px}
+    .c{text-align:center}.t{font-weight:800;font-size:16px}.line{border-top:1px dashed #000;margin:6px 0}
+    .row{display:flex;justify-content:space-between;font-size:13px;gap:8px}.mut{font-size:11px;color:#444}
+    .sec{font-weight:700;font-size:12px;margin:4px 0 2px}.tot{font-weight:800;font-size:16px}</style></head>
+    <body>
+    <div class="c">
+      <div class="t">${esc(req.name || r.pointName || 'ORDA POINT')}</div>
+      ${req.bin ? `<div class="mut">БИН/ИИН ${esc(req.bin)}</div>` : ''}
+      ${req.address ? `<div class="mut">${esc(req.address)}</div>` : ''}
+      ${r.pointName ? `<div class="mut">Точка: ${esc(r.pointName)}</div>` : ''}
+      <div style="font-weight:800;margin-top:6px">СМЕННЫЙ ОТЧЁТ</div>
+    </div>
+    <div class="line"></div>
+    <div class="row"><span>Смена №</span><span>${r.shiftNumber}</span></div>
+    <div class="row"><span>Кассир</span><span>${esc(r.cashier || '—')}</span></div>
+    <div class="row mut"><span>Открыта</span><span>${dts(r.openedAt)}</span></div>
+    <div class="row mut"><span>Закрыта</span><span>${dts(r.closedAt)}</span></div>
+    <div class="line"></div>
+    <div class="sec">ПРОДАЖИ</div>
+    <div class="row"><span>Наличные · ${r.cashCount} чек</span><span>${money(r.cashSales)}</span></div>
+    <div class="row"><span>Безнал · ${r.kaspiCount} чек</span><span>${money(r.kaspiSales)}</span></div>
+    <div class="row"><span>Возвраты</span><span>${money(r.returns)}</span></div>
+    <div class="line"></div>
+    <div class="sec">НАЛИЧНОСТЬ</div>
+    <div class="row"><span>На начало</span><span>${money(r.openingCash)}</span></div>
+    <div class="row"><span>На конец</span><span>${money(r.closingCash)}</span></div>
+    <div class="line"></div>
+    <div class="row"><span>Чеков за смену</span><span>${r.checkCount}</span></div>
+    <div class="row tot"><span>ИТОГО ВЫРУЧКА</span><span>${money(r.total)}</span></div>
+    <div class="line"></div>
+    <div class="c mut">Напечатано: ${new Date().toLocaleString('ru-RU')}</div>
+    <script>window.onload=function(){setTimeout(function(){try{window.focus();window.print();}catch(e){}},300)}</script>
+    </body></html>`)
+  w.document.close()
+}
+
 /** Короткий beep через WebAudio (для подтверждения добавления/ошибки). */
 let audioCtx: AudioContext | null = null
 

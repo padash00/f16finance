@@ -1224,6 +1224,22 @@ export type OpenShiftInfo = {
   opening_cash: number | null
 }
 
+// Данные сменного отчёта (для печати чекового отчёта при закрытии смены).
+export async function getPointShiftReport(
+  config: AppConfig,
+  shiftId: string,
+  companyId?: string | null,
+): Promise<any | null> {
+  const data = await request<{ ok: boolean; report: any }>(
+    config,
+    'GET',
+    `/api/point/shift/report?shift_id=${encodeURIComponent(shiftId)}`,
+    undefined,
+    companyHeader(companyId),
+  )
+  return data?.report || null
+}
+
 export async function getCurrentPointShift(
   config: AppConfig,
   companyId?: string | null,

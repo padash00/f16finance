@@ -31,6 +31,7 @@ import { useCashlessLabels } from '@/lib/use-cashless-labels'
 import { formatMoney, parseMoney, todayISO, localRef } from '@/lib/utils'
 import { toastSuccess, toastError } from '@/lib/toast'
 import * as api from '@/lib/api'
+import { printShiftReportHtml } from '@/lib/receipt-html'
 import { syncQueue, getPendingCount, queueClosePointShift, queueShiftReport, openQueueScreen } from '@/lib/offline'
 import { clearParkedCarts } from '@/lib/parked-carts'
 import type { OpenShiftInfo } from '@/lib/api'
@@ -544,7 +545,15 @@ export default function ShiftPage({
     }
 
     try {
+      const closingShiftId = activeOpenShift?.id || null
       await api.closePointShift(config, payload, session.company.id)
+      // Чековый сменный отчёт — печать сразу при закрытии (диалог печати = подтверждение).
+      if (closingShiftId) {
+        try {
+          const rep = await api.getPointShiftReport(config, closingShiftId, session.company.id)
+          if (rep) printShiftReportHtml(rep)
+        } catch { /* отчёт не критичен для закрытия */ }
+      }
       return 'success'
     } catch (closeError) {
       const status = (closeError as Error & { status?: number }).status
