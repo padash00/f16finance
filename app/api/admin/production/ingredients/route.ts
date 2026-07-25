@@ -20,7 +20,7 @@ export async function GET(request: Request) {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
     if (!canManage(access)) return json({ error: 'forbidden' }, 403)
-    const gate = await requireOrgFeature(access, 'restaurant.recipes_lite')
+    const gate = await requireOrgFeature(access, ['shop.catalog', 'restaurant.recipes_lite'])
     if (gate) return gate
     const orgId = access.activeOrganization?.id || null
     if (!access.isSuperAdmin && !orgId) return json({ ok: true, ingredients: [] })
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
     if (!canManage(access)) return json({ error: 'forbidden' }, 403)
-    const gate = await requireOrgFeature(access, 'restaurant.recipes_lite')
+    const gate = await requireOrgFeature(access, ['shop.catalog', 'restaurant.recipes_lite'])
     if (gate) return gate
     const orgId = access.activeOrganization?.id || null
     if (!orgId) return json({ error: 'Нет активной организации' }, 400)

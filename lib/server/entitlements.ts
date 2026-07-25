@@ -159,16 +159,18 @@ export async function resolveOrgEntitlements(access: {
 
 // Серверный guard платной фичи. Возвращает Response(402) если фича не куплена
 // И включён ENTITLEMENTS_ENFORCE; иначе (shadow) — null, только лог.
-export async function requireOrgFeature(access: any, featureCode: string): Promise<Response | null> {
+// featureCode — одна фича или список (проходит, если есть ЛЮБАЯ из них).
+export async function requireOrgFeature(access: any, featureCode: string | string[]): Promise<Response | null> {
+  const codes = Array.isArray(featureCode) ? featureCode : [featureCode]
   const { features, allAccess } = await resolveOrgEntitlements(access)
-  if (allAccess || features.includes(featureCode)) return null
+  if (allAccess || codes.some((c) => features.includes(c))) return null
   if (!ENFORCE) {
     await writeSystemErrorLogSafe({
       scope: 'server',
       area: 'entitlements/shadow-feature',
-      message: `SHADOW would block feature=${featureCode} org=${access?.activeOrganization?.id || '-'}`,
+      message: `SHADOW would block feature=${codes.join('|')} org=${access?.activeOrganization?.id || '-'}`,
     }).catch(() => {})
     return null
   }
-  return NextResponse.json({ error: 'upgrade_required', feature: featureCode }, { status: 402 })
+  return NextResponse.json({ error: 'upgrade_required', feature: codes[0] }, { status: 402 })
 }
