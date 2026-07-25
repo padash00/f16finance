@@ -25,6 +25,8 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { CAPABILITY_GROUPS } from '@/lib/core/capabilities'
 import { useCapabilities } from '@/lib/client/use-capabilities'
+import { useNavSession } from '@/lib/nav/use-nav-session'
+import { getPathFeature } from '@/lib/nav/sections'
 import type { StaffRole } from '@/lib/core/access'
 import { SITE_NAME } from '@/lib/core/site'
 import { getTenantBaseHost } from '@/lib/core/tenant-domain'
@@ -44,49 +46,49 @@ type SessionRoleResponse = {
 const GROUP_STYLES: Record<string, { icon: any; tone: string; bg: string; label: string }> = {
   finance: {
     icon: Banknote,
-    tone: 'text-emerald-300',
+    tone: 'text-emerald-600 dark:text-emerald-300',
     bg: 'bg-emerald-500/10 border-emerald-500/30',
     label: 'Деньги — выручка, расходы, ОПиУ, прогноз',
   },
   inventory: {
     icon: Boxes,
-    tone: 'text-sky-300',
+    tone: 'text-sky-600 dark:text-sky-300',
     bg: 'bg-sky-500/10 border-sky-500/30',
     label: 'Магазин — каталог, склад, приёмки, заявки',
   },
   shifts: {
     icon: CalendarClock,
-    tone: 'text-cyan-300',
+    tone: 'text-cyan-600 dark:text-cyan-300',
     bg: 'bg-cyan-500/10 border-cyan-500/30',
     label: 'Смены — расписание и отчёты по дням',
   },
   staff: {
     icon: Users,
-    tone: 'text-violet-300',
+    tone: 'text-violet-600 dark:text-violet-300',
     bg: 'bg-violet-500/10 border-violet-500/30',
     label: 'Команда — операторы, сотрудники, зарплата, HR',
   },
   points: {
     icon: MonitorSmartphone,
-    tone: 'text-blue-300',
+    tone: 'text-blue-600 dark:text-blue-300',
     bg: 'bg-blue-500/10 border-blue-500/30',
     label: 'Точки — устройства, киоски, станции',
   },
   pos: {
     icon: ShoppingCart,
-    tone: 'text-amber-300',
+    tone: 'text-amber-600 dark:text-amber-300',
     bg: 'bg-amber-500/10 border-amber-500/30',
     label: 'POS и клиенты — чеки, возвраты, лояльность',
   },
   operations: {
     icon: FolderKanban,
-    tone: 'text-rose-300',
+    tone: 'text-rose-600 dark:text-rose-300',
     bg: 'bg-rose-500/10 border-rose-500/30',
     label: 'Операционная — задачи, инциденты, KPI, цели',
   },
   system: {
     icon: Cog,
-    tone: 'text-slate-300',
+    tone: 'text-slate-600 dark:text-slate-300',
     bg: 'bg-slate-500/10 border-slate-500/30',
     label: 'Системные настройки — доступ, телеграм, журнал',
   },
@@ -95,6 +97,7 @@ const GROUP_STYLES: Record<string, { icon: any; tone: string; bg: string; label:
 export default function WelcomePage() {
   const router = useRouter()
   const { can, isLoading: capsLoading, isSuperAdmin: capsIsSuper } = useCapabilities()
+  const { orgFeatures, featuresAllAccess } = useNavSession()
   const [loading, setLoading] = useState(true)
   const [staffRole, setStaffRole] = useState<StaffRole | null>(null)
   const [roleLabel, setRoleLabel] = useState<string | null>(null)
@@ -151,7 +154,17 @@ export default function WelcomePage() {
     return CAPABILITY_GROUPS
       .map((group) => {
         const accessiblePages = group.pages
-          .filter((page) => can(`${page.id}.view`))
+          .filter((page) => {
+            // Право роли (capability)
+            if (!can(`${page.id}.view`)) return false
+            // + фич-гейтинг пакета (как в меню): страница без фичи в тарифе —
+            // не показываем как доступную, иначе клик ведёт на /unauthorized.
+            if (!featuresAllAccess) {
+              const feat = getPathFeature(page.path)
+              if (feat && !orgFeatures.includes(feat)) return false
+            }
+            return true
+          })
           .map((page) => ({
             id: page.id,
             path: page.path,
@@ -160,7 +173,7 @@ export default function WelcomePage() {
         return { ...group, accessiblePages }
       })
       .filter((g) => g.accessiblePages.length > 0)
-  }, [capsLoading, can])
+  }, [capsLoading, can, featuresAllAccess, orgFeatures])
 
   const totalAccessible = accessibleGroups.reduce((acc, g) => acc + g.accessiblePages.length, 0)
 
@@ -217,7 +230,7 @@ export default function WelcomePage() {
               ) : null}
             </div>
             <div className={`mb-4 inline-flex rounded-2xl p-4 ${isSuperAdmin || staffRole === 'owner' ? 'bg-amber-500/12' : 'bg-violet-500/12'}`}>
-              <HeaderIcon className={`h-7 w-7 ${isSuperAdmin || staffRole === 'owner' ? 'text-amber-300' : 'text-violet-300'}`} />
+              <HeaderIcon className={`h-7 w-7 ${isSuperAdmin || staffRole === 'owner' ? 'text-amber-600 dark:text-amber-300' : 'text-violet-600 dark:text-violet-300'}`} />
             </div>
             <h1 className="text-3xl font-semibold tracking-[-0.03em] text-foreground sm:text-4xl">{greeting}</h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-body">
@@ -229,7 +242,7 @@ export default function WelcomePage() {
 
           <div className="rounded-3xl border border-border bg-slate-50 dark:bg-black/20 px-5 py-4 text-sm text-body">
             <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-amber-300" />
+              <Sparkles className="h-4 w-4 text-amber-500 dark:text-amber-300" />
               <span className="font-semibold text-foreground">{totalAccessible}</span>
               <span>доступных страниц</span>
             </div>
@@ -240,11 +253,11 @@ export default function WelcomePage() {
 
       {/* Если совсем ничего не доступно (кастомная роль с нулевыми правами) */}
       {accessibleGroups.length === 0 && !capsIsSuper && (
-        <Card className="border-amber-500/20 bg-amber-500/5 p-6 text-amber-200">
-          <h2 className="text-lg font-semibold">У вас пока нет открытых разделов</h2>
-          <p className="mt-2 text-sm">
-            Попросите владельца открыть нужные права на странице
-            «Управление доступом».
+        <Card className="border-amber-500/30 bg-amber-500/10 p-6">
+          <h2 className="text-lg font-semibold text-amber-900 dark:text-amber-100">У вас пока нет открытых разделов</h2>
+          <p className="mt-2 text-sm text-amber-800 dark:text-amber-200/90">
+            Попросите владельца открыть нужные права на странице{' '}
+            <Link href="/access" className="font-medium underline hover:opacity-80">«Управление доступом»</Link>.
           </p>
         </Card>
       )}
@@ -301,13 +314,13 @@ export default function WelcomePage() {
       {(isSuperAdmin || staffRole === 'owner') && (
         <Card className="border-border bg-white dark:bg-slate-950/50 p-5 text-sm text-body">
           <div className="flex items-start gap-3">
-            <Wallet className="h-5 w-5 text-amber-300 shrink-0" />
+            <Wallet className="h-5 w-5 text-amber-600 dark:text-amber-300 shrink-0" />
             <div>
               <h3 className="font-semibold text-foreground mb-1">Управление правами</h3>
               <p>
                 Эта страница автоматически собрана из ваших прав. Чтобы изменить
                 какие разделы видит роль — откройте{' '}
-                <Link href="/access" className="text-amber-300 underline hover:text-amber-200">
+                <Link href="/access" className="font-medium text-amber-600 underline hover:text-amber-500 dark:text-amber-300 dark:hover:text-amber-200">
                   Управление доступом
                 </Link>{' '}
                 и настройте capabilities. Карточки тут перерисуются при следующем входе.
