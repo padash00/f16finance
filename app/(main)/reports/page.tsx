@@ -2084,7 +2084,7 @@ function ReportsContent() {
                 className="cursor-pointer bg-white dark:bg-white/[0.04] border border-border rounded-lg px-3 py-1.5 text-sm font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-amber-500/40"
               >
                 {Object.entries(PRESET_LABELS).map(([key, label]) => (
-                  <option key={key} value={key}>{label}</option>
+                  <option key={key} value={key} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">{label}</option>
                 ))}
               </select>
 
@@ -2111,9 +2111,9 @@ function ReportsContent() {
                 onChange={(e) => setCompanyFilter(e.target.value)}
                 className="cursor-pointer bg-white dark:bg-white/[0.04] border border-border rounded-lg px-3 py-1.5 text-sm font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-amber-500/40"
               >
-                <option value="all">Все компании</option>
+                <option value="all" className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">Все компании</option>
                 {companies.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
+                  <option key={c.id} value={c.id} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">{c.name}</option>
                 ))}
               </select>
 
@@ -2122,10 +2122,10 @@ function ReportsContent() {
                 onChange={(e) => setGroupMode(e.target.value as GroupMode)}
                 className="cursor-pointer bg-white dark:bg-white/[0.04] border border-border rounded-lg px-3 py-1.5 text-sm font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-amber-500/40"
               >
-                <option value="day">По дням</option>
-                <option value="week">По неделям</option>
-                <option value="month">По месяцам</option>
-                <option value="year">По годам</option>
+                <option value="day" className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">По дням</option>
+                <option value="week" className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">По неделям</option>
+                <option value="month" className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">По месяцам</option>
+                <option value="year" className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">По годам</option>
               </select>
 
               <button
@@ -2155,9 +2155,9 @@ function ReportsContent() {
                     onChange={(e) => setShiftFilter(e.target.value as 'all' | Shift)}
                     className="w-full bg-white dark:bg-white/[0.04] border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-amber-500/40"
                   >
-                    <option value="all">Все смены</option>
-                    <option value="day">День</option>
-                    <option value="night">Ночь</option>
+                    <option value="all" className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">Все смены</option>
+                    <option value="day" className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">День</option>
+                    <option value="night" className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">Ночь</option>
                   </select>
                 </div>
 
@@ -2535,10 +2535,10 @@ function ReportsContent() {
                     }}
                     className="bg-white dark:bg-slate-900/40 border border-border rounded-lg px-3 py-1.5 text-sm"
                   >
-                    <option value={10}>10</option>
-                    <option value={25}>25</option>
-                    <option value={50}>50</option>
-                    <option value={100}>100</option>
+                    <option value={10} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">10</option>
+                    <option value={25} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">25</option>
+                    <option value={50} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">50</option>
+                    <option value={100} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">100</option>
                   </select>
                   <span className="text-sm text-slate-500">записей</span>
                   {useVirtualization && (
