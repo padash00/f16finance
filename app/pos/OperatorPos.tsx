@@ -80,8 +80,27 @@ function localRef() {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function OperatorPos({ initialShift }: { initialShift: OpenShift }) {
+type OwnerCompany = { id: string; name: string }
+
+export default function OperatorPos({
+  initialShift = null,
+  mode = 'operator',
+  companies = [],
+  companyId = '',
+  onCompanyChange,
+}: {
+  initialShift?: OpenShift
+  mode?: 'operator' | 'owner'
+  companies?: OwnerCompany[]
+  companyId?: string
+  onCompanyChange?: (id: string) => void
+}) {
   const router = useRouter()
+  const isOwner = mode === 'owner'
+  // URL-хвост для админских (владельческих) эндпоинтов
+  const cq = isOwner && companyId ? `?company_id=${encodeURIComponent(companyId)}` : ''
+  const shiftUrl = isOwner ? `/api/admin/pos/shift${cq}` : '/api/operator/shift/current'
+  const catalogUrl = isOwner ? `/api/admin/pos/inventory-sales${cq}` : '/api/operator/inventory-sales'
   const [shift, setShift] = useState<OpenShift>(initialShift)
   const [shiftLoading, setShiftLoading] = useState(false)
 
@@ -125,9 +144,10 @@ export default function OperatorPos({ initialShift }: { initialShift: OpenShift 
 
   // ── Загрузка смены ───────────────────────────────────────────────────────
   const reloadShift = useCallback(async () => {
+    if (isOwner && !companyId) { setShift(null); return }
     setShiftLoading(true)
     try {
-      const res = await fetch('/api/operator/shift/current')
+      const res = await fetch(shiftUrl)
       const j = await res.json().catch(() => ({}))
       setShift((j?.shift as OpenShift) || null)
     } catch {
@@ -135,14 +155,20 @@ export default function OperatorPos({ initialShift }: { initialShift: OpenShift 
     } finally {
       setShiftLoading(false)
     }
-  }, [])
+  }, [shiftUrl, isOwner, companyId])
+
+  // Владелец сменил точку → подтянуть её смену
+  useEffect(() => {
+    if (isOwner) void reloadShift()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId])
 
   // ── Загрузка каталога (когда смена открыта) ──────────────────────────────
   const loadCatalog = useCallback(async () => {
     setCatalogLoading(true)
     setCatalogError(null)
     try {
-      const res = await fetch('/api/operator/inventory-sales')
+      const res = await fetch(catalogUrl)
       const j = await res.json()
       if (!res.ok || !j.ok) throw new Error(j.error || `HTTP ${res.status}`)
       setCatalog(j.data as CatalogData)
@@ -151,7 +177,7 @@ export default function OperatorPos({ initialShift }: { initialShift: OpenShift 
     } finally {
       setCatalogLoading(false)
     }
-  }, [])
+  }, [catalogUrl])
 
   useEffect(() => {
     if (shift?.id) void loadCatalog()
@@ -244,10 +270,14 @@ export default function OperatorPos({ initialShift }: { initialShift: OpenShift 
     }
     setOpening(true)
     try {
-      const res = await fetch('/api/operator/shift/open', {
+      const res = await fetch(isOwner ? '/api/admin/pos/shift' : '/api/operator/shift/open', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ opening_cash: cash, shift_type: shiftType }),
+        body: JSON.stringify(
+          isOwner
+            ? { action: 'open', company_id: companyId, opening_cash: cash, shift_type: shiftType }
+            : { opening_cash: cash, shift_type: shiftType },
+        ),
       })
       const j = await res.json().catch(() => ({}))
       if (!res.ok) {
@@ -271,10 +301,11 @@ export default function OperatorPos({ initialShift }: { initialShift: OpenShift 
     setCloseError(null)
     setClosing(true)
     try {
-      const res = await fetch('/api/operator/shift/close', {
+      const res = await fetch(isOwner ? '/api/admin/pos/shift' : '/api/operator/shift/close', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          ...(isOwner ? { action: 'close', company_id: companyId } : {}),
           closing_cash: Math.max(0, parseFloat(closeCash) || 0),
           closing_kaspi: Math.max(0, parseFloat(closeKaspi) || 0),
         }),
@@ -317,12 +348,13 @@ export default function OperatorPos({ initialShift }: { initialShift: OpenShift 
     if (!saleRefKey.current) saleRefKey.current = localRef()
     setSubmitting(true)
     try {
-      const res = await fetch('/api/operator/inventory-sales', {
+      const res = await fetch(isOwner ? '/api/admin/pos/inventory-sales' : '/api/operator/inventory-sales', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'createSale',
           payload: {
+            company_id: companyId || null,
             sale_date: new Date().toISOString().slice(0, 10),
             shift: shift?.shift_type === 'night' ? 'night' : 'day',
             payment_method: payment,
@@ -358,6 +390,35 @@ export default function OperatorPos({ initialShift }: { initialShift: OpenShift 
     }
   }
 
+  // ── Render (владелец): точка не выбрана → экран выбора точки ─────────────
+  if (isOwner && !companyId) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-950 p-4 text-white">
+        <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-gray-900 p-6 shadow-2xl">
+          <div className="mb-5 text-center">
+            <h1 className="text-lg font-bold">Выберите точку</h1>
+            <p className="mt-1 text-sm text-gray-400">Касса владельца. Выберите точку, чтобы войти в смену.</p>
+          </div>
+          <div className="space-y-2">
+            {companies.length === 0 && <p className="text-center text-sm text-gray-500">Нет доступных точек</p>}
+            {companies.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => onCompanyChange?.(c.id)}
+                className="w-full rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-left text-sm font-medium transition hover:border-emerald-500 hover:bg-white/10"
+              >
+                {c.name}
+              </button>
+            ))}
+          </div>
+          <button onClick={() => router.push('/dashboard')} className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-xl py-2 text-sm text-gray-400 hover:text-white">
+            <ArrowLeft className="h-4 w-4" /> Выйти
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   // ── Render: нет открытой смены → экран открытия ──────────────────────────
   if (!shift?.id) {
     return (
@@ -370,6 +431,21 @@ export default function OperatorPos({ initialShift }: { initialShift: OpenShift 
             <h1 className="text-lg font-bold">Открытие смены</h1>
             <p className="mt-1 text-sm text-gray-400">Продавать можно только при открытой смене. Укажите старт кассы.</p>
           </div>
+
+          {isOwner && companies.length > 0 && (
+            <div className="mb-3">
+              <label className="mb-1 block text-xs text-gray-400">Точка</label>
+              <select
+                value={companyId}
+                onChange={(e) => onCompanyChange?.(e.target.value)}
+                className="w-full rounded-xl border border-white/20 bg-white/10 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id} className="text-gray-900">{c.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="mb-3 grid grid-cols-2 gap-2">
             {(['day', 'night'] as const).map((t) => (
@@ -429,9 +505,21 @@ export default function OperatorPos({ initialShift }: { initialShift: OpenShift 
         <div className="flex items-center gap-2">
           <ShoppingCart className="h-5 w-5 text-emerald-400" />
           <div className="leading-tight">
-            <p className="text-sm font-semibold">{catalog?.company?.name || 'Касса'}</p>
+            {isOwner && companies.length > 0 ? (
+              <select
+                value={companyId}
+                onChange={(e) => onCompanyChange?.(e.target.value)}
+                className="rounded-lg border border-white/15 bg-white/5 px-2 py-1 text-sm font-semibold outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id} className="text-gray-900">{c.name}</option>
+                ))}
+              </select>
+            ) : (
+              <p className="text-sm font-semibold">{catalog?.company?.name || 'Касса'}</p>
+            )}
             <p className="text-[11px] text-gray-400">
-              Смена {shift.shift_type === 'night' ? 'ночь' : 'день'}{openedTime ? ` · с ${openedTime}` : ''}
+              {isOwner ? 'Касса владельца · ' : ''}Смена {shift.shift_type === 'night' ? 'ночь' : 'день'}{openedTime ? ` · с ${openedTime}` : ''}
             </p>
           </div>
         </div>

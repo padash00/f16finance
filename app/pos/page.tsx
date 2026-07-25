@@ -326,7 +326,30 @@ export default function PosPage() {
     )
   }
   if (role === 'operator') return <OperatorPos initialShift={initialShift} />
-  return <AdminPosPage />
+  return <OwnerPos />
+}
+
+// Касса владельца/менеджера — та же карточная POS, что у операторов, но с выбором
+// точки и своей смены (Q6). Продажи идут в ту же смену point_shifts/point_sales.
+function OwnerPos() {
+  const [companies, setCompanies] = useState<{ id: string; name: string }[]>([])
+  const [companyId, setCompanyId] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/admin/companies')
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return
+        const list = ((d.data || []) as any[]).map((c) => ({ id: String(c.id), name: String(c.name) }))
+        setCompanies(list)
+        if (list.length === 1) setCompanyId(list[0].id)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+
+  return <OperatorPos mode="owner" companies={companies} companyId={companyId} onCompanyChange={setCompanyId} />
 }
 
 // ─── Main POS Page (админ/владелец) ────────────────────────────────────────────
