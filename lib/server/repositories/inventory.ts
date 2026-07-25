@@ -86,12 +86,16 @@ async function fetchAllPagesResult(
   return { data: out, error: null }
 }
 
+// Скоуп по орг/компаниям применяется и к суперадмину, если активная орг задана
+// (в т.ч. host-locked субдоменом tenant'а) — иначе на castle.ordaops.kz суперадмин
+// видит склады/витрины/товары чужой орг. «Всё» — только без активной орг
+// (allowedCompanyIds === null / organizationId пуст = платформенный контекст).
 function isRestrictedScope(scope?: InventoryScope) {
-  return Boolean(scope && !scope.isSuperAdmin && scope.allowedCompanyIds !== null)
+  return Boolean(scope && scope.allowedCompanyIds !== null)
 }
 
 function hasOrganizationScope(scope?: InventoryScope) {
-  return Boolean(scope?.organizationId && !scope?.isSuperAdmin)
+  return Boolean(scope?.organizationId)
 }
 
 function getAllowedCompanyIdSet(scope?: InventoryScope) {

@@ -5,6 +5,7 @@ import { humanizeDbError } from '@/lib/server/db-error-humanize'
 import { createPointInventorySale } from '@/lib/server/repositories/inventory'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { resolveCompanyScope } from '@/lib/server/organizations'
+import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { resolveCompanyOrganizationId } from '@/lib/server/point-devices'
 import { requireCurrentOpenShiftId } from '@/lib/server/point-shifts'
 import { checkAndNotifyLowStock } from '@/lib/server/low-stock-notifier'
@@ -56,7 +57,7 @@ export async function GET(request: Request) {
       return json({ error: 'company-out-of-scope' }, 403)
     }
 
-    const supabase = access.supabase
+    const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const [location, stock, catalogOrgId, company] = await Promise.all([
       resolvePointSaleLocation(supabase, companyId),
       resolveStockLocations(supabase, companyId),
@@ -133,7 +134,7 @@ export async function POST(request: Request) {
       return json({ error: 'company-out-of-scope' }, 403)
     }
 
-    const supabase = access.supabase
+    const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const p = body.payload || {}
 
     const saleDate = String(p.sale_date || '').trim()

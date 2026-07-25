@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { writeAuditLog } from '@/lib/server/audit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { resolveCompanyScope } from '@/lib/server/organizations'
+import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 /**
  * Смена для веб-кассы ВЛАДЕЛЬЦА/менеджера (Q6).
@@ -40,7 +41,7 @@ export async function GET(request: Request) {
       return json({ error: 'company-out-of-scope' }, 403)
     }
 
-    const supabase = access.supabase
+    const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const { data: shift, error } = await supabase
       .from('point_shifts')
       .select(
@@ -73,7 +74,7 @@ export async function POST(request: Request) {
       return json({ error: 'company-out-of-scope' }, 403)
     }
 
-    const supabase = access.supabase
+    const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
 
     if (action === 'open') {
       const openingCashRaw = body?.opening_cash
