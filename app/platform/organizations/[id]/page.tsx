@@ -155,6 +155,46 @@ export default function OrgDetailPage() {
   const [orgStatus, setOrgStatus] = useState('active')
   const [subStatus, setSubStatus] = useState('')
   const [subAction, setSubAction] = useState('')
+  const [billingExempt, setBillingExempt] = useState(false)
+  const [tourEnabled, setTourEnabled] = useState(false)
+  const [trialDays, setTrialDays] = useState(14)
+  const [renewMonths, setRenewMonths] = useState(1)
+  const [subBusy, setSubBusy] = useState<string | null>(null)
+
+  const applyOrg = (found: any) => {
+    setOrg(found)
+    setName(found.name)
+    setOrgStatus(found.status)
+    setSubStatus(found.subscription?.status || '')
+    setBillingExempt(!!found.billingExempt)
+    setTourEnabled(!!found.onboardingTourEnabled)
+  }
+
+  const reloadOrg = async () => {
+    const fresh = await fetch('/api/admin/organizations').then(r => r.json())
+    const found = (fresh.organizations || []).find((o: any) => o.id === id)
+    if (found) applyOrg(found)
+  }
+
+  // Быстрое действие подписки: PATCH + перезагрузка карточки.
+  const runSub = async (body: Record<string, unknown>, key: string) => {
+    setSubBusy(key)
+    setError(null)
+    try {
+      const res = await fetch('/api/admin/organizations', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ organizationId: id, ...body }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Ошибка')
+      await reloadOrg()
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setSubBusy(null)
+    }
+  }
 
   useEffect(() => {
     fetch('/api/admin/organizations')
@@ -164,12 +204,7 @@ export default function OrgDetailPage() {
         setAddons(Array.isArray(data.addons) ? data.addons : [])
         setFeatures(Array.isArray(data.features) ? data.features : [])
         const found = (data.organizations || []).find((o: any) => o.id === id) as OrgDetail | undefined
-        if (found) {
-          setOrg(found)
-          setName(found.name)
-          setOrgStatus(found.status)
-          setSubStatus(found.subscription?.status || '')
-        }
+        if (found) applyOrg(found)
       })
       .finally(() => setLoading(false))
   }, [id])
@@ -655,6 +690,39 @@ export default function OrgDetailPage() {
                     <option value="renewCycle">Обновить цикл</option>
                   </select>
                   <p className="text-[11px] text-slate-500">Выберите действие и нажмите «Сохранить» внизу — оно применится к подписке.</p>
+                </div>
+
+                {/* Быстрые действия подписки/триала */}
+                <div className="space-y-3 border-t border-slate-200 pt-3 dark:border-white/10">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-slate-500">Триал</span>
+                    <input type="number" min={1} max={90} value={trialDays} onChange={e => setTrialDays(Math.max(1, Math.min(90, Number(e.target.value) || 1)))} className="w-16 rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm dark:border-white/10 dark:bg-slate-900/60" />
+                    <span className="text-xs text-slate-500">дней</span>
+                    <button disabled={subBusy !== null} onClick={() => runSub({ subscriptionAction: 'startTrial', trialDays }, 'trial')} className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-700 disabled:opacity-50">Выдать триал</button>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-slate-500">Активировать на</span>
+                    <select value={renewMonths} onChange={e => setRenewMonths(Number(e.target.value))} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm text-slate-900 dark:border-white/10 dark:bg-slate-900/60 dark:text-white">
+                      <option value={1}>1 мес</option>
+                      <option value={3}>3 мес</option>
+                      <option value={6}>6 мес</option>
+                      <option value={12}>12 мес</option>
+                    </select>
+                    <button disabled={subBusy !== null} onClick={() => runSub({ subscriptionAction: 'renewCycle', renewMonths }, 'renew')} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50">Активировать / Продлить</button>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button disabled={subBusy !== null} onClick={() => runSub({ organizationStatus: 'suspended', subscriptionAction: 'markPastDue' }, 'suspend')} className="rounded-lg border border-rose-300 px-3 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-50 dark:border-rose-500/30 dark:text-rose-300 dark:hover:bg-rose-500/10 disabled:opacity-50">Приостановить доступ</button>
+                    <button disabled={subBusy !== null} onClick={() => runSub({ organizationStatus: 'active', subscriptionAction: 'resume' }, 'resume')} className="rounded-lg border border-emerald-300 px-3 py-1.5 text-xs font-medium text-emerald-600 hover:bg-emerald-50 dark:border-emerald-500/30 dark:text-emerald-300 dark:hover:bg-emerald-500/10 disabled:opacity-50">Возобновить</button>
+                  </div>
+                  <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+                    <input type="checkbox" checked={billingExempt} onChange={e => runSub({ billingExempt: e.target.checked }, 'exempt')} className="h-4 w-4 accent-emerald-500" />
+                    Вне подписки (billing exempt) — доступ всегда, без блокировок
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+                    <input type="checkbox" checked={tourEnabled} onChange={e => runSub({ onboardingTourEnabled: e.target.checked }, 'tour')} className="h-4 w-4 accent-emerald-500" />
+                    Онбординг-тур включён
+                  </label>
+                  <button disabled={subBusy !== null} onClick={() => runSub({ resetOnboarding: true }, 'resetTour')} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5 disabled:opacity-50">Запустить тур заново для всех</button>
                 </div>
               </div>
             ) : (

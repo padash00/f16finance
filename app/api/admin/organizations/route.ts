@@ -257,6 +257,8 @@ async function loadPlatformData(supabase: any) {
       name: String(o.name || ''),
       slug,
       status: String(o.status || 'active'),
+      billingExempt: !!(o as any).billing_exempt,
+      onboardingTourEnabled: !!(o as any).onboarding_tour_enabled,
       legalName: o.legal_name ?? null,
       primaryDomain: buildTenantHost(slug),
       appUrl: buildTenantUrl(slug),
@@ -652,6 +654,8 @@ export async function PATCH(req: Request) {
     if (body?.name !== undefined) orgPatch.name = String(body.name || '').trim()
     if (body?.legalName !== undefined) orgPatch.legal_name = String(body.legalName || '').trim() || null
     if (body?.organizationStatus !== undefined) orgPatch.status = String(body.organizationStatus || 'active')
+    if (body?.billingExempt !== undefined) orgPatch.billing_exempt = !!body.billingExempt
+    if (body?.onboardingTourEnabled !== undefined) orgPatch.onboarding_tour_enabled = !!body.onboardingTourEnabled
     if (body?.slug !== undefined && body.slug) {
       const s = String(body.slug).trim().toLowerCase()
       if (/^[a-z0-9-]+$/.test(s) && !RESERVED_SLUGS.has(s)) orgPatch.slug = s
@@ -677,6 +681,11 @@ export async function PATCH(req: Request) {
     if (Object.keys(orgPatch).length) {
       const { error } = await supabase.from('organizations').update(orgPatch).eq('id', organizationId)
       if (error) throw error
+    }
+
+    // Онбординг-тур: «Запустить заново» — сброс флага «пройдено» у всех членов орг.
+    if (body?.resetOnboarding) {
+      await supabase.from('organization_members').update({ onboarding_done: false }).eq('organization_id', organizationId)
     }
 
     // ── Подписка ──
@@ -707,15 +716,31 @@ export async function PATCH(req: Request) {
       const nowIso = now.toISOString()
       const trialDays = Math.max(0, Math.min(90, Number(body?.trialDays) || 14))
       switch (action) {
-        case 'activate': subPatch.status = 'active'; subPatch.cancel_at = null; eventType = 'subscription_activated'; break
-        case 'startTrial': subPatch.status = 'trialing'; subPatch.ends_at = new Date(Date.now() + trialDays * 86400000).toISOString(); eventType = 'trial_started'; break
-        case 'recordPayment': subPatch.status = 'active'; eventType = 'payment_recorded'; break
+        case 'activate': subPatch.status = 'active'; subPatch.cancel_at = null; subPatch.grace_until = null; eventType = 'subscription_activated'; break
+        case 'startTrial': subPatch.status = 'trialing'; subPatch.ends_at = new Date(Date.now() + trialDays * 86400000).toISOString(); subPatch.trial_ends_at = new Date(Date.now() + trialDays * 86400000).toISOString(); subPatch.grace_until = null; eventType = 'trial_started'; break
+        case 'recordPayment': subPatch.status = 'active'; subPatch.grace_until = null; eventType = 'payment_recorded'; break
         case 'markPastDue': subPatch.status = 'past_due'; eventType = 'subscription_past_due'; break
         case 'cancelAtPeriodEnd': subPatch.cancel_at = (sub as any).ends_at || nowIso; eventType = 'subscription_cancel_scheduled'; break
         case 'cancelNow': subPatch.status = 'canceled'; subPatch.cancel_at = nowIso; eventType = 'subscription_canceled'; break
-        case 'resume': subPatch.status = 'active'; subPatch.cancel_at = null; eventType = 'subscription_resumed'; break
-        case 'renewCycle': subPatch.status = 'active'; subPatch.starts_at = nowIso; subPatch.ends_at = new Date(Date.now() + 30 * 86400000).toISOString(); eventType = 'subscription_renewed'; break
+        case 'resume': subPatch.status = 'active'; subPatch.cancel_at = null; subPatch.grace_until = null; eventType = 'subscription_resumed'; break
+        case 'renewCycle': {
+          const renewMonths = Math.max(1, Math.min(36, Number(body?.renewMonths) || 1))
+          const end = new Date(now)
+          end.setMonth(end.getMonth() + renewMonths)
+          subPatch.status = 'active'
+          subPatch.starts_at = nowIso
+          subPatch.ends_at = end.toISOString()
+          subPatch.grace_until = null
+          subPatch.cancel_at = null
+          eventType = 'subscription_renewed'
+          break
+        }
         default: break
+      }
+
+      // Активирующие действия снимают suspend с организации (доступ восстановлен).
+      if (['activate', 'recordPayment', 'resume', 'renewCycle', 'startTrial'].includes(action)) {
+        await supabase.from('organizations').update({ status: 'active' }).eq('id', organizationId)
       }
 
       if (Object.keys(subPatch).length) {
