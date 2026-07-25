@@ -4,12 +4,13 @@
  */
 
 import { useEffect, useState } from 'react'
-import { MonitorSmartphone, Sun, Moon, Monitor, Volume2, VolumeX, X } from 'lucide-react'
+import { LayoutGrid, List, MonitorSmartphone, Sun, Moon, Monitor, Volume2, VolumeX, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import {
   type Theme,
   type FontSize,
+  type SalesLayout,
   getTheme,
   setTheme,
   getFontSize,
@@ -18,18 +19,23 @@ import {
   setSoundEnabled,
   isCustomerDisplayEnabled,
   setCustomerDisplayEnabled,
+  getSalesLayout,
+  setSalesLayout,
 } from '@/lib/preferences'
 import { toastError, toastSuccess } from '@/lib/toast'
 
 type PreferencesModalProps = {
   open: boolean
   onClose: () => void
+  /** Вызывается при смене вида кассы — страница продаж перерисовывает раскладку сразу. */
+  onSalesLayoutChange?: (layout: SalesLayout) => void
 }
 
-export function PreferencesModal({ open, onClose }: PreferencesModalProps) {
+export function PreferencesModal({ open, onClose, onSalesLayoutChange }: PreferencesModalProps) {
   const [theme, setThemeState] = useState<Theme>(getTheme())
   const [fontSize, setFontSizeState] = useState<FontSize>(getFontSize())
   const [sound, setSound] = useState<boolean>(isSoundEnabled())
+  const [salesLayout, setSalesLayoutState] = useState<SalesLayout>(getSalesLayout())
   const [customerDisplay, setCustomerDisplay] = useState<boolean>(isCustomerDisplayEnabled())
   const [customerDisplayAvailable, setCustomerDisplayAvailable] = useState<boolean>(false)
 
@@ -64,6 +70,11 @@ export function PreferencesModal({ open, onClose }: PreferencesModalProps) {
   const onSoundChange = (s: boolean) => {
     setSound(s)
     setSoundEnabled(s)
+  }
+  const onSalesLayoutChangeLocal = (l: SalesLayout) => {
+    setSalesLayoutState(l)
+    setSalesLayout(l)
+    onSalesLayoutChange?.(l)
   }
 
   const onCustomerDisplayChange = async (next: boolean) => {
@@ -158,6 +169,35 @@ export function PreferencesModal({ open, onClose }: PreferencesModalProps) {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Вид кассы: карточки товаров или классический список */}
+        <div className="border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+          <p className="mb-3 text-sm font-medium">Вид кассы</p>
+          <div className="flex gap-2">
+            {([
+              { value: 'cards', label: 'Карточки', icon: LayoutGrid, hint: 'Сетка товаров, тап для добавления' },
+              { value: 'list', label: 'Список', icon: List, hint: 'Поиск и таблица позиций' },
+            ] as Array<{ value: SalesLayout; label: string; icon: any; hint: string }>).map(({ value, label, icon: Icon }) => (
+              <button
+                key={value}
+                onClick={() => onSalesLayoutChangeLocal(value)}
+                className={`flex flex-1 flex-col items-center gap-1.5 rounded-xl border-2 px-3 py-3 transition ${
+                  salesLayout === value
+                    ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300'
+                    : 'border-slate-200 hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-600'
+                }`}
+              >
+                <Icon className="h-5 w-5" />
+                <span className="text-xs">{label}</span>
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+            {salesLayout === 'cards'
+              ? 'Товары показываются карточками с фото — удобно на сенсорном экране.'
+              : 'Классический режим: поиск/сканер и таблица позиций.'}
+          </p>
         </div>
 
         {/* Sound */}

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
+import OperatorPos from './OperatorPos'
 import {
   ArrowLeft,
   Minus,
@@ -289,9 +290,48 @@ function ReceiptModal({
   )
 }
 
-// ─── Main POS Page ────────────────────────────────────────────────────────────
+// ─── Role-aware entry ─────────────────────────────────────────────────────────
+// Оператор (есть operator_auth) → веб-касса со сменой; админ/владелец → админский POS.
+// Различаем по /api/operator/shift/current: 200 = оператор, 401/403 = не оператор.
 
 export default function PosPage() {
+  const [role, setRole] = useState<'checking' | 'operator' | 'admin'>('checking')
+  const [initialShift, setInitialShift] = useState<any>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch('/api/operator/shift/current')
+        if (cancelled) return
+        if (res.ok) {
+          const j = await res.json().catch(() => ({}))
+          setInitialShift(j?.shift || null)
+          setRole('operator')
+        } else {
+          setRole('admin')
+        }
+      } catch {
+        if (!cancelled) setRole('admin')
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  if (role === 'checking') {
+    return (
+      <div className="flex h-screen items-center justify-center bg-gray-950 text-white">
+        <RefreshCw className="h-6 w-6 animate-spin text-emerald-400" />
+      </div>
+    )
+  }
+  if (role === 'operator') return <OperatorPos initialShift={initialShift} />
+  return <AdminPosPage />
+}
+
+// ─── Main POS Page (админ/владелец) ────────────────────────────────────────────
+
+function AdminPosPage() {
   const router = useRouter()
 
   // Bootstrap data

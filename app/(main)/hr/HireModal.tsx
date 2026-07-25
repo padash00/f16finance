@@ -87,6 +87,8 @@ export default function HireModal({ open, onClose, onCreated }: Props) {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [companyIds, setCompanyIds] = useState<string[]>([])
+  // Основная точка (is_primary) — куда оператор попадёт в веб-кассе по умолчанию.
+  const [primaryCompanyId, setPrimaryCompanyId] = useState<string>('')
   // staff-only
   const [monthlySalary, setMonthlySalary] = useState('')
 
@@ -105,6 +107,7 @@ export default function HireModal({ open, onClose, onCreated }: Props) {
     setPassword(genPassword())
     setShowPassword(false)
     setCompanyIds([])
+    setPrimaryCompanyId('')
     setMonthlySalary('')
     setError(null)
     setSuccess(null)
@@ -130,9 +133,26 @@ export default function HireModal({ open, onClose, onCreated }: Props) {
 
     fetch('/api/admin/companies')
       .then((r) => r.json())
-      .then((d) => setCompanies((d.data || []) as Company[]))
+      .then((d) => {
+        const list = (d.data || []) as Company[]
+        setCompanies(list)
+        // Одна компания в организации → автопривязка без выбора (кейс магазина).
+        if (list.length === 1) {
+          setCompanyIds([list[0].id])
+          setPrimaryCompanyId(list[0].id)
+        }
+      })
       .catch(() => {})
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Отметить/снять точку + поддержать корректную «основную».
+  const toggleCompany = (id: string) => {
+    const next = companyIds.includes(id) ? companyIds.filter((x) => x !== id) : [...companyIds, id]
+    setCompanyIds(next)
+    if (next.length === 0) setPrimaryCompanyId('')
+    else if (!next.includes(primaryCompanyId)) setPrimaryCompanyId(next[0])
+    else if (!primaryCompanyId) setPrimaryCompanyId(next[0])
+  }
 
   if (!open) return null
 
@@ -164,7 +184,11 @@ export default function HireModal({ open, onClose, onCreated }: Props) {
     }
     if (type === 'operator') {
       body.username = username.trim() || undefined
-      body.company_ids = companyIds
+      // Основная точка — первой в массиве (бэкенд ставит is_primary на idx 0).
+      body.company_ids =
+        primaryCompanyId && companyIds.includes(primaryCompanyId)
+          ? [primaryCompanyId, ...companyIds.filter((x) => x !== primaryCompanyId)]
+          : companyIds
     } else {
       const sal = Number(monthlySalary)
       if (Number.isFinite(sal) && sal > 0) body.monthly_salary = sal
@@ -427,8 +451,8 @@ export default function HireModal({ open, onClose, onCreated }: Props) {
             </div>
           )}
 
-          {/* Operator: Точки */}
-          {type === 'operator' && (
+          {/* Operator: Точки (мультивыбор при нескольких компаниях) */}
+          {type === 'operator' && companies.length !== 1 && (
             <div>
               <SectionLabel icon={<Building2 className="w-3.5 h-3.5" />}>
                 Точки * (на каких работает)
@@ -443,11 +467,7 @@ export default function HireModal({ open, onClose, onCreated }: Props) {
                     <button
                       key={c.id}
                       type="button"
-                      onClick={() =>
-                        setCompanyIds((prev) =>
-                          prev.includes(c.id) ? prev.filter((x) => x !== c.id) : [...prev, c.id],
-                        )
-                      }
+                      onClick={() => toggleCompany(c.id)}
                       className={`px-3 py-2.5 rounded-lg border text-left text-sm transition ${
                         checked
                           ? 'border-indigo-500/50 bg-indigo-500/10 text-foreground'
@@ -468,6 +488,54 @@ export default function HireModal({ open, onClose, onCreated }: Props) {
                   )
                 })}
               </div>
+
+              {/* Основная точка (is_primary) — только когда выбрано 2+ */}
+              {companyIds.length > 1 && (
+                <div className="mt-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5">
+                    Основная точка (куда попадёт по умолчанию)
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {companyIds.map((id) => {
+                      const c = companies.find((x) => x.id === id)
+                      if (!c) return null
+                      const active = primaryCompanyId === id
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => setPrimaryCompanyId(id)}
+                          className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition ${
+                            active
+                              ? 'border-indigo-500/60 bg-indigo-500/10 text-foreground'
+                              : 'border-slate-200 dark:border-gray-700 text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white'
+                          }`}
+                        >
+                          <span
+                            className={`flex h-3.5 w-3.5 items-center justify-center rounded-full border ${
+                              active ? 'border-indigo-400' : 'border-slate-300 dark:border-gray-600'
+                            }`}
+                          >
+                            {active && <span className="h-2 w-2 rounded-full bg-indigo-400" />}
+                          </span>
+                          {c.name}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Operator: одна компания в орг → автопривязка без выбора */}
+          {type === 'operator' && companies.length === 1 && (
+            <div className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800/40 px-3 py-2.5 text-sm text-slate-600 dark:text-gray-300">
+              <Building2 className="w-4 h-4 shrink-0 text-indigo-400" />
+              <span>
+                Оператор будет прикреплён к точке{' '}
+                <b className="text-foreground">{companies[0].name}</b>
+              </span>
             </div>
           )}
 

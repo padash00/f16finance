@@ -5,11 +5,14 @@
 
 export type Theme = 'dark' | 'light' | 'system'
 export type FontSize = 'sm' | 'md' | 'lg' | 'xl'
+/** Вид кассы: 'cards' — сетка карточек товаров (как Poster, под сенсор), 'list' — поиск + таблица позиций. */
+export type SalesLayout = 'cards' | 'list'
 
 const KEY_THEME = 'orda.theme'
 const KEY_FONT = 'orda.fontSize'
 const KEY_SOUND = 'orda.soundEnabled'
 const KEY_CUSTOMER_DISPLAY = 'orda.customerDisplay'
+const KEY_SALES_LAYOUT = 'orda.salesLayout'
 
 export function getTheme(): Theme {
   if (typeof window === 'undefined') return 'dark'
@@ -77,6 +80,18 @@ export function isCustomerDisplayEnabled(): boolean {
 export function setCustomerDisplayEnabled(enabled: boolean) {
   if (typeof window === 'undefined') return
   window.localStorage.setItem(KEY_CUSTOMER_DISPLAY, enabled ? '1' : '0')
+}
+
+export function getSalesLayout(): SalesLayout {
+  if (typeof window === 'undefined') return 'cards'
+  const v = window.localStorage.getItem(KEY_SALES_LAYOUT)
+  // По умолчанию — карточки (сенсорный моноблок). Классический список — по выбору.
+  return v === 'list' ? 'list' : 'cards'
+}
+
+export function setSalesLayout(layout: SalesLayout) {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(KEY_SALES_LAYOUT, layout)
 }
 
 /** Применить все настройки при старте программы */

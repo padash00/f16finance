@@ -55,6 +55,7 @@ import {
   type SaleReceiptPreview,
 } from '@/lib/receipt-html'
 import { resolveRuntimeShift } from '@/lib/shift-runtime'
+import { getSalesLayout, type SalesLayout } from '@/lib/preferences'
 import { toastError, toastSuccess } from '@/lib/toast'
 import { formatMoney, localRef, parseMoney } from '@/lib/utils'
 import {
@@ -203,6 +204,9 @@ export default function InventorySalesPageMinimal({
 
   const [now, setNow] = useState(() => new Date())
   const [showPreferences, setShowPreferences] = useState(false)
+  // Вид кассы: карточки (Poster, сенсор) или классический список. Хранится per-device.
+  const [salesLayout, setSalesLayoutState] = useState<SalesLayout>(() => getSalesLayout())
+  const [gridCategory, setGridCategory] = useState<string>('all')
   const searchRef = useRef<HTMLInputElement | null>(null)
 
   // Часы в шапке — обновляем каждую секунду чтобы не выглядели "застывшими"
@@ -411,6 +415,27 @@ export default function InventorySalesPageMinimal({
       )
       .slice(0, 8)
   }, [search, context?.items])
+
+  // Категории для сетки карточек (режим 'cards')
+  const gridCategories = useMemo(() => {
+    const names = new Set<string>()
+    for (const it of context?.items || []) names.add(it.category?.name || 'Без категории')
+    return Array.from(names).sort((a, b) => a.localeCompare(b, 'ru'))
+  }, [context?.items])
+
+  // Товары для сетки: фильтр по категории + тексту поиска, в наличии — вперёд
+  const gridItems = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return (context?.items || [])
+      .filter((it) => gridCategory === 'all' || (it.category?.name || 'Без категории') === gridCategory)
+      .filter((it) => !q || it.name.toLowerCase().includes(q) || (it.barcode || '').includes(q))
+      .sort((a, b) => {
+        const av = Number(a.display_qty || 0) > 0 ? 1 : 0
+        const bv = Number(b.display_qty || 0) > 0 ? 1 : 0
+        if (av !== bv) return bv - av
+        return a.name.localeCompare(b.name, 'ru')
+      })
+  }, [context?.items, gridCategory, search])
 
   // Подытог корзины
   const subtotal = useMemo(
@@ -1267,7 +1292,131 @@ export default function InventorySalesPageMinimal({
             )}
           </div>
 
-          {/* Таблица позиций */}
+          {salesLayout === 'cards' ? (
+            <div className="flex flex-1 flex-col overflow-hidden">
+              {/* Вкладки категорий */}
+              {gridCategories.length > 0 && (
+                <div className="flex shrink-0 gap-1.5 overflow-x-auto border-b border-border bg-card/60 px-3 py-2">
+                  <button
+                    type="button"
+                    onClick={() => setGridCategory('all')}
+                    className={`whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                      gridCategory === 'all'
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border bg-card text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    Все
+                  </button>
+                  {gridCategories.map((cat) => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setGridCategory(cat)}
+                      className={`whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                        gridCategory === cat
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-border bg-card text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Сетка карточек товаров */}
+              <div className="flex-1 overflow-auto p-3">
+                {loading && (context?.items || []).length === 0 ? (
+                  <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
+                    <Loader2 className="h-8 w-8 animate-spin" />
+                    <p className="text-sm">Загружаем витрину…</p>
+                  </div>
+                ) : error && (context?.items || []).length === 0 ? (
+                  <div className="rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">{error}</div>
+                ) : gridItems.length === 0 ? (
+                  <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-muted-foreground">
+                    <Search className="h-12 w-12 opacity-30" />
+                    <p className="text-sm">Товары не найдены</p>
+                    <p className="text-xs text-muted-foreground">Измените категорию или запрос поиска</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+                    {gridItems.map((item) => {
+                      const qty = Number(item.display_qty || 0)
+                      const disabled = qty <= 0
+                      const inCartQty = cart.find((l) => l.item_id === item.id)?.quantity || 0
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => addItem(item)}
+                          className={`relative flex flex-col overflow-hidden rounded-2xl border text-left transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 ${
+                            inCartQty > 0 ? 'border-primary/60 ring-1 ring-primary/30' : 'border-border hover:border-primary/40'
+                          }`}
+                        >
+                          <div className="relative aspect-square w-full bg-muted">
+                            {item.image_url ? (
+                              <img src={item.image_url} alt="" className="h-full w-full object-cover" loading="lazy" />
+                            ) : (
+                              <div className="grid h-full w-full place-items-center text-3xl font-black text-muted-foreground/30">
+                                {item.name.slice(0, 1).toUpperCase()}
+                              </div>
+                            )}
+                            <span
+                              className={`absolute right-1.5 top-1.5 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${
+                                disabled ? 'bg-destructive/80 text-white' : 'bg-black/55 text-white'
+                              }`}
+                            >
+                              {disabled ? 'Нет' : qty}
+                            </span>
+                            {inCartQty > 0 && (
+                              <span className="absolute left-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground shadow">
+                                {inCartQty}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex flex-1 flex-col p-2">
+                            <p className="line-clamp-2 text-xs font-medium leading-snug">{item.name}</p>
+                            <p className="mt-auto pt-1 text-sm font-bold text-primary">{formatMoney(item.sale_price)} ₸</p>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Компактная корзина снизу (в режиме карточек) */}
+              {cartDetailed.length > 0 && (
+                <div className="max-h-[38%] shrink-0 space-y-1.5 overflow-auto border-t border-border bg-card/60 p-2">
+                  {cartDetailed.map((line, idx) => (
+                    <div key={line.id} className="flex items-center gap-2 rounded-xl border border-border bg-card p-2">
+                      <span className="w-5 shrink-0 text-center text-xs text-muted-foreground">{idx + 1}</span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium leading-tight">{line.name}</p>
+                        <p className="text-[11px] text-muted-foreground">{formatMoney(line.unit_price)} / {line.unit || 'шт'}</p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1 rounded-lg border border-border">
+                        <button type="button" onClick={() => changeQty(line.id, line.quantity - 1)} className="grid h-8 w-8 place-items-center text-muted-foreground hover:bg-muted hover:text-foreground">
+                          <Minus className="h-3.5 w-3.5" />
+                        </button>
+                        <span className="min-w-[1.75rem] text-center text-sm font-semibold tabular-nums">{line.quantity}</span>
+                        <button type="button" onClick={() => changeQty(line.id, line.quantity + 1)} className="grid h-8 w-8 place-items-center text-muted-foreground hover:bg-muted hover:text-foreground">
+                          <Plus className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      <span className="w-20 shrink-0 text-right text-sm font-semibold tabular-nums">{formatMoney(line.total)}</span>
+                      <button type="button" onClick={() => removeLine(line.id)} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
           <div className="flex-1 overflow-auto p-3 sm:p-4">
             {loading && cart.length === 0 ? (
               <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
@@ -1349,6 +1498,7 @@ export default function InventorySalesPageMinimal({
               </div>
             )}
           </div>
+          )}
         </section>
 
         {/* Правая зона: оплата */}
@@ -2126,7 +2276,11 @@ export default function InventorySalesPageMinimal({
       )}
 
       {/* Настройки оператора (тема, шрифт, звуки) */}
-      <PreferencesModal open={showPreferences} onClose={() => setShowPreferences(false)} />
+      <PreferencesModal
+        open={showPreferences}
+        onClose={() => setShowPreferences(false)}
+        onSalesLayoutChange={setSalesLayoutState}
+      />
     </div>
   )
 }
