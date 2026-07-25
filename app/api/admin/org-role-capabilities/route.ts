@@ -69,15 +69,20 @@ async function resolveScope(request: Request) {
   return { access, orgId, supabase }
 }
 
-// Список ролей орг: builtin + кастомные должности (positions глобальны, но
-// применяются в каждой орг).
-async function loadRoles(supabase: any): Promise<string[]> {
+// Список ролей орг: builtin (общие) + кастомные должности ТОЛЬКО своей орг.
+// Раньше брались все positions глобально → в матрицу прав протекали роли чужих
+// организаций.
+async function loadRoles(supabase: any, orgId: string): Promise<string[]> {
   const set = new Set<string>(BUILTIN_ROLES)
   try {
-    const { data } = await supabase.from('positions').select('name').range(0, 999)
+    const { data } = await supabase
+      .from('positions')
+      .select('name')
+      .or(`organization_id.is.null,organization_id.eq.${orgId}`)
+      .range(0, 999)
     for (const r of (data || []) as Array<{ name: string }>) if (r.name) set.add(r.name)
   } catch {
-    /* positions может не быть */
+    /* positions может не быть / нет колонки organization_id (миграция не применена) */
   }
   return Array.from(set).sort()
 }
@@ -102,7 +107,7 @@ export async function GET(request: Request) {
   if ('error' in scope) return scope.error
   const { orgId, supabase } = scope
 
-  const [roles, globalOff] = await Promise.all([loadRoles(supabase), loadGlobalOff(supabase)])
+  const [roles, globalOff] = await Promise.all([loadRoles(supabase, orgId), loadGlobalOff(supabase)])
 
   // Орг-оверрайды.
   const orgMap = new Map<string, boolean>()

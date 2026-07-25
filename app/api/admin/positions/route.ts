@@ -23,16 +23,41 @@ export async function GET(req: Request) {
     if (!access.isSuperAdmin && !access.staffRole) return json({ error: 'forbidden' }, 403)
 
     const supabase = createAdminSupabaseClient()
-    const { data, error } = await supabase
+    // Скоуп по организации: встроенные роли (organization_id null) видны всем,
+    // кастомные — только своей орг. Иначе роли одной организации протекали в
+    // список другой (кросс-тенантная утечка).
+    const orgId = access.activeOrganization?.id || null
+    let query = supabase
       .from('positions')
-      .select('id, name, description, is_builtin, created_at')
+      .select('id, name, description, is_builtin, created_at, organization_id')
       .order('is_builtin', { ascending: false })
       .order('name')
+
+    if (orgId) {
+      // Своя орг: встроенные + собственные кастомные.
+      query = query.or(`organization_id.is.null,organization_id.eq.${orgId}`)
+    } else if (!access.isSuperAdmin) {
+      // Нет активной орг и не суперадмин → только общие встроенные.
+      query = query.is('organization_id', null)
+    }
+    // Суперадмин без активной орг → видит всё (не фильтруем).
+
+    const { data, error } = await query
 
     if (error) {
       if (error.code === '42P01') {
         // Table doesn't exist — return built-in list
         return json({ data: BUILTIN_POSITIONS.map((p, i) => ({ id: `builtin-${i}`, ...p, created_at: null })), tableExists: false })
+      }
+      if (error.code === '42703') {
+        // Колонка organization_id ещё не создана (миграция не применена).
+        // Безопасный фолбэк: только встроенные роли — без утечки чужих кастомных.
+        const { data: builtins } = await supabase
+          .from('positions')
+          .select('id, name, description, is_builtin, created_at')
+          .eq('is_builtin', true)
+          .order('name')
+        return json({ data: builtins ?? [], tableExists: true, pendingMigration: true })
       }
       throw error
     }
@@ -55,6 +80,24 @@ export async function POST(req: Request) {
     const action = body?.action
 
     const supabase = createAdminSupabaseClient()
+    // Организация-владелец для новых ролей и проверки владения при правке/удалении.
+    const orgId = access.activeOrganization?.id || null
+
+    // Гард владения: встроенные роли не трогаем, чужие орг-роли — тоже.
+    // Возвращает Response при отказе, либо null если можно.
+    const assertOwned = async (id: string): Promise<Response | null> => {
+      const { data: pos } = await supabase
+        .from('positions')
+        .select('id, name, is_builtin, organization_id')
+        .eq('id', id)
+        .single()
+      if (!pos) return json({ error: 'Роль не найдена' }, 404)
+      if ((pos as any).is_builtin) return json({ error: 'Встроенную роль нельзя изменить или удалить' }, 403)
+      if (!access.isSuperAdmin && (pos as any).organization_id !== orgId) {
+        return json({ error: 'forbidden', reason: 'cross-org' }, 403)
+      }
+      return null
+    }
 
     if (action === 'create') {
       const name = String(body?.name || '').trim().toLowerCase().replace(/\s+/g, '_')
@@ -70,11 +113,15 @@ export async function POST(req: Request) {
 
       const { data, error } = await supabase
         .from('positions')
-        .insert({ name, description, is_builtin: false })
+        .insert({ name, description, is_builtin: false, organization_id: orgId })
         .select('id, name, description, is_builtin, created_at')
         .single()
 
-      if (error) throw error
+      if (error) {
+        // Имя роли глобально-уникально — понятное сообщение вместо 500.
+        if ((error as any).code === '23505') return json({ error: `Роль «${name}» уже занята` }, 409)
+        throw error
+      }
 
       // Засеять capabilities + position_paths в зависимости от режима
       try {
@@ -132,6 +179,9 @@ export async function POST(req: Request) {
       if (!id) return json({ error: 'id required' }, 400)
       if (!name || name.length < 2) return json({ error: 'name обязателен' }, 400)
 
+      const ownErr = await assertOwned(id)
+      if (ownErr) return ownErr
+
       const { data, error } = await supabase
         .from('positions')
         .update({ name, description })
@@ -147,6 +197,9 @@ export async function POST(req: Request) {
     if (action === 'delete') {
       const id = String(body?.id || '').trim()
       if (!id) return json({ error: 'id required' }, 400)
+
+      const ownErr = await assertOwned(id)
+      if (ownErr) return ownErr
 
       const { data: pos } = await supabase.from('positions').select('name').eq('id', id).single()
       if (!pos) return json({ error: 'Должность не найдена' }, 404)
