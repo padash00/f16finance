@@ -81,9 +81,9 @@ export function StoreShell({ children }: { children: React.ReactNode }) {
   )
 
   return (
-    <div className="min-h-dvh bg-white dark:bg-slate-950/30">
-      {/* Топ-бар модуля «Магазин» */}
-      <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-3 border-b border-slate-200 bg-white/80 px-3 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/80 sm:px-4">
+    <div className="fixed inset-0 z-20 flex flex-col bg-white dark:bg-slate-950">
+      {/* Топ-бар модуля «Магазин» — зафиксирован сверху, не скролится */}
+      <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white/80 px-3 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/80 sm:px-4">
         <div className="flex items-center gap-2">
           <button onClick={() => setMobileOpen(true)} className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10 md:hidden" aria-label="Меню">
             <Menu className="h-4 w-4" />
@@ -115,18 +115,20 @@ export function StoreShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <div className="flex">
-        {/* Десктоп-сайдбар */}
-        <aside className="sticky top-14 hidden h-[calc(100dvh-3.5rem)] w-60 shrink-0 flex-col self-start overflow-y-auto border-r border-slate-200 bg-white dark:border-white/10 dark:bg-slate-950/40 md:flex">
+      {/* Тело: сайдбар (фиксирован) + контент (скролится сам) */}
+      <div className="flex min-h-0 flex-1">
+        {/* Десктоп-сайдбар — фиксированной высоты, свой скролл */}
+        <aside className="hidden w-60 shrink-0 flex-col overflow-y-auto border-r border-slate-200 bg-white dark:border-white/10 dark:bg-slate-950/40 md:flex">
           {navList()}
-          <div className="border-t border-slate-200 p-2 dark:border-white/10">
+          <div className="mt-auto border-t border-slate-200 p-2 dark:border-white/10">
             <Link href="/dashboard" className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-white">
               <ArrowLeft className="h-4 w-4" /> Назад в Orda
             </Link>
           </div>
         </aside>
 
-        <div className="min-w-0 flex-1">{children}</div>
+        {/* Контент — единственная скроллируемая область */}
+        <div className="min-w-0 flex-1 overflow-y-auto">{children}</div>
       </div>
 
       {/* Мобильное меню */}

@@ -223,6 +223,16 @@ export default function ProductionPage() {
         }
       />
 
+      {/* Быстрое объяснение порядка работы */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] px-4 py-3 text-xs text-emerald-900 dark:text-emerald-100">
+        <span className="font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">С чего начать</span>
+        <span><b>1.</b> Добавьте ингредиенты (сырьё) — кнопка «Ингредиенты».</span>
+        <span className="text-emerald-500/60">→</span>
+        <span><b>2.</b> Соберите из них «Новую техкарту».</span>
+        <span className="text-emerald-500/60">→</span>
+        <span><b>3.</b> Привяжите техкарту к товару — появятся себестоимость и food&nbsp;cost.</span>
+      </div>
+
       {err && <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-700 dark:text-rose-200">{err}</div>}
 
       {showIng && (
@@ -352,12 +362,12 @@ export default function ProductionPage() {
 
       {/* Анализ продаж — теоретический food cost */}
       <div className="rounded-2xl border border-border bg-white dark:bg-slate-900/60 p-5 shadow-lg shadow-black/20">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="mb-3 space-y-2">
           <h3 className="text-sm font-semibold text-foreground">Анализ продаж · теоретический food cost</h3>
           <div className="flex flex-wrap items-center gap-2">
-            <DatePicker className={inputCls} value={anFrom} onChange={setAnFrom} />
+            <div className="w-40 shrink-0"><DatePicker className={inputCls} value={anFrom} onChange={setAnFrom} /></div>
             <span className="text-slate-500">—</span>
-            <DatePicker className={inputCls} value={anTo} onChange={setAnTo} />
+            <div className="w-40 shrink-0"><DatePicker className={inputCls} value={anTo} onChange={setAnTo} /></div>
             <button onClick={runAnalysis} disabled={anLoading} className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50">
               {anLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Посчитать
             </button>
