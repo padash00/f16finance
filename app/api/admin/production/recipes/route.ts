@@ -69,14 +69,16 @@ export async function GET(request: Request) {
     const ingIds = Array.from(new Set(components.map((c) => c.ingredient_id).filter(Boolean))) as string[]
     const ingredientCostById = new Map<string, number>()
     const ingredientNameById = new Map<string, string>()
+    const ingredientUnitById = new Map<string, string>()
     if (ingIds.length) {
       const { data: ings } = await supabase
         .from('ingredients')
-        .select('id, name, purchase_price')
+        .select('id, name, purchase_price, unit')
         .in('id', ingIds)
       for (const it of ings || []) {
         ingredientCostById.set(String(it.id), Number((it as any).purchase_price || 0))
         ingredientNameById.set(String(it.id), String((it as any).name || ''))
+        ingredientUnitById.set(String(it.id), String((it as any).unit || ''))
       }
     }
 
@@ -99,6 +101,7 @@ export async function GET(request: Request) {
         name: c.name || (c.ingredient_id ? ingredientNameById.get(String(c.ingredient_id)) : c.component_recipe_id ? recipeName.get(String(c.component_recipe_id)) : null),
         qty: Number(c.qty || 0),
         unit: c.unit,
+        ingredient_unit: c.ingredient_id ? ingredientUnitById.get(String(c.ingredient_id)) || null : null,
         waste_pct: Number(c.waste_pct || 0),
       })),
     }))

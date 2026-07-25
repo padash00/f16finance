@@ -5,6 +5,25 @@
 //              для полуфабриката — portion_cost вложенной техкарты.
 // yield_factor < 1 = технологические потери выхода (напр. 0.97 = 3% ужарки).
 
+// Нормализация единиц: всё сводим к базовой (г / мл / шт), чтобы ингредиент,
+// купленный в кг, корректно списывался в граммах в техкарте.
+//   factor — сколько базовых единиц в одной этой (кг = 1000 г, л = 1000 мл).
+//   family — семейство: 'mass' | 'volume' | 'count'. Конвертация только внутри семьи.
+const UNIT_MAP: Record<string, { factor: number; family: 'mass' | 'volume' | 'count' }> = {
+  'г': { factor: 1, family: 'mass' },
+  'кг': { factor: 1000, family: 'mass' },
+  'мл': { factor: 1, family: 'volume' },
+  'л': { factor: 1000, family: 'volume' },
+  'шт': { factor: 1, family: 'count' },
+  'уп': { factor: 1, family: 'count' },
+  'порц': { factor: 1, family: 'count' },
+}
+
+export function unitInfo(unit?: string | null): { factor: number; family: string } {
+  const u = String(unit || '').trim().toLowerCase()
+  return UNIT_MAP[u] || { factor: 1, family: 'unknown' }
+}
+
 export type RecipeComponent = {
   ingredient_id?: string | null
   component_recipe_id?: string | null
@@ -12,6 +31,8 @@ export type RecipeComponent = {
   qty: number
   unit?: string | null
   waste_pct?: number | null
+  /** Единица ингредиента (в которой задана его закупочная цена). Для конвертации. */
+  ingredient_unit?: string | null
 }
 
 export type Recipe = {
@@ -38,10 +59,26 @@ export function computeRecipeCost(params: {
 
   for (const c of recipe.components || []) {
     const wasteMul = 1 + (Number(c.waste_pct) || 0) / 100
-    let unitCost = 0
-    if (c.ingredient_id) unitCost = ingredientCostById.get(String(c.ingredient_id)) || 0
-    else if (c.component_recipe_id) unitCost = nestedPortionCostById.get(String(c.component_recipe_id)) || 0
-    const cost = (Number(c.qty) || 0) * wasteMul * unitCost
+    const qty = Number(c.qty) || 0
+    let cost = 0
+    if (c.ingredient_id) {
+      const unitCost = ingredientCostById.get(String(c.ingredient_id)) || 0 // цена за ЕДИНИЦУ ингредиента
+      const ci = unitInfo(c.unit) // единица в техкарте
+      const ii = unitInfo(c.ingredient_unit) // единица закупки ингредиента
+      if (ci.family !== 'unknown' && ci.family === ii.family) {
+        // Сводим к базовой единице: qty→база, цену→за базу. Так кг↔г, л↔мл сходятся.
+        const qtyBase = qty * ci.factor
+        const costPerBase = ii.factor ? unitCost / ii.factor : unitCost
+        cost = qtyBase * costPerBase * wasteMul
+      } else {
+        // Единицы не заданы/разных семейств — считаем как есть (одна единица).
+        cost = qty * unitCost * wasteMul
+      }
+    } else if (c.component_recipe_id) {
+      // Полуфабрикат: qty в единицах выхода вложенной техкарты, цена = её порция.
+      const unitCost = nestedPortionCostById.get(String(c.component_recipe_id)) || 0
+      cost = qty * unitCost * wasteMul
+    }
     total += cost
     components.push({ name: String(c.name || c.ingredient_id || c.component_recipe_id || '—'), cost })
   }

@@ -25,6 +25,10 @@ type SaleItem = { id: string; name: string; sale_price: number | null }
 
 const money = (n: number) => Number(n || 0).toLocaleString('ru-RU') + ' ₸'
 const inputCls = 'rounded-xl border border-border bg-white dark:bg-slate-900/60 px-3 py-2 text-sm text-foreground outline-none focus:border-emerald-400/40'
+// Единицы измерения — выпадающие списки вместо ручного ввода.
+const UNITS = ['г', 'кг', 'мл', 'л', 'шт', 'уп'] // сырьё и компоненты
+const OUTPUT_UNITS = ['порц', 'шт', 'кг', 'г', 'л', 'мл', 'уп'] // выход блюда
+const hintCls = 'mt-1 text-[11px] leading-snug text-slate-500'
 
 export default function ProductionPage() {
   const [recipes, setRecipes] = useState<Recipe[]>([])
@@ -242,11 +246,22 @@ export default function ProductionPage() {
             <button onClick={() => setShowIng(false)} className="text-muted-foreground hover:text-slate-900 dark:hover:text-white"><X className="h-4 w-4" /></button>
           </div>
           <p className="mb-3 text-xs text-slate-500">Мука, сыр, тесто — с ценой за базовую единицу (г/мл/шт). Из них собираются техкарты.</p>
-          <div className="mb-4 flex flex-wrap items-center gap-2">
-            <input className={`${inputCls} flex-1 min-w-[180px]`} placeholder="Название (Мука)" value={ingName} onChange={(e) => setIngName(e.target.value)} />
-            <input className={`${inputCls} w-24`} placeholder="ед. (г)" value={ingUnit} onChange={(e) => setIngUnit(e.target.value)} />
-            <input className={`${inputCls} w-32`} type="number" placeholder="цена за ед." value={ingPrice} onChange={(e) => setIngPrice(e.target.value)} />
-            <button onClick={addIngredient} disabled={savingIng} className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50">
+          <div className="mb-1 flex flex-wrap items-end gap-2">
+            <div className="flex-1 min-w-[180px]">
+              <input className={`${inputCls} w-full`} placeholder="Название (Мука)" value={ingName} onChange={(e) => setIngName(e.target.value)} />
+              <p className={hintCls}>Название сырья.</p>
+            </div>
+            <div className="w-24">
+              <select className={`${inputCls} w-full`} value={ingUnit} onChange={(e) => setIngUnit(e.target.value)}>
+                {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+              </select>
+              <p className={hintCls}>Единица закупки.</p>
+            </div>
+            <div className="w-32">
+              <input className={`${inputCls} w-full`} type="number" placeholder="цена за ед." value={ingPrice} onChange={(e) => setIngPrice(e.target.value)} />
+              <p className={hintCls}>Цена за 1 {ingUnit}.</p>
+            </div>
+            <button onClick={addIngredient} disabled={savingIng} className="mb-5 inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50">
               {savingIng ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Добавить
             </button>
           </div>
@@ -312,13 +327,27 @@ export default function ProductionPage() {
             <button onClick={() => { setShowForm(false); resetForm() }} className="text-muted-foreground hover:text-slate-900 dark:hover:text-white"><X className="h-4 w-4" /></button>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <input className={inputCls} placeholder="Название (Пицца Маргарита)" value={name} onChange={(e) => setName(e.target.value)} />
-            <input className={inputCls} placeholder="Категория (необяз.)" value={category} onChange={(e) => setCategory(e.target.value)} />
-            <div className="flex gap-2">
-              <input className={`${inputCls} w-20`} type="number" placeholder="Выход" value={outputQty} onChange={(e) => setOutputQty(e.target.value)} />
-              <input className={`${inputCls} flex-1`} placeholder="ед. (порц/кг)" value={outputUnit} onChange={(e) => setOutputUnit(e.target.value)} />
+            <div>
+              <input className={`${inputCls} w-full`} placeholder="Название (Пицца Маргарита)" value={name} onChange={(e) => setName(e.target.value)} />
+              <p className={hintCls}>Как блюдо называется в меню.</p>
             </div>
-            <input className={inputCls} type="number" placeholder="Потери выхода, %" value={yieldPct} onChange={(e) => setYieldPct(e.target.value)} />
+            <div>
+              <input className={`${inputCls} w-full`} placeholder="Категория (необяз.)" value={category} onChange={(e) => setCategory(e.target.value)} />
+              <p className={hintCls}>Группа: пицца, напитки… Можно не заполнять.</p>
+            </div>
+            <div>
+              <div className="flex gap-2">
+                <input className={`${inputCls} w-20`} type="number" placeholder="Выход" value={outputQty} onChange={(e) => setOutputQty(e.target.value)} />
+                <select className={`${inputCls} flex-1`} value={outputUnit} onChange={(e) => setOutputUnit(e.target.value)}>
+                  {OUTPUT_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+                </select>
+              </div>
+              <p className={hintCls}>Сколько порций/кг даёт вся техкарта.</p>
+            </div>
+            <div>
+              <input className={`${inputCls} w-full`} type="number" placeholder="Потери выхода, %" value={yieldPct} onChange={(e) => setYieldPct(e.target.value)} />
+              <p className={hintCls}>Ужарка/уварка: 3% → выход меньше, себестоимость порции выше.</p>
+            </div>
           </div>
 
           <div className="mt-3">
@@ -330,7 +359,8 @@ export default function ProductionPage() {
           </div>
 
           <div className="mt-4">
-            <div className="mb-2 text-xs font-medium text-muted-foreground">Состав (ингредиенты на весь выход)</div>
+            <div className="mb-1 text-xs font-medium text-muted-foreground">Состав (ингредиенты на весь выход)</div>
+            <p className={`${hintCls} mb-2 mt-0`}>Ингредиент → количество на весь выход → единица (кг/г сводятся к закупке автоматически) → потери % (обрезь, очистка, кости).</p>
             <div className="space-y-2">
               {comps.map((c, i) => (
                 <div key={i} className="flex flex-wrap items-center gap-2">
@@ -342,7 +372,9 @@ export default function ProductionPage() {
                     {ingredients.map((ing) => <option key={ing.id} value={ing.id}>{ing.name} ({ing.unit})</option>)}
                   </select>
                   <input className={`${inputCls} w-24`} type="number" placeholder="кол-во" value={c.qty || ''} onChange={(e) => setComp(i, { qty: Number(e.target.value) })} />
-                  <input className={`${inputCls} w-20`} placeholder="ед." value={c.unit} onChange={(e) => setComp(i, { unit: e.target.value })} />
+                  <select className={`${inputCls} w-20`} value={c.unit} onChange={(e) => setComp(i, { unit: e.target.value })}>
+                    {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+                  </select>
                   <input className={`${inputCls} w-24`} type="number" placeholder="потери %" value={c.waste_pct || ''} onChange={(e) => setComp(i, { waste_pct: Number(e.target.value) })} />
                   <button onClick={() => delComp(i)} className="text-slate-500 hover:text-rose-600 dark:hover:text-rose-300"><Trash2 className="h-4 w-4" /></button>
                 </div>
