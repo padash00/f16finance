@@ -360,6 +360,78 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (body.action === 'closeForce') {
       const deniedClose = await requireCapability(access, 'shifts-reports.close_force')
       if (deniedClose) return deniedClose as any
+
+      // Смена + компания (для изоляции и построения дохода)
+      const { data: shift } = await supabase
+        .from('point_shifts')
+        .select('id, company_id, operator_id, shift_type, opened_at, status, company:company_id(id, code, organization_id)')
+        .eq('id', id)
+        .maybeSingle()
+      if (!shift) return json({ error: 'shift-not-found' }, 404)
+      if ((shift as any).status === 'closed') return json({ error: 'shift-already-closed' }, 409)
+
+      // Изоляция: закрывать можно только смену своей орг (кроме суперадмина).
+      if (!access.isSuperAdmin) {
+        const scope = await resolveCompanyScope({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: false,
+        })
+        if (scope.allowedCompanyIds && !scope.allowedCompanyIds.includes(String((shift as any).company_id))) {
+          return json({ error: 'forbidden' }, 403)
+        }
+      }
+
+      // Отчёт → доход: суммируем POS-продажи смены (минус возвраты) и пишем в incomes
+      // (идемпотентно — если доход по смене уже есть, не дублируем).
+      const [{ data: sales }, { data: returns }, { data: existingIncome }] = await Promise.all([
+        supabase.from('point_sales').select('cash_amount, kaspi_amount, sale_date').eq('shift_id', id),
+        supabase.from('point_returns').select('cash_amount, kaspi_amount').eq('shift_id', id),
+        supabase.from('incomes').select('id').eq('shift_id', id).maybeSingle(),
+      ])
+      const sumCash = (sales || []).reduce((s: number, x: any) => s + Number(x.cash_amount || 0), 0)
+      const sumKaspi = (sales || []).reduce((s: number, x: any) => s + Number(x.kaspi_amount || 0), 0)
+      const retCash = (returns || []).reduce((s: number, x: any) => s + Number(x.cash_amount || 0), 0)
+      const retKaspi = (returns || []).reduce((s: number, x: any) => s + Number(x.kaspi_amount || 0), 0)
+      const cash = Math.round((sumCash - retCash + Number.EPSILON) * 100) / 100
+      const kaspi = Math.round((sumKaspi - retKaspi + Number.EPSILON) * 100) / 100
+      const total = cash + kaspi
+
+      let incomeCreated = false
+      if (!existingIncome && total > 0) {
+        // incomes.operator_id ждёт operators.id — резолвим по staff-линку смены.
+        let opId: string | null = null
+        if ((shift as any).operator_id) {
+          const { data: link } = await supabase
+            .from('operator_staff_links')
+            .select('operator_id')
+            .eq('staff_id', (shift as any).operator_id)
+            .maybeSingle()
+          opId = (link as any)?.operator_id || null
+        }
+        const code = String((shift as any).company?.code || '').toLowerCase().trim()
+        const zone = code === 'ramen' ? 'ramen' : code === 'extra' ? 'extra' : 'pc'
+        const saleDate =
+          (sales || [])[0]?.sale_date ||
+          new Date((shift as any).opened_at || new Date().toISOString()).toISOString().slice(0, 10)
+        const { error: incErr } = await supabase.from('incomes').insert([
+          {
+            date: saleDate,
+            company_id: (shift as any).company_id,
+            operator_id: opId,
+            shift: (shift as any).shift_type === 'night' ? 'night' : 'day',
+            shift_id: id,
+            zone,
+            cash_amount: cash,
+            kaspi_amount: kaspi,
+            online_amount: 0,
+            card_amount: 0,
+            comment: `Принудительное закрытие смены (отчёт из POS-продаж)${(body.note || '').trim() ? ': ' + body.note!.trim() : ''}`,
+            is_virtual: false,
+          },
+        ])
+        if (!incErr) incomeCreated = true
+      }
+
       const { error: rpcErr } = await supabase.rpc('point_shift_admin_close', {
         p_shift_id: id,
         p_actor_user_id: actorUserId,
@@ -371,7 +443,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         if (msg.includes('shift-already-closed')) return json({ error: 'shift-already-closed' }, 409)
         throw rpcErr
       }
-      return json({ ok: true })
+      return json({ ok: true, income_created: incomeCreated, total_amount: total, cash, kaspi })
     }
 
     if (body.action === 'purge') {

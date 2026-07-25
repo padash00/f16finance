@@ -173,6 +173,32 @@ function ShiftDetail({ id, onClose, onChanged }: { id: string; onClose: () => vo
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
   const [mounted, setMounted] = useState(false)
+  const [closing, setClosing] = useState(false)
+  const [closeErr, setCloseErr] = useState<string | null>(null)
+  const [confirmClose, setConfirmClose] = useState(false)
+  const [note, setNote] = useState('')
+
+  async function handleForceClose() {
+    setClosing(true); setCloseErr(null)
+    try {
+      const res = await fetch(`/api/admin/shifts/reports/${id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'closeForce', note: note.trim() || undefined }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok || !j.ok) {
+        if (res.status === 403) throw new Error('Нет прав на принудительное закрытие смены')
+        throw new Error(j.detail || j.error || 'Не удалось закрыть смену')
+      }
+      onChanged()
+      onClose()
+    } catch (e: any) {
+      setCloseErr(e?.message || 'Ошибка')
+    } finally {
+      setClosing(false)
+    }
+  }
 
   useEffect(() => { setMounted(true) }, [])
   useEffect(() => {
@@ -287,6 +313,57 @@ function ShiftDetail({ id, onClose, onChanged }: { id: string; onClose: () => vo
                   ))}
                 </div>
               </>
+            )}
+          </div>
+        )}
+
+        {open && !loading && !err && (
+          <div className="shrink-0 space-y-2 border-t border-border bg-card p-4">
+            {!confirmClose ? (
+              <button
+                type="button"
+                onClick={() => { setConfirmClose(true); setCloseErr(null) }}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-amber-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-amber-700"
+              >
+                <Clock className="h-4 w-4" /> Закрыть смену и отправить отчёт
+              </button>
+            ) : (
+              <div className="space-y-2">
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-800 dark:text-amber-100">
+                  Смена закроется, а выручка попадёт в <b>Доходы</b>:
+                  <div className="mt-1 tabular-nums">
+                    Нал {fmt(cashTotal)} ₸ · Безнал {fmt(kaspiTotal)} ₸ · <b>Итого {fmt(salesTotal)} ₸</b>
+                  </div>
+                </div>
+                <input
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="Причина / комментарий (необязательно)"
+                  className="w-full rounded-xl border border-border bg-white dark:bg-white/5 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-500"
+                />
+                {closeErr && (
+                  <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-700 dark:text-rose-200">{closeErr}</div>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={closing}
+                    onClick={() => setConfirmClose(false)}
+                    className="flex-1 rounded-xl border border-border bg-white dark:bg-white/5 px-4 py-2.5 text-sm font-medium text-body transition-colors hover:bg-slate-50 dark:hover:bg-white/10 disabled:opacity-50"
+                  >
+                    Отмена
+                  </button>
+                  <button
+                    type="button"
+                    disabled={closing}
+                    onClick={handleForceClose}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-amber-700 disabled:opacity-50"
+                  >
+                    {closing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    Закрыть смену
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         )}
