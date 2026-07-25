@@ -598,7 +598,7 @@ export default function OperatorPos({
                 <p className="text-sm">Товары не найдены</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
+              <div className="grid grid-cols-2 items-start gap-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
                 {gridItems.map((item) => {
                   const disabled = item.display_qty <= 0
                   const inCart = cart.find((l) => l.item_id === item.id)?.quantity || 0
@@ -624,9 +624,9 @@ export default function OperatorPos({
                           <span className="absolute left-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full bg-emerald-600 text-xs font-bold">{inCart}</span>
                         )}
                       </div>
-                      <div className="flex flex-1 flex-col p-2">
-                        <p className="line-clamp-2 text-xs font-medium leading-snug">{item.name}</p>
-                        <p className="mt-auto pt-1 text-sm font-bold text-emerald-400">{fmt(item.sale_price)} ₸</p>
+                      <div className="flex flex-col p-2">
+                        <p className="line-clamp-2 min-h-[2rem] text-xs font-medium leading-snug">{item.name}</p>
+                        <p className="pt-1 text-sm font-bold text-emerald-400">{fmt(item.sale_price)} ₸</p>
                       </div>
                     </button>
                   )

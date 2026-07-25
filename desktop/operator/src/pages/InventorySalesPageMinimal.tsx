@@ -1341,7 +1341,7 @@ export default function InventorySalesPageMinimal({
                     <p className="text-xs text-muted-foreground">Измените категорию или запрос поиска</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+                  <div className="grid grid-cols-2 items-start gap-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
                     {gridItems.map((item) => {
                       const qty = Number(item.display_qty || 0)
                       const disabled = qty <= 0
@@ -1377,9 +1377,9 @@ export default function InventorySalesPageMinimal({
                               </span>
                             )}
                           </div>
-                          <div className="flex flex-1 flex-col p-2">
-                            <p className="line-clamp-2 text-xs font-medium leading-snug">{item.name}</p>
-                            <p className="mt-auto pt-1 text-sm font-bold text-primary">{formatMoney(item.sale_price)} ₸</p>
+                          <div className="flex flex-col p-2">
+                            <p className="line-clamp-2 min-h-[2rem] text-xs font-medium leading-snug">{item.name}</p>
+                            <p className="pt-1 text-sm font-bold text-primary">{formatMoney(item.sale_price)} ₸</p>
                           </div>
                         </button>
                       )
