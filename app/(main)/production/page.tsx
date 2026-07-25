@@ -30,6 +30,18 @@ const UNITS = ['г', 'кг', 'мл', 'л', 'шт', 'уп'] // сырьё и ко
 const OUTPUT_UNITS = ['порц', 'шт', 'кг', 'г', 'л', 'мл', 'уп'] // выход блюда
 const hintCls = 'mt-1 text-[11px] leading-snug text-slate-500'
 
+// Food cost: доля себестоимости в цене. Ниже — лучше. Порог: 25% / 35%.
+function fcColor(pct: number): string {
+  if (pct <= 25) return 'text-emerald-700 dark:text-emerald-300'
+  if (pct <= 35) return 'text-amber-700 dark:text-amber-300'
+  return 'text-rose-600 dark:text-rose-300'
+}
+function marginColor(pct: number): string {
+  if (pct >= 65) return 'text-emerald-700 dark:text-emerald-300'
+  if (pct >= 50) return 'text-amber-700 dark:text-amber-300'
+  return 'text-rose-600 dark:text-rose-300'
+}
+
 export default function ProductionPage() {
   const [recipes, setRecipes] = useState<Recipe[]>([])
   const [ingredients, setIngredients] = useState<Ingredient[]>([])
@@ -48,6 +60,7 @@ export default function ProductionPage() {
   const [yieldPct, setYieldPct] = useState('0') // потери %
   const [comps, setComps] = useState<Comp[]>([{ ingredient_id: null, component_recipe_id: null, name: null, qty: 0, unit: 'г', waste_pct: 0 }])
   const [saleItemId, setSaleItemId] = useState('')
+  const [isSemiFinished, setIsSemiFinished] = useState(false)
 
   // анализ продаж
   const todayISO = new Date().toISOString().slice(0, 10)
@@ -154,6 +167,7 @@ export default function ProductionPage() {
   const resetForm = () => {
     setEditingId(null)
     setName(''); setCategory(''); setOutputQty('1'); setOutputUnit('порц'); setYieldPct('0'); setSaleItemId('')
+    setIsSemiFinished(false)
     setComps([{ ingredient_id: null, component_recipe_id: null, name: null, qty: 0, unit: 'г', waste_pct: 0 }])
   }
 
@@ -161,6 +175,7 @@ export default function ProductionPage() {
     setEditingId(r.id)
     setName(r.name); setCategory(r.category || ''); setOutputQty(String(r.output_qty)); setOutputUnit(r.output_unit)
     setSaleItemId(r.sale_item_id || '')
+    setIsSemiFinished(!!r.is_semi_finished)
     setYieldPct(String(Math.round((1 - (r.yield_factor || 1)) * 100)))
     setComps(
       (r.components || []).length
@@ -182,7 +197,8 @@ export default function ProductionPage() {
           name: name.trim(), category: category.trim() || null,
           output_qty: Number(outputQty) || 1, output_unit: outputUnit.trim() || 'порц',
           yield_factor: yf > 0 ? yf : 1, sale_item_id: saleItemId || null,
-          components: comps.filter((c) => c.ingredient_id && Number(c.qty) > 0),
+          is_semi_finished: isSemiFinished,
+          components: comps.filter((c) => (c.ingredient_id || c.component_recipe_id) && Number(c.qty) > 0),
         }),
       })
       const j = await res.json()
@@ -289,32 +305,47 @@ export default function ProductionPage() {
 
       {showJournal && (
         <div className="rounded-2xl border border-border bg-white dark:bg-slate-900/60 p-5 shadow-lg shadow-black/20">
-          <div className="mb-3 flex items-center justify-between">
+          <div className="mb-1 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-foreground">Журнал движений ингредиентов</h3>
             <button onClick={() => setShowJournal(false)} className="text-muted-foreground hover:text-slate-900 dark:hover:text-white"><X className="h-4 w-4" /></button>
           </div>
+          <p className={`${hintCls} mb-3 mt-0`}>История склада сырья: <b className="text-emerald-700 dark:text-emerald-300">приходы</b> (+), <b className="text-rose-600 dark:text-rose-300">списания</b> по продажам (−) и <b className="text-amber-700 dark:text-amber-300">ревизии</b> (факт vs учёт). Плюс/минус — изменение остатка.</p>
           {movements.length === 0 ? (
-            <p className="text-xs text-slate-500">Движений нет.</p>
+            <p className="text-xs text-slate-500">Движений нет. Появятся после приходов, ревизий и списаний по продажам.</p>
           ) : (
-            <div className="divide-y divide-slate-100 dark:divide-white/5 overflow-hidden rounded-xl border border-border">
-              {movements.map((m) => {
-                const kindLabel = m.kind === 'receipt' ? 'приход' : m.kind === 'count' ? 'ревизия' : m.kind === 'sale_writeoff' ? 'списание (продажи)' : 'ручное'
-                return (
-                  <div key={m.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-foreground">{m.ingredient_name}</span>
-                      <span className="rounded border border-border bg-slate-100 dark:bg-white/5 px-1.5 py-0.5 text-[10px] text-muted-foreground">{kindLabel}</span>
-                      {m.period_from ? <span className="text-[11px] text-slate-500">{m.period_from}…{m.period_to}</span> : null}
-                      <span className="text-[11px] text-slate-500">{new Date(m.created_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+            <div className="overflow-hidden rounded-xl border border-border">
+              <div className="grid grid-cols-[1fr_auto_auto] gap-3 border-b border-border bg-slate-50 px-3 py-2 text-[11px] uppercase tracking-wide text-slate-500 dark:bg-white/[0.02] sm:grid-cols-[1.5fr_1fr_auto_auto]">
+                <span>Ингредиент · тип</span><span className="hidden text-right sm:block">Дата</span><span className="text-right">Изменение</span><span className="text-right">Остаток</span>
+              </div>
+              <div className="max-h-[26rem] divide-y divide-slate-100 overflow-y-auto dark:divide-white/5">
+                {movements.map((m) => {
+                  const meta = (
+                    m.kind === 'receipt' ? { label: 'приход', chip: 'border-emerald-400/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' } :
+                    m.kind === 'count' ? { label: 'ревизия', chip: 'border-amber-400/30 bg-amber-500/10 text-amber-700 dark:text-amber-300' } :
+                    m.kind === 'sale_writeoff' ? { label: 'списание (продажи)', chip: 'border-rose-400/30 bg-rose-500/10 text-rose-600 dark:text-rose-300' } :
+                    { label: 'ручное', chip: 'border-border bg-slate-100 text-muted-foreground dark:bg-white/5' }
+                  )
+                  const delta = Number(m.qty_delta)
+                  return (
+                    <div key={m.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 px-3 py-2 text-sm sm:grid-cols-[1.5fr_1fr_auto_auto]">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="truncate font-medium text-foreground">{m.ingredient_name}</span>
+                          <span className={`rounded border px-1.5 py-0.5 text-[10px] ${meta.chip}`}>{meta.label}</span>
+                        </div>
+                        {m.comment ? <div className="mt-0.5 truncate text-[11px] text-slate-500">{m.comment}</div> : null}
+                        {m.period_from ? <div className="mt-0.5 text-[11px] text-slate-500">период {m.period_from}…{m.period_to}</div> : null}
+                      </div>
+                      <span className="hidden text-right text-[11px] text-slate-500 sm:block">{new Date(m.created_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                      <div className="text-right">
+                        <span className={`tabular-nums font-medium ${delta < 0 ? 'text-rose-600 dark:text-rose-300' : 'text-emerald-700 dark:text-emerald-300'}`}>{delta > 0 ? '+' : ''}{delta} {m.ingredient_unit}</span>
+                        {m.variance != null && Number(m.variance) !== 0 ? <div className={`text-[10px] tabular-nums ${Number(m.variance) < 0 ? 'text-rose-600 dark:text-rose-300' : 'text-amber-700 dark:text-amber-300'}`}>расхожд. {Number(m.variance) > 0 ? '+' : ''}{Number(m.variance)}</div> : null}
+                      </div>
+                      <span className="text-right tabular-nums text-muted-foreground">{Number(m.balance_after)} {m.ingredient_unit}</span>
                     </div>
-                    <div className="flex items-center gap-4 text-xs">
-                      <span className={`tabular-nums ${Number(m.qty_delta) < 0 ? 'text-rose-600 dark:text-rose-300' : 'text-emerald-700 dark:text-emerald-300'}`}>{Number(m.qty_delta) > 0 ? '+' : ''}{Number(m.qty_delta)} {m.ingredient_unit}</span>
-                      {m.variance != null && Number(m.variance) !== 0 ? <span className={`tabular-nums ${Number(m.variance) < 0 ? 'text-rose-600 dark:text-rose-300' : 'text-amber-700 dark:text-amber-300'}`}>расхожд. {Number(m.variance) > 0 ? '+' : ''}{Number(m.variance)}</span> : null}
-                      <span className="tabular-nums text-muted-foreground">остаток {Number(m.balance_after)} {m.ingredient_unit}</span>
-                    </div>
-                  </div>
-                )
-              })}
+                  )
+                })}
+              </div>
             </div>
           )}
         </div>
@@ -358,18 +389,46 @@ export default function ProductionPage() {
             </select>
           </div>
 
+          <label className="mt-3 flex items-start gap-2">
+            <input type="checkbox" checked={isSemiFinished} onChange={(e) => setIsSemiFinished(e.target.checked)} className="mt-0.5 h-4 w-4 accent-amber-500" />
+            <span className="text-sm text-foreground">Это полуфабрикат
+              <span className={`${hintCls} mt-0 block`}>Не готовое блюдо, а заготовка (соус, тесто, бульон). Его можно вставлять как ингредиент в другие техкарты — себестоимость подтянется автоматически.</span>
+            </span>
+          </label>
+
           <div className="mt-4">
             <div className="mb-1 text-xs font-medium text-muted-foreground">Состав (ингредиенты на весь выход)</div>
             <p className={`${hintCls} mb-2 mt-0`}>Ингредиент → количество на весь выход → единица (кг/г сводятся к закупке автоматически) → потери % (обрезь, очистка, кости).</p>
             <div className="space-y-2">
               {comps.map((c, i) => (
                 <div key={i} className="flex flex-wrap items-center gap-2">
-                  <select className={`${inputCls} min-w-[200px] flex-1`} value={c.ingredient_id || ''} onChange={(e) => {
-                    const ing = ingredients.find((x) => x.id === e.target.value)
-                    setComp(i, { ingredient_id: e.target.value || null, name: ing?.name || null, unit: ing?.unit || c.unit })
-                  }}>
-                    <option value="">— ингредиент —</option>
-                    {ingredients.map((ing) => <option key={ing.id} value={ing.id}>{ing.name} ({ing.unit})</option>)}
+                  <select
+                    className={`${inputCls} min-w-[200px] flex-1`}
+                    value={c.component_recipe_id ? `rec:${c.component_recipe_id}` : c.ingredient_id ? `ing:${c.ingredient_id}` : ''}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      if (v.startsWith('rec:')) {
+                        const rec = recipes.find((x) => x.id === v.slice(4))
+                        setComp(i, { component_recipe_id: v.slice(4), ingredient_id: null, name: rec?.name || null, unit: rec?.output_unit || c.unit })
+                      } else if (v.startsWith('ing:')) {
+                        const ing = ingredients.find((x) => x.id === v.slice(4))
+                        setComp(i, { ingredient_id: v.slice(4), component_recipe_id: null, name: ing?.name || null, unit: ing?.unit || c.unit })
+                      } else {
+                        setComp(i, { ingredient_id: null, component_recipe_id: null, name: null })
+                      }
+                    }}
+                  >
+                    <option value="">— выбрать —</option>
+                    <optgroup label="Ингредиенты">
+                      {ingredients.map((ing) => <option key={ing.id} value={`ing:${ing.id}`}>{ing.name} ({ing.unit})</option>)}
+                    </optgroup>
+                    {recipes.some((r) => r.is_semi_finished && r.id !== editingId) && (
+                      <optgroup label="Полуфабрикаты">
+                        {recipes.filter((r) => r.is_semi_finished && r.id !== editingId).map((r) => (
+                          <option key={r.id} value={`rec:${r.id}`}>{r.name} ({r.output_unit})</option>
+                        ))}
+                      </optgroup>
+                    )}
                   </select>
                   <input className={`${inputCls} w-24`} type="number" placeholder="кол-во" value={c.qty || ''} onChange={(e) => setComp(i, { qty: Number(e.target.value) })} />
                   <select className={`${inputCls} w-20`} value={c.unit} onChange={(e) => setComp(i, { unit: e.target.value })}>
@@ -461,20 +520,50 @@ export default function ProductionPage() {
           <div className="px-4 py-16 text-center text-sm text-muted-foreground">Техкарт нет. Создайте первую.</div>
         ) : (
           <div className="divide-y divide-slate-100 dark:divide-white/5">
-            {recipes.map((r) => (
+            {recipes.map((r) => {
+              const linked = r.sale_item_id ? saleItems.find((s) => s.id === r.sale_item_id) : null
+              const salePrice = Number(linked?.sale_price || 0)
+              const cost = Number(r.portion_cost || 0)
+              const fc = salePrice > 0 ? Math.round((cost / salePrice) * 100) : null
+              const margin = salePrice > 0 ? Math.round(((salePrice - cost) / salePrice) * 100) : null
+              return (
               <div key={r.id} className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
                 <div className="min-w-[200px] flex-1">
                   <div className="text-sm font-medium text-foreground">{r.name}{r.is_semi_finished ? <span className="ml-2 rounded border border-amber-400/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-700 dark:text-amber-300">полуфабрикат</span> : null}</div>
-                  <div className="text-[11px] text-slate-500">{r.category || '—'} · выход {r.output_qty} {r.output_unit} · {r.components.length} ингр.{r.yield_factor < 1 ? ` · потери ${Math.round((1 - r.yield_factor) * 100)}%` : ''}</div>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500">
+                    <span>{r.category || '—'} · выход {r.output_qty} {r.output_unit} · {r.components.length} ингр.{r.yield_factor < 1 ? ` · потери ${Math.round((1 - r.yield_factor) * 100)}%` : ''}</span>
+                    {linked ? (
+                      <span className="rounded border border-emerald-400/30 bg-emerald-500/10 px-1.5 py-0.5 text-emerald-700 dark:text-emerald-300">товар: {linked.name}</span>
+                    ) : (
+                      <span className="rounded border border-amber-400/30 bg-amber-500/10 px-1.5 py-0.5 text-amber-700 dark:text-amber-300">не связано с товаром</span>
+                    )}
+                  </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-[11px] text-slate-500">Себестоимость порции</div>
-                  <div className="text-base font-bold tabular-nums text-emerald-700 dark:text-emerald-300">{money(r.portion_cost)}</div>
+                  <div className="text-[11px] text-slate-500">Себестоимость</div>
+                  <div className="text-base font-bold tabular-nums text-foreground">{money(cost)}</div>
                 </div>
+                {fc !== null ? (
+                  <>
+                    <div className="text-right">
+                      <div className="text-[11px] text-slate-500">Food cost</div>
+                      <div className={`text-base font-bold tabular-nums ${fcColor(fc)}`}>{fc}%</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[11px] text-slate-500">Маржа</div>
+                      <div className={`text-base font-bold tabular-nums ${marginColor(margin!)}`}>{margin}%</div>
+                      <div className="text-[10px] text-slate-500">цена {money(salePrice)}</div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-right text-[11px] text-slate-400">
+                    привяжи товар,<br />чтобы видеть<br />food cost / маржу
+                  </div>
+                )}
                 <button onClick={() => openEdit(r)} className="text-slate-500 transition hover:text-emerald-700 dark:hover:text-emerald-300"><Pencil className="h-4 w-4" /></button>
                 <button onClick={() => remove(r.id, r.name)} className="text-slate-500 transition hover:text-rose-600 dark:hover:text-rose-300"><Trash2 className="h-4 w-4" /></button>
               </div>
-            ))}
+            )})}
           </div>
         )}
       </div>
