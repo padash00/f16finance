@@ -1406,6 +1406,7 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
                           title="Выбрать все на странице"
                         />
                       </th>
+                      <th className="w-10 px-2 py-2.5 text-center font-medium text-muted-foreground text-xs">#</th>
                       <th className="px-3 py-2.5 text-left font-medium text-muted-foreground text-xs">Название</th>
                       <th className="px-3 py-2.5 text-left font-medium text-muted-foreground text-xs">Штрихкод</th>
                       <th className="px-3 py-2.5 text-left font-medium text-muted-foreground text-xs">Категория</th>
@@ -1419,7 +1420,7 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/40">
-                    {paginated.map((item) => (
+                    {paginated.map((item, idx) => (
                       <Fragment key={item.id}>
                         <tr className={`hover:bg-muted/20 transition-colors ${!item.is_active ? 'opacity-50' : ''} ${item.id === highlightId ? 'bg-emerald-500/10' : ''}`}>
                           <td className="w-8 px-2 py-2.5 text-center">
@@ -1430,6 +1431,7 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
                               onChange={() => toggleSelect(item.id)}
                             />
                           </td>
+                          <td className="px-2 py-2.5 text-center text-xs tabular-nums text-muted-foreground">{(page - 1) * PAGE_SIZE + idx + 1}</td>
                           <td className="px-3 py-2.5 font-medium max-w-[260px]">
                             <button
                               type="button"
@@ -1592,7 +1594,7 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
                   {filtered.length > 0 && (
                     <tfoot>
                       <tr className="border-t-2 border-border/50 bg-muted/30">
-                        <td colSpan={7} className="px-3 py-2.5 text-xs text-muted-foreground font-medium text-right">
+                        <td colSpan={8} className="px-3 py-2.5 text-xs text-muted-foreground font-medium text-right">
                           Итого ({filtered.length} поз.):
                         </td>
                         <td className="px-3 py-2.5 text-right">

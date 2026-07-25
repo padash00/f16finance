@@ -700,6 +700,7 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
                       onChange={(e) => setSelectedIds(e.target.checked ? new Set(filteredBalances.map((b) => b.item_id)) : new Set())}
                     />
                   </th>
+                  <th className="w-10 py-2.5 px-2 text-center font-normal">#</th>
                   <th className="py-2.5 px-2 font-normal">Товар</th>
                   <th className="w-36 py-2.5 px-2 font-normal">Штрихкод</th>
                   <th className="w-36 py-2.5 px-2 font-normal">Категория</th>
@@ -710,7 +711,7 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
-                {filteredBalances.map((b) => {
+                {filteredBalances.map((b, idx) => {
                   const qty = Number(b.quantity)
                   const threshold = b.item?.low_stock_threshold ?? null
                   const isLow = threshold !== null ? qty <= threshold : qty <= 0
@@ -727,6 +728,7 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
                           onChange={() => setSelectedIds((prev) => { const n = new Set(prev); if (n.has(b.item_id)) n.delete(b.item_id); else n.add(b.item_id); return n })}
                         />
                       </td>
+                      <td className="w-10 py-2.5 px-2 text-center align-middle text-xs tabular-nums text-muted-foreground">{idx + 1}</td>
                       <td className="min-w-0 max-w-0 py-2.5 px-2 align-middle">
                         <Tooltip>
                           <TooltipTrigger asChild>

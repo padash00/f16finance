@@ -1011,6 +1011,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
                       }}
                     />
                   </th>
+                  <th className="w-10 py-2.5 px-2 text-center font-normal">#</th>
                   <th className="py-2.5 px-2 font-normal">Товар</th>
                   <th className="w-36 py-2.5 px-2 font-normal">Штрихкод</th>
                   <th className="w-36 py-2.5 px-2 font-normal">Категория</th>
@@ -1020,7 +1021,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
-                {filteredBalances.map((b) => (
+                {filteredBalances.map((b, idx) => (
                   <tr
                     key={b.item_id}
                     className={`transition hover:bg-slate-50 dark:hover:bg-white/[0.02] ${selectedIds.has(b.item_id) ? 'bg-rose-500/[0.05]' : ''}`}
@@ -1040,6 +1041,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
                         }}
                       />
                     </td>
+                    <td className="w-10 py-2.5 px-2 text-center align-middle text-xs tabular-nums text-muted-foreground">{idx + 1}</td>
                     <td className="min-w-0 max-w-0 py-2.5 px-2 align-middle">
                       <Tooltip>
                         <TooltipTrigger asChild>

@@ -124,6 +124,7 @@ export default function OperatorPos({
   const [cart, setCart] = useState<CartLine[]>([])
   const [payment, setPayment] = useState<PaymentMethod>('cash')
   const [mixedCash, setMixedCash] = useState('')
+  const [mixedKaspi, setMixedKaspi] = useState('')
   const [comment, setComment] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [saleError, setSaleError] = useState<string | null>(null)
@@ -337,10 +338,14 @@ export default function OperatorPos({
     if (payment === 'cash') cash = subtotal
     else if (payment === 'kaspi') kaspi = subtotal
     else {
-      cash = Math.min(subtotal, Math.max(0, parseFloat(mixedCash) || 0))
-      kaspi = Math.max(0, subtotal - cash)
+      cash = Math.max(0, parseFloat(mixedCash) || 0)
+      kaspi = Math.max(0, parseFloat(mixedKaspi) || 0)
+      if (Math.abs(cash + kaspi - subtotal) > 0.01) {
+        setSaleError(`Сумма наличных и безнала должна равняться ${fmt(subtotal)} ₸`)
+        return
+      }
       if (cash <= 0 || kaspi <= 0) {
-        setSaleError('Для смешанной оплаты укажите часть наличными, остальное уйдёт в Безналичный.')
+        setSaleError('Для смешанной оплаты укажите обе части: наличные и безнал.')
         return
       }
     }
@@ -381,6 +386,7 @@ export default function OperatorPos({
       setComment('')
       setPayment('cash')
       setMixedCash('')
+      setMixedKaspi('')
       await loadCatalog()
       setTimeout(() => searchRef.current?.focus(), 100)
     } catch (e: any) {
@@ -685,13 +691,38 @@ export default function OperatorPos({
                 ))}
               </div>
               {payment === 'mixed' && (
-                <input
-                  value={mixedCash}
-                  onChange={(e) => setMixedCash(e.target.value)}
-                  inputMode="numeric"
-                  placeholder="Наличными, остальное — безнал"
-                  className="w-full rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500"
-                />
+                <div className="grid grid-cols-2 gap-2 rounded-xl bg-white/5 p-2">
+                  <label className="block">
+                    <span className="text-[11px] text-gray-400">Наличными</span>
+                    <input
+                      value={mixedCash}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        setMixedCash(v)
+                        const c = Math.max(0, Math.min(subtotal, parseFloat(v) || 0))
+                        setMixedKaspi(String(Math.max(0, subtotal - c)))
+                      }}
+                      inputMode="numeric"
+                      placeholder="0"
+                      className="mt-0.5 w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm tabular-nums outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-[11px] text-gray-400">Безнал</span>
+                    <input
+                      value={mixedKaspi}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        setMixedKaspi(v)
+                        const k = Math.max(0, Math.min(subtotal, parseFloat(v) || 0))
+                        setMixedCash(String(Math.max(0, subtotal - k)))
+                      }}
+                      inputMode="numeric"
+                      placeholder="0"
+                      className="mt-0.5 w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm tabular-nums outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </label>
+                </div>
               )}
               <textarea
                 value={comment}
