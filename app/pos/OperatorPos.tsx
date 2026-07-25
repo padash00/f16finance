@@ -697,9 +697,10 @@ export default function OperatorPos({
                     <input
                       value={mixedCash}
                       onChange={(e) => {
-                        const v = e.target.value
-                        setMixedCash(v)
-                        const c = Math.max(0, Math.min(subtotal, parseFloat(v) || 0))
+                        const raw = e.target.value
+                        if (raw === '') { setMixedCash(''); setMixedKaspi(String(subtotal)); return }
+                        const c = Math.max(0, Math.min(subtotal, parseFloat(raw) || 0))
+                        setMixedCash(String(c))
                         setMixedKaspi(String(Math.max(0, subtotal - c)))
                       }}
                       inputMode="numeric"
@@ -712,9 +713,10 @@ export default function OperatorPos({
                     <input
                       value={mixedKaspi}
                       onChange={(e) => {
-                        const v = e.target.value
-                        setMixedKaspi(v)
-                        const k = Math.max(0, Math.min(subtotal, parseFloat(v) || 0))
+                        const raw = e.target.value
+                        if (raw === '') { setMixedKaspi(''); setMixedCash(String(subtotal)); return }
+                        const k = Math.max(0, Math.min(subtotal, parseFloat(raw) || 0))
+                        setMixedKaspi(String(k))
                         setMixedCash(String(Math.max(0, subtotal - k)))
                       }}
                       inputMode="numeric"
