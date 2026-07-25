@@ -49,8 +49,13 @@ function printZReport(r: any) {
     .row.tot{font-weight:800;font-size:15px;border-top:2px solid #111;margin-top:4px;padding-top:6px}
     table{width:100%;border-collapse:collapse;margin-top:6px;font-size:12px}
     th,td{padding:6px 8px;border-bottom:1px solid #eee;text-align:left}th{color:#555;font-weight:600;border-bottom:2px solid #ddd}
-    .r{text-align:right}.foot{margin-top:24px;text-align:right;color:#777;font-size:11px}</style></head>
+    .r{text-align:right}.foot{margin-top:24px;text-align:right;color:#777;font-size:11px}
+    .bar{position:sticky;top:0;display:flex;gap:8px;justify-content:center;padding:10px;background:#f4f4f5;border-bottom:1px solid #e4e4e7;margin:-16mm -16mm 12px}
+    .bar button{border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer}
+    .bar .p{background:#059669;color:#fff}.bar .c{background:#e4e4e7;color:#111}
+    @media print{.bar{display:none}@page{margin:16mm}}</style></head>
     <body>
+      <div class="bar"><button class="p" onclick="window.print()">🖨 Печать</button><button class="c" onclick="window.close()">Закрыть</button></div>
       <h1>Z-Отчёт</h1>
       <div class="sub">${escHtml(req.name || r.pointName || 'ORDA POINT')}${req.bin ? ' · БИН/ИИН ' + escHtml(req.bin) : ''}${req.address ? '<br>' + escHtml(req.address) : ''}</div>
       <div class="grid">
@@ -70,9 +75,18 @@ function printZReport(r: any) {
       <tbody>${rows || '<tr><td colspan="4" style="color:#777">Продаж по позициям нет</td></tr>'}</tbody></table>
       <div class="row tot" style="margin-top:10px"><span>Итог проданных товаров</span><span>${money(r.goodsTotal)}</span></div>
       <div class="foot">Сформировано: ${new Date().toLocaleString('ru-RU')}</div>
-      <script>window.onload=function(){window.print()}</script>
     </body></html>`)
   w.document.close()
+}
+
+// Загрузить данные Z-отчёта и открыть печатную A4-страницу (сперва показ, печать по кнопке).
+async function printZFor(shiftId: string) {
+  try {
+    const res = await fetch(`/api/admin/shifts/z-report?shift_id=${shiftId}`, { cache: 'no-store' })
+    const j = await res.json().catch(() => null)
+    if (res.ok && j?.report) printZReport(j.report)
+    else alert(j?.error === 'forbidden' ? 'Нет доступа к этой смене' : 'Не удалось сформировать Z-отчёт')
+  } catch { alert('Не удалось сформировать Z-отчёт') }
 }
 const tm = (s: string | null) => (s ? new Date(s).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '—')
 const STATUS: { key: string; label: string }[] = [
@@ -187,26 +201,29 @@ export default function StoreShiftsPage() {
               const cash = open ? (s.live_totals?.cash ?? 0) : Number(s.closing_cash || 0)
               const kaspi = open ? (s.live_totals?.kaspi ?? 0) : Number(s.closing_kaspi || 0)
               return (
-                <button key={s.id} onClick={() => setDetailId(s.id)} className="flex w-full flex-wrap items-center gap-x-4 gap-y-2 px-3 py-3 text-left transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.03] sm:gap-x-6 sm:px-4">
-                  <div className="flex min-w-[180px] items-center gap-2">
-                    <span className="grid h-8 w-8 place-items-center rounded-lg bg-slate-100 dark:bg-white/5 text-muted-foreground"><User className="h-4 w-4" /></span>
-                    <div>
-                      <div className="text-sm font-medium text-foreground">{s.operator?.full_name || s.operator?.short_name || '—'}</div>
-                      <div className="text-[11px] text-slate-500">{dt(s.opened_at)} → {dt(s.closed_at)}</div>
+                <div key={s.id} className="flex w-full flex-wrap items-center gap-x-4 gap-y-2 px-3 py-3 transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.03] sm:gap-x-6 sm:px-4">
+                  <button onClick={() => setDetailId(s.id)} className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-2 text-left">
+                    <div className="flex min-w-[180px] items-center gap-2">
+                      <span className="grid h-8 w-8 place-items-center rounded-lg bg-slate-100 dark:bg-white/5 text-muted-foreground"><User className="h-4 w-4" /></span>
+                      <div>
+                        <div className="text-sm font-medium text-foreground">{s.operator?.full_name || s.operator?.short_name || '—'}</div>
+                        <div className="text-[11px] text-slate-500">{dt(s.opened_at)} → {dt(s.closed_at)}</div>
+                      </div>
                     </div>
-                  </div>
-                  <span className={`rounded-md border px-2 py-0.5 text-[11px] font-medium ${open ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-border bg-surface-muted text-muted-foreground'}`}>
-                    {open ? 'Открыта' : 'Закрыта'}
-                  </span>
-                  <div className="ml-auto flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
-                    {sales != null && (
-                      <div className="text-right"><div className="text-[11px] text-slate-500">Продажи</div><div className="font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">{fmt(sales)} ₸</div></div>
-                    )}
-                    <div className="text-right"><div className="flex items-center justify-end gap-1 text-[11px] text-slate-500"><Wallet className="h-3 w-3" /> Касса</div><div className="font-medium tabular-nums text-foreground">{fmt(cash)} ₸</div></div>
-                    <div className="text-right"><div className="flex items-center justify-end gap-1 text-[11px] text-slate-500"><CreditCard className="h-3 w-3" /> Безнал</div><div className="font-medium tabular-nums text-sky-700 dark:text-sky-300">{fmt(kaspi)} ₸</div></div>
-                    <ChevronRight className="h-4 w-4 text-slate-600" />
-                  </div>
-                </button>
+                    <span className={`rounded-md border px-2 py-0.5 text-[11px] font-medium ${open ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-border bg-surface-muted text-muted-foreground'}`}>
+                      {open ? 'Открыта' : 'Закрыта'}
+                    </span>
+                    <div className="ml-auto flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+                      {sales != null && (
+                        <div className="text-right"><div className="text-[11px] text-slate-500">Продажи</div><div className="font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">{fmt(sales)} ₸</div></div>
+                      )}
+                      <div className="text-right"><div className="flex items-center justify-end gap-1 text-[11px] text-slate-500"><Wallet className="h-3 w-3" /> Касса</div><div className="font-medium tabular-nums text-foreground">{fmt(cash)} ₸</div></div>
+                      <div className="text-right"><div className="flex items-center justify-end gap-1 text-[11px] text-slate-500"><CreditCard className="h-3 w-3" /> Безнал</div><div className="font-medium tabular-nums text-sky-700 dark:text-sky-300">{fmt(kaspi)} ₸</div></div>
+                    </div>
+                  </button>
+                  <button onClick={() => printZFor(s.id)} title="Распечатать Z-отчёт" className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20">🖨 <span className="hidden sm:inline">Z-отчёт</span></button>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-slate-600" />
+                </div>
               )
             })}
           </div>
@@ -297,23 +314,7 @@ function ShiftDetail({ id, onClose, onChanged }: { id: string; onClose: () => vo
               <div className="text-xs text-slate-500">{dt(shift?.opened_at)} → {dt(shift?.closed_at)}</div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={async () => {
-                if (!shift?.id) return
-                try {
-                  const res = await fetch(`/api/admin/shifts/z-report?shift_id=${shift.id}`, { cache: 'no-store' })
-                  const j = await res.json().catch(() => null)
-                  if (res.ok && j?.report) printZReport(j.report)
-                  else alert(j?.error === 'forbidden' ? 'Нет доступа к этой смене' : 'Не удалось сформировать Z-отчёт')
-                } catch { alert('Не удалось сформировать Z-отчёт') }
-              }}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20"
-            >
-              🖨 Z-отчёт
-            </button>
-            <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"><X className="h-4 w-4" /></button>
-          </div>
+          <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"><X className="h-4 w-4" /></button>
         </div>
 
         {loading ? (
