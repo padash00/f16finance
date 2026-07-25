@@ -1,9 +1,11 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import {
   Boxes,
   Camera,
+  ChefHat,
   Loader2,
   Package,
   Pencil,
@@ -60,6 +62,21 @@ type CardData = {
   debt_history?: Array<{ date: string; client: string; quantity: number; amount: number; status: string; company: string }>
 }
 
+// Техкарта (рецептура), привязанная к товару через recipes.sale_item_id.
+type RecipeCompRow = {
+  ingredient_id: string | null
+  component_recipe_id: string | null
+  name: string | null
+  qty: number
+  unit: string | null
+}
+type RecipeInfo = {
+  id: string
+  name: string
+  portion_cost: number
+  components: Array<{ name: string; qty: number; unit: string }>
+}
+
 const fmt = (n: number) => Number(n || 0).toLocaleString('ru-RU')
 const fmtMoney = (n: number) => `${fmt(Math.round((n + Number.EPSILON) * 100) / 100)} ₸`
 
@@ -67,6 +84,13 @@ function marginColor(pct: number): string {
   if (pct >= 30) return 'text-emerald-600 dark:text-emerald-400'
   if (pct >= 15) return 'text-amber-600 dark:text-amber-400'
   if (pct > 0) return 'text-orange-600 dark:text-orange-400'
+  return 'text-rose-600 dark:text-rose-400'
+}
+
+// Food cost: доля себестоимости в цене продажи. Чем ниже — тем лучше.
+function foodCostColor(pct: number): string {
+  if (pct <= 25) return 'text-emerald-600 dark:text-emerald-400'
+  if (pct <= 35) return 'text-amber-600 dark:text-amber-400'
   return 'text-rose-600 dark:text-rose-400'
 }
 
@@ -97,6 +121,8 @@ export default function ProductCardModal({
   const [histTab, setHistTab] = useState<'sales' | 'purchases' | 'debts'>('sales')
   const [descDraft, setDescDraft] = useState('')
   const fileRef = useRef<HTMLInputElement | null>(null)
+  // Техкарта: null = нет привязанной; undefined = ещё не проверяли/недоступно
+  const [recipe, setRecipe] = useState<RecipeInfo | null | undefined>(undefined)
 
   const load = useCallback(async (id: string) => {
     setLoading(true)
@@ -115,17 +141,47 @@ export default function ProductCardModal({
     }
   }, [])
 
+  const loadRecipe = useCallback(async (id: string) => {
+    setRecipe(undefined)
+    try {
+      const res = await fetch('/api/admin/production/recipes', { cache: 'no-store' })
+      if (!res.ok) { setRecipe(undefined); return } // нет фичи/прав — блок не показываем
+      const json = await res.json().catch(() => null)
+      const recipes: any[] = Array.isArray(json?.recipes) ? json.recipes : []
+      const ingredients: any[] = Array.isArray(json?.ingredients) ? json.ingredients : []
+      const ingName = new Map<string, string>(ingredients.map((i: any) => [String(i.id), String(i.name || '')]))
+      const recName = new Map<string, string>(recipes.map((r: any) => [String(r.id), String(r.name || '')]))
+      const match = recipes.find((r: any) => String(r.sale_item_id || '') === String(id))
+      if (!match) { setRecipe(null); return }
+      const comps = (Array.isArray(match.components) ? match.components : []) as RecipeCompRow[]
+      setRecipe({
+        id: String(match.id),
+        name: String(match.name || ''),
+        portion_cost: Number(match.portion_cost || 0),
+        components: comps.map((c) => ({
+          name: c.name || (c.ingredient_id ? ingName.get(String(c.ingredient_id)) : c.component_recipe_id ? recName.get(String(c.component_recipe_id)) : '') || '—',
+          qty: Number(c.qty || 0),
+          unit: String(c.unit || ''),
+        })),
+      })
+    } catch {
+      setRecipe(undefined)
+    }
+  }, [])
+
   useEffect(() => {
     if (open && itemId) {
       void load(itemId)
+      void loadRecipe(itemId)
     } else if (!open) {
       setData(null)
       setError(null)
       setEditDesc(false)
       setCandidates([])
       setSearched(false)
+      setRecipe(undefined)
     }
-  }, [open, itemId, load])
+  }, [open, itemId, load, loadRecipe])
 
   async function handlePhoto(file: File | null) {
     if (!file || !itemId) return
@@ -390,6 +446,69 @@ export default function ProductCardModal({
                 </div>
               </div>
             </div>
+
+            {/* ── Техкарта (рецептура + food cost) ── */}
+            {recipe !== undefined && (
+              <div className="rounded-lg border border-slate-200 bg-white p-3 dark:border-white/10 dark:bg-white/[0.02]">
+                <div className="mb-2 flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <ChefHat className="h-3.5 w-3.5 text-amber-500" /> Техкарта
+                  </div>
+                  <Link
+                    href="/store/production"
+                    className="text-xs font-medium text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300"
+                  >
+                    {recipe ? 'Открыть техкарту →' : 'Создать техкарту →'}
+                  </Link>
+                </div>
+
+                {recipe ? (
+                  (() => {
+                    const cost = Math.round(recipe.portion_cost)
+                    const sale = Number(data.sale_price || 0)
+                    const fc = sale > 0 ? Math.round((cost / sale) * 100) : 0
+                    const margin = sale > 0 ? Math.round(((sale - cost) / sale) * 100) : 0
+                    return (
+                      <div className="space-y-3">
+                        {/* Себестоимость / food cost / маржа */}
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
+                            <div className="text-[11px] text-muted-foreground">Себестоимость</div>
+                            <div className="text-sm font-semibold text-foreground">{fmtMoney(cost)}</div>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
+                            <div className="text-[11px] text-muted-foreground">Food cost</div>
+                            <div className={`text-sm font-bold ${foodCostColor(fc)}`}>{fc}%</div>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
+                            <div className="text-[11px] text-muted-foreground">Маржа</div>
+                            <div className={`text-sm font-bold ${marginColor(margin)}`}>{margin}%</div>
+                          </div>
+                        </div>
+                        {/* Состав */}
+                        {recipe.components.length > 0 ? (
+                          <div className="space-y-1">
+                            <div className="text-[11px] font-medium text-muted-foreground">Состав</div>
+                            {recipe.components.map((c, i) => (
+                              <div key={i} className="flex items-center justify-between rounded-md px-2 py-1 text-xs odd:bg-slate-50 dark:odd:bg-white/[0.03]">
+                                <span className="min-w-0 flex-1 truncate text-body">{c.name}</span>
+                                <span className="tabular-nums text-muted-foreground">{fmt(c.qty)} {c.unit}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-muted-foreground">Состав ещё не заполнен.</div>
+                        )}
+                      </div>
+                    )
+                  })()
+                ) : (
+                  <div className="text-xs text-muted-foreground">
+                    У товара нет техкарты. Заведи рецептуру, чтобы видеть себестоимость, food cost и списывать ингредиенты при продаже.
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* ── Остатки по точкам ── */}
             <div>
