@@ -182,7 +182,7 @@ export async function resolveUserOrganizations(params: {
         : (row as any).organization
 
       if (!organization?.id) continue
-      if (organization.status === 'suspended') continue
+      if (organization.status === 'suspended' || organization.status === 'archived') continue
 
       organizations.push({
         id: String(organization.id),
@@ -209,7 +209,7 @@ export async function resolveUserOrganizations(params: {
         : (row as any).organization
 
       if (!organization?.id) continue
-      if (organization.status === 'suspended') continue
+      if (organization.status === 'suspended' || organization.status === 'archived') continue
 
       organizations.push({
         id: String(organization.id),
@@ -239,7 +239,7 @@ export async function resolveUserOrganizations(params: {
         : company?.organization
 
       if (!organization?.id) continue
-      if (organization.status === 'suspended') continue
+      if (organization.status === 'suspended' || organization.status === 'archived') continue
 
       organizations.push({
         id: String(organization.id),
@@ -266,7 +266,7 @@ export async function resolveUserOrganizations(params: {
         : (row as any).organization
 
       if (!organization?.id) continue
-      if (organization.status === 'suspended') continue
+      if (organization.status === 'suspended' || organization.status === 'archived') continue
 
       organizations.push({
         id: String(organization.id),

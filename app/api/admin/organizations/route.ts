@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
 
-import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { buildTenantHost, buildTenantUrl } from '@/lib/core/tenant-domain'
 import { PLATFORM_FEATURES, resolveFeatureState } from '@/lib/core/entitlements'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { isAdminEmail } from '@/lib/server/admin'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 // Панель суперадмина: организации, подписки, обзор платформы.
@@ -649,6 +650,53 @@ export async function PATCH(req: Request) {
       return json({ ok: true, owner: { email: ownerEmail, password: ownerPassword, userId: authUserId } })
     }
 
+    // ── Архивировать организацию (только приостановленную) ──
+    // Архив = поддомен гаснет, вход блокируется, данные целы (обратимо). Отсюда
+    // потом можно «Удалить навсегда» (DELETE) или «Восстановить» (unarchiveOrg).
+    if (body?.action === 'archiveOrg' || body?.action === 'unarchiveOrg') {
+      const { data: org } = await supabase
+        .from('organizations')
+        .select('id, slug, status, billing_exempt')
+        .eq('id', organizationId)
+        .maybeSingle()
+      if (!org) return json({ error: 'Организация не найдена' }, 404)
+      if ((org as any).slug === 'f16') return json({ error: 'F16 нельзя архивировать/удалять' }, 403)
+
+      if (body.action === 'archiveOrg') {
+        if ((org as any).billing_exempt) return json({ error: 'Организация с billing-exempt защищена от архивации' }, 403)
+        if ((org as any).status !== 'suspended') {
+          return json({ error: 'Архивировать можно только приостановленную (suspended) организацию. Сначала приостановите подписку.' }, 409)
+        }
+        const { error } = await supabase.from('organizations').update({ status: 'archived' }).eq('id', organizationId)
+        if (error) throw error
+        await supabase.from('organization_billing_events').insert([{
+          organization_id: organizationId,
+          event_type: 'organization_archived',
+          status: 'archived',
+          created_by_user_id: access.user?.id || null,
+          payload: { note: 'archived via platform admin' },
+        }]).then(() => {}, () => {})
+      } else {
+        // unarchiveOrg: archived → suspended (вернуть в «остановлено», откуда можно оживить подписку)
+        if ((org as any).status !== 'archived') {
+          return json({ error: 'Восстановить можно только архивированную организацию.' }, 409)
+        }
+        const { error } = await supabase.from('organizations').update({ status: 'suspended' }).eq('id', organizationId)
+        if (error) throw error
+        await supabase.from('organization_billing_events').insert([{
+          organization_id: organizationId,
+          event_type: 'organization_unarchived',
+          status: 'suspended',
+          created_by_user_id: access.user?.id || null,
+          payload: { note: 'unarchived via platform admin' },
+        }]).then(() => {}, () => {})
+      }
+
+      const data = await loadPlatformData(supabase)
+      const organization = data.organizations.find((o: any) => o.id === organizationId) || null
+      return json({ ok: true, organization })
+    }
+
     // ── Организация ──
     const orgPatch: Record<string, unknown> = {}
     if (body?.name !== undefined) orgPatch.name = String(body.name || '').trim()
@@ -921,6 +969,99 @@ export async function PATCH(req: Request) {
     return json({ ok: true, organization })
   } catch (error: any) {
     await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/organizations PATCH', message: error?.message || 'error' })
+    return json({ error: error?.message || 'Ошибка сервера' }, 500)
+  }
+}
+
+// ── Хард-удаление организации (покурга) ──
+// Необратимо. Гейт: только archived, кроме F16/exempt, + подтверждение slug.
+// Порядок: собрать «чистые» логины → RPC delete_organization_cascade (атомарно
+// сносит все данные) → удалить чистые auth-аккаунты → аудит.
+export async function DELETE(req: Request) {
+  try {
+    const access = await getRequestAccessContext(req)
+    if ('response' in access) return access.response
+    if (!access.isSuperAdmin) return json({ error: 'forbidden' }, 403)
+
+    const body = (await req.json().catch(() => null)) as any
+    const organizationId = String(body?.organizationId || '').trim()
+    const confirmSlug = String(body?.confirmSlug || '').trim().toLowerCase()
+    if (!organizationId) return json({ error: 'organizationId обязателен' }, 400)
+
+    const supabase = getSupabase()
+
+    const { data: org } = await supabase
+      .from('organizations')
+      .select('id, slug, name, status, billing_exempt')
+      .eq('id', organizationId)
+      .maybeSingle()
+    if (!org) return json({ error: 'Организация не найдена' }, 404)
+
+    const slug = String((org as any).slug || '')
+    if (slug === 'f16') return json({ error: 'F16 нельзя удалить' }, 403)
+    if ((org as any).billing_exempt) return json({ error: 'Организация с billing-exempt защищена от удаления' }, 403)
+    if ((org as any).status !== 'archived') {
+      return json({ error: 'Удалить можно только архивированную организацию. Сначала «Архивировать».' }, 409)
+    }
+    if (confirmSlug !== slug.toLowerCase()) {
+      return json({ error: `Для подтверждения введите slug организации: «${slug}»` }, 400)
+    }
+
+    // Собрать логины орг ДО покурги (потом members удалятся каскадом).
+    // «Чистые» = не суперадмин и не состоят в другой организации.
+    const cleanUserIds: string[] = []
+    try {
+      const { data: members } = await supabase
+        .from('organization_members')
+        .select('user_id, email')
+        .eq('organization_id', organizationId)
+      const candidates = (members || []).filter((m: any) => m.user_id)
+      for (const m of candidates) {
+        const uid = String((m as any).user_id)
+        if (isAdminEmail((m as any).email)) continue // суперадмин — не трогаем
+        // состоит ли в другой орг?
+        const { count } = await supabase
+          .from('organization_members')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', uid)
+          .neq('organization_id', organizationId)
+        if (count && count > 0) continue // есть другая орг — оставляем логин
+        if (!cleanUserIds.includes(uid)) cleanUserIds.push(uid)
+      }
+    } catch {
+      /* сбор логинов best-effort — покурга данных важнее */
+    }
+
+    // Атомарная покурга всех данных организации.
+    const { error: rpcErr } = await supabase.rpc('delete_organization_cascade', { p_org: organizationId })
+    if (rpcErr) {
+      await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/organizations DELETE rpc', message: rpcErr.message })
+      return json({ error: `Не удалось удалить: ${rpcErr.message}` }, 500)
+    }
+
+    // Удалить «чистые» auth-аккаунты (после покурги данных).
+    let deletedAccounts = 0
+    for (const uid of cleanUserIds) {
+      try {
+        const { error } = await supabase.auth.admin.deleteUser(uid)
+        if (!error) deletedAccounts++
+      } catch {
+        /* best-effort */
+      }
+    }
+
+    await writeAuditLog(supabase, {
+      actorUserId: access.user?.id || null,
+      entityType: 'organization',
+      entityId: organizationId,
+      action: 'organization_deleted',
+      organizationId: null,
+      payload: { slug, name: (org as any).name, deletedAccounts },
+    })
+
+    return json({ ok: true, deleted: { organizationId, slug, deletedAccounts } })
+  } catch (error: any) {
+    await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/organizations DELETE', message: error?.message || 'error' })
     return json({ error: error?.message || 'Ошибка сервера' }, 500)
   }
 }

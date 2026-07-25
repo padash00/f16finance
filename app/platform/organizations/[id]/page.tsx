@@ -159,6 +159,8 @@ export default function OrgDetailPage() {
   const [tourEnabled, setTourEnabled] = useState(false)
   const [trialDays, setTrialDays] = useState(14)
   const [renewMonths, setRenewMonths] = useState(1)
+  const [delConfirm, setDelConfirm] = useState('')
+  const [deleting, setDeleting] = useState(false)
   const [subBusy, setSubBusy] = useState<string | null>(null)
 
   const applyOrg = (found: any) => {
@@ -193,6 +195,26 @@ export default function OrgDetailPage() {
       setError(e.message)
     } finally {
       setSubBusy(null)
+    }
+  }
+
+  // Хард-удаление организации (покурга). Необратимо — требует ввода slug.
+  const handleDeleteOrg = async () => {
+    setDeleting(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/admin/organizations', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ organizationId: id, confirmSlug: delConfirm.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Ошибка')
+      // Организации больше нет — уходим в список платформы.
+      router.push('/platform')
+    } catch (e: any) {
+      setError(e.message)
+      setDeleting(false)
     }
   }
 
@@ -729,6 +751,66 @@ export default function OrgDetailPage() {
               <p className="text-sm text-slate-500">Подписки нет.</p>
             )}
           </div>
+
+          {/* Опасная зона: архив → удаление */}
+          {org && org.slug !== 'f16' && !billingExempt && (
+            <div className="rounded-2xl border border-rose-300/60 bg-rose-50/50 p-4 dark:border-rose-500/30 dark:bg-rose-500/[0.06]">
+              <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-rose-700 dark:text-rose-300">
+                <Trash2 className="h-4 w-4" />
+                Опасная зона
+              </h2>
+              <p className="mb-3 text-xs text-rose-700/80 dark:text-rose-200/80">
+                Архив гасит поддомен и вход, но данные целы (обратимо). Удаление — необратимо: сносит все данные, точки, историю и логины.
+              </p>
+
+              {org.status === 'archived' ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full bg-slate-200 px-2.5 py-0.5 text-xs font-medium text-slate-600 dark:bg-white/10 dark:text-slate-300">Статус: в архиве</span>
+                    <button
+                      disabled={subBusy !== null || deleting}
+                      onClick={() => runSub({ action: 'unarchiveOrg' }, 'unarchive')}
+                      className="rounded-lg border border-emerald-300 px-3 py-1.5 text-xs font-medium text-emerald-600 hover:bg-emerald-50 dark:border-emerald-500/30 dark:text-emerald-300 dark:hover:bg-emerald-500/10 disabled:opacity-50"
+                    >
+                      Восстановить (в «остановлено»)
+                    </button>
+                  </div>
+                  <div className="rounded-xl border border-rose-300/60 bg-white/60 p-3 dark:border-rose-500/30 dark:bg-black/20">
+                    <p className="mb-2 text-xs text-rose-700 dark:text-rose-200">
+                      Чтобы удалить навсегда, введите slug организации <code className="rounded bg-rose-500/10 px-1 font-mono">{org.slug}</code>:
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        value={delConfirm}
+                        onChange={e => setDelConfirm(e.target.value)}
+                        placeholder={org.slug}
+                        className="rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs text-slate-900 outline-none dark:border-rose-500/30 dark:bg-slate-900 dark:text-white"
+                      />
+                      <button
+                        disabled={deleting || delConfirm.trim().toLowerCase() !== org.slug.toLowerCase()}
+                        onClick={handleDeleteOrg}
+                        className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700 disabled:opacity-40"
+                      >
+                        {deleting ? 'Удаляю…' : 'Удалить навсегда'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : org.status === 'suspended' ? (
+                <button
+                  disabled={subBusy !== null}
+                  onClick={() => runSub({ action: 'archiveOrg' }, 'archive')}
+                  className="rounded-lg border border-rose-300 px-3 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-50 dark:border-rose-500/30 dark:text-rose-300 dark:hover:bg-rose-500/10 disabled:opacity-50"
+                >
+                  Архивировать организацию
+                </button>
+              ) : (
+                <p className="text-xs text-rose-700/80 dark:text-rose-200/80">
+                  Сначала приостановите доступ (кнопка «Приостановить доступ» выше) — архивировать можно только остановленную организацию.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Тариф (пакет) */}
           <div className={cardCls}>
