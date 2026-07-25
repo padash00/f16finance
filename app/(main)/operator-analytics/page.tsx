@@ -1154,7 +1154,6 @@ function OperatorAnalyticsContent() {
             .gte('date', dateFrom)
             .lte('date', dateTo)
             .in('company_id', selectedCompanyIds)
-            .in('operator_id', activeOperatorIds)
         : null
 
       const adjQ = activeOperatorIds.length > 0
@@ -1220,6 +1219,10 @@ function OperatorAnalyticsContent() {
     const dailyByOperator = new Map<string, Map<string, number>>()
 
     let totalTurnover = 0
+    // Доход по точкам, не привязанный к оператору из списка (operator_id пуст,
+    // владельческие/принудительно закрытые смены, неактивные операторы) — чтобы
+    // сумма сходилась с «Отчётами».
+    let unattributedTurnover = 0
     let totalAutoDebts = 0
     let totalMinus = 0
     let totalPlus = 0
@@ -1284,14 +1287,9 @@ function OperatorAnalyticsContent() {
 
     // Process incomes
     for (const row of incomes) {
-      if (!row.operator_id) continue
-
       const company = companyById.get(row.company_id)
       const code = (company?.code || '').toLowerCase()
       if (!code || !allowedCodes.has(code)) continue
-
-      const op = ensureOp(row.operator_id)
-      if (!op) continue
 
       const cash = safeNumber(row.cash_amount)
       const kaspi = safeNumber(row.kaspi_amount)
@@ -1301,6 +1299,13 @@ function OperatorAnalyticsContent() {
 
       if (!Number.isFinite(total) || total <= 0) continue
 
+      // Нет оператора (или он вне списка/неактивен) → в «Не распределено».
+      const op = row.operator_id ? ensureOp(row.operator_id) : null
+      if (!op) {
+        unattributedTurnover += total
+        continue
+      }
+
       op.totalTurnover += total
       op.cashAmount += cash
       op.kaspiAmount += kaspi
@@ -1308,13 +1313,13 @@ function OperatorAnalyticsContent() {
       op.cardAmount += card
       totalTurnover += total
 
-      daysByOperator.get(row.operator_id)!.add(row.date)
+      daysByOperator.get(op.operatorId)!.add(row.date)
 
-      const shiftKey = `${row.date}|${row.shift || 'na'}|${row.company_id}|${row.operator_id}`
-      shiftsByOperator.get(row.operator_id)!.add(shiftKey)
+      const shiftKey = `${row.date}|${row.shift || 'na'}|${row.company_id}|${op.operatorId}`
+      shiftsByOperator.get(op.operatorId)!.add(shiftKey)
 
       // Daily data
-      const dailyMap = dailyByOperator.get(row.operator_id)!
+      const dailyMap = dailyByOperator.get(op.operatorId)!
       dailyMap.set(row.date, (dailyMap.get(row.date) || 0) + total)
     }
 
@@ -1451,6 +1456,7 @@ function OperatorAnalyticsContent() {
     return {
       rows: sorted,
       totalTurnover,
+      unattributedTurnover,
       totalAutoDebts,
       totalMinus,
       totalPlus,
@@ -1572,7 +1578,6 @@ function OperatorAnalyticsContent() {
           .gte('date', dateFrom)
           .lte('date', dateTo)
           .in('company_id', selectedCompanyIds)
-          .in('operator_id', activeOperatorIds)
       : null
 
     const adjQ = activeOperatorIds.length > 0
@@ -1915,6 +1920,24 @@ function OperatorAnalyticsContent() {
               color={analytics.totalsFiltered.netEffect >= 0 ? 'violet' : 'red'}
             />
           </div>
+
+          {/* Сверка с «Отчётами»: доход без привязки к оператору */}
+          {analytics.unattributedTurnover > 0 && (
+            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-100">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span>
+                  <b>Не распределено по операторам:</b> {formatMoney(analytics.unattributedTurnover, moneyFmt)} ₸
+                </span>
+                <span className="text-amber-700/80 dark:text-amber-200/80">
+                  Всего по точкам: <b>{formatMoney(analytics.totalTurnover + analytics.unattributedTurnover, moneyFmt)} ₸</b> (как в «Отчётах»)
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-amber-700/80 dark:text-amber-200/70">
+                Доход без оператора (смены, закрытые владельцем/принудительно, либо неактивные операторы) не попадает
+                в разбивку по операторам, но входит в общую выручку в «Отчётах». Поэтому «Общая выручка» здесь может быть меньше.
+              </p>
+            </div>
+          )}
 
           {/* Operator Details Modal */}
           {selectedOperator && (
