@@ -113,6 +113,7 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
   const [comment, setComment] = useState('')
   const [lines, setLines] = useState<PostingLine[]>([newLine()])
   const [search, setSearch] = useState<Record<string, string>>({})
+  const [quickSearch, setQuickSearch] = useState('') // быстрый поиск-добавитель по каталогу
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [confirmPhrase, setConfirmPhrase] = useState('')
   useModalEscape(confirmOpen, () => { if (!saving) setConfirmOpen(false) })
@@ -184,6 +185,38 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
     return items
       .filter((i) => i.name.toLowerCase().includes(q) || i.barcode.includes(q))
       .slice(0, 30)
+  }
+
+  // Быстрый добавитель: совпадения по каталогу для верхнего поиска.
+  const quickMatches = useMemo(() => {
+    const q = quickSearch.trim().toLowerCase()
+    if (!q) return [] as Item[]
+    return items.filter((i) => i.name.toLowerCase().includes(q) || i.barcode.includes(q)).slice(0, 12)
+  }, [quickSearch, items])
+
+  // Клик по товару из каталога: если уже в списке — +1 к количеству; иначе
+  // заполнить первую пустую строку или добавить новую (цены подтянуть из каталога).
+  const pickCatalogItem = (opt: Item) => {
+    setLines((prev) => {
+      const existing = prev.find((l) => l.item_id === opt.id)
+      if (existing) {
+        return prev.map((l) => l.item_id === opt.id ? { ...l, quantity: String((parseNum(l.quantity) || 0) + 1) } : l)
+      }
+      const unitCost = opt.default_purchase_price ? String(opt.default_purchase_price) : ''
+      const salePrice = opt.sale_price ? String(opt.sale_price) : ''
+      const filled: PostingLine = {
+        ...newLine(),
+        item_id: opt.id,
+        quantity: '1',
+        unit_cost: unitCost,
+        sale_price: salePrice,
+        markup: markupFrom(parseNum(unitCost), parseNum(salePrice)),
+      }
+      const emptyIdx = prev.findIndex((l) => !l.item_id)
+      if (emptyIdx >= 0) return prev.map((l, i) => i === emptyIdx ? { ...filled, key: l.key } : l)
+      return [...prev, filled]
+    })
+    setQuickSearch('')
   }
 
   const selectedLocation = locations.find((l) => l.id === locationId) || null
@@ -465,6 +498,37 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
                 <Plus className="h-3.5 w-3.5 mr-1" /> Добавить строку
               </Button>
             </div>
+
+            {/* Быстрый добавитель из каталога — выбери товар, потом укажи кол-во */}
+            <div className="relative rounded-lg border border-emerald-500/20 bg-emerald-500/[0.05] p-3">
+              <Label className="mb-1 block text-xs">Добавить из каталога</Label>
+              <Input
+                placeholder="Название или штрихкод — выбери товар из списка"
+                value={quickSearch}
+                onChange={(e) => setQuickSearch(e.target.value)}
+              />
+              {quickSearch.trim() && (
+                <div className="absolute left-3 right-3 z-10 mt-1 max-h-60 overflow-auto rounded-md border border-border bg-background shadow-lg">
+                  {quickMatches.map((opt) => {
+                    const inList = lines.some((l) => l.item_id === opt.id)
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-white/5"
+                        onClick={() => pickCatalogItem(opt)}
+                      >
+                        <span className="min-w-0 flex-1 truncate">{opt.name} <span className="text-xs text-muted-foreground">· {opt.barcode}</span></span>
+                        <span className="shrink-0 text-xs text-emerald-700 dark:text-emerald-300">{inList ? '+1' : 'добавить'}</span>
+                      </button>
+                    )
+                  })}
+                  {quickMatches.length === 0 && <div className="px-3 py-2 text-sm text-muted-foreground">Ничего не найдено в каталоге</div>}
+                </div>
+              )}
+              <p className="mt-1.5 text-[11px] text-muted-foreground">Показывает товары из каталога. Клик добавляет позицию — дальше только количество. Повторный клик — +1.</p>
+            </div>
+
             <div className="space-y-2">
               {lines.map((line, idx) => {
                 const it = itemById.get(line.item_id)
