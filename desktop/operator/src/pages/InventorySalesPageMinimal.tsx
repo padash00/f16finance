@@ -1356,7 +1356,7 @@ export default function InventorySalesPageMinimal({
                             inCartQty > 0 ? 'border-primary/60 ring-1 ring-primary/30' : 'border-border hover:border-primary/40'
                           }`}
                         >
-                          <div className="relative aspect-square w-full bg-muted">
+                          <div className="relative h-36 w-full overflow-hidden bg-muted sm:h-40">
                             {item.image_url ? (
                               <img src={item.image_url} alt="" className="h-full w-full object-cover" loading="lazy" />
                             ) : (

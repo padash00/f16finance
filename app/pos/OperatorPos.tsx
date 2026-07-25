@@ -611,7 +611,7 @@ export default function OperatorPos({
                         inCart > 0 ? 'border-emerald-500/60 ring-1 ring-emerald-500/30' : 'border-white/10 hover:border-white/30'
                       }`}
                     >
-                      <div className="relative aspect-square w-full bg-white/5">
+                      <div className="relative h-36 w-full overflow-hidden bg-white/5 sm:h-40">
                         {item.image_url ? (
                           <img src={item.image_url} alt="" className="h-full w-full object-cover" loading="lazy" />
                         ) : (
