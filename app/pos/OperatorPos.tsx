@@ -136,6 +136,50 @@ function printReceipt(r: ReceiptSnapshot) {
   w.document.close()
 }
 
+// Чековый сменный отчёт (80мм) — печать при закрытии смены и повторно.
+function printShiftReport(r: any) {
+  const w = window.open('', '_blank', 'width=380,height=720')
+  if (!w) return
+  const dt = (s: string | null) => (s ? new Date(s).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—')
+  const money = (n: number) => `${fmt(Math.round(Number(n || 0)))} ₸`
+  const req = r.requisites || {}
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Сменный отчёт</title>
+    <style>@page{size:80mm auto;margin:4mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;font-size:13px;color:#000;padding:6px}
+    .c{text-align:center}.t{font-weight:800;font-size:16px}.line{border-top:1px dashed #000;margin:6px 0}
+    .row{display:flex;justify-content:space-between;font-size:13px;gap:8px}.mut{font-size:11px;color:#444}
+    .sec{font-weight:700;font-size:12px;margin:4px 0 2px}.tot{font-weight:800;font-size:16px}</style></head>
+    <body>
+    <div class="c">
+      ${req.name ? `<div class="t">${escapeHtml(req.name)}</div>` : `<div class="t">${escapeHtml(r.pointName || 'ORDA POINT')}</div>`}
+      ${req.bin ? `<div class="mut">БИН/ИИН ${escapeHtml(req.bin)}</div>` : ''}
+      ${req.address ? `<div class="mut">${escapeHtml(req.address)}</div>` : ''}
+      ${r.pointName ? `<div class="mut">Точка: ${escapeHtml(r.pointName)}</div>` : ''}
+      <div style="font-weight:800;margin-top:6px">СМЕННЫЙ ОТЧЁТ</div>
+    </div>
+    <div class="line"></div>
+    <div class="row"><span>Смена №</span><span>${r.shiftNumber}</span></div>
+    <div class="row"><span>Кассир</span><span>${escapeHtml(r.cashier || '—')}</span></div>
+    <div class="row mut"><span>Открыта</span><span>${dt(r.openedAt)}</span></div>
+    <div class="row mut"><span>Закрыта</span><span>${dt(r.closedAt)}</span></div>
+    <div class="line"></div>
+    <div class="sec">ПРОДАЖИ</div>
+    <div class="row"><span>Наличные · ${r.cashCount} чек</span><span>${money(r.cashSales)}</span></div>
+    <div class="row"><span>Безнал · ${r.kaspiCount} чек</span><span>${money(r.kaspiSales)}</span></div>
+    <div class="row"><span>Возвраты</span><span>${money(r.returns)}</span></div>
+    <div class="line"></div>
+    <div class="sec">НАЛИЧНОСТЬ</div>
+    <div class="row"><span>На начало</span><span>${money(r.openingCash)}</span></div>
+    <div class="row"><span>На конец</span><span>${money(r.closingCash)}</span></div>
+    <div class="line"></div>
+    <div class="row"><span>Чеков за смену</span><span>${r.checkCount}</span></div>
+    <div class="row tot"><span>ИТОГО ВЫРУЧКА</span><span>${money(r.total)}</span></div>
+    <div class="line"></div>
+    <div class="c mut">Напечатано: ${new Date().toLocaleString('ru-RU')}</div>
+    <script>window.onload=function(){window.print()}</script>
+    </body></html>`)
+  w.document.close()
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 type OwnerCompany = { id: string; name: string }
@@ -161,6 +205,7 @@ export default function OperatorPos({
   const catalogUrl = isOwner ? `/api/admin/pos/inventory-sales${cq}` : '/api/operator/inventory-sales'
   const [shift, setShift] = useState<OpenShift>(initialShift)
   const [shiftLoading, setShiftLoading] = useState(false)
+  const [shiftReport, setShiftReport] = useState<any | null>(null) // чековый отчёт после закрытия
 
   // Открытие смены
   const [openingCash, setOpeningCash] = useState('')
@@ -401,6 +446,7 @@ export default function OperatorPos({
   async function handleCloseShift() {
     setCloseError(null)
     setClosing(true)
+    const closingShiftId = shift?.id || null
     try {
       const res = await fetch(isOwner ? '/api/admin/pos/shift' : '/api/operator/shift/close', {
         method: 'POST',
@@ -420,6 +466,14 @@ export default function OperatorPos({
       }
       setShowClose(false)
       setCart([])
+      // Чековый сменный отчёт: тянем данные закрытой смены и показываем модалку с печатью.
+      if (!isOwner && closingShiftId) {
+        try {
+          const rr = await fetch(`/api/operator/shift/report?shift_id=${encodeURIComponent(closingShiftId)}`, { cache: 'no-store' })
+          const rj = await rr.json().catch(() => null)
+          if (rr.ok && rj?.report) setShiftReport(rj.report)
+        } catch { /* отчёт не критичен для закрытия */ }
+      }
       await reloadShift()
     } catch (e: any) {
       setCloseError(e?.message || 'Не удалось закрыть смену')
@@ -1009,6 +1063,45 @@ export default function OperatorPos({
             <div className="flex gap-2 border-t border-white/10 p-3">
               <button onClick={() => printReceipt(lastReceipt)} className="flex-1 rounded-xl border border-white/20 py-3 text-sm font-medium text-gray-200 hover:bg-white/10">🖨 Печать</button>
               <button onClick={() => setLastReceipt(null)} className="flex-1 rounded-xl bg-emerald-600 py-3 text-sm font-semibold hover:bg-emerald-700">Новая продажа</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Чековый сменный отчёт — после закрытия смены */}
+      {shiftReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="flex max-h-[90vh] w-full max-w-sm flex-col overflow-hidden rounded-2xl border border-white/10 bg-gray-900">
+            <div className="flex items-center justify-between border-b border-white/10 p-3">
+              <span className="text-sm font-semibold text-white">Сменный отчёт</span>
+              <span className="text-xs text-gray-400">Смена №{shiftReport.shiftNumber}</span>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 text-sm text-gray-200">
+              <div className="text-center">
+                <div className="font-bold text-white">{shiftReport.requisites?.name || shiftReport.pointName || 'ORDA POINT'}</div>
+                {shiftReport.requisites?.bin ? <div className="text-[11px] text-gray-400">БИН/ИИН {shiftReport.requisites.bin}</div> : null}
+                <div className="mt-1 text-[11px] text-gray-400">Кассир: {shiftReport.cashier}</div>
+              </div>
+              <div className="my-3 border-t border-dashed border-white/15" />
+              <div className="space-y-1">
+                <div className="text-xs font-semibold text-gray-400">ПРОДАЖИ</div>
+                <div className="flex justify-between"><span>Наличные · {shiftReport.cashCount} чек</span><span>{fmt(Math.round(shiftReport.cashSales))} ₸</span></div>
+                <div className="flex justify-between"><span>Безнал · {shiftReport.kaspiCount} чек</span><span>{fmt(Math.round(shiftReport.kaspiSales))} ₸</span></div>
+                <div className="flex justify-between"><span>Возвраты</span><span>{fmt(Math.round(shiftReport.returns))} ₸</span></div>
+              </div>
+              <div className="my-3 border-t border-dashed border-white/15" />
+              <div className="space-y-1">
+                <div className="text-xs font-semibold text-gray-400">НАЛИЧНОСТЬ</div>
+                <div className="flex justify-between"><span>На начало</span><span>{fmt(Math.round(shiftReport.openingCash))} ₸</span></div>
+                <div className="flex justify-between"><span>На конец</span><span>{fmt(Math.round(shiftReport.closingCash))} ₸</span></div>
+              </div>
+              <div className="my-3 border-t border-dashed border-white/15" />
+              <div className="flex justify-between text-xs text-gray-400"><span>Чеков за смену</span><span>{shiftReport.checkCount}</span></div>
+              <div className="mt-1 flex justify-between text-base font-bold text-emerald-400"><span>Итого выручка</span><span>{fmt(Math.round(shiftReport.total))} ₸</span></div>
+            </div>
+            <div className="flex gap-2 border-t border-white/10 p-3">
+              <button onClick={() => printShiftReport(shiftReport)} className="flex-1 rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white hover:bg-emerald-700">🖨 Печать</button>
+              <button onClick={() => setShiftReport(null)} className="flex-1 rounded-xl border border-white/20 py-3 text-sm font-medium text-gray-200 hover:bg-white/10">Закрыть</button>
             </div>
           </div>
         </div>
