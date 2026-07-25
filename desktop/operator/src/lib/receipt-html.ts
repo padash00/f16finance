@@ -302,16 +302,16 @@ export function printReceiptFromIframe(iframe: HTMLIFrameElement | null) {
   }
 }
 
-/** Чековый сменный отчёт (80мм) — печать при закрытии смены. */
-export function printShiftReportHtml(r: any) {
-  if (!r) return
+/** Чековый сменный отчёт (80мм) — HTML для превью в iframe (без авто-печати).
+ *  Печать идёт через printReceiptFromIframe, как обычные чеки — без отдельного
+ *  окна, которое уходило за программу. */
+export function buildShiftReportHtml(r: any): string {
+  if (!r) return ''
   const esc = (s: any) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string))
   const money = (n: number) => `${Math.round(Number(n || 0)).toLocaleString('ru-RU')} ₸`
   const dts = (s: string | null) => (s ? new Date(s).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—')
   const req = r.requisites || {}
-  const w = window.open('', '_blank', 'width=380,height=720')
-  if (!w) return
-  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Сменный отчёт</title>
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Сменный отчёт</title>
     <style>@page{size:80mm auto;margin:4mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;font-size:13px;color:#000;padding:6px}
     .c{text-align:center}.t{font-weight:800;font-size:16px}.line{border-top:1px dashed #000;margin:6px 0}
     .row{display:flex;justify-content:space-between;font-size:13px;gap:8px}.mut{font-size:11px;color:#444}
@@ -343,9 +343,7 @@ export function printShiftReportHtml(r: any) {
     <div class="row tot"><span>ИТОГО ВЫРУЧКА</span><span>${money(r.total)}</span></div>
     <div class="line"></div>
     <div class="c mut">Напечатано: ${new Date().toLocaleString('ru-RU')}</div>
-    <script>window.onload=function(){setTimeout(function(){try{window.focus();window.print();}catch(e){}},300)}</script>
-    </body></html>`)
-  w.document.close()
+    </body></html>`
 }
 
 /** Короткий beep через WebAudio (для подтверждения добавления/ошибки). */

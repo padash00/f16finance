@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, type ReactNode } from 'react'
+import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import {
   AlertTriangle,
   Building2,
@@ -31,7 +31,7 @@ import { useCashlessLabels } from '@/lib/use-cashless-labels'
 import { formatMoney, parseMoney, todayISO, localRef } from '@/lib/utils'
 import { toastSuccess, toastError } from '@/lib/toast'
 import * as api from '@/lib/api'
-import { printShiftReportHtml } from '@/lib/receipt-html'
+import { buildShiftReportHtml, printReceiptFromIframe } from '@/lib/receipt-html'
 import { syncQueue, getPendingCount, queueClosePointShift, queueShiftReport, openQueueScreen } from '@/lib/offline'
 import { clearParkedCarts } from '@/lib/parked-carts'
 import type { OpenShiftInfo } from '@/lib/api'
@@ -176,6 +176,8 @@ export default function ShiftPage({
   const [splitDialog, setSplitDialog] = useState(false)
   const [startCashInput, setStartCashInput] = useState('')
   const [activeOpenShift, setActiveOpenShift] = useState<OpenShiftInfo | null>(openShift || null)
+  const [shiftReport, setShiftReport] = useState<any | null>(null) // чековый отчёт после закрытия
+  const shiftReportIframeRef = useRef<HTMLIFrameElement | null>(null)
   const [openingShift, setOpeningShift] = useState(false)
   const [openingError, setOpeningError] = useState<string | null>(null)
   const [splitAfter, setSplitAfter] = useState({ cash: '', kaspi_pos: '', kaspi_online: '' })
@@ -547,11 +549,12 @@ export default function ShiftPage({
     try {
       const closingShiftId = activeOpenShift?.id || null
       await api.closePointShift(config, payload, session.company.id)
-      // Чековый сменный отчёт — печать сразу при закрытии (диалог печати = подтверждение).
+      // Чековый сменный отчёт — показываем модалку с превью + «Печать»
+      // (через iframe внутри программы, чтобы окно не уходило за неё).
       if (closingShiftId) {
         try {
           const rep = await api.getPointShiftReport(config, closingShiftId, session.company.id)
-          if (rep) printShiftReportHtml(rep)
+          if (rep) setShiftReport(rep)
         } catch { /* отчёт не критичен для закрытия */ }
       }
       return 'success'
@@ -1910,6 +1913,44 @@ export default function ShiftPage({
           </Card>
         </div>
       ) : null}
+
+      {/* Чековый сменный отчёт — превью в iframe + печать (без отдельного окна) */}
+      {shiftReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border p-4">
+              <span className="text-sm font-semibold">Сменный отчёт</span>
+              <span className="text-xs text-muted-foreground">Смена №{shiftReport.shiftNumber}</span>
+            </div>
+            <div className="flex-1 overflow-auto bg-muted p-3">
+              <div className="mx-auto w-full max-w-[360px] overflow-hidden rounded-lg bg-white shadow-md">
+                <iframe
+                  ref={shiftReportIframeRef}
+                  srcDoc={buildShiftReportHtml(shiftReport)}
+                  title="Сменный отчёт"
+                  className="h-[60vh] w-full border-0"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 border-t border-border p-4">
+              <button
+                type="button"
+                onClick={() => setShiftReport(null)}
+                className="h-12 flex-1 rounded-xl border border-border text-sm font-medium hover:bg-muted"
+              >
+                Закрыть
+              </button>
+              <button
+                type="button"
+                onClick={() => printReceiptFromIframe(shiftReportIframeRef.current)}
+                className="h-12 flex-1 rounded-xl bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-700"
+              >
+                🖨 Печать
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
