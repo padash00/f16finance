@@ -215,6 +215,7 @@ export async function proxy(request: NextRequest) {
     '/store/showcase': '/store/stock',
     '/store/movements': '/store/stock',
     '/store/catalog': '/store/stock',
+    '/production': '/store/production',
     '/store/receipts': '/store/documents',
     '/store/postings': '/store/documents',
     '/store/writeoffs': '/store/documents',

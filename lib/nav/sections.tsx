@@ -138,7 +138,7 @@ export const navSections: NavSection[] = [
     items: [
       { href: '/store', label: 'Обзор магазина', icon: Boxes, note: 'Общая сводка по складу и витринам' },
       { href: '/store/stock', label: 'Склад', icon: Warehouse, note: 'Склад, витрина, движения, каталог' },
-      { href: '/production', label: 'Техкарты', icon: ChefHat, note: 'Рецептуры, себестоимость и food cost товаров', badge: 'new', badgeColor: 'green', isNew: true },
+      { href: '/store/production', label: 'Техкарты', icon: ChefHat, note: 'Рецептуры, себестоимость и food cost товаров', badge: 'new', badgeColor: 'green', isNew: true },
       { href: '/store/documents', label: 'Документы', icon: FileText, note: 'Приёмка, оприходование, списания, ревизия' },
       { href: '/store/orders', label: 'Заявки', icon: ClipboardList, note: 'Заявки точек, журнал, заказы поставщикам' },
       { href: '/store/purchase-plan', label: 'План закупа', icon: ShoppingCart, note: 'Сколько закупить на след. неделю — по продажам и остаткам', badge: 'new', badgeColor: 'green', isNew: true },

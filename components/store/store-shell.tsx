@@ -18,7 +18,7 @@ const NAV: Item[] = [
   { href: '/store/insights', label: 'AI-разбор', icon: Sparkles },
   { href: '/store', label: 'Обзор', icon: Boxes, exact: true },
   { href: '/store/stock', label: 'Склад', icon: Warehouse },
-  { href: '/production', label: 'Техкарты', icon: ChefHat },
+  { href: '/store/production', label: 'Техкарты', icon: ChefHat },
   { href: '/store/documents', label: 'Документы', icon: FileText },
   { href: '/store/orders', label: 'Заявки', icon: ClipboardList },
   { href: '/store/purchase-plan', label: 'План закупа', icon: ShoppingCart },
