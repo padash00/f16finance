@@ -51,6 +51,7 @@ export function AdminPageHeader(props: {
 
   return (
     <div
+      data-tour="page-header"
       className={cn(
         'relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg shadow-slate-200/60 dark:border-white/10 dark:bg-slate-900/60 dark:shadow-black/25 p-5',
         props.className,

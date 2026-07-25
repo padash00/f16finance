@@ -37,6 +37,7 @@ export default function StoreStockPage() {
             {TABS.map(({ key, label, icon: Icon }) => (
               <button
                 key={key}
+                data-tour={`store-tab-${key}`}
                 onClick={() => setTab(key)}
                 className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-all sm:px-4 ${tab === key ? 'bg-surface-hover text-foreground shadow-sm ring-1 ring-slate-200 dark:ring-white/10' : 'text-muted-foreground hover:text-slate-900 dark:hover:text-white'}`}
               >
