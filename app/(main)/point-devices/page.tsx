@@ -754,10 +754,10 @@ export default function PointDevicesPage() {
 
       {/* Create form */}
       {can('point-devices.create') && (
-        <Card className="border-border bg-card p-5">
+        <Card data-tour="pd-new-project" className="border-border bg-card p-5">
           <div className="mb-4 flex items-center gap-2">
             <Plus className="h-4 w-4 text-amber-300" />
-            <h2 data-tour="pd-new-project" className="text-lg font-semibold text-foreground">Новый проект</h2>
+            <h2 className="text-lg font-semibold text-foreground">Новый проект</h2>
           </div>
           <ProjectFormPanel
             title=""

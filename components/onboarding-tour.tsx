@@ -24,22 +24,20 @@ import { useNavSession } from '@/lib/nav/use-nav-session'
 // (открыть вкладку/раскрыть блок), чтобы целевая кнопка появилась в DOM.
 type Step = { route: string; tour?: string; clickFirst?: string; title: string; text: string }
 
+// Тур построен вокруг ЗАДАЧ, которые новичок не знает как сделать
+// (завести точку, добавить товары, принять поставку, нанять, открыть кассу),
+// а не вокруг отдельных кнопок. Каждый шаг ведёт на нужную страницу и обводит
+// всю рабочую область целиком.
 const STEPS: Step[] = [
-  { route: '/dashboard', title: 'Добро пожаловать в Orda', text: 'Проведём короткий тур: покажем, где что находится и как запустить работу — от товаров до выручки. В любой момент можно нажать «Пропустить».' },
-  { route: '/dashboard', title: 'Магазин', text: 'Главный модуль торговли: каталог товаров, склад, витрина, приёмка и движения. Дальше пройдём по нему по вкладкам и кнопкам.' },
-  { route: '/settings', tour: 'settings-companies', title: 'Компании (точки)', text: 'Здесь заводишь бизнес-точки — юр-сущности, к которым привязаны товары, сотрудники и деньги. Одна компания = одна точка бизнеса.' },
-  { route: '/point-devices', tour: 'pd-new-project', title: 'Проекты (устройства)', text: 'Отдельный слой поверх компании: как точка работает на кассе — режимы и функции (смены, доходы, долги, арена). Именно к проекту подключается операторская программа и киоск.' },
-  { route: '/point-devices', tour: 'pd-points', title: 'Компания уже в проекте', text: 'Видишь «N из N точек» — проект НЕ создаёт новую компанию, он лишь настраивает существующую под кассу. Отметь нужные функции и сохрани.' },
-  { route: '/store/stock', tour: 'store-tab-warehouse', title: 'Склад (подсобка)', text: 'Остатки на складе-подсобке. Сюда приходит товар от поставщика при приёмке, отсюда перемещается на витрину.' },
-  { route: '/store/stock', tour: 'store-tab-showcase', title: 'Витрина', text: 'Остатки на витрине — то, что реально продаётся на кассе. Продажа списывает именно отсюда.' },
-  { route: '/store/stock', tour: 'store-tab-movements', title: 'Движения', text: 'История всех перемещений товара: приход, перемещения склад→витрина, списания, продажи. Полная прослеживаемость.' },
-  { route: '/store/stock', tour: 'store-tab-catalog', title: 'Каталог', text: 'Все товары: название, штрихкод, цена продажи и закупа, категория. Здесь добавляешь и редактируешь карточки, импортируешь из Excel.' },
-  { route: '/store/stock', clickFirst: 'store-tab-catalog', tour: 'catalog-add-item', title: 'Кнопка «Добавить товар»', text: 'Открывает карточку нового товара: название, штрихкод, цена продажи и закупа, категория. Массово — вкладка «Импорт Excel» рядом. Товар из каталога появляется на кассе.' },
-  { route: '/store/receipts', tour: 'page-header', title: 'Приёмка товара', text: 'Заводишь приход от поставщика: выбираешь склад, поставщика, добавляешь строки товара. Остатки увеличиваются, цены обновляются, чек уходит в расход.' },
-  { route: '/hr', tour: 'page-header', title: 'Команда', text: 'Наём сотрудников. Кассиру логин и пароль выдаются сразу — он заходит в веб-кассу и работает.' },
-  { route: '/hr', tour: 'hr-hire', title: 'Кнопка «Нанять»', text: 'Заводит сотрудника: имя, роль, ставка. Оператору сразу выдаётся логин и пароль для веб-кассы. При одной точке привязка автоматическая, при нескольких — выберешь точки и основную.' },
-  { route: '/store/shifts', tour: 'page-header', title: 'Смены', text: 'Открытие и закрытие смен по точке, выручка смены. Сами продажи — в «Web POS» (в меню): открой смену и продавай карточками.' },
-  { route: '/reports', tour: 'page-header', title: 'Финансы и отчёты', text: 'Доходы, расходы, прибыль, маржа и аналитика по дням/точкам. Здесь видно, как зарабатывает бизнес.' },
+  { route: '/dashboard', title: 'Добро пожаловать в Orda', text: 'Проведём по шагам запуска: заведём точку, добавим товары, примем поставку, наймём команду и откроем кассу. Займёт минуту — в любой момент можно нажать «Пропустить».' },
+  { route: '/settings', tour: 'settings-companies', title: 'Шаг 1 · Заведи точку', text: 'Компания — это твоя бизнес-точка: к ней привязаны товары, сотрудники и деньги. Одна компания = одна точка. Начинается всё отсюда.' },
+  { route: '/point-devices', tour: 'pd-new-project', title: 'Шаг 2 · Настрой кассу', text: 'Проект — как точка работает на кассе: добавь точку кнопкой «Добавить», отметь нужные функции (смены, доходы, долги, арена) и сохрани. Именно к проекту подключается операторская программа.' },
+  { route: '/store/stock', clickFirst: 'store-tab-catalog', tour: 'catalog-add-item', title: 'Шаг 3 · Как добавить товары', text: 'Чтобы касса что-то продавала, заполни каталог. «Добавить товар» — завести по одному (название, штрихкод, цены). Рядом вкладка «Импорт Excel» — залить весь список разом.' },
+  { route: '/store/stock', tour: 'store-tabs', title: 'Склад и витрина', text: 'Товар живёт в двух местах: «Склад» — подсобка (сюда падает приёмка), «Витрина» — то, что продаётся на кассе. «Движения» — вся история. Переключай эти вкладки.' },
+  { route: '/store/receipts', tour: 'receipt-new', title: 'Шаг 4 · Как принять поставку', text: 'Пришёл товар от поставщика — жми «Новый документ». Добавляешь строки (можно распознать накладную ИИ), проводишь — остатки на складе растут, а сумма уходит в расходы.' },
+  { route: '/hr', tour: 'hr-hire', title: 'Шаг 5 · Как нанять сотрудника', text: 'Жми «Нанять»: имя, роль, ставка. Кассиру логин и пароль для веб-кассы выдаются сразу. При одной точке привязка автоматическая, при нескольких — выберешь точки и основную.' },
+  { route: '/store/shifts', tour: 'page-header', title: 'Шаг 6 · Смена и касса', text: 'Открой смену по точке — оператор заходит в веб-кассу (пункт «Web POS» в меню) и продаёт товары карточками. Закрытие смены сводит выручку и наличные.' },
+  { route: '/reports', tour: 'page-header', title: 'Готово · Финансы', text: 'Здесь видно результат: доходы, расходы, прибыль, маржа и аналитика по дням и точкам. Всё, точка запущена — можно работать.' },
 ]
 
 const PAD = 6
@@ -122,8 +120,12 @@ export function OnboardingTour() {
         opener?.click()
       }
       if (el) {
-        try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }) } catch {}
-        setTimeout(() => setRect(el.getBoundingClientRect()), 200)
+        // Мгновенный скролл (не smooth): плавная прокрутка порождает поток
+        // scroll-событий → пересчёт rect на каждом кадре → мигание обводки.
+        const r0 = el.getBoundingClientRect()
+        const inView = r0.top >= 0 && r0.bottom <= (window.innerHeight || 0)
+        if (!inView) { try { el.scrollIntoView({ block: 'center', behavior: 'auto' }) } catch {} }
+        setTimeout(() => setRect(el.getBoundingClientRect()), inView ? 0 : 120)
         return true
       }
       return false
@@ -135,16 +137,22 @@ export function OnboardingTour() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idx, active, pathname])
 
-  // Пересчёт позиции при скролле/ресайзе.
+  // Пересчёт позиции при скролле/ресайзе (throttle через rAF — без шторма setState).
   useEffect(() => {
     if (!step?.tour) return
+    let raf = 0
     const recompute = () => {
-      const el = document.querySelector(`[data-tour="${step.tour}"]`) as HTMLElement | null
-      if (el) setRect(el.getBoundingClientRect())
+      if (raf) return
+      raf = requestAnimationFrame(() => {
+        raf = 0
+        const el = document.querySelector(`[data-tour="${step.tour}"]`) as HTMLElement | null
+        if (el) setRect(el.getBoundingClientRect())
+      })
     }
     window.addEventListener('scroll', recompute, true)
     window.addEventListener('resize', recompute)
     return () => {
+      if (raf) cancelAnimationFrame(raf)
       window.removeEventListener('scroll', recompute, true)
       window.removeEventListener('resize', recompute)
     }
@@ -164,7 +172,8 @@ export function OnboardingTour() {
     const ni = idx + delta
     if (ni < 0) return
     if (ni >= steps.length) { finish(); return }
-    setRect(null)
+    // rect не сбрасываем: эффект поиска сам обновит его (дырка плавно переедет),
+    // а для шага без обводки — погасит. Сброс тут давал лишнее «моргание».
     setI(ni)
   }
 
@@ -186,10 +195,12 @@ export function OnboardingTour() {
 
   return (
     <>
-      {/* Затемнение + «дырка» с обводкой вокруг элемента (spotlight) */}
+      {/* Затемнение + «дырка» с обводкой вокруг элемента (spotlight).
+          Оба состояния — одинаковая опаклесть 0.62, чтобы при переходе между
+          шагами яркость затемнения не пульсировала (это и давало «моргание»). */}
       {rect ? (
         <div
-          className="pointer-events-none fixed z-[201] rounded-xl ring-2 ring-emerald-400 transition-all"
+          className="pointer-events-none fixed z-[201] rounded-xl ring-2 ring-emerald-400 transition-[top,left,width,height] duration-200"
           style={{
             top: rect.top - PAD,
             left: rect.left - PAD,
@@ -199,7 +210,7 @@ export function OnboardingTour() {
           }}
         />
       ) : (
-        <div className="pointer-events-none fixed inset-0 z-[201] bg-slate-950/40" />
+        <div className="pointer-events-none fixed inset-0 z-[201]" style={{ backgroundColor: 'rgba(2,6,23,0.62)' }} />
       )}
 
       {/* Карточка */}

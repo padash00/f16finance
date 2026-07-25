@@ -33,7 +33,7 @@ export default function StoreStockPage() {
         accent="emerald"
         backHref="/store"
         toolbar={
-          <div className="inline-flex flex-wrap gap-1 rounded-2xl border border-border bg-white dark:bg-slate-950/50 p-1">
+          <div data-tour="store-tabs" className="inline-flex flex-wrap gap-1 rounded-2xl border border-border bg-white dark:bg-slate-950/50 p-1">
             {TABS.map(({ key, label, icon: Icon }) => (
               <button
                 key={key}

@@ -951,7 +951,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
               Обновить
             </Button>
             {canCreate && (
-              <Button size="sm" onClick={() => setFormSheetOpen(true)} className="h-9 gap-1.5 bg-amber-600 hover:bg-amber-700">
+              <Button data-tour="receipt-new" size="sm" onClick={() => setFormSheetOpen(true)} className="h-9 gap-1.5 bg-amber-600 hover:bg-amber-700">
                 <PackagePlus className="h-3.5 w-3.5" />
                 Новый документ
               </Button>
