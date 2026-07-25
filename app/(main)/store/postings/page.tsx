@@ -466,10 +466,14 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
               </Button>
             </div>
             <div className="space-y-2">
-              {lines.map((line) => {
+              {lines.map((line, idx) => {
                 const it = itemById.get(line.item_id)
                 return (
                   <div key={line.key} className="rounded-lg border border-border bg-slate-50 dark:bg-white/[0.02] p-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/15 text-[11px] font-bold text-emerald-700 dark:text-emerald-300">{idx + 1}</span>
+                      <span className="text-[11px] font-medium text-muted-foreground">Строка {idx + 1}</span>
+                    </div>
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-12">
                       <div className="col-span-2 sm:col-span-4">
                         <Label className="mb-1 block text-[10px] text-muted-foreground">Товар</Label>

@@ -1788,10 +1788,11 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
             </div>
 
             <div className="space-y-3">
-              {lines.map((line) => (
+              {lines.map((line, idx) => (
                 <ReceiptLineRow
                   key={line.uid}
                   line={line}
+                  index={idx + 1}
                   items={catalogItems}
                   itemsById={itemsById}
                   canRemove={lines.length > 1}

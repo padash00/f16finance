@@ -21,6 +21,7 @@ import type { InventoryItem, ReceiptLine } from '@/components/store/receipts/typ
 
 type ReceiptLineRowProps = {
   line: ReceiptLine
+  index: number
   items: InventoryItem[]
   itemsById: Map<string, InventoryItem>
   canRemove: boolean
@@ -28,7 +29,7 @@ type ReceiptLineRowProps = {
   onRemove: (uid: string) => void
 }
 
-function ReceiptLineRowImpl({ line, items, itemsById, canRemove, onPatch, onRemove }: ReceiptLineRowProps) {
+function ReceiptLineRowImpl({ line, index, items, itemsById, canRemove, onPatch, onRemove }: ReceiptLineRowProps) {
   const [pickerOpen, setPickerOpen] = useState(false)
   const lineItem = line.item_id ? itemsById.get(line.item_id) || null : null
 
@@ -79,6 +80,12 @@ function ReceiptLineRowImpl({ line, items, itemsById, canRemove, onPatch, onRemo
 
   return (
     <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-white/[0.03] p-4">
+      <div className="flex items-center gap-2">
+        <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-xs font-bold text-emerald-700 dark:text-emerald-300">
+          {index}
+        </span>
+        <span className="text-xs font-medium text-muted-foreground">Строка {index}</span>
+      </div>
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_160px_110px_130px_130px_110px_minmax(0,1fr)_auto]">
       <div className="space-y-1.5 min-w-0">
         <Label>Товар</Label>
