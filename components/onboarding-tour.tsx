@@ -20,7 +20,9 @@ import { useNavSession } from '@/lib/nav/use-nav-session'
  * Все страницы — внутри layout (main), чтобы компонент не размонтировался.
  * Шаги закрытых страниц пропускаются целиком (та же логика, что строит меню).
  */
-type Step = { route: string; tour?: string; title: string; text: string }
+// clickFirst — data-tour элемента, по которому кликнуть перед подсветкой
+// (открыть вкладку/раскрыть блок), чтобы целевая кнопка появилась в DOM.
+type Step = { route: string; tour?: string; clickFirst?: string; title: string; text: string }
 
 const STEPS: Step[] = [
   { route: '/dashboard', title: 'Добро пожаловать в Orda', text: 'Проведём короткий тур: покажем, где что находится и как запустить работу — от товаров до выручки. В любой момент можно нажать «Пропустить».' },
@@ -32,8 +34,10 @@ const STEPS: Step[] = [
   { route: '/store/stock', tour: 'store-tab-showcase', title: 'Витрина', text: 'Остатки на витрине — то, что реально продаётся на кассе. Продажа списывает именно отсюда.' },
   { route: '/store/stock', tour: 'store-tab-movements', title: 'Движения', text: 'История всех перемещений товара: приход, перемещения склад→витрина, списания, продажи. Полная прослеживаемость.' },
   { route: '/store/stock', tour: 'store-tab-catalog', title: 'Каталог', text: 'Все товары: название, штрихкод, цена продажи и закупа, категория. Здесь добавляешь и редактируешь карточки, импортируешь из Excel.' },
+  { route: '/store/stock', clickFirst: 'store-tab-catalog', tour: 'catalog-add-item', title: 'Кнопка «Добавить товар»', text: 'Открывает карточку нового товара: название, штрихкод, цена продажи и закупа, категория. Массово — вкладка «Импорт Excel» рядом. Товар из каталога появляется на кассе.' },
   { route: '/store/receipts', tour: 'page-header', title: 'Приёмка товара', text: 'Заводишь приход от поставщика: выбираешь склад, поставщика, добавляешь строки товара. Остатки увеличиваются, цены обновляются, чек уходит в расход.' },
   { route: '/hr', tour: 'page-header', title: 'Команда', text: 'Наём сотрудников. Кассиру логин и пароль выдаются сразу — он заходит в веб-кассу и работает.' },
+  { route: '/hr', tour: 'hr-hire', title: 'Кнопка «Нанять»', text: 'Заводит сотрудника: имя, роль, ставка. Оператору сразу выдаётся логин и пароль для веб-кассы. При одной точке привязка автоматическая, при нескольких — выберешь точки и основную.' },
   { route: '/store/shifts', tour: 'page-header', title: 'Смены', text: 'Открытие и закрытие смен по точке, выручка смены. Сами продажи — в «Web POS» (в меню): открой смену и продавай карточками.' },
   { route: '/reports', tour: 'page-header', title: 'Финансы и отчёты', text: 'Доходы, расходы, прибыль, маржа и аналитика по дням/точкам. Здесь видно, как зарабатывает бизнес.' },
 ]
@@ -111,6 +115,12 @@ export function OnboardingTour() {
     let iv: ReturnType<typeof setInterval> | null = null
     const find = () => {
       const el = document.querySelector(`[data-tour="${step.tour}"]`) as HTMLElement | null
+      // Цель ещё не в DOM — кликаем открывашку (вкладку/блок), она может
+      // отрисоваться не сразу после захода на страницу, поэтому пробуем каждый раз.
+      if (!el && step.clickFirst) {
+        const opener = document.querySelector(`[data-tour="${step.clickFirst}"]`) as HTMLElement | null
+        opener?.click()
+      }
       if (el) {
         try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }) } catch {}
         setTimeout(() => setRect(el.getBoundingClientRect()), 200)

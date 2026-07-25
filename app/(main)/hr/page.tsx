@@ -509,6 +509,7 @@ export default function HrPage() {
         actions={
           canHire ? (
             <Button
+              data-tour="hr-hire"
               onClick={() => setHireOpen(true)}
               className="bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white shadow-lg shadow-amber-500/20 h-10 sm:h-auto sm:px-5"
             >

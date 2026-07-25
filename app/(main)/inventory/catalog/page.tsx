@@ -1101,7 +1101,7 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
               </Button>
             )}
             {canCreate && (
-              <Button size="sm" onClick={() => { setShowAdd(true); setEditingId(null) }}>
+              <Button data-tour="catalog-add-item" size="sm" onClick={() => { setShowAdd(true); setEditingId(null) }}>
                 <Plus className="w-3.5 h-3.5 mr-1.5" />
                 Добавить товар
               </Button>
