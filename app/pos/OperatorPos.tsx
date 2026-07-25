@@ -78,6 +78,62 @@ function localRef() {
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
+type ReceiptSnapshot = {
+  saleId: string | null
+  soldAt: string
+  companyName: string
+  shiftType: 'day' | 'night'
+  payment: PaymentMethod
+  cash: number
+  kaspi: number
+  subtotal: number
+  discount: number
+  total: number
+  customerName: string | null
+  items: Array<{ name: string; quantity: number; unit_price: number; unit: string | null }>
+}
+
+function escapeHtml(s: string) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+function printReceipt(r: ReceiptSnapshot) {
+  const w = window.open('', '_blank', 'width=380,height=640')
+  if (!w) return
+  const dt = new Date(r.soldAt)
+  const date = dt.toLocaleDateString('ru-RU')
+  const time = dt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+  const change = r.payment === 'cash' && r.cash > r.total ? r.cash - r.total : 0
+  const rows = r.items
+    .map(
+      (l) => `<tr><td>${escapeHtml(l.name)}</td><td style="text-align:center">${l.quantity}</td><td style="text-align:right">${fmt(l.unit_price)}</td><td style="text-align:right">${fmt(l.unit_price * l.quantity)}</td></tr>`,
+    )
+    .join('')
+  const payLabel = r.payment === 'cash' ? 'Наличные' : r.payment === 'kaspi' ? 'Безналичный' : 'Смешанная'
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Чек</title>
+    <style>@page{size:80mm auto;margin:4mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;font-size:13px;color:#000;padding:6px}
+    .c{text-align:center}.t{font-weight:800;font-size:18px}.line{border-top:1px dashed #000;margin:6px 0}
+    table{width:100%;border-collapse:collapse;font-size:12px}td{padding:2px 0;vertical-align:top}
+    .row{display:flex;justify-content:space-between;font-size:13px}.tot{font-weight:800;font-size:16px}</style></head>
+    <body>
+    <div class="c"><div class="t">ORDA POINT</div><div>${escapeHtml(r.companyName)}</div>
+    <div style="font-size:11px;color:#444">${date} ${time} · ${r.shiftType === 'night' ? 'Ночь' : 'День'}${r.saleId ? ' · #' + r.saleId.slice(-6) : ''}</div></div>
+    <div class="line"></div>
+    <table><tr style="font-size:11px;color:#444"><td>Товар</td><td style="text-align:center">Кол</td><td style="text-align:right">Цена</td><td style="text-align:right">Сумма</td></tr>${rows}</table>
+    <div class="line"></div>
+    ${r.discount > 0 ? `<div class="row"><span>Подытог</span><span>${fmt(r.subtotal)} ₸</span></div><div class="row"><span>Скидка</span><span>−${fmt(r.discount)} ₸</span></div>` : ''}
+    <div class="row tot"><span>К оплате</span><span>${fmt(r.total)} ₸</span></div>
+    <div class="row"><span>${payLabel}</span><span>${fmt(r.total)} ₸</span></div>
+    ${r.payment === 'mixed' ? `<div class="row" style="font-size:12px;color:#444"><span>↳ Наличные</span><span>${fmt(r.cash)} ₸</span></div><div class="row" style="font-size:12px;color:#444"><span>↳ Безнал</span><span>${fmt(r.kaspi)} ₸</span></div>` : ''}
+    ${change > 0 ? `<div class="row"><span>Сдача</span><span>${fmt(change)} ₸</span></div>` : ''}
+    ${r.customerName ? `<div style="font-size:12px;margin-top:6px">Клиент: ${escapeHtml(r.customerName)}</div>` : ''}
+    <div class="line"></div>
+    <div class="c" style="font-size:13px;font-weight:700;margin-top:6px">СПАСИБО ЗА ПОКУПКУ!</div>
+    <script>window.onload=function(){window.print()}</script>
+    </body></html>`)
+  w.document.close()
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 type OwnerCompany = { id: string; name: string }
@@ -125,6 +181,8 @@ export default function OperatorPos({
   const [payment, setPayment] = useState<PaymentMethod>('cash')
   const [mixedCash, setMixedCash] = useState('')
   const [mixedKaspi, setMixedKaspi] = useState('')
+  const [discountPct, setDiscountPct] = useState('')
+  const [lastReceipt, setLastReceipt] = useState<ReceiptSnapshot | null>(null)
   const [comment, setComment] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [saleError, setSaleError] = useState<string | null>(null)
@@ -209,6 +267,11 @@ export default function OperatorPos({
   }, [catalog?.items, category, search])
 
   const subtotal = useMemo(() => cart.reduce((s, l) => s + l.quantity * l.unit_price, 0), [cart])
+  const discountAmount = useMemo(() => {
+    const p = Math.max(0, Math.min(99, parseFloat(discountPct) || 0))
+    return Math.round((subtotal * p) / 100 * 100) / 100
+  }, [subtotal, discountPct])
+  const payable = Math.max(0, subtotal - discountAmount)
 
   // ── Cart actions ───────────────────────────────────────────────────────────
   const addItem = useCallback((item: PosItem) => {
@@ -335,13 +398,13 @@ export default function OperatorPos({
 
     let cash = 0
     let kaspi = 0
-    if (payment === 'cash') cash = subtotal
-    else if (payment === 'kaspi') kaspi = subtotal
+    if (payment === 'cash') cash = payable
+    else if (payment === 'kaspi') kaspi = payable
     else {
       cash = Math.max(0, parseFloat(mixedCash) || 0)
       kaspi = Math.max(0, parseFloat(mixedKaspi) || 0)
-      if (Math.abs(cash + kaspi - subtotal) > 0.01) {
-        setSaleError(`Сумма наличных и безнала должна равняться ${fmt(subtotal)} ₸`)
+      if (Math.abs(cash + kaspi - payable) > 0.01) {
+        setSaleError(`Сумма наличных и безнала должна равняться ${fmt(payable)} ₸`)
         return
       }
       if (cash <= 0 || kaspi <= 0) {
@@ -367,6 +430,7 @@ export default function OperatorPos({
             kaspi_amount: kaspi,
             kaspi_before_midnight_amount: kaspi,
             kaspi_after_midnight_amount: 0,
+            discount_amount: discountAmount,
             comment: comment.trim() || null,
             local_ref: saleRefKey.current,
             items: cart.map((l) => ({
@@ -381,12 +445,28 @@ export default function OperatorPos({
       const j = await res.json()
       if (!res.ok || !j.ok) throw new Error(j.error || j.message || `HTTP ${res.status}`)
       saleRefKey.current = null
+      const data = j.data || {}
+      setLastReceipt({
+        saleId: data.sale_id || null,
+        soldAt: data.sold_at || new Date().toISOString(),
+        companyName: catalog?.company?.name || '',
+        shiftType: shift?.shift_type === 'night' ? 'night' : 'day',
+        payment,
+        cash,
+        kaspi,
+        subtotal,
+        discount: discountAmount,
+        total: payable,
+        customerName: null,
+        items: cart.map((l) => ({ name: l.name, quantity: l.quantity, unit_price: l.unit_price, unit: l.unit })),
+      })
       // Сброс и обновление остатков
       setCart([])
       setComment('')
       setPayment('cash')
       setMixedCash('')
       setMixedKaspi('')
+      setDiscountPct('')
       await loadCatalog()
       setTimeout(() => searchRef.current?.focus(), 100)
     } catch (e: any) {
@@ -646,7 +726,10 @@ export default function OperatorPos({
         <div className="flex w-80 shrink-0 flex-col overflow-hidden bg-gray-900 lg:w-96">
           <div className="shrink-0 border-b border-white/10 px-4 py-3">
             <div className="text-xs uppercase tracking-wider text-gray-400">К оплате</div>
-            <div className="mt-1 text-4xl font-bold text-emerald-400">{fmt(subtotal)} <span className="text-lg text-emerald-400/60">₸</span></div>
+            <div className="mt-1 text-4xl font-bold text-emerald-400">{fmt(payable)} <span className="text-lg text-emerald-400/60">₸</span></div>
+            {discountAmount > 0 && (
+              <div className="text-xs text-gray-400">Подытог {fmt(subtotal)} ₸ · скидка −{fmt(discountAmount)} ₸</div>
+            )}
             <div className="text-xs text-gray-500">{cart.length} поз · {cart.reduce((s, l) => s + l.quantity, 0)} шт</div>
           </div>
 
@@ -698,10 +781,10 @@ export default function OperatorPos({
                       value={mixedCash}
                       onChange={(e) => {
                         const raw = e.target.value
-                        if (raw === '') { setMixedCash(''); setMixedKaspi(String(subtotal)); return }
-                        const c = Math.max(0, Math.min(subtotal, parseFloat(raw) || 0))
+                        if (raw === '') { setMixedCash(''); setMixedKaspi(String(payable)); return }
+                        const c = Math.max(0, Math.min(payable, parseFloat(raw) || 0))
                         setMixedCash(String(c))
-                        setMixedKaspi(String(Math.max(0, subtotal - c)))
+                        setMixedKaspi(String(Math.max(0, payable - c)))
                       }}
                       inputMode="numeric"
                       placeholder="0"
@@ -714,10 +797,10 @@ export default function OperatorPos({
                       value={mixedKaspi}
                       onChange={(e) => {
                         const raw = e.target.value
-                        if (raw === '') { setMixedKaspi(''); setMixedCash(String(subtotal)); return }
-                        const k = Math.max(0, Math.min(subtotal, parseFloat(raw) || 0))
+                        if (raw === '') { setMixedKaspi(''); setMixedCash(String(payable)); return }
+                        const k = Math.max(0, Math.min(payable, parseFloat(raw) || 0))
                         setMixedKaspi(String(k))
-                        setMixedCash(String(Math.max(0, subtotal - k)))
+                        setMixedCash(String(Math.max(0, payable - k)))
                       }}
                       inputMode="numeric"
                       placeholder="0"
@@ -726,6 +809,17 @@ export default function OperatorPos({
                   </label>
                 </div>
               )}
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-gray-400">Скидка&nbsp;%</span>
+                <input
+                  value={discountPct}
+                  onChange={(e) => setDiscountPct(e.target.value)}
+                  inputMode="numeric"
+                  placeholder="0"
+                  className="w-20 rounded-lg border border-white/20 bg-white/10 px-2 py-1.5 text-sm tabular-nums outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+                {discountAmount > 0 && <span className="text-xs text-emerald-300">−{fmt(discountAmount)} ₸</span>}
+              </div>
               <textarea
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
@@ -739,7 +833,7 @@ export default function OperatorPos({
                 disabled={submitting}
                 className="w-full rounded-xl bg-emerald-600 py-4 text-base font-bold transition hover:bg-emerald-700 disabled:opacity-50"
               >
-                {submitting ? 'Проводим…' : `Оплатить · ${fmt(subtotal)} ₸`}
+                {submitting ? 'Проводим…' : `Оплатить · ${fmt(payable)} ₸`}
               </button>
             </div>
           )}
@@ -777,6 +871,39 @@ export default function OperatorPos({
             <button onClick={handleCloseShift} disabled={closing} className="w-full rounded-xl bg-amber-600 py-3 font-semibold hover:bg-amber-700 disabled:opacity-50">
               {closing ? 'Закрываем…' : 'Закрыть смену'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Receipt modal after successful sale */}
+      {lastReceipt && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4">
+          <div className="flex max-h-[90vh] w-full max-w-sm flex-col overflow-hidden rounded-2xl bg-gray-900">
+            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+              <div>
+                <p className="font-semibold text-emerald-400">Оплата проведена</p>
+                <p className="text-xs text-gray-400">{lastReceipt.saleId ? `Чек #${lastReceipt.saleId.slice(-6)} · ` : ''}{fmt(lastReceipt.total)} ₸</p>
+              </div>
+              <button onClick={() => setLastReceipt(null)} className="text-gray-400 hover:text-white"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 text-sm">
+              <div className="space-y-1">
+                {lastReceipt.items.map((it, i) => (
+                  <div key={i} className="flex justify-between gap-2 text-gray-200">
+                    <span className="truncate">{it.name} × {it.quantity}</span>
+                    <span className="shrink-0 tabular-nums">{fmt(it.unit_price * it.quantity)} ₸</span>
+                  </div>
+                ))}
+              </div>
+              {lastReceipt.discount > 0 && (
+                <div className="mt-2 flex justify-between text-xs text-gray-400"><span>Скидка</span><span>−{fmt(lastReceipt.discount)} ₸</span></div>
+              )}
+              <div className="mt-2 flex justify-between border-t border-white/10 pt-2 text-base font-bold text-emerald-400"><span>Итого</span><span>{fmt(lastReceipt.total)} ₸</span></div>
+            </div>
+            <div className="flex gap-2 border-t border-white/10 p-3">
+              <button onClick={() => printReceipt(lastReceipt)} className="flex-1 rounded-xl border border-white/20 py-3 text-sm font-medium text-gray-200 hover:bg-white/10">🖨 Печать</button>
+              <button onClick={() => setLastReceipt(null)} className="flex-1 rounded-xl bg-emerald-600 py-3 text-sm font-semibold hover:bg-emerald-700">Новая продажа</button>
+            </div>
           </div>
         </div>
       )}
