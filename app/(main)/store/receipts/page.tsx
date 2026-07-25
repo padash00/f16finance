@@ -1365,7 +1365,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={createReceipt} className="flex-1 space-y-5 overflow-y-auto p-5">
-            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.05] p-4">
+            <div data-tour="receipt-quickadd" className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.05] p-4">
               <div className="flex flex-wrap items-center gap-2">
                 <Input
                   ref={quickInputRef}
@@ -1627,7 +1627,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
               )}
             </div>
 
-            <div className="space-y-2 rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] p-3">
+            <div data-tour="receipt-invoice" className="space-y-2 rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] p-3">
               <Label>Файл накладной (обязательно)</Label>
               <div className="flex flex-wrap items-center gap-2">
                 <Input
@@ -1822,7 +1822,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
               </div>
             </div>
 
-            <Button type="submit" disabled={saving || loading} className="w-full">
+            <Button data-tour="receipt-submit" type="submit" disabled={saving || loading} className="w-full">
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PackagePlus className="mr-2 h-4 w-4" />}
               Провести приемку
             </Button>

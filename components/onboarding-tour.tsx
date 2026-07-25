@@ -34,7 +34,10 @@ const STEPS: Step[] = [
   { route: '/point-devices', tour: 'pd-new-project', title: 'Шаг 2 · Настрой кассу', text: 'Проект — как точка работает на кассе: добавь точку кнопкой «Добавить», отметь нужные функции (смены, доходы, долги, арена) и сохрани. Именно к проекту подключается операторская программа.' },
   { route: '/store/stock', clickFirst: 'store-tab-catalog', tour: 'catalog-add-item', title: 'Шаг 3 · Как добавить товары', text: 'Чтобы касса что-то продавала, заполни каталог. «Добавить товар» — завести по одному (название, штрихкод, цены). Рядом вкладка «Импорт Excel» — залить весь список разом.' },
   { route: '/store/stock', tour: 'store-tabs', title: 'Склад и витрина', text: 'Товар живёт в двух местах: «Склад» — подсобка (сюда падает приёмка), «Витрина» — то, что продаётся на кассе. «Движения» — вся история. Переключай эти вкладки.' },
-  { route: '/store/receipts', tour: 'receipt-new', title: 'Шаг 4 · Как принять поставку', text: 'Пришёл товар от поставщика — жми «Новый документ». Добавляешь строки (можно распознать накладную ИИ), проводишь — остатки на складе растут, а сумма уходит в расходы.' },
+  { route: '/store/receipts', tour: 'receipt-new', title: 'Шаг 4 · Как принять поставку', text: 'Пришёл товар от поставщика — жми «Новый документ». Сейчас откроем эту форму и пройдём её по кнопкам.' },
+  { route: '/store/receipts', clickFirst: 'receipt-new', tour: 'receipt-quickadd', title: 'Приёмка · Добавь товары', text: 'Сюда добавляешь строки прихода: отсканируй штрихкод или введи название и жми «Добавить товар». Товар, которого ещё нет в каталоге, заведётся автоматически.' },
+  { route: '/store/receipts', clickFirst: 'receipt-new', tour: 'receipt-invoice', title: 'Приёмка · Накладная и ИИ', text: 'Загрузи файл накладной (обязательно) и нажми «Распознать ИИ» — он сам разложит строки и суммы. Останется только проверить.' },
+  { route: '/store/receipts', clickFirst: 'receipt-new', tour: 'receipt-submit', title: 'Приёмка · Проведи', text: 'Проверил строки и цены — жми «Провести приемку». Остатки на складе вырастут, цены обновятся, а сумма закупа уйдёт в расходы.' },
   { route: '/hr', tour: 'hr-hire', title: 'Шаг 5 · Как нанять сотрудника', text: 'Жми «Нанять»: имя, роль, ставка. Кассиру логин и пароль для веб-кассы выдаются сразу. При одной точке привязка автоматическая, при нескольких — выберешь точки и основную.' },
   { route: '/store/shifts', tour: 'page-header', title: 'Шаг 6 · Смена и касса', text: 'Открой смену по точке — оператор заходит в веб-кассу (пункт «Web POS» в меню) и продаёт товары карточками. Закрытие смены сводит выручку и наличные.' },
   { route: '/reports', tour: 'page-header', title: 'Готово · Финансы', text: 'Здесь видно результат: доходы, расходы, прибыль, маржа и аналитика по дням и точкам. Всё, точка запущена — можно работать.' },
@@ -213,9 +216,13 @@ export function OnboardingTour() {
         <div className="pointer-events-none fixed inset-0 z-[201]" style={{ backgroundColor: 'rgba(2,6,23,0.62)' }} />
       )}
 
-      {/* Карточка */}
+      {/* Карточка. stopPropagation на pointerdown — чтобы Radix-модалка
+          (приёмка и т.п.) не закрывалась, считая клик по карточке «внешним». */}
       <div style={cardStyle}>
-        <div className="pointer-events-auto rounded-2xl border border-emerald-500/30 bg-white p-5 text-slate-900 shadow-2xl dark:bg-slate-900 dark:text-white">
+        <div
+          onPointerDown={(e) => e.stopPropagation()}
+          className="pointer-events-auto rounded-2xl border border-emerald-500/30 bg-white p-5 text-slate-900 shadow-2xl dark:bg-slate-900 dark:text-white"
+        >
           <div className="mb-2 flex items-center justify-between">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
               <Sparkles className="h-3.5 w-3.5" /> {idx + 1} / {steps.length}
