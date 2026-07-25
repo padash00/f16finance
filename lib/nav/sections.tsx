@@ -138,6 +138,7 @@ export const navSections: NavSection[] = [
     items: [
       { href: '/store', label: 'Обзор магазина', icon: Boxes, note: 'Общая сводка по складу и витринам' },
       { href: '/store/stock', label: 'Склад', icon: Warehouse, note: 'Склад, витрина, движения, каталог' },
+      { href: '/production', label: 'Техкарты', icon: ChefHat, note: 'Рецептуры, себестоимость и food cost товаров', badge: 'new', badgeColor: 'green', isNew: true },
       { href: '/store/documents', label: 'Документы', icon: FileText, note: 'Приёмка, оприходование, списания, ревизия' },
       { href: '/store/orders', label: 'Заявки', icon: ClipboardList, note: 'Заявки точек, журнал, заказы поставщикам' },
       { href: '/store/purchase-plan', label: 'План закупа', icon: ShoppingCart, note: 'Сколько закупить на след. неделю — по продажам и остаткам', badge: 'new', badgeColor: 'green', isNew: true },
@@ -176,7 +177,6 @@ export const navSections: NavSection[] = [
     icon: Workflow,
     featuresAny: ['club.pos', 'shop.catalog', 'service.jobs', 'restaurant.recipes_lite'],
     items: [
-      { href: '/production', label: 'Техкарты', icon: ChefHat, note: 'Рецептуры и food cost (ресторан)', feature: 'restaurant.recipes_lite', badge: 'new', badgeColor: 'green', isNew: true },
       { href: '/simulation', label: 'Симуляция выручки', icon: Calculator, note: 'Потенциал по зонам vs факт', badge: 'new', badgeColor: 'blue', isNew: true },
       { href: '/tasks', label: 'Задачи', icon: FolderKanban, note: 'Текущая работа', badge: '12', badgeColor: 'red' },
       { href: '/shifts', label: 'Смены', icon: CalendarClock, note: 'График и сменность' },
