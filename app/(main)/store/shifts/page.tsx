@@ -35,46 +35,76 @@ function printZReport(r: any) {
   if (!w) return
   const money = (n: number) => `${fmt(Math.round(Number(n || 0)))} ₸`
   const dts = (s: string | null) => (s ? new Date(s).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—')
+  const qtyU = (n: number, u: string) => `${fmt(n)}${u ? ' ' + escHtml(u) : ''}`
   const req = r.requisites || {}
   const rows = (r.positions || [])
-    .map((p: any) => `<tr><td>${escHtml(p.name)}</td><td class="r">${fmt(p.sold)} ${escHtml(p.unit || '')}</td><td class="r">${fmt(p.stock)} ${escHtml(p.unit || '')}</td><td class="r">${money(p.amount)}</td></tr>`)
+    .map((p: any, i: number) => `<tr><td class="idx">${i + 1}</td><td class="nm">${escHtml(p.name)}</td><td class="num">${qtyU(p.sold, p.unit)}</td><td class="num stk">${qtyU(p.stock, p.unit)}</td><td class="num amt">${money(p.amount)}</td></tr>`)
     .join('')
-  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Z-Отчёт</title>
-    <style>@page{size:A4;margin:16mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;font-size:13px;color:#111}
-    h1{text-align:center;font-size:20px;margin:0 0 2px}.sub{text-align:center;color:#555;font-size:12px;margin-bottom:14px}
-    .grid{display:grid;grid-template-columns:180px 1fr;gap:4px 12px;margin:10px 0}
-    .grid .k{color:#555}.grid .v{font-weight:600}
-    .sec{font-weight:700;margin:16px 0 6px;border-bottom:1px solid #ddd;padding-bottom:4px}
-    .row{display:flex;justify-content:space-between;padding:3px 0;max-width:360px}
-    .row.tot{font-weight:800;font-size:15px;border-top:2px solid #111;margin-top:4px;padding-top:6px}
-    table{width:100%;border-collapse:collapse;margin-top:6px;font-size:12px}
-    th,td{padding:6px 8px;border-bottom:1px solid #eee;text-align:left}th{color:#555;font-weight:600;border-bottom:2px solid #ddd}
-    .r{text-align:right}.foot{margin-top:24px;text-align:right;color:#777;font-size:11px}
-    .bar{position:sticky;top:0;display:flex;gap:8px;justify-content:center;padding:10px;background:#f4f4f5;border-bottom:1px solid #e4e4e7;margin:-16mm -16mm 12px}
-    .bar button{border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer}
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Z-Отчёт · Смена №${r.shiftNumber}</title>
+    <style>
+    @page{size:A4;margin:14mm}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,'Segoe UI',Arial,sans-serif;font-size:12.5px;color:#1a1a1a;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .wrap{max-width:720px;margin:0 auto}
+    .hd{text-align:center;padding-bottom:12px;border-bottom:2px solid #111;margin-bottom:16px}
+    .hd .co{font-size:17px;font-weight:800;letter-spacing:.2px}
+    .hd .m{color:#666;font-size:11.5px;margin-top:3px}
+    .title{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px}
+    .title h1{font-size:20px;font-weight:800;color:#059669;letter-spacing:1px}
+    .title .sh{font-size:13px;color:#555;font-weight:700}
+    .meta{display:grid;grid-template-columns:1fr 1fr;gap:2px 28px;margin-bottom:18px}
+    .meta .r{display:flex;justify-content:space-between;gap:12px;border-bottom:1px dotted #ddd;padding:4px 0}
+    .meta .k{color:#777}.meta .v{font-weight:700;text-align:right}
+    .sec{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.9px;color:#999;margin-bottom:6px}
+    .sum{margin-bottom:20px}
+    .sum .r{display:flex;justify-content:space-between;padding:5px 2px;border-bottom:1px solid #f1f1f1}
+    .sum .r span:last-child{font-variant-numeric:tabular-nums;font-weight:600}
+    .sum .r.tot{border-top:2px solid #111;border-bottom:none;margin-top:5px;padding-top:9px;font-size:16px;font-weight:800}
+    .sum .r.tot span:last-child{color:#059669}
+    table{width:100%;border-collapse:collapse}
+    thead th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#999;padding:7px 8px;border-bottom:2px solid #111}
+    tbody td{padding:6px 8px;border-bottom:1px solid #f1f1f1;vertical-align:middle}
+    tbody tr:nth-child(even){background:#fafafa}
+    .idx{color:#bbb;width:24px;text-align:right;font-size:11px}
+    .nm{width:auto}
+    .num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+    th.num{text-align:right}
+    .stk{color:#666;width:96px}.amt{font-weight:700;width:110px}
+    .foot{margin-top:22px;padding-top:8px;border-top:1px solid #eee;display:flex;justify-content:space-between;color:#aaa;font-size:10.5px}
+    .bar{position:sticky;top:0;z-index:9;display:flex;gap:8px;justify-content:center;padding:10px;background:#f4f4f5;border-bottom:1px solid #e4e4e7;margin:-14mm -14mm 14px}
+    .bar button{border:none;border-radius:8px;padding:8px 20px;font-size:13px;font-weight:600;cursor:pointer}
     .bar .p{background:#059669;color:#fff}.bar .c{background:#e4e4e7;color:#111}
-    @media print{.bar{display:none}@page{margin:16mm}}</style></head>
+    @media print{.bar{display:none}}
+    </style></head>
     <body>
       <div class="bar"><button class="p" onclick="window.print()">🖨 Печать</button><button class="c" onclick="window.close()">Закрыть</button></div>
-      <h1>Z-Отчёт</h1>
-      <div class="sub">${escHtml(req.name || r.pointName || 'ORDA POINT')}${req.bin ? ' · БИН/ИИН ' + escHtml(req.bin) : ''}${req.address ? '<br>' + escHtml(req.address) : ''}</div>
-      <div class="grid">
-        <div class="k">Точка</div><div class="v">${escHtml(r.pointName || '—')}</div>
-        <div class="k">Кассир</div><div class="v">${escHtml(r.cashier || '—')}</div>
-        <div class="k">Смена №</div><div class="v">${r.shiftNumber}</div>
-        <div class="k">Дата начала</div><div class="v">${dts(r.openedAt)}</div>
-        <div class="k">Дата окончания</div><div class="v">${dts(r.closedAt)}</div>
+      <div class="wrap">
+        <div class="hd">
+          <div class="co">${escHtml(req.name || r.pointName || 'ORDA POINT')}</div>
+          <div class="m">${req.bin ? 'БИН/ИИН ' + escHtml(req.bin) : ''}${req.bin && req.address ? ' · ' : ''}${req.address ? escHtml(req.address) : ''}</div>
+        </div>
+        <div class="title"><h1>Z-ОТЧЁТ</h1><span class="sh">Смена №${r.shiftNumber}</span></div>
+        <div class="meta">
+          <div class="r"><span class="k">Точка</span><span class="v">${escHtml(r.pointName || '—')}</span></div>
+          <div class="r"><span class="k">Кассир</span><span class="v">${escHtml(r.cashier || '—')}</span></div>
+          <div class="r"><span class="k">Открыта</span><span class="v">${dts(r.openedAt)}</span></div>
+          <div class="r"><span class="k">Закрыта</span><span class="v">${dts(r.closedAt)}</span></div>
+        </div>
+        <div class="sec">Суммы за смену</div>
+        <div class="sum">
+          <div class="r"><span>Наличные</span><span>${money(r.cashSales)}</span></div>
+          <div class="r"><span>Безналичные</span><span>${money(r.kaspiSales)}</span></div>
+          <div class="r"><span>Возвраты</span><span>${money(r.returns)}</span></div>
+          <div class="r tot"><span>Итоговая сумма</span><span>${money(r.total)}</span></div>
+        </div>
+        <div class="sec">Позиции · ${(r.positions || []).length}</div>
+        <table>
+          <thead><tr><th class="idx">#</th><th>Название</th><th class="num">Продано</th><th class="num">На складе</th><th class="num">Сумма</th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="5" style="color:#999;padding:12px 8px">Продаж по позициям нет</td></tr>'}</tbody>
+        </table>
+        <div class="sum" style="margin-top:8px"><div class="r tot"><span>Итог проданных товаров</span><span>${money(r.goodsTotal)}</span></div></div>
+        <div class="foot"><span>Orda Point · управленческий Z-отчёт</span><span>Сформировано: ${new Date().toLocaleString('ru-RU')}</span></div>
       </div>
-      <div class="sec">Суммы за смену</div>
-      <div class="row"><span>Наличные</span><span>${money(r.cashSales)}</span></div>
-      <div class="row"><span>Безналичные</span><span>${money(r.kaspiSales)}</span></div>
-      <div class="row"><span>Возвраты</span><span>${money(r.returns)}</span></div>
-      <div class="row tot"><span>ИТОГОВАЯ СУММА</span><span>${money(r.total)}</span></div>
-      <div class="sec">Позиции</div>
-      <table><thead><tr><th>Название позиции</th><th class="r">Продано</th><th class="r">На складе</th><th class="r">Сумма</th></tr></thead>
-      <tbody>${rows || '<tr><td colspan="4" style="color:#777">Продаж по позициям нет</td></tr>'}</tbody></table>
-      <div class="row tot" style="margin-top:10px"><span>Итог проданных товаров</span><span>${money(r.goodsTotal)}</span></div>
-      <div class="foot">Сформировано: ${new Date().toLocaleString('ru-RU')}</div>
     </body></html>`)
   w.document.close()
 }
