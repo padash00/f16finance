@@ -67,6 +67,8 @@ type CartLine = {
 
 type PaymentMethod = 'cash' | 'kaspi' | 'mixed'
 
+type WebCustomer = { id: string; name: string; phone: string | null; card_number: string | null; loyalty_points: number }
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function fmt(n: number) {
@@ -182,6 +184,11 @@ export default function OperatorPos({
   const [mixedCash, setMixedCash] = useState('')
   const [mixedKaspi, setMixedKaspi] = useState('')
   const [discountPct, setDiscountPct] = useState('')
+  const [customer, setCustomer] = useState<WebCustomer | null>(null)
+  const [customerSearch, setCustomerSearch] = useState('')
+  const [customerResults, setCustomerResults] = useState<WebCustomer[]>([])
+  const [pointsToSpend, setPointsToSpend] = useState(0)
+  const [showCustomer, setShowCustomer] = useState(false)
   const [lastReceipt, setLastReceipt] = useState<ReceiptSnapshot | null>(null)
   const [comment, setComment] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -246,6 +253,25 @@ export default function OperatorPos({
     if (shift?.id) setTimeout(() => searchRef.current?.focus(), 100)
   }, [shift?.id])
 
+  // Поиск клиента (debounced)
+  useEffect(() => {
+    const q = customerSearch.trim()
+    if (q.length < 2) { setCustomerResults([]); return }
+    const t = setTimeout(async () => {
+      try {
+        const url = isOwner
+          ? `/api/admin/customers?company_id=${encodeURIComponent(companyId)}&search=${encodeURIComponent(q)}`
+          : `/api/operator/customers?search=${encodeURIComponent(q)}`
+        const res = await fetch(url)
+        const j = await res.json().catch(() => ({}))
+        setCustomerResults((j?.data || []) as WebCustomer[])
+      } catch {
+        setCustomerResults([])
+      }
+    }, 300)
+    return () => clearTimeout(t)
+  }, [customerSearch, isOwner, companyId])
+
   // ── Derived ──────────────────────────────────────────────────────────────
   const categories = useMemo(() => {
     const s = new Set<string>()
@@ -271,7 +297,18 @@ export default function OperatorPos({
     const p = Math.max(0, Math.min(99, parseFloat(discountPct) || 0))
     return Math.round((subtotal * p) / 100 * 100) / 100
   }, [subtotal, discountPct])
-  const payable = Math.max(0, subtotal - discountAmount)
+  const afterDiscount = Math.max(0, subtotal - discountAmount)
+  const loyalty = (catalog?.loyalty_config as any) || null
+  const tengePerPoint = Number(loyalty?.tenge_per_point || 1) || 1
+  const maxRedeemable = useMemo(() => {
+    if (!customer || !loyalty?.is_active) return 0
+    const maxPct = Number(loyalty?.max_redeem_percent ?? loyalty?.max_redeem_percent_per_purchase ?? 50)
+    const maxTenge = Math.floor((afterDiscount * maxPct) / 100)
+    const byPoints = tengePerPoint > 0 ? Math.floor(maxTenge / tengePerPoint) : 0
+    return Math.min(Number(customer.loyalty_points || 0), byPoints)
+  }, [customer, loyalty, afterDiscount, tengePerPoint])
+  const loyaltyDiscount = Math.min(Math.max(0, pointsToSpend) * tengePerPoint, afterDiscount)
+  const payable = Math.max(0, afterDiscount - loyaltyDiscount)
 
   // ── Cart actions ───────────────────────────────────────────────────────────
   const addItem = useCallback((item: PosItem) => {
@@ -431,6 +468,9 @@ export default function OperatorPos({
             kaspi_before_midnight_amount: kaspi,
             kaspi_after_midnight_amount: 0,
             discount_amount: discountAmount,
+            customer_id: customer?.id || null,
+            loyalty_points_spent: customer ? Math.max(0, Math.min(pointsToSpend, maxRedeemable)) : 0,
+            loyalty_discount_amount: loyaltyDiscount,
             comment: comment.trim() || null,
             local_ref: saleRefKey.current,
             items: cart.map((l) => ({
@@ -457,7 +497,7 @@ export default function OperatorPos({
         subtotal,
         discount: discountAmount,
         total: payable,
-        customerName: null,
+        customerName: customer?.name || null,
         items: cart.map((l) => ({ name: l.name, quantity: l.quantity, unit_price: l.unit_price, unit: l.unit })),
       })
       // Сброс и обновление остатков
@@ -467,6 +507,11 @@ export default function OperatorPos({
       setMixedCash('')
       setMixedKaspi('')
       setDiscountPct('')
+      setCustomer(null)
+      setCustomerSearch('')
+      setCustomerResults([])
+      setPointsToSpend(0)
+      setShowCustomer(false)
       await loadCatalog()
       setTimeout(() => searchRef.current?.focus(), 100)
     } catch (e: any) {
@@ -809,6 +854,67 @@ export default function OperatorPos({
                   </label>
                 </div>
               )}
+              {/* Клиент + лояльность */}
+              <div className="rounded-xl border border-white/10 bg-white/5">
+                <button
+                  type="button"
+                  onClick={() => setShowCustomer((v) => !v)}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm"
+                >
+                  <span className="flex-1 text-left text-gray-300">{customer ? customer.name : 'Клиент'}</span>
+                  {customer && <span className="text-xs text-amber-400">⭐ {customer.loyalty_points}</span>}
+                  <span className="text-xs text-gray-500">{showCustomer ? '▲' : '▼'}</span>
+                </button>
+                {showCustomer && (
+                  <div className="space-y-2 border-t border-white/10 p-2">
+                    {customer ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-gray-300">{customer.name} · ⭐ {customer.loyalty_points}</span>
+                          <button type="button" onClick={() => { setCustomer(null); setPointsToSpend(0) }} className="text-gray-500 hover:text-red-400">убрать</button>
+                        </div>
+                        {loyalty?.is_active && maxRedeemable > 0 && (
+                          <input
+                            type="number"
+                            min={0}
+                            max={maxRedeemable}
+                            value={pointsToSpend || ''}
+                            onChange={(e) => setPointsToSpend(Math.max(0, Math.min(maxRedeemable, parseInt(e.target.value) || 0)))}
+                            placeholder={`Списать баллы (макс ${maxRedeemable})`}
+                            className="w-full rounded-lg border border-white/20 bg-white/10 px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-amber-500"
+                          />
+                        )}
+                        {loyaltyDiscount > 0 && <div className="text-xs text-amber-300">Баллами −{fmt(loyaltyDiscount)} ₸</div>}
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <input
+                          value={customerSearch}
+                          onChange={(e) => setCustomerSearch(e.target.value)}
+                          placeholder="Имя, телефон или карта"
+                          className="w-full rounded-lg border border-white/20 bg-white/10 px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-emerald-500"
+                        />
+                        {customerResults.length > 0 && (
+                          <div className="max-h-40 overflow-auto rounded-lg border border-white/10">
+                            {customerResults.map((c) => (
+                              <button
+                                key={c.id}
+                                type="button"
+                                onClick={() => { setCustomer(c); setCustomerResults([]); setCustomerSearch('') }}
+                                className="flex w-full items-center justify-between px-2 py-1.5 text-left text-xs hover:bg-white/10"
+                              >
+                                <span className="truncate">{c.name}{c.phone ? ` · ${c.phone}` : ''}</span>
+                                <span className="shrink-0 text-amber-400">⭐ {c.loyalty_points}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div className="flex items-center gap-2">
                 <span className="text-[11px] text-gray-400">Скидка&nbsp;%</span>
                 <input
