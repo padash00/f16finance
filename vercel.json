@@ -2,6 +2,10 @@
   "regions": ["hnd1"],
   "crons": [
     {
+      "path": "/api/cron/subscription-lifecycle",
+      "schedule": "15 5 * * *"
+    },
+    {
       "path": "/api/cron/cleanup-operator-chat",
       "schedule": "0 3 * * *"
     },
