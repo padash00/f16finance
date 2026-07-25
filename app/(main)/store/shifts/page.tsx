@@ -24,6 +24,56 @@ type Shift = {
 
 const fmt = (n: number | null | undefined) => Number(n || 0).toLocaleString('ru-RU')
 const dt = (s: string | null) => (s ? new Date(s).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—')
+
+function escHtml(s: string): string {
+  return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string))
+}
+
+// A4 Z-отчёт — печать по требованию на сайте (страница «Смены»).
+function printZReport(r: any) {
+  const w = window.open('', '_blank', 'width=800,height=1000')
+  if (!w) return
+  const money = (n: number) => `${fmt(Math.round(Number(n || 0)))} ₸`
+  const dts = (s: string | null) => (s ? new Date(s).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—')
+  const req = r.requisites || {}
+  const rows = (r.positions || [])
+    .map((p: any) => `<tr><td>${escHtml(p.name)}</td><td class="r">${fmt(p.sold)} ${escHtml(p.unit || '')}</td><td class="r">${fmt(p.stock)} ${escHtml(p.unit || '')}</td><td class="r">${money(p.amount)}</td></tr>`)
+    .join('')
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Z-Отчёт</title>
+    <style>@page{size:A4;margin:16mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;font-size:13px;color:#111}
+    h1{text-align:center;font-size:20px;margin:0 0 2px}.sub{text-align:center;color:#555;font-size:12px;margin-bottom:14px}
+    .grid{display:grid;grid-template-columns:180px 1fr;gap:4px 12px;margin:10px 0}
+    .grid .k{color:#555}.grid .v{font-weight:600}
+    .sec{font-weight:700;margin:16px 0 6px;border-bottom:1px solid #ddd;padding-bottom:4px}
+    .row{display:flex;justify-content:space-between;padding:3px 0;max-width:360px}
+    .row.tot{font-weight:800;font-size:15px;border-top:2px solid #111;margin-top:4px;padding-top:6px}
+    table{width:100%;border-collapse:collapse;margin-top:6px;font-size:12px}
+    th,td{padding:6px 8px;border-bottom:1px solid #eee;text-align:left}th{color:#555;font-weight:600;border-bottom:2px solid #ddd}
+    .r{text-align:right}.foot{margin-top:24px;text-align:right;color:#777;font-size:11px}</style></head>
+    <body>
+      <h1>Z-Отчёт</h1>
+      <div class="sub">${escHtml(req.name || r.pointName || 'ORDA POINT')}${req.bin ? ' · БИН/ИИН ' + escHtml(req.bin) : ''}${req.address ? '<br>' + escHtml(req.address) : ''}</div>
+      <div class="grid">
+        <div class="k">Точка</div><div class="v">${escHtml(r.pointName || '—')}</div>
+        <div class="k">Кассир</div><div class="v">${escHtml(r.cashier || '—')}</div>
+        <div class="k">Смена №</div><div class="v">${r.shiftNumber}</div>
+        <div class="k">Дата начала</div><div class="v">${dts(r.openedAt)}</div>
+        <div class="k">Дата окончания</div><div class="v">${dts(r.closedAt)}</div>
+      </div>
+      <div class="sec">Суммы за смену</div>
+      <div class="row"><span>Наличные</span><span>${money(r.cashSales)}</span></div>
+      <div class="row"><span>Безналичные</span><span>${money(r.kaspiSales)}</span></div>
+      <div class="row"><span>Возвраты</span><span>${money(r.returns)}</span></div>
+      <div class="row tot"><span>ИТОГОВАЯ СУММА</span><span>${money(r.total)}</span></div>
+      <div class="sec">Позиции</div>
+      <table><thead><tr><th>Название позиции</th><th class="r">Продано</th><th class="r">На складе</th><th class="r">Сумма</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="4" style="color:#777">Продаж по позициям нет</td></tr>'}</tbody></table>
+      <div class="row tot" style="margin-top:10px"><span>Итог проданных товаров</span><span>${money(r.goodsTotal)}</span></div>
+      <div class="foot">Сформировано: ${new Date().toLocaleString('ru-RU')}</div>
+      <script>window.onload=function(){window.print()}</script>
+    </body></html>`)
+  w.document.close()
+}
 const tm = (s: string | null) => (s ? new Date(s).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '—')
 const STATUS: { key: string; label: string }[] = [
   { key: 'closed', label: 'Закрытые' },
@@ -247,7 +297,23 @@ function ShiftDetail({ id, onClose, onChanged }: { id: string; onClose: () => vo
               <div className="text-xs text-slate-500">{dt(shift?.opened_at)} → {dt(shift?.closed_at)}</div>
             </div>
           </div>
-          <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"><X className="h-4 w-4" /></button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={async () => {
+                if (!shift?.id) return
+                try {
+                  const res = await fetch(`/api/admin/shifts/z-report?shift_id=${shift.id}`, { cache: 'no-store' })
+                  const j = await res.json().catch(() => null)
+                  if (res.ok && j?.report) printZReport(j.report)
+                  else alert(j?.error === 'forbidden' ? 'Нет доступа к этой смене' : 'Не удалось сформировать Z-отчёт')
+                } catch { alert('Не удалось сформировать Z-отчёт') }
+              }}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20"
+            >
+              🖨 Z-отчёт
+            </button>
+            <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"><X className="h-4 w-4" /></button>
+          </div>
         </div>
 
         {loading ? (
