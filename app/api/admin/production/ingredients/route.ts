@@ -79,7 +79,7 @@ export async function DELETE(request: Request) {
     if (!id) return json({ error: 'id обязателен' }, 400)
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     // NEVER-pattern: не-супер без орг → нулевой uuid → удаление затронет 0 строк.
-    const scopeOrg = access.isSuperAdmin ? null : (orgId || '00000000-0000-0000-0000-000000000000')
+    const scopeOrg = orgId || (access.isSuperAdmin ? null : '00000000-0000-0000-0000-000000000000')
     let del = supabase.from('ingredients').delete().eq('id', id)
     if (scopeOrg) del = del.eq('organization_id', scopeOrg)
     const { error } = await del

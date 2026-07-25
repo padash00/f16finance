@@ -74,7 +74,7 @@ export async function GET(request: Request) {
       .order('name', { ascending: true })
       .limit(500)
     // NEVER-pattern: не-супер без орг → нулевой uuid → 0 строк (fail-closed).
-    const scopeOrg = access.isSuperAdmin ? null : (access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+    const scopeOrg = access.activeOrganization?.id || (access.isSuperAdmin ? null : '00000000-0000-0000-0000-000000000000')
     if (scopeOrg) {
       query = query.eq('organization_id', scopeOrg)
     }

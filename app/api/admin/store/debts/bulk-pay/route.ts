@@ -64,7 +64,7 @@ export async function POST(request: Request) {
       )
       .in('id', debtIds)
     // NEVER-pattern: не-супер без орг → нулевой uuid → чужие id не совпадут.
-    const scopeOrg = access.isSuperAdmin ? null : (access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+    const scopeOrg = access.activeOrganization?.id || (access.isSuperAdmin ? null : '00000000-0000-0000-0000-000000000000')
     if (scopeOrg) {
       debtsQuery = debtsQuery.eq('organization_id', scopeOrg)
     }

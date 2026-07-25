@@ -216,7 +216,7 @@ export async function PATCH(request: Request) {
 
     // NEVER-pattern: не-супер без орг → нулевой uuid → 0 строк (fail-closed).
     // Иначе при null-орг у не-супера гейт пропускался и мутация шла без изоляции.
-    const scopeOrg = access.isSuperAdmin ? null : (orgId || '00000000-0000-0000-0000-000000000000')
+    const scopeOrg = orgId || (access.isSuperAdmin ? null : '00000000-0000-0000-0000-000000000000')
 
     // Изоляция: рецепт обязан принадлежать орг — иначе ниже мы стёрли бы/подменили
     // состав (recipe_components) чужой техкарты, даже если сам update затронул 0 строк.
@@ -287,7 +287,7 @@ export async function DELETE(request: Request) {
     if (!id) return json({ error: 'id обязателен' }, 400)
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     // NEVER-pattern: не-супер без орг → нулевой uuid → удаление затронет 0 строк.
-    const scopeOrg = access.isSuperAdmin ? null : (orgId || '00000000-0000-0000-0000-000000000000')
+    const scopeOrg = orgId || (access.isSuperAdmin ? null : '00000000-0000-0000-0000-000000000000')
     let del = supabase.from('recipes').delete().eq('id', id)
     if (scopeOrg) del = del.eq('organization_id', scopeOrg) // нельзя удалить чужую
     const { error } = await del

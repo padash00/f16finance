@@ -34,7 +34,7 @@ export async function GET(request: Request) {
 
   // Изоляция: владелец видит флаги только своей орг; супер-админ — все.
   const orgId = access.activeOrganization?.id || null
-  const scopeOrg = access.isSuperAdmin ? null : (orgId || '00000000-0000-0000-0000-000000000000')
+  const scopeOrg = orgId || (access.isSuperAdmin ? null : '00000000-0000-0000-0000-000000000000')
 
   let query = supabase
     .from('chat_moderation_flags')
@@ -77,7 +77,7 @@ export async function PATCH(request: Request) {
 
   const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
   const orgId = access.activeOrganization?.id || null
-  const scopeOrg = access.isSuperAdmin ? null : (orgId || '00000000-0000-0000-0000-000000000000')
+  const scopeOrg = orgId || (access.isSuperAdmin ? null : '00000000-0000-0000-0000-000000000000')
   let upd = supabase
     .from('chat_moderation_flags')
     .update({

@@ -71,7 +71,7 @@ export async function GET(request: Request) {
       // строки audit_log утекали бы ФИО/роли сотрудников чужой орг).
       let staffQuery: any = supabase.from('staff').select('id, full_name, role').in('id', actorIds)
       // NEVER-pattern: не-супер без орг → нулевой uuid → ничего.
-      const scopeOrg = access.isSuperAdmin ? null : (orgId || '00000000-0000-0000-0000-000000000000')
+      const scopeOrg = orgId || (access.isSuperAdmin ? null : '00000000-0000-0000-0000-000000000000')
       if (scopeOrg) staffQuery = staffQuery.eq('organization_id', scopeOrg)
       const { data: staffRows } = await staffQuery
       for (const s of staffRows || []) {

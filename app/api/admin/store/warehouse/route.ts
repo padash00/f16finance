@@ -356,7 +356,7 @@ export async function POST(request: Request) {
       // Изоляция: штрихкод теперь уникален per-org, поэтому lookup ОБЯЗАН
       // скоупиться по орг — иначе приход зачислился бы на товар чужого
       // арендатора с тем же штрихкодом (NEVER: не-супер без орг → нулевой uuid).
-      const lookupOrg = access.isSuperAdmin ? null : (orgId || '00000000-0000-0000-0000-000000000000')
+      const lookupOrg = orgId || (access.isSuperAdmin ? null : '00000000-0000-0000-0000-000000000000')
       if (barcodes.length > 0) {
         // Чанки по 200 штрихкодов — лимит длины URL + лимит 1000 строк ответа.
         for (const bcChunk of chunkArray(barcodes, 200)) {

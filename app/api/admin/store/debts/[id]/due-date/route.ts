@@ -45,7 +45,7 @@ export async function PATCH(
       .eq('id', id)
       .limit(1)
     // NEVER-pattern: не-супер без орг → нулевой uuid → чужой id не совпадёт.
-    const scopeOrg = access.isSuperAdmin ? null : (access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+    const scopeOrg = access.activeOrganization?.id || (access.isSuperAdmin ? null : '00000000-0000-0000-0000-000000000000')
     if (scopeOrg) {
       debtQuery = debtQuery.eq('organization_id', scopeOrg)
     }

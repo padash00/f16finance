@@ -66,9 +66,12 @@ export async function GET(request: Request) {
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
 
     // Изоляция: каталог только своей орг (inventory_items.organization_id).
+    // Если активная орг задана (в т.ч. host-locked субдоменом tenant'а) — скоупим по
+    // ней ДАЖЕ для суперадмина, иначе на castle.ordaops.kz видны чужие каталоги.
+    // Суперадмин видит всё только когда активной орг нет вовсе (платформенный контекст).
     // NEVER-pattern: не-супер-админ без орг → пустой uuid → ничего.
     const orgId = access.activeOrganization?.id || null
-    const scopeOrg = access.isSuperAdmin ? null : (orgId || '00000000-0000-0000-0000-000000000000')
+    const scopeOrg = orgId || (access.isSuperAdmin ? null : '00000000-0000-0000-0000-000000000000')
 
     // Опциональный фильтр остатков по точке (company) — для инлайн-правки в каталоге
     const companyFilter = String(new URL(request.url).searchParams.get('company_id') || '').trim() || null

@@ -76,7 +76,7 @@ export async function GET(req: Request) {
     // (service-role обходит RLS → фильтруем явно по organization_id.) NEVER-pattern:
     // без валидной орг — пустой uuid → ничего.
     const orgId = access.activeOrganization?.id || null
-    const scopeOrg = access.isSuperAdmin ? null : (orgId || '00000000-0000-0000-0000-000000000000')
+    const scopeOrg = orgId || (access.isSuperAdmin ? null : '00000000-0000-0000-0000-000000000000')
 
     let companiesQuery = supabase.from('companies').select('id, name, code, show_in_structure').order('name')
     let staffQuery = supabase.from('staff').select('id, full_name, phone, email, role, is_active').eq('is_active', true).order('full_name')
@@ -158,7 +158,9 @@ export async function POST(req: Request) {
     // иначе менеджер орг A может изменить/удалить компанию/сотрудника/категорию орг B.
     const orgId = access.activeOrganization?.id || null
     if (!access.isSuperAdmin && !orgId) return badRequest('Нет активной организации')
-    const scopeOrg = <T,>(q: T): T => (access.isSuperAdmin ? q : ((q as any).eq('organization_id', orgId) as T))
+    // Скоуп по активной орг даже для суперадмина (на субдомене tenant'а). Без фильтра —
+    // только когда активной орг нет вовсе (платформенный контекст суперадмина).
+    const scopeOrg = <T,>(q: T): T => (orgId ? ((q as any).eq('organization_id', orgId) as T) : q)
 
     if (body.entity === 'company') {
       // Капабилити-проверка зависит от действия

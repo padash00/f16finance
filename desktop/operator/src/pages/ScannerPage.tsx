@@ -453,10 +453,10 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
         </div>
       </header>
 
-      {/* Content */}
-      <div className="flex flex-1 gap-5 overflow-hidden p-5">
+      {/* Content — на узких экранах стек со скроллом всей страницы, на широких две колонки */}
+      <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-5 lg:flex-row lg:overflow-hidden">
         {/* Left: scanner form */}
-        <div className="w-80 shrink-0 flex flex-col gap-4">
+        <div className="w-full shrink-0 flex flex-col gap-4 lg:w-80">
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
@@ -617,7 +617,7 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
         </div>
 
         {/* Right: debts list */}
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="w-full min-w-0 flex flex-col lg:flex-1 lg:min-h-0">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold flex items-center gap-2">
               <Package className="h-4 w-4 text-muted-foreground" />
@@ -659,7 +659,7 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
               <p className="text-sm">Долгов нет</p>
             </div>
           ) : (
-            <div className="flex-1 overflow-auto space-y-2">
+            <div className="space-y-2 lg:min-h-0 lg:flex-1 lg:overflow-auto">
               {filteredDebts.map(debt => (
                 <div key={debt.id} className="flex items-start justify-between rounded-xl border border-border bg-card shadow-[var(--card-shadow)] px-4 py-3 gap-4">
                   <div className="min-w-0 flex-1">

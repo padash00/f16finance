@@ -163,7 +163,7 @@ export async function GET(request: Request) {
       .order('updated_at', { ascending: false })
       .limit(30)
     // NEVER-pattern: не-супер без орг → нулевой uuid → 0 строк (fail-closed).
-    const scopeOrg = access.isSuperAdmin ? null : (access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+    const scopeOrg = access.activeOrganization?.id || (access.isSuperAdmin ? null : '00000000-0000-0000-0000-000000000000')
     if (scopeOrg) {
       draftsQuery = draftsQuery.eq('organization_id', scopeOrg)
     }
@@ -235,7 +235,7 @@ export async function POST(request: Request) {
         .eq('status', 'draft')
         .maybeSingle()
       // NEVER-pattern: не-супер без орг → нулевой uuid → чужой draft не совпадёт.
-      const scopeOrgCur = access.isSuperAdmin ? null : (access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+      const scopeOrgCur = access.activeOrganization?.id || (access.isSuperAdmin ? null : '00000000-0000-0000-0000-000000000000')
       if (scopeOrgCur) {
         currentDraftQuery = currentDraftQuery.eq('organization_id', scopeOrgCur)
       }
@@ -247,7 +247,7 @@ export async function POST(request: Request) {
         .eq('id', draftId)
         .eq('status', 'draft')
       // NEVER-pattern: не-супер без орг → нулевой uuid → чужой draft не совпадёт.
-      const scopeOrgDel = access.isSuperAdmin ? null : (access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+      const scopeOrgDel = access.activeOrganization?.id || (access.isSuperAdmin ? null : '00000000-0000-0000-0000-000000000000')
       if (scopeOrgDel) {
         query = query.eq('organization_id', scopeOrgDel)
       }
@@ -443,7 +443,7 @@ export async function POST(request: Request) {
           .select('name, barcode, sale_price, is_active')
           .single()
         // NEVER-pattern: не-супер без орг → нулевой uuid → чужой item не совпадёт.
-        const scopeOrgPrice = access.isSuperAdmin ? null : (access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+        const scopeOrgPrice = access.activeOrganization?.id || (access.isSuperAdmin ? null : '00000000-0000-0000-0000-000000000000')
         if (scopeOrgPrice) {
           priceQuery = priceQuery.eq('organization_id', scopeOrgPrice)
         }
@@ -515,7 +515,7 @@ export async function POST(request: Request) {
           .eq('id', draftId)
           .eq('status', 'draft')
         // NEVER-pattern: не-супер без орг → нулевой uuid → чужой draft не совпадёт.
-        const scopeOrgUpd = access.isSuperAdmin ? null : (access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+        const scopeOrgUpd = access.activeOrganization?.id || (access.isSuperAdmin ? null : '00000000-0000-0000-0000-000000000000')
         if (scopeOrgUpd) {
           updateQuery = updateQuery.eq('organization_id', scopeOrgUpd)
         }
@@ -897,7 +897,7 @@ export async function POST(request: Request) {
           .select('name, barcode, sale_price, is_active')
           .single()
         // NEVER-pattern: не-супер без орг → нулевой uuid → чужой item не совпадёт.
-        const scopeOrgItem = access.isSuperAdmin ? null : (access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+        const scopeOrgItem = access.activeOrganization?.id || (access.isSuperAdmin ? null : '00000000-0000-0000-0000-000000000000')
         if (scopeOrgItem) {
           query = query.eq('organization_id', scopeOrgItem)
         }
@@ -975,7 +975,7 @@ export async function POST(request: Request) {
         .eq('id', draftId)
         .eq('status', 'draft')
       // NEVER-pattern: не-супер без орг → нулевой uuid → чужой draft не совпадёт.
-      const scopeOrgDraftUpd = access.isSuperAdmin ? null : (access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+      const scopeOrgDraftUpd = access.activeOrganization?.id || (access.isSuperAdmin ? null : '00000000-0000-0000-0000-000000000000')
       if (scopeOrgDraftUpd) {
         draftUpdateQuery = draftUpdateQuery.eq('organization_id', scopeOrgDraftUpd)
       }
