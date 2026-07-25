@@ -237,6 +237,36 @@ export default function ReceiptSettingsPage() {
         </Card>
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
+          {/* Готовность к №626 — обязательные реквизиты чека */}
+          {(() => {
+            const checks: Array<{ ok: boolean; label: string }> = [
+              { ok: !!settings.tax_payer_name.trim(), label: 'Наименование налогоплательщика' },
+              { ok: settings.tax_payer_bin.trim().length === 12, label: 'БИН/ИИН (12 цифр)' },
+              { ok: !!settings.point_address.trim(), label: 'Адрес точки' },
+              { ok: !!settings.kkm_registration_number.trim(), label: 'Рег. номер ККМ' },
+              { ok: !!settings.ofd_name.trim(), label: 'Оператор фискальных данных' },
+              { ok: !settings.is_vat_payer || Number(settings.vat_rate) > 0, label: 'Ставка НДС (если плательщик)' },
+            ]
+            const done = checks.filter((c) => c.ok).length
+            const all = done === checks.length
+            return (
+              <Card className={`p-4 lg:col-span-2 ${all ? 'border-emerald-500/30 bg-emerald-500/[0.06]' : 'border-amber-500/30 bg-amber-500/[0.06]'}`}>
+                <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
+                  <ShieldCheck className={`h-4 w-4 ${all ? 'text-emerald-600 dark:text-emerald-300' : 'text-amber-600 dark:text-amber-300'}`} />
+                  Готовность чека к Приказу МФ РК №626 · {done}/{checks.length}
+                </div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                  {checks.map((c) => (
+                    <span key={c.label} className={c.ok ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'}>
+                      {c.ok ? '✓' : '•'} {c.label}
+                    </span>
+                  ))}
+                </div>
+                {!all && <p className="mt-2 text-[11px] text-amber-700/80 dark:text-amber-200/80">Заполните обязательные реквизиты — без них чек не соответствует закону.</p>}
+              </Card>
+            )
+          })()}
+
           {/* Налогоплательщик */}
           <Card className="border-border bg-card/70 p-5 space-y-4">
             <div className="flex items-center gap-2">
@@ -428,6 +458,52 @@ export default function ReceiptSettingsPage() {
                 <Switch checked={settings.nkt_enabled} onCheckedChange={(v) => patch('nkt_enabled', v)} disabled />
               </div>
             </div>
+          </Card>
+
+          {/* Живой предпросмотр чека */}
+          <Card className="border-border bg-card/70 p-5 lg:col-span-2">
+            <div className="mb-3 flex items-center gap-2">
+              <FileText className="h-4 w-4 text-amber-600 dark:text-amber-300" />
+              <h2 className="text-sm font-semibold">Предпросмотр чека</h2>
+              <span className="text-xs text-muted-foreground">— как чек увидит покупатель</span>
+            </div>
+            <div className="flex justify-center">
+              <div className="w-[300px] rounded-md border border-slate-300 bg-white p-4 font-mono text-[12px] leading-relaxed text-black shadow-sm dark:border-white/15">
+                <div className="text-center">
+                  <div className="font-bold">{settings.tax_payer_name || 'ТОО / ИП «…»'}</div>
+                  <div>БИН/ИИН {settings.tax_payer_bin || '____________'}</div>
+                  {settings.point_address ? <div className="text-[11px]">{settings.point_address}</div> : null}
+                  <div className="my-1 border-t border-dashed border-black" />
+                  <div className="font-bold">КАССОВЫЙ ЧЕК</div>
+                  <div className="text-[11px]">
+                    ККМ рег.№ {settings.kkm_registration_number || '—'}
+                    {settings.kkm_factory_number ? ` · зав.№ ${settings.kkm_factory_number}` : ''}
+                  </div>
+                </div>
+                <div className="my-1 border-t border-dashed border-black" />
+                <div className="flex justify-between text-[11px]"><span>Чек №000123</span><span>25.07.2026 19:40</span></div>
+                <div className="my-1 border-t border-dashed border-black" />
+                <div className="flex justify-between"><span>Кофе латте ×1</span><span>1 200</span></div>
+                <div className="flex justify-between"><span>Круассан ×2</span><span>1 400</span></div>
+                <div className="my-1 border-t border-dashed border-black" />
+                <div className="flex justify-between"><span>Подытог</span><span>2 600 ₸</span></div>
+                {settings.is_vat_payer ? (
+                  <div className="flex justify-between text-[11px]"><span>в т.ч. НДС {settings.vat_rate}%</span><span>{Math.round(2600 - 2600 / (1 + Number(settings.vat_rate || 0) / 100)).toLocaleString('ru-RU')} ₸</span></div>
+                ) : (
+                  <div className="text-[11px]">Без НДС</div>
+                )}
+                <div className="flex justify-between font-bold"><span>ИТОГО</span><span>2 600 ₸</span></div>
+                <div className="my-1 border-t border-dashed border-black" />
+                {settings.ofd_name ? <div className="text-center text-[11px]">ОФД: {settings.ofd_name}</div> : null}
+                {settings.ofd_check_url ? <div className="text-center text-[10px] break-all">Проверка чека: {settings.ofd_check_url}</div> : null}
+                <div className="mx-auto my-2 grid h-16 w-16 place-items-center border border-black text-[9px] text-slate-500">QR</div>
+                {settings.receipt_footer_text ? <div className="text-center text-[11px]">{settings.receipt_footer_text}</div> : null}
+                <div className="mt-1 text-center text-[10px] text-slate-500">
+                  Язык: {settings.receipt_language === 'kk' ? 'Қазақша' : settings.receipt_language === 'both' ? 'Қазақша / Русский' : 'Русский'}
+                </div>
+              </div>
+            </div>
+            <p className="mt-3 text-center text-[11px] text-muted-foreground">Пример с фиктивными товарами. Реальные данные подставятся при продаже.</p>
           </Card>
         </div>
       )}
