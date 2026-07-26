@@ -28,6 +28,8 @@ export type ShiftReport = {
   closingCash: number
   positions: ShiftReportPosition[]
   goodsTotal: number
+  debts: Array<{ debtor: string; item: string; quantity: number; amount: number }>
+  debtsTotal: number
 }
 
 export async function computeShiftReport(supabase: any, shiftId: string): Promise<ShiftReport | null> {
@@ -148,6 +150,31 @@ export async function computeShiftReport(supabase: any, shiftId: string): Promis
   }
   positions.sort((a, b) => b.amount - a.amount)
 
+  // Долги за смену (взято в долг, отдельно от выручки). Окно смены по created_at
+  // (ловит и старые долги без shift_id, и новые). status='active'.
+  const openedAt = shift.opened_at || new Date(0).toISOString()
+  const closedAt = shift.closed_at || new Date().toISOString()
+  const debtRows = await fetchAllPages((from, to) =>
+    supabase.from('point_debt_items')
+      .select('client_name, item_name, quantity, total_amount, operator_id')
+      .eq('company_id', companyId).eq('status', 'active')
+      .gte('created_at', openedAt).lte('created_at', closedAt)
+      .order('created_at').range(from, to),
+  )
+  const debtOpIds = Array.from(new Set(debtRows.map((d: any) => d.operator_id).filter(Boolean))) as string[]
+  const debtOpName = new Map<string, string>()
+  if (debtOpIds.length) {
+    const { data: ops } = await supabase.from('operators').select('id, name, short_name').in('id', debtOpIds)
+    for (const o of ops || []) debtOpName.set(String(o.id), String((o as any).short_name || (o as any).name || ''))
+  }
+  const debts = debtRows.map((d: any) => ({
+    debtor: (d.operator_id ? debtOpName.get(String(d.operator_id)) : '') || String(d.client_name || 'Должник'),
+    item: String(d.item_name || '—'),
+    quantity: Number(d.quantity || 0),
+    amount: Number(d.total_amount || 0),
+  }))
+  const debtsTotal = debts.reduce((a, d) => a + d.amount, 0)
+
   return {
     shiftId,
     companyId,
@@ -168,5 +195,7 @@ export async function computeShiftReport(supabase: any, shiftId: string): Promis
     closingCash: Number(shift.closing_cash || 0),
     positions,
     goodsTotal,
+    debts,
+    debtsTotal,
   }
 }

@@ -14,6 +14,7 @@ type CreateDebtBody = {
     operator_id?: string | null
     client_name?: string | null
     item_name: string
+    item_id?: string | null
     barcode?: string | null
     quantity?: number | null
     unit_price?: number | null
@@ -430,6 +431,7 @@ export async function POST(request: Request) {
         p_source: 'point-client',
         p_local_ref: payload.local_ref?.trim() || null,
         p_created_by_operator_id: createdByOperatorId,
+        p_item_id: payload.item_id?.trim() || null,
       })
 
       if (insertError) {

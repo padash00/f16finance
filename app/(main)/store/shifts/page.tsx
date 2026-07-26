@@ -52,6 +52,10 @@ function printZReport(r: any) {
     if (ms > 0) { const h = Math.floor(ms / 3600000); const m = Math.round((ms % 3600000) / 60000); duration = `${h} ч ${m} мин` }
   }
   const kpi = (label: string, value: string) => `<div class="kpi"><div class="kl">${label}</div><div class="kv">${value}</div></div>`
+  const debts = r.debts || []
+  const debtRows = debts
+    .map((d: any) => `<tr><td class="nm">${escHtml(d.debtor)}</td><td>${escHtml(d.item)}</td><td class="num">${fmt(d.quantity)}</td><td class="num amt">${money(d.amount)}</td></tr>`)
+    .join('')
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Z-Отчёт · Смена №${r.shiftNumber}</title>
     <style>
     @page{size:A4;margin:14mm}
@@ -135,6 +139,15 @@ function printZReport(r: any) {
           <tbody>${rows || '<tr><td colspan="5" style="color:#999;padding:12px 8px">Продаж по позициям нет</td></tr>'}</tbody>
         </table>
         <div class="sum" style="margin-top:8px"><div class="r tot"><span>Итог проданных товаров</span><span>${money(r.goodsTotal)}</span></div></div>
+        ${debts.length ? `
+        <div class="sec" style="margin-top:20px">Долги за смену · ${debts.length}</div>
+        <table>
+          <thead><tr><th>Должник</th><th>Товар</th><th class="num">Кол-во</th><th class="num">Сумма</th></tr></thead>
+          <tbody>${debtRows}</tbody>
+        </table>
+        <div class="sum" style="margin-top:8px"><div class="r tot"><span>Итого долгов за смену</span><span style="color:#e11d48 !important">${money(r.debtsTotal)}</span></div></div>
+        <div style="margin-top:4px;color:#999;font-size:10.5px">Долги — товар взят без оплаты. В выручку смены не входят.</div>
+        ` : ''}
         <div class="foot"><span>Orda Point · управленческий Z-отчёт</span><span>Сформировано: ${new Date().toLocaleString('ru-RU')}</span></div>
       </div>
     </body></html>`)
