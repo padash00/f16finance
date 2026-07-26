@@ -133,9 +133,12 @@ export function useCapabilities(): UseCapabilities {
   // Стабилизируем функции через useCallback — иначе при каждом рендере
   // useCapabilities получаются новые ссылки, которые лавинообразно перерендеривают
   // потребители (Sidebar, TopNav, страницы) и ломают <Link> навигацию.
+  // Пока права ещё грузятся — оптимистично разрешаем (fail-open), чтобы гейченные
+  // кнопки НЕ мигали/не пропадали на первой загрузке страницы. После ответа
+  // сервера набор уточняется и лишнее скрывается.
   const can = useCallback(
     (capability: string): boolean => {
-      if (state.isSuperAdmin) return true
+      if (state.isLoading || state.isSuperAdmin) return true
       return state.capabilities.has(capability)
     },
     [state],
@@ -143,7 +146,7 @@ export function useCapabilities(): UseCapabilities {
 
   const canAny = useCallback(
     (caps: string[]): boolean => {
-      if (state.isSuperAdmin) return true
+      if (state.isLoading || state.isSuperAdmin) return true
       return caps.some((c) => state.capabilities.has(c))
     },
     [state],
@@ -151,7 +154,7 @@ export function useCapabilities(): UseCapabilities {
 
   const canAll = useCallback(
     (caps: string[]): boolean => {
-      if (state.isSuperAdmin) return true
+      if (state.isLoading || state.isSuperAdmin) return true
       return caps.every((c) => state.capabilities.has(c))
     },
     [state],
