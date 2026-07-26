@@ -12,6 +12,7 @@ export type OrganizationSummary = {
   name: string
   slug: string
   status: string
+  logoUrl?: string | null
 }
 
 export type OrganizationAccessRole =
@@ -281,6 +282,21 @@ export async function resolveUserOrganizations(params: {
   }
 
   const deduped = dedupeOrganizations(organizations)
+
+  // Логотипы организаций (white-label шапки) — одним запросом после дедупа.
+  // URL лежит в JSONB organizations.branding.logo_url.
+  const dedupedIds = deduped.map((o) => o.id).filter(Boolean)
+  if (dedupedIds.length) {
+    const { data: logoRows } = await supabase
+      .from('organizations')
+      .select('id, branding')
+      .in('id', dedupedIds)
+    const logoById = new Map<string, string | null>(
+      (logoRows || []).map((r: any) => [String(r.id), (r.branding?.logo_url as string | null) || null]),
+    )
+    for (const org of deduped) org.logoUrl = logoById.get(org.id) ?? null
+  }
+
   const activeOrganization = deduped.find((item) => item.isDefault) || deduped[0] || null
 
   return {

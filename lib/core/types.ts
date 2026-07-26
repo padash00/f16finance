@@ -38,6 +38,7 @@ export type SessionRoleInfo = {
     status: string
     accessRole: SessionOrganizationAccessRole
     isDefault?: boolean
+    logoUrl?: string | null
   }>
   activeOrganization?: {
     id: string
@@ -45,6 +46,7 @@ export type SessionRoleInfo = {
     slug: string
     status: string
     accessRole: SessionOrganizationAccessRole
+    logoUrl?: string | null
   } | null
   activeSubscription?: {
     id: string

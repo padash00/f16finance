@@ -141,6 +141,7 @@ export default function OrgDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [okMsg, setOkMsg] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<TabKey>('overview')
+  const [logoBusy, setLogoBusy] = useState(false)
 
   // Участники
   const [members, setMembers] = useState<OrgMember[]>([])
@@ -383,6 +384,45 @@ export default function OrgDetailPage() {
     }
   }
 
+  const handleLogoUpload = async (file: File) => {
+    setLogoBusy(true)
+    setError(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('organization_id', id)
+      const res = await fetch('/api/admin/organizations/logo', { method: 'POST', body: fd })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(data?.error || 'Не удалось загрузить логотип')
+      setOrg(prev => prev ? { ...prev, branding: { ...prev.branding, logoUrl: data.logo_url } } : prev)
+      setOkMsg('Логотип обновлён')
+      setTimeout(() => setOkMsg(null), 3000)
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setLogoBusy(false)
+    }
+  }
+
+  const handleLogoRemove = async () => {
+    setLogoBusy(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/admin/organizations/logo', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ organization_id: id }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(data?.error || 'Не удалось убрать логотип')
+      setOrg(prev => prev ? { ...prev, branding: { ...prev.branding, logoUrl: '' } } : prev)
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setLogoBusy(false)
+    }
+  }
+
   const handleEnter = async () => {
     setEntering(true)
     setError(null)
@@ -554,6 +594,44 @@ export default function OrgDetailPage() {
                   {ORG_STATUSES.map(s => <option key={s} value={s}>{ORG_STATUS_LABELS[s] || s}</option>)}
                 </select>
                 <p className="text-[11px] text-slate-500">«Заморожена» — клиент не сможет пользоваться системой. Не забудьте «Сохранить».</p>
+              </div>
+
+              {/* Логотип (white-label шапки) */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-400">Логотип (white-label)</label>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-white/10">
+                    {org.branding?.logoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={org.branding.logoUrl} alt="Логотип" className="h-full w-full object-contain p-1.5" />
+                    ) : (
+                      <span className="text-xs font-semibold text-slate-400">нет</span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-white/10 dark:bg-slate-900/60 dark:text-slate-200 dark:hover:bg-white/[0.06] ${logoBusy ? 'pointer-events-none opacity-50' : ''}`}>
+                      {logoBusy ? 'Загрузка…' : (org.branding?.logoUrl ? 'Заменить' : 'Загрузить')}
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                        className="hidden"
+                        disabled={logoBusy}
+                        onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleLogoUpload(f); e.target.value = '' }}
+                      />
+                    </label>
+                    {org.branding?.logoUrl && (
+                      <button
+                        type="button"
+                        onClick={handleLogoRemove}
+                        disabled={logoBusy}
+                        className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-sm font-medium text-rose-600 transition hover:bg-rose-100 disabled:opacity-50 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300"
+                      >
+                        Убрать
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-500">PNG, JPG, WEBP или SVG, до 2 МБ. Показывается вместо значка в шапке клиента.</p>
               </div>
             </div>
           </div>

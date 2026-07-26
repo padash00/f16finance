@@ -613,7 +613,7 @@ export function Sidebar({ desktopEnabled = true }: { desktopEnabled?: boolean } 
     <div className="flex h-full flex-col bg-gradient-to-b from-white via-slate-50 to-white text-slate-900 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 dark:text-white">
       <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-white/5">
         <div className="flex items-center gap-3" title={`${SITE_NAME} · v${APP_VERSION}`}>
-          <AppLogoMark />
+          <AppLogoMark logoUrl={activeOrganization?.logoUrl || organizations[0]?.logoUrl} />
           <div>
             <h1 className="bg-gradient-to-r from-slate-900 to-slate-600 bg-clip-text text-lg font-bold text-transparent dark:from-white dark:to-slate-300">
               {activeOrganization?.name || organizations[0]?.name || SITE_NAME}

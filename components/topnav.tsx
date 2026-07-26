@@ -547,7 +547,7 @@ export function TopNav() {
             className="flex items-center gap-3"
             title={`${SITE_NAME} · v${APP_VERSION}`}
           >
-            <AppLogoMark />
+            <AppLogoMark logoUrl={session.activeOrganization?.logoUrl || session.organizations[0]?.logoUrl} />
             <div className="hidden xl:block">
               <h1 className="bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-300 bg-clip-text text-base font-bold leading-tight text-transparent">
                 {session.activeOrganization?.name || session.organizations[0]?.name || SITE_NAME}
