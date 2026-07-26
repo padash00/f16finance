@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Loader2, Package, Plus, Puzzle, Save, Trash2, Building2 } from 'lucide-react'
 
+import { CapabilityExcludePicker } from '@/components/platform/capability-exclude-picker'
+
 type PageFeature = { path: string; label: string; feature: string; group: string; base: boolean }
-type Pkg = { code: string; name: string; vertical: string; description: string | null; feature_codes: string[]; price_kzt: number; status: string }
+type Pkg = { code: string; name: string; vertical: string; description: string | null; feature_codes: string[]; capability_codes?: string[]; price_kzt: number; status: string }
 type Addon = { code: string; name: string; description: string | null; feature_codes: string[]; price_kzt: number; billing_unit: string; status: string }
 type Org = { id: string; name: string; slug?: string | null }
 
@@ -142,19 +144,23 @@ function PagePicker({ grouped, selected, toggle, setMany }: { grouped: [string, 
 
 function PackageEditor({ packages, grouped, saving, setSaving, reload, showToast }: any) {
   const [editing, setEditing] = useState<Pkg | null>(null)
-  const blank: Pkg = { code: '', name: '', vertical: 'custom', description: '', feature_codes: [], price_kzt: 0, status: 'active' }
+  const blank: Pkg = { code: '', name: '', vertical: 'custom', description: '', feature_codes: [], capability_codes: [], price_kzt: 0, status: 'active' }
   const cur = editing || blank
   const [sel, setSel] = useState<Set<string>>(new Set(cur.feature_codes))
-  const start = (p: Pkg | null) => { const x = p || blank; setEditing(p || blank); setSel(new Set(x.feature_codes)) }
+  // Исключённые (выключенные) действия пакета.
+  const [capExcl, setCapExcl] = useState<Set<string>>(new Set(cur.capability_codes || []))
+  const start = (p: Pkg | null) => { const x = p || blank; setEditing(p || blank); setSel(new Set(x.feature_codes)); setCapExcl(new Set(x.capability_codes || [])) }
   const toggle = (f: string) => setSel((s) => { const n = new Set(s); n.has(f) ? n.delete(f) : n.add(f); return n })
   const setMany = (fs: string[], on: boolean) => setSel((s) => { const n = new Set(s); fs.forEach((f) => (on ? n.add(f) : n.delete(f))); return n })
+  const toggleCap = (c: string) => setCapExcl((s) => { const n = new Set(s); n.has(c) ? n.delete(c) : n.add(c); return n })
+  const setManyCap = (cs: string[], exclude: boolean) => setCapExcl((s) => { const n = new Set(s); cs.forEach((c) => (exclude ? n.add(c) : n.delete(c))); return n })
   const [form, setForm] = useState(cur)
   useEffect(() => { setForm(cur) /* eslint-disable-next-line */ }, [editing])
 
   const save = async () => {
     if (!form.code.trim()) { showToast('Укажи код пакета'); return }
     setSaving(true)
-    try { await api('POST', { action: 'save_package', ...form, feature_codes: Array.from(sel) }); showToast('Пакет сохранён'); setEditing(null); await reload() }
+    try { await api('POST', { action: 'save_package', ...form, feature_codes: Array.from(sel), capability_codes: Array.from(capExcl) }); showToast('Пакет сохранён'); setEditing(null); await reload() }
     catch (e: any) { showToast(e?.message || 'Ошибка') } finally { setSaving(false) }
   }
   const del = async (code: string) => { if (!confirm(`Удалить пакет ${code}?`)) return; setSaving(true); try { await api('POST', { action: 'delete_package', code }); showToast('Удалён'); await reload() } catch (e: any) { showToast(e?.message) } finally { setSaving(false) } }
@@ -194,6 +200,11 @@ function PackageEditor({ packages, grouped, saving, setSaving, reload, showToast
         <div>
           <div className="mb-2 text-sm font-medium text-foreground">Страницы в пакете <span className="text-muted-foreground">({sel.size} выбрано)</span></div>
           <PagePicker grouped={grouped} selected={sel} toggle={toggle} setMany={setMany} />
+        </div>
+        <div>
+          <div className="mb-1 text-sm font-medium text-foreground">Действия (кнопки) в пакете {capExcl.size > 0 ? <span className="text-rose-600 dark:text-rose-300">({capExcl.size} выключено)</span> : <span className="text-muted-foreground">(всё включено)</span>}</div>
+          <p className="mb-2 text-xs text-muted-foreground">По умолчанию все действия включены. Выключи те, которых у пакета не будет. Применяется только когда у орг включена «Жёсткая блокировка страниц».</p>
+          <CapabilityExcludePicker excluded={capExcl} onToggle={toggleCap} onSetMany={setManyCap} />
         </div>
         <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 dark:border-emerald-500/25 dark:bg-emerald-500/[0.06]">
           <div className="mb-2 text-sm font-semibold text-foreground">Предпросмотр — что увидит организация</div>

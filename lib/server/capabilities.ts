@@ -55,6 +55,8 @@ export async function loadOrgDisabledCapabilities(
   const disabled = new Set<string>()
   try {
     const supabase = createAdminSupabaseClient()
+
+    // 1) Ручной пер-орг рубильник (Фаза 1) — применяется ВСЕГДА.
     const { data } = await supabase
       .from('organization_capability_overrides')
       .select('capability, enabled')
@@ -63,6 +65,33 @@ export async function loadOrgDisabledCapabilities(
       .range(0, 999)
     for (const row of (data || []) as Array<{ capability: string }>) {
       if (row.capability) disabled.add(row.capability)
+    }
+
+    // 2) Действия, выключенные ПАКЕТОМ орг — только если включён features_enforced
+    //    (как и страницы). Без пакета/без энфорсмента — не режем.
+    try {
+      const { data: org } = await supabase
+        .from('organizations')
+        .select('features_enforced')
+        .eq('id', organizationId)
+        .maybeSingle()
+      if ((org as any)?.features_enforced) {
+        const { data: pkgRow } = await supabase
+          .from('organization_packages')
+          .select('package_code')
+          .eq('organization_id', organizationId)
+          .maybeSingle()
+        if ((pkgRow as any)?.package_code) {
+          const { data: pkg } = await supabase
+            .from('packages')
+            .select('capability_codes')
+            .eq('code', (pkgRow as any).package_code)
+            .maybeSingle()
+          for (const c of (((pkg as any)?.capability_codes as string[]) || [])) disabled.add(String(c))
+        }
+      }
+    } catch {
+      // колонок/таблиц пакетов может не быть — пропускаем пакетный слой
     }
   } catch {
     // Таблицы может ещё не быть (миграция не применена) → рубильник no-op.

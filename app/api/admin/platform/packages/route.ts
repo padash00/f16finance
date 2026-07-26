@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 
+import { getAllCapabilityIds } from '@/lib/core/capabilities'
+import { invalidateOrgCapabilitiesCache } from '@/lib/server/capabilities'
 import { getAllPageFeatures } from '@/lib/nav/sections'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -65,6 +67,10 @@ export async function POST(req: Request) {
 
     const clean = (s: unknown) => String(s ?? '').trim()
     const featureCodes = (v: unknown) => (Array.isArray(v) ? v.map((x) => clean(x)).filter(Boolean) : [])
+    const validCapIds = new Set(getAllCapabilityIds())
+    // Выключенные действия пакета — только валидные коды из каталога.
+    const capabilityCodes = (v: unknown) =>
+      Array.isArray(v) ? v.map((x) => clean(x)).filter((c) => c && validCapIds.has(c)) : []
 
     if (action === 'save_package') {
       const code = clean(body.code)
@@ -75,12 +81,14 @@ export async function POST(req: Request) {
         vertical: clean(body.vertical) || 'custom',
         description: clean(body.description) || null,
         feature_codes: featureCodes(body.feature_codes),
+        capability_codes: capabilityCodes(body.capability_codes),
         price_kzt: Math.max(0, Math.round(Number(body.price_kzt) || 0)),
         status: body.status === 'archived' ? 'archived' : 'active',
         updated_at: new Date().toISOString(),
       }
       const { error } = await supabase.from('packages').upsert(row, { onConflict: 'code' })
       if (error) return json({ error: error.message }, 500)
+      invalidateOrgCapabilitiesCache() // состав действий пакета мог измениться
       return json({ ok: true })
     }
 
@@ -101,6 +109,7 @@ export async function POST(req: Request) {
         name: clean(body.name) || code,
         description: clean(body.description) || null,
         feature_codes: featureCodes(body.feature_codes),
+        capability_codes: capabilityCodes(body.capability_codes),
         price_kzt: Math.max(0, Math.round(Number(body.price_kzt) || 0)),
         billing_unit: unit,
         status: body.status === 'archived' ? 'archived' : 'active',
@@ -143,6 +152,7 @@ export async function POST(req: Request) {
         const { error } = await supabase.from('organization_addons').insert(rows)
         if (error) return json({ error: error.message }, 500)
       }
+      invalidateOrgCapabilitiesCache(organization_id) // сменился пакет орг
       return json({ ok: true })
     }
 
