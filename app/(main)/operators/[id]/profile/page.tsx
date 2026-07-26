@@ -2572,7 +2572,37 @@ export default function OperatorProfilePage() {
               </div>
               {shifts.length === 0 ? (
                 <div className="py-12 text-center text-sm text-muted-foreground">Смен пока нет.</div>
-              ) : (
+              ) : (() => {
+                const totalCash = shifts.reduce((s: number, x: any) => s + Number(x.closing_cash || 0), 0)
+                const totalKaspi = shifts.reduce((s: number, x: any) => s + Number(x.closing_kaspi || 0), 0)
+                const totalMs = shifts.reduce((s: number, x: any) => {
+                  if (!x.opened_at || !x.closed_at) return s
+                  const ms = new Date(x.closed_at).getTime() - new Date(x.opened_at).getTime()
+                  return s + (ms > 0 ? ms : 0)
+                }, 0)
+                const totalHours = Math.floor(totalMs / 3600000)
+                const totalMins = Math.round((totalMs % 3600000) / 60000)
+                const fmt = (v: number) => `${Math.round(v).toLocaleString('ru-RU')} ₸`
+                return (
+                <>
+                <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-white/5 dark:bg-white/[0.02]">
+                    <div className="text-[11px] uppercase tracking-wide text-gray-500">Всего смен</div>
+                    <div className="mt-1 text-xl font-semibold tabular-nums text-foreground">{shifts.length}</div>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-white/5 dark:bg-white/[0.02]">
+                    <div className="text-[11px] uppercase tracking-wide text-gray-500">Касса (нал)</div>
+                    <div className="mt-1 text-xl font-semibold tabular-nums text-foreground">{fmt(totalCash)}</div>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-white/5 dark:bg-white/[0.02]">
+                    <div className="text-[11px] uppercase tracking-wide text-gray-500">Безнал</div>
+                    <div className="mt-1 text-xl font-semibold tabular-nums text-sky-700 dark:text-sky-300">{fmt(totalKaspi)}</div>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-white/5 dark:bg-white/[0.02]">
+                    <div className="text-[11px] uppercase tracking-wide text-gray-500">Отработано</div>
+                    <div className="mt-1 text-xl font-semibold tabular-nums text-foreground">{totalHours}ч {totalMins}м</div>
+                  </div>
+                </div>
                 <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-white/5">
                   <table className="w-full text-sm">
                     <thead>
@@ -2612,9 +2642,20 @@ export default function OperatorProfilePage() {
                         )
                       })}
                     </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 border-slate-200 bg-slate-50 font-semibold dark:border-white/10 dark:bg-white/[0.03]">
+                        <td className="px-3 py-2.5 text-foreground" colSpan={3}>Итого · {shifts.length} смен</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums text-body">{totalHours}ч {totalMins}м</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums text-foreground">{fmt(totalCash)}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums text-sky-700 dark:text-sky-300">{fmt(totalKaspi)}</td>
+                        <td className="px-3 py-2.5"></td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
-              )}
+                </>
+                )
+              })()}
             </Card>
           )}
 
