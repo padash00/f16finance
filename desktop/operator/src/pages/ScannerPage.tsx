@@ -457,8 +457,8 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
 
       {/* Content — на узких экранах стек со скроллом всей страницы, на широких две колонки */}
       <div className="flex flex-1 min-h-0 flex-col gap-5 overflow-y-auto p-5 lg:flex-row lg:overflow-hidden">
-        {/* Left: scanner form */}
-        <div className="w-full shrink-0 flex flex-col gap-4 lg:w-80">
+        {/* Left: scanner form — на lg своя прокрутка (короткие экраны: кнопка «Добавить долг» ниже сгиба) */}
+        <div className="w-full shrink-0 flex flex-col gap-4 lg:w-80 lg:min-h-0 lg:overflow-y-auto lg:pr-1">
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">

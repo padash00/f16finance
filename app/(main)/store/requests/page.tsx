@@ -733,7 +733,7 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
                   {request.comment ? <p className="mt-2 text-sm text-muted-foreground">{request.comment}</p> : null}
                 </div>
 
-                <div className="space-y-3 overflow-x-auto px-4 py-3">
+                <div className="space-y-3 max-h-[55vh] overflow-auto px-4 py-3">
                   <table className="w-full min-w-[560px] text-sm">
                     <thead>
                       <tr className="border-b border-slate-200 dark:border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
