@@ -82,18 +82,91 @@ export async function GET(req: Request) {
     if (operatorError) throw operatorError
     if (!operator) return json({ error: 'Оператор не найден' }, 404)
 
-    // История выхода на смены: point_shifts.operator_id = staff.id (оператор
-    // открывает смену под своим staff_id). Резолвим staff_id(ы) оператора.
+    // История выхода на смены. point_shifts.operator_id непостоянен: у кассира
+    // это может быть operators.id, а может — staff.id (смена открыта под staff_id
+    // через линк). Плюс бывает, что operator_id в смене пуст, а кассир записан
+    // только в audit_log открытия или в продажах смены. Поэтому собираем shift_id
+    // из трёх источников и объединяем — ровно как список /store/shifts (reports).
     const staffIds = Array.from(new Set((staffLinks || []).map((l: any) => String(l.staff_id)).filter(Boolean)))
+    const opMatchIds = Array.from(new Set([operatorId, ...staffIds]))
+    const shiftIdSet = new Set<string>()
+
+    // 1) прямое совпадение operator_id (operators.id или staff.id)
+    const { data: directShifts } = await supabase
+      .from('point_shifts')
+      .select('id')
+      .in('operator_id', opMatchIds)
+      .limit(500)
+    for (const s of directShifts || []) {
+      const id = String((s as any).id || '')
+      if (id) shiftIdSet.add(id)
+    }
+
+    // 2) аудит-лог открытия смены (payload.operator_id = этот оператор)
+    const { data: openLogs } = await supabase
+      .from('audit_log')
+      .select('entity_id')
+      .eq('action', 'point_shift.open')
+      .contains('payload', { operator_id: operatorId })
+      .limit(500)
+    for (const l of openLogs || []) {
+      const id = String((l as any).entity_id || '')
+      if (id) shiftIdSet.add(id)
+    }
+
+    // 3) продажи этого оператора → их смены (самый надёжный сигнал по кассиру)
+    const { data: saleShifts } = await supabase
+      .from('point_sales')
+      .select('shift_id')
+      .eq('operator_id', operatorId)
+      .not('shift_id', 'is', null)
+      .limit(2000)
+    for (const r of saleShifts || []) {
+      const id = String((r as any).shift_id || '')
+      if (id) shiftIdSet.add(id)
+    }
+
     let shifts: any[] = []
-    if (staffIds.length) {
-      const { data: sh } = await supabase
+    const shiftIds = Array.from(shiftIdSet)
+    if (shiftIds.length) {
+      let shiftsQuery = supabase
         .from('point_shifts')
         .select('id, company_id, status, shift_type, opened_at, closed_at, closing_cash, closing_kaspi, company:company_id(name, code)')
-        .in('operator_id', staffIds)
+        .in('id', shiftIds)
         .order('opened_at', { ascending: false })
-        .limit(200)
+        .limit(300)
+      // Изоляция: смены только из компаний, доступных активной организации.
+      if (scope.allowedCompanyIds) shiftsQuery = shiftsQuery.in('company_id', scope.allowedCompanyIds)
+      const { data: sh } = await shiftsQuery
       shifts = sh || []
+    }
+
+    // Ленивый бэкфилл: если истории работы ещё нет, но известна дата устройства
+    // (operator_profiles.hire_date) — создаём запись найма при первом открытии.
+    // Самолечение для операторов, заведённых до авто-записи при найме.
+    let workHistoryRows = (workHistory || []) as any[]
+    const hireDate = (profile as any)?.hire_date
+    if (workHistoryRows.length === 0 && hireDate) {
+      const { data: primaryAssign } = await supabase
+        .from('operator_company_assignments')
+        .select('company_id')
+        .eq('operator_id', operatorId)
+        .eq('is_active', true)
+        .order('is_primary', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      const { data: inserted } = await supabase
+        .from('operator_work_history')
+        .insert({
+          operator_id: operatorId,
+          company_id: (primaryAssign as any)?.company_id || null,
+          position: (operator as any).role || 'Оператор',
+          start_date: hireDate,
+          is_current: !!(operator as any).is_active,
+        })
+        .select('*, companies:company_id(name, code)')
+        .maybeSingle()
+      if (inserted) workHistoryRows = [inserted]
     }
 
     return json({
@@ -101,7 +174,7 @@ export async function GET(req: Request) {
       data: {
         operator,
         profile: profile || null,
-        workHistory: (workHistory || []).map((w: any) => ({
+        workHistory: workHistoryRows.map((w: any) => ({
           ...w,
           company_name: Array.isArray(w.companies) ? w.companies[0]?.name : w.companies?.name,
           company_code: Array.isArray(w.companies) ? w.companies[0]?.code : w.companies?.code,

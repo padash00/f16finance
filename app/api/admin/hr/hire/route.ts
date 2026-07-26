@@ -268,6 +268,20 @@ export async function POST(request: Request) {
       }
     }
 
+    // 4b. Авто-запись в историю работы (устроился → текущая запись).
+    // Fail-soft: если что-то пойдёт не так — оператор уже создан, не падаем.
+    const hireDate = body.hire_date || new Date().toISOString().slice(0, 10)
+    const { error: workErr } = await supabase.from('operator_work_history').insert({
+      operator_id: operatorId,
+      company_id: assignmentCompanyIds[0] || null,
+      position: role,
+      start_date: hireDate,
+      is_current: true,
+    })
+    if (workErr) {
+      console.warn('hr/hire: failed to insert operator_work_history', workErr)
+    }
+
     // 5. AuditLog
     await writeAuditLog(supabase, {
       actorUserId: access.user?.id || null,
