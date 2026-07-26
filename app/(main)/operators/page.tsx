@@ -767,8 +767,8 @@ export default function OperatorsPage() {
                       </Link>
                       <span className={`inline-flex flex-shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-1 text-xs ${
                         op.is_active
-                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                          : 'bg-slate-500/20 text-slate-400 border border-slate-500/30'
+                          ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
+                          : 'bg-slate-500/15 text-slate-600 dark:text-slate-300 border border-slate-500/30'
                       }`}>
                         {op.is_active ? <CheckCircle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
                         {op.is_active ? 'Активен' : 'Неактивен'}
@@ -1002,8 +1002,8 @@ export default function OperatorsPage() {
                         <td className="py-3 px-4 text-center">
                           <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs whitespace-nowrap ${
                             op.is_active
-                              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                              : 'bg-slate-500/20 text-slate-400 border border-slate-500/30'
+                              ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
+                              : 'bg-slate-500/15 text-slate-600 dark:text-slate-300 border border-slate-500/30'
                           }`}>
                             {op.is_active ? (
                               <>

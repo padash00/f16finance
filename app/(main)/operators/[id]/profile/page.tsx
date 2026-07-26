@@ -1811,13 +1811,13 @@ export default function OperatorProfilePage() {
                 <div className="flex flex-wrap items-center gap-3">
                   <span className={`text-xs px-2 py-0.5 rounded-full ${
                     operator.is_active
-                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                      ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
                       : 'bg-slate-100 dark:bg-gray-500/20 text-slate-500 dark:text-gray-400 border border-slate-200 dark:border-gray-500/30'
                   }`}>
                     {operator.is_active ? 'Активен' : 'Неактивен'}
                   </span>
                   {operatorAccount && (
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
                       <Key className="w-3 h-3" />
                       Аккаунт создан
                     </span>
