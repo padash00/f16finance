@@ -78,6 +78,7 @@ function formatDateTime(value: string | null | undefined) {
 
 export default function StoreAnalyticsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [tab, setTab] = useState<'showcase' | 'warehouse'>('showcase')
+  const [days, setDays] = useState(30) // период движения: 1 / 7 / 30
   const [data, setData] = useState<AnalyticsResponse['data'] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -86,7 +87,7 @@ export default function StoreAnalyticsPage({ embedded = false }: { embedded?: bo
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch('/api/admin/store/analytics', { cache: 'no-store', signal })
+      const response = await fetch(`/api/admin/store/analytics?days=${days}`, { cache: 'no-store', signal })
       const json = (await response.json().catch(() => null)) as AnalyticsResponse | null
       if (signal?.aborted) return
       if (!response.ok || !json?.ok || !json.data) throw new Error(json?.error || 'Не удалось загрузить аналитику')
@@ -124,7 +125,8 @@ export default function StoreAnalyticsPage({ embedded = false }: { embedded?: bo
     const ac = new AbortController()
     void load(ac.signal)
     return () => ac.abort()
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [days])
 
   const pointLocations = useMemo(
     () => (data?.locations || []).filter((location) => location.location_type === 'point_display'),
@@ -272,21 +274,36 @@ export default function StoreAnalyticsPage({ embedded = false }: { embedded?: bo
           </DropdownMenu>
         )
         const hdrToolbar = (
-          <div className="grid grid-cols-2 gap-2 rounded-xl border border-border bg-surface-muted p-1">
-            <button
-              type="button"
-              onClick={() => setTab('showcase')}
-              className={`rounded-lg px-3 py-2 text-sm ${tab === 'showcase' ? 'bg-slate-200 dark:bg-white/10 text-foreground' : 'text-muted-foreground'}`}
-            >
-              Витрина (продажи)
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab('warehouse')}
-              className={`rounded-lg px-3 py-2 text-sm ${tab === 'warehouse' ? 'bg-slate-200 dark:bg-white/10 text-foreground' : 'text-muted-foreground'}`}
-            >
-              Склад (запасы)
-            </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="grid grid-cols-2 gap-2 rounded-xl border border-border bg-surface-muted p-1">
+              <button
+                type="button"
+                onClick={() => setTab('showcase')}
+                className={`rounded-lg px-3 py-2 text-sm ${tab === 'showcase' ? 'bg-slate-200 dark:bg-white/10 text-foreground' : 'text-muted-foreground'}`}
+              >
+                Витрина (продажи)
+              </button>
+              <button
+                type="button"
+                onClick={() => setTab('warehouse')}
+                className={`rounded-lg px-3 py-2 text-sm ${tab === 'warehouse' ? 'bg-slate-200 dark:bg-white/10 text-foreground' : 'text-muted-foreground'}`}
+              >
+                Склад (запасы)
+              </button>
+            </div>
+            {/* Период движения */}
+            <div className="flex gap-1 rounded-xl border border-border bg-surface-muted p-1">
+              {[{ d: 1, l: 'Сегодня' }, { d: 7, l: 'Неделя' }, { d: 30, l: 'Месяц' }].map((p) => (
+                <button
+                  key={p.d}
+                  type="button"
+                  onClick={() => setDays(p.d)}
+                  className={`rounded-lg px-3 py-2 text-sm ${days === p.d ? 'bg-slate-200 dark:bg-white/10 text-foreground' : 'text-muted-foreground'}`}
+                >
+                  {p.l}
+                </button>
+              ))}
+            </div>
           </div>
         )
         return embedded ? (
@@ -318,7 +335,7 @@ export default function StoreAnalyticsPage({ embedded = false }: { embedded?: bo
             <Boxes className="h-4 w-4 text-amber-700 dark:text-amber-300" />
             <h2 className="text-lg font-semibold text-foreground">Сводка по витринам</h2>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">Главные цифры по каждой точке без лишней детализации.</p>
+          <p className="mt-1 text-sm text-muted-foreground">«Сейчас на витрине» — текущий остаток. Остальное — движение за выбранный период (сверху справа).</p>
 
           <div className="mt-4 space-y-3">
             {loading && pointAnalytics.length === 0 ? (
@@ -346,50 +363,47 @@ export default function StoreAnalyticsPage({ embedded = false }: { embedded?: bo
             ) : (
               pointAnalytics.map((point) => (
                 <div key={point.location.id} className="rounded-2xl border border-border bg-surface-muted p-4">
-                  <div className="flex items-start justify-between gap-3">
+                  {/* Состояние сейчас */}
+                  <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <p className="font-medium text-foreground">{point.location.company?.name || point.location.name}</p>
+                      <p className="font-semibold text-foreground">{point.location.company?.name || point.location.name}</p>
                       <p className="text-xs text-muted-foreground">Последнее движение: {formatDateTime(point.lastMovementAt)}</p>
                     </div>
-                    <div className="rounded-full border border-border bg-slate-100 dark:bg-black/20 px-3 py-1 text-xs text-muted-foreground">
-                      {point.stockItems} SKU
+                    <div className="text-right">
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Сейчас на витрине</p>
+                      <p className="font-semibold text-foreground">{formatQty(point.stockQty)} ед · {point.stockItems} SKU</p>
                     </div>
                   </div>
-                  <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4">
-                    <div className="rounded-xl border border-border bg-slate-100 dark:bg-black/20 px-3 py-2">
-                      <p className="text-xs text-muted-foreground">На витрине</p>
-                      <p className="mt-1 font-semibold text-foreground">{formatQty(point.stockQty)}</p>
+
+                  {/* Продано за период — главный акцент */}
+                  <div className="mt-3 flex items-end justify-between gap-3 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.07] px-4 py-3">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Продано за период</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{formatQty(point.saleQty)} ед</p>
                     </div>
-                    <div className="rounded-xl border border-border bg-slate-100 dark:bg-black/20 px-3 py-2">
-                      <p className="text-xs text-muted-foreground">Пришло</p>
-                      <p className="mt-1 font-semibold text-foreground">{formatQty(point.incomingQty)}</p>
-                      <p className="text-xs text-muted-foreground">{formatMoney(point.incomingAmount)}</p>
-                    </div>
-                    <div className="rounded-xl border border-border bg-slate-100 dark:bg-black/20 px-3 py-2">
-                      <p className="text-xs text-muted-foreground">Продано</p>
-                      <p className="mt-1 font-semibold text-foreground">{formatQty(point.saleQty)}</p>
-                      <p className="text-xs text-muted-foreground">{formatMoney(point.saleAmount)}</p>
-                    </div>
-                    <div className="rounded-xl border border-border bg-slate-100 dark:bg-black/20 px-3 py-2">
-                      <p className="text-xs text-muted-foreground">В долг</p>
-                      <p className="mt-1 font-semibold text-foreground">{formatQty(point.debtQty)}</p>
-                      <p className="text-xs text-muted-foreground">{formatMoney(point.debtAmount)}</p>
-                    </div>
+                    <p className="text-2xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300">{formatMoney(point.saleAmount)}</p>
                   </div>
-                  <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-3">
-                    <div className="rounded-xl border border-border bg-slate-100 dark:bg-black/20 px-3 py-2">
-                      <p className="text-xs text-muted-foreground">Возвраты</p>
-                      <p className="mt-1 font-semibold text-foreground">{formatQty(point.returnQty)}</p>
-                    </div>
-                    <div className="rounded-xl border border-border bg-slate-100 dark:bg-black/20 px-3 py-2">
-                      <p className="text-xs text-muted-foreground">Списания</p>
-                      <p className="mt-1 font-semibold text-foreground">{formatQty(point.writeoffQty)}</p>
-                    </div>
-                    <div className="rounded-xl border border-border bg-slate-100 dark:bg-black/20 px-3 py-2">
-                      <p className="text-xs text-muted-foreground">Корректировка</p>
-                      <p className="mt-1 font-semibold text-foreground">{formatQty(point.adjustmentQty)}</p>
-                    </div>
+
+                  {/* Прочее движение за период */}
+                  <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {[
+                      { label: 'Пришло', qty: point.incomingQty, money: point.incomingAmount },
+                      { label: 'В долг', qty: point.debtQty, money: point.debtAmount },
+                      { label: 'Возвраты', qty: point.returnQty, money: null as number | null },
+                      { label: 'Списания', qty: point.writeoffQty, money: null as number | null },
+                    ].map((s) => (
+                      <div key={s.label} className="rounded-xl border border-border bg-slate-100 dark:bg-black/20 px-3 py-2">
+                        <p className="text-[11px] text-muted-foreground">{s.label}</p>
+                        <p className="mt-0.5 font-semibold text-foreground">{formatQty(s.qty)}</p>
+                        {s.money != null ? <p className="text-[11px] text-muted-foreground">{formatMoney(s.money)}</p> : null}
+                      </div>
+                    ))}
                   </div>
+                  {point.adjustmentQty !== 0 && (
+                    <p className="mt-2 text-[11px] text-muted-foreground" title="Ручные правки остатка: ревизия/корректировка (не продажа и не приход)">
+                      Корректировка остатка за период: {formatQty(point.adjustmentQty)}
+                    </p>
+                  )}
                 </div>
               ))
             )}

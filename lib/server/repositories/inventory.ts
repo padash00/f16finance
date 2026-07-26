@@ -327,7 +327,14 @@ export async function fetchStoreOverview(supabase: AnySupabase, scope?: Inventor
   }
 }
 
-export async function fetchStoreAnalytics(supabase: AnySupabase, scope?: InventoryScope): Promise<StoreAnalyticsData> {
+export async function fetchStoreAnalytics(
+  supabase: AnySupabase,
+  scope?: InventoryScope,
+  options?: { days?: number },
+): Promise<StoreAnalyticsData> {
+  // Окно движений по дате (Сегодня/Неделя/Месяц). days<=0 или undefined → всё время.
+  const days = Number(options?.days || 0)
+  const sinceIso = days > 0 ? new Date(Date.now() - days * 86400000).toISOString() : null
   const [
     { data: locations, error: locationsError },
     { data: balances, error: balancesError },
@@ -352,11 +359,14 @@ export async function fetchStoreAnalytics(supabase: AnySupabase, scope?: Invento
         .order('item_id', { ascending: true })
         .range(from, to),
     ),
-    supabase
-      .from('inventory_movements')
-      .select('id, movement_type, quantity, total_amount, created_at, item:item_id(id, name, barcode, unit), from_location:from_location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code)), to_location:to_location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code))')
-      .order('created_at', { ascending: false })
-      .limit(320),
+    fetchAllPagesResult((from, to) => {
+      let q = supabase
+        .from('inventory_movements')
+        .select('id, movement_type, quantity, total_amount, created_at, item:item_id(id, name, barcode, unit), from_location:from_location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code)), to_location:to_location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code))')
+        .order('created_at', { ascending: false })
+      if (sinceIso) q = q.gte('created_at', sinceIso)
+      return q.range(from, to)
+    }),
   ])
 
   if (locationsError) throw locationsError

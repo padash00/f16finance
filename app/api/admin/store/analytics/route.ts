@@ -35,11 +35,16 @@ export async function GET(request: Request) {
       activeOrganizationId: access.activeOrganization?.id || null,
       isSuperAdmin: access.isSuperAdmin,
     })
-    const data = await fetchStoreAnalytics(supabase as any, {
-      organizationId: access.activeOrganization?.id || null,
-      allowedCompanyIds: companyScope.allowedCompanyIds,
-      isSuperAdmin: access.isSuperAdmin,
-    })
+    const days = Math.max(0, Math.min(365, Number(new URL(request.url).searchParams.get('days')) || 0))
+    const data = await fetchStoreAnalytics(
+      supabase as any,
+      {
+        organizationId: access.activeOrganization?.id || null,
+        allowedCompanyIds: companyScope.allowedCompanyIds,
+        isSuperAdmin: access.isSuperAdmin,
+      },
+      { days },
+    )
 
     return json({ ok: true, data })
   } catch (error: any) {
