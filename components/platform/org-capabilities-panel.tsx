@@ -42,8 +42,8 @@ export function OrgCapabilitiesPanel({ organizationId }: Props) {
   }, [organizationId])
 
   const q = query.trim().toLowerCase()
+  // `.view` — доступ к странице (вкладка «Доступы (страницы)»), не действие.
   const groups = useMemo(() => {
-    if (!q) return CAPABILITY_GROUPS
     return CAPABILITY_GROUPS
       .map((g) => ({
         ...g,
@@ -52,9 +52,11 @@ export function OrgCapabilitiesPanel({ organizationId }: Props) {
             ...p,
             capabilities: p.capabilities.filter(
               (c) =>
-                c.label.toLowerCase().includes(q) ||
-                c.id.toLowerCase().includes(q) ||
-                p.label.toLowerCase().includes(q),
+                !c.id.endsWith('.view') &&
+                (!q ||
+                  c.label.toLowerCase().includes(q) ||
+                  c.id.toLowerCase().includes(q) ||
+                  p.label.toLowerCase().includes(q)),
             ),
           }))
           .filter((p) => p.capabilities.length > 0),

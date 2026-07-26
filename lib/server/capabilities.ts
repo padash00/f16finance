@@ -97,6 +97,13 @@ export async function loadOrgDisabledCapabilities(
     // Таблицы может ещё не быть (миграция не применена) → рубильник no-op.
   }
 
+  // `.view` — это ДОСТУП К СТРАНИЦЕ (управляется слоем страниц/фич), а не действие.
+  // Никогда не выключаем его через пульт/пакет действий, иначе выключение
+  // «действия» закрыло бы всю страницу (баг с «Нет доступа»).
+  for (const c of Array.from(disabled)) {
+    if (c.endsWith('.view')) disabled.delete(c)
+  }
+
   orgDisabledCache.set(organizationId, { disabled, loadedAt: Date.now() })
   return disabled
 }

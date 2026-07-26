@@ -21,13 +21,21 @@ export function CapabilityExcludePicker({ excluded, onToggle, onSetMany }: Props
   const [open, setOpen] = useState<Record<string, boolean>>({})
   const q = query.trim().toLowerCase()
 
+  // `.view` — доступ к странице (управляется вкладкой «Доступы (страницы)»),
+  // а не действие. В пикере действий его не показываем.
   const groups = useMemo(() => {
-    if (!q) return CAPABILITY_GROUPS
     return CAPABILITY_GROUPS
       .map((g) => ({
         ...g,
         pages: g.pages
-          .map((p) => ({ ...p, capabilities: p.capabilities.filter((c) => c.label.toLowerCase().includes(q) || c.id.toLowerCase().includes(q) || p.label.toLowerCase().includes(q)) }))
+          .map((p) => ({
+            ...p,
+            capabilities: p.capabilities.filter(
+              (c) =>
+                !c.id.endsWith('.view') &&
+                (!q || c.label.toLowerCase().includes(q) || c.id.toLowerCase().includes(q) || p.label.toLowerCase().includes(q)),
+            ),
+          }))
           .filter((p) => p.capabilities.length > 0),
       }))
       .filter((g) => g.pages.length > 0)
