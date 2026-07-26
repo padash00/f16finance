@@ -1597,9 +1597,14 @@ export default function OperatorProfilePage() {
       
       let totalMonths = years * 12 + months
       if (days < 0) totalMonths -= 1
-      
-      if (totalMonths < 0) return '0 месяцев'
-      
+
+      // Меньше месяца — показываем дни, а не «0 месяцев» (выглядело как ошибка).
+      if (totalMonths <= 0) {
+        const totalDays = Math.max(0, Math.floor((end.getTime() - start.getTime()) / 86400000))
+        if (totalDays <= 0) return 'сегодня'
+        return `${totalDays} ${getDayWord(totalDays)}`
+      }
+
       const yearsText = Math.floor(totalMonths / 12)
       const monthsText = totalMonths % 12
       
@@ -1625,6 +1630,12 @@ export default function OperatorProfilePage() {
     if (months % 10 === 1 && months % 100 !== 11) return 'месяц'
     if ([2, 3, 4].includes(months % 10) && ![12, 13, 14].includes(months % 100)) return 'месяца'
     return 'месяцев'
+  }
+
+  const getDayWord = (d: number) => {
+    if (d % 10 === 1 && d % 100 !== 11) return 'день'
+    if ([2, 3, 4].includes(d % 10) && ![12, 13, 14].includes(d % 100)) return 'дня'
+    return 'дней'
   }
 
   // Получение текущего места работы
@@ -1859,18 +1870,21 @@ export default function OperatorProfilePage() {
                 <div className="p-2 rounded-lg bg-violet-500/20">
                   <Building2 className="w-4 h-4 text-violet-400" />
                 </div>
-                <div>
-                  <p className="text-xs text-gray-500">Отдел</p>
-                  <p className="text-sm font-medium">{profile?.department || 'Не указано'}</p>
-                  {companyAssignments.filter(a => a.is_active).length > 0 && (
-                    <p className="text-xs text-violet-400 mt-0.5">
-                      {companyAssignments.filter(a => a.is_active).map((a: any) => {
-                        const co = companies.find((c: any) => c.id === a.company_id)
-                        return co?.name || co?.code || a.company_id
-                      }).join(', ')}
-                    </p>
-                  )}
-                </div>
+                {(() => {
+                  const points = companyAssignments.filter((a) => a.is_active).map((a: any) => {
+                    const co = companies.find((c: any) => c.id === a.company_id)
+                    return co?.name || co?.code || a.company_id
+                  })
+                  return (
+                    <div>
+                      <p className="text-xs text-gray-500">Точка</p>
+                      <p className="text-sm font-medium">{points.length ? points.join(', ') : 'Не привязан'}</p>
+                      {profile?.department ? (
+                        <p className="text-xs text-violet-400 mt-0.5">Отдел: {profile.department}</p>
+                      ) : null}
+                    </div>
+                  )
+                })()}
               </div>
             </Card>
           </div>
