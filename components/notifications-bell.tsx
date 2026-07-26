@@ -39,6 +39,11 @@ const READ_AT_KEY = 'f16.notifications.lastReadAt'
 const SEEN_IDS_KEY = 'f16.notifications.seenIds'
 const SEEN_IDS_MAX = 500  // храним до 500 последних
 
+// Группы, которые прячутся после «Прочитать всё» (когда в них не осталось новых).
+// Появятся снова, если придут новые долги/остатки. Остальные группы (заявки, ДР)
+// остаются видимыми даже прочитанными.
+const DISMISSIBLE_GROUP_IDS = new Set(['debts', 'low-stock'])
+
 function readLastReadAt(): number {
   if (typeof window === 'undefined') return 0
   const raw = window.localStorage.getItem(READ_AT_KEY)
@@ -167,8 +172,15 @@ export function NotificationsBell() {
     return sum + newItems
   }, 0)
 
+  // Видимые группы: «долги» и «низкие остатки» скрываем, если в них не осталось
+  // новых (после «Прочитать всё»). Придут новые — снова покажутся.
+  const visibleGroups = groups.filter((group) => {
+    if (!DISMISSIBLE_GROUP_IDS.has(group.id)) return true
+    return group.items.some((item) => isItemNew(item, lastReadAt, seenIds))
+  })
+
   // Грубое total для подписи внутри попапа.
-  const total = groups.reduce((sum, g) => sum + g.count, 0)
+  const total = visibleGroups.reduce((sum, g) => sum + g.count, 0)
 
   const handleMarkAllRead = () => {
     const now = Date.now()
@@ -237,12 +249,12 @@ export function NotificationsBell() {
           </div>
 
           <div className="max-h-[60vh] overflow-y-auto p-2">
-            {groups.length === 0 ? (
+            {visibleGroups.length === 0 ? (
               <div className="px-4 py-8 text-center text-sm text-slate-500">
                 {loading ? 'Загружаем...' : 'Пусто — всё разобрали'}
               </div>
             ) : (
-              groups.map((group) => {
+              visibleGroups.map((group) => {
                 const GroupIcon = iconMap[group.icon] || Bell
                 const newCount = group.items.filter((item) => isItemNew(item, lastReadAt, seenIds)).length
                 return (
