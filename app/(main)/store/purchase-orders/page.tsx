@@ -5,6 +5,7 @@ import { ClipboardList, Loader2, MessageCircle, Plus, Trash2, X } from 'lucide-r
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
@@ -80,6 +81,7 @@ const fmtDate = (value: string | null | undefined) => {
 }
 
 export default function PurchaseOrdersPage({ embedded = false }: { embedded?: boolean } = {}) {
+  const { can } = useCapabilities()
   const [orders, setOrders] = useState<OrderRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -504,7 +506,7 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
                   Отметить «Получена»
                 </Button>
               ) : null}
-              {detail.status === 'draft' || detail.status === 'sent' ? (
+              {(detail.status === 'draft' || detail.status === 'sent') && can('store-purchase-orders.cancel') ? (
                 <Button
                   variant="outline"
                   className="border-rose-500/40 text-rose-700 dark:text-rose-200 hover:bg-rose-500/10"

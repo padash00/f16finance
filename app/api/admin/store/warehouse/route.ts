@@ -760,7 +760,11 @@ export async function POST(request: Request) {
 
     // ── deleteStock: remove item from warehouse + showcase ────────────────────
     if (body.action === 'deleteStock') {
-      const denied = await requireCapability(access, 'store-warehouse.edit')
+      // Право зависит от масштаба: очистка всего склада ≠ удаление выбранных.
+      const denied = await requireCapability(
+        access,
+        body.delete_all === true ? 'store-warehouse.delete_all' : 'store-warehouse.delete_selected',
+      )
       if (denied) return denied as any
       const companyId = String(body.company_id || '').trim()
       if (!companyId) return json({ error: 'company-id-required' }, 400)

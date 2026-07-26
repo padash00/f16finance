@@ -1550,6 +1550,7 @@ export default function ProfitabilityPage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2 pt-1">
+                {can('profitability.export_pdf') && (
                 <Button
                   disabled={!branchReportCompanyId || !branchReportFrom || !branchReportTo || branchPdfDownloading}
                   onClick={() => void handleDownloadBranchPdf()}
@@ -1558,6 +1559,8 @@ export default function ProfitabilityPage() {
                   <Download className="mr-2 h-4 w-4" />
                   {branchPdfDownloading ? 'Готовим PDF…' : 'Скачать PDF'}
                 </Button>
+                )}
+                {can('profitability.export_pdf') && (
                 <Button
                   variant="outline"
                   disabled={!branchReportCompanyId || !branchReportFrom || !branchReportTo}
@@ -1568,6 +1571,7 @@ export default function ProfitabilityPage() {
                 >
                   Открыть в браузере
                 </Button>
+                )}
                 <span className="text-[11px] text-amber-800 dark:text-amber-100/60">
                   «Скачать PDF» — сразу .pdf файл. «Открыть в браузере» — для предпросмотра.
                 </span>
@@ -1598,6 +1602,7 @@ export default function ProfitabilityPage() {
                     <option key={c.id} value={String(c.id)}>{c.name}</option>
                   ))}
                 </select>
+                {can('profitability.export_pdf') && (
                 <Button
                   onClick={() => void handleInvestorExport()}
                   disabled={!investorCompanyId || investorExporting}
@@ -1606,6 +1611,7 @@ export default function ProfitabilityPage() {
                   <Download className="mr-2 h-4 w-4" />
                   {investorExporting ? 'Готовим…' : 'Скачать PDF'}
                 </Button>
+                )}
               </div>
             </div>
           </Card>
@@ -1623,9 +1629,11 @@ export default function ProfitabilityPage() {
                   </h2>
                   <p className="mt-0.5 text-xs text-muted-foreground/70">Полный P&amp;L по каждой точке за весь выбранный период. Ручные оверрайды (POS, ФОТ, налоги) разнесены по доле выручки.</p>
                 </div>
+                {can('profitability.export_pdf') && (
                 <Button size="sm" variant="outline" className="shrink-0 gap-1.5" disabled={allPointsExporting} onClick={() => void handleExportAllPoints()}>
                   <Download className="h-4 w-4" /> {allPointsExporting ? 'Выгрузка…' : 'Все точки (PDF)'}
                 </Button>
+                )}
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[1100px] text-sm">

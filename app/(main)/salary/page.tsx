@@ -1078,16 +1078,18 @@ export default function SalaryPage() {
                     {broadcastSending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                     {broadcastSending ? `${broadcastDone}/${broadcastTotal}` : 'Всем'}
                   </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={downloadSalaryCSV}
-                    disabled={loading || !data}
-                    className="h-8 gap-1.5 rounded-xl border-border bg-white dark:bg-white/5 text-xs text-body hover:bg-surface-hover"
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                    PDF
-                  </Button>
+                  {can('salary.export') && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={downloadSalaryCSV}
+                      disabled={loading || !data}
+                      className="h-8 gap-1.5 rounded-xl border-border bg-white dark:bg-white/5 text-xs text-body hover:bg-surface-hover"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      PDF
+                    </Button>
+                  )}
                   <div className="flex rounded-xl border border-border bg-slate-100 dark:bg-black/20 p-0.5 text-xs" role="group" aria-label="Неделя">
                     <button
                       type="button"

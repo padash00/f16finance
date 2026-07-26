@@ -850,18 +850,22 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>Операции со складом</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem disabled={selectedIds.size === 0 || deleting} onClick={() => void handleDelete('selected')}>
-                <Trash2 className="h-3.5 w-3.5" />
-                Удалить выбранные ({selectedIds.size})
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                variant="destructive"
-                disabled={balances.length === 0 || deleting}
-                onClick={() => void handleDelete('all')}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                Очистить весь склад
-              </DropdownMenuItem>
+              {can('store-warehouse.delete_selected') && (
+                <DropdownMenuItem disabled={selectedIds.size === 0 || deleting} onClick={() => void handleDelete('selected')}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Удалить выбранные ({selectedIds.size})
+                </DropdownMenuItem>
+              )}
+              {can('store-warehouse.delete_all') && (
+                <DropdownMenuItem
+                  variant="destructive"
+                  disabled={balances.length === 0 || deleting}
+                  onClick={() => void handleDelete('all')}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Очистить весь склад
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         )}

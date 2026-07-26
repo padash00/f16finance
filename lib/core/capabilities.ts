@@ -136,6 +136,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
           { id: 'profitability.view', label: 'Просмотр', severity: 'low' },
           { id: 'profitability.edit', label: 'Изменение параметров месяца', severity: 'high' },
           { id: 'profitability.simulate', label: 'What-if симуляция', severity: 'low' },
+          { id: 'profitability.export_pdf', label: 'Экспорт PDF', severity: 'low' },
         ],
       },
       {
@@ -551,6 +552,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
           { id: 'salary.unlock_week', label: 'Разблокировать закрытую неделю', severity: 'high' },
           { id: 'salary.update_chat_id', label: 'Изменить Telegram ID', severity: 'medium' },
           { id: 'salary.add_extra_day', label: 'Добавить доп. рабочий день', severity: 'medium' },
+          { id: 'salary.export', label: 'Экспорт PDF', severity: 'low' },
         ],
       },
       {

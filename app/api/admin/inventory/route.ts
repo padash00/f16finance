@@ -704,6 +704,8 @@ export async function POST(request: Request) {
     }
 
     if (body.action === 'deleteCategory') {
+      const denied = await requireCapability(access, 'store-catalog.delete')
+      if (denied) return denied
       const id = String((body as any).id || '').trim()
       if (!id) return json({ error: 'category-id-required' }, 400)
       await deleteInventoryCategory(supabase as any, id, inventoryScope)

@@ -22,6 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { formatMoney } from '@/lib/core/format'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { StoreDataTableSkeleton } from '@/components/store/store-data-table-skeleton'
 import { Skeleton } from '@/components/ui/skeleton'
 import { isAbortError } from '@/lib/is-abort-error'
@@ -115,6 +116,7 @@ function formatDate(value: string | null | undefined) {
 }
 
 export default function StoreWriteoffsPage({ embedded = false }: { embedded?: boolean } = {}) {
+  const { can } = useCapabilities()
   const [data, setData] = useState<WriteoffsResponse['data'] | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -877,7 +879,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
                   </table>
                 </div>
 
-                {selectedWriteoff.status !== 'cancelled' ? (
+                {selectedWriteoff.status !== 'cancelled' && can('store-writeoffs.cancel') ? (
                   <div className="flex justify-end">
                     <Button
                       variant="outline"

@@ -1663,15 +1663,17 @@ function WeeklyReportContent() {
                   <RefreshCw className="h-4 w-4" />
                 </Button>
 
-                <Button
-                  variant="outline"
-                  className="rounded-xl border-border bg-surface-muted hover:bg-surface-hover"
-                  onClick={() => setShowActPrint(true)}
-                  title="Печатный акт по точкам"
-                >
-                  <Printer className="mr-2 h-4 w-4" />
-                  Печать акт
-                </Button>
+                {can('weekly-report.export_pdf') && (
+                  <Button
+                    variant="outline"
+                    className="rounded-xl border-border bg-surface-muted hover:bg-surface-hover"
+                    onClick={() => setShowActPrint(true)}
+                    title="Печатный акт по точкам"
+                  >
+                    <Printer className="mr-2 h-4 w-4" />
+                    Печать акт
+                  </Button>
+                )}
 
                 {can('weekly-report.export') && (
                   <div className="relative group">

@@ -1068,7 +1068,9 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                 <button type="button" onClick={() => applyDraft(draft)} className="text-amber-700 dark:text-amber-200 hover:text-slate-900 dark:hover:text-white">
                   {draft.title || 'Черновик'}
                 </button>
-                <button type="button" onClick={() => void deleteDraft(draft.id)} className="text-rose-700 dark:text-rose-300 hover:text-rose-900 dark:hover:text-rose-100">×</button>
+                {canDelete && (
+                  <button type="button" onClick={() => void deleteDraft(draft.id)} className="text-rose-700 dark:text-rose-300 hover:text-rose-900 dark:hover:text-rose-100">×</button>
+                )}
               </div>
             ))}
           </div>
