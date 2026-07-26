@@ -127,6 +127,38 @@ function ReceiptDetailModal({ sale, onClose }: { sale: Sale; onClose: () => void
   if (sale.card_amount > 0) paymentBreakdown.push({ label: 'Карта', amount: sale.card_amount })
   if (sale.online_amount > 0) paymentBreakdown.push({ label: 'Онлайн', amount: sale.online_amount })
 
+  // Печать чека в отдельном окне (только чек) — window.print() всей страницы
+  // давал пустой лист (портал Dialog + фикс-шелл модуля).
+  const printCheque = () => {
+    const w = window.open('', '_blank', 'width=380,height=640')
+    if (!w) return
+    const esc = (s: any) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string))
+    const rows = sale.items
+      .map((it: any) => `<tr><td>${esc(it.inventory_items?.name || it.universal_name || '—')}</td><td class="c">${it.quantity}</td><td class="r">${fmt(it.unit_price)}</td><td class="r">${fmt(it.total_price)}</td></tr>`)
+      .join('')
+    const pay = paymentBreakdown.map((p) => `<div class="row"><span>${esc(p.label)}</span><span>${fmt(p.amount)} ₸</span></div>`).join('')
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Чек #${esc(sale.id.slice(-6).toUpperCase())}</title>
+      <style>@page{size:80mm auto;margin:4mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;font-size:13px;color:#000;padding:6px}
+      .c{text-align:center}.r{text-align:right}.t{font-weight:800;font-size:16px}.line{border-top:1px dashed #000;margin:6px 0}
+      table{width:100%;border-collapse:collapse;font-size:12px}td{padding:2px 0;vertical-align:top}th{font-size:11px;color:#444;text-align:left;padding-bottom:2px}
+      .row{display:flex;justify-content:space-between;font-size:13px}.tot{font-weight:800;font-size:16px}</style></head>
+      <body>
+        <div class="c"><div class="t">Чек #${esc(sale.id.slice(-6).toUpperCase())}</div>
+        <div style="font-size:11px;color:#444">${fmtDate(sale.sold_at)} ${fmtTime(sale.sold_at)} · ${esc(pm.label)}</div></div>
+        <div class="line"></div>
+        <table><tr><th>Товар</th><th class="c">Кол</th><th class="r">Цена</th><th class="r">Сумма</th></tr>${rows}</table>
+        <div class="line"></div>
+        ${sale.discount_amount > 0 ? `<div class="row"><span>Скидка</span><span>−${fmt(sale.discount_amount)} ₸</span></div>` : ''}
+        <div class="row tot"><span>Итого</span><span>${fmt(sale.total_amount)} ₸</span></div>
+        ${pay ? `<div class="line"></div>${pay}` : ''}
+        <div class="line"></div>
+        <div class="c" style="font-size:9px;color:#666">ID: ${esc(sale.id)}</div>
+        <div class="c" style="font-weight:700;margin-top:6px">СПАСИБО ЗА ПОКУПКУ!</div>
+        <script>window.onload=function(){setTimeout(function(){window.print()},250)}</script>
+      </body></html>`)
+    w.document.close()
+  }
+
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
@@ -245,7 +277,7 @@ function ReceiptDetailModal({ sale, onClose }: { sale: Sale; onClose: () => void
         {/* Print button */}
         {can('pos-receipts.print') && (
           <div className="mt-4 flex justify-end">
-            <Button size="sm" onClick={() => window.print()} className="gap-2">
+            <Button size="sm" onClick={printCheque} className="gap-2">
               <Printer className="h-4 w-4" />
               Печать
             </Button>

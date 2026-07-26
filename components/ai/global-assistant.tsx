@@ -24,6 +24,8 @@ const HIDDEN_PATH_PREFIXES = [
   '/unauthorized',
   // Касса (веб-POS) — кнопка перекрывает «Оплатить», AI там не нужен
   '/pos',
+  // Модуль «Магазин» — свой шелл, AI-кнопка не нужна
+  '/store',
   // Print/PDF-страницы — ассистент не должен попадать в выгрузку
   '/profitability/print',
   '/weekly-report/act-print',

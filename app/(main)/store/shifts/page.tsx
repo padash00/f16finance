@@ -37,9 +37,21 @@ function printZReport(r: any) {
   const dts = (s: string | null) => (s ? new Date(s).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—')
   const qtyU = (n: number, u: string) => `${fmt(n)}${u ? ' ' + escHtml(u) : ''}`
   const req = r.requisites || {}
-  const rows = (r.positions || [])
+  const positions = r.positions || []
+  const rows = positions
     .map((p: any, i: number) => `<tr><td class="idx">${i + 1}</td><td class="nm">${escHtml(p.name)}</td><td class="num">${qtyU(p.sold, p.unit)}</td><td class="num stk">${qtyU(p.stock, p.unit)}</td><td class="num amt">${money(p.amount)}</td></tr>`)
     .join('')
+  // Доп. показатели для полноты отчёта.
+  const checks = Number(r.checkCount || 0)
+  const avg = checks > 0 ? Math.round(Number(r.total || 0) / checks) : 0
+  const soldUnits = positions.reduce((a: number, p: any) => a + Number(p.sold || 0), 0)
+  const names = positions.length
+  let duration = '—'
+  if (r.openedAt && r.closedAt) {
+    const ms = new Date(r.closedAt).getTime() - new Date(r.openedAt).getTime()
+    if (ms > 0) { const h = Math.floor(ms / 3600000); const m = Math.round((ms % 3600000) / 60000); duration = `${h} ч ${m} мин` }
+  }
+  const kpi = (label: string, value: string) => `<div class="kpi"><div class="kl">${label}</div><div class="kv">${value}</div></div>`
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Z-Отчёт · Смена №${r.shiftNumber}</title>
     <style>
     @page{size:A4;margin:14mm}
@@ -55,6 +67,13 @@ function printZReport(r: any) {
     .meta{display:grid;grid-template-columns:1fr 1fr;gap:2px 28px;margin-bottom:18px}
     .meta .r{display:flex;justify-content:space-between;gap:12px;border-bottom:1px dotted #ddd;padding:4px 0}
     .meta .k{color:#777}.meta .v{font-weight:700;text-align:right}
+    .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}
+    .kpi{border:1px solid #eee;border-radius:8px;padding:9px 10px;text-align:center}
+    .kpi .kl{font-size:9px;text-transform:uppercase;letter-spacing:.4px;color:#999}
+    .kpi .kv{font-size:16px;font-weight:800;margin-top:3px;font-variant-numeric:tabular-nums}
+    .cash{display:grid;grid-template-columns:1fr 1fr;gap:0 24px;margin-bottom:20px}
+    .cash .r{display:flex;justify-content:space-between;padding:5px 2px;border-bottom:1px solid #f1f1f1}
+    .cash .r span:last-child{font-weight:600;font-variant-numeric:tabular-nums}
     .sec{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.9px;color:#999;margin-bottom:6px}
     .sum{margin-bottom:20px}
     .sum .r{display:flex;justify-content:space-between;padding:5px 2px;border-bottom:1px solid #f1f1f1}
@@ -89,15 +108,28 @@ function printZReport(r: any) {
           <div class="r"><span class="k">Кассир</span><span class="v">${escHtml(r.cashier || '—')}</span></div>
           <div class="r"><span class="k">Открыта</span><span class="v">${dts(r.openedAt)}</span></div>
           <div class="r"><span class="k">Закрыта</span><span class="v">${dts(r.closedAt)}</span></div>
+          <div class="r"><span class="k">Продолжительность</span><span class="v">${duration}</span></div>
+        </div>
+        <div class="sec">Ключевые показатели</div>
+        <div class="kpis">
+          ${kpi('Чеков за смену', String(checks))}
+          ${kpi('Средний чек', money(avg))}
+          ${kpi('Позиций продано', fmt(soldUnits))}
+          ${kpi('Наименований', String(names))}
         </div>
         <div class="sec">Суммы за смену</div>
         <div class="sum">
-          <div class="r"><span>Наличные</span><span>${money(r.cashSales)}</span></div>
-          <div class="r"><span>Безналичные</span><span>${money(r.kaspiSales)}</span></div>
+          <div class="r"><span>Наличные · ${r.cashCount || 0} чек</span><span>${money(r.cashSales)}</span></div>
+          <div class="r"><span>Безналичные · ${r.kaspiCount || 0} чек</span><span>${money(r.kaspiSales)}</span></div>
           <div class="r"><span>Возвраты</span><span>${money(r.returns)}</span></div>
           <div class="r tot"><span>Итоговая сумма</span><span>${money(r.total)}</span></div>
         </div>
-        <div class="sec">Позиции · ${(r.positions || []).length}</div>
+        <div class="sec">Наличность в кассе</div>
+        <div class="cash">
+          <div class="r"><span>На начало смены</span><span>${money(r.openingCash)}</span></div>
+          <div class="r"><span>На конец смены</span><span>${money(r.closingCash)}</span></div>
+        </div>
+        <div class="sec">Позиции · ${names}</div>
         <table>
           <thead><tr><th class="idx">#</th><th>Название</th><th class="num">Продано</th><th class="num">На складе</th><th class="num">Сумма</th></tr></thead>
           <tbody>${rows || '<tr><td colspan="5" style="color:#999;padding:12px 8px">Продаж по позициям нет</td></tr>'}</tbody>
