@@ -14,12 +14,14 @@ import {
   LogIn,
   Package,
   ShieldCheck,
+  SlidersHorizontal,
   Sparkles,
   Trash2,
   Users,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { OrgCapabilitiesPanel } from '@/components/platform/org-capabilities-panel'
 
 type EntitlementState = { enabled: boolean; source: string }
 type PackageItem = { code: string; name: string; vertical: string; description: string | null; feature_codes: string[]; price_kzt: number }
@@ -92,11 +94,12 @@ const BILLING_EVENT_LABELS: Record<string, string> = {
 
 const tenge = (n: number) => `${Math.round(n).toLocaleString('ru-RU')} ₸`
 
-type TabKey = 'overview' | 'billing' | 'access' | 'members' | 'history'
+type TabKey = 'overview' | 'billing' | 'access' | 'actions' | 'members' | 'history'
 const TABS: Array<{ key: TabKey; label: string; icon: React.ReactNode }> = [
   { key: 'overview', label: 'Обзор', icon: <LayoutDashboard className="h-4 w-4" /> },
   { key: 'billing', label: 'Тариф и оплата', icon: <CreditCard className="h-4 w-4" /> },
-  { key: 'access', label: 'Доступы', icon: <ShieldCheck className="h-4 w-4" /> },
+  { key: 'access', label: 'Доступы (страницы)', icon: <ShieldCheck className="h-4 w-4" /> },
+  { key: 'actions', label: 'Действия (кнопки)', icon: <SlidersHorizontal className="h-4 w-4" /> },
   { key: 'members', label: 'Участники', icon: <Users className="h-4 w-4" /> },
   { key: 'history', label: 'История', icon: <History className="h-4 w-4" /> },
 ]
@@ -1146,6 +1149,17 @@ export default function OrgDetailPage() {
               </p>
             </div>
           ) : null}
+        </div>
+      )}
+
+      {/* ============================ ДЕЙСТВИЯ (КНОПКИ) ============================ */}
+      {activeTab === 'actions' && (
+        <div className={cardCls}>
+          <h2 className="mb-1 text-sm font-semibold">Действия (кнопки)</h2>
+          <p className="mb-4 text-[12px] text-slate-500">
+            Пульт по отдельным действиям организации. Выключенное действие пропадает у всех её сотрудников (включая владельца).
+          </p>
+          <OrgCapabilitiesPanel organizationId={id} />
         </div>
       )}
 

@@ -36,6 +36,51 @@ type CapabilitiesCache = {
 const CACHE_TTL_MS = 60_000
 const cache = new Map<string, CapabilitiesCache>()
 
+// ── Слой org-рубильника (пульт супер-админа) ────────────────────────────────
+// Пер-организационный оверрайд: набор capability, ВЫКЛЮЧЕННЫХ для всей орг.
+// Применяется поверх ролевых прав в точках проверки — режет право у всех в орг
+// (включая владельца), но не у супер-админа. Кэш отдельный, по organizationId.
+type OrgDisabledCache = { disabled: Set<string>; loadedAt: number }
+const orgDisabledCache = new Map<string, OrgDisabledCache>()
+
+/** Capabilities, выключенные супер-админом для всей организации. */
+export async function loadOrgDisabledCapabilities(
+  organizationId: string | null | undefined,
+): Promise<Set<string>> {
+  if (!organizationId || !hasAdminSupabaseCredentials()) return new Set()
+
+  const cached = orgDisabledCache.get(organizationId)
+  if (cached && Date.now() - cached.loadedAt < CACHE_TTL_MS) return cached.disabled
+
+  const disabled = new Set<string>()
+  try {
+    const supabase = createAdminSupabaseClient()
+    const { data } = await supabase
+      .from('organization_capability_overrides')
+      .select('capability, enabled')
+      .eq('organization_id', organizationId)
+      .eq('enabled', false)
+      .range(0, 999)
+    for (const row of (data || []) as Array<{ capability: string }>) {
+      if (row.capability) disabled.add(row.capability)
+    }
+  } catch {
+    // Таблицы может ещё не быть (миграция не применена) → рубильник no-op.
+  }
+
+  orgDisabledCache.set(organizationId, { disabled, loadedAt: Date.now() })
+  return disabled
+}
+
+/** Сбросить кэш org-рубильника (после правки на /platform). */
+export function invalidateOrgCapabilitiesCache(organizationId?: string): void {
+  if (!organizationId) {
+    orgDisabledCache.clear()
+    return
+  }
+  orgDisabledCache.delete(organizationId)
+}
+
 function cacheKey(userId: string, role: string | null, organizationId?: string | null): string {
   return `${userId}:${role || ''}:${organizationId || ''}`
 }
@@ -169,6 +214,16 @@ export async function requireCapability(
     return NextResponse.json({ error: 'forbidden', reason: 'staff-only' }, { status: 403 })
   }
 
+  // Org-рубильник (пульт супер-админа): если право выключено для всей орг —
+  // блокируем ВСЕХ, включая владельца (проверка ДО owner-bypass ниже).
+  const orgDisabled = await loadOrgDisabledCapabilities(access.activeOrganization?.id || null)
+  if (orgDisabled.has(capability)) {
+    return NextResponse.json(
+      { error: 'forbidden', capability, reason: 'org-disabled', message: `Действие отключено для организации: ${capability}` },
+      { status: 403 },
+    )
+  }
+
   // Владелец организации = верхняя роль тенанта → обходит capability-проверки
   // (как супер-админ, но данные всё равно скоупятся его орг в самих запросах).
   // Иначе право, используемое в роуте, но отсутствующее в каталоге, ложно
@@ -235,6 +290,9 @@ export async function hasCapability(
   capability: string,
 ): Promise<boolean> {
   if (access.isSuperAdmin) return true
+  // Org-рубильник действует на всех в орг, включая владельца.
+  const orgDisabled = await loadOrgDisabledCapabilities(access.activeOrganization?.id || null)
+  if (orgDisabled.has(capability)) return false
   const role = access.staffRole || access.staffMember?.role || null
   if (role === 'owner') return true // владелец = полный доступ в своей орг
   const userId = access.user?.id
@@ -253,5 +311,8 @@ export async function getEffectiveCapabilities(access: AccessLike): Promise<stri
   if (!userId) return []
   const role = access.staffRole || access.staffMember?.role || null
   const capabilities = await loadUserCapabilities(userId, role, access.activeOrganization?.id || null)
-  return Array.from(capabilities)
+  // Org-рубильник: убираем выключенные для орг права из итогового набора —
+  // чтобы клиентский can() скрыл кнопки у всех, включая владельца.
+  const orgDisabled = await loadOrgDisabledCapabilities(access.activeOrganization?.id || null)
+  return Array.from(capabilities).filter((c) => !orgDisabled.has(c))
 }
