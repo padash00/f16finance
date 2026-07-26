@@ -5,6 +5,7 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine, Cell, Legend,
 } from 'recharts'
 import { Brain, TrendingUp, TrendingDown, Wallet, RefreshCw, Sparkles, Info, AlertTriangle } from 'lucide-react'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -51,6 +52,7 @@ function monthShort(ym: string) {
 }
 
 export default function AnalysisPage() {
+  const { can } = useCapabilities()
   const [companies, setCompanies] = useState<Company[]>([])
   const [companyId, setCompanyId] = useState('')
   const [data, setData] = useState<Forecast | null>(null)
@@ -379,9 +381,11 @@ export default function AnalysisPage() {
           <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
             <div className="flex items-center justify-between gap-2 mb-3">
               <h3 className="text-sm font-semibold text-foreground flex items-center gap-2"><Sparkles className="w-4 h-4 text-violet-500" />AI-вывод</h3>
+              {can('analysis.refresh') && (
               <Button size="sm" variant="outline" onClick={askAi} disabled={aiLoading} className="rounded-xl">
                 {aiLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : 'Получить вывод'}
               </Button>
+              )}
             </div>
             {ai ? (
               <p className="whitespace-pre-line text-sm leading-relaxed text-body">{ai}</p>

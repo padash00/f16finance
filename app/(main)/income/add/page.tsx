@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 
 import { Card } from '@/components/ui/card'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { Button } from '@/components/ui/button'
 import { MoneyInput } from '@/components/ui/money-input'
 import { confirmDialog } from '@/components/ui/confirm-dialog'
@@ -81,6 +82,7 @@ async function logIncomeAudit(event: {
 }
 
 export default function AddIncomePage() {
+  const { can } = useCapabilities()
   const router = useRouter()
 
   // Встроенный режим (внутри модалки на странице доходов через iframe ?embedded=1):
@@ -790,6 +792,7 @@ export default function AddIncomePage() {
                 Отмена
               </Button>
 
+              {can('income.create') && (
               <Button
                 type="submit"
                 disabled={saving || !validation.ok}
@@ -808,6 +811,7 @@ export default function AddIncomePage() {
                   </span>
                 )}
               </Button>
+              )}
             </div>
           </form>
         </div>

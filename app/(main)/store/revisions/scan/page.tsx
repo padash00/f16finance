@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, Loader2, Package, ScanLine, Search, X } from 'lucide-react'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { CameraScanner, scanFeedback } from '@/components/store/camera-scanner'
 import { Skeleton } from '@/components/skeleton'
@@ -25,6 +26,7 @@ const locLabel = (l: Loc) =>
   `${l.company?.name ? l.company.name + ' · ' : ''}${l.location_type === 'point_display' ? 'Витрина' : l.location_type === 'warehouse' ? 'Склад' : l.name}`
 
 export default function ScanRevisionPage() {
+  const { can } = useCapabilities()
   const [data, setData] = useState<RevData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -404,7 +406,7 @@ export default function ScanRevisionPage() {
       )}
 
       {/* Кнопка провести */}
-      {locationId && countedCount > 0 ? (
+      {locationId && countedCount > 0 && can('store-revisions.commit') ? (
         <div className="fixed inset-x-0 bottom-0 border-t border-border bg-background/95 p-3 backdrop-blur" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom,0px))' }}>
           <div className="mx-auto max-w-md">
             <button

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { ArrowRight, Building2, Loader2, Plus, Search } from 'lucide-react'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -39,6 +40,7 @@ const fmtDate = (value: string | null | undefined) => {
 }
 
 export default function SuppliersListPage({ embedded = false }: { embedded?: boolean } = {}) {
+  const { can } = useCapabilities()
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -238,9 +240,11 @@ export default function SuppliersListPage({ embedded = false }: { embedded?: boo
             </div>
             <div className="mt-5 flex justify-end gap-2">
               <Button variant="outline" onClick={() => setAddOpen(false)} disabled={saving}>Отмена</Button>
+              {can('store-suppliers.create') && (
               <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => void submitSupplier()} disabled={saving || !form.name.trim()}>
                 {saving ? <><Loader2 className="mr-1 h-4 w-4 animate-spin" />Создаю…</> : 'Создать'}
               </Button>
+              )}
             </div>
           </Card>
         </div>

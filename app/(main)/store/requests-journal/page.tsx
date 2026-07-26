@@ -16,6 +16,7 @@ import {
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { DatePicker } from '@/components/ui/date-picker'
@@ -210,6 +211,7 @@ function requestTimeline(request: InventoryRequest) {
 }
 
 function StoreRequestsJournalPageContent({ embedded = false }: { embedded?: boolean }) {
+  const { can } = useCapabilities()
   const [requests, setRequests] = useState<InventoryRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -385,9 +387,11 @@ function StoreRequestsJournalPageContent({ embedded = false }: { embedded?: bool
               <RefreshCw className={`h-3.5 w-3.5 ${loading || refreshing ? 'animate-spin' : ''}`} />
               Обновить
             </Button>
+            {can('store-requests-journal.export') && (
             <Button variant="outline" size="sm" onClick={exportCsv} disabled={filtered.length === 0} className="h-9 gap-1.5">
               Экспорт CSV
             </Button>
+            )}
           </>
         )
         const hdrToolbar = (

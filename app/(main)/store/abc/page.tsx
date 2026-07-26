@@ -14,6 +14,7 @@ import {
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { TableSkeleton } from '@/components/skeleton'
 import { Button } from '@/components/ui/button'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { isAbortError } from '@/lib/is-abort-error'
@@ -93,6 +94,7 @@ const XYZ_LABEL: Record<XyzClass, string> = {
 }
 
 export default function StoreAbcPage({ embedded = false }: { embedded?: boolean } = {}) {
+  const { can } = useCapabilities()
   const [tab, setTab] = useState<'sales' | 'stock'>('sales')
   const [period, setPeriod] = useState<number>(30)
   const [loading, setLoading] = useState(true)
@@ -212,10 +214,12 @@ export default function StoreAbcPage({ embedded = false }: { embedded?: boolean 
       {(() => {
         const hdrActions = (
           <>
+            {can('store-analytics.export') && (
             <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={exportCsv} disabled={filteredRows.length === 0}>
               <Download className="h-3.5 w-3.5" />
               CSV
             </Button>
+            )}
             <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={() => void load(tab, period)} disabled={loading}>
               <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
               Обновить

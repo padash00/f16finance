@@ -9,6 +9,7 @@
 import { useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { CreditCard, Save, CheckCircle2 } from 'lucide-react'
 import { TableSkeleton } from '@/components/skeleton'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
@@ -31,6 +32,7 @@ interface Company {
 const FLAG: Record<string, string> = { KZ: '🇰🇿', RU: '🇷🇺' }
 
 export default function PaymentProviderSettingsPage() {
+  const { can } = useCapabilities()
   const [providers, setProviders] = useState<Provider[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
   const [loading, setLoading] = useState(true)
@@ -107,7 +109,7 @@ export default function PaymentProviderSettingsPage() {
                     <select
                       value={c.payment_provider_id || ''}
                       onChange={(e) => void changeProvider(c.id, e.target.value || null)}
-                      disabled={savingId === c.id}
+                      disabled={savingId === c.id || !can('settings.manage_companies')}
                       className="w-full min-w-0 rounded-lg border border-border bg-white dark:bg-slate-900/60 px-3 py-2 text-sm text-foreground focus:border-emerald-400 focus:outline-none sm:w-auto"
                     >
                       <option value="">— не выбрано —</option>

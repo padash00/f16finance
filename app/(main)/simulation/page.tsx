@@ -12,6 +12,7 @@ import {
   YAxis,
 } from 'recharts'
 import { Calculator, Loader2, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -71,6 +72,7 @@ function tariffRate(t: Tariff): number {
 }
 
 export default function SimulationPage() {
+  const { can } = useCapabilities()
   const [companies, setCompanies] = useState<Company[]>([])
   const [companyId, setCompanyId] = useState<string>('')
   const [zones, setZones] = useState<Zone[]>([])
@@ -493,10 +495,12 @@ export default function SimulationPage() {
       </Card>
 
       <div className="flex justify-end">
+        {can('simulation.edit') && (
         <Button onClick={() => void save()} disabled={saving || !companyId}>
           {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
           Сохранить конфигурацию
         </Button>
+        )}
       </div>
 
       <Card className="border-border bg-white dark:bg-white/[0.02] p-4 text-[11px] leading-relaxed text-muted-foreground">

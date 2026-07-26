@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { CalendarPlus } from 'lucide-react'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
@@ -34,6 +35,7 @@ const todayISO = () => {
 }
 
 export default function AddShiftPage() {
+  const { can } = useCapabilities()
   const router = useRouter()
   const [companies, setCompanies] = useState<Company[]>([])
   const [operators, setOperators] = useState<Operator[]>([])
@@ -273,6 +275,7 @@ export default function AddShiftPage() {
                 >
                   Отменить
                 </Button>
+                {can('shifts.create') && (
                 <Button
                   type="submit"
                   disabled={saving || loadingCompanies}
@@ -280,6 +283,7 @@ export default function AddShiftPage() {
                 >
                   {saving ? 'Сохраняем…' : 'Сохранить смену'}
                 </Button>
+                )}
               </div>
             </form>
           </Card>
