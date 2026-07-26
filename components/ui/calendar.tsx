@@ -13,8 +13,9 @@ export type CalendarProps = React.ComponentProps<typeof DayPicker>
  * Поверх react-day-picker v9. Выпадающие месяц/год + стрелки навигации.
  */
 export function Calendar({ className, classNames, showOutsideDays = true, ...props }: CalendarProps) {
-  // Скользящий диапазон лет вокруг текущего (а не захардкоженный 2021–2035):
-  // 5 лет назад для истории + 2 года вперёд. Можно переопределить через props.
+  // Широкий диапазон лет: с 1920 (для дат рождения и т.п.) до текущего+5.
+  // Список года — нативный <select>, длинный список скроллится сам.
+  // Можно переопределить через props (startMonth/endMonth).
   const nowYear = new Date().getFullYear()
   return (
     <DayPicker
@@ -22,8 +23,8 @@ export function Calendar({ className, classNames, showOutsideDays = true, ...pro
       locale={ru}
       weekStartsOn={1}
       captionLayout="dropdown"
-      startMonth={new Date(nowYear - 5, 0)}
-      endMonth={new Date(nowYear + 2, 11)}
+      startMonth={new Date(1920, 0)}
+      endMonth={new Date(nowYear + 5, 11)}
       className={cn('p-3', className)}
       classNames={{
         months: 'flex flex-col sm:flex-row gap-4',
