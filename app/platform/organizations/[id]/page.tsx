@@ -631,7 +631,7 @@ export default function OrgDetailPage() {
                     )}
                   </div>
                 </div>
-                <p className="text-[11px] text-slate-500">PNG, JPG, WEBP или SVG, до 2 МБ. Показывается вместо значка в шапке клиента.</p>
+                <p className="text-[11px] text-slate-500">Квадрат 1:1, лучше SVG или PNG 512×512 с прозрачным фоном. Для широких лого берите только иконку. До 2 МБ. Показывается вместо значка в шапке клиента.</p>
               </div>
             </div>
           </div>
