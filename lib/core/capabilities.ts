@@ -163,6 +163,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         capabilities: [
           { id: 'branch-plan.view', label: 'Просмотр финмодели', severity: 'low' },
           { id: 'branch-plan.edit', label: 'Редактирование/сохранение', severity: 'medium' },
+          { id: 'branch-plan.delete', label: 'Удалить черновик финмодели', severity: 'high' },
         ],
       },
       {
@@ -221,6 +222,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         label: 'Налоги',
         capabilities: [
           { id: 'tax.view', label: 'Просмотр налоговых данных', severity: 'low' },
+          { id: 'tax.export_910', label: 'Экспорт формы 910 (xlsx)', severity: 'medium' },
         ],
       },
       {
@@ -286,6 +288,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
           { id: 'store-catalog.bulk_deactivate', label: 'Скрыть все товары', severity: 'high' },
           { id: 'store-catalog.bulk_delete_empty', label: 'Удалить товары без остатков', severity: 'high' },
           { id: 'store-catalog.bulk_delete_all', label: 'Удалить весь каталог', severity: 'high' },
+          { id: 'store-catalog.print_labels', label: 'Печать ценников', severity: 'low' },
         ],
       },
       {
@@ -443,6 +446,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
           { id: 'store-billing.reschedule_debt', label: 'Перенести срок оплаты долга', severity: 'medium' },
           { id: 'store-billing.parse_receipt', label: 'AI-распознавание чека/счёта', severity: 'medium' },
           { id: 'store-billing.export', label: 'Выгрузка долгов в Excel', severity: 'low' },
+          { id: 'store-billing.delete_debt', label: 'Удалить запись долга', severity: 'high' },
         ],
       },
     ],
@@ -511,6 +515,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
           { id: 'operators.bulk_send_credentials_telegram', label: 'Массовая отправка credentials в Telegram', severity: 'high' },
           { id: 'operators.export_credentials', label: 'Выгрузить логины и пароли в Excel', severity: 'high' },
           { id: 'operators.copy_profile_data', label: 'Копирование данных оператора в буфер', severity: 'low' },
+          { id: 'operators.export', label: 'Экспорт PDF доступов операторов', severity: 'medium' },
         ],
       },
       {
@@ -553,6 +558,8 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
           { id: 'salary.update_chat_id', label: 'Изменить Telegram ID', severity: 'medium' },
           { id: 'salary.add_extra_day', label: 'Добавить доп. рабочий день', severity: 'medium' },
           { id: 'salary.export', label: 'Экспорт PDF', severity: 'low' },
+          { id: 'salary.mark_debt_paid', label: 'Отметить долг оператора оплаченным', severity: 'high' },
+          { id: 'salary.send_telegram', label: 'Отправить расчёт ЗП в Telegram', severity: 'medium' },
         ],
       },
       {
@@ -589,6 +596,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
           { id: 'hr.dismiss', label: 'Уволить сотрудника', severity: 'high' },
           { id: 'hr.restore', label: 'Восстановить уволенного', severity: 'high' },
           { id: 'hr.view_history', label: 'Просмотр истории действий', severity: 'low' },
+          { id: 'hr.export', label: 'Экспорт CSV сотрудников', severity: 'high' },
         ],
       },
       {
@@ -614,6 +622,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         label: 'Эффективность операторов (PI)',
         capabilities: [
           { id: 'performance.view', label: 'Просмотр', severity: 'low' },
+          { id: 'performance.export', label: 'Экспорт CSV рейтинга', severity: 'medium' },
         ],
       },
       {
@@ -686,6 +695,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
           { id: 'stations.get_analytics', label: 'Просмотр аналитики проекта', severity: 'low' },
           { id: 'stations.edit_kiosk_background', label: 'Изменить фон киоска', severity: 'low' },
           { id: 'stations.edit_kiosk_announcement', label: 'Редактировать объявление киоска', severity: 'low' },
+          { id: 'stations.export_analytics', label: 'Экспорт аналитики проекта', severity: 'low' },
         ],
       },
     ],
@@ -788,6 +798,8 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         label: 'Цели',
         capabilities: [
           { id: 'goals.view', label: 'Просмотр целей', severity: 'low' },
+          { id: 'goals.create', label: 'Создать цель/KPI-план', severity: 'medium' },
+          { id: 'goals.delete', label: 'Удалить план', severity: 'high' },
         ],
       },
       {
@@ -893,6 +905,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         capabilities: [
           { id: 'logs.view', label: 'Просмотр журнала', severity: 'low' },
           { id: 'logs.export', label: 'Выгрузка журнала', severity: 'medium' },
+          { id: 'logs.explain_error', label: 'AI-объяснение ошибки', severity: 'low' },
         ],
       },
       {
@@ -920,6 +933,119 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         capabilities: [
           { id: 'debug.view', label: 'Просмотр', severity: 'low' },
           { id: 'debug.run_tests', label: 'Запуск автотестов', severity: 'medium' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'more-actions',
+    label: 'Прочие действия',
+    pages: [
+      {
+        id: 'production',
+        path: '/production',
+        label: 'Техкарты (производство)',
+        capabilities: [
+          { id: 'production.create', label: 'Создать/изменить техкарту', severity: 'medium' },
+          { id: 'production.delete', label: 'Удалить техкарту', severity: 'high' },
+          { id: 'production.create_ingredient', label: 'Добавить ингредиент', severity: 'medium' },
+          { id: 'production.delete_ingredient', label: 'Удалить ингредиент', severity: 'high' },
+          { id: 'production.stock_receipt', label: 'Приход сырья на склад', severity: 'medium' },
+          { id: 'production.stock_count', label: 'Ревизия остатка сырья', severity: 'medium' },
+          { id: 'production.writeoff', label: 'Списание сырья по продажам', severity: 'high' },
+        ],
+      },
+      {
+        id: 'store-advertising',
+        path: '/store/advertising',
+        label: 'Реклама на витрине',
+        capabilities: [
+          { id: 'store-advertising.create', label: 'Добавить рекламу', severity: 'medium' },
+          { id: 'store-advertising.edit', label: 'Изменить рекламу', severity: 'medium' },
+          { id: 'store-advertising.delete', label: 'Удалить рекламу', severity: 'high' },
+        ],
+      },
+      {
+        id: 'store-purchase-plan',
+        path: '/store/purchase-plan',
+        label: 'План закупа',
+        capabilities: [
+          { id: 'store-purchase-plan.create', label: 'Создать/изменить план закупа', severity: 'medium' },
+          { id: 'store-purchase-plan.ai_advice', label: 'AI-совет по закупу', severity: 'low' },
+        ],
+      },
+      {
+        id: 'store-settings',
+        path: '/store/settings',
+        label: 'Настройки магазина',
+        capabilities: [
+          { id: 'store-settings.edit', label: 'Изменить настройки магазина', severity: 'medium' },
+        ],
+      },
+      {
+        id: 'store-shifts',
+        path: '/store/shifts',
+        label: 'Сменные отчёты (магазин)',
+        capabilities: [
+          { id: 'store-shifts.export', label: 'Экспорт сменных отчётов', severity: 'low' },
+        ],
+      },
+      {
+        id: 'news',
+        path: '/news',
+        label: 'Новости',
+        capabilities: [
+          { id: 'news.create', label: 'Опубликовать пост', severity: 'medium' },
+          { id: 'news.delete', label: 'Удалить пост', severity: 'high' },
+        ],
+      },
+      {
+        id: 'moderation',
+        path: '/moderation',
+        label: 'Модерация',
+        capabilities: [
+          { id: 'moderation.confirm', label: 'Подтвердить нарушение', severity: 'medium' },
+          { id: 'moderation.dismiss', label: 'Отклонить нарушение', severity: 'medium' },
+        ],
+      },
+      {
+        id: 'messages',
+        path: '/messages',
+        label: 'Личные сообщения',
+        capabilities: [
+          { id: 'messages.send', label: 'Отправить сообщение', severity: 'low' },
+        ],
+      },
+      {
+        id: 'team-chat',
+        path: '/team-chat',
+        label: 'Командный чат',
+        capabilities: [
+          { id: 'team-chat.pin', label: 'Закрепить сообщение', severity: 'low' },
+        ],
+      },
+      {
+        id: 'team-analysis',
+        path: '/team-analysis',
+        label: 'Анализ команды',
+        capabilities: [
+          { id: 'team-analysis.refresh', label: 'Перезапустить AI-анализ', severity: 'low' },
+        ],
+      },
+      {
+        id: 'ai-cfo',
+        path: '/ai-cfo',
+        label: 'AI Финдиректор',
+        capabilities: [
+          { id: 'ai-cfo.generate', label: 'Сгенерировать анализ (AI)', severity: 'medium' },
+        ],
+      },
+      {
+        id: 'expense-analysis',
+        path: '/expense-analysis',
+        label: 'AI-разбор расходов',
+        capabilities: [
+          { id: 'expense-analysis.refresh', label: 'Перезапустить AI-разбор', severity: 'low' },
         ],
       },
     ],
