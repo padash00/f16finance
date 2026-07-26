@@ -18,7 +18,7 @@ import { AppLogoMark } from '@/components/app-brand-mark'
 import { NotificationsBell } from '@/components/notifications-bell'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { Button } from '@/components/ui/button'
-import { SITE_NAME } from '@/lib/core/site'
+import { APP_VERSION, SITE_NAME } from '@/lib/core/site'
 import { cn } from '@/lib/utils'
 import type { SessionRoleInfo } from '@/lib/core/types'
 import {
@@ -542,13 +542,16 @@ export function TopNav() {
     <>
       <header className="sticky top-0 z-40 hidden border-b border-slate-200 bg-white/90 dark:border-white/5 dark:bg-slate-950/90 backdrop-blur-xl md:block">
         <div className="flex h-14 items-center gap-3 px-4 xl:px-6">
-          <Link href="/dashboard" className="flex items-center gap-3">
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-3"
+            title={`${SITE_NAME} · v${APP_VERSION}`}
+          >
             <AppLogoMark />
             <div className="hidden xl:block">
               <h1 className="bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-300 bg-clip-text text-base font-bold leading-tight text-transparent">
-                {SITE_NAME}
+                {session.activeOrganization?.name || session.organizations[0]?.name || SITE_NAME}
               </h1>
-              <p className="text-[10px] text-slate-500">v2.0.1</p>
             </div>
           </Link>
 

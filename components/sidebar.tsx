@@ -26,7 +26,7 @@ import {
 
 import { AppLogoMark } from '@/components/app-brand-mark'
 import { Button } from '@/components/ui/button'
-import { SITE_NAME } from '@/lib/core/site'
+import { APP_VERSION, SITE_NAME } from '@/lib/core/site'
 import {
   badgeColors,
   buildOwnerNavSections,
@@ -612,13 +612,12 @@ export function Sidebar({ desktopEnabled = true }: { desktopEnabled?: boolean } 
   const navContent = (
     <div className="flex h-full flex-col bg-gradient-to-b from-white via-slate-50 to-white text-slate-900 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 dark:text-white">
       <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-white/5">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3" title={`${SITE_NAME} · v${APP_VERSION}`}>
           <AppLogoMark />
           <div>
             <h1 className="bg-gradient-to-r from-slate-900 to-slate-600 bg-clip-text text-lg font-bold text-transparent dark:from-white dark:to-slate-300">
-              {SITE_NAME}
+              {activeOrganization?.name || organizations[0]?.name || SITE_NAME}
             </h1>
-            <p className="text-xs text-slate-500">v2.0.1</p>
           </div>
         </div>
         <button

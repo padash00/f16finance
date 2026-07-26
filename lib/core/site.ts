@@ -7,6 +7,11 @@ export const SITE_NAME = rawSiteName || 'Orda Control'
 
 export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://ordaops.kz'
 
+// Версия приложения. Не светим в шапке (убрано ради чистого SaaS-вида) —
+// доступна в тултипе лого и в «О системе». Переопределяется NEXT_PUBLIC_APP_VERSION.
+export const APP_VERSION =
+  (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_APP_VERSION?.trim()) || '2.0.1'
+
 // Контакт для связи (CTA «Связаться с менеджером» на /upgrade и др.).
 // Задаётся через NEXT_PUBLIC_SUPPORT_CONTACT (ссылка: https://t.me/…, https://wa.me/…, mailto:…).
 export const SUPPORT_CONTACT = process.env.NEXT_PUBLIC_SUPPORT_CONTACT || SITE_URL
