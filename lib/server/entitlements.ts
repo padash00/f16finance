@@ -80,20 +80,37 @@ export async function requireFeature(
   return { allowed: allowedReal, entitled, capabilityOk, enforced: ENFORCE }
 }
 
-export type OrgEntitlements = { features: string[]; allAccess: boolean }
+export type OrgEntitlements = { features: string[]; allAccess: boolean; enforce: boolean }
 
 // Эффективные фичи организации (company_features по её точкам). allAccess=true —
 // супер-админ, F16-legacy или орг без настроенных entitlements (не гейтим).
+// enforce — пер-орг тумблер жёсткой блокировки (organizations.features_enforced);
+// глобальный ENTITLEMENTS_ENFORCE тоже включает блокировку.
 // Единый источник правды для session-role (меню) и серверных guard'ов (API).
 export async function resolveOrgEntitlements(access: {
   isSuperAdmin?: boolean
   activeOrganization?: { id?: string | null } | null
 }): Promise<OrgEntitlements> {
-  if (access.isSuperAdmin) return { features: [], allAccess: true }
+  if (access.isSuperAdmin) return { features: [], allAccess: true, enforce: false }
   const orgId = access.activeOrganization?.id || null
-  if (!orgId || !hasAdminSupabaseCredentials()) return { features: [], allAccess: true }
+  if (!orgId || !hasAdminSupabaseCredentials()) return { features: [], allAccess: true, enforce: false }
   try {
     const supabase = createAdminSupabaseClient()
+
+    // Пер-орг флаги: жёсткий энфорсмент и billing-exempt (fail-open).
+    let enforce = false
+    try {
+      const { data: orgRow } = await supabase
+        .from('organizations')
+        .select('features_enforced, billing_exempt')
+        .eq('id', orgId)
+        .maybeSingle()
+      // billing_exempt (напр. F16) — никогда не блокируем.
+      if ((orgRow as any)?.billing_exempt) return { features: [], allAccess: true, enforce: false }
+      enforce = !!(orgRow as any)?.features_enforced
+    } catch {
+      // колонки может ещё не быть (миграция не применена) → enforce=false
+    }
 
     // ── НОВАЯ МОДЕЛЬ: пакет + аддоны организации ─────────────────────────────
     // Если организации НАЗНАЧЕН пакет — фичи = пакет.feature_codes ∪ включённые
@@ -125,7 +142,7 @@ export async function resolveOrgEntitlements(access: {
             for (const f of ((a.feature_codes as string[]) || [])) features.add(String(f))
           }
         }
-        return { features: Array.from(features), allAccess: false }
+        return { features: Array.from(features), allAccess: false, enforce }
       }
     } catch {
       // Таблиц пакетов может ещё не быть — падаем в legacy-путь ниже.
@@ -134,7 +151,7 @@ export async function resolveOrgEntitlements(access: {
 
     const { data: cos } = await supabase.from('companies').select('id').eq('organization_id', orgId)
     const cids = (cos || []).map((c: any) => String(c.id))
-    if (cids.length === 0) return { features: [], allAccess: true }
+    if (cids.length === 0) return { features: [], allAccess: true, enforce }
     const { data: cf } = await supabase
       .from('company_features')
       .select('source_type, enabled, ends_at, feature:feature_id(code)')
@@ -150,10 +167,10 @@ export async function resolveOrgEntitlements(access: {
       const feat = Array.isArray(row.feature) ? row.feature[0] : row.feature
       if (feat?.code) codes.add(String(feat.code))
     }
-    if (hasLegacy || codes.size === 0) return { features: Array.from(codes), allAccess: true }
-    return { features: Array.from(codes), allAccess: false }
+    if (hasLegacy || codes.size === 0) return { features: Array.from(codes), allAccess: true, enforce }
+    return { features: Array.from(codes), allAccess: false, enforce }
   } catch {
-    return { features: [], allAccess: true }
+    return { features: [], allAccess: true, enforce: false }
   }
 }
 
@@ -162,9 +179,11 @@ export async function resolveOrgEntitlements(access: {
 // featureCode — одна фича или список (проходит, если есть ЛЮБАЯ из них).
 export async function requireOrgFeature(access: any, featureCode: string | string[]): Promise<Response | null> {
   const codes = Array.isArray(featureCode) ? featureCode : [featureCode]
-  const { features, allAccess } = await resolveOrgEntitlements(access)
+  const { features, allAccess, enforce } = await resolveOrgEntitlements(access)
   if (allAccess || codes.some((c) => features.includes(c))) return null
-  if (!ENFORCE) {
+  // Блокируем, если включён глобальный ENFORCE ИЛИ пер-орг тумблер features_enforced.
+  const shouldBlock = ENFORCE || enforce
+  if (!shouldBlock) {
     await writeSystemErrorLogSafe({
       scope: 'server',
       area: 'entitlements/shadow-feature',

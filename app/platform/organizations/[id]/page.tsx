@@ -22,6 +22,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { OrgCapabilitiesPanel } from '@/components/platform/org-capabilities-panel'
+import { getAllPageFeatures } from '@/lib/nav/sections'
 
 type EntitlementState = { enabled: boolean; source: string }
 type PackageItem = { code: string; name: string; vertical: string; description: string | null; feature_codes: string[]; price_kzt: number }
@@ -57,6 +58,7 @@ type OrgDetail = {
   legacyGrants?: number
   packageCode?: string | null
   addonCodes?: string[]
+  featuresEnforced?: boolean
   effectiveFeatures?: Array<{ code: string; sources: string[] }>
   billingEvents?: Array<{ eventType: string; status: string | null; amount: number | null; currency: string | null; createdAt: string | null }>
   invoices?: InvoiceItem[]
@@ -1058,6 +1060,60 @@ export default function OrgDetailPage() {
       {/* ============================ ДОСТУПЫ ============================ */}
       {activeTab === 'access' && (
         <div className="space-y-5">
+          {/* Жёсткая блокировка страниц (пер-орг энфорсмент) */}
+          {(() => {
+            const effCodes = new Set((org.effectiveFeatures || []).map((e) => e.code))
+            const blockedPages = org.packageCode
+              ? getAllPageFeatures().filter((p) => !p.base && !effCodes.has(p.feature))
+              : []
+            const on = !!org.featuresEnforced
+            return (
+              <div className={cardCls}>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold">
+                      <ShieldCheck className="h-4 w-4 text-rose-400" />
+                      Жёсткая блокировка страниц
+                    </h2>
+                    <p className="text-xs text-slate-500">
+                      Выкл (по умолчанию) — недоступные страницы просто скрыты из меню. Вкл — сервер жёстко блокирует их (прямой заход по ссылке вернёт «нужен апгрейд»). F16 и billing-exempt не блокируются.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => runSub({ featuresEnforced: !on }, 'enforce')}
+                    disabled={subBusy === 'enforce'}
+                    className={`relative h-6 w-11 shrink-0 rounded-full transition disabled:opacity-50 ${on ? 'bg-rose-500' : 'bg-slate-300 dark:bg-slate-600'}`}
+                    title={on ? 'Выключить блокировку' : 'Включить блокировку'}
+                  >
+                    <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${on ? 'left-[22px]' : 'left-0.5'}`} />
+                  </button>
+                </div>
+                {!org.packageCode ? (
+                  <p className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                    У организации нет назначенного пакета → блокировка не применяется (fail-open). Сначала назначь пакет во вкладке «Тариф и оплата».
+                  </p>
+                ) : blockedPages.length === 0 ? (
+                  <p className="mt-3 text-xs text-emerald-600 dark:text-emerald-300">Пакет покрывает все страницы — ничего не отвалится.</p>
+                ) : (
+                  <div className="mt-3">
+                    <p className="mb-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+                      {on ? 'Сейчас заблокировано' : 'При включении отвалится'} страниц: <span className="text-rose-600 dark:text-rose-300">{blockedPages.length}</span>
+                    </p>
+                    <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-200 dark:border-white/10">
+                      {blockedPages.map((p) => (
+                        <div key={p.path} className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-1.5 text-xs last:border-0 dark:border-white/5">
+                          <span className="truncate text-slate-700 dark:text-slate-200">{p.label}</span>
+                          <span className="shrink-0 text-[10px] text-slate-400">{p.group}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+
           <div className={cardCls}>
             <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold">
               <Sparkles className="h-4 w-4 text-violet-400" />
