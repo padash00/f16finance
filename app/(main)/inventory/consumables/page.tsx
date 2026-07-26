@@ -6,6 +6,7 @@ import { Loader2, Package2, RefreshCw } from 'lucide-react'
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { DatePicker } from '@/components/ui/date-picker'
@@ -71,6 +72,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 export function ConsumablesPageContent({ embedded = false }: { embedded?: boolean } = {}) {
+  const { can } = useCapabilities()
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -348,10 +350,12 @@ export function ConsumablesPageContent({ embedded = false }: { embedded?: boolea
             />
           </Field>
           <div className="flex items-end">
+            {can('store-consumables.create') && (
             <Button onClick={handleCreateConsumable} disabled={creatingItem} className="w-full">
               {creatingItem ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Добавить расходник
             </Button>
+            )}
           </div>
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
@@ -511,10 +515,12 @@ export function ConsumablesPageContent({ embedded = false }: { embedded?: boolea
               <Field label="Комментарий (опц.)">
                 <Input value={issueComment} onChange={(e) => setIssueComment(e.target.value)} placeholder="Например: выдали на выходные / срочная выдача" />
               </Field>
+              {can('store-consumables.issue') && (
               <Button onClick={handleCreateIssue} disabled={saving}>
                 {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Записать выдачу
               </Button>
+              )}
             </div>
           </Card>
 
@@ -596,10 +602,12 @@ export function ConsumablesPageContent({ embedded = false }: { embedded?: boolea
               </Field>
             </div>
             <div className="mt-4 flex gap-2">
+              {can('store-consumables.edit') && (
               <Button size="sm" onClick={handleSaveNorm} disabled={saving}>
                 {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Сохранить норму
               </Button>
+              )}
               {editingNormId && (
                 <Button size="sm" variant="outline" onClick={cancelEditNorm} disabled={saving}>Отмена</Button>
               )}

@@ -1614,7 +1614,7 @@ function SalaryRulesContent() {
                           {/* Actions */}
                           <td className="py-3 px-4 text-right">
                             <div className="flex items-center justify-end gap-1">
-                              {isDirty && (
+                              {isDirty && can('salary-rules.edit') && (
                                 <Button
                                   size="xs"
                                   className="h-7 px-2 bg-violet-500/20 text-violet-400 hover:bg-violet-500/30 border-0"
@@ -1715,10 +1715,12 @@ function SalaryRulesContent() {
                                         </label>
                                       </div>
                                       <div className="mt-3 flex items-center gap-2">
+                                        {can('salary-rules.upsert_version') && (
                                         <Button size="xs" className="h-8 px-3 bg-cyan-600 text-white hover:bg-cyan-500" onClick={() => void handleSubmitNewVersion()} disabled={savingNewVersion}>
                                           <Save className="w-3 h-3 mr-1" />
                                           {savingNewVersion ? 'Сохранение...' : 'Сохранить версию'}
                                         </Button>
+                                        )}
                                         <Button size="xs" variant="outline" className="h-8 px-3 border-border bg-white dark:bg-white/5 text-slate-700 dark:text-gray-300 hover:bg-surface-hover" onClick={() => { setNewVersionForRule(null); setNewVersionDraft({}) }}>
                                           Отмена
                                         </Button>
@@ -1817,9 +1819,11 @@ function SalaryRulesContent() {
                                                   <div className="flex items-center justify-end gap-1">
                                                     {isEditing ? (
                                                       <>
+                                                        {can('salary-rules.upsert_version') && (
                                                         <Button size="xs" className="h-7 px-2 bg-violet-500/20 text-violet-400 hover:bg-violet-500/30 border-0" onClick={() => void handleSaveVersion(v.id)} disabled={savingVersionId === v.id}>
                                                           {savingVersionId === v.id ? '...' : <><Save className="w-3 h-3 mr-1" />Сохранить</>}
                                                         </Button>
+                                                        )}
                                                         <Button size="xs" variant="ghost" className="h-7 px-2 text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white" onClick={() => cancelEditingVersion(v.id)}>
                                                           Отмена
                                                         </Button>
@@ -1829,9 +1833,11 @@ function SalaryRulesContent() {
                                                         <Button size="xs" variant="ghost" className="h-7 px-2 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10" onClick={() => startEditingVersion(v)}>
                                                           Изменить
                                                         </Button>
+                                                        {can('salary-rules.delete_version') && (
                                                         <Button size="xs" variant="ghost" className="h-7 w-7 p-0 text-red-400 hover:text-red-300 hover:bg-red-500/10" onClick={() => void handleDeleteVersion(v.id)} disabled={deletingVersionId === v.id} title="Удалить версию">
                                                           <Trash2 className="w-3.5 h-3.5" />
                                                         </Button>
+                                                        )}
                                                       </>
                                                     )}
                                                   </div>
@@ -2053,6 +2059,7 @@ function SalaryRulesContent() {
                         className="h-10 rounded-xl px-3 text-sm"
                       />
                     </label>
+                    {can('salary-rules.upsert_seniority') && (
                     <Button
                       type="button"
                       className="h-10 gap-2 rounded-xl bg-violet-600 text-white hover:bg-violet-500"
@@ -2062,6 +2069,7 @@ function SalaryRulesContent() {
                       <Plus className="h-4 w-4" />
                       {addingTier ? '...' : 'Добавить'}
                     </Button>
+                    )}
                   </div>
                 </div>
               </Card>
@@ -2140,6 +2148,7 @@ function SalaryRulesContent() {
                                 </td>
                                 <td className="px-4 py-3 text-right">
                                   <div className="flex justify-end gap-2">
+                                    {can('salary-rules.upsert_seniority') && (
                                     <Button
                                       type="button"
                                       size="xs"
@@ -2150,6 +2159,8 @@ function SalaryRulesContent() {
                                       <Save className="h-3.5 w-3.5" />
                                       {savingTierId === tier.id ? '...' : 'Сохранить'}
                                     </Button>
+                                    )}
+                                    {can('salary-rules.delete_seniority') && (
                                     <Button
                                       type="button"
                                       size="xs"
@@ -2161,6 +2172,7 @@ function SalaryRulesContent() {
                                     >
                                       <Trash2 className="h-3.5 w-3.5" />
                                     </Button>
+                                    )}
                                   </div>
                                 </td>
                               </tr>

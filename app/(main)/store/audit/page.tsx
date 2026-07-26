@@ -6,6 +6,7 @@ import { ArrowLeft, Check, ClipboardList, Loader2, Lock, Plus, RefreshCw, Trash2
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { CardSkeleton, Skeleton, TableSkeleton } from '@/components/skeleton'
 import { Button } from '@/components/ui/button'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { Card } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -36,6 +37,7 @@ const fmtDate = (s: string | null) => (s ? new Date(s).toLocaleString('ru-RU', {
 const locLabel = (l: Loc | null) => (l ? `${l.company?.name ? l.company.name + ' · ' : ''}${l.location_type === 'point_display' ? 'Витрина' : l.location_type === 'warehouse' ? 'Склад' : l.name}` : '—')
 
 export default function StoreAuditPage() {
+  const { can } = useCapabilities()
   const [view, setView] = useState<'list' | 'create' | 'detail'>('list')
   const [acts, setActs] = useState<ActListRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -406,10 +408,12 @@ export default function StoreAuditPage() {
             <Textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2} placeholder="Например: плановая ревизия за июнь" />
           </div>
 
+          {can('store-revisions.create') && (
           <Button onClick={createAct} disabled={creating || !locationId} className="w-full gap-2 bg-amber-600 hover:bg-amber-700">
             {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             Открыть акт
           </Button>
+          )}
           <p className="text-xs text-muted-foreground">При открытии фиксируется снимок остатков. Операторы считают вслепую — системную цифру они не видят.</p>
         </Card>
       </div>
@@ -504,6 +508,7 @@ export default function StoreAuditPage() {
                   )
                 })()}
                 {hasConflicts ? <div className="rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-700 dark:text-rose-300">Есть расхождения между счётчиками — решите их (примите значение или на пересчёт), затем закрывайте.</div> : null}
+                {can('store-revisions.commit') && (
                 <Button
                   onClick={() => {
                     if (zeroUncounted && (detail.uncounted || []).length > 0) setZeroPreviewOpen(true)
@@ -515,6 +520,8 @@ export default function StoreAuditPage() {
                   {closing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
                   Закрыть акт и провести
                 </Button>
+                )}
+                {can('store-revisions.commit') && (
                 <button
                   type="button"
                   onClick={() => void closeAct(true)}
@@ -523,7 +530,9 @@ export default function StoreAuditPage() {
                 >
                   Принудительно закрыть (обойти блокировки)
                 </button>
+                )}
                 <p className="text-[11px] text-muted-foreground">Принудительно — когда акт «завис»: есть заявки в пути, расхождения или операторы не досчитали. Проведёт что посчитано, остальное не тронет. Только для владельца.</p>
+                {can('store-revisions.cancel') && (
                 <button
                   type="button"
                   onClick={() => void cancelAct()}
@@ -533,13 +542,14 @@ export default function StoreAuditPage() {
                   {canceling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Undo2 className="h-3.5 w-3.5" />}
                   Отменить акт (вернуть как было)
                 </button>
+                )}
                 <p className="text-[11px] text-muted-foreground">Отмена — акт ещё не проведён: снимок и подсчёты отбрасываются, остатки не меняются. Используйте, если ревизию открыли по ошибке.</p>
               </div>
             ) : null}
             {debtsCreated && debtsCreated > 0 ? (
               <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">Создано долгов: {debtsCreated} — удержатся из зарплаты ответственных.</div>
             ) : null}
-            {detail.act.status === 'closed' ? (
+            {detail.act.status === 'closed' && can('store-revisions.cancel') ? (
               <div className="space-y-2 border-t border-slate-200 dark:border-white/5 pt-3">
                 <button
                   type="button"
@@ -679,6 +689,7 @@ export default function StoreAuditPage() {
                             <span className="min-w-0 truncate text-foreground">{r.name}</span>
                             <span className="rounded bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-medium text-rose-700 dark:text-rose-300">расхождение</span>
                           </div>
+                          {can('store-revisions.edit') && (
                           <div className="mt-1.5 flex flex-wrap items-center gap-2">
                             {(r.counts || []).map((c: any, i: number) => (
                               <button key={i} type="button" onClick={() => void resolveItem(r.item_id, c.qty)} title="Принять это значение" className="rounded border border-border px-2 py-1 text-xs tabular-nums text-foreground transition hover:border-amber-400/40 hover:text-amber-700 dark:hover:text-amber-300">
@@ -687,6 +698,7 @@ export default function StoreAuditPage() {
                             ))}
                             <button type="button" onClick={() => void recountItem(r.item_id)} className="rounded border border-amber-500/30 px-2 py-1 text-xs text-amber-700 dark:text-amber-300 transition hover:bg-amber-500/10">на пересчёт</button>
                           </div>
+                          )}
                         </div>
                       ) : (
                         <div key={r.item_id} className="flex items-center justify-between gap-3 border-b border-slate-100 dark:border-white/5 py-1.5 text-sm last:border-0">
@@ -754,6 +766,7 @@ export default function StoreAuditPage() {
                       </div>
                       <div className="flex justify-end gap-2">
                         <Button variant="ghost" onClick={() => setZeroPreviewOpen(false)} disabled={closing}>Отмена</Button>
+                        {can('store-revisions.commit') && (
                         <Button
                           onClick={() => void closeAct(false, true)}
                           disabled={closing}
@@ -762,6 +775,7 @@ export default function StoreAuditPage() {
                           {closing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
                           Обнулить {uncountedRows.length} поз. и провести
                         </Button>
+                        )}
                       </div>
                     </div>
                   )

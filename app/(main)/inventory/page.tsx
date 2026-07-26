@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { Card } from '@/components/ui/card'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Input } from '@/components/ui/input'
@@ -396,6 +397,7 @@ function ItemCombobox({
 }
 
 export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?: InventoryView }) {
+  const { can } = useCapabilities()
   const [data, setData] = useState<InventoryResponse['data'] | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -1277,10 +1279,12 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
             </div>
 
             <div className="mt-4">
+              {can('store-receipts.create') && (
               <Button type="button" className="gap-2" onClick={handleCreateReceipt} disabled={saving}>
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackagePlus className="h-4 w-4" />}
                 Провести приемку
               </Button>
+              )}
             </div>
           </Card>
 
@@ -1370,10 +1374,12 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
             </div>
 
             <div className="mt-4">
+              {can('store-writeoffs.create') && (
               <Button type="button" className="gap-2" onClick={handleCreateWriteoff} disabled={saving}>
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArchiveX className="h-4 w-4" />}
                 Провести списание
               </Button>
+              )}
             </div>
           </Card>
 
@@ -1462,10 +1468,12 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
             ) : null}
 
             <div className="mt-4">
+              {can('store-revisions.create') && (
               <Button type="button" className="gap-2" onClick={handleCreateStocktake} disabled={saving}>
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanSearch className="h-4 w-4" />}
                 Провести ревизию
               </Button>
+              )}
             </div>
           </Card>
 
@@ -1538,10 +1546,12 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
 
             <div className="mt-4 flex flex-wrap gap-3">
               <Button type="button" variant="outline" onClick={() => setRequestLines((current) => [...current, emptyRequestLine()])}>Добавить позицию</Button>
+              {can('store-requests.create') && (
               <Button type="button" className="gap-2" onClick={handleCreateRequest} disabled={saving}>
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardList className="h-4 w-4" />}
                 Создать заявку
               </Button>
+              )}
             </div>
           </Card>
         </div>
@@ -1617,13 +1627,17 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
                     </Field>
 
                     <div className="mt-4 flex flex-wrap gap-3">
+                      {can('store-requests.approve') && (
                       <Button type="button" className="gap-2" onClick={() => void handleDecideRequest(request, true)} disabled={saving}>
                         {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardCheck className="h-4 w-4" />}
                         Одобрить и выдать
                       </Button>
+                      )}
+                      {can('store-requests.reject') && (
                       <Button type="button" variant="outline" onClick={() => void handleDecideRequest(request, false)} disabled={saving}>
                         Отклонить
                       </Button>
+                      )}
                     </div>
                   </div>
                 )
@@ -1714,11 +1728,11 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
               <div className="flex gap-2">
                 {editingCategory ? (
                   <>
-                    <Button type="button" onClick={handleUpdateCategory} disabled={saving}>Сохранить</Button>
+                    {can('store-catalog.edit') && <Button type="button" onClick={handleUpdateCategory} disabled={saving}>Сохранить</Button>}
                     <Button type="button" variant="outline" onClick={cancelEditCategory} disabled={saving}><X className="h-4 w-4" /></Button>
                   </>
                 ) : (
-                  <Button type="button" onClick={handleCreateCategory} disabled={saving}>Создать категорию</Button>
+                  can('store-catalog.create') && <Button type="button" onClick={handleCreateCategory} disabled={saving}>Создать категорию</Button>
                 )}
               </div>
               <div className="flex flex-wrap gap-2">
@@ -1752,11 +1766,11 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
               <div className="flex gap-2">
                 {editingSupplier ? (
                   <>
-                    <Button type="button" onClick={handleUpdateSupplier} disabled={saving}>Сохранить</Button>
+                    {can('store-suppliers.edit') && <Button type="button" onClick={handleUpdateSupplier} disabled={saving}>Сохранить</Button>}
                     <Button type="button" variant="outline" onClick={cancelEditSupplier} disabled={saving}><X className="h-4 w-4" /></Button>
                   </>
                 ) : (
-                  <Button type="button" onClick={handleCreateSupplier} disabled={saving}>Добавить поставщика</Button>
+                  can('store-suppliers.create') && <Button type="button" onClick={handleCreateSupplier} disabled={saving}>Добавить поставщика</Button>
                 )}
               </div>
               {(data?.suppliers || []).length > 0 && (
@@ -1825,11 +1839,11 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
               <div className="flex gap-2">
                 {editingItem ? (
                   <>
-                    <Button type="button" onClick={handleUpdateItem} disabled={saving}>Сохранить изменения</Button>
+                    {can('store-catalog.edit') && <Button type="button" onClick={handleUpdateItem} disabled={saving}>Сохранить изменения</Button>}
                     <Button type="button" variant="outline" onClick={cancelEditItem} disabled={saving}><X className="h-4 w-4" /></Button>
                   </>
                 ) : (
-                  <Button type="button" onClick={handleCreateItem} disabled={saving}>Создать товар</Button>
+                  can('store-catalog.create') && <Button type="button" onClick={handleCreateItem} disabled={saving}>Создать товар</Button>
                 )}
               </div>
               {(data?.items || []).length > 0 && (
@@ -2007,10 +2021,12 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
           </div>
 
           <div className="mt-4">
+            {can('store-writeoffs.create') && (
             <Button type="button" className="gap-2" onClick={handleCreateWriteoff} disabled={saving}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArchiveX className="h-4 w-4" />}
               Провести списание
             </Button>
+            )}
           </div>
         </Card>
 
@@ -2099,10 +2115,12 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
           ) : null}
 
           <div className="mt-4">
+            {can('store-revisions.create') && (
             <Button type="button" className="gap-2" onClick={handleCreateStocktake} disabled={saving}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanSearch className="h-4 w-4" />}
               Провести ревизию
             </Button>
+            )}
           </div>
         </Card>
       </div>
@@ -2217,6 +2235,7 @@ function ShowcaseTogglesCard({
   setSuccess: (msg: string | null) => void
   setError: (msg: string | null) => void
 }) {
+  const { can } = useCapabilities()
   const [busyId, setBusyId] = useState<string | null>(null)
 
   const pointByCompany = useMemo(() => {
@@ -2268,11 +2287,13 @@ function ShowcaseTogglesCard({
                   {on ? 'Витрина активна' : loc ? 'Витрина выключена' : 'Витрина не создана — включите переключатель'}
                 </div>
               </div>
+              {can('store-showcase.move') && (
               <Switch
                 checked={on}
                 disabled={busyId === c.id}
                 onCheckedChange={(v) => void applyShowcase(c.id, v)}
               />
+              )}
             </div>
           )
         })}
