@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Users, Loader2, RefreshCw, Star, AlertTriangle, GraduationCap, Sparkles } from 'lucide-react'
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { DatePicker } from '@/components/ui/date-picker'
 
 type OperatorMetric = {
@@ -61,6 +62,7 @@ const SEV: Record<Insight['severity'], { accent: string; chip: string; label: st
 }
 
 export default function TeamAnalysisPage() {
+  const { can } = useCapabilities()
   const [data, setData] = useState<Resp | null>(null)
   const [loading, setLoading] = useState(false)
   const [loaded, setLoaded] = useState(false)
@@ -184,6 +186,7 @@ export default function TeamAnalysisPage() {
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
+            {can('team-analysis.refresh') && (
             <button
               onClick={() => run()}
               disabled={loading}
@@ -191,6 +194,7 @@ export default function TeamAnalysisPage() {
             >
               <RefreshCw className="h-3.5 w-3.5" /> Обновить
             </button>
+            )}
           </div>
         }
       />

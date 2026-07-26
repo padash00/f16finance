@@ -5,6 +5,7 @@ import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { TableSkeleton } from '@/components/skeleton'
 import { DatePicker } from '@/components/ui/date-picker'
 import { ChefHat, Loader2, Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 
 type Ingredient = { id: string; name: string; unit: string | null; purchase_price: number | null; category?: string | null; stock_qty?: number | null }
 type Comp = { id?: string; ingredient_id: string | null; component_recipe_id: string | null; name: string | null; qty: number; unit: string; waste_pct: number }
@@ -43,6 +44,7 @@ function marginColor(pct: number): string {
 }
 
 export default function ProductionPage() {
+  const { can } = useCapabilities()
   const [recipes, setRecipes] = useState<Recipe[]>([])
   const [ingredients, setIngredients] = useState<Ingredient[]>([])
   const [saleItems, setSaleItems] = useState<SaleItem[]>([])
@@ -277,9 +279,11 @@ export default function ProductionPage() {
               <input className={`${inputCls} w-full`} type="number" placeholder="цена за ед." value={ingPrice} onChange={(e) => setIngPrice(e.target.value)} />
               <p className={hintCls}>Цена за 1 {ingUnit}.</p>
             </div>
-            <button onClick={addIngredient} disabled={savingIng} className="mb-5 inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50">
-              {savingIng ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Добавить
-            </button>
+            {can('production.create_ingredient') && (
+              <button onClick={addIngredient} disabled={savingIng} className="mb-5 inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50">
+                {savingIng ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Добавить
+              </button>
+            )}
           </div>
           {ingredients.length === 0 ? (
             <p className="text-xs text-slate-500">Ингредиентов нет. Добавьте первый — потом из них соберёте техкарту.</p>
@@ -292,9 +296,9 @@ export default function ProductionPage() {
                     <span className="tabular-nums text-muted-foreground">{money(Number(ing.purchase_price || 0))}/{ing.unit}</span>
                     <span className="text-[11px] text-slate-500">остаток</span>
                     <span className={`tabular-nums ${Number(ing.stock_qty || 0) < 0 ? 'text-rose-600 dark:text-rose-300' : 'text-foreground'}`}>{Number(ing.stock_qty || 0)} {ing.unit}</span>
-                    <button onClick={() => receiptIng(ing)} className="rounded-lg border border-border bg-slate-100 dark:bg-white/5 px-2 py-1 text-[11px] text-emerald-700 dark:text-emerald-300 hover:bg-slate-200 dark:hover:bg-white/10">+ приход</button>
-                    <button onClick={() => countIng(ing)} className="rounded-lg border border-border bg-slate-100 dark:bg-white/5 px-2 py-1 text-[11px] text-body hover:bg-slate-200 dark:hover:bg-white/10">ревизия</button>
-                    <button onClick={() => deleteIngredient(ing.id, ing.name)} className="text-slate-500 hover:text-rose-600 dark:hover:text-rose-300"><Trash2 className="h-3.5 w-3.5" /></button>
+                    {can('production.stock_receipt') && <button onClick={() => receiptIng(ing)} className="rounded-lg border border-border bg-slate-100 dark:bg-white/5 px-2 py-1 text-[11px] text-emerald-700 dark:text-emerald-300 hover:bg-slate-200 dark:hover:bg-white/10">+ приход</button>}
+                    {can('production.stock_count') && <button onClick={() => countIng(ing)} className="rounded-lg border border-border bg-slate-100 dark:bg-white/5 px-2 py-1 text-[11px] text-body hover:bg-slate-200 dark:hover:bg-white/10">ревизия</button>}
+                    {can('production.delete_ingredient') && <button onClick={() => deleteIngredient(ing.id, ing.name)} className="text-slate-500 hover:text-rose-600 dark:hover:text-rose-300"><Trash2 className="h-3.5 w-3.5" /></button>}
                   </div>
                 </div>
               ))}
@@ -444,9 +448,11 @@ export default function ProductionPage() {
 
           <div className="mt-4 flex justify-end gap-2">
             <button onClick={() => { setShowForm(false); resetForm() }} className="rounded-xl border border-border bg-slate-100 dark:bg-white/5 px-4 py-2 text-sm text-body hover:bg-slate-200 dark:hover:bg-white/10">Отмена</button>
-            <button onClick={save} disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50">
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Сохранить
-            </button>
+            {can('production.create') && (
+              <button onClick={save} disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50">
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Сохранить
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -462,9 +468,11 @@ export default function ProductionPage() {
             <button onClick={runAnalysis} disabled={anLoading} className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50">
               {anLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Посчитать
             </button>
-            <button onClick={writeoffSales} className="inline-flex items-center gap-1.5 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-700 dark:text-amber-200 hover:bg-amber-500/20" title="Списать теоретический расход ингредиентов со склада за период">
-              Списать со склада
-            </button>
+            {can('production.writeoff') && (
+              <button onClick={writeoffSales} className="inline-flex items-center gap-1.5 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-700 dark:text-amber-200 hover:bg-amber-500/20" title="Списать теоретический расход ингредиентов со склада за период">
+                Списать со склада
+              </button>
+            )}
           </div>
         </div>
         {analysis ? (
@@ -560,8 +568,8 @@ export default function ProductionPage() {
                     привяжи товар,<br />чтобы видеть<br />food cost / маржу
                   </div>
                 )}
-                <button onClick={() => openEdit(r)} className="text-slate-500 transition hover:text-emerald-700 dark:hover:text-emerald-300"><Pencil className="h-4 w-4" /></button>
-                <button onClick={() => remove(r.id, r.name)} className="text-slate-500 transition hover:text-rose-600 dark:hover:text-rose-300"><Trash2 className="h-4 w-4" /></button>
+                {can('production.create') && <button onClick={() => openEdit(r)} className="text-slate-500 transition hover:text-emerald-700 dark:hover:text-emerald-300"><Pencil className="h-4 w-4" /></button>}
+                {can('production.delete') && <button onClick={() => remove(r.id, r.name)} className="text-slate-500 transition hover:text-rose-600 dark:hover:text-rose-300"><Trash2 className="h-4 w-4" /></button>}
               </div>
             )})}
           </div>

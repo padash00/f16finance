@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { ArrowDownRight, ArrowUpRight, Brain, Loader2, ShieldAlert, TrendingUp, TrendingDown, Lightbulb, Target, CalendarDays, RefreshCw } from 'lucide-react'
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { DatePicker } from '@/components/ui/date-picker'
 
 type Exec = {
@@ -101,6 +102,7 @@ const LEVEL: Record<string, { c: string; l: string }> = {
 }
 
 export default function AiCfoPage() {
+  const { can } = useCapabilities()
   const [data, setData] = useState<Resp | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -151,12 +153,12 @@ export default function AiCfoPage() {
         icon={<Brain className="h-5 w-5" />}
         accent="violet"
         backHref="/"
-        actions={
+        actions={can('ai-cfo.generate') && (
           <button onClick={() => run(lastParams, sel, true)} disabled={loading}
             className={`inline-flex items-center gap-1.5 rounded-lg border ${C.border} px-3 py-1.5 text-sm ${C.sub} transition hover:bg-slate-100 dark:hover:bg-white/[0.03] disabled:opacity-50`}>
             <RefreshCw className="h-3.5 w-3.5" /> Обновить
           </button>
-        }
+        )}
         toolbar={
           <div className="flex flex-wrap items-center gap-3">
             {/* Сегментированные пресеты */}

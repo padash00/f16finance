@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { ArrowDownRight, ArrowUpRight, Loader2, TrendingDown, Wallet, RefreshCw } from 'lucide-react'
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { DatePicker } from '@/components/ui/date-picker'
 
 type Category = { category: string; amount: number; prev: number; sharePct: number; changePct: number }
@@ -43,6 +44,7 @@ function ChangeBadge({ value, goodWhenUp = false }: { value: number; goodWhenUp?
 }
 
 export default function ExpenseAnalysisPage() {
+  const { can } = useCapabilities()
   const [data, setData] = useState<Resp | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -150,10 +152,12 @@ export default function ExpenseAnalysisPage() {
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
+            {can('expense-analysis.refresh') && (
             <button onClick={() => run(companyId, days, custom, from, to)} disabled={loading}
               className={`inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm ${sub} transition hover:bg-slate-100 disabled:opacity-50 dark:border-white/10 dark:hover:bg-white/[0.04]`}>
               <RefreshCw className="h-3.5 w-3.5" /> Обновить
             </button>
+            )}
           </div>
         }
       />
