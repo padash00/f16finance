@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { Skeleton } from '@/components/skeleton'
 import { Settings, Store, Check, Loader2, Save } from 'lucide-react'
 
 type Company = { id: string; name: string; code: string | null }
 
 export default function StoreSettingsPage() {
+  const { can } = useCapabilities()
   const [companies, setCompanies] = useState<Company[]>([])
   const [storeCompanyId, setStoreCompanyId] = useState<string | null>(null)
   const [selected, setSelected] = useState<string>('')
@@ -104,6 +106,7 @@ export default function StoreSettingsPage() {
         )}
 
         <div className="mt-4 flex flex-wrap items-center gap-3">
+          {can('store-settings.edit') && (
           <button
             onClick={save}
             disabled={!canManage || saving || !dirty}
@@ -112,6 +115,7 @@ export default function StoreSettingsPage() {
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             Сохранить
           </button>
+          )}
           {msg && <span className="text-sm text-emerald-700 dark:text-emerald-300">{msg}</span>}
           {err && <span className="text-sm text-rose-700 dark:text-rose-300">{err}</span>}
           {!canManage && <span className="text-xs text-slate-500">Только владелец/менеджер может менять</span>}

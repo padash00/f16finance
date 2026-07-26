@@ -533,12 +533,16 @@ export default function SettingsPage() {
                                             </div>
                                         </div>
                                         <div className="flex shrink-0 gap-1">
+                                            {can('access.manage_staff_roles') && (
                                             <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-purple-400" onClick={() => { setEditStaffId(s.id); setEditStaffData({ name: s.full_name, phone: s.phone || '', email: s.email || '', role: s.role || 'other' }) }}>
                                                 <Pencil className="w-3 h-3" />
                                             </Button>
+                                            )}
+                                            {can('staff.toggle_status') && (
                                             <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-amber-400" title="Убрать из команды (в архив)" onClick={() => handleArchiveStaff(s.id, s.full_name)}>
                                                 <Archive className="w-3 h-3" />
                                             </Button>
+                                            )}
                                         </div>
                                     </div>
                                 )}
@@ -580,9 +584,11 @@ export default function SettingsPage() {
                                     <option value="owner">Владелец</option>
                                 </select>
                             </div>
+                            {can('access.manage_staff_roles') && (
                             <Button type="submit" disabled={!newStaff.name.trim() || saving} className="w-full bg-purple-600 hover:bg-purple-700 mt-2">
                                 <Plus className="w-4 h-4 mr-2" /> Добавить сотрудника
                             </Button>
+                            )}
                         </form>
                     </div>
                 </Card>

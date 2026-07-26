@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useStoreScope } from '@/components/store/store-scope'
 import { isAbortError } from '@/lib/is-abort-error'
 
@@ -71,6 +72,7 @@ const emptySettings = (companyId: string): Settings => ({
 })
 
 export default function ReceiptSettingsPage() {
+  const { can } = useCapabilities()
   const [companies, setCompanies] = useState<Company[]>([])
   const [selectedCompanyId, setSelectedCompanyId] = useState('')
   const { storeCompanyId } = useStoreScope()
@@ -185,6 +187,7 @@ export default function ReceiptSettingsPage() {
                 </SelectContent>
               </Select>
             )}
+            {can('store-receipt-settings.edit') && (
             <Button
               size="sm"
               onClick={handleSave}
@@ -194,6 +197,7 @@ export default function ReceiptSettingsPage() {
               {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
               Сохранить
             </Button>
+            )}
           </>
         }
       />

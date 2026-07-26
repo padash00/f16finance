@@ -410,9 +410,11 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
 
             <div className="mt-5 flex justify-end gap-2">
               <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={saving}>Отмена</Button>
+              {can('store-purchase-orders.create') && (
               <Button onClick={submitCreate} disabled={saving}>
                 {saving ? <><Loader2 className="w-4 h-4 animate-spin mr-1" />Создаю...</> : 'Создать заявку'}
               </Button>
+              )}
             </div>
           </div>
         </div>
@@ -485,7 +487,7 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
             </div>
 
             <div className="mt-5 flex flex-wrap justify-end gap-2">
-              {detail.status === 'draft' ? (
+              {detail.status === 'draft' && can('store-purchase-orders.send') ? (
                 <>
                   <Button
                     className="bg-amber-600 hover:bg-amber-700"
@@ -500,7 +502,7 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
                   </Button>
                 </>
               ) : null}
-              {detail.status === 'sent' ? (
+              {detail.status === 'sent' && can('store-purchase-orders.edit') ? (
                 <Button onClick={() => void changeStatus('received')} disabled={statusBusy}>
                   {statusBusy ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
                   Отметить «Получена»

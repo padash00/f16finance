@@ -568,10 +568,12 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>Заявки</DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                {can('store-requests.export') && (
                 <DropdownMenuItem onClick={exportRequestsCsv}>
                   <ClipboardList className="h-4 w-4" />
                   Экспорт CSV
                 </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   onClick={() => {
                     setSearchInput('')
@@ -805,6 +807,7 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
                       className="text-sm"
                     />
                     <div className="flex items-start gap-2">
+                      {can('store-requests.approve') && (
                       <Button
                         onClick={() => submitDecision(request, true, false)}
                         disabled={savingId === request.id}
@@ -813,6 +816,7 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
                         {savingId === request.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackageCheck className="h-4 w-4" />}
                         Сохранить
                       </Button>
+                      )}
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="outline" size="icon" disabled={savingId === request.id}>
@@ -822,18 +826,24 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
                         <DropdownMenuContent align="end" className="w-56">
                           <DropdownMenuLabel>Доп. действия</DropdownMenuLabel>
                           <DropdownMenuSeparator />
+                          {can('store-requests.approve') && (
                           <DropdownMenuItem onClick={() => submitDecision(request, true, true)}>
                             <CheckCircle2 className="h-4 w-4" />
                             Одобрить полностью
                           </DropdownMenuItem>
+                          )}
+                          {can('store-requests.approve') && (
                           <DropdownMenuItem onClick={() => submitDecision(request, true, false)}>
                             <PackageCheck className="h-4 w-4" />
                             Одобрить по количествам
                           </DropdownMenuItem>
+                          )}
+                          {can('store-requests.reject') && (
                           <DropdownMenuItem variant="destructive" onClick={() => submitDecision(request, false, false)}>
                             <XCircle className="h-4 w-4" />
                             Отклонить заявку
                           </DropdownMenuItem>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
