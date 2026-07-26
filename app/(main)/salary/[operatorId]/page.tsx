@@ -290,7 +290,7 @@ function OperatorSalaryDetailPageContent() {
                   Неделя: <span className="font-semibold text-foreground">{formatRuDate(weekStart)} — {formatRuDate(weekEnd)}</span>
                 </div>
                 {st ? <span className={`rounded-full border px-3 py-1.5 text-xs font-medium ${st.className}`}>{st.label}</span> : null}
-                {data && data.week.status === 'paid' ? (
+                {data && data.week.status === 'paid' && can('salary.unlock_week') ? (
                   <button
                     type="button"
                     onClick={() => void unlockWeek()}
@@ -352,10 +352,12 @@ function OperatorSalaryDetailPageContent() {
                   <Wallet className="mr-2 h-4 w-4" />Выплатить
                 </Button>
                 )}
+                {can('salary.send_telegram') && (
                 <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover disabled:opacity-40" disabled={!data.operator.telegram_chat_id || tgSending} onClick={() => void sendTelegram()}>
                   {tgSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MessageCircle className="mr-2 h-4 w-4" />}
                   {data.operator.telegram_chat_id ? 'Отправить в Telegram' : 'Нет Telegram'}
                 </Button>
+                )}
               </div>
 
               {/* Company allocations */}
@@ -482,9 +484,11 @@ function OperatorSalaryDetailPageContent() {
                   </select>
                   <DatePicker className="h-11" value={adjDate} onChange={setAdjDate} />
                   <input className={input} type="text" placeholder="Сумма" value={adjAmount} onChange={(e) => setAdjAmount(e.target.value)} />
+                  {can('salary.create_adjustment') && (
                   <Button type="submit" className="h-11 rounded-xl bg-emerald-500 text-white hover:bg-emerald-400">
                     {adjSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Сохранить'}
                   </Button>
+                  )}
                   <input className={`${input} md:col-span-2 xl:col-span-5`} type="text" placeholder="Комментарий" value={adjComment} onChange={(e) => setAdjComment(e.target.value)} />
                 </form>
                 {adjSuccess ? <div className="mt-3 flex items-center gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300"><CheckCircle2 className="h-4 w-4 shrink-0" />Корректировка сохранена</div> : null}

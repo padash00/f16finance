@@ -514,6 +514,7 @@ export default function OperatorsPage() {
             icon={<Users2 className="h-5 w-5" aria-hidden />}
             actions={
               <div className="flex items-center gap-2">
+                {can('operators.export') && (
                 <Button
                   onClick={() => void handleExportPdf()}
                   variant="outline"
@@ -522,6 +523,7 @@ export default function OperatorsPage() {
                 >
                   <Download className="h-4 w-4" /> PDF
                 </Button>
+                )}
                 <Button
                   onClick={() => void load()}
                   variant="outline"

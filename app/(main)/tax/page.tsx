@@ -15,6 +15,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { DatePicker } from '@/components/ui/date-picker'
 import {
   Calculator,
@@ -137,6 +138,7 @@ function todayISO() { return new Date().toISOString().slice(0, 10) }
 function startOfYearISO() { return `${new Date().getFullYear()}-01-01` }
 
 export default function TaxPage() {
+  const { can } = useCapabilities()
   const [iknRate, setIknRate] = useState(() => {
     if (typeof window === 'undefined') return 2
     const saved = localStorage.getItem('tax_ikn_rate')
@@ -925,6 +927,7 @@ export default function TaxPage() {
               {!includeSelfSocial ? ' · соц «за себя» не учтены' : ''}
               {!includeEmployees ? ' · работники не учтены' : ''}
             </p>
+            {can('tax.export_910') && (
             <button
               type="button"
               onClick={async () => {
@@ -957,6 +960,7 @@ export default function TaxPage() {
             >
               📄 Скачать форму 910.00 (Excel)
             </button>
+            )}
           </div>
         </div>
       </Card>

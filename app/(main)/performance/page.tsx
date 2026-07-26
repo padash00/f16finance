@@ -26,6 +26,7 @@ import {
 
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
 
@@ -300,6 +301,7 @@ function exportCsv(rows: RankingItem[], bonusPct: number) {
 }
 
 export default function PerformancePage() {
+  const { can } = useCapabilities()
   const [isClient, setIsClient] = useState(false)
   useEffect(() => setIsClient(true), [])
 
@@ -551,6 +553,7 @@ export default function PerformancePage() {
                 />
                 <span className="text-xs font-medium text-muted-foreground">% сверх нормы</span>
               </div>
+              {can('performance.export') && (
               <button
                 type="button"
                 onClick={() => exportCsv(viewQualifying, bonusPct)}
@@ -560,6 +563,7 @@ export default function PerformancePage() {
               >
                 <Download className="w-3.5 h-3.5" />Экспорт
               </button>
+              )}
             </div>
           </>
         }

@@ -315,6 +315,7 @@ interface MapEditorProps {
 }
 
 function MapEditor({ projectId, companyId, zones, stations, decorations, cellSize: CELL, onSaved, showFlash }: MapEditorProps) {
+  const { can } = useCapabilities()
   // Local mutable state for positions
   const [localZones, setLocalZones] = useState<Zone[]>(zones)
   const [localStations, setLocalStations] = useState<Station[]>(stations)
@@ -555,6 +556,7 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
               Есть несохранённые изменения
             </span>
           )}
+          {can('stations.update_map_layout') && (
           <button
             type="button"
             onClick={() => void saveMapLayout()}
@@ -564,6 +566,7 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
             {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
             Сохранить карту
           </button>
+          )}
           <button
             type="button"
             onClick={autoArrange}
@@ -732,10 +735,12 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
                   ? <span className="text-xl" title={deco.label ?? deco.type}>{decoEmoji(deco.type)}</span>
                   : null
               }
+              {can('stations.delete_decoration') && (
               <button
                 className="absolute -top-1 -right-1 hidden group-hover:flex h-3.5 w-3.5 items-center justify-center rounded-full bg-destructive text-[9px] text-white"
                 onClick={e => { e.stopPropagation(); void handleDeleteDeco(deco.id) }}
               >×</button>
+              )}
             </div>
           ))}
 
@@ -838,12 +843,14 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
               </label>
             </div>
             <div className="flex gap-2">
+              {can('stations.create_decoration') && (
               <button
                 onClick={() => void handleAddDecoration()}
                 className="flex-1 rounded-lg bg-primary py-1.5 text-sm font-medium text-primary-foreground"
               >
                 Добавить
               </button>
+              )}
               <button onClick={() => setAddDecoCell(null)} className="rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground">
                 Отмена
               </button>
@@ -2719,6 +2726,7 @@ function StationsPageContent() {
               <button type="button" onClick={() => void loadAnalytics()} disabled={analyticsLoading} className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-50">
                 {analyticsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Загрузить
               </button>
+              {can('stations.export_analytics') && (
               <button
                 type="button"
                 onClick={exportAnalyticsCsv}
@@ -2728,6 +2736,7 @@ function StationsPageContent() {
               >
                 <Download className="h-4 w-4" /> CSV
               </button>
+              )}
             </div>
             <p className="text-[11px] text-muted-foreground">Период сохраняется в адресе (<code className="rounded bg-slate-100 dark:bg-white/5 px-1">tab</code>, <code className="rounded bg-slate-100 dark:bg-white/5 px-1">afrom</code>, <code className="rounded bg-slate-100 dark:bg-white/5 px-1">ato</code>) — можно поделиться ссылкой.</p>
 
@@ -3480,6 +3489,7 @@ function StationsPageContent() {
                         <p className="font-medium">{game?.title || x.game_id}</p>
                         <p className="text-muted-foreground truncate">{x.exe_path}</p>
                         {x.launch_args ? <p className="text-muted-foreground truncate">args: {x.launch_args}</p> : null}
+                        {can('stations.delete_station_game') && (
                         <button
                           type="button"
                           onClick={() => void handleDeleteStationGame(x.id)}
@@ -3487,6 +3497,7 @@ function StationsPageContent() {
                         >
                           Удалить
                         </button>
+                        )}
                       </div>
                     )
                   })}

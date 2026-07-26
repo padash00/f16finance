@@ -43,6 +43,7 @@ import {
 } from 'recharts'
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -326,6 +327,7 @@ function buildSeries(params: {
 // ─── Компонент ──────────────────────────────────────────────────────────────
 
 export default function GoalsPage() {
+  const { can } = useCapabilities()
   const currentYear = new Date().getFullYear()
   const [year, setYear] = useState(currentYear)
   const [tab, setTab] = useState<PeriodKind>('year')
@@ -784,10 +786,12 @@ export default function GoalsPage() {
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setDialogOpen(false)}>Отмена</Button>
+              {can('goals.create') && (
               <Button onClick={handleAddPlan} disabled={saving} className="bg-gradient-to-r from-amber-600 to-amber-600 hover:from-amber-700 hover:to-amber-700">
                 {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Сохранить
               </Button>
+              )}
             </div>
           </DialogContent>
         </Dialog>
@@ -1003,6 +1007,7 @@ function PeriodView({
   setActiveMetric: (m: Metric) => void
   onDelete: (id: string) => void
 }) {
+  const { can } = useCapabilities()
   const periodPlans = plans.filter((p) => p.period_kind === tab)
   const monthPlans = plans.filter((p) => p.period_kind === 'month')
   const { start, end } = periodBounds(tab, year)
@@ -1084,7 +1089,7 @@ function PeriodView({
       <div className="rounded-2xl border border-border bg-white dark:bg-white/[0.02] p-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold">Динамика: {metricMeta(activeMetric).label}</h2>
-          {activePlan ? (
+          {activePlan && can('goals.delete') ? (
             <button onClick={() => onDelete(activePlan.id)} className="inline-flex items-center gap-1 rounded-lg border border-rose-500/20 px-2 py-1 text-xs text-rose-700 dark:text-rose-300 hover:bg-rose-500/10">
               <Trash2 className="h-3.5 w-3.5" /> Удалить план
             </button>
@@ -1217,6 +1222,7 @@ function MonthDetailDialog({
   onClose: () => void
   onDelete: (id: string) => void
 }) {
+  const { can } = useCapabilities()
   const [activeMetric, setActiveMetric] = useState<Metric>('revenue')
   const { start, end } = periodBounds('month', year, monthIdx)
   const orgPlan = plans.find((p) => p.metric === activeMetric && !p.company_id)
@@ -1338,7 +1344,7 @@ function MonthDetailDialog({
           <div className="rounded-2xl border border-border bg-white dark:bg-white/[0.02] p-5">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-sm font-semibold">Динамика по дням: {metricMeta(activeMetric).label}</h2>
-              {orgPlan ? (
+              {orgPlan && can('goals.delete') ? (
                 <button onClick={() => onDelete(orgPlan.id)} className="inline-flex items-center gap-1 rounded-lg border border-rose-500/20 px-2 py-1 text-xs text-rose-700 dark:text-rose-300 hover:bg-rose-500/10">
                   <Trash2 className="h-3.5 w-3.5" /> Удалить план
                 </button>

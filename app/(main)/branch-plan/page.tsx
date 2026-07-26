@@ -15,6 +15,7 @@ import {
   YAxis,
 } from 'recharts'
 import { Building2, Cpu, Loader2, Plus, RefreshCw, Save, Trash2 } from 'lucide-react'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -459,6 +460,7 @@ function draftSnapshot(d: Draft): string {
 }
 
 export default function BranchPlanPage() {
+  const { can } = useCapabilities()
   const [drafts, setDrafts] = useState<DraftListItem[]>([])
   const [draft, setDraft] = useState<Draft>(defaultDraft)
   const [loading, setLoading] = useState(true)
@@ -1349,15 +1351,17 @@ export default function BranchPlanPage() {
       </Card>
 
       <div className="flex flex-wrap justify-end gap-2">
-        {draft.id ? (
+        {draft.id && can('branch-plan.delete') ? (
           <Button variant="outline" className="border-rose-500/40 text-rose-700 dark:text-rose-200 hover:bg-rose-500/10" onClick={() => void deleteDraft()}>
             <Trash2 className="mr-1 h-4 w-4" /> Удалить
           </Button>
         ) : null}
+        {can('branch-plan.edit') && (
         <Button onClick={() => void saveDraft()} disabled={saving}>
           {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
           {draft.id ? 'Сохранить' : 'Сохранить как новый'}
         </Button>
+        )}
       </div>
 
       <Card className="border-border bg-white dark:bg-white/[0.02] p-4 text-[11px] leading-relaxed text-muted-foreground">

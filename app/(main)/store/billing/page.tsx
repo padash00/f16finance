@@ -767,7 +767,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
                             )}
                           </>
                         )}
-                        {canWriteOff && (
+                        {can('store-billing.delete_debt') && (
                           <Button
                             variant="outline"
                             size="sm"
@@ -888,6 +888,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
                     <a href={payReceiptUrl} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 dark:text-emerald-300 underline">
                       Чек загружен — открыть файл
                     </a>
+                    {can('store-billing.parse_receipt') && (
                     <Button
                       type="button"
                       size="sm"
@@ -899,6 +900,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
                       {parsingReceipt ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
                       Распознать ИИ
                     </Button>
+                    )}
                   </div>
                 ) : null}
                 {receiptParseHint ? (

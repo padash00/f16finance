@@ -9,6 +9,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -547,6 +548,7 @@ function relativeTime(dateStr: string): string {
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function LogsPage() {
+  const { can } = useCapabilities()
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -722,10 +724,12 @@ export default function LogsPage() {
             >
               {includeNoise ? 'Только важное' : 'Показать всё'}
             </Button>
+            {can('logs.export') && (
             <Button variant="outline" onClick={exportLogs} className="border-slate-200 bg-white hover:bg-slate-50 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10">
               <Download className="mr-2 h-4 w-4" />
               Экспорт CSV
             </Button>
+            )}
             <Button onClick={() => void loadLogs(true)} disabled={refreshing}>
               {refreshing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
               Обновить
@@ -905,7 +909,7 @@ export default function LogsPage() {
                       >
                         ↓
                       </button>
-                      {isError && (
+                      {isError && can('logs.explain_error') && (
                         <button
                           type="button"
                           onClick={() => explainError(item)}

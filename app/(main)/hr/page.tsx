@@ -728,10 +728,12 @@ export default function HrPage() {
                   Уволить {selectedIds.size}
                 </Button>
               )}
+              {can('hr.export') && (
               <Button size="sm" variant="outline" onClick={exportCSV} className="border-border">
                 <Download className="w-3 h-3 mr-1" />
                 Экспорт CSV{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
               </Button>
+              )}
             </div>
           </div>
         )}

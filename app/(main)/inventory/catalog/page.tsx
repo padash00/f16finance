@@ -1351,10 +1351,12 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
             <Card className="border-emerald-500/30 bg-emerald-500/[0.05] p-3">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm font-medium">Выбрано: {selectedItemIds.size}</span>
+                {can('store-catalog.print_labels') && (
                 <Button variant="outline" size="sm" className="h-8 text-xs" onClick={openLabelsForSelection}>
                   <Printer className="mr-1.5 h-3.5 w-3.5" />
                   Ценники ({selectedItemIds.size})
                 </Button>
+                )}
                 {canEdit && (
                   <>
                     <Select value={bulkCategoryId || undefined} onValueChange={setBulkCategoryId}>
