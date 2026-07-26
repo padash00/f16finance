@@ -50,7 +50,7 @@ export async function GET(req: Request) {
       { data: notes },
       { data: account },
       { data: companies },
-      { data: shifts },
+      { data: staffLinks },
     ] = await Promise.all([
       supabase.from('operators').select('*').eq('id', operatorId).maybeSingle(),
       supabase.from('operator_profiles').select('*').eq('operator_id', operatorId).maybeSingle(),
@@ -75,17 +75,26 @@ export async function GET(req: Request) {
         if (scope.allowedCompanyIds) companiesQuery = companiesQuery.in('id', scope.allowedCompanyIds)
         return companiesQuery
       })(),
-      // История выхода на смены — по operator_id (видна даже после увольнения).
-      supabase
-        .from('point_shifts')
-        .select('id, company_id, status, shift_type, opened_at, closed_at, closing_cash, closing_kaspi, company:company_id(name, code)')
-        .eq('operator_id', operatorId)
-        .order('opened_at', { ascending: false })
-        .limit(200),
+      // Связь оператор→staff (point_shifts.operator_id ссылается на staff, не operators).
+      supabase.from('operator_staff_links').select('staff_id').eq('operator_id', operatorId),
     ])
 
     if (operatorError) throw operatorError
     if (!operator) return json({ error: 'Оператор не найден' }, 404)
+
+    // История выхода на смены: point_shifts.operator_id = staff.id (оператор
+    // открывает смену под своим staff_id). Резолвим staff_id(ы) оператора.
+    const staffIds = Array.from(new Set((staffLinks || []).map((l: any) => String(l.staff_id)).filter(Boolean)))
+    let shifts: any[] = []
+    if (staffIds.length) {
+      const { data: sh } = await supabase
+        .from('point_shifts')
+        .select('id, company_id, status, shift_type, opened_at, closed_at, closing_cash, closing_kaspi, company:company_id(name, code)')
+        .in('operator_id', staffIds)
+        .order('opened_at', { ascending: false })
+        .limit(200)
+      shifts = sh || []
+    }
 
     return json({
       ok: true,

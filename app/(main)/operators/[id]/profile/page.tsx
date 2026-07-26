@@ -566,7 +566,8 @@ function DocumentUpload({
       <Button
         onClick={() => setShowForm(true)}
         size="sm"
-        className="bg-violet-500/20 hover:bg-violet-500/30 text-violet-400 border border-violet-500/30"
+        variant="outline"
+        className="!bg-violet-500/15 hover:!bg-violet-500/25 !text-violet-700 dark:!text-violet-300 border-violet-500/40 font-medium"
       >
         <Upload className="w-4 h-4 mr-2" />
         Загрузить документ
@@ -2316,7 +2317,8 @@ export default function OperatorProfilePage() {
                   <Button
                     size="sm"
                     onClick={() => setShowWorkForm(!showWorkForm)}
-                    className="bg-violet-500/20 hover:bg-violet-500/30 text-violet-400 border border-violet-500/30"
+                    variant="outline"
+        className="!bg-violet-500/15 hover:!bg-violet-500/25 !text-violet-700 dark:!text-violet-300 border-violet-500/40 font-medium"
                   >
                     {showWorkForm ? (
                       <X className="w-4 h-4 mr-2" />
