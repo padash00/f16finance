@@ -6,6 +6,8 @@ import { findCapabilityPageByPath } from '@/lib/core/capabilities'
 import { SITE_URL } from '@/lib/core/site'
 import { isAdminEmail, resolveStaffByUser } from '@/lib/server/admin'
 import { loadUserCapabilities } from '@/lib/server/capabilities'
+import { resolveOrgEntitlements } from '@/lib/server/entitlements'
+import { getPathFeature } from '@/lib/nav/sections'
 import { fetchLinkedCustomersForUser } from '@/lib/server/linked-customers'
 import { ensureRoleMatrixHydrated } from '@/lib/server/role-hydration'
 
@@ -268,8 +270,40 @@ export async function proxy(request: NextRequest) {
     }
   }
 
+  // ── Фаза 2: пер-орг энфорсмент страниц по фичам пакета ──────────────────────
+  // Если у орг включена «Жёсткая блокировка страниц» (features_enforced) и фича
+  // страницы НЕ входит в её пакет — блокируем (даже владельца). Fail-open:
+  // супер-админ, apex/не-тенант, billing_exempt/F16, без пакета (allAccess),
+  // без энфорсмента, любая ошибка/неопределённость → пускаем.
+  let featureBlocked = false
+  if (!isSuperAdmin && isStaff && isTenantHost && subLabel) {
+    try {
+      const feature = getPathFeature(requestedPath)
+      if (feature) {
+        const { data: orgRow } = await supabase
+          .from('organizations')
+          .select('id')
+          .eq('slug', subLabel)
+          .maybeSingle()
+        if (orgRow?.id) {
+          const ent = await resolveOrgEntitlements({
+            isSuperAdmin: false,
+            activeOrganization: { id: String(orgRow.id) },
+          })
+          if (ent.enforce && !ent.allAccess && !ent.features.includes(feature)) {
+            featureBlocked = true
+          }
+        }
+      }
+    } catch {
+      featureBlocked = false // fail-open на любой ошибке
+    }
+  }
+
   const hasAccess =
-    capabilityGate === false
+    featureBlocked
+      ? false
+      : capabilityGate === false
       ? false
       : capabilityGate === true
         ? true
