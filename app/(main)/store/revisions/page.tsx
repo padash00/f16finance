@@ -6,6 +6,7 @@ import { ClipboardCheck, ClipboardList, Loader2, Package, RefreshCw, ScanLine, S
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { Card } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -111,6 +112,7 @@ function actorLabel(staff: { full_name: string | null } | null | undefined, fall
 }
 
 export default function StoreRevisionsPage({ embedded = false }: { embedded?: boolean } = {}) {
+  const { can } = useCapabilities()
   const [data, setData] = useState<RevisionsResponse['data'] | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -1104,6 +1106,7 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
                 <Button type="button" variant="outline" className="h-11 w-full sm:w-auto" onClick={handleScan} disabled={!locationId}>
                   Добавить +1
                 </Button>
+                {can('store-revisions.preload_from_balances') && (
                 <Button
                   type="button"
                   variant="outline"
@@ -1113,6 +1116,7 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
                 >
                   Подтянуть весь каталог
                 </Button>
+                )}
               </div>
               <div className="text-xs">
                 {scanFeedback?.kind === 'ok' ? (
@@ -1289,10 +1293,12 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
               </div>
             </div>
 
+            {can('store-revisions.commit') && (
             <Button type="submit" disabled={saving} className="w-full">
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ClipboardCheck className="mr-2 h-4 w-4" />}
               Провести ревизию
             </Button>
+            )}
           </form>
         </DialogContent>
       </Dialog>
@@ -1308,7 +1314,7 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
                   : 'Проведенный акт ревизии'}
               </DialogDescription>
             </div>
-            {selectedRevision ? (
+            {selectedRevision && can('store-revisions.export') ? (
               <Button
                 type="button"
                 variant="outline"

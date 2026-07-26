@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton, TableSkeleton } from '@/components/skeleton'
@@ -222,6 +223,7 @@ function ItemSearchPicker({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ShowcasePage({ embedded = false }: { embedded?: boolean } = {}) {
+  const { can } = useCapabilities()
   const { storeCompanyId } = useStoreScope()
   // Точка магазина с памятью — ключ 'store.companyId' общий со «Складом»,
   // чтобы точка была одна на весь магазин; null → серверный дефолт.
@@ -656,6 +658,7 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
                                 if (e.key === 'Escape') { setEditingSc(null); setEditScVal('') }
                               }}
                             />
+                            {can('store-warehouse.edit') && (
                             <button
                               onClick={() => void handleSetShowcase(b.item_id)}
                               disabled={savingSc}
@@ -663,6 +666,7 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
                             >
                               {savingSc ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                             </button>
+                            )}
                             <button
                               onClick={() => { setEditingSc(null); setEditScVal('') }}
                               className="text-muted-foreground hover:text-rose-400"
@@ -767,6 +771,7 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
                                 if (e.key === 'Escape') { setEditingSc(null); setEditScVal('') }
                               }}
                             />
+                            {can('store-warehouse.edit') && (
                             <button
                               onClick={() => void handleSetShowcase(b.item_id)}
                               disabled={savingSc}
@@ -774,6 +779,7 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
                             >
                               {savingSc ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                             </button>
+                            )}
                             <button
                               onClick={() => { setEditingSc(null); setEditScVal('') }}
                               className="text-muted-foreground hover:text-rose-400"
@@ -1014,10 +1020,12 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
                             {filled.length} поз. · {totalUnits.toLocaleString('ru-RU')} ед.
                           </span>
                         </div>
+                        {can('store-showcase.move') && (
                         <Button type="submit" disabled={sending || filled.length === 0} className="w-full gap-2">
                           {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardList className="h-4 w-4" />}
                           Отправить заявку
                         </Button>
+                        )}
                       </>
                     )
                   })()}
@@ -1100,10 +1108,12 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
 
                   {returnError && <p className="text-xs text-rose-400">{returnError}</p>}
 
+                  {can('store-showcase.return_to_warehouse') && (
                   <Button type="submit" disabled={returning} className="w-full gap-2 bg-amber-500 hover:bg-amber-600 text-black">
                     {returning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                     Вернуть на склад
                   </Button>
+                  )}
                 </form>
               )}
           </div>

@@ -8,6 +8,7 @@ import { ArrowLeft, Building2, FileText, Loader2, Plus, Receipt, Tag, Trash2, Wa
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { PageSkeleton } from '@/components/skeleton'
 import { Button } from '@/components/ui/button'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -104,6 +105,7 @@ const fmtDate = (value: string | null | undefined) => {
 }
 
 export default function SupplierCardPage() {
+  const { can } = useCapabilities()
   const params = useParams()
   const supplierId = String((params as any)?.id || '')
 
@@ -479,9 +481,11 @@ export default function SupplierCardPage() {
           </div>
 
           <div className="flex justify-end">
+            {can('store-suppliers.edit') && (
             <Button onClick={saveSupplier} disabled={savingSupplier}>
               {savingSupplier ? <><Loader2 className="w-4 h-4 animate-spin mr-1" />Сохраняю...</> : 'Сохранить настройки'}
             </Button>
+            )}
           </div>
         </Card>
       ) : null}
@@ -691,6 +695,7 @@ export default function SupplierCardPage() {
                       <td className="px-3 py-2 text-right text-xs text-muted-foreground">{a.usage_count}</td>
                       <td className="px-3 py-2 text-xs text-muted-foreground">{fmtDate(a.last_seen_at)}</td>
                       <td className="px-2 py-2 text-right">
+                        {can('store-suppliers.delete_alias') && (
                         <button
                           onClick={() => void deleteAlias(a.id)}
                           className="text-muted-foreground hover:text-red-600 dark:hover:text-red-300 transition"
@@ -698,6 +703,7 @@ export default function SupplierCardPage() {
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -750,9 +756,11 @@ export default function SupplierCardPage() {
             </div>
             <div className="mt-4 flex justify-end gap-2">
               <Button variant="outline" onClick={() => setAddAliasOpen(false)} disabled={savingAlias}>Отмена</Button>
+              {can('store-suppliers.add_alias') && (
               <Button onClick={submitAlias} disabled={savingAlias}>
                 {savingAlias ? <><Loader2 className="w-4 h-4 animate-spin mr-1" />Сохраняю...</> : 'Добавить'}
               </Button>
+              )}
             </div>
           </div>
         </div>
@@ -780,9 +788,11 @@ export default function SupplierCardPage() {
             </Select>
             <div className="mt-5 flex justify-end gap-2">
               <Button variant="outline" onClick={() => setTransferOpen(false)} disabled={transferring}>Отмена</Button>
+              {can('store-suppliers.edit') && (
               <Button onClick={() => void doTransfer()} disabled={transferring || !transferTarget}>
                 {transferring ? <><Loader2 className="mr-1 h-4 w-4 animate-spin" />Переношу…</> : 'Перенести'}
               </Button>
+              )}
             </div>
           </Card>
         </div>
