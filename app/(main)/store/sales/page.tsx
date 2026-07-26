@@ -19,7 +19,6 @@ const REFRESH_MS = 12_000
 const embFallback = () => <PageSkeleton stats={0} rows={8} cols={5} />
 const AbcEmbed = dynamic(() => import('@/app/(main)/store/abc/page'), { ssr: false, loading: embFallback })
 const ForecastEmbed = dynamic(() => import('@/app/(main)/inventory/forecast/page').then((m) => m.InventoryForecastPageContent), { ssr: false, loading: embFallback })
-const PointsEmbed = dynamic(() => import('@/app/(main)/store/analytics/page'), { ssr: false, loading: embFallback })
 
 // ── Монитор ──
 type Totals = { amount: number; count: number; avg_check: number; cash: number; cashless: number; net_profit: number }
@@ -59,7 +58,7 @@ type ProdData = {
   no_cost?: { sold: number; stock: number }
 }
 type Company = { id: string; name: string }
-type Tab = 'monitor' | 'best' | 'profit' | 'stock' | 'abc' | 'forecast' | 'points'
+type Tab = 'monitor' | 'best' | 'profit' | 'stock' | 'abc' | 'forecast'
 type Preset = 'today' | 'yesterday' | '7d' | '30d' | 'month' | 'custom'
 
 const card = 'rounded-2xl border border-border bg-white dark:bg-slate-900/60 shadow-lg shadow-black/20'
@@ -84,9 +83,8 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'stock', label: 'Остатки' },
   { key: 'abc', label: 'ABC' },
   { key: 'forecast', label: 'Прогноз' },
-  { key: 'points', label: 'Аналитика точек' },
 ]
-const EMBED_TABS: Tab[] = ['abc', 'forecast', 'points']
+const EMBED_TABS: Tab[] = ['abc', 'forecast']
 
 export default function SalesMonitorPage() {
   const today = almatyDate()
@@ -272,7 +270,6 @@ export default function SalesMonitorPage() {
 
       {tab === 'abc' ? <AbcEmbed embedded /> :
        tab === 'forecast' ? <ForecastEmbed embedded /> :
-       tab === 'points' ? <PointsEmbed embedded /> :
        tab === 'monitor'
         ? <MonitorView data={mon} loading={loading} flashIds={flashIds} />
         : <ProductView data={prod} loading={loading} tab={tab} category={category} setCategory={setCategory} q={q} />}
