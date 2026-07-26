@@ -96,10 +96,12 @@ const comparisonRows: Array<{ criterion: string; values: Record<ComparisonColumn
 ]
 
 const pricingPlans = [
-  { name: 'Start', levelLabel: 'Базовый', description: 'Видеть основные финансовые показатели.', features: ['Финансовый дашборд', 'Доходы и расходы', 'Отчёты по периодам', 'Telegram-отчёты владельцу'], cta: 'Попробовать', highlight: false },
-  { name: 'Business', levelLabel: 'Оптимальный', description: 'Сотрудники, смены и ежедневная работа.', features: ['Всё из Start', 'Смены и сверка кассы', 'Зарплата: ставка, %, KPI', 'AI-разборы показателей'], cta: 'Выбрать Business', highlight: true, badge: 'Популярный' },
-  { name: 'Pro', levelLabel: 'Продвинутый', description: 'Полноценная система продаж и склада.', features: ['Всё из Business', 'POS с офлайн-режимом', 'Склад и приёмка по фото', 'Ревизии и лояльность', 'AI-копилот и AI-финдиректор'], cta: 'Выбрать Pro', highlight: false },
-  { name: 'Enterprise', levelLabel: 'Индивидуальный', description: 'Сети и несколько филиалов.', features: ['Несколько точек', 'Роли и права', 'Настройка модулей', 'Персональное внедрение'], cta: 'Связаться', highlight: false },
+  { name: 'Orda Finance', levelLabel: 'Финансы', price: 9900, description: 'Контроль владельца поверх любой кассы.', features: ['Финансовый дашборд', 'Доходы и расходы', 'Отчёты по периодам', 'Telegram-отчёты владельцу', 'AI-разборы показателей'], cta: 'Попробовать', highlight: false },
+  { name: 'Orda Service', levelLabel: 'Услуги / сервис', price: 16900, description: 'СТО, автомойки, ремонт, барбершопы.', features: ['Всё из Finance', 'Смены и сверка кассы', 'Зарплата: ставка, %, KPI', 'Операционные задачи'], cta: 'Выбрать', highlight: false },
+  { name: 'Orda Shop', levelLabel: 'Магазин', price: 19900, description: 'Магазины и небольшие сети.', features: ['Всё из Finance', 'Магазин, склад, приёмка по фото', 'Смены и зарплата', 'Ревизии и остатки'], cta: 'Выбрать', highlight: false },
+  { name: 'Orda Club', levelLabel: 'Клуб / игровая', price: 19900, description: 'Компьютерные клубы и игровые точки.', features: ['Всё из Finance', 'Смены и зарплата', 'Операционная работа', 'Команда и пространство'], cta: 'Выбрать Club', highlight: true, badge: 'Популярный' },
+  { name: 'Orda Restaurant', levelLabel: 'Кафе / ресторан', price: 24900, description: 'Кафе, бар, пиццерия, dark kitchen.', features: ['Всё из Finance', 'Склад и техкарты', 'Себестоимость блюд', 'Смены и зарплата'], cta: 'Выбрать', highlight: false },
+  { name: 'Магазин + Финансы', levelLabel: 'Комплект', price: 28000, description: 'Магазин и расширенные финансы вместе.', features: ['Всё из Shop', 'Углублённая финмодель', 'Приоритетная поддержка', 'Помощь с внедрением'], cta: 'Связаться', highlight: false },
 ]
 
 const faqItems = [
@@ -135,7 +137,7 @@ export default async function MarketingHomePage() {
               <Link href="#features">Возможности</Link>
             </Button>
             <Button asChild variant="ghost" className="hidden rounded-[11px] text-[14px] font-medium text-[#56657d] hover:bg-[#f3f6fa] hover:text-[#0f2038] dark:hover:bg-[#f3f6fa] dark:hover:text-[#0f2038] sm:inline-flex">
-              <Link href="#pricing">Тарифы</Link>
+              <Link href="#pricing">Пакеты</Link>
             </Button>
             <Button asChild variant="ghost" className="rounded-[11px] text-[14px] font-medium text-[#56657d] hover:bg-[#f3f6fa] hover:text-[#0f2038] dark:hover:bg-[#f3f6fa] dark:hover:text-[#0f2038]">
               <Link href="/login">Войти</Link>
@@ -448,11 +450,11 @@ export default async function MarketingHomePage() {
       <section id="pricing" className="scroll-mt-20">
         <div className={`${container} py-16 lg:py-20`}>
           <Reveal className="mx-auto max-w-[760px] text-center">
-            <div className={eyebrowClass}><Tag className="h-3.5 w-3.5" />Тарифы</div>
-            <h2 className={`mt-4 ${h2Class}`}>Подключайте только нужное</h2>
-            <p className={`mt-3 ${leadClass}`}>Цена зависит от числа точек и модулей — посчитаем индивидуально за 5 минут.</p>
+            <div className={eyebrowClass}><Tag className="h-3.5 w-3.5" />Пакеты</div>
+            <h2 className={`mt-4 ${h2Class}`}>Выберите пакет под свой бизнес</h2>
+            <p className={`mt-3 ${leadClass}`}>Готовые пакеты по типу бизнеса. Цена за организацию, модули докупаются сверху.</p>
           </Reveal>
-          <Stagger className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <Stagger className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {pricingPlans.map((plan) => (
               <StaggerItem key={plan.name}>
                 <div className={plan.highlight
@@ -461,6 +463,10 @@ export default async function MarketingHomePage() {
                   {plan.highlight && plan.badge ? <span className="absolute right-5 top-5 rounded-full bg-gradient-to-br from-[#fb923c] to-[#f97316] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white shadow-[0_6px_16px_-6px_rgba(249,115,22,0.6)]">{plan.badge}</span> : null}
                   <div className={'text-[11px] font-semibold uppercase tracking-[0.12em] ' + (plan.highlight ? 'text-[#15803d]' : 'text-[#64748b]')}>{plan.levelLabel}</div>
                   <div className="mt-1.5 font-display text-[26px] font-bold text-[#0f2038]">{plan.name}</div>
+                  <div className="mt-2 flex items-baseline gap-1">
+                    <span className="font-display text-[30px] font-extrabold tabular-nums text-[#0f2038]">{plan.price.toLocaleString('ru-RU')}</span>
+                    <span className="text-[14px] font-medium text-[#64748b]">₸ / мес</span>
+                  </div>
                   <p className="mt-2 text-[14px] leading-[1.5] text-[#56657d]">{plan.description}</p>
                   <ul className="mt-5 flex-1 space-y-2.5 border-t border-[#e2e8f0] pt-5">
                     {plan.features.map((f) => (
@@ -507,7 +513,7 @@ export default async function MarketingHomePage() {
                 <div className="rounded-[22px] border border-[#16a34a]/25 bg-white p-7 shadow-[0_24px_60px_-28px_rgba(22,163,74,0.4)] sm:p-8">
                   <div className={eyebrowClass}><Sparkles className="h-3.5 w-3.5" />Начните сегодня</div>
                   <h3 className="mt-4 font-display text-[24px] font-bold leading-[1.2] text-[#0f2038] sm:text-[27px]">Покажем систему на ваших данных</h3>
-                  <p className="mt-2 text-[14px] leading-[1.55] text-[#56657d]">Оставьте контакты — ответим в течение рабочего дня и подскажем тариф. Без спама и звонков-роботов.</p>
+                  <p className="mt-2 text-[14px] leading-[1.55] text-[#56657d]">Оставьте контакты — ответим в течение рабочего дня и подскажем пакет. Без спама и звонков-роботов.</p>
                   <div className="mt-5"><ContactLeadForm /></div>
                   <div className="mt-5 space-y-2 border-t border-[#e2e8f0] pt-4">
                     {[
@@ -547,7 +553,7 @@ export default async function MarketingHomePage() {
                 <div className="text-[12px] font-semibold uppercase tracking-[0.1em] text-[#64748b]">Продукт</div>
                 <div className="mt-3.5 flex flex-col gap-2.5 text-[14px] font-medium text-[#5b6b82]">
                   <Link href="#features" className="transition-colors hover:text-[#16a34a]">Возможности</Link>
-                  <Link href="#pricing" className="transition-colors hover:text-[#16a34a]">Тарифы</Link>
+                  <Link href="#pricing" className="transition-colors hover:text-[#16a34a]">Пакеты</Link>
                   <Link href="/club-management-system" className="transition-colors hover:text-[#16a34a]">Для клубов</Link>
                   <Link href="/login" className="transition-colors hover:text-[#16a34a]">Войти</Link>
                 </div>
