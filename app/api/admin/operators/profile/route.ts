@@ -50,6 +50,7 @@ export async function GET(req: Request) {
       { data: notes },
       { data: account },
       { data: companies },
+      { data: shifts },
     ] = await Promise.all([
       supabase.from('operators').select('*').eq('id', operatorId).maybeSingle(),
       supabase.from('operator_profiles').select('*').eq('operator_id', operatorId).maybeSingle(),
@@ -74,6 +75,13 @@ export async function GET(req: Request) {
         if (scope.allowedCompanyIds) companiesQuery = companiesQuery.in('id', scope.allowedCompanyIds)
         return companiesQuery
       })(),
+      // История выхода на смены — по operator_id (видна даже после увольнения).
+      supabase
+        .from('point_shifts')
+        .select('id, company_id, status, shift_type, opened_at, closed_at, closing_cash, closing_kaspi, company:company_id(name, code)')
+        .eq('operator_id', operatorId)
+        .order('opened_at', { ascending: false })
+        .limit(200),
     ])
 
     if (operatorError) throw operatorError
@@ -93,6 +101,10 @@ export async function GET(req: Request) {
         notes: notes || [],
         account: account || null,
         companies: companies || [],
+        shifts: (shifts || []).map((s: any) => ({
+          ...s,
+          company_name: Array.isArray(s.company) ? s.company[0]?.name : s.company?.name,
+        })),
       },
     })
   } catch (error: any) {

@@ -897,6 +897,7 @@ export default function OperatorProfilePage() {
   const [profile, setProfile] = useState<OperatorProfile | null>(null)
   const [companies, setCompanies] = useState<Company[]>([])
   const [workHistory, setWorkHistory] = useState<WorkHistory[]>([])
+  const [shifts, setShifts] = useState<any[]>([]) // история выхода на смены (даже после увольнения)
   const [documents, setDocuments] = useState<Document[]>([])
   const [notes, setNotes] = useState<Note[]>([])
   const [currentUser, setCurrentUser] = useState<any>(null)
@@ -920,7 +921,7 @@ export default function OperatorProfilePage() {
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null)
   const [isEditing, setIsEditing] = useState(false)
-  const [activeTab, setActiveTab] = useState<'info' | 'work' | 'docs' | 'notes'>('info')
+  const [activeTab, setActiveTab] = useState<'info' | 'work' | 'shifts' | 'docs' | 'notes'>('info')
   const [saving, setSaving] = useState(false)
   const [creatingAccount, setCreatingAccount] = useState(false)
 
@@ -964,7 +965,7 @@ export default function OperatorProfilePage() {
         const profileJson = await profileResp.json()
         if (!profileResp.ok) throw new Error(profileJson?.error || 'Ошибка загрузки профиля')
 
-        const { operator: operatorData, profile: profileData, workHistory: workData, documents: docsData, notes: notesData, account: accountData, companies: companiesData } = profileJson.data
+        const { operator: operatorData, profile: profileData, workHistory: workData, documents: docsData, notes: notesData, account: accountData, companies: companiesData, shifts: shiftsData } = profileJson.data
 
         setCurrentUser(user)
         setCompanies(companiesData || [])
@@ -972,6 +973,7 @@ export default function OperatorProfilePage() {
         setEditedTelegramChatId(operatorData.telegram_chat_id || '')
         if (profileData) { setProfile(profileData); setEditedProfile(profileData) }
         if (workData) setWorkHistory(workData)
+        setShifts(Array.isArray(shiftsData) ? shiftsData : [])
         if (docsData) setDocuments(docsData)
         if (notesData) setNotes(notesData.map((n: any) => ({ ...n, created_by_name: 'Система' })))
         if (accountData) setOperatorAccount(accountData)
@@ -1726,7 +1728,12 @@ export default function OperatorProfilePage() {
           <AdminPageHeader
             title={getOperatorDisplayName({ ...operator, full_name: profile?.full_name })}
             description={operator.short_name || operator.name || 'Профиль оператора'}
-            icon={<User className="h-5 w-5" />}
+            icon={profile?.photo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={profile.photo_url} alt="" className="h-full w-full rounded-2xl object-cover" />
+            ) : (
+              <User className="h-5 w-5" />
+            )}
             accent="amber"
             backHref="/operators"
             actions={
@@ -1790,14 +1797,16 @@ export default function OperatorProfilePage() {
             }
             toolbar={
               <div className="flex flex-wrap items-center gap-4">
-                {/* Avatar с загрузкой */}
-                <AvatarUpload
-                  operatorId={operatorId}
-                  currentAvatarUrl={profile?.photo_url || null}
-                  onUploadComplete={handleAvatarUpload}
-                  onError={setUploadError}
-                  canUpload={canAvatarUpload}
-                />
+                {/* Загрузка фото — только в режиме редактирования (иначе дублировал аватар шапки) */}
+                {isEditing && (
+                  <AvatarUpload
+                    operatorId={operatorId}
+                    currentAvatarUrl={profile?.photo_url || null}
+                    onUploadComplete={handleAvatarUpload}
+                    onError={setUploadError}
+                    canUpload={canAvatarUpload}
+                  />
+                )}
                 <div className="flex flex-wrap items-center gap-3">
                   <span className={`text-xs px-2 py-0.5 rounded-full ${
                     operator.is_active
@@ -1910,6 +1919,16 @@ export default function OperatorProfilePage() {
               }`}
             >
               История работы
+            </button>
+            <button
+              onClick={() => setActiveTab('shifts')}
+              className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-all whitespace-nowrap ${
+                activeTab === 'shifts'
+                  ? 'text-violet-400 border-b-2 border-violet-500 bg-gradient-to-t from-violet-500/10 to-transparent'
+                  : 'text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              Смены{shifts.length > 0 ? ` (${shifts.length})` : ''}
             </button>
             <button
               onClick={() => setActiveTab('docs')}
@@ -2538,6 +2557,62 @@ export default function OperatorProfilePage() {
                   </div>
                 )}
               </div>
+            </Card>
+          )}
+
+          {/* Смены — история выхода (видна даже после увольнения) */}
+          {activeTab === 'shifts' && (
+            <Card className="p-6 bg-white dark:bg-gray-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                <Clock className="w-5 h-5 text-violet-400" />
+                <h3 className="text-lg font-semibold">История выхода на смены</h3>
+                <span className="text-xs text-gray-500">Все смены сотрудника · сохраняются даже после увольнения</span>
+              </div>
+              {shifts.length === 0 ? (
+                <div className="py-12 text-center text-sm text-muted-foreground">Смен пока нет.</div>
+              ) : (
+                <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-white/5">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200 dark:border-white/5 text-left text-[11px] uppercase tracking-wide text-gray-500">
+                        <th className="px-3 py-2 font-medium">Точка</th>
+                        <th className="px-3 py-2 font-medium">Открыта</th>
+                        <th className="px-3 py-2 font-medium">Закрыта</th>
+                        <th className="px-3 py-2 text-right font-medium">Длит.</th>
+                        <th className="px-3 py-2 text-right font-medium">Касса</th>
+                        <th className="px-3 py-2 text-right font-medium">Безнал</th>
+                        <th className="px-3 py-2 font-medium">Статус</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                      {shifts.map((s) => {
+                        const dt = (v: string | null) => (v ? new Date(v).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—')
+                        let dur = '—'
+                        if (s.opened_at && s.closed_at) {
+                          const ms = new Date(s.closed_at).getTime() - new Date(s.opened_at).getTime()
+                          if (ms > 0) { const h = Math.floor(ms / 3600000); const m = Math.round((ms % 3600000) / 60000); dur = `${h}ч ${m}м` }
+                        }
+                        const money = (v: any) => (v == null ? '—' : `${Number(v).toLocaleString('ru-RU')} ₸`)
+                        return (
+                          <tr key={s.id} className="hover:bg-slate-50 dark:hover:bg-white/[0.02]">
+                            <td className="px-3 py-2 text-foreground">{s.company_name || '—'}</td>
+                            <td className="px-3 py-2 text-muted-foreground tabular-nums">{dt(s.opened_at)}</td>
+                            <td className="px-3 py-2 text-muted-foreground tabular-nums">{dt(s.closed_at)}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-body">{dur}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-foreground">{money(s.closing_cash)}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-sky-700 dark:text-sky-300">{money(s.closing_kaspi)}</td>
+                            <td className="px-3 py-2">
+                              <span className={`rounded-md border px-2 py-0.5 text-[11px] ${s.status === 'open' ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-slate-200 dark:border-white/10 text-muted-foreground'}`}>
+                                {s.status === 'open' ? 'Открыта' : 'Закрыта'}
+                              </span>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </Card>
           )}
 
