@@ -69,7 +69,7 @@ export function DatePicker({
           )}
         >
           <CalendarDays className="h-4 w-4 shrink-0 text-faint" />
-          <span className={cn(!selected && 'text-faint')}>
+          <span className={cn('whitespace-nowrap', !selected && 'text-faint')}>
             {selected ? format(selected, 'd MMMM yyyy', { locale: ru }) : placeholder}
           </span>
         </button>
