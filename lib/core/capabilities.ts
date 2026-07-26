@@ -946,6 +946,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         path: '/production',
         label: 'Техкарты (производство)',
         capabilities: [
+          { id: 'production.view', label: 'Просмотр', severity: 'low' },
           { id: 'production.create', label: 'Создать/изменить техкарту', severity: 'medium' },
           { id: 'production.delete', label: 'Удалить техкарту', severity: 'high' },
           { id: 'production.create_ingredient', label: 'Добавить ингредиент', severity: 'medium' },
@@ -960,6 +961,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         path: '/store/advertising',
         label: 'Реклама на витрине',
         capabilities: [
+          { id: 'store-advertising.view', label: 'Просмотр', severity: 'low' },
           { id: 'store-advertising.create', label: 'Добавить рекламу', severity: 'medium' },
           { id: 'store-advertising.edit', label: 'Изменить рекламу', severity: 'medium' },
           { id: 'store-advertising.delete', label: 'Удалить рекламу', severity: 'high' },
@@ -970,6 +972,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         path: '/store/purchase-plan',
         label: 'План закупа',
         capabilities: [
+          { id: 'store-purchase-plan.view', label: 'Просмотр', severity: 'low' },
           { id: 'store-purchase-plan.create', label: 'Создать/изменить план закупа', severity: 'medium' },
           { id: 'store-purchase-plan.ai_advice', label: 'AI-совет по закупу', severity: 'low' },
         ],
@@ -979,6 +982,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         path: '/store/settings',
         label: 'Настройки магазина',
         capabilities: [
+          { id: 'store-settings.view', label: 'Просмотр', severity: 'low' },
           { id: 'store-settings.edit', label: 'Изменить настройки магазина', severity: 'medium' },
         ],
       },
@@ -987,6 +991,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         path: '/store/shifts',
         label: 'Сменные отчёты (магазин)',
         capabilities: [
+          { id: 'store-shifts.view', label: 'Просмотр', severity: 'low' },
           { id: 'store-shifts.export', label: 'Экспорт сменных отчётов', severity: 'low' },
         ],
       },
@@ -995,6 +1000,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         path: '/news',
         label: 'Новости',
         capabilities: [
+          { id: 'news.view', label: 'Просмотр', severity: 'low' },
           { id: 'news.create', label: 'Опубликовать пост', severity: 'medium' },
           { id: 'news.delete', label: 'Удалить пост', severity: 'high' },
         ],
@@ -1004,6 +1010,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         path: '/moderation',
         label: 'Модерация',
         capabilities: [
+          { id: 'moderation.view', label: 'Просмотр', severity: 'low' },
           { id: 'moderation.confirm', label: 'Подтвердить нарушение', severity: 'medium' },
           { id: 'moderation.dismiss', label: 'Отклонить нарушение', severity: 'medium' },
         ],
@@ -1013,6 +1020,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         path: '/messages',
         label: 'Личные сообщения',
         capabilities: [
+          { id: 'messages.view', label: 'Просмотр', severity: 'low' },
           { id: 'messages.send', label: 'Отправить сообщение', severity: 'low' },
         ],
       },
@@ -1021,6 +1029,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         path: '/team-chat',
         label: 'Командный чат',
         capabilities: [
+          { id: 'team-chat.view', label: 'Просмотр', severity: 'low' },
           { id: 'team-chat.pin', label: 'Закрепить сообщение', severity: 'low' },
         ],
       },
@@ -1029,6 +1038,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         path: '/team-analysis',
         label: 'Анализ команды',
         capabilities: [
+          { id: 'team-analysis.view', label: 'Просмотр', severity: 'low' },
           { id: 'team-analysis.refresh', label: 'Перезапустить AI-анализ', severity: 'low' },
         ],
       },
@@ -1037,6 +1047,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         path: '/ai-cfo',
         label: 'AI Финдиректор',
         capabilities: [
+          { id: 'ai-cfo.view', label: 'Просмотр', severity: 'low' },
           { id: 'ai-cfo.generate', label: 'Сгенерировать анализ (AI)', severity: 'medium' },
         ],
       },
@@ -1045,6 +1056,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         path: '/expense-analysis',
         label: 'AI-разбор расходов',
         capabilities: [
+          { id: 'expense-analysis.view', label: 'Просмотр', severity: 'low' },
           { id: 'expense-analysis.refresh', label: 'Перезапустить AI-разбор', severity: 'low' },
         ],
       },
