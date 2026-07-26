@@ -549,9 +549,13 @@ export function TopNav() {
           >
             <AppLogoMark logoUrl={session.activeOrganization?.logoUrl || session.organizations[0]?.logoUrl} />
             <div className="hidden xl:block">
-              <h1 className="bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-300 bg-clip-text text-base font-bold leading-tight text-transparent">
-                {session.activeOrganization?.name || session.organizations[0]?.name || SITE_NAME}
-              </h1>
+              {session.sessionReady ? (
+                <h1 className="bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-300 bg-clip-text text-base font-bold leading-tight text-transparent">
+                  {session.activeOrganization?.name || session.organizations[0]?.name || SITE_NAME}
+                </h1>
+              ) : (
+                <div className="h-4 w-20 animate-pulse rounded bg-slate-200 dark:bg-white/10" />
+              )}
             </div>
           </Link>
 

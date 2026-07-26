@@ -396,6 +396,7 @@ export function Sidebar({ desktopEnabled = true }: { desktopEnabled?: boolean } 
   Array<{ path: string; enabled: boolean }>
 >([])
   const [isSwitchingOrganization, setIsSwitchingOrganization] = useState(false)
+  const [sessionReady, setSessionReady] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => {
     if (typeof window !== 'undefined') {
@@ -456,6 +457,7 @@ export function Sidebar({ desktopEnabled = true }: { desktopEnabled?: boolean } 
           setOpenSections(Object.fromEntries(navSections.map((s) => [s.id, true])))
         }
       }
+      if (!ignore) setSessionReady(true)
     }
 
     loadUser()
@@ -615,9 +617,13 @@ export function Sidebar({ desktopEnabled = true }: { desktopEnabled?: boolean } 
         <div className="flex items-center gap-3" title={`${SITE_NAME} · v${APP_VERSION}`}>
           <AppLogoMark logoUrl={activeOrganization?.logoUrl || organizations[0]?.logoUrl} />
           <div>
-            <h1 className="bg-gradient-to-r from-slate-900 to-slate-600 bg-clip-text text-lg font-bold text-transparent dark:from-white dark:to-slate-300">
-              {activeOrganization?.name || organizations[0]?.name || SITE_NAME}
-            </h1>
+            {sessionReady ? (
+              <h1 className="bg-gradient-to-r from-slate-900 to-slate-600 bg-clip-text text-lg font-bold text-transparent dark:from-white dark:to-slate-300">
+                {activeOrganization?.name || organizations[0]?.name || SITE_NAME}
+              </h1>
+            ) : (
+              <div className="h-5 w-24 animate-pulse rounded bg-slate-200 dark:bg-white/10" />
+            )}
           </div>
         </div>
         <button

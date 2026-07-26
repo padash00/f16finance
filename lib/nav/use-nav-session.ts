@@ -26,6 +26,8 @@ export type NavSession = {
   orgFeatures: string[]
   featuresAllAccess: boolean
   isSwitchingOrganization: boolean
+  /** Сессия загружена (session-role получен) — чтобы не мигать фолбэком бренда. */
+  sessionReady: boolean
   handleLogout: () => Promise<void>
   handleSwitchOrganization: (organizationId: string) => Promise<void>
   filterSection: (section: NavSection) => NavSection
@@ -50,6 +52,7 @@ export function useNavSession(): NavSession {
   const [orgFeatures, setOrgFeatures] = useState<string[]>([])
   const [featuresAllAccess, setFeaturesAllAccess] = useState(true)
   const [isSwitchingOrganization, setIsSwitchingOrganization] = useState(false)
+  const [sessionReady, setSessionReady] = useState(false)
 
   useEffect(() => {
     let ignore = false
@@ -86,6 +89,7 @@ export function useNavSession(): NavSession {
         setOrgFeatures(Array.isArray(json?.orgFeatures) ? json.orgFeatures : [])
         setFeaturesAllAccess(json?.featuresAllAccess !== false)
       }
+      if (!ignore) setSessionReady(true)
     }
 
     loadUser()
@@ -173,6 +177,7 @@ export function useNavSession(): NavSession {
     isLeadOperator,
     organizations,
     activeOrganization,
+    sessionReady,
     subscriptionFeatures,
     rolePermissionOverrides,
     orgFeatures,
