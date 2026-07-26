@@ -2,13 +2,12 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Loader2, Package, Sparkles, CreditCard, Lock } from 'lucide-react'
+import { Loader2, Package, Sparkles, Lock } from 'lucide-react'
 
 const RESERVED_SLUGS = ['www', 'admin', 'api', 'app', 'status', 'mail', 'blog', 'docs', 'support']
 const fmt = (n: number) => new Intl.NumberFormat('ru-RU').format(Math.round(n || 0))
 
 export default function PlatformSettingsPage() {
-  const [plans, setPlans] = useState<any[]>([])
   const [packages, setPackages] = useState<any[]>([])
   const [addons, setAddons] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -17,7 +16,6 @@ export default function PlatformSettingsPage() {
     fetch('/api/admin/organizations', { cache: 'no-store' })
       .then((r) => r.json())
       .then((j) => {
-        setPlans(j.plans || [])
         setPackages(j.packages || [])
         setAddons(j.addons || [])
       })
@@ -39,34 +37,18 @@ export default function PlatformSettingsPage() {
         <div>
           <h1 className="text-2xl font-semibold">Настройки платформы</h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Тарифы, пакеты, модули и системные поддомены.
+            Пакеты, модули и системные поддомены.
           </p>
         </div>
         <Link
-          href="/platform/billing"
+          href="/platform/packages"
           className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-violet-700"
         >
-          <CreditCard className="h-4 w-4" /> Редактировать тарифы
+          <Package className="h-4 w-4" /> Конструктор пакетов
         </Link>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        {/* Тарифы */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900/40">
-          <h2 className="flex items-center gap-2 text-sm font-semibold">
-            <CreditCard className="h-4 w-4 text-violet-500" /> Тарифы ({plans.length})
-          </h2>
-          <div className="mt-4 space-y-2 text-sm">
-            {plans.map((p) => (
-              <div key={p.code || p.id} className="flex items-center justify-between">
-                <span className="text-slate-600 dark:text-slate-300">{p.name || p.code}</span>
-                <span className="font-medium tabular-nums text-slate-500 dark:text-slate-400">{fmt(p.priceMonthly || p.price_monthly || 0)} ₸</span>
-              </div>
-            ))}
-            {plans.length === 0 && <p className="text-slate-500">Тарифов пока нет.</p>}
-          </div>
-        </div>
-
+      <div className="grid gap-4 lg:grid-cols-2">
         {/* Пакеты */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900/40">
           <h2 className="flex items-center gap-2 text-sm font-semibold">

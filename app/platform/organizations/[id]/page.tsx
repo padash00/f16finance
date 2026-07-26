@@ -91,7 +91,7 @@ const BILLING_EVENT_LABELS: Record<string, string> = {
   subscription_canceled: 'Подписка отменена',
   subscription_resumed: 'Возобновление',
   subscription_renewed: 'Продление',
-  plan_changed: 'Смена тарифа',
+  plan_changed: 'Смена пакета',
 }
 
 const tenge = (n: number) => `${Math.round(n).toLocaleString('ru-RU')} ₸`
@@ -99,7 +99,7 @@ const tenge = (n: number) => `${Math.round(n).toLocaleString('ru-RU')} ₸`
 type TabKey = 'overview' | 'billing' | 'access' | 'actions' | 'members' | 'history'
 const TABS: Array<{ key: TabKey; label: string; icon: React.ReactNode }> = [
   { key: 'overview', label: 'Обзор', icon: <LayoutDashboard className="h-4 w-4" /> },
-  { key: 'billing', label: 'Тариф и оплата', icon: <CreditCard className="h-4 w-4" /> },
+  { key: 'billing', label: 'Оплата и пакет', icon: <CreditCard className="h-4 w-4" /> },
   { key: 'access', label: 'Доступы (страницы)', icon: <ShieldCheck className="h-4 w-4" /> },
   { key: 'actions', label: 'Действия (кнопки)', icon: <SlidersHorizontal className="h-4 w-4" /> },
   { key: 'members', label: 'Участники', icon: <Users className="h-4 w-4" /> },
@@ -647,7 +647,7 @@ export default function OrgDetailPage() {
               <h2 className="mb-3 text-sm font-semibold">Статус подписки</h2>
               <div className={`text-3xl font-bold ${subStatusColor}`}>{subStatusLabel}</div>
               <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                Тариф: <span className="font-medium text-slate-700 dark:text-slate-200">{org.subscription?.plan?.name || '—'}</span>
+                Пакет: <span className="font-medium text-slate-700 dark:text-slate-200">{packages.find((p) => p.code === org.packageCode)?.name || org.packageCode || 'без пакета'}</span>
               </p>
               {org.subscription?.endsAt && (
                 <p className="mt-1 text-xs text-slate-400">
@@ -658,7 +658,7 @@ export default function OrgDetailPage() {
                 onClick={() => setActiveTab('billing')}
                 className="mt-3 text-xs font-medium text-violet-500 hover:text-violet-600 dark:hover:text-violet-300"
               >
-                Управлять тарифом и оплатой →
+                Управлять оплатой →
               </button>
             </div>
 
@@ -755,8 +755,8 @@ export default function OrgDetailPage() {
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
-                    <p className="text-xs text-slate-500">Тариф</p>
-                    <p className="font-medium text-slate-900 dark:text-white">{org.subscription.plan?.name || '—'}</p>
+                    <p className="text-xs text-slate-500">Пакет</p>
+                    <p className="font-medium text-slate-900 dark:text-white">{packages.find((p) => p.code === org.packageCode)?.name || org.packageCode || 'без пакета'}</p>
                   </div>
                   <div>
                     <p className="text-xs text-slate-500">Статус</p>
@@ -899,11 +899,11 @@ export default function OrgDetailPage() {
           <div className={cardCls}>
             <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold">
               <Package className="h-4 w-4 text-violet-400" />
-              Тариф
+              Пакет
             </h2>
             <p className="mb-3 text-xs text-slate-500">Основной отраслевой пакет клиента. Его функции включаются автоматически.</p>
             {packages.length === 0 ? (
-              <p className="text-xs text-slate-600">Каталог тарифов пуст (примени миграцию).</p>
+              <p className="text-xs text-slate-600">Каталог пакетов пуст (примени миграцию).</p>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {packages.map((p) => {
@@ -928,7 +928,7 @@ export default function OrgDetailPage() {
             )}
             {org.packageCode && (
               <p className="mt-2 text-[11px] text-emerald-600 dark:text-emerald-400/80">
-                Активный тариф: {packages.find((p) => p.code === org.packageCode)?.name || org.packageCode} — его функции включены автоматически.
+                Активный пакет: {packages.find((p) => p.code === org.packageCode)?.name || org.packageCode} — его функции включены автоматически.
               </p>
             )}
           </div>
@@ -939,7 +939,7 @@ export default function OrgDetailPage() {
               <Package className="h-4 w-4 text-violet-400" />
               Доп. модули
             </h2>
-            <p className="mb-3 text-xs text-slate-500">Платные надстройки поверх тарифа. Включаются тумблером.</p>
+            <p className="mb-3 text-xs text-slate-500">Платные надстройки поверх пакета. Включаются тумблером.</p>
             <div className="grid gap-2 sm:grid-cols-2">
               {addons.map((a) => {
                 const on = (org.addonCodes || []).includes(a.code)
@@ -982,7 +982,7 @@ export default function OrgDetailPage() {
               return (
                 <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-white/5 dark:bg-black/20">
                   <div className="mb-2 flex items-center gap-2">
-                    <span className="text-[11px] text-slate-500">К оплате по тарифу:</span>
+                    <span className="text-[11px] text-slate-500">К оплате по пакету:</span>
                     <span className="text-xs tabular-nums text-slate-700 dark:text-slate-300">{tenge(suggested)}/мес</span>
                     {suggested > 0 ? (
                       <button type="button" onClick={() => setInvAmount(String(suggested))} className="text-[11px] text-violet-400 hover:text-violet-300">
@@ -1091,7 +1091,7 @@ export default function OrgDetailPage() {
                 </div>
                 {!org.packageCode ? (
                   <p className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
-                    У организации нет назначенного пакета → блокировка не применяется (fail-open). Сначала назначь пакет во вкладке «Тариф и оплата».
+                    У организации нет назначенного пакета → блокировка не применяется (fail-open). Сначала назначь пакет во вкладке «Оплата и пакет».
                   </p>
                 ) : blockedPages.length === 0 ? (
                   <p className="mt-3 text-xs text-emerald-600 dark:text-emerald-300">Пакет покрывает все страницы — ничего не отвалится.</p>
@@ -1120,7 +1120,7 @@ export default function OrgDetailPage() {
               Что включено у клиента
             </h2>
             <p className="mb-3 text-xs text-slate-500">
-              Список возможностей системы. Зелёный тумблер — функция доступна клиенту. Функции из тарифа и модулей включаются сами; остальные можно выдать вручную.
+              Список возможностей системы. Зелёный тумблер — функция доступна клиенту. Функции из пакета и модулей включаются сами; остальные можно выдать вручную.
             </p>
             {org.legacyGrants ? (
               <div className="mb-4 inline-flex items-center gap-1.5 rounded-lg border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-700 dark:text-amber-300">
@@ -1144,7 +1144,7 @@ export default function OrgDetailPage() {
                     : sources.includes('legacy')
                       ? 'перенос со старой схемы'
                       : sources.includes('plan')
-                        ? 'из тарифа'
+                        ? 'из пакета'
                         : sources.includes('addon')
                           ? 'из доп. модуля'
                           : 'выдано вручную'
@@ -1158,7 +1158,7 @@ export default function OrgDetailPage() {
                         type="button"
                         onClick={() => handleFeatureGrant(f.code, !isManual)}
                         disabled={busy || lockedByPackage}
-                        title={lockedByPackage ? 'Включено тарифом/модулем — меняется через тариф' : isManual ? 'Снять ручную выдачу' : 'Выдать вручную'}
+                        title={lockedByPackage ? 'Включено пакетом/модулем — меняется через пакет' : isManual ? 'Снять ручную выдачу' : 'Выдать вручную'}
                         className={`relative h-5 w-9 shrink-0 rounded-full transition disabled:opacity-40 ${enabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`}
                       >
                         <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${enabled ? 'left-[18px]' : 'left-0.5'}`} />
@@ -1169,7 +1169,7 @@ export default function OrgDetailPage() {
               </div>
             )}
             <p className="mt-3 text-[11px] text-slate-600">
-              Тумблер управляет ручной выдачей. Функции из тарифа/переноса меняются через тариф.
+              Тумблер управляет ручной выдачей. Функции из пакета/переноса меняются через пакет.
             </p>
           </div>
 
@@ -1182,7 +1182,7 @@ export default function OrgDetailPage() {
                 {org.effectiveFeatures.map((ef) => {
                   const isLegacy = ef.sources.includes('legacy')
                   const human = ef.sources
-                    .map((s) => (s === 'legacy' ? 'перенос' : s === 'plan' ? 'тариф' : s === 'addon' ? 'модуль' : s === 'manual' ? 'вручную' : s))
+                    .map((s) => (s === 'legacy' ? 'перенос' : s === 'plan' ? 'пакет' : s === 'addon' ? 'модуль' : s === 'manual' ? 'вручную' : s))
                     .join(', ')
                   const name = features.find((f) => f.code === ef.code)?.name || ef.code
                   return (
@@ -1201,7 +1201,7 @@ export default function OrgDetailPage() {
                 })}
               </div>
               <p className="mt-2 text-[11px] text-slate-600">
-                🛡 жёлтые — перенесены со старой схемы, зелёные — из тарифа/модулей или выданы вручную.
+                🛡 жёлтые — перенесены со старой схемы, зелёные — из пакета/модулей или выданы вручную.
               </p>
             </div>
           ) : null}

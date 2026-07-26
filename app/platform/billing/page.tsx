@@ -34,7 +34,7 @@ export default function BillingPage() {
         <h1 className="text-2xl font-semibold">Пакеты и модули</h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
           Что и почём продаём клиентам. Доступ клиента определяет <b>пакет</b> (набор страниц);
-          модули докупаются сверху. Собираются в «Конструкторе тарифов», назначаются в карточке организации.
+          модули докупаются сверху. Собираются в «Конструкторе пакетов», назначаются в карточке организации.
         </p>
       </div>
 
@@ -75,7 +75,7 @@ export default function BillingPage() {
           ))}
           {packages.length === 0 && (
             <div className="col-span-full rounded-2xl border border-dashed border-slate-300 bg-slate-50 py-8 text-center text-sm text-slate-500 dark:border-white/15 dark:bg-white/[0.02]">
-              Пакеты не настроены (таблица <code className="text-slate-500 dark:text-slate-400">packages</code>). Собери их в «Конструкторе тарифов».
+              Пакеты не настроены (таблица <code className="text-slate-500 dark:text-slate-400">packages</code>). Собери их в «Конструкторе пакетов».
             </div>
           )}
         </div>

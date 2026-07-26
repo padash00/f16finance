@@ -156,7 +156,7 @@ export default function PlatformOverviewPage() {
           <Building2 className="mx-auto h-10 w-10 text-slate-300 dark:text-slate-600" />
           <p className="mt-3 text-lg font-medium">Клиентов пока нет</p>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Здесь появятся клубы, которым ты продал Orda: их оплаты, тарифы и состояние.
+            Здесь появятся клубы, которым ты продал Orda: их оплаты, пакеты и состояние.
           </p>
           <Link
             href="/platform/new"

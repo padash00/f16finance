@@ -78,7 +78,7 @@ export default function OrganizationsPage() {
         <div>
           <h1 className="text-2xl font-semibold">Клиенты</h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Все клубы на Orda — статус, тариф, точки и люди.
+            Все клубы на Orda — статус, пакет, точки и люди.
           </p>
         </div>
         <Link

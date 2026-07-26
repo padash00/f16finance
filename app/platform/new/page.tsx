@@ -280,14 +280,14 @@ export default function NewOrganizationPage() {
 
         {step === 2 && (
           <div className="space-y-4">
-            {/* Пакет (тариф) — задаёт доступные страницы клиента */}
+            {/* Пакет — задаёт доступные страницы клиента */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900/40">
               <h2 className="text-sm font-semibold">Пакет</h2>
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Определяет, какие страницы будут у клиента. Позже можно сменить на карточке организации.</p>
               <div className="mt-4 space-y-2">
                 {packages.length === 0 && (
                   <p className="rounded-xl border border-amber-500/30 bg-amber-500/[0.06] px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
-                    Пакетов пока нет. Создай их в «Конструкторе тарифов» — или заведи без пакета (полный доступ).
+                    Пакетов пока нет. Создай их в «Конструкторе пакетов» — или заведи без пакета (полный доступ).
                   </p>
                 )}
                 {packages.map(pkg => (

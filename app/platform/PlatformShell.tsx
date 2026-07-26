@@ -22,7 +22,7 @@ const NAV = [
   { href: '/platform', label: 'Кокпит', icon: BarChart3, exact: true },
   { href: '/platform/organizations', label: 'Организации', icon: Building2, exact: false },
   { href: '/platform/invoices', label: 'Счета', icon: FileText, exact: false },
-  { href: '/platform/billing', label: 'Тарифы и пакеты', icon: CreditCard, exact: false },
+  { href: '/platform/billing', label: 'Пакеты и модули', icon: CreditCard, exact: false },
   { href: '/platform/packages', label: 'Конструктор', icon: Package, exact: false },
   { href: '/platform/analytics', label: 'Аналитика', icon: TrendingUp, exact: false },
   { href: '/platform/audit', label: 'Аудит', icon: ScrollText, exact: false },

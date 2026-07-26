@@ -67,7 +67,7 @@ export default function PackagesConstructorPage() {
   return (
     <div className="space-y-6 p-4 sm:p-6">
       <div>
-        <h1 className="text-2xl font-semibold text-foreground">Конструктор тарифов</h1>
+        <h1 className="text-2xl font-semibold text-foreground">Конструктор пакетов</h1>
         <p className="mt-1 text-sm text-muted-foreground">Собирай пакеты из страниц, заводи докупаемые модули (аддоны) и назначай организациям. 1 фича = 1 страница.</p>
       </div>
 
