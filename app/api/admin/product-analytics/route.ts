@@ -96,7 +96,7 @@ export async function GET(request: Request) {
     // ── Остатки по локациям компании ──
     let locQuery = supabase
       .from('inventory_locations')
-      .select('id, company_id')
+      .select('id, company_id, location_type')
       .eq('is_active', true)
       .not('company_id', 'is', null)
     if (companyId) locQuery = locQuery.eq('company_id', companyId)
@@ -104,13 +104,18 @@ export async function GET(request: Request) {
     const { data: locs, error: locError } = await locQuery
     if (locError) throw locError
     const locationIds = (locs || []).map((l: any) => String(l.id)).filter((x) => x && x !== 'null')
+    const locTypeById = new Map<string, string>()
+    for (const l of (locs || []) as any[]) locTypeById.set(String(l.id), String(l.location_type || ''))
 
+    // Остаток разбиваем на витрину (point_display) и склад (warehouse).
     const stockByItem = new Map<string, number>()
+    const showcaseByItem = new Map<string, number>()
+    const warehouseByItem = new Map<string, number>()
     if (locationIds.length > 0) {
       const balances = await fetchAllPages((from, to) =>
         supabase
           .from('inventory_balances')
-          .select('item_id, quantity')
+          .select('item_id, quantity, location_id')
           .in('location_id', locationIds)
           .gt('quantity', 0)
           .order('location_id', { ascending: true })
@@ -120,7 +125,11 @@ export async function GET(request: Request) {
       for (const b of (balances || []) as any[]) {
         const id = b.item_id
         if (!id || typeof id !== 'string') continue
-        stockByItem.set(id, (stockByItem.get(id) || 0) + Number(b.quantity || 0))
+        const q = Number(b.quantity || 0)
+        stockByItem.set(id, (stockByItem.get(id) || 0) + q)
+        const t = locTypeById.get(String(b.location_id))
+        if (t === 'point_display') showcaseByItem.set(id, (showcaseByItem.get(id) || 0) + q)
+        else if (t === 'warehouse') warehouseByItem.set(id, (warehouseByItem.get(id) || 0) + q)
       }
     }
 
@@ -144,6 +153,8 @@ export async function GET(request: Request) {
         profit: round(profit),
         margin_percent: sold.revenue > 0 ? Math.round((profit / sold.revenue) * 1000) / 10 : 0,
         stock: Math.round(stock * 100) / 100,
+        showcase_stock: Math.round(Number(showcaseByItem.get(String(it.id)) || 0) * 100) / 100,
+        warehouse_stock: Math.round(Number(warehouseByItem.get(String(it.id)) || 0) * 100) / 100,
         sale_price: sale,
         purchase_price: purchase,
       }

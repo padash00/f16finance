@@ -49,6 +49,7 @@ type MonData = {
 type Item = {
   item_id: string; name: string; barcode: string; unit: string; category: string | null
   qty: number; revenue: number; profit: number; margin_percent: number; stock: number
+  showcase_stock: number; warehouse_stock: number
   sale_price: number; purchase_price: number
 }
 type ProdData = {
@@ -582,7 +583,7 @@ function ProductView({ data, loading, tab, category, setCategory, q }: { data: P
               <thead>
                 <tr className="border-b border-border text-left text-[11px] uppercase tracking-wider text-slate-500">
                   {tab === 'stock' ? (
-                    <><th className="px-4 py-2.5 font-medium">Артикул</th><th className="px-4 py-2.5 font-medium">Название</th><th className="px-4 py-2.5 font-medium">Категория</th><th className="px-4 py-2.5 text-right font-medium">Остаток</th><th className="px-4 py-2.5 text-right font-medium">Закупка</th><th className="px-4 py-2.5 text-right font-medium">Продажа</th></>
+                    <><th className="px-4 py-2.5 font-medium">Артикул</th><th className="px-4 py-2.5 font-medium">Название</th><th className="px-4 py-2.5 font-medium">Категория</th><th className="px-4 py-2.5 text-right font-medium">Витрина</th><th className="px-4 py-2.5 text-right font-medium">Склад</th><th className="px-4 py-2.5 text-right font-medium">Закупка</th><th className="px-4 py-2.5 text-right font-medium">Продажа</th></>
                   ) : (
                     <><th className="px-4 py-2.5 font-medium">Название</th><th className="px-4 py-2.5 font-medium">Артикул</th><th className="px-4 py-2.5 font-medium">Категория</th><th className="px-4 py-2.5 text-right font-medium">Кол-во</th><th className="px-4 py-2.5 text-right font-medium">{tab === 'profit' ? 'Прибыль' : 'Доход'}</th><th className="px-4 py-2.5 text-right font-medium">Остаток</th></>
                   )}
@@ -596,7 +597,8 @@ function ProductView({ data, loading, tab, category, setCategory, q }: { data: P
                         <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{it.barcode || '—'}</td>
                         <td className="px-4 py-2.5 text-foreground">{it.name}</td>
                         <td className="px-4 py-2.5 text-muted-foreground">{it.category || '—'}</td>
-                        <td className={`px-4 py-2.5 text-right tabular-nums ${it.stock > 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500'}`}>{fmt(it.stock)} {it.unit}</td>
+                        <td className={`px-4 py-2.5 text-right tabular-nums ${it.showcase_stock > 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-400'}`}>{fmt(it.showcase_stock)} {it.unit}</td>
+                        <td className={`px-4 py-2.5 text-right tabular-nums ${it.warehouse_stock > 0 ? 'text-sky-700 dark:text-sky-300' : 'text-slate-400'}`}>{fmt(it.warehouse_stock)} {it.unit}</td>
                         <td className="px-4 py-2.5 text-right tabular-nums text-body">{fmt(it.purchase_price)} ₸</td>
                         <td className="px-4 py-2.5 text-right tabular-nums text-foreground">{fmt(it.sale_price)} ₸</td>
                       </>
