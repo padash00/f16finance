@@ -815,6 +815,7 @@ export default function KnowledgeAdminPage() {
                 <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                 Обновить
               </button>
+              {can('knowledge-admin.create') && (
               <button
                 onClick={() =>
                   send('seedDefaults', undefined, undefined, (response) => {
@@ -827,6 +828,7 @@ export default function KnowledgeAdminPage() {
                 <Sparkles className="h-4 w-4" />
                 Создать базу F16
               </button>
+              )}
             </>
           }
           toolbar={

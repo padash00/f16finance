@@ -776,6 +776,7 @@ function ExpenseWizardPageContent() {
               <div className="text-xs text-muted-foreground mb-3">
                 Напиши расход в "Краткое название" или "Комментарий", затем нажми кнопку.
               </div>
+              {can('expenses.create') && (
               <Button
                 variant="outline"
                 className="w-full mb-2"
@@ -785,6 +786,7 @@ function ExpenseWizardPageContent() {
                 {aiHintLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
                 Спросить ИИ
               </Button>
+              )}
               {aiHintError ? (
                 <div className="text-xs text-destructive">{aiHintError}</div>
               ) : null}

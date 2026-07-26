@@ -700,10 +700,12 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
           {success && <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">{success}</div>}
 
           <div className="flex justify-end">
+            {can('store-postings.create') && (
             <Button type="button" onClick={openConfirm} disabled={saving || loading} className="w-full sm:w-auto">
               {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Package className="h-3.5 w-3.5 mr-1" />}
               Оприходовать
             </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -822,7 +824,7 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
                     Загрузить в форму для редактирования
                   </Button>
                 )}
-                {viewPosting.status === 'posted' && (
+                {viewPosting.status === 'posted' && can('store-receipts.cancel') && (
                   <Button variant="outline" className="border-amber-500/40 text-amber-700 hover:bg-amber-500/10 dark:text-amber-300" onClick={() => void cancelAndEdit()} disabled={cancelling}>
                     {cancelling ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
                     Отменить и редактировать

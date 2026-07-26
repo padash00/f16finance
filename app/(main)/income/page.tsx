@@ -2103,6 +2103,7 @@ function IncomeRowFull({
                   className="w-24 h-7 min-w-0 text-right px-2 py-0 rounded border-pink-500 bg-card text-foreground text-sm md:text-sm"
                 />
               ) : (
+                can('income.update_online') ? (
                 <button
                   onClick={() => {
                     setEditingOnlineId(row.id)
@@ -2112,6 +2113,9 @@ function IncomeRowFull({
                 >
                   {row.online_amount ? Formatters.moneyDetailed(row.online_amount) : '+ добавить'}
                 </button>
+                ) : (
+                  <span className={`font-mono px-2 py-1 ${row.online_amount ? 'text-pink-400' : 'text-slate-600'}`}>{row.online_amount ? Formatters.moneyDetailed(row.online_amount) : '—'}</span>
+                )
               )}
             </div>
           </div>
