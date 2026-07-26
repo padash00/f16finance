@@ -39,17 +39,20 @@ export function AppLogoMark({ className, size = 'md', logoUrl }: Props) {
 
   return (
     <div className={cn('relative shrink-0 group', className)}>
-      <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 blur-lg opacity-50 transition-opacity duration-500 group-hover:opacity-80" />
+      <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 blur-lg opacity-40 transition-opacity duration-500 group-hover:opacity-70 dark:opacity-50 dark:group-hover:opacity-80" />
       <div
         className={cn(
-          'relative flex items-center justify-center border border-white/10 bg-gradient-to-br from-slate-900 to-slate-800 shadow-2xl',
+          // Светлая тема — светлый значок; тёмная — тёмный.
+          'relative flex items-center justify-center border shadow-lg',
+          'border-slate-200 bg-gradient-to-br from-white to-slate-100',
+          'dark:border-white/10 dark:from-slate-900 dark:to-slate-800 dark:shadow-2xl',
           box,
         )}
       >
-        <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/10 to-transparent" />
+        <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-transparent to-transparent dark:from-white/10" />
         <span
           className={cn(
-            'relative z-10 select-none font-bold tracking-tight text-amber-300',
+            'relative z-10 select-none font-bold tracking-tight text-amber-600 dark:text-amber-300',
             textSize,
           )}
           aria-hidden
