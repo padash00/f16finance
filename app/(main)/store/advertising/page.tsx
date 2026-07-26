@@ -14,6 +14,7 @@ import {
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { useStoreScope } from '@/components/store/store-scope'
 import { Button } from '@/components/ui/button'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { Card } from '@/components/ui/card'
 import { supabase } from '@/lib/supabaseClient'
 
@@ -35,6 +36,7 @@ type Ad = {
 }
 
 export default function AdvertisingPage({ embedded = false }: { embedded?: boolean } = {}) {
+  const { can } = useCapabilities()
   const [companies, setCompanies] = useState<CompanyOption[]>([])
   const [companyId, setCompanyId] = useState<string>('')
   const { storeCompanyId } = useStoreScope()
@@ -233,6 +235,7 @@ export default function AdvertisingPage({ embedded = false }: { embedded?: boole
               className="hidden"
               onChange={onFileChange}
             />
+            {can('store-advertising.create') && (
             <Button onClick={onPickFile} disabled={uploading || !companyId} size="sm">
               {uploading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -241,6 +244,7 @@ export default function AdvertisingPage({ embedded = false }: { embedded?: boole
               )}
               Загрузить
             </Button>
+            )}
           </div>
         )
         return embedded ? (
@@ -352,6 +356,7 @@ export default function AdvertisingPage({ embedded = false }: { embedded?: boole
                   )}
 
                   <div className="flex items-center gap-1">
+                    {can('store-advertising.edit') && (
                     <button
                       onClick={() => toggleActive(ad)}
                       className={`rounded-md px-2 py-1 text-[11px] ${
@@ -362,12 +367,15 @@ export default function AdvertisingPage({ embedded = false }: { embedded?: boole
                     >
                       {ad.is_active ? 'Активно' : 'Выключено'}
                     </button>
+                    )}
+                    {can('store-advertising.delete') && (
                     <button
                       onClick={() => removeAd(ad)}
                       className="rounded-md bg-rose-500/10 p-1.5 text-rose-700 dark:text-rose-300 hover:bg-rose-500/20"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
+                    )}
                   </div>
                 </div>
               </div>

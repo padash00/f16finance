@@ -5,6 +5,7 @@ import { ShoppingCart, Loader2, Sparkles, Save, TrendingUp, TrendingDown, Calcul
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -61,6 +62,7 @@ const num = (n: number) => {
 }
 
 export default function PurchasePlanPage() {
+  const { can } = useCapabilities()
   const { storeCompanyId } = useStoreScope()
 
   const [companies, setCompanies] = useState<Company[]>([])
@@ -262,14 +264,18 @@ export default function PurchasePlanPage() {
           </Button>
           {plan ? (
             <>
+              {can('store-purchase-plan.ai_advice') && (
               <Button variant="outline" onClick={askAi} disabled={aiLoading}>
                 {aiLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Sparkles className="h-4 w-4 mr-1.5" />}
                 AI-совет
               </Button>
+              )}
+              {can('store-purchase-plan.create') && (
               <Button variant="outline" onClick={savePlan} disabled={saving}>
                 {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Save className="h-4 w-4 mr-1.5" />}
                 Сохранить план
               </Button>
+              )}
             </>
           ) : null}
         </div>

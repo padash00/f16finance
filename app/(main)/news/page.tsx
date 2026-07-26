@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { CardSkeleton } from '@/components/skeleton'
 import { Newspaper, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 
 type Post = {
   id: string
@@ -29,6 +30,7 @@ const fmtTime = (iso: string) => {
 }
 
 export default function NewsPage() {
+  const { can } = useCapabilities()
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -101,7 +103,7 @@ export default function NewsPage() {
         backHref="/"
         actions={
           <>
-            {canPublish && (
+            {canPublish && can('news.create') && (
               <Button onClick={() => setComposing(true)} className="bg-orange-600 hover:bg-orange-700">
                 <Plus className="w-4 h-4 mr-1" /> Новый пост
               </Button>
@@ -165,7 +167,7 @@ export default function NewsPage() {
                     <div className="text-xs text-muted-foreground">{fmtTime(post.created_at)}</div>
                   </div>
                 </div>
-                {canPublish && (
+                {canPublish && can('news.delete') && (
                   <button onClick={() => remove(post.id)} className="text-muted-foreground opacity-100 hover:text-red-400 sm:opacity-0 sm:group-hover:opacity-100">
                     <Trash2 className="w-4 h-4" />
                   </button>

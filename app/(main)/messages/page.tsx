@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Skeleton } from '@/components/skeleton'
 import { Send, MessageSquare, Search, ArrowLeft, RefreshCw } from 'lucide-react'
@@ -36,6 +37,7 @@ const fmtTime = (iso: string) => {
 }
 
 export default function MessagesPage() {
+  const { can } = useCapabilities()
   const [threads, setThreads] = useState<Thread[]>([])
   const [activeUser, setActiveUser] = useState<{ id: string; name: string } | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
@@ -264,9 +266,11 @@ export default function MessagesPage() {
                   placeholder="Сообщение..."
                   className="flex-1 bg-input border border-border rounded-lg px-3 py-2 text-sm focus:border-amber-500"
                 />
+                {can('messages.send') && (
                 <Button onClick={send} disabled={!draft.trim()} className="bg-amber-600 hover:bg-amber-700">
                   <Send className="w-4 h-4" />
                 </Button>
+                )}
               </div>
             </>
           )}

@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Card } from '@/components/ui/card'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { Button } from '@/components/ui/button'
 import { DatePicker } from '@/components/ui/date-picker'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
@@ -61,6 +62,7 @@ const fmtPinTtl = (until: string | null) => {
 }
 
 function ChatContent() {
+  const { can } = useCapabilities()
   const searchParams = useSearchParams()
   const contextType = searchParams.get('context_type') || ''
   const contextId = searchParams.get('context_id') || ''
@@ -309,7 +311,7 @@ function ChatContent() {
                       <span className="text-[10px] text-muted-foreground italic">ред.</span>
                     )}
                   </div>
-                  <div className="opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                  <div className={`opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 ${can('team-chat.pin') ? '' : 'hidden'}`}>
                     {m.pinned_until && new Date(m.pinned_until).getTime() > Date.now() ? (
                       <button
                         className="text-xs text-amber-300 hover:underline"

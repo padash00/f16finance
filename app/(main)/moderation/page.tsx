@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import {
   AlertTriangle,
@@ -57,6 +58,7 @@ const fmtDate = (iso: string) => {
 }
 
 export default function ModerationPage() {
+  const { can } = useCapabilities()
   const [tab, setTab] = useState<Tab>('pending')
   const [flags, setFlags] = useState<Flag[]>([])
   const [pendingCount, setPendingCount] = useState(0)
@@ -206,6 +208,7 @@ export default function ModerationPage() {
 
             {flag.status === 'pending' && (
               <div className="flex flex-wrap gap-2 justify-end">
+                {can('moderation.dismiss') && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -215,6 +218,8 @@ export default function ModerationPage() {
                   <XCircle className="w-4 h-4 mr-1" />
                   Отклонить (всё ок)
                 </Button>
+                )}
+                {can('moderation.confirm') && (
                 <Button
                   size="sm"
                   className="bg-red-600 hover:bg-red-700"
@@ -224,6 +229,7 @@ export default function ModerationPage() {
                   <ShieldCheck className="w-4 h-4 mr-1" />
                   Подтвердить нарушение
                 </Button>
+                )}
               </div>
             )}
             {flag.status !== 'pending' && flag.reviewer_note && (
