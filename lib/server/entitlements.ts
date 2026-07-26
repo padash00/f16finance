@@ -97,16 +97,17 @@ export async function resolveOrgEntitlements(access: {
   try {
     const supabase = createAdminSupabaseClient()
 
-    // Пер-орг флаги: жёсткий энфорсмент и billing-exempt (fail-open).
+    // Пер-орг флаг жёсткого энфорсмента. ВАЖНО: billing_exempt тут НЕ трогаем —
+    // он про биллинг (не блокировать за неоплату), а НЕ про доступ к страницам.
+    // Иначе billing-exempt орг (напр. castle) обходила бы гейтинг пакета и
+    // видела все страницы.
     let enforce = false
     try {
       const { data: orgRow } = await supabase
         .from('organizations')
-        .select('features_enforced, billing_exempt')
+        .select('features_enforced')
         .eq('id', orgId)
         .maybeSingle()
-      // billing_exempt (напр. F16) — никогда не блокируем.
-      if ((orgRow as any)?.billing_exempt) return { features: [], allAccess: true, enforce: false }
       enforce = !!(orgRow as any)?.features_enforced
     } catch {
       // колонки может ещё не быть (миграция не применена) → enforce=false
