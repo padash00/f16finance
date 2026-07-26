@@ -1551,6 +1551,7 @@ function ShiftsPageContent() {
                                 </select>
 
                                 <div className="flex flex-wrap gap-2">
+                                  {can('shifts.resolve_issue') && (
                                   <Button
                                     size="sm"
                                     variant="outline"
@@ -1559,6 +1560,7 @@ function ShiftsPageContent() {
                                   >
                                     Снять со смены
                                   </Button>
+                                  )}
                                   <Button
                                     size="sm"
                                     variant="outline"
@@ -1819,6 +1821,7 @@ function EditableShiftCell({
   workflowState,
   weekShiftCounts,
 }: EditableCellProps) {
+  const { can } = useCapabilities()
   const [isEditing, setIsEditing] = useState(false)
   const [val, setVal] = useState(shiftData?.name || '')
   const [status, setStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle')
@@ -1958,7 +1961,7 @@ function EditableShiftCell({
           type="button"
           className="flex h-full w-full items-center justify-center px-2 text-sm"
           onClick={() => {
-            if (status !== 'saving') setIsEditing(true)
+            if (status !== 'saving' && can('shifts.edit')) setIsEditing(true)
           }}
           title={
             isConflict

@@ -8,6 +8,7 @@ import Image from 'next/image'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { PageSkeleton, TableSkeleton } from '@/components/skeleton'
 import { supabase } from '@/lib/supabaseClient'
@@ -909,6 +910,7 @@ function OperatorAnalyticsLoading() {
 // MAIN CONTENT COMPONENT
 // =====================
 function OperatorAnalyticsContent() {
+  const { can } = useCapabilities()
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -1767,6 +1769,7 @@ function OperatorAnalyticsContent() {
                   <RefreshCw className="w-4 h-4" />
                 </Button>
 
+                {can('operator-analytics.export') && (
                 <Button
                   variant="outline"
                   size="icon"
@@ -1776,6 +1779,7 @@ function OperatorAnalyticsContent() {
                 >
                   <Download className="w-4 h-4" />
                 </Button>
+                )}
               </>
             }
             toolbar={

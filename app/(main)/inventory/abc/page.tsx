@@ -17,6 +17,7 @@ import {
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Dialog,
@@ -96,6 +97,7 @@ const PERIOD_OPTIONS = [
 // ─── Main Component ────────────────────────────────────────────────────────────
 
 export function AbcAnalysisPageContent() {
+  const { can } = useCapabilities()
   const [items, setItems] = useState<AbcItem[]>([])
   const [summary, setSummary] = useState<Summary | null>(null)
   const [loading, setLoading] = useState(true)
@@ -270,10 +272,12 @@ export function AbcAnalysisPageContent() {
         className="mb-6"
         actions={
           <>
+            {can('store-analytics.export') && (
             <Button variant="outline" size="sm" onClick={exportCsv} disabled={filtered.length === 0}>
               <Download className="mr-2 h-4 w-4" />
               Скачать PDF
             </Button>
+            )}
             <Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading}>
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             </Button>
@@ -559,6 +563,7 @@ export function AbcAnalysisPageContent() {
                           >
                             Заявка
                           </Link>
+                          {can('store-analytics.edit_sale_price') && (
                           <button
                             onClick={() => openEdit(item)}
                             title="Изменить цену"
@@ -567,6 +572,7 @@ export function AbcAnalysisPageContent() {
                             <Edit2 className="h-3 w-3" />
                             Цена
                           </button>
+                          )}
                           <Link
                             href={`/store/writeoffs?item_id=${item.item_id}`}
                             title="Списать"

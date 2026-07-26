@@ -1070,7 +1070,7 @@ function TasksContent() {
                     variant="outline"
                     className="border-red-500/30 text-red-400 hover:bg-red-500/10 text-xs gap-1.5"
                     onClick={() => void handleNotifyAllOverdue(overdueTasks)}
-                    disabled={notifyingAll}
+                    disabled={notifyingAll || !can('tasks.notify')}
                   >
                     {notifyingAll ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
                     Напомнить всем в Telegram
@@ -1481,6 +1481,7 @@ function TasksContent() {
 // TASK CARD COMPONENT
 // =====================
 function TaskCard({ task, onClick, onStatusChange, onNotify, onDragStart, onDragEnd, isDragging }: TaskCardProps) {
+  const { can } = useCapabilities()
   const [showMenu, setShowMenu] = useState(false)
   const isTaskOverdue = isOverdue(task.due_date, task.status)
   const daysUntilDue = getDaysUntilDue(task.due_date)
@@ -1502,7 +1503,7 @@ function TaskCard({ task, onClick, onStatusChange, onNotify, onDragStart, onDrag
     >
       {/* Кнопки действий */}
       <div className="absolute top-2 right-2 flex gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
-        {task.assignee_telegram && (
+        {task.assignee_telegram && can('tasks.notify') && (
           <button
             onClick={(e) => {
               e.stopPropagation()
@@ -1514,6 +1515,7 @@ function TaskCard({ task, onClick, onStatusChange, onNotify, onDragStart, onDrag
             <Send className="w-3.5 h-3.5" />
           </button>
         )}
+        {can('tasks.edit') && (
         <button
           onClick={(e) => {
             e.stopPropagation()
@@ -1523,6 +1525,7 @@ function TaskCard({ task, onClick, onStatusChange, onNotify, onDragStart, onDrag
         >
           <MoreHorizontal className="w-3.5 h-3.5" />
         </button>
+        )}
         
         {showMenu && (
           <div className="absolute right-0 mt-6 w-40 bg-card border border-border rounded-lg shadow-xl z-10">
@@ -2362,6 +2365,7 @@ function TaskDetailModal({
                   className="flex-1 resize-none rounded-lg border border-border bg-white dark:bg-slate-800/50 p-2 text-sm text-foreground"
                   rows={2}
                 />
+                {can('tasks.add_comment') && (
                 <Button
                   onClick={handleAddComment}
                   disabled={loading || !newComment.trim()}
@@ -2369,6 +2373,7 @@ function TaskDetailModal({
                 >
                   {loading ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Отправить'}
                 </Button>
+                )}
               </div>
 
               <div className="space-y-3">

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { PageSkeleton, StatGridSkeleton, TableSkeleton } from '@/components/skeleton'
 import { Clock, Loader2, RefreshCw, Settings, User, Wallet, CreditCard, X, ChevronRight, TrendingUp, RotateCcw } from 'lucide-react'
 
@@ -189,6 +190,7 @@ function salesOf(s: Shift): number | null {
 }
 
 export default function StoreShiftsPage() {
+  const { can } = useCapabilities()
   const [storeCompanyId, setStoreCompanyId] = useState<string | null | undefined>(undefined)
   const [status, setStatus] = useState('closed')
   const [shifts, setShifts] = useState<Shift[]>([])
@@ -296,7 +298,7 @@ export default function StoreShiftsPage() {
                       <div className="text-right"><div className="flex items-center justify-end gap-1 text-[11px] text-slate-500"><CreditCard className="h-3 w-3" /> Безнал</div><div className="font-medium tabular-nums text-sky-700 dark:text-sky-300">{fmt(kaspi)} ₸</div></div>
                     </div>
                   </button>
-                  <button onClick={() => printZFor(s.id)} title="Распечатать Z-отчёт" className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20">🖨 <span className="hidden sm:inline">Z-отчёт</span></button>
+                  {can('store-shifts.export') && <button onClick={() => printZFor(s.id)} title="Распечатать Z-отчёт" className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20">🖨 <span className="hidden sm:inline">Z-отчёт</span></button>}
                   <ChevronRight className="h-4 w-4 shrink-0 text-slate-600" />
                 </div>
               )
@@ -311,6 +313,7 @@ export default function StoreShiftsPage() {
 }
 
 function ShiftDetail({ id, onClose, onChanged }: { id: string; onClose: () => void; onChanged: () => void }) {
+  const { can } = useCapabilities()
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
@@ -495,6 +498,7 @@ function ShiftDetail({ id, onClose, onChanged }: { id: string; onClose: () => vo
                   >
                     Отмена
                   </button>
+                  {can('shifts-reports.close_force') && (
                   <button
                     type="button"
                     disabled={closing}
@@ -504,6 +508,7 @@ function ShiftDetail({ id, onClose, onChanged }: { id: string; onClose: () => vo
                     {closing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                     Закрыть смену
                   </button>
+                  )}
                 </div>
               </div>
             )}
