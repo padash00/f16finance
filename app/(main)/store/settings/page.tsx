@@ -55,7 +55,7 @@ export default function StoreSettingsPage() {
     <div className="app-page-wide space-y-5">
       <AdminPageHeader
         title="Настройки магазина"
-        description="Выберите точку, которая является магазином — модуль будет работать только с ней"
+        description="Точка по умолчанию для модуля. В шапке магазина можно переключаться между точками и режимом «Общий»."
         icon={<Settings className="h-5 w-5" />}
         accent="emerald"
         backHref="/store"
@@ -66,7 +66,7 @@ export default function StoreSettingsPage() {
           <Store className="h-4 w-4 text-emerald-300" /> Точка магазина
         </div>
         <p className="mb-4 text-xs text-muted-foreground">
-          Склад, витрина, ревизия, документы, аналитика и смены будут показываться только по этой точке.
+          Стартовая точка при входе в магазин. Переключить точку или включить «Общий» (все точки) можно в шапке модуля в любой момент.
         </p>
 
         {loading ? (

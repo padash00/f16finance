@@ -27,26 +27,29 @@ export function StoreCompanyProvider({ children }: { children: React.ReactNode }
   const [loading, setLoading] = useState(true)
   const [companyId, setCompanyIdState] = useState<string>('')
 
-  // Восстанавливаем выбор до загрузки списка.
-  useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem(LS_KEY)
-      if (saved) setCompanyIdState(saved)
-    } catch {}
-  }, [])
-
   useEffect(() => {
     let ignore = false
-    fetch('/api/admin/companies', { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((j) => {
+    // Сохранённый в браузере выбор имеет приоритет; иначе дефолт — основная
+    // точка орг (store_company_id из настроек магазина), иначе «Общий».
+    let saved: string | null = null
+    try { saved = window.localStorage.getItem(LS_KEY) } catch {}
+    const hasSaved = saved !== null
+
+    Promise.all([
+      fetch('/api/admin/companies', { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
+      hasSaved
+        ? Promise.resolve(null)
+        : fetch('/api/admin/store/config', { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
+    ])
+      .then(([compsJson, cfgJson]) => {
         if (ignore) return
-        const list: StoreCompany[] = Array.isArray(j?.data) ? j.data : []
+        const list: StoreCompany[] = Array.isArray(compsJson?.data) ? compsJson.data : []
         setCompanies(list)
-        // Если сохранённая компания больше не в скоупе — сбрасываем на «Общий».
-        setCompanyIdState((cur) => (cur && !list.some((c) => c.id === cur) ? '' : cur))
+        const defaultPoint = (cfgJson?.data?.store_company_id as string | null) || ''
+        const initial = hasSaved ? String(saved) : defaultPoint
+        // Если выбор больше не в скоупе орг — «Общий».
+        setCompanyIdState(initial && list.some((c) => c.id === initial) ? initial : '')
       })
-      .catch(() => {})
       .finally(() => { if (!ignore) setLoading(false) })
     return () => { ignore = true }
   }, [])
