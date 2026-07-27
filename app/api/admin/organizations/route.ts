@@ -260,6 +260,7 @@ async function loadPlatformData(supabase: any) {
       status: String(o.status || 'active'),
       billingExempt: !!(o as any).billing_exempt,
       featuresEnforced: !!(o as any).features_enforced,
+      companyLimit: Number((o as any).company_limit ?? 1),
       onboardingTourEnabled: !!(o as any).onboarding_tour_enabled,
       legalName: o.legal_name ?? null,
       primaryDomain: buildTenantHost(slug),
@@ -705,6 +706,7 @@ export async function PATCH(req: Request) {
     if (body?.organizationStatus !== undefined) orgPatch.status = String(body.organizationStatus || 'active')
     if (body?.billingExempt !== undefined) orgPatch.billing_exempt = !!body.billingExempt
     if (body?.featuresEnforced !== undefined) orgPatch.features_enforced = !!body.featuresEnforced
+    if (body?.companyLimit !== undefined) orgPatch.company_limit = Math.max(1, Math.round(Number(body.companyLimit) || 1))
     if (body?.onboardingTourEnabled !== undefined) orgPatch.onboarding_tour_enabled = !!body.onboardingTourEnabled
     if (body?.slug !== undefined && body.slug) {
       const s = String(body.slug).trim().toLowerCase()

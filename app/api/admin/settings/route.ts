@@ -172,6 +172,23 @@ export async function POST(req: Request) {
       if (body.action === 'create') {
         const companyName = body.payload.name?.trim()
         if (!companyName) return badRequest('Название компании обязательно')
+
+        // Лимит точек: нельзя создать компанию сверх company_limit орг.
+        // Супер-админ без активной орг (платформенный контекст) — без лимита.
+        const limitOrgId = access.activeOrganization?.id || null
+        if (limitOrgId) {
+          const [{ count: currentCount }, { data: orgLimitRow }] = await Promise.all([
+            supabase.from('companies').select('id', { count: 'exact', head: true }).eq('organization_id', limitOrgId),
+            supabase.from('organizations').select('company_limit').eq('id', limitOrgId).maybeSingle(),
+          ])
+          const limit = Number((orgLimitRow as any)?.company_limit ?? 1)
+          if (Number.isFinite(limit) && (currentCount ?? 0) >= limit) {
+            return NextResponse.json(
+              { error: `Лимит точек исчерпан (${currentCount}/${limit}). Докупите точку, чтобы добавить ещё одну.`, code: 'company-limit-reached' },
+              { status: 402 },
+            )
+          }
+        }
         // code NOT NULL: если не задан — генерируем из названия (латиница) или фолбэк.
         const code =
           body.payload.code?.trim().toUpperCase() ||
