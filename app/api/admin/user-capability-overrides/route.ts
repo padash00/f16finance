@@ -31,11 +31,13 @@ async function assertTargetUserInOrg(
   const { data: authUser } = await admin.auth.admin.getUserById(userId)
   const email = authUser?.user?.email?.trim()?.toLowerCase() || null
   if (!email) return json({ error: 'forbidden', reason: 'user-not-found' }, 403)
+  // Регистронезависимый матч: staff.email может быть в смешанном регистре
+  // (как в lib/server/admin.ts). .eq на lowercase дал бы ложный 403.
   const { data: st } = await admin
     .from('staff')
     .select('id')
     .eq('organization_id', orgId)
-    .eq('email', email)
+    .ilike('email', email)
     .maybeSingle()
   if (!st) return json({ error: 'forbidden', reason: 'cross-org' }, 403)
   return null

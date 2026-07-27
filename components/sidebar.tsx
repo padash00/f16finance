@@ -509,6 +509,12 @@ export function Sidebar({ desktopEnabled = true }: { desktopEnabled?: boolean } 
               return false
             }
 
+            // Управление доступом — только владелец (или супер-админ). При fail-open
+            // менеджеры имеют access.view, поэтому гейтим пункт явно по роли.
+            if (item.href === '/access' && !(staffRole === 'owner' || isSuperAdmin)) {
+              return false
+            }
+
             // Гейтинг по фиче ПАКЕТА (пер-страничная). allAccess → не гейтим.
             // getPathFeature вернёт null для базовых страниц (всегда доступны).
             if (!featuresAllAccess) {

@@ -308,6 +308,7 @@ export function buildOwnerNavSections(): NavSection[] {
   const operatorAnalyticsItem = getSectionItem('operator-space', '/operator-analytics')
   const subscriptionItem = getSectionItem('system', '/subscription')
   const settingsItem = getSectionItem('system', '/settings')
+  const accessItem = getSectionItem('system', '/access')
 
   const sections: NavSection[] = []
 
@@ -330,14 +331,15 @@ export function buildOwnerNavSections(): NavSection[] {
     })
   }
 
-  if (settingsItem) {
+  if (settingsItem || accessItem) {
     sections.push({
       id: 'owner-system',
       title: 'Настройки',
-      subtitle: 'Точки, компании и справочники',
+      subtitle: 'Точки, компании и доступ команды',
       accentColor: 'slate',
       icon: Settings2,
-      items: settingsItem ? [settingsItem] : [],
+      // /access («Права и пароли») — управление доступом, доступно только владельцу.
+      items: [settingsItem, accessItem].filter(Boolean) as NavItem[],
     })
   }
 
