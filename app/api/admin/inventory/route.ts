@@ -345,8 +345,11 @@ export async function POST(request: Request) {
       companyId: targetCompanyId || null,
     }
     // Создание каталожных строк требует выбранной точки (в режиме «Общий» — нельзя).
+    // ИСКЛЮЧЕНИЕ: расходники (item_type='consumable') — орг-общие (страница расходников
+    // не привязана к точке), создаются без company_id и видны во всех точках.
+    const isConsumableCreate = body.action === 'createItem' && String((body as any)?.payload?.item_type || '') === 'consumable'
     const CREATE_ACTIONS = new Set(['createItem', 'createCategory', 'createSupplier'])
-    if (CREATE_ACTIONS.has(body.action) && !targetCompanyId) {
+    if (CREATE_ACTIONS.has(body.action) && !targetCompanyId && !isConsumableCreate) {
       return json({ error: 'point-required', message: 'Выберите точку-магазин в шапке — товары создаются в конкретной точке.' }, 400)
     }
 

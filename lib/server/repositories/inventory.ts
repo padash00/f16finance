@@ -123,9 +123,14 @@ function filterByCompanyScope<T>(
   if (!isRestrictedScope(scope)) return rows
   const allowed = getAllowedCompanyIdSet(scope)
   if (allowed.size === 0) return []
-  return rows.filter((row) =>
-    getCompanyIds(row).some((companyId) => companyId && allowed.has(String(companyId))),
-  )
+  return rows.filter((row) => {
+    const ids = getCompanyIds(row)
+    // Строки БЕЗ company_id (орг-общие / легаси / глобальные локации-склады) —
+    // видны везде в орг (и в «Общем», и в конкретной точке). Иначе легаси-данные
+    // пропадали бы из пикеров, хотя их сток есть в журналах.
+    if (ids.every((id) => !id)) return true
+    return ids.some((companyId) => companyId && allowed.has(String(companyId)))
+  })
 }
 
 function filterByLocationScope<T>(
