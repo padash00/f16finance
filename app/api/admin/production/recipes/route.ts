@@ -48,12 +48,16 @@ export async function GET(request: Request) {
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const scopeOrg = orgId || '00000000-0000-0000-0000-000000000000'
+    // Техкарты по точке: выбрана точка → её техкарты; «Общий» → все магазины.
+    const companyFilter = String(new URL(request.url).searchParams.get('company_id') || '').trim() || null
 
-    const { data: recipes, error: rErr } = await supabase
+    let recipesQ = supabase
       .from('recipes')
-      .select('id, name, category, output_qty, output_unit, yield_factor, sale_item_id, is_semi_finished, is_active, notes')
+      .select('id, name, category, output_qty, output_unit, yield_factor, sale_item_id, is_semi_finished, is_active, notes, company_id')
       .eq('organization_id', scopeOrg)
       .order('name')
+    if (companyFilter) recipesQ = recipesQ.eq('company_id', companyFilter)
+    const { data: recipes, error: rErr } = await recipesQ
     if (rErr) throw rErr
 
     const recipeIds = (recipes || []).map((r: any) => String(r.id))
@@ -128,13 +132,15 @@ export async function GET(request: Request) {
       .eq('is_active', true)
       .order('name')
 
-    // Товары продажи (для связи техкарта → блюдо в чеке)
-    const { data: saleItems } = await supabase
+    // Товары продажи (для связи техкарта → блюдо в чеке) — каталог точки.
+    let saleItemsQ = supabase
       .from('inventory_items')
       .select('id, name, sale_price')
       .eq('organization_id', scopeOrg)
       .eq('is_active', true)
       .order('name')
+    if (companyFilter) saleItemsQ = saleItemsQ.eq('company_id', companyFilter)
+    const { data: saleItems } = await saleItemsQ
 
     return json({ ok: true, recipes: out, ingredients: ingredients || [], saleItems: saleItems || [] })
   } catch (error: any) {
@@ -157,13 +163,16 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => null)) as any
     const name = String(body?.name || '').trim()
     if (!name) return json({ error: 'Название обязательно' }, 400)
+    // Техкарты по точке: техкарта создаётся в выбранной точке-магазине.
+    const recipeCompanyId = String(body?.company_id || '').trim()
+    if (!recipeCompanyId) return json({ error: 'point-required', message: 'Выберите точку-магазин — техкарта создаётся в конкретной точке.' }, 400)
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const { data: recipe, error } = await supabase
       .from('recipes')
       .insert({
         organization_id: orgId,
-        company_id: body?.company_id || null,
+        company_id: recipeCompanyId,
         name,
         category: body?.category?.trim() || null,
         output_qty: Number(body?.output_qty) || 1,

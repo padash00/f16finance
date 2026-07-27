@@ -6,10 +6,8 @@
 -- БЕЗОПАСНОСТЬ РАЗВЁРТКИ:
 --  * Старый barcode-индекс (organization_id, barcode) НЕ дропаем здесь — код
 --    addStock развязан от onConflict (явный find-then-write), поэтому оба индекса
---    временно сосуществуют без 42P10. Пока каталог односалонный (сразу после
---    бэкфилла) (org,barcode) и (company,barcode) эквивалентны. Старый индекс
---    дропнет отдельная миграция 20260729_catalog_drop_org_barcode ПОСЛЕ деплоя —
---    тогда одинаковый штрихкод в двух магазинах станет допустим.
+--    временно сосуществуют без 42P10. Старый индекс дропнет отдельная миграция
+--    20260729_catalog_drop_org_barcode ПОСЛЕ деплоя.
 --  * Категории/поставщики создаются обычным insert (без onConflict), поэтому их
 --    уникальные индексы можно менять сразу.
 
@@ -18,14 +16,15 @@ alter table public.inventory_items      add column if not exists company_id uuid
 alter table public.inventory_categories add column if not exists company_id uuid references public.companies(id) on delete set null;
 alter table public.inventory_suppliers  add column if not exists company_id uuid references public.companies(id) on delete set null;
 
--- 2) Бэкфилл: точка-магазин орг.
+-- 2) Бэкфилл: точка-магазин орг. «Единственная store_enabled» через
+--    array_agg + having count(*)=1 (оконные функции в HAVING в PG запрещены).
 with shop_point as (
   select o.id as organization_id,
          coalesce(
            ss.store_company_id,
-           (select c.id from public.companies c
+           (select (array_agg(c.id))[1] from public.companies c
              where c.organization_id = o.id and c.store_enabled
-             group by c.id having count(*) over () = 1 limit 1),
+             having count(*) = 1),
            (select l.company_id from public.inventory_locations l
              join public.companies c2 on c2.id = l.company_id
             where c2.organization_id = o.id and l.location_type = 'point_display'
@@ -41,7 +40,7 @@ update public.inventory_items i set company_id = sp.company_id
 with shop_point as (
   select o.id as organization_id,
          coalesce(ss.store_company_id,
-           (select c.id from public.companies c where c.organization_id = o.id and c.store_enabled group by c.id having count(*) over () = 1 limit 1),
+           (select (array_agg(c.id))[1] from public.companies c where c.organization_id = o.id and c.store_enabled having count(*) = 1),
            (select l.company_id from public.inventory_locations l join public.companies c2 on c2.id = l.company_id where c2.organization_id = o.id and l.location_type = 'point_display' order by l.created_at limit 1)
          ) as company_id
   from public.organizations o left join public.store_settings ss on ss.organization_id = o.id
@@ -52,7 +51,7 @@ update public.inventory_categories i set company_id = sp.company_id
 with shop_point as (
   select o.id as organization_id,
          coalesce(ss.store_company_id,
-           (select c.id from public.companies c where c.organization_id = o.id and c.store_enabled group by c.id having count(*) over () = 1 limit 1),
+           (select (array_agg(c.id))[1] from public.companies c where c.organization_id = o.id and c.store_enabled having count(*) = 1),
            (select l.company_id from public.inventory_locations l join public.companies c2 on c2.id = l.company_id where c2.organization_id = o.id and l.location_type = 'point_display' order by l.created_at limit 1)
          ) as company_id
   from public.organizations o left join public.store_settings ss on ss.organization_id = o.id
@@ -65,8 +64,7 @@ create unique index if not exists inventory_items_company_barcode_uidx
   on public.inventory_items (company_id, barcode)
   where barcode is not null;
 
--- 4) Категории: глобальный lower(name)-индекс был кросс-тенантным багом. Меняем на
---    по-точечный.
+-- 4) Категории: глобальный lower(name)-индекс был кросс-тенантным багом → по-точечно.
 drop index if exists public.inventory_categories_name_uidx;
 create unique index if not exists inventory_categories_company_name_uidx
   on public.inventory_categories (company_id, lower(name));

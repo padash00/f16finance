@@ -6,6 +6,7 @@ import { TableSkeleton } from '@/components/skeleton'
 import { DatePicker } from '@/components/ui/date-picker'
 import { ChefHat, Loader2, Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react'
 import { useCapabilities } from '@/lib/client/use-capabilities'
+import { useStoreScope } from '@/components/store/store-scope'
 
 type Ingredient = { id: string; name: string; unit: string | null; purchase_price: number | null; category?: string | null; stock_qty?: number | null }
 type Comp = { id?: string; ingredient_id: string | null; component_recipe_id: string | null; name: string | null; qty: number; unit: string; waste_pct: number }
@@ -45,6 +46,7 @@ function marginColor(pct: number): string {
 
 export default function ProductionPage() {
   const { can } = useCapabilities()
+  const { storeCompanyId } = useStoreScope()
   const [recipes, setRecipes] = useState<Recipe[]>([])
   const [ingredients, setIngredients] = useState<Ingredient[]>([])
   const [saleItems, setSaleItems] = useState<SaleItem[]>([])
@@ -189,12 +191,14 @@ export default function ProductionPage() {
 
   const save = async () => {
     if (!name.trim()) { setErr('Укажите название'); return }
+    if (!editingId && !storeCompanyId) { setErr('Выберите точку-магазин в шапке — техкарта создаётся в конкретной точке'); return }
     setSaving(true); setErr(null)
     try {
       const yf = 1 - (Number(yieldPct) || 0) / 100
       const res = await fetch('/api/admin/production/recipes', {
         method: editingId ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          company_id: storeCompanyId || undefined,
           ...(editingId ? { id: editingId } : {}),
           name: name.trim(), category: category.trim() || null,
           output_qty: Number(outputQty) || 1, output_unit: outputUnit.trim() || 'порц',
