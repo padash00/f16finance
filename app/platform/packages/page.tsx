@@ -6,8 +6,8 @@ import { Loader2, Package, Plus, Puzzle, Save, Trash2, Building2 } from 'lucide-
 import { CapabilityExcludePicker } from '@/components/platform/capability-exclude-picker'
 
 type PageFeature = { path: string; label: string; feature: string; group: string; base: boolean }
-type Pkg = { code: string; name: string; vertical: string; description: string | null; feature_codes: string[]; capability_codes?: string[]; price_kzt: number; status: string }
-type Addon = { code: string; name: string; description: string | null; feature_codes: string[]; price_kzt: number; billing_unit: string; status: string }
+type Pkg = { code: string; name: string; vertical: string; description: string | null; feature_codes: string[]; capability_codes?: string[]; price_kzt: number; included_companies?: number; status: string }
+type Addon = { code: string; name: string; description: string | null; feature_codes: string[]; price_kzt: number; billing_unit: string; included_companies?: number; status: string }
 type Org = { id: string; name: string; slug?: string | null }
 
 const money = (n: number) => `${(Number(n) || 0).toLocaleString('ru-RU')} ₸`
@@ -144,7 +144,7 @@ function PagePicker({ grouped, selected, toggle, setMany }: { grouped: [string, 
 
 function PackageEditor({ packages, grouped, saving, setSaving, reload, showToast }: any) {
   const [editing, setEditing] = useState<Pkg | null>(null)
-  const blank: Pkg = { code: '', name: '', vertical: 'custom', description: '', feature_codes: [], capability_codes: [], price_kzt: 0, status: 'active' }
+  const blank: Pkg = { code: '', name: '', vertical: 'custom', description: '', feature_codes: [], capability_codes: [], price_kzt: 0, included_companies: 1, status: 'active' }
   const cur = editing || blank
   const [sel, setSel] = useState<Set<string>>(new Set(cur.feature_codes))
   // Исключённые (выключенные) действия пакета.
@@ -195,6 +195,7 @@ function PackageEditor({ packages, grouped, saving, setSaving, reload, showToast
           <Field label="Название" value={form.name} onChange={(v: string) => setForm({ ...form, name: v })} placeholder="Orda Finance" />
           <Field label="Ниша" value={form.vertical} onChange={(v: string) => setForm({ ...form, vertical: v })} placeholder="finance / club / shop…" />
           <Field label="Цена в месяц, ₸" value={String(form.price_kzt)} onChange={(v: string) => setForm({ ...form, price_kzt: Number(v.replace(/\D/g, '')) || 0 })} placeholder="9900" />
+          <Field label="Точек включено" value={String(form.included_companies ?? 1)} onChange={(v: string) => setForm({ ...form, included_companies: Math.max(1, Number(v.replace(/\D/g, '')) || 1) })} placeholder="1" />
         </div>
         <Field label="Описание" value={form.description || ''} onChange={(v: string) => setForm({ ...form, description: v })} placeholder="Для кого этот пакет" />
         <div>
@@ -227,7 +228,7 @@ function PackageEditor({ packages, grouped, saving, setSaving, reload, showToast
 
 function AddonEditor({ addons, grouped, saving, setSaving, reload, showToast }: any) {
   const [editing, setEditing] = useState<Addon | null>(null)
-  const blank: Addon = { code: '', name: '', description: '', feature_codes: [], price_kzt: 0, billing_unit: 'organization', status: 'active' }
+  const blank: Addon = { code: '', name: '', description: '', feature_codes: [], price_kzt: 0, billing_unit: 'organization', included_companies: 0, status: 'active' }
   const cur = editing || blank
   const [sel, setSel] = useState<Set<string>>(new Set(cur.feature_codes))
   const [form, setForm] = useState(cur)
@@ -271,7 +272,9 @@ function AddonEditor({ addons, grouped, saving, setSaving, reload, showToast }: 
               <option value="device">за устройство</option>
             </select>
           </div>
+          <Field label="Даёт точек (+N к лимиту)" value={String(form.included_companies ?? 0)} onChange={(v: string) => setForm({ ...form, included_companies: Math.max(0, Number(v.replace(/\D/g, '')) || 0) })} placeholder="0" />
         </div>
+        <p className="text-xs text-muted-foreground">«Даёт точек» &gt; 0 — аддон поднимает лимит точек орг (напр. «Доп. точка» = 1). Количество задаётся при назначении организации.</p>
         <Field label="Описание" value={form.description || ''} onChange={(v: string) => setForm({ ...form, description: v })} placeholder="Что даёт модуль" />
         <div>
           <div className="mb-2 text-sm font-medium text-foreground">Страницы аддона <span className="text-muted-foreground">({sel.size})</span></div>
@@ -287,21 +290,32 @@ function AssignTab({ orgs, packages, addons, saving, setSaving, showToast }: any
   const [orgId, setOrgId] = useState('')
   const [pkgCode, setPkgCode] = useState('')
   const [addonCodes, setAddonCodes] = useState<Set<string>>(new Set())
+  const [addonQty, setAddonQty] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(false)
 
   const loadOrg = async (id: string) => {
-    setOrgId(id); setPkgCode(''); setAddonCodes(new Set())
+    setOrgId(id); setPkgCode(''); setAddonCodes(new Set()); setAddonQty({})
     if (!id) return
     setLoading(true)
-    try { const d = await api('GET', undefined, `?organization_id=${encodeURIComponent(id)}`); setPkgCode(d.package_code || ''); setAddonCodes(new Set(d.addon_codes || [])) }
+    try { const d = await api('GET', undefined, `?organization_id=${encodeURIComponent(id)}`); setPkgCode(d.package_code || ''); setAddonCodes(new Set(d.addon_codes || [])); setAddonQty(d.addon_quantities || {}) }
     catch (e: any) { showToast(e?.message) } finally { setLoading(false) }
   }
   const save = async () => {
     if (!orgId) { showToast('Выбери организацию'); return }
     setSaving(true)
-    try { await api('POST', { action: 'assign_org', organization_id: orgId, package_code: pkgCode || null, addon_codes: Array.from(addonCodes) }); showToast('Назначено — доступ организации обновлён') }
+    try { await api('POST', { action: 'assign_org', organization_id: orgId, package_code: pkgCode || null, addon_codes: Array.from(addonCodes), addon_quantities: addonQty }); showToast('Назначено — доступ организации обновлён') }
     catch (e: any) { showToast(e?.message) } finally { setSaving(false) }
   }
+
+  // Предпросмотр эффективного лимита точек: точки пакета + Σ(аддон.точки × кол-во).
+  const pkgPoints = pkgCode ? Number((packages.find((p: Pkg) => p.code === pkgCode)?.included_companies) ?? 1) : null
+  const addonPoints = addons.reduce((sum: number, a: Addon) => {
+    if (!addonCodes.has(a.code)) return sum
+    const inc = Number(a.included_companies ?? 0)
+    if (inc <= 0) return sum
+    return sum + inc * Math.max(1, Number(addonQty[a.code] ?? 1) || 1)
+  }, 0)
+  const effectiveLimit = pkgCode ? (pkgPoints || 1) + addonPoints : null
 
   return (
     <div className="max-w-2xl space-y-5 rounded-2xl border border-border bg-white p-6 dark:bg-white/5">
@@ -326,16 +340,31 @@ function AssignTab({ orgs, packages, addons, saving, setSaving, showToast }: any
           <div>
             <div className="mb-2 text-sm font-medium text-foreground">Докупленные аддоны</div>
             <div className="space-y-1.5">
-              {addons.map((a: Addon) => (
-                <label key={a.code} className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${addonCodes.has(a.code) ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-500/10' : 'border-border bg-white dark:bg-white/5'}`}>
-                  <input type="checkbox" checked={addonCodes.has(a.code)} onChange={() => setAddonCodes((s) => { const n = new Set(s); n.has(a.code) ? n.delete(a.code) : n.add(a.code); return n })} className="h-4 w-4 accent-emerald-600" />
-                  <span className="flex-1 text-foreground">{a.name}</span>
+              {addons.map((a: Addon) => {
+                const pts = Number(a.included_companies ?? 0)
+                const checked = addonCodes.has(a.code)
+                return (
+                <label key={a.code} className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${checked ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-500/10' : 'border-border bg-white dark:bg-white/5'}`}>
+                  <input type="checkbox" checked={checked} onChange={() => setAddonCodes((s) => { const n = new Set(s); n.has(a.code) ? n.delete(a.code) : n.add(a.code); return n })} className="h-4 w-4 accent-emerald-600" />
+                  <span className="flex-1 text-foreground">{a.name}{pts > 0 ? <span className="ml-1 text-xs text-emerald-600">+{pts} точк.</span> : null}</span>
+                  {checked && pts > 0 && (
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      ×
+                      <input type="number" min={1} value={addonQty[a.code] ?? 1} onClick={(e) => e.stopPropagation()} onChange={(e) => { const q = Math.max(1, Math.round(Number(e.target.value) || 1)); setAddonQty((m) => ({ ...m, [a.code]: q })) }} className="w-14 rounded-md border border-border bg-white px-2 py-1 text-sm text-foreground dark:bg-white/10" />
+                    </span>
+                  )}
                   <span className="text-xs text-muted-foreground">{money(a.price_kzt)}</span>
                 </label>
-              ))}
+              )})}
               {addons.length === 0 && <div className="text-sm text-muted-foreground">Аддонов пока нет — создай во вкладке «Аддоны».</div>}
             </div>
           </div>
+          {effectiveLimit !== null && (
+            <div className="rounded-xl border border-sky-200 bg-sky-50/60 px-4 py-2.5 text-sm text-foreground dark:border-sky-500/25 dark:bg-sky-500/[0.06]">
+              Лимит точек по этому набору: <span className="font-semibold">{effectiveLimit}</span>
+              <span className="text-muted-foreground"> (пакет {pkgPoints || 1}{addonPoints > 0 ? ` + аддоны ${addonPoints}` : ''}). Ручное поле на карточке орг может поднять его выше.</span>
+            </div>
+          )}
           <button onClick={save} disabled={saving} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Назначить организации</button>
         </>
       )}

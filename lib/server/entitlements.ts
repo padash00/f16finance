@@ -175,6 +175,75 @@ export async function resolveOrgEntitlements(access: {
   }
 }
 
+/**
+ * Эффективный лимит точек (компаний) организации.
+ *   = max( точки_пакета + Σ(аддон.included_companies × quantity), ручной company_limit )
+ * Ручное organizations.company_limit — override/fallback: для орг без пакета,
+ * освобождённых от биллинга и индив. сделок. Никогда не занижает существующее.
+ * Обратно-совместимо: если колонок included_companies/quantity ещё нет (миграция
+ * не применена) — отдаём ручной лимит (как было).
+ */
+export async function resolveCompanyLimit(orgId: string | null | undefined): Promise<number> {
+  if (!orgId || !hasAdminSupabaseCredentials()) return 1
+  const supabase = createAdminSupabaseClient()
+
+  const readManual = async (): Promise<number> => {
+    try {
+      const { data } = await supabase.from('organizations').select('company_limit').eq('id', orgId).maybeSingle()
+      const n = Number((data as any)?.company_limit ?? 1)
+      return Number.isFinite(n) && n > 0 ? Math.round(n) : 1
+    } catch {
+      return 1
+    }
+  }
+
+  const manual = await readManual()
+
+  try {
+    // База: точки пакета (если назначен), иначе ручной лимит как fallback.
+    let base = manual
+    const { data: pkgRow } = await supabase
+      .from('organization_packages')
+      .select('package_code')
+      .eq('organization_id', orgId)
+      .maybeSingle()
+    if ((pkgRow as any)?.package_code) {
+      const { data: pkg } = await supabase
+        .from('packages')
+        .select('included_companies')
+        .eq('code', (pkgRow as any).package_code)
+        .maybeSingle()
+      const inc = Number((pkg as any)?.included_companies ?? 1)
+      base = Number.isFinite(inc) && inc > 0 ? Math.round(inc) : 1
+    }
+
+    // Аддоны: сумма included_companies × quantity по включённым.
+    let addonPoints = 0
+    const { data: addonRows } = await supabase
+      .from('organization_addons')
+      .select('addon_code, quantity')
+      .eq('organization_id', orgId)
+      .eq('enabled', true)
+    const rows = (addonRows || []) as Array<{ addon_code: string; quantity: number | null }>
+    if (rows.length > 0) {
+      const codes = rows.map((r) => String(r.addon_code)).filter(Boolean)
+      const { data: addons } = await supabase.from('addons').select('code, included_companies').in('code', codes)
+      const incByCode = new Map<string, number>()
+      for (const a of (addons || []) as any[]) incByCode.set(String(a.code), Number(a.included_companies ?? 0) || 0)
+      for (const r of rows) {
+        const inc = incByCode.get(String(r.addon_code)) || 0
+        const qty = Math.max(1, Number(r.quantity ?? 1) || 1)
+        addonPoints += inc * qty
+      }
+    }
+
+    return Math.max(base + addonPoints, manual)
+  } catch {
+    // Колонок included_companies/quantity может ещё не быть — ведём себя как раньше.
+    return manual
+  }
+}
+
 // Серверный guard платной фичи. Возвращает Response(402) если фича не куплена
 // И включён ENTITLEMENTS_ENFORCE; иначе (shadow) — null, только лог.
 // featureCode — одна фича или список (проходит, если есть ЛЮБАЯ из них).

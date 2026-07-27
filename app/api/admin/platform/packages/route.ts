@@ -28,13 +28,16 @@ export async function GET(req: Request) {
     if (orgId) {
       const [{ data: pkg }, { data: addons }] = await Promise.all([
         supabase.from('organization_packages').select('package_code').eq('organization_id', orgId).maybeSingle(),
-        supabase.from('organization_addons').select('addon_code').eq('organization_id', orgId).eq('enabled', true),
+        supabase.from('organization_addons').select('addon_code, quantity').eq('organization_id', orgId).eq('enabled', true),
       ])
+      const addonQuantities: Record<string, number> = {}
+      for (const a of (addons || []) as any[]) addonQuantities[String(a.addon_code)] = Math.max(1, Number(a.quantity ?? 1) || 1)
       return json({
         ok: true,
         organization_id: orgId,
         package_code: pkg?.package_code || null,
         addon_codes: (addons || []).map((a: any) => String(a.addon_code)),
+        addon_quantities: addonQuantities,
       })
     }
 
@@ -83,6 +86,7 @@ export async function POST(req: Request) {
         feature_codes: featureCodes(body.feature_codes),
         capability_codes: capabilityCodes(body.capability_codes),
         price_kzt: Math.max(0, Math.round(Number(body.price_kzt) || 0)),
+        included_companies: Math.max(1, Math.round(Number(body.included_companies) || 1)),
         status: body.status === 'archived' ? 'archived' : 'active',
         updated_at: new Date().toISOString(),
       }
@@ -111,6 +115,7 @@ export async function POST(req: Request) {
         feature_codes: featureCodes(body.feature_codes),
         capability_codes: capabilityCodes(body.capability_codes),
         price_kzt: Math.max(0, Math.round(Number(body.price_kzt) || 0)),
+        included_companies: Math.max(0, Math.round(Number(body.included_companies) || 0)),
         billing_unit: unit,
         status: body.status === 'archived' ? 'archived' : 'active',
         updated_at: new Date().toISOString(),
@@ -146,9 +151,17 @@ export async function POST(req: Request) {
       }
 
       // Аддоны: удаляем все и вставляем выбранные (простая полная замена).
+      // Количество (quantity) — для аддонов, дающих точки (напр. «+N точек»).
+      const qtyMap = (body.addon_quantities && typeof body.addon_quantities === 'object') ? body.addon_quantities as Record<string, unknown> : {}
       await supabase.from('organization_addons').delete().eq('organization_id', organization_id)
       if (addonCodes.length > 0) {
-        const rows = addonCodes.map((addon_code) => ({ organization_id, addon_code, enabled: true, updated_at: new Date().toISOString() }))
+        const rows = addonCodes.map((addon_code) => ({
+          organization_id,
+          addon_code,
+          enabled: true,
+          quantity: Math.max(1, Math.round(Number(qtyMap[addon_code]) || 1)),
+          updated_at: new Date().toISOString(),
+        }))
         const { error } = await supabase.from('organization_addons').insert(rows)
         if (error) return json({ error: error.message }, 500)
       }

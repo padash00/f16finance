@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability, requireStaffCapability, isOwnerActor, canAssignStaffRole } from '@/lib/server/capabilities'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
+import { resolveCompanyLimit } from '@/lib/server/entitlements'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 type MutationBody =
@@ -123,16 +124,11 @@ export async function GET(req: Request) {
     }
 
     // Лимит точек орг (для баннера «точек N из M» на клиенте). null — без лимита
-    // (супер-админ в платформенном контексте). Дефолт 1, если колонки/строки нет.
+    // (супер-админ в платформенном контексте). Вычисляется из пакета+аддонов, с
+    // ручным company_limit как override/fallback (resolveCompanyLimit).
     let companyLimit: number | null = null
     if (orgId) {
-      const { data: orgRow } = await supabase
-        .from('organizations')
-        .select('company_limit')
-        .eq('id', orgId)
-        .maybeSingle()
-      const raw = Number((orgRow as any)?.company_limit ?? 1)
-      companyLimit = Number.isFinite(raw) ? raw : 1
+      companyLimit = await resolveCompanyLimit(orgId)
     }
 
     return NextResponse.json({
@@ -191,12 +187,11 @@ export async function POST(req: Request) {
         // Супер-админ без активной орг (платформенный контекст) — без лимита.
         const limitOrgId = access.activeOrganization?.id || null
         if (limitOrgId) {
-          const [{ count: currentCount }, { data: orgLimitRow }] = await Promise.all([
+          const [{ count: currentCount }, limit] = await Promise.all([
             supabase.from('companies').select('id', { count: 'exact', head: true }).eq('organization_id', limitOrgId),
-            supabase.from('organizations').select('company_limit').eq('id', limitOrgId).maybeSingle(),
+            resolveCompanyLimit(limitOrgId),
           ])
-          const limit = Number((orgLimitRow as any)?.company_limit ?? 1)
-          if (Number.isFinite(limit) && (currentCount ?? 0) >= limit) {
+          if ((currentCount ?? 0) >= limit) {
             return NextResponse.json(
               { error: `Лимит точек исчерпан (${currentCount}/${limit}). Докупите точку, чтобы добавить ещё одну.`, code: 'company-limit-reached' },
               { status: 402 },

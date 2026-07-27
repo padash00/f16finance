@@ -604,9 +604,9 @@ export default function OrgDetailPage() {
                 <p className="text-[11px] text-slate-500">«Заморожена» — клиент не сможет пользоваться системой. Не забудьте «Сохранить».</p>
               </div>
 
-              {/* Лимит точек (компаний) */}
+              {/* Лимит точек (компаний) — ручной override поверх пакета+аддонов */}
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-slate-400">Лимит точек (компаний)</label>
+                <label className="text-xs font-medium text-slate-400">Лимит точек — ручной override</label>
                 <div className="flex items-center gap-2">
                   <Input
                     type="number"
@@ -616,7 +616,7 @@ export default function OrgDetailPage() {
                     onBlur={() => { if (companyLimit !== (org.companyLimit ?? 1)) void runSub({ companyLimit }, 'limit') }}
                     className="w-24 border-slate-200 bg-white text-slate-900 dark:border-white/10 dark:bg-slate-900/60 dark:text-white"
                   />
-                  <span className="text-[11px] text-slate-500">Сейчас точек: {org.companyCount}. Сверх лимита владелец создать не сможет.</span>
+                  <span className="text-[11px] text-slate-500">Сейчас точек: {org.companyCount}. Базовый лимит берётся из пакета + аддонов «Доп. точка» (вкладка «Пакеты → Назначение»); это поле поднимает его выше (для орг без пакета / индив. сделок).</span>
                 </div>
               </div>
 
