@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArchiveX, Loader2, MoreHorizontal, Package, RefreshCw, Search, Trash2 } from 'lucide-react'
 
+import { useStoreScope } from '@/components/store/store-scope'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -116,6 +117,7 @@ function formatDate(value: string | null | undefined) {
 }
 
 export default function StoreWriteoffsPage({ embedded = false }: { embedded?: boolean } = {}) {
+  const { storeCompanyId } = useStoreScope()
   const { can } = useCapabilities()
   const [data, setData] = useState<WriteoffsResponse['data'] | null>(null)
   const [loading, setLoading] = useState(true)
@@ -301,6 +303,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'createWriteoff',
+          company_id: storeCompanyId || undefined,
           payload: {
             location_id: locationId,
             written_at: writtenAt,

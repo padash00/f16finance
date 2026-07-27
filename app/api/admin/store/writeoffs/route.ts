@@ -106,8 +106,13 @@ export async function POST(request: Request) {
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const actorUserId = access.user?.id || null
+    const body = (await request.json().catch(() => null)) as Body | null
+    if (!body?.action) return json({ error: 'invalid-action' }, 400)
+    // Изоляция записи по точке: выбранная точка → скоуп [точка].
+    const writeCompanyId = String((body as any)?.company_id || '').trim() || null
     const companyScope = await resolveCompanyScope({
       activeOrganizationId: access.activeOrganization?.id || null,
+      requestedCompanyId: writeCompanyId,
       isSuperAdmin: access.isSuperAdmin,
     })
     const inventoryScope = {
@@ -115,8 +120,6 @@ export async function POST(request: Request) {
       allowedCompanyIds: companyScope.allowedCompanyIds,
       isSuperAdmin: access.isSuperAdmin,
     }
-    const body = (await request.json().catch(() => null)) as Body | null
-    if (!body?.action) return json({ error: 'invalid-action' }, 400)
 
     // ── Отмена списания: возвращаем товар на локацию, акт → cancelled ──────
     if (body.action === 'cancelWriteoff') {

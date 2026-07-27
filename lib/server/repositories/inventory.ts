@@ -191,11 +191,18 @@ export async function ensureInventoryLocationAccess(
 
   const organizationId = String(scope?.organizationId || '')
   const allowed = getAllowedCompanyIdSet(scope)
-  if (data.organization_id && organizationId && String(data.organization_id) === organizationId) {
-    return
+
+  // Локация ПРИВЯЗАНА к точке → должна входить в разрешённый набор точек.
+  // При выбранной точке allowedCompanyIds=[точка] → запись строго в неё; в
+  // режиме «Общий» allowed=все точки орг → любая своя локация. Так приёмка/
+  // списание/оприходование не запишутся в чужую точку даже прямым API-запросом.
+  if (data.company_id) {
+    if (allowed.has(String(data.company_id))) return
+    throw new Error('forbidden-location')
   }
 
-  if (data.company_id && allowed.has(String(data.company_id))) {
+  // Локация без company_id (орг-уровень) — разрешаем по принадлежности орг.
+  if (data.organization_id && organizationId && String(data.organization_id) === organizationId) {
     return
   }
 

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, Loader2, MoreHorizontal, Package, PackagePlus, RefreshCw, Search, Sparkles, Trash2 } from 'lucide-react'
 import { useCapabilities } from '@/lib/client/use-capabilities'
+import { useStoreScope } from '@/components/store/store-scope'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -52,6 +53,7 @@ import {
 } from '@/lib/store/receipts/format'
 
 export default function StoreReceiptsPage({ embedded = false }: { embedded?: boolean } = {}) {
+  const { storeCompanyId } = useStoreScope()
   const { can } = useCapabilities()
   const canCreate = can('store-receipts.create')
   const canEdit = can('store-receipts.edit')
@@ -460,6 +462,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'createReceipt',
+          company_id: storeCompanyId || undefined,
           draft_id: draftId,
           payload: {
             location_id: locationId,

@@ -214,8 +214,13 @@ export async function POST(request: Request) {
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const actorUserId = access.user?.id || null
+    const body = (await request.json().catch(() => null)) as Body | null
+    // Изоляция записи по точке: клиент шлёт выбранную точку → скоуп [точка] →
+    // ensureInventoryLocationAccess не даст записать в локацию чужой точки.
+    const writeCompanyId = String((body as any)?.company_id || '').trim() || null
     const companyScope = await resolveCompanyScope({
       activeOrganizationId: access.activeOrganization?.id || null,
+      requestedCompanyId: writeCompanyId,
       isSuperAdmin: access.isSuperAdmin,
     })
     const inventoryScope = {
@@ -223,7 +228,6 @@ export async function POST(request: Request) {
       allowedCompanyIds: companyScope.allowedCompanyIds,
       isSuperAdmin: access.isSuperAdmin,
     }
-    const body = (await request.json().catch(() => null)) as Body | null
     if (!body?.action) return json({ error: 'invalid-action' }, 400)
 
     if (body.action === 'deleteDraft') {
