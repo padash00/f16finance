@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getAllCapabilityIds } from '@/lib/core/capabilities'
-import { invalidateCapabilitiesCache, requireStaffCapability } from '@/lib/server/capabilities'
+import { invalidateCapabilitiesCache, requireOwnerOrSuper } from '@/lib/server/capabilities'
 import { invalidateRoleMatrixCache } from '@/lib/server/role-hydration'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
@@ -72,8 +72,9 @@ export async function POST(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
-    // Управление ролями (в т.ч. seed:'open') — staff + право access.manage_staff_roles.
-    const denied = await requireStaffCapability(access, 'access.manage_staff_roles')
+    // Управление должностями — ТОЛЬКО владелец (или супер-админ). Доступом рулит
+    // владелец: менеджер/кастомная роль сюда не заходят.
+    const denied = requireOwnerOrSuper(access)
     if (denied) return denied
 
     const body = await req.json().catch(() => null)
@@ -106,9 +107,13 @@ export async function POST(req: Request) {
 
       // По умолчанию что включаем для новой роли:
       // 'open'  — все 265 capabilities включены (как у владельца)
-      // 'closed' — ничего не включено, настраивает руками
+      // 'closed' — НИЧЕГО не доступно (наименьшие права). ВАЖНО: из-за fail-open
+      //            (staff-роль базово имеет ВСЕ права, слои только вычитают) пустой
+      //            набор дал бы роли всё. Поэтому «closed» пишет granted=false на
+      //            ВСЕ права — тогда должность реально пустая, владелец включает
+      //            нужное во вкладке «Права».
       // 'copy_from' — копировать набор от другой роли (поле copy_from_role)
-      const seedMode = String(body?.seed || 'open') as 'open' | 'closed' | 'copy_from'
+      const seedMode = String(body?.seed || 'closed') as 'open' | 'closed' | 'copy_from'
       const copyFromRole = String(body?.copy_from_role || '').trim()
 
       const { data, error } = await supabase
@@ -161,8 +166,14 @@ export async function POST(req: Request) {
           if (pathRows.length > 0) {
             await supabase.from('position_paths').upsert(pathRows, { onConflict: 'position_name,path' })
           }
+        } else {
+          // 'closed' (наименьшие права): deny-all, чтобы победить fail-open.
+          const allCaps = getAllCapabilityIds()
+          const rows = allCaps.map((c) => ({ role: name, capability: c, granted: false }))
+          await supabase.from('role_capabilities').upsert(rows, { onConflict: 'role,capability' })
+          // position_paths оставляем пустыми — страниц не видно, пока владелец не
+          // включит .view во вкладке «Права» (слой org_role_capabilities добавит).
         }
-        // 'closed' — ничего не вставляем, всё пустое
       } catch (e) {
         console.warn('Не удалось засеять capabilities/paths для новой роли', e)
       }

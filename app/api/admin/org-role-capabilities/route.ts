@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { CAPABILITY_GROUPS, expandCapabilityDeps, getAllCapabilityIds } from '@/lib/core/capabilities'
 import { writeAuditLog } from '@/lib/server/audit'
-import { invalidateCapabilitiesCache, requireStaffCapability } from '@/lib/server/capabilities'
+import { invalidateCapabilitiesCache, requireOwnerOrSuper } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -57,8 +57,9 @@ function autoEnableDeps(targets: string[]): string[] {
 async function resolveScope(request: Request) {
   const access = await getRequestAccessContext(request)
   if ('response' in access) return { error: access.response as NextResponse }
-  // Доступ к редактированию прав — capability access.toggle_capability (staff-only).
-  const denied = await requireStaffCapability(access as any, 'access.toggle_capability')
+  // Доступом рулит только владелец (или супер-админ). Менеджер/кастомная роль
+  // сюда не заходят — иначе при fail-open они бы поднимали права сами себе.
+  const denied = requireOwnerOrSuper(access as any)
   if (denied) return { error: denied as NextResponse }
 
   const orgId = access.isSuperAdmin ? null : access.activeOrganization?.id || null

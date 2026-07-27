@@ -300,6 +300,22 @@ export function requireSuperAdmin(access: AccessLike): Response | null {
 }
 
 /**
+ * Только владелец организации (или супер-админ). Для роутов УПРАВЛЕНИЯ доступом
+ * внутри орг — создание должностей, правка прав ролей, инд. права сотрудников.
+ * Доступом рулит только владелец: менеджер/маркетолог/кастомная роль сюда не
+ * заходят (иначе при fail-open они бы поднимали права сами себе).
+ */
+export function requireOwnerOrSuper(access: AccessLike): Response | null {
+  if (access.isSuperAdmin) return null
+  const role = access.staffRole || access.staffMember?.role || null
+  if (role === 'owner') return null
+  return NextResponse.json(
+    { error: 'forbidden', reason: 'owner-only', message: 'Управление доступом доступно только владельцу' },
+    { status: 403 },
+  )
+}
+
+/**
  * Staff-only + capability для admin-роутов.
  *
  * Сначала отсекает НЕ-staff (операторы/гости заходят с role='other' без

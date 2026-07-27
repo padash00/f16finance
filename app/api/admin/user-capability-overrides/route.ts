@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog } from '@/lib/server/audit'
-import { invalidateCapabilitiesCache, requireSuperAdmin } from '@/lib/server/capabilities'
+import { invalidateCapabilitiesCache, requireOwnerOrSuper } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -10,6 +10,35 @@ function json(data: unknown, status = 200) {
     status,
     headers: { 'Cache-Control': 'no-store' },
   })
+}
+
+/**
+ * Владелец может править инд. права ТОЛЬКО сотрудников СВОЕЙ организации.
+ * Иначе (права каталога — глобальные, применяются по user_id вне зависимости от
+ * орг) владелец одной орг мог бы дёрнуть право у сотрудника чужой орг.
+ * Супер-админ — без ограничения. Возвращает Response при отказе, null если ок.
+ */
+async function assertTargetUserInOrg(
+  access: Awaited<ReturnType<typeof getRequestAccessContext>>,
+  userId: string,
+): Promise<Response | null> {
+  if ((access as any).isSuperAdmin) return null
+  const orgId = (access as any).activeOrganization?.id || null
+  if (!orgId) return json({ error: 'Требуется активная организация' }, 400)
+  if (!hasAdminSupabaseCredentials()) return json({ error: 'forbidden' }, 403)
+  const admin = createAdminSupabaseClient()
+  // user_id (auth) → email → staff в этой орг.
+  const { data: authUser } = await admin.auth.admin.getUserById(userId)
+  const email = authUser?.user?.email?.trim()?.toLowerCase() || null
+  if (!email) return json({ error: 'forbidden', reason: 'user-not-found' }, 403)
+  const { data: st } = await admin
+    .from('staff')
+    .select('id')
+    .eq('organization_id', orgId)
+    .eq('email', email)
+    .maybeSingle()
+  if (!st) return json({ error: 'forbidden', reason: 'cross-org' }, 403)
+  return null
 }
 
 /**
@@ -22,11 +51,20 @@ function json(data: unknown, status = 200) {
 export async function GET(request: Request) {
   const access = await getRequestAccessContext(request)
   if ('response' in access) return access.response
-  const denied = await requireSuperAdmin(access)
+  const denied = requireOwnerOrSuper(access)
   if (denied) return denied
 
   const url = new URL(request.url)
   const userId = url.searchParams.get('user_id')
+
+  // Владелец видит инд. права только своих сотрудников.
+  if (userId) {
+    const scopeErr = await assertTargetUserInOrg(access, userId)
+    if (scopeErr) return scopeErr
+  } else if (!access.isSuperAdmin) {
+    // Список ВСЕХ оверрайдов — только супер-админу.
+    return json({ error: 'forbidden', reason: 'owner-only' }, 403)
+  }
 
   const supabase = hasAdminSupabaseCredentials()
     ? createAdminSupabaseClient()
@@ -55,7 +93,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const access = await getRequestAccessContext(request)
   if ('response' in access) return access.response
-  const denied = await requireSuperAdmin(access)
+  const denied = requireOwnerOrSuper(access)
   if (denied) return denied
 
   const body = (await request.json().catch(() => null)) as
@@ -66,6 +104,10 @@ export async function POST(request: Request) {
   const userId = String(body.user_id || '').trim()
   const capability = String(body.capability || '').trim()
   if (!userId || !capability) return json({ error: 'user_id и capability обязательны' }, 400)
+
+  // Владелец правит инд. права только своих сотрудников (супер-админ — любых).
+  const scopeErr = await assertTargetUserInOrg(access, userId)
+  if (scopeErr) return scopeErr
 
   const supabase = hasAdminSupabaseCredentials()
     ? createAdminSupabaseClient()

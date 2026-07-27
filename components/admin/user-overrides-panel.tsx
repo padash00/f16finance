@@ -67,9 +67,12 @@ export function UserOverridesPanel({
     setLoading(true)
     setError(null)
     try {
+      // baseline берём из org-role-capabilities — это ПЛОТНЫЙ эффективный срез
+      // (глобал fail-open ⊕ орг-слой), поэтому «по роли» показывает реальное
+      // состояние. Роут доступен владельцу (в отличие от глобального role-capabilities).
       const [ovRes, roleRes] = await Promise.all([
         fetch(`/api/admin/user-capability-overrides?user_id=${encodeURIComponent(userId)}`, { cache: 'no-store' }),
-        fetch('/api/admin/role-capabilities', { cache: 'no-store' }),
+        fetch('/api/admin/org-role-capabilities', { cache: 'no-store' }),
       ])
       if (!ovRes.ok) throw new Error(`HTTP ${ovRes.status}`)
       const ovData = await ovRes.json()

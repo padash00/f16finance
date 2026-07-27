@@ -10,6 +10,7 @@ import { CardSkeleton } from '@/components/skeleton'
 import {
   CheckCircle2, Copy, Eye, EyeOff, KeyRound, Loader2,
   Lock, Pencil, Plus, RefreshCw, Shield, Trash2, Users, X, Briefcase, Save, SlidersHorizontal,
+  ChevronDown, Info, ArrowRight,
 } from 'lucide-react'
 
 // ==================== TYPES ====================
@@ -89,12 +90,28 @@ export default function AccessPage() {
   // Суперадмин правит глобальный дефолт (role_capabilities), владелец орг — свой
   // слой (org_role_capabilities). Определяем по session-role.
   const [isSuperAdmin, setIsSuperAdmin] = useState<boolean | null>(null)
+  // Доступом рулит ТОЛЬКО владелец (или супер-админ). Остальным — заглушка.
+  const [isOwner, setIsOwner] = useState<boolean | null>(null)
   useEffect(() => {
     fetch('/api/auth/session-role')
       .then((r) => r.json())
-      .then((d) => setIsSuperAdmin(!!d?.isSuperAdmin))
-      .catch(() => setIsSuperAdmin(false))
+      .then((d) => {
+        setIsSuperAdmin(!!d?.isSuperAdmin)
+        setIsOwner(d?.staffRole === 'owner' || !!d?.isSuperAdmin)
+      })
+      .catch(() => { setIsSuperAdmin(false); setIsOwner(false) })
   }, [])
+
+  // «Как работает доступ» — сворачиваемая карточка, состояние в localStorage.
+  const [helpOpen, setHelpOpen] = useState(true)
+  useEffect(() => {
+    try { setHelpOpen(window.localStorage.getItem('access.help.collapsed') !== '1') } catch {}
+  }, [])
+  const toggleHelp = () => setHelpOpen((v) => {
+    const next = !v
+    try { window.localStorage.setItem('access.help.collapsed', next ? '0' : '1') } catch {}
+    return next
+  })
 
   // --- Positions state ---
   const [positions, setPositions] = useState<Position[]>([])
@@ -343,6 +360,36 @@ export default function AccessPage() {
 
   const allPositionNames = useMemo(() => positions.map(p => p.name), [positions])
 
+  // ── Гейт: доступом управляет только владелец (или супер-админ) ──────────────
+  if (isOwner === null) {
+    return (
+      <div className="app-page-wide">
+        <div className="flex items-center gap-2 p-10 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" /> Загрузка…
+        </div>
+      </div>
+    )
+  }
+  if (isOwner === false) {
+    return (
+      <div className="app-page-wide">
+        <div className="mx-auto max-w-lg rounded-2xl border border-border bg-white dark:bg-slate-900/60 p-8 text-center shadow-lg shadow-black/20">
+          <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl border border-border bg-gradient-to-br from-amber-400/25 to-rose-400/15 text-amber-700 dark:text-amber-200">
+            <Lock className="h-6 w-6" />
+          </div>
+          <h1 className="text-lg font-semibold text-foreground">Только для владельца</h1>
+          <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">
+            Управление доступом — должности, права и аккаунты сотрудников — доступно
+            только владельцу организации. Если нужен доступ, обратитесь к владельцу.
+          </p>
+          <Link href="/" className="mt-5 inline-flex items-center gap-2 rounded-xl border border-border bg-slate-100 dark:bg-white/5 px-4 py-2 text-sm text-body transition-colors hover:bg-slate-200 dark:hover:bg-white/10">
+            ← На главную
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
   const TABS = [
     { key: 'positions' as const, icon: Briefcase, label: 'Должности' },
     { key: 'permissions' as const, icon: Lock, label: 'Права' },
@@ -398,9 +445,53 @@ export default function AccessPage() {
         </div>
       </div>
 
+      {/* ============ HELP: как работает доступ ============ */}
+      <div className="rounded-2xl border border-sky-500/20 bg-sky-500/[0.04] dark:bg-sky-500/[0.06]">
+        <button
+          type="button"
+          onClick={toggleHelp}
+          className="flex w-full items-center justify-between gap-3 px-5 py-3.5 text-left"
+          aria-expanded={helpOpen}
+        >
+          <span className="flex items-center gap-2.5 text-sm font-semibold text-foreground">
+            <span className="grid h-7 w-7 place-items-center rounded-lg bg-sky-500/15 text-sky-700 dark:text-sky-300"><Info className="h-4 w-4" /></span>
+            Как работает доступ
+          </span>
+          <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${helpOpen ? 'rotate-180' : ''}`} />
+        </button>
+        {helpOpen && (
+          <div className="space-y-3 border-t border-sky-500/15 px-5 py-4 text-sm leading-relaxed text-muted-foreground">
+            <p>
+              Доступом управляет <span className="font-medium text-foreground">только владелец</span>. Модель — три шага:
+            </p>
+            <ol className="space-y-2.5">
+              <li className="flex gap-3">
+                <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md bg-emerald-500/15 text-[11px] font-bold text-emerald-700 dark:text-emerald-300">1</span>
+                <span><span className="font-medium text-foreground">Должность</span> (роль) — набор прав. Создайте нужные во вкладке «Должности»: например «Бухгалтер», «Кассир-старший». Новая должность создаётся <span className="font-medium text-foreground">пустой</span> — без доступа.</span>
+              </li>
+              <li className="flex gap-3">
+                <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md bg-emerald-500/15 text-[11px] font-bold text-emerald-700 dark:text-emerald-300">2</span>
+                <span>Во вкладке <span className="font-medium text-foreground">«Права»</span> для каждой должности включаете, <span className="font-medium text-foreground">какие страницы видит</span> и <span className="font-medium text-foreground">какие действия</span> внутри может делать (создавать, редактировать, экспорт в PDF и т.д.).</span>
+              </li>
+              <li className="flex gap-3">
+                <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md bg-emerald-500/15 text-[11px] font-bold text-emerald-700 dark:text-emerald-300">3</span>
+                <span>Во вкладке <span className="font-medium text-foreground">«Аккаунты»</span> назначаете сотруднику должность и выдаёте вход (email + пароль). Нужны точечные отличия одному человеку — кнопка <span className="font-medium text-foreground">«Инд. права»</span> добавит/заберёт конкретное право поверх должности.</span>
+              </li>
+            </ol>
+            <p className="text-xs text-slate-500">
+              Нанять нового сотрудника и сразу выбрать должность можно на странице «Сотрудники» (HR).
+            </p>
+          </div>
+        )}
+      </div>
+
       {/* ============ TAB: POSITIONS ============ */}
       {tab === 'positions' && (
         <>
+          <p className="flex items-start gap-2 px-1 text-xs leading-relaxed text-muted-foreground">
+            <ArrowRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+            Должности — это роли с набором прав. Базовые (Владелец, Руководитель, Маркетолог) менять нельзя. Создавайте свои под задачи; права настраиваются во вкладке «Права».
+          </p>
           {posTableExists === false && (
             <div className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.06] p-5">
               <div className="mb-3 flex items-center gap-2">
@@ -458,9 +549,9 @@ export default function AccessPage() {
                 onChange={e => setNewPosSeed(e.target.value as 'closed' | 'open' | 'copy_from')}
                 className="rounded-lg border border-border bg-white dark:bg-slate-950/50 px-2.5 py-1.5 text-xs text-foreground focus:border-emerald-400/50 focus:outline-none"
               >
-                <option value="closed">Без прав (настрою сам)</option>
+                <option value="closed">Пустая — без доступа (рекомендуется)</option>
                 <option value="open">Полный доступ (все права)</option>
-                <option value="copy_from">Скопировать с роли…</option>
+                <option value="copy_from">Скопировать с должности…</option>
               </select>
               {newPosSeed === 'copy_from' && (
                 <select
@@ -476,6 +567,9 @@ export default function AccessPage() {
               )}
               {newPosSeed === 'open' && (
                 <span className="text-xs text-amber-700/90 dark:text-amber-300/90">⚠ роль получит все права</span>
+              )}
+              {newPosSeed === 'closed' && (
+                <span className="text-xs text-slate-500">роль без доступа — включите нужное во вкладке «Права»</span>
               )}
             </div>
           </div>
@@ -572,6 +666,11 @@ export default function AccessPage() {
 
       {/* ============ TAB: PERMISSIONS (capabilities) ============ */}
       {tab === 'permissions' && (
+        <>
+        <p className="flex items-start gap-2 px-1 text-xs leading-relaxed text-muted-foreground">
+          <ArrowRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+          Выберите должность и включите, какие страницы она видит и какие действия внутри может делать. «Видят» — доступ к странице; галочки ниже — конкретные действия (создать, изменить, экспорт и т.д.).
+        </p>
         <div className="overflow-x-auto">
           {isSuperAdmin === null ? (
             <div className="flex items-center gap-2 p-6 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Загрузка…</div>
@@ -579,11 +678,16 @@ export default function AccessPage() {
             <CapabilitiesPanel scope={isSuperAdmin ? 'global' : 'org'} />
           )}
         </div>
+        </>
       )}
 
       {/* ============ TAB: ACCOUNTS ============ */}
       {tab === 'accounts' && (
         <>
+          <p className="flex items-start gap-2 px-1 text-xs leading-relaxed text-muted-foreground">
+            <ArrowRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+            Сотрудники, их должность и вход в систему. Меняйте должность, выдавайте пароль. «Инд. права» — точечные исключения поверх должности для конкретного человека.
+          </p>
           {accountsLoading ? (
             <div className="space-y-2.5">
               {Array.from({ length: 4 }).map((_, i) => (
