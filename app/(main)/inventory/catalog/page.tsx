@@ -631,7 +631,8 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
   async function addCategory() {
     const name = newCatName.trim()
     if (!name) return
-    if (await catAction({ action: 'createCategory', payload: { name } })) {
+    if (!effectiveCompanyId) { showToast('Выберите точку-магазин'); return }
+    if (await catAction({ action: 'createCategory', company_id: effectiveCompanyId, payload: { name } })) {
       setNewCatName('')
       showToast('Категория создана')
     }
@@ -870,6 +871,7 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
   }
 
   async function saveAdd() {
+    if (!effectiveCompanyId) { showToast('Выберите точку-магазин — товар создаётся в конкретной точке'); return }
     setSaving(true)
     try {
       const res2 = await fetch('/api/admin/inventory', {
@@ -877,6 +879,7 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'createItem',
+          company_id: effectiveCompanyId,
           payload: {
             name: addForm.name.trim(),
             barcode: addForm.barcode.trim(),
@@ -970,13 +973,14 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
 
   async function confirmImport(opts: { force?: boolean } = {}) {
     if (!importRows.length) return
+    if (!effectiveCompanyId) { setImportError('Выберите точку-магазин — импорт грузит в конкретную точку'); return }
     setImportStatus('importing')
     setImportError(null)
     try {
       const res = await fetch('/api/admin/inventory/catalog', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'confirmImport', rows: importRows, force: !!opts.force }),
+        body: JSON.stringify({ action: 'confirmImport', rows: importRows, force: !!opts.force, company_id: effectiveCompanyId }),
       })
       const json = await res.json()
       if (res.status === 409 && json?.error === 'stock-below-warehouse') {

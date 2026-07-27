@@ -94,12 +94,14 @@ export async function GET(request: Request) {
       return out
     }
 
-    const ITEM_COLS = 'id, name, barcode, category_id, sale_price, default_purchase_price, unit, notes, is_active, item_type, low_stock_threshold, requires_expiry, created_at, category:inventory_categories(id, name)'
+    const ITEM_COLS = 'id, name, barcode, category_id, company_id, sale_price, default_purchase_price, unit, notes, is_active, item_type, low_stock_threshold, requires_expiry, created_at, category:inventory_categories(id, name), company:company_id(id, name)'
     let items: any[] = []
     try {
       items = await fetchAllPages((from, to) => {
         let q = supabase.from('inventory_items').select(`${ITEM_COLS}, image_url`).order('name', { ascending: true }).range(from, to)
         if (scopeOrg) q = q.eq('organization_id', scopeOrg)
+        // Каталог по точке: выбрана точка → только её товары; «Общий» → все магазины.
+        if (companyFilter) q = q.eq('company_id', companyFilter)
         return q
       })
     } catch {
@@ -107,6 +109,7 @@ export async function GET(request: Request) {
         await fetchAllPages((from, to) => {
           let q = supabase.from('inventory_items').select(ITEM_COLS).order('name', { ascending: true }).range(from, to)
           if (scopeOrg) q = q.eq('organization_id', scopeOrg)
+          if (companyFilter) q = q.eq('company_id', companyFilter)
           return q
         })
       ).map((i: any) => ({ ...i, image_url: null }))
@@ -415,11 +418,16 @@ export async function POST(request: Request) {
         )
       }
 
-      // Ensure all categories exist (с organization_id)
+      // Каталог по точке: импорт грузит товары/категории в выбранную точку-магазин.
+      const importCompanyId = String(body.company_id || '').trim()
+      if (!importCompanyId) return json({ error: 'point-required', message: 'Выберите точку-магазин — импорт грузит в конкретную точку.' }, 400)
+
+      // Ensure all categories exist (в точке)
       const { data: existingCategories, error: catFetchError } = await supabase
         .from('inventory_categories')
         .select('id, name')
         .eq('organization_id', orgId)
+        .eq('company_id', importCompanyId)
 
       if (catFetchError) throw catFetchError
 
@@ -437,7 +445,7 @@ export async function POST(request: Request) {
       }
 
       if (missingCats.size > 0) {
-        const newCats = Array.from(missingCats).map((name) => ({ name, organization_id: orgId }))
+        const newCats = Array.from(missingCats).map((name) => ({ name, organization_id: orgId, company_id: importCompanyId }))
         const { data: insertedCats, error: insertCatError } = await supabase
           .from('inventory_categories')
           .insert(newCats)
@@ -459,6 +467,7 @@ export async function POST(request: Request) {
           .from('inventory_items')
           .select('id, barcode')
           .eq('organization_id', orgId)
+          .eq('company_id', importCompanyId)
           .in('barcode', bcChunk)
 
         if (existingError) throw existingError
@@ -473,6 +482,7 @@ export async function POST(request: Request) {
       // Process in batches
       const toInsert: Array<{
         organization_id: string
+        company_id: string
         name: string
         barcode: string
         unit: string
@@ -514,6 +524,7 @@ export async function POST(request: Request) {
         } else {
           toInsert.push({
             organization_id: orgId,
+            company_id: importCompanyId,
             name: row.name,
             barcode: row.barcode,
             unit: row.unit,

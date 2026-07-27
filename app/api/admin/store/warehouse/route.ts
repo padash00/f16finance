@@ -302,6 +302,12 @@ export async function POST(request: Request) {
       if (!barcode) return json({ error: 'barcode-required' }, 400)
 
       const orgId = access.activeOrganization?.id || null
+      // Каталог по точке: товар создаётся в выбранной точке-магазине.
+      const createCompanyId = String(body.company_id || '').trim()
+      if (!createCompanyId) return json({ error: 'company-id-required', message: 'Выберите точку-магазин' }, 400)
+      if (!access.isSuperAdmin && companyScope.allowedCompanyIds?.length && !companyScope.allowedCompanyIds.includes(createCompanyId)) {
+        return json({ error: 'forbidden' }, 403)
+      }
 
       const { data: item, error: insErr } = await supabase
         .from('inventory_items')
@@ -312,6 +318,7 @@ export async function POST(request: Request) {
           sale_price: normalizeQty(body.sale_price),
           default_purchase_price: normalizeQty(body.purchase_price),
           organization_id: orgId,
+          company_id: createCompanyId,
           is_active: true,
         })
         .select('id, name, barcode, unit, sale_price, default_purchase_price')
@@ -355,43 +362,49 @@ export async function POST(request: Request) {
 
       let itemByBarcode: Record<string, string> = {}
       const orgId = access.activeOrganization?.id || null
-      // Изоляция: штрихкод теперь уникален per-org, поэтому lookup ОБЯЗАН
-      // скоупиться по орг — иначе приход зачислился бы на товар чужого
-      // арендатора с тем же штрихкодом (NEVER: не-супер без орг → нулевой uuid).
-      const lookupOrg = orgId || (access.isSuperAdmin ? null : '00000000-0000-0000-0000-000000000000')
-      if (barcodes.length > 0) {
-        // Чанки по 200 штрихкодов — лимит длины URL + лимит 1000 строк ответа.
+      // Каталог по точке: штрихкод уникален per-(company, barcode), поэтому lookup
+      // и авто-создание скоупятся по ВЫБРАННОЙ точке (companyId) — приход зачисляется
+      // на товар именно этой точки.
+      const lookupByCompany = async () => {
         for (const bcChunk of chunkArray(barcodes, 200)) {
-          let lq = supabase
+          const { data: found } = await supabase
             .from('inventory_items')
             .select('id, barcode')
             .in('barcode', bcChunk)
+            .eq('company_id', companyId)
             .eq('is_active', true)
-          if (lookupOrg) lq = lq.eq('organization_id', lookupOrg)
-          const { data: found } = await lq
           ;(found || []).forEach((row: any) => { itemByBarcode[row.barcode] = row.id })
         }
       }
+      if (barcodes.length > 0) await lookupByCompany()
 
       const toCreate = needLookup.filter((i) => i.barcode && !itemByBarcode[i.barcode!] && i.name)
 
       if (toCreate.length > 0) {
-        const inserts = toCreate.map((i) => ({
-          name: i.name!,
-          barcode: i.barcode!,
-          unit: i.unit || 'шт',
-          sale_price: 0,
-          default_purchase_price: i.unit_cost || 0,
-          organization_id: orgId,
-          is_active: true,
-        }))
-        // Изоляция: onConflict по (organization_id, barcode), иначе upsert по
-        // одному barcode переписал бы товар другого арендатора.
-        const { data: created } = await supabase
+        // Дедуп по barcode внутри батча.
+        const seen = new Set<string>()
+        const inserts = toCreate
+          .filter((i) => { if (seen.has(i.barcode!)) return false; seen.add(i.barcode!); return true })
+          .map((i) => ({
+            name: i.name!,
+            barcode: i.barcode!,
+            unit: i.unit || 'шт',
+            sale_price: 0,
+            default_purchase_price: i.unit_cost || 0,
+            organization_id: orgId,
+            company_id: companyId,
+            is_active: true,
+          }))
+        // Развязано от onConflict (чтобы смена barcode-индекса не давала 42P10):
+        // явный insert; на 23505 (гонка/дубль) — просто дочитываем по (company, barcode).
+        const { data: created, error: crErr } = await supabase
           .from('inventory_items')
-          .upsert(inserts, { onConflict: 'organization_id,barcode', ignoreDuplicates: false })
+          .insert(inserts)
           .select('id, barcode')
+        if (crErr && crErr.code !== '23505') throw crErr
         ;(created || []).forEach((row: any) => { itemByBarcode[row.barcode] = row.id })
+        // Дочитать всё, что не создалось (уже существовало из-за гонки).
+        if (toCreate.some((i) => !itemByBarcode[i.barcode!])) await lookupByCompany()
       }
 
       const resolvedItems: Array<{ item_id: string; quantity: number; unit_cost: number }> = []

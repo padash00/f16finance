@@ -6,6 +6,9 @@ export type InventoryScope = {
   organizationId?: string | null
   allowedCompanyIds?: string[] | null
   isSuperAdmin?: boolean
+  /** Целевая точка (магазин) для СОЗДАНИЯ каталожных строк (товар/категория/
+   *  поставщик). Каталог по точке: новая строка принадлежит выбранной точке. */
+  companyId?: string | null
 }
 
 export type InventoryOverview = {
@@ -687,6 +690,7 @@ export async function createInventoryCategory(
     .insert([
       {
         organization_id: scope?.organizationId || null,
+        company_id: scope?.companyId || null,
         name: payload.name.trim(),
         description: payload.description?.trim() || null,
       },
@@ -718,6 +722,7 @@ export async function createInventorySupplier(
     .insert([
       {
         organization_id: scope?.organizationId || null,
+        company_id: scope?.companyId || null,
         name: payload.name.trim(),
         bin_iin: payload.bin_iin?.trim() || null,
         organization_name: payload.organization_name?.trim() || null,
@@ -759,6 +764,7 @@ export async function createInventoryItem(
     .insert([
       {
         organization_id: scope?.organizationId || null,
+        company_id: scope?.companyId || null,
         name: payload.name.trim(),
         barcode: payload.barcode.trim(),
         category_id: payload.category_id || null,

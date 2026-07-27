@@ -328,14 +328,27 @@ export async function POST(request: Request) {
       activeOrganizationId: access.activeOrganization?.id || null,
       isSuperAdmin: access.isSuperAdmin,
     })
+    const body = (await request.json().catch(() => null)) as Body | null
+
+    if (!body?.action) return json({ error: 'invalid-action' }, 400)
+
+    // Каталог по точке: строка (товар/категория/поставщик) принадлежит выбранной
+    // точке-магазину. Клиент шлёт company_id (POST не инъектится StoreScope).
+    const targetCompanyId = String((body as any)?.company_id || new URL(request.url).searchParams.get('company_id') || '').trim()
+    if (targetCompanyId && companyScope.allowedCompanyIds && !companyScope.allowedCompanyIds.includes(targetCompanyId)) {
+      return json({ error: 'forbidden-company' }, 403)
+    }
     const inventoryScope = {
       organizationId: access.activeOrganization?.id || null,
       allowedCompanyIds: companyScope.allowedCompanyIds,
       isSuperAdmin: access.isSuperAdmin,
+      companyId: targetCompanyId || null,
     }
-    const body = (await request.json().catch(() => null)) as Body | null
-
-    if (!body?.action) return json({ error: 'invalid-action' }, 400)
+    // Создание каталожных строк требует выбранной точки (в режиме «Общий» — нельзя).
+    const CREATE_ACTIONS = new Set(['createItem', 'createCategory', 'createSupplier'])
+    if (CREATE_ACTIONS.has(body.action) && !targetCompanyId) {
+      return json({ error: 'point-required', message: 'Выберите точку-магазин в шапке — товары создаются в конкретной точке.' }, 400)
+    }
 
     if (body.action === 'createCategory') {
       const name = String(body.payload?.name || '').trim()

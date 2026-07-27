@@ -776,12 +776,14 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
 
   async function handleCreateSupplier() {
     if (!supplierName.trim()) return setError('Введите название поставщика')
+    if (!requestCompanyId) return setError('Выберите точку — поставщик привязывается к точке-магазину')
     setSaving(true)
     setError(null)
     setSuccess(null)
     try {
       await mutate({
         action: 'createSupplier',
+        company_id: requestCompanyId,
         payload: {
           name: supplierName.trim(),
           contact_name: supplierContact.trim() || null,

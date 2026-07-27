@@ -78,18 +78,18 @@ async function ensureCompanyPointProductsFromInventory(params: {
         .order('id')
         .range(from, to),
     ),
-    resolveCompanyOrganizationId(params.supabase, params.companyId).then((orgId) =>
-      fetchAllPages((from, to) =>
-        params.supabase
-          .from('inventory_items')
-          .select('id, name, barcode, sale_price, is_active, item_type')
-          .eq('organization_id', orgId)
-          .eq('is_active', true)
-          .neq('item_type', 'consumable')
-          .order('name', { ascending: true })
-          .order('id')
-          .range(from, to),
-      ),
+    // Каталог по точке: в POS точки синкаем ТОЛЬКО её товары (company_id), а не
+    // весь орг-каталог — иначе на кассе одной точки был бы каталог всех.
+    fetchAllPages((from, to) =>
+      params.supabase
+        .from('inventory_items')
+        .select('id, name, barcode, sale_price, is_active, item_type')
+        .eq('company_id', params.companyId)
+        .eq('is_active', true)
+        .neq('item_type', 'consumable')
+        .order('name', { ascending: true })
+        .order('id')
+        .range(from, to),
     ),
   ])
 

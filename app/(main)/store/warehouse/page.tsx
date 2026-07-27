@@ -297,6 +297,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
 
   async function handleCreateItem() {
     if (!newItemDialog || !newItemName.trim()) return
+    if (!selectedCompanyId) { alert('Выберите точку-магазин'); return }
     setCreatingItem(true)
     try {
       const res = await fetch('/api/admin/store/warehouse', {
@@ -304,6 +305,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'createItem',
+          company_id: selectedCompanyId,
           barcode: newItemDialog.barcode,
           name: newItemName.trim(),
           unit: newItemUnit,
