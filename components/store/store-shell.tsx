@@ -8,6 +8,7 @@ import {
   Activity, Boxes, Warehouse, FileText, ClipboardList, Building2,
   Receipt, Users2, Monitor, ReceiptText, ArrowLeft, Store, LogOut,
   Clock, Settings, Menu, X, Search, Command, ShoppingCart, Sparkles, ChefHat,
+  ChevronDown, Check,
 } from 'lucide-react'
 import { isAbortError } from '@/lib/is-abort-error'
 import { StoreCompanyProvider, useStoreCompany } from '@/components/store/store-company-context'
@@ -40,22 +41,75 @@ export function StoreShell({ children }: { children: React.ReactNode }) {
   )
 }
 
-/** Переключатель компаний в шапке модуля. Виден только при 2+ точках. */
+/** Переключатель точек в шапке модуля. Виден только при 2+ точках.
+ *  Кастомный дропдаун (не нативный select) — в стиле модуля, обе темы. */
 function StoreCompanySwitcher() {
   const { companyId, setCompanyId, companies } = useStoreCompany()
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onKey) }
+  }, [open])
+
   if (companies.length < 2) return null
+
+  const current = companyId ? companies.find((c) => c.id === companyId) : null
+  const label = current ? current.name : 'Общий'
+  const options = [{ id: '', name: 'Общий (все точки)', all: true }, ...companies.map((c) => ({ id: c.id, name: c.name, all: false }))]
+
   return (
-    <div className="relative inline-flex items-center">
-      <Building2 className="pointer-events-none absolute left-2.5 h-3.5 w-3.5 text-emerald-600 dark:text-emerald-300" />
-      <select
-        value={companyId}
-        onChange={(e) => setCompanyId(e.target.value)}
-        className="appearance-none rounded-xl border border-emerald-400/30 bg-emerald-500/10 py-1.5 pl-8 pr-7 text-xs font-medium text-emerald-800 outline-none transition hover:bg-emerald-500/15 dark:text-emerald-200"
-        title="Точка (магазин)"
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        title="Точка магазина"
+        className="inline-flex max-w-[180px] items-center gap-1.5 rounded-xl border border-emerald-400/30 bg-emerald-500/10 py-1.5 pl-2.5 pr-2 text-xs font-medium text-emerald-800 transition-colors hover:bg-emerald-500/15 dark:text-emerald-200"
       >
-        <option value="">Общий (все точки)</option>
-        {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-      </select>
+        {current ? <Store className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-300" /> : <Boxes className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-300" />}
+        <span className="truncate">{label}</span>
+        <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-emerald-600/70 transition-transform dark:text-emerald-300/70 ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div
+          role="listbox"
+          className="absolute left-0 top-full z-40 mt-1.5 min-w-[200px] overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-xl shadow-black/10 dark:border-white/10 dark:bg-slate-900"
+        >
+          {options.map((o) => {
+            const active = (o.id || '') === (companyId || '')
+            return (
+              <button
+                key={o.id || 'all'}
+                type="button"
+                role="option"
+                aria-selected={active}
+                onClick={() => { setCompanyId(o.id); setOpen(false) }}
+                className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs transition-colors ${
+                  active
+                    ? 'bg-emerald-500/10 font-semibold text-emerald-700 dark:text-emerald-200'
+                    : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/5'
+                }`}
+              >
+                {o.all
+                  ? <Boxes className={`h-3.5 w-3.5 shrink-0 ${active ? 'text-emerald-500' : 'text-slate-400'}`} />
+                  : <Store className={`h-3.5 w-3.5 shrink-0 ${active ? 'text-emerald-500' : 'text-slate-400'}`} />}
+                <span className="flex-1 truncate">{o.name}</span>
+                {active && <Check className="h-3.5 w-3.5 shrink-0 text-emerald-500" />}
+              </button>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
@@ -128,9 +182,10 @@ function StoreShellInner({ children }: { children: React.ReactNode }) {
               <span className="ml-1 hidden rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-emerald-700/90 dark:text-emerald-300/90 lg:inline">модуль</span>
             </div>
           </div>
+          <div className="mx-1 hidden h-6 w-px bg-slate-200 dark:bg-white/10 sm:block" />
+          <StoreCompanySwitcher />
         </div>
         <div className="flex items-center gap-1.5">
-          <StoreCompanySwitcher />
           <button onClick={() => setSearchOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-100 px-3 py-1.5 text-xs text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-white/10 dark:bg-white/5 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white">
             <Search className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Поиск</span>
