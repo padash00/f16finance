@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { resolveCompanyScope, resolveEffectiveOrganizationId } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { requireAnyCapability } from '@/lib/server/capabilities'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 // Планировщик закупа на следующую неделю (для weekly-report PDF).
@@ -27,6 +28,8 @@ export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    const denied = await requireAnyCapability(access, ['store-purchase-plan.view', 'weekly-report.view'])
+    if (denied) return denied
     if (!canManage(access)) return json({ error: 'forbidden' }, 403)
 
     const supabase = getSupabase(access)

@@ -4,6 +4,7 @@ import { resolveAllRecipeCosts } from '@/lib/domain/production'
 import { writeAuditLog } from '@/lib/server/audit'
 import { requireOrgFeature } from '@/lib/server/entitlements'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { requireAnyCapability } from '@/lib/server/capabilities'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 export const runtime = 'nodejs'
@@ -36,6 +37,8 @@ export async function GET(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+    const denied = await requireAnyCapability(access, ['production.view', 'store-catalog.view'])
+    if (denied) return denied
     if (!canManage(access)) return json({ error: 'forbidden' }, 403)
     const gate = await requireOrgFeature(access, ['shop.catalog', 'restaurant.recipes_lite'])
     if (gate) return gate

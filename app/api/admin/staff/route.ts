@@ -64,6 +64,9 @@ export async function GET(req: Request) {
     if (guard) return guard
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    // Чтение данных сотрудников — требует доступ к странице /staff.
+    const denied = await requireCapability(access, 'staff.view')
+    if (denied) return denied
 
     const url = new URL(req.url)
     const from = url.searchParams.get('from')

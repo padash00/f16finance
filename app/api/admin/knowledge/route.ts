@@ -626,6 +626,8 @@ export async function GET(req: Request) {
     if (guard) return guard
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    const denied = await requireCapability(access, 'knowledge-admin.view')
+    if (denied) return denied
 
     const url = new URL(req.url)
     const articleId = url.searchParams.get('article')

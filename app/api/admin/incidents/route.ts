@@ -24,6 +24,8 @@ export async function GET(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+    const denied = await requireCapability(access, 'incidents.view')
+    if (denied) return denied
     if (!canView(access)) return json({ error: 'forbidden' }, 403)
 
     const url = new URL(request.url)

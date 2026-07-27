@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { writeAuditLog } from '@/lib/server/audit'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
-import { requireStaffCapability } from '@/lib/server/capabilities'
+import { requireCapability, requireStaffCapability } from '@/lib/server/capabilities'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 function json(data: unknown, status = 200) {
@@ -31,6 +31,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+    const denied = await requireCapability(access, 'incidents.view')
+    if (denied) return denied
 
     const { id } = await params
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase

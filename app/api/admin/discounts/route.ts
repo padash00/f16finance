@@ -13,6 +13,8 @@ export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    const denied = await requireCapability(access, 'discounts.view')
+    if (denied) return denied
 
     const { staffRole, isSuperAdmin } = access
     // Capability checks выше уже отсеивают; здесь — любой staff

@@ -91,6 +91,8 @@ export async function GET(request: Request) {
   try {
     const access = await getContext(request)
     if ('response' in access) return access.response
+    const denied = await requireCapability(access, 'stations.view')
+    if (denied) return denied
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const companyScope = await resolveCompanyScope({
       activeOrganizationId: access.activeOrganization?.id || null,

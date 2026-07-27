@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { requireCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { computeShiftReport } from '@/lib/server/shift-report'
@@ -13,6 +14,8 @@ function json(data: unknown, status = 200) {
 export async function GET(request: Request) {
   const access = await getRequestAccessContext(request)
   if ('response' in access) return access.response
+  const denied = await requireCapability(access, 'store-shifts.view')
+  if (denied) return denied
   if (!access.isSuperAdmin && !access.staffMember) return json({ error: 'forbidden' }, 403)
 
   const url = new URL(request.url)

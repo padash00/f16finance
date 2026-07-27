@@ -289,6 +289,47 @@ export async function requireCapability(
 }
 
 /**
+ * Как requireCapability, но пропускает если есть ХОТЯ БЫ ОДНО из прав.
+ * Для GET-роутов, обслуживающих несколько страниц: доступ к чтению, если
+ * пользователь может видеть любую из потребляющих страниц (напр. income.view
+ * ИЛИ reports.view). Super-admin/владелец проходят всегда; org-рубильник режет
+ * право у всех. Пустой список → пропускаем (нечего проверять).
+ */
+export async function requireAnyCapability(
+  access: AccessLike,
+  capabilitiesToCheck: string[],
+): Promise<Response | null> {
+  if (access.isSuperAdmin) return null
+  if (!access.staffMember) {
+    return NextResponse.json({ error: 'forbidden', reason: 'staff-only' }, { status: 403 })
+  }
+  const caps = (capabilitiesToCheck || []).filter(Boolean)
+  if (caps.length === 0) return null
+
+  const ownerRole = access.staffRole || access.staffMember?.role || null
+  if (ownerRole === 'owner') return null
+
+  const userId = access.user?.id
+  if (!userId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
+  const role = ownerRole
+  const orgId = access.activeOrganization?.id || null
+  const [granted, orgDisabled] = await Promise.all([
+    loadUserCapabilities(userId, role, orgId),
+    loadOrgDisabledCapabilities(orgId),
+  ])
+  // Доступно, если есть хотя бы одно право, не выключенное орг-рубильником.
+  const ok = caps.some((c) => granted.has(c) && !orgDisabled.has(c))
+  if (!ok) {
+    return NextResponse.json(
+      { error: 'forbidden', capabilities: caps, message: `Нет ни одного из прав: ${caps.join(', ')}` },
+      { status: 403 },
+    )
+  }
+  return null
+}
+
+/**
  * Только super-admin. Для роутов УПРАВЛЕНИЯ правами (role_capabilities,
  * user_capability_overrides, set-password, role-permissions) — их нельзя
  * завязывать на capability, потому что при fail-open менеджеры имеют access.*

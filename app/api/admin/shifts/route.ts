@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { writeAuditLog, writeNotificationLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
-import { requireCapability } from '@/lib/server/capabilities'
+import { requireAnyCapability, requireCapability } from '@/lib/server/capabilities'
 import { requiredEnv } from '@/lib/server/env'
 import { listOrganizationOperatorIds, resolveCompanyScope } from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
@@ -981,6 +981,9 @@ export async function GET(req: Request) {
     if (guard) return guard
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+
+    const denied = await requireAnyCapability(access, ['shifts.view', 'dashboard.view'])
+    if (denied) return denied
 
     const url = new URL(req.url)
     const weekStart = url.searchParams.get('weekStart')?.trim()

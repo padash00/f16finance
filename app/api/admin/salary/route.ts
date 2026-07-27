@@ -550,6 +550,8 @@ export async function GET(req: Request) {
     if (guard) return guard
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    const denied = await requireCapability(access, 'salary.view')
+    if (denied) return denied
     const [allowedCompanyIds, allowedOperatorIds] = await Promise.all([
       listOrganizationCompanyIds({
         activeOrganizationId: access.activeOrganization?.id || null,

@@ -6,6 +6,7 @@
  */
 
 import { NextResponse } from 'next/server'
+import { requireCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -24,6 +25,8 @@ function canModerate(access: any): boolean {
 export async function GET(request: Request) {
   const access = await getRequestAccessContext(request)
   if ('response' in access) return access.response
+  const denied = await requireCapability(access, 'moderation.view')
+  if (denied) return denied
   if (!canModerate(access)) return json({ error: 'forbidden' }, 403)
 
   const url = new URL(request.url)

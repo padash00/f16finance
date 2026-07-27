@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { requireCapability } from '@/lib/server/capabilities'
 import { requireOrgFeature } from '@/lib/server/entitlements'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -21,6 +22,9 @@ export async function GET(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+
+    const denied = await requireCapability(access, 'store-analytics.view')
+    if (denied) return denied
 
     // Платная фича магазина (shop.catalog): при ENTITLEMENTS_ENFORCE=true → 402.
     const gate = await requireOrgFeature(access, 'shop.catalog')

@@ -4,7 +4,7 @@ import { evaluatePointRules, type PointRuleAction, type PointRuleCondition } fro
 import { listOrganizationCompanyIds, resolveCompanyScope } from '@/lib/server/organizations'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
-import { requireStaffCapability } from '@/lib/server/capabilities'
+import { requireCapability, requireStaffCapability } from '@/lib/server/capabilities'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
 type RulePayload = {
@@ -67,6 +67,9 @@ export async function GET(req: Request) {
     if (guard) return guard
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+
+    const denied = await requireCapability(access, 'salary-rules.view')
+    if (denied) return denied
 
     const allowedCompanyIds = await listOrganizationCompanyIds({
       activeOrganizationId: access.activeOrganization?.id || null,

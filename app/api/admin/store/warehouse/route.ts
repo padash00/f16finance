@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
-import { requireCapability } from '@/lib/server/capabilities'
+import { requireAnyCapability, requireCapability } from '@/lib/server/capabilities'
 import { humanizeDbError } from '@/lib/server/db-error-humanize'
 import { requireOrgFeature } from '@/lib/server/entitlements'
 import { resolveCompanyScope } from '@/lib/server/organizations'
@@ -98,6 +98,8 @@ export async function GET(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+    const denied = await requireAnyCapability(access, ['store-warehouse.view', 'store-catalog.view'])
+    if (denied) return denied
     if (!canViewWarehouse(access)) return json({ error: 'forbidden' }, 403)
     const entitlementGuard = await requireOrgFeature(access, 'shop.catalog')
     if (entitlementGuard) return entitlementGuard
