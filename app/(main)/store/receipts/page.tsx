@@ -119,7 +119,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
     }
     setError(null)
     try {
-      const response = await fetch(`/api/admin/store/receipts?scope=${scope}`, { cache: 'no-store', signal })
+      const response = await fetch(`/api/admin/store/receipts?scope=${scope}${storeCompanyId ? `&company_id=${encodeURIComponent(storeCompanyId)}` : ''}`, { cache: 'no-store', signal })
       const json = (await response.json().catch(() => null)) as ReceiptsResponse | null
       if (signal?.aborted) return
       if (!response.ok || !json?.ok || !json.data) throw new Error(json?.error || 'Не удалось загрузить приемку')
@@ -132,7 +132,8 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
         expense_categories: asArray(json.data.expense_categories),
       }
       setData(normalized)
-      setLocationId((current) => current || normalized.locations?.[0]?.id || '')
+      // Сброс локации при смене точки: если текущая не из набора новой точки — берём первую.
+      setLocationId((current) => (current && normalized.locations.some((l: any) => l.id === current)) ? current : (normalized.locations?.[0]?.id || ''))
 
       // load debts and build a map by receipt_id
       try {
@@ -176,7 +177,9 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
     const ac = new AbortController()
     void load(ac.signal)
     return () => ac.abort()
-  }, [scope])
+    // storeCompanyId: при смене точки в шапке — перезапрос локаций/данных этой точки.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope, storeCompanyId])
 
   useEffect(() => {
     try {

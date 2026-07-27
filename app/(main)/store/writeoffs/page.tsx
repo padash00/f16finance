@@ -152,12 +152,12 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
     }
     setError(null)
     try {
-      const response = await fetch(`/api/admin/store/writeoffs?scope=${scope}`, { cache: 'no-store', signal })
+      const response = await fetch(`/api/admin/store/writeoffs?scope=${scope}${storeCompanyId ? `&company_id=${encodeURIComponent(storeCompanyId)}` : ''}`, { cache: 'no-store', signal })
       const json = (await response.json().catch(() => null)) as WriteoffsResponse | null
       if (signal?.aborted) return
       if (!response.ok || !json?.ok || !json.data) throw new Error(json?.error || 'Не удалось загрузить списания')
       setData(json.data)
-      setLocationId((current) => current || json.data?.locations?.[0]?.id || '')
+      setLocationId((current) => (current && (json.data?.locations || []).some((l: any) => l.id === current)) ? current : (json.data?.locations?.[0]?.id || ''))
     } catch (err: any) {
       if (isAbortError(err) || signal?.aborted) return
       if (!soft) setData(null)
@@ -179,7 +179,8 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
     const ac = new AbortController()
     void load(ac.signal)
     return () => ac.abort()
-  }, [scope])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope, storeCompanyId])
 
   useEffect(() => {
     try {

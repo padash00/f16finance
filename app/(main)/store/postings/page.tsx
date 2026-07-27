@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { useStoreScope } from '@/components/store/store-scope'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
@@ -96,6 +97,7 @@ function saleFromMarkup(unitCost: number, markup: number) {
 }
 
 export default function StorePostingsPage({ embedded = false }: { embedded?: boolean } = {}) {
+  const { storeCompanyId } = useStoreScope()
   const { can, isSuperAdmin, isLoading: capsLoading } = useCapabilities()
   const [role, setRole] = useState<SessionRole | null>(null)
   const [roleLoading, setRoleLoading] = useState(true)
@@ -150,17 +152,17 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
     setLoading(true)
     setError(null)
     try {
-      // scope=all чтобы получить и склады, и витрины
-      const res = await fetch('/api/admin/store/receipts?scope=all', { cache: 'no-store' })
+      // scope=all чтобы получить и склады, и витрины ВЫБРАННОЙ точки.
+      const res = await fetch(`/api/admin/store/receipts?scope=all${storeCompanyId ? `&company_id=${encodeURIComponent(storeCompanyId)}` : ''}`, { cache: 'no-store' })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Ошибка загрузки')
       const data = json.data || {}
       setItems(data.items || [])
-      setLocations(
-        ((data.locations as Location[]) || []).filter(
-          (l) => l.location_type === 'warehouse' || l.location_type === 'point_display',
-        ),
+      const locs = ((data.locations as Location[]) || []).filter(
+        (l) => l.location_type === 'warehouse' || l.location_type === 'point_display',
       )
+      setLocations(locs)
+      setLocationId((cur) => (cur && locs.some((l) => l.id === cur)) ? cur : (locs[0]?.id || ''))
       setRecent(((data.receipts as RecentPosting[]) || []).filter((r) => r.kind === 'posting').slice(0, 20))
     } catch (e: any) {
       setError(e?.message || 'Ошибка')
@@ -171,7 +173,8 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
 
   useEffect(() => {
     if (allowed) void load()
-  }, [allowed])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allowed, storeCompanyId])
 
   const itemById = useMemo(() => {
     const m = new Map<string, Item>()
@@ -352,6 +355,7 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'createPosting',
+          company_id: storeCompanyId || undefined,
           posting: {
             location_id: locationId,
             received_at: receivedAt,

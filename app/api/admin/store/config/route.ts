@@ -87,6 +87,25 @@ export async function PUT(request: Request) {
         const toDisable = orgCompanyIds.filter((id) => !enabledSet.includes(id))
         if (toDisable.length) await supabase.from('companies').update({ store_enabled: false }).in('id', toDisable)
       }
+
+      // Новой точке-магазину нужны СВОИ локации (склад + витрина), иначе приёмке/
+      // оприходованию/списанию некуда писать и дропдаун падает на чужую точку.
+      if (enabledSet.length > 0) {
+        const { data: enabledCompanies } = await supabase
+          .from('companies').select('id, name, code, organization_id').in('id', enabledSet)
+        for (const c of (enabledCompanies || []) as any[]) {
+          for (const lt of ['warehouse', 'point_display'] as const) {
+            const { data: exists } = await supabase
+              .from('inventory_locations').select('id').eq('company_id', c.id).eq('location_type', lt).limit(1).maybeSingle()
+            if (!exists) {
+              await supabase.from('inventory_locations').insert({
+                company_id: c.id, organization_id: c.organization_id,
+                name: c.name, code: c.code, location_type: lt, is_active: true,
+              })
+            }
+          }
+        }
+      }
     }
 
     // ── Стартовая точка по умолчанию (store_company_id) ──────────────────────
