@@ -30,7 +30,9 @@ export const transferToShowcaseTool: CopilotTool = {
       required: true,
       description: 'Какой товар перенести',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase.from('inventory_items').select('id, name').order('name')
+        let q = ctx.supabase.from('inventory_items').select('id, name').order('name')
+        if (ctx.organizationId) q = q.eq('organization_id', ctx.organizationId)
+        const { data } = await q
         return (data || []).map((i: any) => ({ value: i.id, label: i.name }))
       },
     },

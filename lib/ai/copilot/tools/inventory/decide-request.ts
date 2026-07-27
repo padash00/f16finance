@@ -26,11 +26,13 @@ async function assertRequestInScope(ctx: any, reqId: string): Promise<string | n
 }
 
 async function getPendingRequests(ctx: any) {
-  const { data } = await ctx.supabase
+  let q = ctx.supabase
     .from('inventory_requests')
     .select('id, status, created_at, requesting_company_id, comment')
     .in('status', ['new', 'disputed'])
     .order('created_at', { ascending: false })
+  if (ctx.organizationId) q = q.eq('organization_id', ctx.organizationId)
+  const { data } = await q
   const rows = data || []
   if (rows.length === 0) return []
 

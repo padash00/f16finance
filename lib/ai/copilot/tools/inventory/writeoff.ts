@@ -29,10 +29,12 @@ export const writeoffItemTool: CopilotTool = {
       required: true,
       description: 'Склад или витрина',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase
+        let q = ctx.supabase
           .from('inventory_locations')
           .select('id, name, kind, company:company_id(name)')
           .order('name')
+        if (ctx.organizationId) q = q.eq('organization_id', ctx.organizationId)
+        const { data } = await q
         return (data || []).map((l: any) => {
           const co = Array.isArray(l.company) ? l.company[0] : l.company
           const kindLabel = l.kind === 'warehouse' ? '🏭' : '🛍'
@@ -47,7 +49,9 @@ export const writeoffItemTool: CopilotTool = {
       required: true,
       description: 'Какой товар',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase.from('inventory_items').select('id, name').order('name')
+        let q = ctx.supabase.from('inventory_items').select('id, name').order('name')
+        if (ctx.organizationId) q = q.eq('organization_id', ctx.organizationId)
+        const { data } = await q
         return (data || []).map((i: any) => ({ value: i.id, label: i.name }))
       },
     },

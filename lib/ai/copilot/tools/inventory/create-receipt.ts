@@ -30,11 +30,13 @@ export const createReceiptTool: CopilotTool = {
       description: 'Склад приёмки',
       getOptions: async (ctx) => {
         // Только склады, не витрины
-        const { data } = await ctx.supabase
+        let q = ctx.supabase
           .from('inventory_locations')
           .select('id, name, kind, company:company_id(name)')
           .eq('kind', 'warehouse')
           .order('name')
+        if (ctx.organizationId) q = q.eq('organization_id', ctx.organizationId)
+        const { data } = await q
         return (data || []).map((l: any) => {
           const co = Array.isArray(l.company) ? l.company[0] : l.company
           return { value: l.id, label: `${l.name}${co?.name ? ` · ${co.name}` : ''}` }
@@ -48,7 +50,9 @@ export const createReceiptTool: CopilotTool = {
       required: true,
       description: 'Что приходим',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase.from('inventory_items').select('id, name').order('name')
+        let q = ctx.supabase.from('inventory_items').select('id, name').order('name')
+        if (ctx.organizationId) q = q.eq('organization_id', ctx.organizationId)
+        const { data } = await q
         return (data || []).map((i: any) => ({ value: i.id, label: i.name }))
       },
     },
@@ -73,7 +77,9 @@ export const createReceiptTool: CopilotTool = {
       required: false,
       description: 'От кого пришло',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase.from('inventory_suppliers').select('id, name').order('name')
+        let q = ctx.supabase.from('inventory_suppliers').select('id, name').order('name')
+        if (ctx.organizationId) q = q.eq('organization_id', ctx.organizationId)
+        const { data } = await q
         return (data || []).map((s: any) => ({ value: s.id, label: s.name }))
       },
     },
