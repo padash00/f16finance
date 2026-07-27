@@ -16,10 +16,10 @@ function canManage(access: { isSuperAdmin: boolean; staffRole: string }) {
 }
 
 async function loadCompanies(supabase: any, scoped: string[] | null) {
-  let q = supabase.from('companies').select('id, name, code').order('name')
+  let q = supabase.from('companies').select('id, name, code, store_enabled').order('name')
   if (scoped) q = q.in('id', scoped)
   const { data } = await q
-  return (data || []) as Array<{ id: string; name: string; code: string | null }>
+  return (data || []) as Array<{ id: string; name: string; code: string | null; store_enabled?: boolean }>
 }
 
 export async function GET(request: Request) {
@@ -50,7 +50,8 @@ export async function GET(request: Request) {
       storeCompanyId = (data?.store_company_id as string | null) || null
     }
 
-    return json({ ok: true, data: { store_company_id: storeCompanyId, companies, can_manage: canManage(access) } })
+    const storeEnabledIds = companies.filter((c) => c.store_enabled).map((c) => c.id)
+    return json({ ok: true, data: { store_company_id: storeCompanyId, store_enabled_ids: storeEnabledIds, companies, can_manage: canManage(access) } })
   } catch (error: any) {
     await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/store/config.GET', message: error?.message || 'error' })
     return json({ error: error?.message || 'Ошибка' }, 500)
@@ -68,23 +69,39 @@ export async function PUT(request: Request) {
     const orgId = access.activeOrganization?.id || null
     if (!orgId) return json({ error: 'no-organization' }, 400)
 
-    const body = await request.json().catch(() => ({})) as { store_company_id?: string | null }
-    const storeCompanyId = body.store_company_id || null
+    const body = await request.json().catch(() => ({})) as { store_company_id?: string | null; store_enabled_ids?: string[] }
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const scope = await resolveCompanyScope({ activeOrganizationId: orgId, isSuperAdmin: access.isSuperAdmin })
+    const allowed = scope.allowedCompanyIds
 
-    // Точка должна быть доступна организации
-    if (storeCompanyId && scope.allowedCompanyIds && !scope.allowedCompanyIds.includes(storeCompanyId)) {
-      return json({ error: 'forbidden-company' }, 403)
+    // ── Флаги «точка = магазин» (store_enabled) для точек орг ────────────────
+    if (Array.isArray(body.store_enabled_ids)) {
+      const requested = body.store_enabled_ids.map(String)
+      // Только точки своей орг.
+      const enabledSet = allowed ? requested.filter((id) => allowed.includes(id)) : requested
+      // Все точки орг: включённым — true, остальным — false.
+      const orgCompanyIds = allowed || (await loadCompanies(supabase, null)).map((c) => c.id)
+      if (orgCompanyIds.length > 0) {
+        await supabase.from('companies').update({ store_enabled: true }).in('id', enabledSet.length ? enabledSet : ['00000000-0000-0000-0000-000000000000'])
+        const toDisable = orgCompanyIds.filter((id) => !enabledSet.includes(id))
+        if (toDisable.length) await supabase.from('companies').update({ store_enabled: false }).in('id', toDisable)
+      }
     }
 
-    const { error } = await supabase
-      .from('store_settings')
-      .upsert({ organization_id: orgId, store_company_id: storeCompanyId, updated_at: new Date().toISOString() }, { onConflict: 'organization_id' })
-    if (error) throw error
+    // ── Стартовая точка по умолчанию (store_company_id) ──────────────────────
+    if ('store_company_id' in body) {
+      const storeCompanyId = body.store_company_id || null
+      if (storeCompanyId && allowed && !allowed.includes(storeCompanyId)) {
+        return json({ error: 'forbidden-company' }, 403)
+      }
+      const { error } = await supabase
+        .from('store_settings')
+        .upsert({ organization_id: orgId, store_company_id: storeCompanyId, updated_at: new Date().toISOString() }, { onConflict: 'organization_id' })
+      if (error) throw error
+    }
 
-    return json({ ok: true, data: { store_company_id: storeCompanyId } })
+    return json({ ok: true })
   } catch (error: any) {
     await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/store/config.PUT', message: error?.message || 'error' })
     return json({ error: error?.message || 'Ошибка' }, 500)
