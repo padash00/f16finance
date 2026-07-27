@@ -7,6 +7,7 @@ import { ClipboardCheck, ClipboardList, Loader2, Package, RefreshCw, ScanLine, S
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { useCapabilities } from '@/lib/client/use-capabilities'
+import { useStoreScope } from '@/components/store/store-scope'
 import { Card } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -112,6 +113,7 @@ function actorLabel(staff: { full_name: string | null } | null | undefined, fall
 }
 
 export default function StoreRevisionsPage({ embedded = false }: { embedded?: boolean } = {}) {
+  const { storeCompanyId } = useStoreScope()
   const { can } = useCapabilities()
   const [data, setData] = useState<RevisionsResponse['data'] | null>(null)
   const [loading, setLoading] = useState(true)
@@ -156,12 +158,12 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
     }
     setError(null)
     try {
-      const response = await fetch(`/api/admin/store/revisions?scope=${scope}`, { cache: 'no-store', signal })
+      const response = await fetch(`/api/admin/store/revisions?scope=${scope}${storeCompanyId ? `&company_id=${encodeURIComponent(storeCompanyId)}` : ''}`, { cache: 'no-store', signal })
       const json = (await response.json().catch(() => null)) as RevisionsResponse | null
       if (signal?.aborted) return
       if (!response.ok || !json?.ok || !json.data) throw new Error(json?.error || 'Не удалось загрузить ревизии')
       setData(json.data)
-      setLocationId((current) => current || json.data?.locations?.[0]?.id || '')
+      setLocationId((current) => (current && (json.data?.locations || []).some((l: any) => l.id === current)) ? current : (json.data?.locations?.[0]?.id || ''))
     } catch (err: any) {
       if (isAbortError(err) || signal?.aborted) return
       if (!soft) setData(null)
@@ -178,7 +180,8 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
     const ac = new AbortController()
     void load(ac.signal)
     return () => ac.abort()
-  }, [scope])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope, storeCompanyId])
 
   const activeLocations = data?.locations || []
   const selectedLocation = activeLocations.find((location) => location.id === locationId) || null
