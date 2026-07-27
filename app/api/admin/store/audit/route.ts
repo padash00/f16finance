@@ -112,7 +112,14 @@ export async function GET(request: Request) {
         companyId
           ? supabase.from('operator_company_assignments').select('operator_id').eq('company_id', companyId).eq('is_active', true)
           : Promise.resolve({ data: [] as any[] }),
-        supabase.from('inventory_categories').select('id, name').eq('is_active', true).order('name'),
+        // Изоляция: категории только своей орг (была кросс-тенант утечка) и точки.
+        (() => {
+          let cq = supabase.from('inventory_categories').select('id, name').eq('is_active', true).order('name')
+          const oid = access.activeOrganization?.id || null
+          if (oid) cq = cq.eq('organization_id', oid)
+          if (companyId) cq = cq.eq('company_id', companyId)
+          return cq
+        })(),
       ])
       const opIds = Array.from(new Set(((assignRes as any).data || []).map((r: any) => String(r.operator_id)).filter(Boolean)))
       const { data: ops } = opIds.length

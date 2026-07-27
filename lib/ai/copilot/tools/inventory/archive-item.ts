@@ -20,7 +20,9 @@ export const archiveItemTool: CopilotTool = {
       required: true,
       description: 'Какой архивировать',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase.from('inventory_items').select('id, name').is('archived_at', null).order('name')
+        let q = ctx.supabase.from('inventory_items').select('id, name').is('archived_at', null).order('name')
+        if (ctx.organizationId) q = q.eq('organization_id', ctx.organizationId)
+        const { data } = await q
         return (data || []).map((i: any) => ({ value: i.id, label: i.name }))
       },
     },
@@ -31,13 +33,17 @@ export const archiveItemTool: CopilotTool = {
     const reason = String(input.reason || '').trim()
     if (!itemId || !reason) return { ok: false, message: 'Не хватает данных.' }
 
-    // TODO isolation: inventory_items — глобальный каталог без company_id/organization_id,
-    // ownership-проверку по тенанту тут сделать нельзя (товары общие для всех точек).
-    const { data: before } = await ctx.supabase.from('inventory_items').select('name').eq('id', itemId).single()
-    const { error } = await ctx.supabase
+    // Изоляция: архивируем только товар СВОЕЙ орг (админ-клиент обходит RLS).
+    let beforeQ = ctx.supabase.from('inventory_items').select('name').eq('id', itemId)
+    if (ctx.organizationId) beforeQ = beforeQ.eq('organization_id', ctx.organizationId)
+    const { data: before } = await beforeQ.maybeSingle()
+    if (!before) return { ok: false, message: 'Товар не найден.' }
+    let upd = ctx.supabase
       .from('inventory_items')
       .update({ archived_at: new Date().toISOString(), archive_reason: reason })
       .eq('id', itemId)
+    if (ctx.organizationId) upd = upd.eq('organization_id', ctx.organizationId)
+    const { error } = await upd
     if (error) return { ok: false, message: `Не удалось: ${error.message}` }
 
     try {
