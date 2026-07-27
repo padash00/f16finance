@@ -1030,7 +1030,8 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
       const res = await fetch('/api/admin/inventory/catalog', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, confirm: bulkPhrase.trim() }),
+        // Каталог по точке: выбрана точка → операция только по ней; «Общий» → все.
+        body: JSON.stringify({ action, confirm: bulkPhrase.trim(), company_id: effectiveCompanyId || undefined }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error)

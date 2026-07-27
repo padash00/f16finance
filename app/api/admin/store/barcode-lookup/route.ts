@@ -150,11 +150,12 @@ export async function GET(request: Request) {
     const country = countryByPrefix(code)
     const orgId = access.activeOrganization?.id || null
 
-    // 1) Уже в каталоге этой орг?
-    const companyScope = await resolveCompanyScope({ activeOrganizationId: orgId, isSuperAdmin: access.isSuperAdmin })
+    // 1) Уже в каталоге? Каталог по точке: скан скоупится по выбранной точке
+    //    (StoreScope инъектит ?company_id), иначе по орг. Убрана утечка null-org.
+    const companyFilter = String(url.searchParams.get('company_id') || '').trim() || null
     let localQ = supabase.from('inventory_items').select('id, name, category_id, category:category_id(id, name)').eq('barcode', code).limit(1)
-    if (!access.isSuperAdmin && orgId) localQ = localQ.or(`organization_id.eq.${orgId},organization_id.is.null`)
-    void companyScope
+    if (companyFilter) localQ = localQ.eq('company_id', companyFilter)
+    else if (!access.isSuperAdmin && orgId) localQ = localQ.eq('organization_id', orgId)
     const { data: local } = await localQ.maybeSingle()
     if (local) {
       const cat = Array.isArray((local as any).category) ? (local as any).category[0] : (local as any).category

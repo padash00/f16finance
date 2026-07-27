@@ -803,12 +803,15 @@ export async function POST(request: Request) {
       if (!orgId) {
         return json({ error: 'Укажите организацию в шапке или одну организацию в БД' }, 400)
       }
+      // Каталог по точке: выбрана точка → гасим только её товары, «Общий» → все.
+      const deactCompanyId = String((body as any).company_id || '').trim()
 
-      const { data: updatedRows, error: deactErr } = await supabase
+      let deactQ = supabase
         .from('inventory_items')
         .update({ is_active: false, updated_at: new Date().toISOString() })
         .eq('organization_id', orgId)
-        .select('id')
+      if (deactCompanyId) deactQ = deactQ.eq('company_id', deactCompanyId)
+      const { data: updatedRows, error: deactErr } = await deactQ.select('id')
 
       if (deactErr) throw deactErr
 
@@ -830,12 +833,13 @@ export async function POST(request: Request) {
         activeOrganizationId: access.activeOrganization?.id || null,
       })
       if (!orgId) return json({ error: 'Укажите организацию' }, 400)
+      // Каталог по точке: выбрана точка → удаляем только её товары, «Общий» → все.
+      const delCompanyId = String((body as any).company_id || '').trim()
 
-      // Fetch all item ids for this org
-      const { data: orgItems, error: listErr } = await supabase
-        .from('inventory_items')
-        .select('id')
-        .eq('organization_id', orgId)
+      // Fetch all item ids for this org (или точки)
+      let listQ = supabase.from('inventory_items').select('id').eq('organization_id', orgId)
+      if (delCompanyId) listQ = listQ.eq('company_id', delCompanyId)
+      const { data: orgItems, error: listErr } = await listQ
       if (listErr) throw listErr
 
       const itemIds = (orgItems || []).map((r: { id: string }) => r.id)
@@ -851,10 +855,11 @@ export async function POST(request: Request) {
       // Пробуем удалить все товары. Если у части есть история движений —
       // FK заблокирует весь delete. В этом случае удаляем только товары
       // без истории, а остальные переводим в архив (is_active=false).
+      // Удаляем строго по собранным id (уже скоупнуты по точке, если выбрана).
       const { error: delErr } = await supabase
         .from('inventory_items')
         .delete()
-        .eq('organization_id', orgId)
+        .in('id', itemIds)
       if (delErr) {
         const code = String((delErr as any)?.code || '')
         const isFk = code === '23503' || String(delErr.message || '').toLowerCase().includes('foreign key')

@@ -25,9 +25,24 @@ export const addItemTool: CopilotTool = {
     const barcode = String(input.barcode || '').trim() || null
     if (!name || price < 0) return { ok: false, message: 'Не хватает данных.' }
 
+    // Изоляция: раньше вставка шла БЕЗ organization_id/company_id → глобальная
+    // строка (кросс-тенант баг). Товар принадлежит орг и точке-магазину.
+    const orgId = ctx.organizationId || null
+    if (!orgId) return { ok: false, message: 'Не удалось определить организацию.' }
+    let companyId: string | null = null
+    try {
+      const { data: ss } = await ctx.supabase.from('store_settings').select('store_company_id').eq('organization_id', orgId).maybeSingle()
+      companyId = (ss as any)?.store_company_id || null
+      if (!companyId) {
+        const { data: shops } = await ctx.supabase.from('companies').select('id').eq('organization_id', orgId).eq('store_enabled', true).limit(2)
+        if ((shops || []).length === 1) companyId = String((shops as any)[0].id)
+      }
+    } catch {}
+    if (!companyId) return { ok: false, message: 'Не удалось определить точку-магазин. Укажите её в настройках магазина.' }
+
     const { data, error } = await ctx.supabase
       .from('inventory_items')
-      .insert([{ name, sale_price: price, unit, barcode }])
+      .insert([{ name, sale_price: price, unit, barcode, organization_id: orgId, company_id: companyId }])
       .select('id, name')
       .single()
     if (error) return { ok: false, message: `Не удалось добавить: ${error.message}` }

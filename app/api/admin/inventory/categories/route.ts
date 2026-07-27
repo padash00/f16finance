@@ -28,11 +28,15 @@ export async function GET(request: Request) {
     const orgId = access.activeOrganization?.id || null
     const scopeOrg = orgId || (access.isSuperAdmin ? null : '00000000-0000-0000-0000-000000000000')
 
+    // Каталог по точке: выбрана точка → её категории; «Общий» → все.
+    const companyFilter = String(new URL(request.url).searchParams.get('company_id') || '').trim() || null
+
     let query = supabase
       .from('inventory_categories')
       .select('id, name, description')
       .order('name', { ascending: true })
     if (scopeOrg) query = query.eq('organization_id', scopeOrg)
+    if (companyFilter) query = query.eq('company_id', companyFilter)
 
     const { data, error } = await query
     if (error) throw error

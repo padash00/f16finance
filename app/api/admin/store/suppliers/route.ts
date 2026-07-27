@@ -78,6 +78,9 @@ export async function GET(request: Request) {
     if (scopeOrg) {
       query = query.eq('organization_id', scopeOrg)
     }
+    // Каталог по точке: выбрана точка → её поставщики; «Общий» → все.
+    const companyFilter = String(new URL(request.url).searchParams.get('company_id') || '').trim() || null
+    if (companyFilter) query = query.eq('company_id', companyFilter)
     const { data: suppliers, error } = await query
     if (error) throw error
 
