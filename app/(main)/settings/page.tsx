@@ -62,6 +62,7 @@ export default function SettingsPage() {
   // Данные
   const [companies, setCompanies] = useState<Company[]>([])
   const [staff, setStaff] = useState<Staff[]>([])
+  const [companyLimit, setCompanyLimit] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
 
   // Поиск
@@ -108,6 +109,7 @@ export default function SettingsPage() {
 
       setCompanies((json?.companies || []) as Company[])
       setStaff((json?.staff || []) as Staff[])
+      setCompanyLimit(typeof json?.companyLimit === 'number' ? json.companyLimit : null)
     } catch (err: any) {
       setError(err?.message || 'Ошибка загрузки данных')
       setCompanies([])
@@ -297,8 +299,12 @@ export default function SettingsPage() {
                     <h2 data-tour="settings-companies" className="text-xl font-bold flex items-center gap-2">
                         <Building2 className="w-5 h-5 text-blue-400" /> Компании
                     </h2>
-                    <span className="text-xs bg-card border border-border px-2 py-1 rounded-full text-muted-foreground">
-                        {companies.length} активных
+                    <span className={`text-xs border px-2 py-1 rounded-full ${
+                        companyLimit !== null && companies.length >= companyLimit
+                            ? 'bg-amber-500/10 border-amber-500/40 text-amber-700 dark:text-amber-300'
+                            : 'bg-card border-border text-muted-foreground'
+                    }`}>
+                        {companyLimit !== null ? `Точек: ${companies.length} / ${companyLimit}` : `${companies.length} активных`}
                     </span>
                 </div>
 
@@ -395,18 +401,28 @@ export default function SettingsPage() {
                     {/* Добавление */}
                     {can('settings.manage_companies') && (
                     <div className="pt-4 mt-2 border-t border-border">
+                        {companyLimit !== null && companies.length >= companyLimit && (
+                            <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-800 dark:text-amber-200">
+                                <Shield className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                                <span>
+                                    Лимит точек исчерпан ({companies.length} из {companyLimit}). Чтобы добавить ещё одну точку — докупите дополнительную точку в пакете.
+                                </span>
+                            </div>
+                        )}
                         <form onSubmit={handleAddCompany} className="flex flex-wrap gap-2">
                             <input
                                 value={newComp.name}
                                 onChange={e => setNewComp({...newComp, name: e.target.value})}
                                 placeholder="Новая компания..."
-                                className="min-w-[140px] flex-1 bg-input border border-border rounded-lg px-3 py-2 text-sm focus:border-blue-500"
+                                disabled={companyLimit !== null && companies.length >= companyLimit}
+                                className="min-w-[140px] flex-1 bg-input border border-border rounded-lg px-3 py-2 text-sm focus:border-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
                             />
                             <input
                                 value={newComp.code}
                                 onChange={e => setNewComp({...newComp, code: e.target.value})}
                                 placeholder="CODE"
-                                className="w-24 bg-input border border-border rounded-lg px-3 py-2 text-sm uppercase focus:border-blue-500"
+                                disabled={companyLimit !== null && companies.length >= companyLimit}
+                                className="w-24 bg-input border border-border rounded-lg px-3 py-2 text-sm uppercase focus:border-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
                             />
                             <label className="flex items-center gap-2 rounded-lg border border-border bg-input px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">
                                 <input
@@ -417,7 +433,7 @@ export default function SettingsPage() {
                                 />
                                 В структуре
                             </label>
-                            <Button type="submit" disabled={!newComp.name.trim() || saving} className="bg-blue-600 hover:bg-blue-700">
+                            <Button type="submit" disabled={!newComp.name.trim() || saving || (companyLimit !== null && companies.length >= companyLimit)} className="bg-blue-600 hover:bg-blue-700">
                                 <Plus className="w-4 h-4" />
                             </Button>
                         </form>

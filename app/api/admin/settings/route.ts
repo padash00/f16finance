@@ -122,10 +122,24 @@ export async function GET(req: Request) {
       })
     }
 
+    // Лимит точек орг (для баннера «точек N из M» на клиенте). null — без лимита
+    // (супер-админ в платформенном контексте). Дефолт 1, если колонки/строки нет.
+    let companyLimit: number | null = null
+    if (orgId) {
+      const { data: orgRow } = await supabase
+        .from('organizations')
+        .select('company_limit')
+        .eq('id', orgId)
+        .maybeSingle()
+      const raw = Number((orgRow as any)?.company_limit ?? 1)
+      companyLimit = Number.isFinite(raw) ? raw : 1
+    }
+
     return NextResponse.json({
       companies,
       staff,
       categories,
+      companyLimit,
     })
   } catch (error: any) {
     console.error('Admin settings read error', error)
