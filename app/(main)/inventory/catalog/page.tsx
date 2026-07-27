@@ -1461,11 +1461,16 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
                             <CopyText value={item.barcode} className="font-mono text-xs" />
                           </td>
                           <td className="px-3 py-2.5">
-                            {item.category ? (
-                              <Badge variant="secondary" className="text-xs">{item.category.name}</Badge>
-                            ) : (
-                              <span className="text-muted-foreground text-xs">—</span>
-                            )}
+                            <div className="flex flex-wrap items-center gap-1">
+                              {item.category ? (
+                                <Badge variant="secondary" className="text-xs">{item.category.name}</Badge>
+                              ) : (
+                                <span className="text-muted-foreground text-xs">—</span>
+                              )}
+                              {filterCompany === 'all' && (item as any).company?.name && (
+                                <Badge variant="outline" className="text-[10px] text-emerald-700 dark:text-emerald-300">{(item as any).company.name}</Badge>
+                              )}
+                            </div>
                           </td>
                           <td className="px-3 py-2.5 text-right font-medium">{item.sale_price.toLocaleString('ru-RU')} ₸</td>
                           <td className="px-3 py-2.5 text-right text-muted-foreground">{item.default_purchase_price.toLocaleString('ru-RU')} ₸</td>
