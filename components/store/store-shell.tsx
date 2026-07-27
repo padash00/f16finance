@@ -166,7 +166,7 @@ function StoreShellInner({ children }: { children: React.ReactNode }) {
   return (
     <div className="fixed inset-0 z-20 flex flex-col bg-white dark:bg-slate-950">
       {/* Топ-бар модуля «Магазин» — зафиксирован сверху, не скролится */}
-      <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white/80 px-3 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/80 sm:px-4">
+      <header className="relative z-50 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white/80 px-3 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/80 sm:px-4">
         <div className="flex items-center gap-2">
           <button onClick={() => setMobileOpen(true)} className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10 md:hidden" aria-label="Меню">
             <Menu className="h-4 w-4" />
