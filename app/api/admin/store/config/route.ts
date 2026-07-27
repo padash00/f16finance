@@ -16,10 +16,40 @@ function canManage(access: { isSuperAdmin: boolean; staffRole: string }) {
 }
 
 async function loadCompanies(supabase: any, scoped: string[] | null) {
-  let q = supabase.from('companies').select('id, name, code, store_enabled').order('name')
+  let q = supabase.from('companies').select('id, name, code, store_enabled, organization_id').order('name')
   if (scoped) q = q.in('id', scoped)
   const { data } = await q
-  return (data || []) as Array<{ id: string; name: string; code: string | null; store_enabled?: boolean }>
+  return (data || []) as Array<{ id: string; name: string; code: string | null; store_enabled?: boolean; organization_id?: string | null }>
+}
+
+/**
+ * У каждой точки-магазина должны быть СВОИ локации (склад + витрина), иначе
+ * приёмке/оприходованию/списанию некуда писать. Идемпотентно, батчем: читаем
+ * все локации данных точек одним запросом, создаём недостающие. Вызывается при
+ * заходе в модуль (GET) — точка получает локации без ручных действий.
+ */
+async function ensureShopLocations(
+  supabase: any,
+  companies: Array<{ id: string; name: string; code: string | null; organization_id?: string | null }>,
+) {
+  const ids = companies.map((c) => c.id)
+  if (ids.length === 0) return
+  const { data: locs } = await supabase
+    .from('inventory_locations')
+    .select('company_id, location_type')
+    .in('company_id', ids)
+  const have = new Set<string>((locs || []).map((l: any) => `${l.company_id}:${l.location_type}`))
+  const toCreate: any[] = []
+  for (const c of companies) {
+    for (const lt of ['warehouse', 'point_display'] as const) {
+      if (!have.has(`${c.id}:${lt}`)) {
+        toCreate.push({ company_id: c.id, organization_id: c.organization_id || null, name: c.name, code: c.code, location_type: lt, is_active: true })
+      }
+    }
+  }
+  if (toCreate.length) {
+    try { await supabase.from('inventory_locations').insert(toCreate) } catch { /* гонка/уник — не критично */ }
+  }
 }
 
 export async function GET(request: Request) {
@@ -39,6 +69,10 @@ export async function GET(request: Request) {
     })
 
     const companies = await loadCompanies(supabase, scope.allowedCompanyIds)
+
+    // Авто-провижн: точки-магазины без своих локаций получают склад+витрину прямо
+    // здесь (модуль загружается через этот GET) — без ручного пере-сохранения.
+    await ensureShopLocations(supabase, companies.filter((c) => c.store_enabled))
 
     let storeCompanyId: string | null = null
     if (orgId) {
@@ -88,23 +122,11 @@ export async function PUT(request: Request) {
         if (toDisable.length) await supabase.from('companies').update({ store_enabled: false }).in('id', toDisable)
       }
 
-      // Новой точке-магазину нужны СВОИ локации (склад + витрина), иначе приёмке/
-      // оприходованию/списанию некуда писать и дропдаун падает на чужую точку.
+      // Новой точке-магазину нужны СВОИ локации (склад + витрина).
       if (enabledSet.length > 0) {
         const { data: enabledCompanies } = await supabase
           .from('companies').select('id, name, code, organization_id').in('id', enabledSet)
-        for (const c of (enabledCompanies || []) as any[]) {
-          for (const lt of ['warehouse', 'point_display'] as const) {
-            const { data: exists } = await supabase
-              .from('inventory_locations').select('id').eq('company_id', c.id).eq('location_type', lt).limit(1).maybeSingle()
-            if (!exists) {
-              await supabase.from('inventory_locations').insert({
-                company_id: c.id, organization_id: c.organization_id,
-                name: c.name, code: c.code, location_type: lt, is_active: true,
-              })
-            }
-          }
-        }
+        await ensureShopLocations(supabase, (enabledCompanies || []) as any[])
       }
     }
 
