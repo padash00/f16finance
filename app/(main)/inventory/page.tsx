@@ -758,11 +758,12 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
 
   async function handleCreateCategory() {
     if (!categoryName.trim()) return setError('Введите название категории')
+    if (!requestCompanyId) return setError('Выберите точку — категория привязывается к точке-магазину')
     setSaving(true)
     setError(null)
     setSuccess(null)
     try {
-      await mutate({ action: 'createCategory', payload: { name: categoryName.trim(), description: categoryDescription.trim() || null } })
+      await mutate({ action: 'createCategory', company_id: requestCompanyId, payload: { name: categoryName.trim(), description: categoryDescription.trim() || null } })
       setCategoryName('')
       setCategoryDescription('')
       setSuccess('Категория товара создана')
@@ -807,12 +808,14 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
   async function handleCreateItem() {
     if (!itemName.trim()) return setError('Введите название товара')
     if (!itemBarcode.trim()) return setError('Введите штрихкод')
+    if (!requestCompanyId) return setError('Выберите точку — товар создаётся в точке-магазине')
     setSaving(true)
     setError(null)
     setSuccess(null)
     try {
       await mutate({
         action: 'createItem',
+        company_id: requestCompanyId,
         payload: {
           name: itemName.trim(),
           barcode: itemBarcode.trim(),

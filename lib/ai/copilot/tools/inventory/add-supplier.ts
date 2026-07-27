@@ -49,9 +49,25 @@ export const addSupplierTool: CopilotTool = {
     const comment = String(input.comment || '').trim() || null
     if (!name) return { ok: false, message: 'Название обязательно.' }
 
+    // Изоляция: раньше вставка шла БЕЗ org/company И с неверными колонками
+    // (contact_phone/contact_person/comment) → падала/создавала глобальную строку.
+    // Поставщик принадлежит орг и точке-магазину; колонки — phone/contact_name/notes.
+    const orgId = ctx.organizationId || null
+    if (!orgId) return { ok: false, message: 'Не удалось определить организацию.' }
+    let companyId: string | null = null
+    try {
+      const { data: ss } = await ctx.supabase.from('store_settings').select('store_company_id').eq('organization_id', orgId).maybeSingle()
+      companyId = (ss as any)?.store_company_id || null
+      if (!companyId) {
+        const { data: shops } = await ctx.supabase.from('companies').select('id').eq('organization_id', orgId).eq('store_enabled', true).limit(2)
+        if ((shops || []).length === 1) companyId = String((shops as any)[0].id)
+      }
+    } catch {}
+    if (!companyId) return { ok: false, message: 'Не удалось определить точку-магазин.' }
+
     const { data, error } = await ctx.supabase
       .from('inventory_suppliers')
-      .insert([{ name, contact_phone: phone, contact_person: person, comment, is_active: true }])
+      .insert([{ name, phone, contact_name: person, notes: comment, organization_id: orgId, company_id: companyId }])
       .select('id')
       .single()
     if (error) return { ok: false, message: `Не удалось создать: ${error.message}` }

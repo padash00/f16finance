@@ -631,6 +631,7 @@ export async function POST(request: Request) {
             organization_name: organizationName,
             bin_iin: binIin,
             organization_id: locationOrganizationId,
+            company_id: writeCompanyId || null,
             contact_name: null,
             phone: null,
             notes: null,

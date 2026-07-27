@@ -673,6 +673,7 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'createRevision',
+          company_id: storeCompanyId || undefined,
           payload: {
             location_id: locationId,
             counted_at: countedAt,

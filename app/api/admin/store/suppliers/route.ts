@@ -162,6 +162,9 @@ export async function POST(request: Request) {
 
     const organizationId = access.activeOrganization?.id || null
     if (!access.isSuperAdmin && !organizationId) return json({ error: 'Нет активной организации' }, 400)
+    // Поставщики по точке: привязка к выбранной точке-магазину.
+    const supplierCompanyId = String(body?.company_id || '').trim()
+    if (!supplierCompanyId) return json({ error: 'point-required', message: 'Выберите точку — поставщик привязывается к точке-магазину' }, 400)
 
     // Дедуп в пределах своей орг (по БИН или названию) — не плодим дубли.
     if (binIin) {
@@ -181,6 +184,7 @@ export async function POST(request: Request) {
       lead_time_days: Number.isFinite(leadTime) && leadTime >= 0 ? Math.round(leadTime) : 3,
       preferred_expense_category_id: String(body?.preferred_expense_category_id || '').trim() || null,
       organization_id: organizationId,
+      company_id: supplierCompanyId,
     }
     const { data: created, error } = await supabase.from('inventory_suppliers').insert([insertRow]).select('id').single()
     if (error) throw error

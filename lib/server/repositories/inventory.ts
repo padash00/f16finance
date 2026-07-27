@@ -139,10 +139,13 @@ function filterByLocationScope<T>(
   return rows.filter((row) => {
     const location = getLocation(row)
     if (!location) return false
-    if (location.organization_id && organizationId) {
-      return String(location.organization_id) === organizationId
-    }
-    return location.company_id ? allowed.has(String(location.company_id)) : false
+    // Привязана к точке → строго в разрешённом наборе точек (при выбранной точке
+    // = только она; «Общий» = все точки орг). Раньше org-байпас пропускал любую
+    // локацию орг — из-за этого журналы/дропдауны показывали чужие точки.
+    if (location.company_id) return allowed.has(String(location.company_id))
+    // Локация без company_id (орг-уровень) → по орг.
+    if (location.organization_id && organizationId) return String(location.organization_id) === organizationId
+    return false
   })
 }
 
@@ -329,7 +332,7 @@ export async function fetchStoreOverview(supabase: AnySupabase, scope?: Inventor
 
   return {
     items: filterByOrganizationScope(mapNestedRows(items || []), scope, (row: any) => row.organization_id),
-    locations: filterByOrganizationScope(mapNestedRows(locations || []), scope, (row: any) => row.organization_id),
+    locations: filterByCompanyScope(mapNestedRows(locations || []), scope, (row: any) => [row.company_id]),
     balances: filterByLocationScope(mapNestedRows(balances || []), scope, (row: any) => row.location),
     requests: filterByCompanyScope(mapNestedRows(requests || []), scope, (row: any) => [row.requesting_company_id, row.company?.id]),
     receipts: filterByLocationScope(mapNestedRows(receipts || []), scope, (row: any) => row.location),
@@ -384,7 +387,7 @@ export async function fetchStoreAnalytics(
   if (movementsError) throw movementsError
 
   return {
-    locations: filterByOrganizationScope(mapNestedRows(locations || []), scope, (row: any) => row.organization_id),
+    locations: filterByCompanyScope(mapNestedRows(locations || []), scope, (row: any) => [row.company_id]),
     balances: filterByLocationScope(mapNestedRows(balances || []), scope, (row: any) => row.location),
     movements: filterByMovementScope(mapNestedRows(movements || []), scope),
   }
@@ -394,7 +397,7 @@ export async function fetchStoreReceipts(supabase: AnySupabase, scope?: Inventor
   const buildItemsQuery = () => {
     let itemsQuery: any = supabase
       .from('inventory_items')
-      .select('id, name, barcode, unit, sale_price, default_purchase_price, item_type, requires_expiry, category:category_id(id, name), organization_id')
+      .select('id, name, barcode, unit, sale_price, default_purchase_price, item_type, requires_expiry, category:category_id(id, name), organization_id, company_id')
       .eq('is_active', true)
       .order('name', { ascending: true })
       .order('id', { ascending: true })
@@ -436,9 +439,9 @@ export async function fetchStoreReceipts(supabase: AnySupabase, scope?: Inventor
   if (receiptsError) throw receiptsError
 
   return {
-    items: mapNestedRows(items || []),
-    suppliers: filterByOrganizationScope((suppliers || []) as any[], scope, (row: any) => row.organization_id),
-    locations: filterByOrganizationScope(mapNestedRows(locations || []), scope, (row: any) => row.organization_id),
+    items: filterByCompanyScope(mapNestedRows(items || []), scope, (row: any) => [row.company_id]),
+    suppliers: filterByCompanyScope((suppliers || []) as any[], scope, (row: any) => [row.company_id]),
+    locations: filterByCompanyScope(mapNestedRows(locations || []), scope, (row: any) => [row.company_id]),
     receipts: filterByLocationScope(mapNestedRows(receipts || []), scope, (row: any) => row.location),
   }
 }
@@ -466,7 +469,7 @@ export async function fetchStoreMovements(supabase: AnySupabase, scope?: Invento
 
   return {
     movements: filterByMovementScope(mapNestedRows(movements || []), scope),
-    locations: filterByOrganizationScope(mapNestedRows(locations || []), scope, (row: any) => row.organization_id),
+    locations: filterByCompanyScope(mapNestedRows(locations || []), scope, (row: any) => [row.company_id]),
   }
 }
 
@@ -481,7 +484,7 @@ export async function fetchStoreWriteoffs(supabase: AnySupabase, scope?: Invento
       applyOrganizationFilter(
         supabase
         .from('inventory_items')
-        .select('id, name, barcode, unit, item_type, is_active, category:category_id(id, name)')
+        .select('id, name, barcode, unit, item_type, is_active, company_id, category:category_id(id, name)')
         .eq('is_active', true)
         .order('name', { ascending: true })
         .order('id', { ascending: true }),
@@ -521,8 +524,8 @@ export async function fetchStoreWriteoffs(supabase: AnySupabase, scope?: Invento
   if (writeoffsError) throw writeoffsError
 
   return {
-    items: filterByOrganizationScope(mapNestedRows(items || []), scope, (row: any) => row.organization_id),
-    locations: filterByOrganizationScope(mapNestedRows(locations || []), scope, (row: any) => row.organization_id),
+    items: filterByCompanyScope(mapNestedRows(items || []), scope, (row: any) => [row.company_id]),
+    locations: filterByCompanyScope(mapNestedRows(locations || []), scope, (row: any) => [row.company_id]),
     balances: filterByLocationScope(mapNestedRows(balances || []), scope, (row: any) => row.location),
     writeoffs: filterByLocationScope(mapNestedRows(writeoffs || []), scope, (row: any) => row.location),
   }
@@ -539,7 +542,7 @@ export async function fetchStoreRevisions(supabase: AnySupabase, scope?: Invento
       applyOrganizationFilter(
         supabase
         .from('inventory_items')
-        .select('id, name, barcode, unit, item_type, is_active, category:category_id(id, name)')
+        .select('id, name, barcode, unit, item_type, is_active, company_id, category:category_id(id, name)')
         .eq('is_active', true)
         .order('name', { ascending: true })
         .order('id', { ascending: true }),
@@ -578,8 +581,8 @@ export async function fetchStoreRevisions(supabase: AnySupabase, scope?: Invento
   if (stocktakesError) throw stocktakesError
 
   return {
-    items: filterByOrganizationScope(mapNestedRows(items || []), scope, (row: any) => row.organization_id),
-    locations: filterByOrganizationScope(mapNestedRows(locations || []), scope, (row: any) => row.organization_id),
+    items: filterByCompanyScope(mapNestedRows(items || []), scope, (row: any) => [row.company_id]),
+    locations: filterByCompanyScope(mapNestedRows(locations || []), scope, (row: any) => [row.company_id]),
     balances: filterByLocationScope(mapNestedRows(balances || []), scope, (row: any) => row.location),
     stocktakes: filterByLocationScope(mapNestedRows(stocktakes || []), scope, (row: any) => row.location),
   }
@@ -676,7 +679,7 @@ export async function fetchInventoryOverview(supabase: AnySupabase, scope?: Inve
     categories: filterByOrganizationScope(mapNestedRows(categories || []), scope, (row: any) => row.organization_id),
     suppliers: filterByOrganizationScope((suppliers || []) as any[], scope, (row: any) => row.organization_id),
     items: filterByOrganizationScope(mapNestedRows(items || []), scope, (row: any) => row.organization_id),
-    locations: filterByOrganizationScope(mapNestedRows(locations || []), scope, (row: any) => row.organization_id),
+    locations: filterByCompanyScope(mapNestedRows(locations || []), scope, (row: any) => [row.company_id]),
     balances: filterByLocationScope(mapNestedRows(balances || []), scope, (row: any) => row.location),
     receipts: filterByLocationScope(mapNestedRows(receipts || []), scope, (row: any) => row.location),
     requests: filterByCompanyScope(mapNestedRows(requests || []), scope, (row: any) => [row.requesting_company_id, row.company?.id]),
@@ -1361,7 +1364,7 @@ export async function fetchConsumableDashboard(supabase: AnySupabase, scope?: In
     norms: norms || [],
     limits: filterByCompanyScope((limits || []) as any[], scope, (row: any) => [row.company_id]),
     balances: filterByLocationScope(mapNestedRows(balances || []), scope, (row: any) => row.location),
-    locations: filterByOrganizationScope(mapNestedRows(locations || []), scope, (row: any) => row.organization_id),
+    locations: filterByCompanyScope(mapNestedRows(locations || []), scope, (row: any) => [row.company_id]),
     companies: companies || [],
   }
 }

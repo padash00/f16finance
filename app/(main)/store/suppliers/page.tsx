@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { ArrowRight, Building2, Loader2, Plus, Search } from 'lucide-react'
 import { useCapabilities } from '@/lib/client/use-capabilities'
+import { useStoreScope } from '@/components/store/store-scope'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -40,6 +41,7 @@ const fmtDate = (value: string | null | undefined) => {
 }
 
 export default function SuppliersListPage({ embedded = false }: { embedded?: boolean } = {}) {
+  const { storeCompanyId } = useStoreScope()
   const { can } = useCapabilities()
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
@@ -69,6 +71,7 @@ export default function SuppliersListPage({ embedded = false }: { embedded?: boo
 
   const submitSupplier = async () => {
     if (!form.name.trim()) { setError('Введите название поставщика'); return }
+    if (!storeCompanyId) { setError('Выберите точку-магазин — поставщик привязывается к точке'); return }
     const digits = form.bin_iin.replace(/\D/g, '')
     if (digits && !/^\d{12}$/.test(digits)) { setError('ИИН/БИН — 12 цифр'); return }
     setSaving(true); setError(null)
@@ -77,6 +80,7 @@ export default function SuppliersListPage({ embedded = false }: { embedded?: boo
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          company_id: storeCompanyId,
           name: form.name.trim(),
           organization_name: form.organization_name.trim() || form.name.trim(),
           bin_iin: digits || null,
