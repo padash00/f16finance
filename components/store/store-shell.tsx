@@ -10,6 +10,7 @@ import {
   Clock, Settings, Menu, X, Search, Command, ShoppingCart, Sparkles, ChefHat,
 } from 'lucide-react'
 import { isAbortError } from '@/lib/is-abort-error'
+import { StoreCompanyProvider, useStoreCompany } from '@/components/store/store-company-context'
 
 type Item = { href: string; label: string; icon: any; exact?: boolean }
 
@@ -32,6 +33,34 @@ const NAV: Item[] = [
 ]
 
 export function StoreShell({ children }: { children: React.ReactNode }) {
+  return (
+    <StoreCompanyProvider>
+      <StoreShellInner>{children}</StoreShellInner>
+    </StoreCompanyProvider>
+  )
+}
+
+/** Переключатель компаний в шапке модуля. Виден только при 2+ точках. */
+function StoreCompanySwitcher() {
+  const { companyId, setCompanyId, companies } = useStoreCompany()
+  if (companies.length < 2) return null
+  return (
+    <div className="relative inline-flex items-center">
+      <Building2 className="pointer-events-none absolute left-2.5 h-3.5 w-3.5 text-emerald-600 dark:text-emerald-300" />
+      <select
+        value={companyId}
+        onChange={(e) => setCompanyId(e.target.value)}
+        className="appearance-none rounded-xl border border-emerald-400/30 bg-emerald-500/10 py-1.5 pl-8 pr-7 text-xs font-medium text-emerald-800 outline-none transition hover:bg-emerald-500/15 dark:text-emerald-200"
+        title="Точка (магазин)"
+      >
+        <option value="">Общий (все точки)</option>
+        {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+      </select>
+    </div>
+  )
+}
+
+function StoreShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -101,6 +130,7 @@ export function StoreShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
         <div className="flex items-center gap-1.5">
+          <StoreCompanySwitcher />
           <button onClick={() => setSearchOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-100 px-3 py-1.5 text-xs text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-white/10 dark:bg-white/5 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white">
             <Search className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Поиск</span>

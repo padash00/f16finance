@@ -117,8 +117,11 @@ export default function SalesMonitorPage() {
   // SWR-кэш: повторное открытие показывает прошлые данные мгновенно, свежие
   // подтягиваются фоном. refresh() (loadMonitor/loadProducts) — перезагрузка;
   // с живым кэшем она фоновая (без скелетона) — то же, что прежний silent=true.
+  // Глобальный переключатель точки (шапка магазина) имеет приоритет над
+  // локальным селектором страницы.
+  const effectiveCompanyId = storeCompanyId || companyId
   const qsParams = new URLSearchParams({ from, to })
-  if (companyId) qsParams.set('company_id', companyId)
+  if (effectiveCompanyId) qsParams.set('company_id', effectiveCompanyId)
   const qs = qsParams.toString()
   const { data: mon, loading: monLoading, error: monError, refresh: loadMonitor } =
     useApiCache<MonData>(`/api/admin/sales-monitor?${qs}`, { enabled: tab === 'monitor' })
