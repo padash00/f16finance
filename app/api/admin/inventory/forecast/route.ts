@@ -133,6 +133,9 @@ export async function GET(request: Request) {
         .select('id, name, low_stock_threshold, is_active, category:inventory_categories(name)')
         .eq('is_active', true)
       if (!access.isSuperAdmin) itemsQuery = itemsQuery.eq('organization_id', access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+      // Каталог по точке: выбрана точка → только её товары.
+      const fcCompany = new URL(request.url).searchParams.get('company_id')
+      if (fcCompany) itemsQuery = itemsQuery.eq('company_id', fcCompany)
       return itemsQuery.order('id', { ascending: true }).range(from, to)
     })
 

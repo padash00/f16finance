@@ -243,6 +243,9 @@ export async function GET(request: Request) {
         .select('id, name, sale_price, default_purchase_price, category_id, is_active, category:inventory_categories(name)')
         .eq('is_active', true)
       if (!access.isSuperAdmin) allItemsQuery = allItemsQuery.eq('organization_id', access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+      // Каталог по точке: выбрана точка → только её товары.
+      const abcCompany = new URL(request.url).searchParams.get('company_id')
+      if (abcCompany) allItemsQuery = allItemsQuery.eq('company_id', abcCompany)
       return allItemsQuery.order('id', { ascending: true }).range(from, to)
     })
 

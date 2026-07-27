@@ -33,6 +33,7 @@ export async function GET(request: Request) {
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const companyScope = await resolveCompanyScope({
       activeOrganizationId: access.activeOrganization?.id || null,
+      requestedCompanyId: new URL(request.url).searchParams.get('company_id') || null,
       isSuperAdmin: access.isSuperAdmin,
     })
     const days = Math.max(0, Math.min(365, Number(new URL(request.url).searchParams.get('days')) || 0))
