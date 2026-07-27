@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { Card } from '@/components/ui/card'
+import { toast } from '@/components/ui/use-toast'
 import { Button } from '@/components/ui/button'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { CardSkeleton } from '@/components/skeleton'
@@ -156,7 +157,7 @@ export default function SettingsPage() {
       setNewComp({ name: '', code: '', show_in_structure: true })
       fetchData()
     } catch (err: any) {
-      alert(err.message)
+      toast({ title: 'Не получилось', description: err.message, variant: 'destructive' })
     }
     setSaving(false)
   }
@@ -179,7 +180,7 @@ export default function SettingsPage() {
       fetchData()
     }
     catch (err: any) {
-      alert(err.message)
+      toast({ title: 'Не получилось', description: err.message, variant: 'destructive' })
     }
     setSaving(false)
   }
@@ -190,7 +191,7 @@ export default function SettingsPage() {
         await mutateSettings({ entity: 'company', action: 'delete', id })
         fetchData()
       } catch (err: any) {
-        alert(err.message)
+        toast({ title: 'Не получилось', description: err.message, variant: 'destructive' })
       }
   }
 
@@ -214,7 +215,7 @@ export default function SettingsPage() {
       setNewStaff({ name: '', phone: '', email: '', role: 'other' })
       fetchData()
     } catch (err: any) {
-      alert(err.message)
+      toast({ title: 'Не получилось', description: err.message, variant: 'destructive' })
     }
     setSaving(false)
   }
@@ -237,7 +238,7 @@ export default function SettingsPage() {
       setEditStaffId(null)
       fetchData()
     } catch (err: any) {
-      alert(err.message)
+      toast({ title: 'Не получилось', description: err.message, variant: 'destructive' })
     }
     setSaving(false)
   }
@@ -257,7 +258,7 @@ export default function SettingsPage() {
         if (!response.ok) throw new Error(json?.error || 'Не удалось архивировать сотрудника')
         fetchData()
       } catch (err: any) {
-        alert(err.message)
+        toast({ title: 'Не получилось', description: err.message, variant: 'destructive' })
       }
   }
 
