@@ -10,6 +10,8 @@ import {
   type CapabilityPage,
 } from '@/lib/core/capabilities'
 import { useCapabilities } from '@/lib/client/use-capabilities'
+import { useNavSession } from '@/lib/nav/use-nav-session'
+import { getPathFeature } from '@/lib/nav/sections'
 
 type RoleCapability = { role: string; capability: string; granted: boolean }
 
@@ -36,6 +38,11 @@ function severityBadge(sev: Capability['severity']) {
 
 export function CapabilitiesPanel({ scope = 'global' }: { scope?: 'global' | 'org' } = {}) {
   const { can } = useCapabilities()
+  // Фичи пакета орг: в org-скоупе (владелец) показываем в матрице ТОЛЬКО страницы,
+  // доступные организации по пакету — нельзя раздавать доступ к тому, чего у орг
+  // нет. Супер-админ (global) видит весь каталог. featuresAllAccess (орг без
+  // пакета / F16) — не фильтруем.
+  const { orgFeatures, featuresAllAccess } = useNavSession()
   // Слой прав: global → role_capabilities (суперадмин), org → org_role_capabilities
   // (владелец режет свои роли внутри своей организации).
   const endpoint = scope === 'org' ? '/api/admin/org-role-capabilities' : '/api/admin/role-capabilities'
@@ -204,10 +211,28 @@ export function CapabilitiesPanel({ scope = 'global' }: { scope?: 'global' | 'or
     })
   }
 
+  // Страница доступна организации? В org-скоупе — только если её фича входит в
+  // пакет (или это базовая страница без фичи). global/allAccess — всё доступно.
+  const isPageEntitled = (page: CapabilityPage): boolean => {
+    if (scope !== 'org' || featuresAllAccess) return true
+    const feat = getPathFeature(page.path)
+    if (!feat) return true // базовая страница — всегда
+    return orgFeatures.includes(feat)
+  }
+
+  // Каталог, урезанный до фич пакета орг (для owner-скоупа).
+  const entitledGroups = useMemo(() => {
+    if (scope !== 'org' || featuresAllAccess) return CAPABILITY_GROUPS
+    return CAPABILITY_GROUPS
+      .map((group) => ({ ...group, pages: group.pages.filter(isPageEntitled) }))
+      .filter((group) => group.pages.length > 0)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope, featuresAllAccess, orgFeatures])
+
   const filteredGroups = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return CAPABILITY_GROUPS
-    return CAPABILITY_GROUPS
+    if (!q) return entitledGroups
+    return entitledGroups
       .map((group) => ({
         ...group,
         pages: group.pages
@@ -223,13 +248,13 @@ export function CapabilitiesPanel({ scope = 'global' }: { scope?: 'global' | 'or
           .filter((page) => page.capabilities.length > 0),
       }))
       .filter((group) => group.pages.length > 0)
-  }, [search])
+  }, [search, entitledGroups])
 
-  // Сводка по ролям
+  // Сводка по ролям — по страницам, доступным орг (entitledGroups).
   const summary = useMemo(() => {
     const totals: Record<string, { granted: number; total: number }> = {}
     for (const role of roles) totals[role] = { granted: 0, total: 0 }
-    for (const group of CAPABILITY_GROUPS) {
+    for (const group of entitledGroups) {
       for (const page of group.pages) {
         for (const cap of page.capabilities) {
           for (const role of roles) {
@@ -243,7 +268,7 @@ export function CapabilitiesPanel({ scope = 'global' }: { scope?: 'global' | 'or
       }
     }
     return totals
-  }, [roles, grantedMap])
+  }, [roles, grantedMap, entitledGroups])
 
   if (loading) {
     return (
