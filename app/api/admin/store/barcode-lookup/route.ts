@@ -202,11 +202,15 @@ export async function GET(request: Request) {
     let categoryId: string | null = null
     let categoryName: string | null = null
     if (!cached && suggestion.name) {
-      const { data: cats } = await supabase
+      let catsQ = supabase
         .from('inventory_categories')
         .select('id, name')
         .eq('is_active', true)
         .order('name')
+      // Изоляция: категории только своей орг (была кросс-тенант утечка) и точки.
+      if (orgId) catsQ = catsQ.eq('organization_id', orgId)
+      if (companyFilter) catsQ = catsQ.eq('company_id', companyFilter)
+      const { data: cats } = await catsQ
       const catList = ((cats as any[]) || []).map((c) => ({ id: String(c.id), name: String(c.name) }))
       const norm = await aiNormalize({ name: suggestion.name, brand: suggestion.brand, category_raw: suggestion.category_raw }, catList)
       if (norm) {
