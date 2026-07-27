@@ -86,6 +86,7 @@ export async function GET(request: Request) {
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const companyScope = await resolveCompanyScope({
       activeOrganizationId: access.activeOrganization?.id || null,
+      requestedCompanyId: new URL(request.url).searchParams.get('company_id') || null,
       isSuperAdmin: access.isSuperAdmin,
     })
     const requests = await fetchInventoryRequests(supabase as any, {

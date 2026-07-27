@@ -147,8 +147,11 @@ export async function GET(request: Request) {
     const scopeParam = String(url.searchParams.get('scope') || 'all')
     const scope: 'all' | 'warehouse' | 'showcase' =
       scopeParam === 'warehouse' || scopeParam === 'showcase' ? scopeParam : 'all'
+    // Изоляция по выбранной точке: StoreScope инъектит ?company_id при выборе точки
+    // (пусто = «Общий» → все точки орг).
     const companyScope = await resolveCompanyScope({
       activeOrganizationId: access.activeOrganization?.id || null,
+      requestedCompanyId: new URL(request.url).searchParams.get('company_id') || null,
       isSuperAdmin: access.isSuperAdmin,
     })
     const inventoryScope = {

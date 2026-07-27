@@ -93,7 +93,7 @@ export async function GET(request: Request) {
     if (entitlementGuard) return entitlementGuard
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
-    const companyScope = await resolveCompanyScope({ activeOrganizationId: access.activeOrganization?.id || null, isSuperAdmin: access.isSuperAdmin })
+    const companyScope = await resolveCompanyScope({ activeOrganizationId: access.activeOrganization?.id || null, requestedCompanyId: new URL(request.url).searchParams.get('company_id') || null, isSuperAdmin: access.isSuperAdmin })
     const inventoryScope = resolveInventoryScope(access, companyScope.allowedCompanyIds)
     const url = new URL(request.url)
     const actId = url.searchParams.get('act')
