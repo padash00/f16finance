@@ -71,6 +71,8 @@ export type CopilotContext = {
   organizationId?: string | null
   /** Является ли super-admin */
   isSuperAdmin: boolean
+  /** Роль актора (для owner-only действий, напр. назначение роли) */
+  staffRole?: string | null
   /** Список capabilities пользователя (Set для O(1) проверки) */
   capabilities: Set<string>
   /** Источник запроса */

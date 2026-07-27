@@ -109,6 +109,7 @@ async function buildContext(params: {
     telegramChatId: params.telegramChatId,
     organizationId: params.organizationId,
     isSuperAdmin: params.isSuperAdmin,
+    staffRole: params.role,
     capabilities,
     source: params.source,
     currentPath: params.currentPath,

@@ -30,7 +30,7 @@ import { NextResponse } from 'next/server'
 
 import { normalizeOperatorUsername, toOperatorAuthEmail } from '@/lib/core/auth'
 import { writeAuditLog } from '@/lib/server/audit'
-import { requireCapability } from '@/lib/server/capabilities'
+import { requireCapability, canAssignStaffRole } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { listOrganizationCompanyIds } from '@/lib/server/organizations'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
@@ -117,6 +117,12 @@ export async function POST(request: Request) {
       type === 'operator' ? 'operators.create' : 'staff.create',
     )
     if (denied) return denied as any
+
+    // Нанять на административную должность (owner/manager/кастомная с доступом)
+    // может только владелец. Базовые роли (operator/other) — любой с правом найма.
+    if (type === 'staff' && !canAssignStaffRole(access, role)) {
+      return json({ error: 'Нанимать на административную должность может только владелец', reason: 'owner-only-role' }, 403)
+    }
 
     const supabase = createAdminSupabaseClient()
 

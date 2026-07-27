@@ -315,6 +315,26 @@ export function requireOwnerOrSuper(access: AccessLike): Response | null {
   )
 }
 
+/** Актор = владелец организации или супер-админ. */
+export function isOwnerActor(access: AccessLike): boolean {
+  return !!access.isSuperAdmin || (access.staffRole || access.staffMember?.role || null) === 'owner'
+}
+
+/**
+ * Базовые (НЕ административные) staff-роли — их назначать может любой с правом
+ * управления сотрудниками. Всё остальное (owner/manager/marketer/кастомные
+ * должности с доступом) — назначает ТОЛЬКО владелец. Иначе менеджер (fail-open)
+ * повысил бы себя/другого до owner в обход owner-only контура /access.
+ */
+export const SAFE_STAFF_ROLES = new Set(['operator', 'other'])
+
+/** true, если актор вправе назначить/сохранить staff-роль `role`. */
+export function canAssignStaffRole(access: AccessLike, role: string | null | undefined): boolean {
+  const r = String(role || '').trim()
+  if (!r || SAFE_STAFF_ROLES.has(r)) return true
+  return isOwnerActor(access)
+}
+
 /**
  * Staff-only + capability для admin-роутов.
  *

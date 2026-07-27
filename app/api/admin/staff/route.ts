@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { assertOrganizationLimitAvailable, ensureOrganizationStaffAccess, listOrganizationStaffIds } from '@/lib/server/organizations'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
-import { requireCapability } from '@/lib/server/capabilities'
+import { requireCapability, canAssignStaffRole, isOwnerActor } from '@/lib/server/capabilities'
 import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -135,6 +135,10 @@ export async function POST(req: Request) {
       const denied = await requireCapability(access, 'staff.create')
       if (denied) return denied as any
       const payload = body.payload
+      // Назначать административную должность (owner/manager/…) может только владелец.
+      if (!canAssignStaffRole(access, payload.role)) {
+        return json({ error: 'Назначать административную должность может только владелец', reason: 'owner-only-role' }, 403)
+      }
       if (!payload.full_name?.trim()) {
         return json({ error: 'ФИО обязательно' }, 400)
       }
@@ -221,6 +225,12 @@ export async function POST(req: Request) {
         .eq('id', body.staffId)
         .single()
       if (existingError) throw existingError
+
+      // Смена должности сотрудника — только владелец. Не-владелец правит остальные
+      // поля, но не роль (иначе повысил бы до owner или понизил владельца).
+      if (!isOwnerActor(access) && String(payload.role || '') !== String(existing.role || '')) {
+        return json({ error: 'Менять должность сотрудника может только владелец', reason: 'owner-only-role' }, 403)
+      }
 
       const { data, error } = await supabase
         .from('staff')

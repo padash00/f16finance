@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
-import { requireCapability, requireStaffCapability } from '@/lib/server/capabilities'
+import { requireCapability, requireStaffCapability, isOwnerActor, canAssignStaffRole } from '@/lib/server/capabilities'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -266,17 +266,30 @@ export async function POST(req: Request) {
     }
 
     if (body.entity === 'staff') {
-      // Создание/правка сотрудника (вкл. смену role) — staff + управление ролями.
+      // Создание/правка сотрудника — staff + управление ролями.
       const deniedStaff = await requireStaffCapability(access, 'access.manage_staff_roles')
       if (deniedStaff) return deniedStaff
+
+      // НАЗНАЧЕНИЕ РОЛИ — только владелец (или супер-админ). Иначе менеджер (у него
+      // при fail-open есть access.manage_staff_roles) мог бы повысить сотрудника —
+      // или себя — до owner прямо здесь, в обход owner-only контура /access.
+      // Не-владелец может править ФИО/почту/телефон, но не роль. Безопасные базовые
+      // роли ('operator'/'other') назначать можно (это не админ-доступ).
       if (body.action === 'create') {
         if (!body.payload.name?.trim()) return badRequest('Имя сотрудника обязательно')
+        const requestedRole = body.payload.role?.trim() || 'operator'
+        if (!canAssignStaffRole(access, requestedRole)) {
+          return NextResponse.json(
+            { error: 'Назначать административную должность может только владелец', reason: 'owner-only-role' },
+            { status: 403 },
+          )
+        }
         const { data, error } = await supabase.from('staff').insert([
           {
             full_name: body.payload.name.trim(),
             phone: body.payload.phone?.trim() || null,
             email: body.payload.email?.trim() || null,
-            role: body.payload.role?.trim() || 'operator',
+            role: requestedRole,
             organization_id: access.activeOrganization?.id || null,
           },
         ]).select('id,full_name,email,role').single()
@@ -295,6 +308,18 @@ export async function POST(req: Request) {
 
       if (body.action === 'update') {
         if (!body.payload.name?.trim()) return badRequest('Имя сотрудника обязательно')
+        const newRole = body.payload.role?.trim() || 'operator'
+        // Смена роли — только владелец. Не-владелец сохраняет текущую роль.
+        const { data: curStaff } = await scopeOrg(
+          supabase.from('staff').select('role').eq('id', body.id),
+        ).single()
+        const currentRole = String((curStaff as any)?.role || '')
+        if (!isOwnerActor(access) && newRole !== currentRole) {
+          return NextResponse.json(
+            { error: 'Менять должность сотрудника может только владелец', reason: 'owner-only-role' },
+            { status: 403 },
+          )
+        }
         const { data, error } = await scopeOrg(
           supabase
             .from('staff')
@@ -302,7 +327,7 @@ export async function POST(req: Request) {
               full_name: body.payload.name.trim(),
               phone: body.payload.phone?.trim() || null,
               email: body.payload.email?.trim() || null,
-              role: body.payload.role?.trim() || 'operator',
+              role: newRole,
             })
             .eq('id', body.id),
         )

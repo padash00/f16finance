@@ -42,6 +42,13 @@ export const assignRoleTool: CopilotTool = {
     const role = String(input.role || '')
     if (!staffId || !['owner', 'manager', 'other'].includes(role)) return { ok: false, message: 'Не хватает данных.' }
 
+    // Назначать административную роль (owner/manager) может ТОЛЬКО владелец. Иначе
+    // менеджер (fail-open staff.update) повысил бы себя/другого до owner.
+    const isOwnerActor = ctx.isSuperAdmin || ctx.staffRole === 'owner'
+    if (!isOwnerActor && role !== 'other') {
+      return { ok: false, message: 'Назначать административную роль может только владелец.' }
+    }
+
     // Мультитенантная изоляция: менять роль можно только сотруднику своей организации.
     let beforeQ = ctx.supabase.from('staff').select('full_name, role, organization_id').eq('id', staffId)
     if (ctx.organizationId) beforeQ = beforeQ.eq('organization_id', ctx.organizationId)
