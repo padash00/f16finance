@@ -77,7 +77,10 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
 
     // 1. Сам товар. description/image_url/brand читаем МЯГКО (try/catch) —
     //    эти колонки могут отсутствовать, если миграция не применена.
-    const baseCols = 'id, name, barcode, unit, sale_price, default_purchase_price, category_id, low_stock_threshold, pack_size, organization_id, category:inventory_categories(id, name)'
+    // Каталог по точке: если выбрана точка (StoreScope инъектит ?company_id),
+    // карточка обязана принадлежать ей.
+    const companyFilter = String(new URL(request.url).searchParams.get('company_id') || '').trim() || null
+    const baseCols = 'id, name, barcode, unit, sale_price, default_purchase_price, category_id, company_id, low_stock_threshold, pack_size, organization_id, category:inventory_categories(id, name)'
     let item: any = null
     try {
       const { data, error } = await supabase
@@ -102,6 +105,10 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     // Изоляция: товар обязан принадлежать орг вызывающего.
     if (scopeOrg && String(item.organization_id || '') !== String(scopeOrg)) {
       return json({ error: 'forbidden' }, 403)
+    }
+    // Каталог по точке: при выбранной точке — товар должен быть её.
+    if (companyFilter && String(item.company_id || '') !== companyFilter) {
+      return json({ error: 'forbidden', reason: 'wrong-point' }, 403)
     }
 
     const category = Array.isArray(item.category) ? item.category[0] || null : item.category || null

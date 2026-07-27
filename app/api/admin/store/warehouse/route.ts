@@ -605,12 +605,13 @@ export async function POST(request: Request) {
       // иначе лимит длины URL/1000 строк молча превратит товары в «несматченные».
       const foundItems: any[] = []
       for (const bcChunk of chunkArray(barcodes, 200)) {
+        // Каталог по точке: матчим штрихкоды с товарами ЭТОЙ точки.
         let itemsQuery = supabase
           .from('inventory_items')
           .select('id, name, barcode, unit')
           .eq('is_active', true)
           .in('barcode', bcChunk)
-        if (orgId) itemsQuery = itemsQuery.eq('organization_id', orgId)
+          .eq('company_id', companyId)
         const { data: part, error: itemsErr } = await itemsQuery
         if (itemsErr) throw itemsErr
         foundItems.push(...(part || []))
