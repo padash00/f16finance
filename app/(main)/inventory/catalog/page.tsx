@@ -4,7 +4,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { downloadReportPdf } from '@/lib/client/download-pdf'
 import { useApiCache } from '@/lib/client/use-api-cache'
 import { useCapabilities } from '@/lib/client/use-capabilities'
-import { Package, Pencil, Plus, Printer, Search, Trash2, Upload, Download, Check, X, ChevronLeft, ChevronRight, ShoppingCart, TrendingUp, Warehouse, Store, Tag, Loader2 } from 'lucide-react'
+import { Package, Pencil, Plus, Printer, Search, Trash2, Upload, Download, Check, X, ChevronLeft, ChevronRight, ShoppingCart, TrendingUp, Warehouse, Store, Tag, Loader2, AlertTriangle, MoreHorizontal } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -530,6 +530,17 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
   const [bulkDialog, setBulkDialog] = useState<null | 'deactivate' | 'deleteEmpty' | 'deleteAll' | 'resetBalances'>(null)
   const [bulkPhrase, setBulkPhrase] = useState('')
   const [bulkLoading, setBulkLoading] = useState(false)
+  // Опасные массовые операции спрятаны в меню, чтобы не нажать случайно.
+  const [dangerOpen, setDangerOpen] = useState(false)
+  const dangerRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!dangerOpen) return
+    const onDoc = (e: MouseEvent) => { if (dangerRef.current && !dangerRef.current.contains(e.target as Node)) setDangerOpen(false) }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setDangerOpen(false) }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onKey) }
+  }, [dangerOpen])
 
   const showToast = (msg: string) => {
     setToast(msg)
@@ -1091,25 +1102,31 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
                 Экспорт PDF
               </Button>
             )}
-            {canBulkZeroStock && (
-              <Button variant="outline" size="sm" className="text-sky-700 border-sky-500/40" onClick={() => { setBulkDialog('resetBalances'); setBulkPhrase('') }}>
-                Обнулить остатки
-              </Button>
-            )}
-            {canBulkDeactivate && (
-              <Button variant="outline" size="sm" className="text-amber-700 border-amber-500/40" onClick={() => { setBulkDialog('deactivate'); setBulkPhrase('') }}>
-                Скрыть все в каталоге
-              </Button>
-            )}
-            {canBulkDeleteEmpty && (
-              <Button variant="outline" size="sm" className="text-destructive border-destructive/40" onClick={() => { setBulkDialog('deleteEmpty'); setBulkPhrase('') }}>
-                Удалить без остатков
-              </Button>
-            )}
-            {canBulkDeleteAll && (
-              <Button variant="outline" size="sm" className="text-destructive border-destructive/60 bg-destructive/5" onClick={() => { setBulkDialog('deleteAll'); setBulkPhrase('') }}>
-                Удалить весь каталог
-              </Button>
+            {(canBulkZeroStock || canBulkDeactivate || canBulkDeleteEmpty || canBulkDeleteAll) && (
+              <div ref={dangerRef} className="relative">
+                <Button variant="outline" size="sm" className="text-slate-500 border-slate-300 dark:border-white/10" onClick={() => setDangerOpen((v) => !v)} title="Опасные операции">
+                  <MoreHorizontal className="w-4 h-4" />
+                </Button>
+                {dangerOpen && (
+                  <div className="absolute right-0 top-full z-40 mt-1.5 w-64 overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-xl shadow-black/10 dark:border-white/10 dark:bg-slate-900">
+                    <div className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                      <AlertTriangle className="h-3.5 w-3.5" /> Опасные операции
+                    </div>
+                    {canBulkZeroStock && (
+                      <button type="button" onClick={() => { setBulkDialog('resetBalances'); setBulkPhrase(''); setDangerOpen(false) }} className="flex w-full items-center rounded-lg px-2.5 py-2 text-left text-sm text-sky-700 transition-colors hover:bg-sky-500/10 dark:text-sky-300">Обнулить остатки</button>
+                    )}
+                    {canBulkDeactivate && (
+                      <button type="button" onClick={() => { setBulkDialog('deactivate'); setBulkPhrase(''); setDangerOpen(false) }} className="flex w-full items-center rounded-lg px-2.5 py-2 text-left text-sm text-amber-700 transition-colors hover:bg-amber-500/10 dark:text-amber-300">Скрыть все в каталоге</button>
+                    )}
+                    {canBulkDeleteEmpty && (
+                      <button type="button" onClick={() => { setBulkDialog('deleteEmpty'); setBulkPhrase(''); setDangerOpen(false) }} className="flex w-full items-center rounded-lg px-2.5 py-2 text-left text-sm text-rose-700 transition-colors hover:bg-rose-500/10 dark:text-rose-300">Удалить без остатков</button>
+                    )}
+                    {canBulkDeleteAll && (
+                      <button type="button" onClick={() => { setBulkDialog('deleteAll'); setBulkPhrase(''); setDangerOpen(false) }} className="flex w-full items-center rounded-lg px-2.5 py-2 text-left text-sm font-medium text-rose-700 transition-colors hover:bg-rose-500/10 dark:text-rose-300">Удалить весь каталог</button>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
             {canCreate && (
               <Button data-tour="catalog-add-item" size="sm" onClick={() => { setShowAdd(true); setEditingId(null) }}>
