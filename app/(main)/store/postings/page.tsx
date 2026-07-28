@@ -270,14 +270,10 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
     return items.filter((i) => i.name.toLowerCase().includes(q) || i.barcode.includes(q)).slice(0, 12)
   }, [quickSearch, items])
 
-  // Клик по товару из каталога: если уже в списке — +1 к количеству; иначе
-  // заполнить первую пустую строку или добавить новую (цены подтянуть из каталога).
+  // Клик по товару из каталога: заполнить первую пустую строку или добавить новую
+  // (цены подтянуть из каталога). Никакого объединения — каждый клик = отдельная строка.
   const pickCatalogItem = (opt: Item) => {
     setLines((prev) => {
-      const existing = prev.find((l) => l.item_id === opt.id)
-      if (existing) {
-        return prev.map((l) => l.item_id === opt.id ? { ...l, quantity: String((parseNum(l.quantity) || 0) + 1) } : l)
-      }
       const unitCost = opt.default_purchase_price ? String(opt.default_purchase_price) : ''
       const salePrice = opt.sale_price ? String(opt.sale_price) : ''
       const filled: PostingLine = {
@@ -596,14 +592,14 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
                         onClick={() => pickCatalogItem(opt)}
                       >
                         <span className="min-w-0 flex-1 truncate">{opt.name} <span className="text-xs text-muted-foreground">· {opt.barcode}</span></span>
-                        <span className="shrink-0 text-xs text-emerald-700 dark:text-emerald-300">{inList ? '+1' : 'добавить'}</span>
+                        <span className="shrink-0 text-xs text-emerald-700 dark:text-emerald-300">{inList ? `уже в строке ${rowIndexOfItem(opt.id)}` : 'добавить'}</span>
                       </button>
                     )
                   })}
                   {quickMatches.length === 0 && <div className="px-3 py-2 text-sm text-muted-foreground">Ничего не найдено в каталоге</div>}
                 </div>
               )}
-              <p className="mt-1.5 text-[11px] text-muted-foreground">Показывает товары из каталога. Клик добавляет позицию — дальше только количество. Повторный клик — +1.</p>
+              <p className="mt-1.5 text-[11px] text-muted-foreground">Показывает товары из каталога. Клик добавляет позицию отдельной строкой — дальше только количество.</p>
             </div>
 
             <div className="space-y-2">
