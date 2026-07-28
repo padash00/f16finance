@@ -251,8 +251,12 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
 
   const filteredItemsFor = (lineKey: string) => {
     const q = (search[lineKey] || '').trim().toLowerCase()
-    if (!q) return items.slice(0, 30)
-    return items
+    // Защита от дубля: прячем товары, уже добавленные в ДРУГИЕ строки (в этой
+    // строке товар ещё не выбран — тут показываем всё).
+    const usedElsewhere = new Set(lines.filter((l) => l.key !== lineKey && l.item_id).map((l) => l.item_id))
+    const base = items.filter((i) => !usedElsewhere.has(i.id))
+    if (!q) return base.slice(0, 30)
+    return base
       .filter((i) => i.name.toLowerCase().includes(q) || i.barcode.includes(q))
       .slice(0, 30)
   }
@@ -415,6 +419,18 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
       }))
       .filter((l) => l.item_id && l.quantity > 0)
 
+    // Защита от дубля: один и тот же товар в нескольких строках объединяем
+    // (суммируем количество, цены/срок берём из первой строки) — иначе приход
+    // задвоился бы.
+    const mergedMap = new Map<string, typeof payloadItems[number]>()
+    for (const it of payloadItems) {
+      const ex = mergedMap.get(it.item_id)
+      if (ex) ex.quantity += it.quantity
+      else mergedMap.set(it.item_id, { ...it })
+    }
+    const finalItems = Array.from(mergedMap.values())
+    const mergedCount = payloadItems.length - finalItems.length
+
     setSaving(true)
     try {
       const res = await fetch('/api/admin/store/receipts', {
@@ -427,13 +443,13 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
             location_id: locationId,
             received_at: receivedAt,
             comment: comment.trim() || null,
-            items: payloadItems,
+            items: finalItems,
           },
         }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.message || json.error || 'Не удалось оприходовать')
-      setSuccess(`Оприходование на ${targetLabel} проведено.`)
+      setSuccess(`Оприходование на ${targetLabel} проведено.${mergedCount > 0 ? ` Повторяющиеся товары объединены (${mergedCount}).` : ''}`)
       setLines([newLine()])
       setComment('')
       setConfirmOpen(false)
