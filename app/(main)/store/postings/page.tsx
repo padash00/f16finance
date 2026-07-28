@@ -251,14 +251,16 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
 
   const filteredItemsFor = (lineKey: string) => {
     const q = (search[lineKey] || '').trim().toLowerCase()
-    // Защита от дубля: прячем товары, уже добавленные в ДРУГИЕ строки (в этой
-    // строке товар ещё не выбран — тут показываем всё).
-    const usedElsewhere = new Set(lines.filter((l) => l.key !== lineKey && l.item_id).map((l) => l.item_id))
-    const base = items.filter((i) => !usedElsewhere.has(i.id))
-    if (!q) return base.slice(0, 30)
-    return base
+    if (!q) return items.slice(0, 30)
+    return items
       .filter((i) => i.name.toLowerCase().includes(q) || i.barcode.includes(q))
       .slice(0, 30)
+  }
+
+  // В какой строке (1-based) уже стоит товар — чтобы не дублировать, а показать где.
+  const rowIndexOfItem = (itemId: string, exceptKey?: string): number | null => {
+    const idx = lines.findIndex((l) => l.item_id === itemId && l.key !== exceptKey)
+    return idx >= 0 ? idx + 1 : null
   }
 
   // Быстрый добавитель: совпадения по каталогу для верхнего поиска.
@@ -418,18 +420,6 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
         expiry_date: l.expiry_date.trim() || null,
       }))
       .filter((l) => l.item_id && l.quantity > 0)
-
-    // Защита от дубля: один и тот же товар в нескольких строках объединяем
-    // (суммируем количество, цены/срок берём из первой строки) — иначе приход
-    // задвоился бы.
-    const mergedMap = new Map<string, typeof payloadItems[number]>()
-    for (const it of payloadItems) {
-      const ex = mergedMap.get(it.item_id)
-      if (ex) ex.quantity += it.quantity
-      else mergedMap.set(it.item_id, { ...it })
-    }
-    const finalItems = Array.from(mergedMap.values())
-    const mergedCount = payloadItems.length - finalItems.length
 
     setSaving(true)
     try {
@@ -662,6 +652,9 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
                                 }}
                               >
                                 {opt.name} <span className="text-muted-foreground">· {opt.barcode}</span>
+                                {rowIndexOfItem(opt.id, line.key) && (
+                                  <span className="ml-1 text-amber-600 dark:text-amber-400">· уже в строке {rowIndexOfItem(opt.id, line.key)}</span>
+                                )}
                               </button>
                             ))}
                             {filteredItemsFor(line.key).length === 0 && (
