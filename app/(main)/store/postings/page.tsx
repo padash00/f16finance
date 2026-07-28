@@ -116,6 +116,7 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
   const [lines, setLines] = useState<PostingLine[]>([newLine()])
   const [search, setSearch] = useState<Record<string, string>>({})
   const [quickSearch, setQuickSearch] = useState('') // быстрый поиск-добавитель по каталогу
+  const [dupWarn, setDupWarn] = useState<string | null>(null) // предупреждение о повторном добавлении товара
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [confirmPhrase, setConfirmPhrase] = useState('')
   useModalEscape(confirmOpen, () => { if (!saving) setConfirmOpen(false) })
@@ -270,9 +271,16 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
     return items.filter((i) => i.name.toLowerCase().includes(q) || i.barcode.includes(q)).slice(0, 12)
   }, [quickSearch, items])
 
-  // Клик по товару из каталога: заполнить первую пустую строку или добавить новую
-  // (цены подтянуть из каталога). Никакого объединения — каждый клик = отдельная строка.
+  // Клик по товару из каталога. Если товар уже добавлен — НЕ добавляем и НЕ плюсуем,
+  // а предупреждаем (защита от случайного дубля при вводе десятков позиций).
   const pickCatalogItem = (opt: Item) => {
+    const dupIdx = lines.findIndex((l) => l.item_id === opt.id)
+    if (dupIdx >= 0) {
+      setDupWarn(`«${opt.name}» уже добавлен — строка ${dupIdx + 1}`)
+      setQuickSearch('')
+      return
+    }
+    setDupWarn(null)
     setLines((prev) => {
       const unitCost = opt.default_purchase_price ? String(opt.default_purchase_price) : ''
       const salePrice = opt.sale_price ? String(opt.sale_price) : ''
@@ -592,14 +600,20 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
                         onClick={() => pickCatalogItem(opt)}
                       >
                         <span className="min-w-0 flex-1 truncate">{opt.name} <span className="text-xs text-muted-foreground">· {opt.barcode}</span></span>
-                        <span className="shrink-0 text-xs text-emerald-700 dark:text-emerald-300">{inList ? `уже в строке ${rowIndexOfItem(opt.id)}` : 'добавить'}</span>
+                        <span className={`shrink-0 text-xs ${inList ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-300'}`}>{inList ? `уже в строке ${rowIndexOfItem(opt.id)}` : 'добавить'}</span>
                       </button>
                     )
                   })}
                   {quickMatches.length === 0 && <div className="px-3 py-2 text-sm text-muted-foreground">Ничего не найдено в каталоге</div>}
                 </div>
               )}
-              <p className="mt-1.5 text-[11px] text-muted-foreground">Показывает товары из каталога. Клик добавляет позицию отдельной строкой — дальше только количество.</p>
+              {dupWarn && (
+                <div className="mt-2 flex items-center justify-between gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                  <span className="min-w-0 flex-1">⚠ {dupWarn}</span>
+                  <button type="button" className="shrink-0 underline" onClick={() => setDupWarn(null)}>ок</button>
+                </div>
+              )}
+              <p className="mt-1.5 text-[11px] text-muted-foreground">Показывает товары из каталога. Клик добавляет позицию отдельной строкой — дальше только количество. Повторный товар не добавится — покажет, где он уже стоит.</p>
             </div>
 
             <div className="space-y-2">
@@ -632,6 +646,13 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
                                 type="button"
                                 className="block w-full truncate px-2 py-1.5 text-left text-xs hover:bg-slate-100 dark:hover:bg-white/5"
                                 onClick={() => {
+                                  const dup = rowIndexOfItem(opt.id, line.key)
+                                  if (dup) {
+                                    setDupWarn(`«${opt.name}» уже добавлен — строка ${dup}`)
+                                    setSearch((s) => ({ ...s, [line.key]: '' }))
+                                    return
+                                  }
+                                  setDupWarn(null)
                                   setLines((prev) => prev.map((l) => {
                                     if (l.key !== line.key) return l
                                     const unitCost = l.unit_cost || (opt.default_purchase_price ? String(opt.default_purchase_price) : '')
