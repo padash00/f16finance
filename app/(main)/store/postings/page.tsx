@@ -220,6 +220,29 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
     }
   }
 
+  // Экспорт ОДНОГО документа оприходования (из модалки) в Excel.
+  const exportPostingExcel = async (p: RecentPosting) => {
+    const rows: (string | number)[][] = (p.items || []).map((it) => {
+      const item = it.item
+      const qty = Number(it.quantity || 0)
+      const cost = Number(it.unit_cost || 0)
+      return [item?.name || '', item?.barcode || '', item?.unit || '', qty, cost, Number(it.total_cost ?? qty * cost), Number(item?.sale_price ?? 0), it.comment || '']
+    })
+    if (rows.length === 0) return
+    const headers = ['Название', 'Штрихкод', 'Ед.', 'Кол-во', 'Цена закупки', 'Сумма закупки', 'Цена продажи', 'Комментарий']
+    const XLSX = await import('xlsx')
+    const ws = XLSX.utils.aoa_to_sheet([
+      [`Оприходование от ${p.received_at} · ${p.location?.name || ''}`],
+      [],
+      headers,
+      ...rows,
+    ])
+    ;(ws as any)['!cols'] = [{ wch: 34 }, { wch: 16 }, { wch: 6 }, { wch: 8 }, { wch: 13 }, { wch: 13 }, { wch: 13 }, { wch: 26 }]
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Оприходование')
+    XLSX.writeFile(wb, `Oprihodovanie_${p.received_at}.xlsx`)
+  }
+
   const itemById = useMemo(() => {
     const m = new Map<string, Item>()
     for (const it of items) m.set(it.id, it)
@@ -865,7 +888,10 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
                 </p>
               )}
 
-              <div className="flex justify-end gap-2">
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button variant="outline" onClick={() => void exportPostingExcel(viewPosting)}>
+                  <Download className="h-3.5 w-3.5 mr-1.5" /> Экспорт Excel
+                </Button>
                 <Button variant="ghost" onClick={() => setViewPosting(null)} disabled={cancelling}>Закрыть</Button>
                 {viewPosting.status === 'cancelled' && (
                   <Button variant="outline" onClick={editCancelled}>
