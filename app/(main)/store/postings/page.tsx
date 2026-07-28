@@ -467,15 +467,9 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
           accent="emerald"
           backHref="/"
           actions={(
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={exportExcel} disabled={exporting}>
-                {exporting ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Download className="h-3.5 w-3.5 mr-1.5" />}
-                Экспорт Excel
-              </Button>
-              <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200">
-                {role?.roleLabel || 'Владелец'}
-              </Badge>
-            </div>
+            <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200">
+              {role?.roleLabel || 'Владелец'}
+            </Badge>
           )}
         />
       )}
@@ -892,8 +886,14 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
 
       <Card className="border-border bg-card/70 p-0">
         <CardContent className="p-4 sm:p-5">
-          <div className="mb-2 flex items-center gap-2 text-sm font-medium">
-            <Package className="h-4 w-4 text-emerald-700 dark:text-emerald-300" /> Последние оприходования
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Package className="h-4 w-4 text-emerald-700 dark:text-emerald-300" /> Последние оприходования
+            </div>
+            <Button variant="outline" size="sm" onClick={exportExcel} disabled={exporting}>
+              {exporting ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Download className="h-3.5 w-3.5 mr-1.5" />}
+              Экспорт Excel
+            </Button>
           </div>
           {loading && recent.length === 0 ? (
             <TableSkeleton rows={5} cols={7} />
