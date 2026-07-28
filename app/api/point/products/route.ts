@@ -69,6 +69,17 @@ async function ensureCompanyPointProductsFromInventory(params: {
   supabase: any
   companyId: string
 }) {
+  // По точке синкаем только для «магазинов» (store_enabled) — там каждый магазин
+  // самостоятелен. Для обычных точек (игровые клубы) синкаем ВЕСЬ орг-каталог, как
+  // было раньше, иначе товары без company_id точки пропадают с кассы.
+  const { data: companyRow } = await params.supabase
+    .from('companies')
+    .select('organization_id, store_enabled')
+    .eq('id', params.companyId)
+    .maybeSingle()
+  const orgId = (companyRow as any)?.organization_id || null
+  const isStore = (companyRow as any)?.store_enabled === true
+
   const [existing, inventoryItems] = await Promise.all([
     fetchAllPages((from, to) =>
       params.supabase
@@ -78,19 +89,17 @@ async function ensureCompanyPointProductsFromInventory(params: {
         .order('id')
         .range(from, to),
     ),
-    // Каталог по точке: в POS точки синкаем ТОЛЬКО её товары (company_id), а не
-    // весь орг-каталог — иначе на кассе одной точки был бы каталог всех.
-    fetchAllPages((from, to) =>
-      params.supabase
+    fetchAllPages((from, to) => {
+      let q = params.supabase
         .from('inventory_items')
         .select('id, name, barcode, sale_price, is_active, item_type')
-        .eq('company_id', params.companyId)
         .eq('is_active', true)
         .neq('item_type', 'consumable')
-        .order('name', { ascending: true })
-        .order('id')
-        .range(from, to),
-    ),
+      // Магазин → только свои товары; обычная точка → весь орг-каталог (как было).
+      if (isStore) q = q.eq('company_id', params.companyId)
+      else if (orgId) q = q.eq('organization_id', orgId)
+      return q.order('name', { ascending: true }).order('id').range(from, to)
+    }),
   ])
 
   const existingBarcodes = new Set((existing || []).map((row: any) => normalizeBarcode(row.barcode)))
