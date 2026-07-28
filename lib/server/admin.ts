@@ -33,13 +33,16 @@ export async function resolveStaffByUser(
 
     // АНТИ-ФОРЖ: user_metadata самоперезаписываем пользователем (GoTrue
     // updateUser({data})), поэтому staff_id из него — НЕдоверенный ключ. Иначе
-    // менеджер подставил бы staff_id владельца и получил роль owner. Доверяем
-    // строке только если её email совпадает с email аутентифицированного
-    // пользователя; иначе падаем в поиск по email ниже (по своей же учётке).
+    // менеджер подставил бы staff_id владельца и получил роль owner.
+    // Доверяем строке, если:
+    //  - её email совпадает с email аутентифицированного пользователя (анти-форж), ИЛИ
+    //  - у строки НЕТ email — проверить нечем, но это легитимная привязка через
+    //    провижининг (иначе владельцы/staff без email на строке теряли роль и
+    //    ловили 403, напр. дропдаун должностей «Загрузка…»).
     if (!error && data && data.is_active !== false) {
       const authEmail = user.email?.trim().toLowerCase() || null
       const staffEmail = (data.email as string | null)?.trim().toLowerCase() || null
-      if (authEmail && staffEmail && authEmail === staffEmail) return data
+      if (!staffEmail || (authEmail && staffEmail === authEmail)) return data
     }
   }
 
