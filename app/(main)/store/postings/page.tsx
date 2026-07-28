@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Loader2, Package, Plus, ShieldAlert, Store, Trash2, Upload, Warehouse } from 'lucide-react'
+import { Loader2, Package, Plus, ShieldAlert, Store, Trash2, Upload, Warehouse, Download } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -175,6 +175,50 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
     if (allowed) void load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allowed, storeCompanyId])
+
+  const [exporting, setExporting] = useState(false)
+  // Выгрузка оприходованного товара в Excel (по строкам документов оприходования).
+  const exportExcel = async () => {
+    setExporting(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/admin/store/receipts?scope=all${storeCompanyId ? `&company_id=${encodeURIComponent(storeCompanyId)}` : ''}`, { cache: 'no-store' })
+      const json = await res.json().catch(() => null)
+      const postings = ((json?.data?.receipts as RecentPosting[]) || []).filter((r) => r.kind === 'posting' && r.status !== 'cancelled')
+      const rows: (string | number)[][] = []
+      for (const p of postings) {
+        for (const it of (p.items || [])) {
+          const item = it.item
+          const qty = Number(it.quantity || 0)
+          const cost = Number(it.unit_cost || 0)
+          rows.push([
+            p.received_at || '',
+            p.location?.name || '',
+            item?.name || '',
+            item?.barcode || '',
+            item?.unit || '',
+            qty,
+            cost,
+            Number(it.total_cost ?? qty * cost),
+            Number(item?.sale_price ?? 0),
+            it.comment || '',
+          ])
+        }
+      }
+      if (rows.length === 0) { setError('Нет оприходованного товара для выгрузки'); return }
+      const headers = ['Дата', 'Локация', 'Название', 'Штрихкод', 'Ед.', 'Кол-во', 'Цена закупки', 'Сумма закупки', 'Цена продажи', 'Комментарий']
+      const XLSX = await import('xlsx')
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+      ;(ws as any)['!cols'] = [{ wch: 12 }, { wch: 18 }, { wch: 34 }, { wch: 16 }, { wch: 6 }, { wch: 8 }, { wch: 13 }, { wch: 13 }, { wch: 13 }, { wch: 26 }]
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, 'Оприходование')
+      XLSX.writeFile(wb, `Oprihodovanie_${new Date().toISOString().slice(0, 10)}.xlsx`)
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось выгрузить')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   const itemById = useMemo(() => {
     const m = new Map<string, Item>()
@@ -423,9 +467,15 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
           accent="emerald"
           backHref="/"
           actions={(
-            <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200">
-              {role?.roleLabel || 'Владелец'}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={exportExcel} disabled={exporting}>
+                {exporting ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Download className="h-3.5 w-3.5 mr-1.5" />}
+                Экспорт Excel
+              </Button>
+              <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200">
+                {role?.roleLabel || 'Владелец'}
+              </Badge>
+            </div>
           )}
         />
       )}
