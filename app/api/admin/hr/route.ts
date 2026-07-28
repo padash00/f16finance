@@ -25,6 +25,7 @@ type HrEmployee = {
   is_active: boolean
   is_admin_staff?: boolean
   is_hybrid?: boolean
+  company_ids?: string[]
   has_login?: boolean
   last_login?: string | null
   dismissed_at: string | null
@@ -94,13 +95,34 @@ export async function GET(req: Request) {
       }
     }
 
-    const [staffRes, operatorsRes, authRes] = await Promise.all([
+    let assignmentsQuery = supabase
+      .from('operator_company_assignments')
+      .select('operator_id, company_id, is_active')
+    if (allowedOperatorIds) {
+      assignmentsQuery = assignmentsQuery.in(
+        'operator_id',
+        allowedOperatorIds.length > 0 ? allowedOperatorIds : ['00000000-0000-0000-0000-000000000000'],
+      )
+    }
+
+    const [staffRes, operatorsRes, authRes, assignmentsRes] = await Promise.all([
       staffQuery,
       operatorsQuery,
       supabase.from('operator_auth').select('operator_id, is_active, last_login'),
+      assignmentsQuery,
     ])
     if (staffRes.error) throw staffRes.error
     if (operatorsRes.error) throw operatorsRes.error
+
+    // Точки оператора: operator_id → [company_id]
+    const companyIdsByOperator = new Map<string, string[]>()
+    for (const a of (assignmentsRes.data || []) as any[]) {
+      if (a.is_active === false || !a.company_id) continue
+      const opId = String(a.operator_id)
+      const list = companyIdsByOperator.get(opId) || []
+      list.push(String(a.company_id))
+      companyIdsByOperator.set(opId, list)
+    }
 
     const opIdsWithLogin = new Set(
       (authRes.data || [])
@@ -158,6 +180,7 @@ export async function GET(req: Request) {
         dismissal_reason: row.dismissal_reason || null,
         dismissed_by: row.dismissed_by || null,
         monthly_salary: null,
+        company_ids: companyIdsByOperator.get(String(row.id)) || [],
       }
     })
 
