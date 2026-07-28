@@ -433,13 +433,13 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
             location_id: locationId,
             received_at: receivedAt,
             comment: comment.trim() || null,
-            items: finalItems,
+            items: payloadItems,
           },
         }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.message || json.error || 'Не удалось оприходовать')
-      setSuccess(`Оприходование на ${targetLabel} проведено.${mergedCount > 0 ? ` Повторяющиеся товары объединены (${mergedCount}).` : ''}`)
+      setSuccess(`Оприходование на ${targetLabel} проведено.`)
       setLines([newLine()])
       setComment('')
       setConfirmOpen(false)
