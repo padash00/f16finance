@@ -268,12 +268,17 @@ export async function POST(request: Request) {
         is_primary: idx === 0,
         is_active: true,
       }))
-      const { error: assignErr } = await supabase
+      const { data: insertedAssign, error: assignErr } = await supabase
         .from('operator_company_assignments')
         .insert(assignments)
-      if (assignErr) {
-        // Не падаем — оператор создан, просто логируем для диагностики
-        console.warn('hr/hire: failed to insert operator_company_assignments', assignErr)
+        .select('id')
+      if (assignErr || !insertedAssign || insertedAssign.length !== assignments.length) {
+        // Точки — критичны: без них оператор не сможет войти. Логируем подробно.
+        console.warn('hr/hire: operator_company_assignments write incomplete', {
+          error: assignErr?.message,
+          wrote: insertedAssign?.length || 0,
+          expected: assignments.length,
+        })
       }
     }
 

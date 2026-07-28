@@ -281,10 +281,17 @@ export async function POST(request: Request) {
         }
       }
 
-      // Обновление точек
+      // Обновление точек. ВАЖНО: ошибки записи НЕ проглатываем — иначе точки
+      // «не сохраняются» молча, а оператор потом не может войти («не привязан к точке»).
       if (Array.isArray(payload.company_ids)) {
         // Сносим старые назначения и пишем новые (простая стратегия)
-        await supabase.from('operator_company_assignments').delete().eq('operator_id', id)
+        const { error: delErr } = await supabase
+          .from('operator_company_assignments')
+          .delete()
+          .eq('operator_id', id)
+        if (delErr) {
+          return json({ error: `Не удалось обновить точки (удаление старых): ${delErr.message}` }, 500)
+        }
         if (payload.company_ids.length > 0) {
           const rows = payload.company_ids.map((companyId, idx) => ({
             operator_id: id,
@@ -293,11 +300,15 @@ export async function POST(request: Request) {
             is_primary: idx === 0,
             is_active: true,
           }))
-          const { error: assignErr } = await supabase
+          const { data: inserted, error: assignErr } = await supabase
             .from('operator_company_assignments')
             .insert(rows)
+            .select('id')
           if (assignErr) {
-            console.warn('hr/update: failed to insert operator_company_assignments', assignErr)
+            return json({ error: `Не удалось сохранить точки: ${assignErr.message}` }, 500)
+          }
+          if (!inserted || inserted.length !== rows.length) {
+            return json({ error: `Точки не сохранились (записано ${inserted?.length || 0} из ${rows.length}). Проверьте права/ограничения таблицы.` }, 500)
           }
         }
       }
