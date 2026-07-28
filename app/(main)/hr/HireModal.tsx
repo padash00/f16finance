@@ -162,7 +162,9 @@ export default function HireModal({ open, onClose, onCreated }: Props) {
       setError('Введите ФИО')
       return
     }
-    if (!role) {
+    // Должность (админ-роль) нужна только админ-сотруднику. Оператор — «оператор»
+    // (у него своя касса-программа, админ-роли ему не нужны).
+    if (type === 'staff' && !role) {
       setError('Выберите должность')
       return
     }
@@ -176,7 +178,7 @@ export default function HireModal({ open, onClose, onCreated }: Props) {
       type,
       full_name: fullName.trim(),
       short_name: shortName.trim() || undefined,
-      role,
+      role: type === 'operator' ? 'operator' : role,
       hire_date: hireDate,
       phone: phone.trim() || undefined,
       email: email.trim() || undefined,
@@ -345,16 +347,18 @@ export default function HireModal({ open, onClose, onCreated }: Props) {
                   className={inputClass}
                 />
               </Field>
-              <Field label="Должность *">
-                <select value={role} onChange={(e) => setRole(e.target.value)} className={inputClass}>
-                  {positions.length === 0 && <option>Загрузка…</option>}
-                  {positions.map((p) => (
-                    <option key={p.id} value={p.name}>
-                      {p.label || p.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
+              {type === 'staff' && (
+                <Field label="Должность *">
+                  <select value={role} onChange={(e) => setRole(e.target.value)} className={inputClass}>
+                    {positions.length === 0 && <option value="">Загрузка…</option>}
+                    {positions.map((p) => (
+                      <option key={p.id} value={p.name}>
+                        {p.label || p.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              )}
               <Field label="Дата найма">
                 <DatePicker value={hireDate} onChange={setHireDate} />
               </Field>

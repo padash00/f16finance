@@ -152,14 +152,17 @@ export async function POST(request: Request) {
       }
     }
 
-    // Проверяем что роль существует в positions
-    const { data: position } = await supabase
-      .from('positions')
-      .select('name')
-      .eq('name', role)
-      .maybeSingle()
-    if (!position) {
-      return json({ error: `Должность "${role}" не найдена. Создай её на /access → Должности.` }, 400)
+    // Проверяем что роль существует в positions — только для АДМИН-сотрудника.
+    // Оператору админ-должность не нужна (role='operator'), проверку пропускаем.
+    if (type === 'staff') {
+      const { data: position } = await supabase
+        .from('positions')
+        .select('name')
+        .eq('name', role)
+        .maybeSingle()
+      if (!position) {
+        return json({ error: `Должность "${role}" не найдена. Создай её на /access → Должности.` }, 400)
+      }
     }
 
     // ─── Type: STAFF ───────────────────────────────────────────────
