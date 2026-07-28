@@ -4,6 +4,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { downloadReportPdf } from '@/lib/client/download-pdf'
 import { useApiCache } from '@/lib/client/use-api-cache'
 import { useCapabilities } from '@/lib/client/use-capabilities'
+import { useStoreScope } from '@/components/store/store-scope'
 import { Package, Pencil, Plus, Printer, Search, Trash2, Upload, Download, Check, X, ChevronLeft, ChevronRight, ShoppingCart, TrendingUp, Warehouse, Store, Tag, Loader2, AlertTriangle, MoreHorizontal } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
@@ -492,7 +493,11 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
   const [editingQty, setEditingQty] = useState<{ id: string; field: 'wh' | 'sh' } | null>(null)
   const [editQtyVal, setEditQtyVal] = useState('')
   const [savingQty, setSavingQty] = useState(false)
-  const effectiveCompanyId = filterCompany !== 'all' ? filterCompany : (companies.length === 1 ? companies[0].id : null)
+  // Верхний переключатель точки (StoreScope) — главный. Выбрана точка → фильтруем по ней;
+  // «Общий» (storeCompanyId=null) → внутренний фильтр «Все точки».
+  const { storeCompanyId } = useStoreScope()
+  const activeCompanyId = storeCompanyId || (filterCompany !== 'all' ? filterCompany : null)
+  const effectiveCompanyId = activeCompanyId || (companies.length === 1 ? companies[0].id : null)
 
   // Edit / add
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -549,7 +554,7 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
 
   // SWR-кэш: повторное открытие каталога показывает прошлые данные мгновенно,
   // свежие подтягиваются фоном; после мутаций зовём loadItems() (refresh).
-  const catalogUrl = `/api/admin/inventory/catalog${filterCompany !== 'all' ? `?company_id=${encodeURIComponent(filterCompany)}` : ''}`
+  const catalogUrl = `/api/admin/inventory/catalog${activeCompanyId ? `?company_id=${encodeURIComponent(activeCompanyId)}` : ''}`
   const { data: itemsData, loading, error, refresh: loadItems } = useApiCache<CatalogItem[]>(catalogUrl)
   // Undo-удаление: скрытые id (строка исчезает сразу, сервер — через 5 сек)
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set())
@@ -692,7 +697,7 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
   const totalPages = Math.ceil(sorted.length / PAGE_SIZE)
   const paginated = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
-  useEffect(() => { setPage(1) }, [search, filterCategory, filterType, sortBy, filterCompany])
+  useEffect(() => { setPage(1) }, [search, filterCategory, filterType, sortBy, filterCompany, storeCompanyId])
   // Смена точки = другой набор данных — сбрасываем выбор чекбоксами
   useEffect(() => { setSelectedItemIds(new Set()) }, [filterCompany])
 
@@ -1332,7 +1337,8 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
                   <SelectItem value="consumable">Расходник</SelectItem>
                 </SelectContent>
               </Select>
-              {companies.length > 1 && (
+              {/* Когда точка выбрана верхним переключателем — внутренний фильтр прячем (главный сверху) */}
+              {companies.length > 1 && !storeCompanyId && (
                 <Select value={filterCompany} onValueChange={setFilterCompany}>
                   <SelectTrigger className="h-8 text-sm w-[160px]">
                     <SelectValue placeholder="Точка" />
@@ -1490,7 +1496,7 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
                               ) : (
                                 <span className="text-muted-foreground text-xs">—</span>
                               )}
-                              {filterCompany === 'all' && (item as any).company?.name && (
+                              {!activeCompanyId && (item as any).company?.name && (
                                 <Badge variant="outline" className="text-[10px] text-emerald-700 dark:text-emerald-300">{(item as any).company.name}</Badge>
                               )}
                             </div>
