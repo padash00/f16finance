@@ -548,9 +548,15 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
   )
 
   useEffect(() => {
-    fetch('/api/admin/companies')
+    // Только точки-МАГАЗИНЫ (store_enabled) — у них есть каталог. Иначе при
+    // одной точке-магазине (но многих компаниях орг) авто-выбор не срабатывал
+    // и товар не создать (нет переключателя, форма требует точку).
+    fetch('/api/admin/store/config')
       .then((r) => r.json())
-      .then((j) => setCompanies(j.data || []))
+      .then((j) => {
+        const all = Array.isArray(j?.data?.companies) ? (j.data.companies as any[]) : []
+        setCompanies(all.filter((c) => c?.store_enabled).map((c) => ({ id: String(c.id), name: String(c.name) })))
+      })
       .catch(() => {})
   }, [])
 
