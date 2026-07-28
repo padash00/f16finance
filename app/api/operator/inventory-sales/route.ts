@@ -66,27 +66,27 @@ export async function GET(request: Request) {
     if ('response' in ctx) return ctx.response
     const { supabase, companyId, operatorId } = ctx
 
-    const [location, stock, catalogOrgId, company] = await Promise.all([
+    const [location, stock, company] = await Promise.all([
       resolvePointSaleLocation(supabase, companyId),
       resolveStockLocations(supabase, companyId),
-      resolveCompanyOrganizationId(supabase, companyId),
-      supabase.from('companies').select('id, name, code').eq('id', companyId).maybeSingle(),
+      supabase.from('companies').select('id, name, code, organization_id, store_enabled').eq('id', companyId).maybeSingle(),
     ])
+    // Точка-магазин → каталог только своей точки; обычная точка → весь орг-каталог.
+    const catalogOrgId = (company as any)?.data?.organization_id || (await resolveCompanyOrganizationId(supabase, companyId))
+    const isStore = (company as any)?.data?.store_enabled === true
 
     const [items, showcaseMap, { data: sales, error: salesError }, { data: loyaltyConfig }] =
       await Promise.all([
-        // Изоляция арендатора: каталог кассы — только товары своей организации
-        fetchAllPages((from, to) =>
-          supabase
+        fetchAllPages((from, to) => {
+          let q = supabase
             .from('inventory_items')
             .select('id, name, barcode, unit, sale_price, item_type, image_url, category:category_id(id, name)')
-            .eq('organization_id', catalogOrgId)
             .eq('is_active', true)
             .neq('item_type', 'consumable')
-            .order('name', { ascending: true })
-            .order('id')
-            .range(from, to),
-        ),
+          if (isStore) q = q.eq('company_id', companyId)
+          else q = q.eq('organization_id', catalogOrgId)
+          return q.order('name', { ascending: true }).order('id').range(from, to)
+        }),
         fetchShowcaseBalances({
           supabase,
           catalogId: stock.catalogId,

@@ -781,22 +781,29 @@ export async function GET(request: Request) {
     }
 
     const stock = await resolveStockLocations(supabase, device.company_id)
-    // Изоляция арендатора: каталог кассы — только товары своей организации
-    const catalogOrgId = await resolveCompanyOrganizationId(supabase, device.company_id)
+    // Каталог кассы: точка-магазин (store_enabled) → ТОЛЬКО свои товары (изоляция по
+    // точке, иначе товары разных точек сливаются в один список); обычная точка →
+    // весь орг-каталог, как раньше. Всё серверно — обновление кассы не требуется.
+    const { data: companyRow } = await supabase
+      .from('companies')
+      .select('organization_id, store_enabled')
+      .eq('id', device.company_id)
+      .maybeSingle()
+    const catalogOrgId = (companyRow as any)?.organization_id || (await resolveCompanyOrganizationId(supabase, device.company_id))
+    const isStore = (companyRow as any)?.store_enabled === true
 
     const [items, showcaseMap, { data: sales, error: salesError }] =
       await Promise.all([
-        fetchAllPages((from, to) =>
-          supabase
+        fetchAllPages((from, to) => {
+          let q = supabase
             .from('inventory_items')
             .select('id, name, barcode, unit, sale_price, item_type, image_url, category:category_id(id, name)')
-            .eq('organization_id', catalogOrgId)
             .eq('is_active', true)
             .neq('item_type', 'consumable')
-            .order('name', { ascending: true })
-            .order('id')
-            .range(from, to),
-        ),
+          if (isStore) q = q.eq('company_id', device.company_id)
+          else q = q.eq('organization_id', catalogOrgId)
+          return q.order('name', { ascending: true }).order('id').range(from, to)
+        }),
         fetchShowcaseBalances({ supabase, catalogId: stock.catalogId, warehouseId: stock.warehouseId, showcaseId: stock.showcaseId }),
         supabase
           .from('point_sales')
