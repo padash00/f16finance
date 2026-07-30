@@ -25,13 +25,18 @@ const LS_KEY = 'store.companyId'
 export function StoreCompanyProvider({ children }: { children: React.ReactNode }) {
   const [companies, setCompanies] = useState<StoreCompany[]>([])
   const [loading, setLoading] = useState(true)
-  const [companyId, setCompanyIdState] = useState<string>('')
+  // ВАЖНО: инициализируем выбранную точку СИНХРОННО из localStorage на первом
+  // рендере. Иначе companyId стартует с '' и после загрузки конфига прыгает на
+  // точку → у страниц, чей запрос зависит от точки, меняется URL → useApiCache
+  // сбрасывает данные и перезагружает (полное «мигание» страницы). С синхронной
+  // инициализацией точка корректна с первого рендера — лишнего цикла нет.
+  const [companyId, setCompanyIdState] = useState<string>(() => {
+    if (typeof window === 'undefined') return ''
+    try { return window.localStorage.getItem(LS_KEY) || '' } catch { return '' }
+  })
 
   useEffect(() => {
     let ignore = false
-    // Сохранённый в браузере выбор имеет приоритет; иначе дефолт — стартовая
-    // точка (store_company_id), иначе «Общий». Список — ТОЛЬКО точки-магазины
-    // (store_enabled), их же показывает переключатель.
     let saved: string | null = null
     try { saved = window.localStorage.getItem(LS_KEY) } catch {}
     const hasSaved = saved !== null
@@ -49,7 +54,10 @@ export function StoreCompanyProvider({ children }: { children: React.ReactNode }
         const defaultPoint = (cfgJson?.data?.store_company_id as string | null) || ''
         const initial = hasSaved ? String(saved) : defaultPoint
         // Выбор валиден только если он среди магазинов; иначе «Общий».
-        setCompanyIdState(initial && shops.some((c) => c.id === initial) ? initial : '')
+        const resolved = initial && shops.some((c) => c.id === initial) ? initial : ''
+        // Валидация конфигом: меняем состояние ТОЛЬКО если значение отличается —
+        // иначе React пропустит ре-рендер (нет лишнего мигания при верном LS).
+        setCompanyIdState((prev) => (prev === resolved ? prev : resolved))
       })
       .finally(() => { if (!ignore) setLoading(false) })
     return () => { ignore = true }
