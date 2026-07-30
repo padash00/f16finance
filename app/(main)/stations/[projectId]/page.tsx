@@ -1925,6 +1925,36 @@ function StationsPageContent() {
       <div className="space-y-4">
         {activeTab === 'manage' && (
           <div className="space-y-4">
+            {/* Живой обзор занятости — считаем по тем же presence-правилам, что и станции */}
+            {stations.length > 0 && (() => {
+              let busy = 0, online = 0
+              for (const s of stations) {
+                const p = kioskStationPresence(s)
+                if (p.busy) busy++
+                if (p.online) online++
+              }
+              const free = Math.max(0, stations.length - busy)
+              const load = stations.length > 0 ? Math.round((busy / stations.length) * 100) : 0
+              const kpis = [
+                { label: 'Станций', value: stations.length, tone: 'text-foreground', dot: 'bg-slate-400' },
+                { label: 'Занято', value: busy, tone: 'text-amber-600 dark:text-amber-400', dot: 'bg-amber-500' },
+                { label: 'Свободно', value: free, tone: 'text-emerald-600 dark:text-emerald-400', dot: 'bg-emerald-500' },
+                { label: 'Онлайн', value: online, tone: 'text-sky-600 dark:text-sky-400', dot: 'bg-sky-500' },
+                { label: 'Загрузка', value: `${load}%`, tone: 'text-foreground', dot: 'bg-violet-500' },
+              ]
+              return (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                  {kpis.map(k => (
+                    <div key={k.label} className="rounded-xl border border-border bg-card px-4 py-3">
+                      <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                        <span className={`h-1.5 w-1.5 rounded-full ${k.dot}`} aria-hidden />{k.label}
+                      </div>
+                      <div className={`mt-0.5 text-2xl font-bold ${k.tone}`}>{k.value}</div>
+                    </div>
+                  ))}
+                </div>
+              )
+            })()}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <h2 className="text-base font-semibold">Зоны и станции</h2>
@@ -2010,7 +2040,7 @@ function StationsPageContent() {
               const collapsed = Boolean(collapsedZones[zone.id])
               const zColor = zone.color ?? '#3b82f6'
               return (
-                <div key={zone.id} className="rounded-xl border border-border bg-card overflow-hidden">
+                <div key={zone.id} className="rounded-xl border border-border bg-card overflow-hidden" style={{ boxShadow: `inset 3px 0 0 ${zColor}` }}>
                   <div className="flex items-center gap-1 border-b border-border bg-surface-muted px-2 py-2 sm:px-3">
                     <button
                       type="button"
@@ -2069,8 +2099,25 @@ function StationsPageContent() {
                       ) : (
                         <>
                           <span className="truncate font-semibold text-sm">{zone.name}</span>
-                          <span className="shrink-0 rounded-full bg-slate-100 dark:bg-white/5 px-2 py-0.5 text-xs text-muted-foreground">{zoneStations.length} ст.</span>
+                          {zoneStations.length > 0 && (() => {
+                            const zb = zoneStations.reduce((n, s) => n + (kioskStationPresence(s).busy ? 1 : 0), 0)
+                            return (
+                              <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${zb > 0 ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400' : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'}`}>
+                                {zb > 0 ? `занято ${zb}/${zoneStations.length}` : `свободно ${zoneStations.length}`}
+                              </span>
+                            )
+                          })()}
                           <span className="shrink-0 rounded-full bg-slate-100 dark:bg-white/5 px-2 py-0.5 text-xs text-muted-foreground">{zoneTariffs.length} тар.</span>
+                          {(() => {
+                            const fixed = zoneTariffs.filter(t => t.tariff_type === 'fixed' && t.is_active && t.price > 0)
+                            if (fixed.length === 0) return null
+                            const min = Math.min(...fixed.map(t => t.price))
+                            return (
+                              <span className="shrink-0 rounded-full bg-slate-100 dark:bg-white/5 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                от {formatPrice(min)}
+                              </span>
+                            )
+                          })()}
                           {zone.extension_hourly_price != null && zone.extension_hourly_price > 0 && (
                             <span className="shrink-0 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
                               час {formatPrice(zone.extension_hourly_price)}
