@@ -140,6 +140,7 @@ export default function InventorySalesPageMinimal({
   const [simpleShiftId, setSimpleShiftId] = useState<string | null>(null)
   const [simpleShiftBusy, setSimpleShiftBusy] = useState(false)
   const [confirmCloseShift, setConfirmCloseShift] = useState(false)
+  const [shiftChecked, setShiftChecked] = useState(false) // статус смены проверен (чтобы не мигать промптом)
   const [zReport, setZReport] = useState<any | null>(null) // данные Z для модалки-превью
   const zReportIframeRef = useRef<HTMLIFrameElement | null>(null)
   useEffect(() => {
@@ -148,6 +149,7 @@ export default function InventorySalesPageMinimal({
     api.getCurrentPointShift(config, session.company.id)
       .then((info) => { if (!cancel) setSimpleShiftId(info?.id || null) })
       .catch(() => { if (!cancel) setSimpleShiftId(null) })
+      .finally(() => { if (!cancel) setShiftChecked(true) })
     return () => { cancel = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [simpleClose])
@@ -1941,6 +1943,24 @@ export default function InventorySalesPageMinimal({
                 className="h-12 rounded-xl text-base font-semibold sm:order-2 sm:px-8"
               >
                 🖨 Печатать чек
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Промпт открытия смены (упрощённый режим): смена не открыта → предлагаем открыть */}
+      {simpleClose && shiftChecked && !simpleShiftId && !zReport && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-card text-card-foreground shadow-xl">
+            <div className="border-b border-border px-5 py-4">
+              <h3 className="text-lg font-semibold">Смена не открыта</h3>
+              <p className="mt-1 text-sm text-muted-foreground">Чтобы начать продажи, откройте смену. Вводить ничего не нужно.</p>
+            </div>
+            <div className="flex justify-between gap-3 p-4">
+              <Button variant="outline" onClick={onLogout} disabled={simpleShiftBusy} className="h-11 px-6">Выйти</Button>
+              <Button onClick={() => void handleSimpleOpenShift()} disabled={simpleShiftBusy} className="h-11 px-6 bg-emerald-600 text-white hover:bg-emerald-700">
+                {simpleShiftBusy ? 'Открываю…' : 'Открыть смену'}
               </Button>
             </div>
           </div>
