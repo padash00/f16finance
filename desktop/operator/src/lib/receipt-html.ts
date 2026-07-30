@@ -36,6 +36,9 @@ export type SaleReceiptPreview = {
   originalSaleDate?: string | null
   originalSaleTime?: string | null
   refundReason?: string | null
+  // QR на онлайн-чек продажи (data URI) + ссылка. Наводишь камеру → чек в браузере.
+  qrDataUrl?: string | null
+  onlineUrl?: string | null
   lines: Array<{
     name: string
     quantity: number
@@ -259,6 +262,10 @@ export function buildReceiptHtml(preview: SaleReceiptPreview) {
         ${copyFooter}
         <div class="fiscal">ФП: ${fiscalSign}</div>
         <div class="placeholder-note">фискализация: тестовый режим</div>
+        ${preview.qrDataUrl ? `<div style="margin-top:10px;text-align:center;">
+          <img src="${preview.qrDataUrl}" style="width:120px;height:120px;" alt="QR" />
+          <div class="muted" style="margin-top:2px;">Чек онлайн — наведите камеру</div>
+        </div>` : ''}
         ${footerExtra}
       </div>
     </div>
@@ -344,15 +351,77 @@ export function buildShiftReportHtml(r: any): string {
     <div class="row"><span>Баланс кассы (нал)</span><span>${money(Number(r.openingCash || 0) + Number(r.cashSales || 0))}</span></div>
     <div class="line"></div>
     <div class="row tot"><span>ИТОГО ВЫРУЧКА</span><span>${money(r.total)}</span></div>
-    ${r.qrDataUrl ? `<div class="line"></div>
-    <div class="c">
-      <img src="${r.qrDataUrl}" style="width:118px;height:118px" alt="QR" />
-      <div class="mut">Чек онлайн — наведите камеру</div>
-      ${r.onlineUrl ? `<div class="mut" style="font-size:9px;word-break:break-all">${esc(r.onlineUrl)}</div>` : ''}
-    </div>` : ''}
     <div class="line"></div>
     <div class="c mut">Напечатано: ${new Date().toLocaleString('ru-RU')}</div>
     <div class="c mut">Управленческий отчёт, не является фискальным чеком</div>
+    </body></html>`
+}
+
+/** Полный отчёт по смене (A4) — как на /store/shifts: реквизиты, сводка, позиции, долги.
+ *  Для превью в iframe и печати (без авто-печати). */
+export function buildShiftFullReportHtml(r: any): string {
+  if (!r) return ''
+  const esc = (s: any) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string))
+  const money = (n: number) => `${Math.round(Number(n || 0)).toLocaleString('ru-RU')} ₸`
+  const num = (n: number) => Number(n || 0).toLocaleString('ru-RU')
+  const dts = (s: string | null) => (s ? new Date(s).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—')
+  const req = r.requisites || {}
+  const income = Number(r.total || 0) - Number(r.returns || 0)
+  const cashBalance = Number(r.openingCash || 0) + Number(r.cashSales || 0)
+  const positions = Array.isArray(r.positions) ? r.positions : []
+  const debts = Array.isArray(r.debts) ? r.debts : []
+  const kv = (label: string, value: string) => `<div style="display:flex;justify-content:space-between;gap:16px;padding:2px 0"><span style="color:#64748b">${esc(label)}</span><span style="font-weight:600">${esc(value)}</span></div>`
+  const card = (title: string, body: string) => `<div style="border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;break-inside:avoid"><div style="font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#334155;margin-bottom:8px">${esc(title)}</div>${body}</div>`
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Отчёт по смене №${esc(r.shiftNumber)}</title>
+    <style>@page{size:A4;margin:14mm}*{box-sizing:border-box}
+    body{font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#0f172a;margin:0}
+    table{width:100%;border-collapse:collapse;font-size:12px}
+    th,td{padding:6px 8px;border-bottom:1px solid #e2e8f0;text-align:left}
+    th{background:#f8fafc;font-size:11px;text-transform:uppercase;letter-spacing:.3px;color:#475569}
+    td.r,th.r{text-align:right}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .tot{font-size:18px;font-weight:800}</style></head>
+    <body>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:14px">
+      <div>
+        <div style="font-size:20px;font-weight:800">${esc(req.name || r.pointName || 'ORDA POINT')}</div>
+        ${req.bin ? `<div style="color:#64748b;font-size:12px">БИН/ИИН ${esc(req.bin)}</div>` : ''}
+        ${req.address ? `<div style="color:#64748b;font-size:12px">${esc(req.address)}</div>` : ''}
+        ${req.kkmReg ? `<div style="color:#64748b;font-size:12px">ККМ: ${esc(req.kkmReg)}</div>` : ''}
+        ${req.ofd ? `<div style="color:#64748b;font-size:12px">ОФД: ${esc(req.ofd)}</div>` : ''}
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:16px;font-weight:800">ОТЧЁТ ПО СМЕНЕ</div>
+        <div style="color:#64748b;font-size:12px">Смена №${esc(r.shiftNumber)}</div>
+        ${r.pointName ? `<div style="color:#64748b;font-size:12px">Точка: ${esc(r.pointName)}</div>` : ''}
+      </div>
+    </div>
+
+    <div class="grid" style="margin-bottom:14px">
+      ${card('Смена', kv('Кассир', r.cashier || '—') + kv('Открыта', dts(r.openedAt)) + kv('Закрыта', dts(r.closedAt)) + kv('Чеков', String(r.checkCount)))}
+      ${card('Касса', kv('Старт кассы', money(r.openingCash)) + kv('Наличные продаж', money(r.cashSales)) + kv('Баланс кассы (нал)', money(cashBalance)))}
+    </div>
+
+    <div class="grid" style="margin-bottom:14px">
+      ${card('Продажи', kv(`Наличные · ${num(r.cashCount)} чек`, money(r.cashSales)) + kv(`Карта · ${num(r.kaspiCount)} чек`, money(r.kaspiSales)) + kv('Возвраты', money(r.returns)) + kv('Доход', money(income)))}
+      ${card('Итог', `<div class="tot" style="text-align:right">${money(r.total)}</div><div style="text-align:right;color:#64748b;font-size:12px">Выручка за смену</div>`)}
+    </div>
+
+    ${positions.length ? `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#334155;margin:8px 0 6px">Позиции (${positions.length})</div>
+    <table>
+      <thead><tr><th>Товар</th><th class="r">Продано</th><th>Ед.</th><th class="r">Остаток</th><th class="r">Сумма</th></tr></thead>
+      <tbody>${positions.map((p: any) => `<tr><td>${esc(p.name)}</td><td class="r">${num(p.sold)}</td><td>${esc(p.unit || '')}</td><td class="r">${num(p.stock)}</td><td class="r">${money(p.amount)}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><td colspan="4" style="text-align:right;font-weight:700">Итого товаров</td><td class="r" style="font-weight:700">${money(r.goodsTotal)}</td></tr></tfoot>
+    </table>` : ''}
+
+    ${debts.length ? `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#334155;margin:14px 0 6px">Долги за смену (${debts.length})</div>
+    <table>
+      <thead><tr><th>Должник</th><th>Товар</th><th class="r">Кол-во</th><th class="r">Сумма</th></tr></thead>
+      <tbody>${debts.map((d: any) => `<tr><td>${esc(d.debtor)}</td><td>${esc(d.item)}</td><td class="r">${num(d.quantity)}</td><td class="r">${money(d.amount)}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><td colspan="3" style="text-align:right;font-weight:700">Итого долгов</td><td class="r" style="font-weight:700">${money(r.debtsTotal)}</td></tr></tfoot>
+    </table>` : ''}
+
+    <div style="margin-top:18px;color:#94a3b8;font-size:11px;text-align:center">Напечатано: ${new Date().toLocaleString('ru-RU')} · Управленческий отчёт, не является фискальным чеком</div>
     </body></html>`
 }
 

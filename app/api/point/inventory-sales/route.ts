@@ -4,6 +4,7 @@ import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { humanizeDbError } from '@/lib/server/db-error-humanize'
 import { createPointInventorySale } from '@/lib/server/repositories/inventory'
 import { requirePointDevice, resolveCompanyOrganizationId } from '@/lib/server/point-devices'
+import { buildSaleReceiptUrl } from '@/lib/server/sale-receipt'
 import { requireCurrentOpenShiftId } from '@/lib/server/point-shifts'
 import { checkAndNotifyLowStock } from '@/lib/server/low-stock-notifier'
 
@@ -1040,12 +1041,17 @@ export async function POST(request: Request) {
       checkAndNotifyLowStock(soldItemIds, stock.showcaseId).catch(() => null)
     }
 
+    const receiptUrl = sale?.sale_id
+      ? await buildSaleReceiptUrl(supabase, device.company_id, String(sale.sale_id)).catch(() => null)
+      : null
+
     return json({
       ok: true,
       data: {
         sale_id: sale?.sale_id || null,
         total_amount: sale?.total_amount || 0,
         sold_at: savedSale?.sold_at || null,
+        receipt_url: receiptUrl,
         customer_id: loyaltyResult?.customerId || null,
         loyalty_points_earned: loyaltyResult?.pointsEarned || 0,
         loyalty_points_spent: loyaltyResult?.pointsSpent || 0,

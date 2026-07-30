@@ -19,6 +19,8 @@ type PointFeatureFlags = {
   arena_defer_income_to_shift?: boolean
   /** Упрощённое закрытие: вкладка «Смена» скрыта, кнопка закрытия в «Продажах» → Z-чек из продаж. */
   simple_shift_close?: boolean
+  /** При закрытии показывать полный отчёт (A4), а не короткий чековый Z. */
+  simple_close_full_report?: boolean
 }
 
 type CompanyAssignment = {
@@ -96,6 +98,9 @@ function normalizeFlags(input: Partial<PointFeatureFlags> | null | undefined): P
   if (input?.simple_shift_close !== undefined) {
     flags.simple_shift_close = input.simple_shift_close === true
   }
+  if (input?.simple_close_full_report !== undefined) {
+    flags.simple_close_full_report = input.simple_close_full_report === true
+  }
   return flags
 }
 
@@ -111,6 +116,7 @@ function normalizeAssignmentFlags(input: Partial<PointFeatureFlags> | null | und
     'arena_shift_auto_totals',
     'arena_defer_income_to_shift',
     'simple_shift_close',
+    'simple_close_full_report',
   ]
   const flags: Partial<PointFeatureFlags> = {}
   for (const key of allowedKeys) {

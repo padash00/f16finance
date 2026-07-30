@@ -51,6 +51,7 @@ import {
   beep,
   buildReceiptHtmlForPreview,
   buildShiftReportHtml,
+  buildShiftFullReportHtml,
   formatShiftLabel,
   printReceiptFromIframe,
   type SaleReceiptPreview,
@@ -137,6 +138,7 @@ export default function InventorySalesPageMinimal({
 
   // Упрощённое закрытие смены — кнопкой здесь (вкладки «Смена» нет).
   const simpleClose = (bootstrap.device.feature_flags as any)?.simple_shift_close === true
+  const fullCloseReport = (bootstrap.device.feature_flags as any)?.simple_close_full_report === true // A4 вместо чекового Z
   const [simpleShiftId, setSimpleShiftId] = useState<string | null>(null)
   const [simpleShiftBusy, setSimpleShiftBusy] = useState(false)
   const [confirmCloseShift, setConfirmCloseShift] = useState(false)
@@ -200,14 +202,7 @@ export default function InventorySalesPageMinimal({
       const report = await api.getPointShiftReport(config, shiftId, session.company.id).catch(() => null)
       setSimpleShiftId(null)
       if (report) {
-        // QR на онлайн-чек (поддомен организации). Не критично — если не вышло, чек без QR.
-        try {
-          if ((report as any).onlineUrl) {
-            const QRCode = (await import('qrcode')).default
-            ;(report as any).qrDataUrl = await QRCode.toDataURL(String((report as any).onlineUrl), { margin: 1, width: 240 })
-          }
-        } catch { /* QR не критичен */ }
-        setZReport(report) // показываем модалку с превью Z; закрытие модалки → выход
+        setZReport(report) // показываем модалку с превью отчёта; закрытие модалки → выход
       } else {
         toastSuccess('Смена закрыта')
         onLogout()
@@ -1068,8 +1063,18 @@ export default function InventorySalesPageMinimal({
 
     try {
       const result = await api.createPointInventorySale(config, session, salePayload as any)
-      // Тихо обновляем id в превью чека на настоящий
-      setLastReceipt((prev) => prev && prev.saleId === ref ? { ...prev, saleId: result?.sale_id || ref } : prev)
+      // Тихо обновляем id в превью чека на настоящий + QR на онлайн-чек продажи.
+      const receiptUrl = (result as any)?.receipt_url || null
+      let qrDataUrl: string | null = null
+      if (receiptUrl) {
+        try {
+          const QRCode = (await import('qrcode')).default
+          qrDataUrl = await QRCode.toDataURL(String(receiptUrl), { margin: 1, width: 240 })
+        } catch { /* QR не критичен */ }
+      }
+      setLastReceipt((prev) => prev && prev.saleId === ref
+        ? { ...prev, saleId: result?.sale_id || ref, onlineUrl: receiptUrl, qrDataUrl }
+        : prev)
       toastSuccess('Продажа сохранена')
       beep('ok')
       void load(true)
@@ -2007,13 +2012,14 @@ export default function InventorySalesPageMinimal({
         </div>
       )}
 
-      {/* Z-отчёт после закрытия — превью внутри программы, печать по кнопке, закрытие → выход */}
+      {/* Отчёт после закрытия — превью внутри программы, печать по кнопке, закрытие → выход.
+          Формат: полный A4 (флаг simple_close_full_report) или короткий чековый Z. */}
       {zReport && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4">
-          <div className="flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-card text-card-foreground shadow-xl">
+          <div className={`flex max-h-[94vh] w-full flex-col overflow-hidden rounded-2xl bg-card text-card-foreground shadow-xl ${fullCloseReport ? 'max-w-4xl' : 'max-w-lg'}`}>
             <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
               <div>
-                <h3 className="text-lg font-semibold">Смена закрыта · Z-отчёт</h3>
+                <h3 className="text-lg font-semibold">Смена закрыта · {fullCloseReport ? 'Отчёт по смене' : 'Z-отчёт'}</h3>
                 <p className="text-xs text-muted-foreground">Смена №{zReport.shiftNumber}</p>
               </div>
               <button type="button" onClick={finishZReport} className="grid h-9 w-9 place-items-center rounded-xl text-muted-foreground hover:bg-accent hover:text-foreground">
@@ -2021,14 +2027,19 @@ export default function InventorySalesPageMinimal({
               </button>
             </div>
             <div className="flex-1 overflow-auto bg-muted p-3 sm:p-5">
-              <div className="mx-auto w-full max-w-[400px] overflow-hidden rounded-lg bg-white shadow-md">
-                <iframe ref={zReportIframeRef} srcDoc={buildShiftReportHtml(zReport)} title="Z-отчёт" className="h-[60vh] w-full border-0" />
+              <div className={`mx-auto w-full overflow-hidden rounded-lg bg-white shadow-md ${fullCloseReport ? 'max-w-[800px]' : 'max-w-[400px]'}`}>
+                <iframe
+                  ref={zReportIframeRef}
+                  srcDoc={fullCloseReport ? buildShiftFullReportHtml(zReport) : buildShiftReportHtml(zReport)}
+                  title="Отчёт по смене"
+                  className={`w-full border-0 ${fullCloseReport ? 'h-[70vh]' : 'h-[60vh]'}`}
+                />
               </div>
             </div>
             <div className="flex flex-col gap-2 border-t border-border p-4 sm:flex-row sm:justify-end sm:gap-3 sm:p-5">
               <Button variant="outline" onClick={finishZReport} className="h-12 sm:order-1 sm:px-6">Закрыть и выйти</Button>
               <Button onClick={() => printReceiptFromIframe(zReportIframeRef.current)} className="h-12 rounded-xl text-base font-semibold sm:order-2 sm:px-8">
-                🖨 Печать Z
+                🖨 Печать
               </Button>
             </div>
           </div>

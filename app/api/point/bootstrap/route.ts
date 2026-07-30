@@ -21,6 +21,8 @@ function normalizeFlags(input: Record<string, unknown> | null | undefined) {
     arena_defer_income_to_shift: input?.arena_defer_income_to_shift === true,
     /** Упрощённое закрытие смены: «Смена» скрыта, кнопка закрытия в «Продажах» → Z-чек из продаж. */
     simple_shift_close: input?.simple_shift_close === true,
+    /** При закрытии показывать полный отчёт (A4), а не короткий чековый Z. */
+    simple_close_full_report: input?.simple_close_full_report === true,
   }
 }
 

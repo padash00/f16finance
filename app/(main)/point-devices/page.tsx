@@ -45,6 +45,7 @@ type PointFeatureFlags = {
   arena_shift_auto_totals: boolean
   arena_defer_income_to_shift: boolean
   simple_shift_close: boolean
+  simple_close_full_report: boolean
 }
 
 type CompanyAssignment = {
@@ -101,6 +102,7 @@ const DEFAULT_FLAGS: PointFeatureFlags = {
   arena_shift_auto_totals: false,
   arena_defer_income_to_shift: false,
   simple_shift_close: false,
+  simple_close_full_report: false,
 }
 
 const DEFAULT_FORM: ProjectForm = {
@@ -169,6 +171,11 @@ const PROJECT_FLAG_OPTIONS: Array<{
     label: 'Упрощённое закрытие смены',
     hint: 'Вкладка «Смена» скрыта. В «Продажах» кнопка «Закрытие смены» — печатает Z-чек из продаж, оператор ничего не вводит.',
   },
+  {
+    key: 'simple_close_full_report',
+    label: 'Полный отчёт при закрытии (A4)',
+    hint: 'При закрытии показывать полный отчёт по смене (позиции, разбивка), как на /store/shifts, а не короткий чековый Z. Работает вместе с «Упрощённым закрытием».',
+  },
 ]
 
 const POINT_OVERRIDE_OPTIONS = PROJECT_FLAG_OPTIONS.filter((option) => option.key !== 'shift_report' && option.key !== 'income_report')
@@ -197,6 +204,7 @@ function emptyAssignment(company_id: string): CompanyAssignment {
       arena_shift_auto_totals: null,
       arena_defer_income_to_shift: null,
       simple_shift_close: null,
+      simple_close_full_report: null,
     },
   }
 }
@@ -603,6 +611,7 @@ export default function PointDevicesPage() {
           arena_shift_auto_totals: (c.feature_flags as any)?.arena_shift_auto_totals ?? null,
           arena_defer_income_to_shift: (c.feature_flags as any)?.arena_defer_income_to_shift ?? null,
           simple_shift_close: (c.feature_flags as any)?.simple_shift_close ?? null,
+          simple_close_full_report: (c.feature_flags as any)?.simple_close_full_report ?? null,
         },
       })),
       shift_report_chat_id: project.shift_report_chat_id || '',
@@ -617,6 +626,7 @@ export default function PointDevicesPage() {
         arena_shift_auto_totals: project.feature_flags.arena_shift_auto_totals === true,
         arena_defer_income_to_shift: project.feature_flags.arena_defer_income_to_shift === true,
         simple_shift_close: project.feature_flags.simple_shift_close === true,
+        simple_close_full_report: project.feature_flags.simple_close_full_report === true,
       },
     })
   }
