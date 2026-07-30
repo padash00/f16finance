@@ -62,6 +62,10 @@ export function useApiCache<T>(url: string | null, options: UseApiCacheOptions =
   const [error, setError] = useState<string | null>(null)
   // Отбрасываем ответы устаревших запросов (быстрое переключение фильтров)
   const requestSeq = useRef(0)
+  // Уже показывали данные хотя бы раз? Тогда при смене url НЕ обнуляем экран
+  // (иначе последовательная гидрация фильтров/точки из localStorage меняет url
+  // несколько раз подряд → страница мигает скелетоном 3-4 раза).
+  const shownOnceRef = useRef(hasFresh)
 
   const load = useCallback(
     async (background: boolean) => {
@@ -77,6 +81,7 @@ export function useApiCache<T>(url: string | null, options: UseApiCacheOptions =
         cache.set(target, { data: payload, ts: Date.now() })
         if (seq !== requestSeq.current) return
         setData(payload)
+        shownOnceRef.current = true
         setError(null)
       } catch (e: any) {
         if (seq !== requestSeq.current) return
@@ -96,8 +101,14 @@ export function useApiCache<T>(url: string | null, options: UseApiCacheOptions =
     if (isFresh) {
       setData(entry!.data as T)
       setLoading(false)
+      shownOnceRef.current = true
+      void load(true)
+    } else if (shownOnceRef.current) {
+      // Уже что-то показывали (сменился url после первой загрузки) — держим
+      // прошлые данные на экране и тихо догружаем новые, без скелетона-мигания.
       void load(true)
     } else {
+      // Самая первая загрузка — показываем скелетон.
       setData(null)
       void load(false)
     }
