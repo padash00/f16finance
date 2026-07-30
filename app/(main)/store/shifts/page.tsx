@@ -322,6 +322,7 @@ function ShiftDetail({ id, onClose, onChanged }: { id: string; onClose: () => vo
   const [closeErr, setCloseErr] = useState<string | null>(null)
   const [confirmClose, setConfirmClose] = useState(false)
   const [note, setNote] = useState('')
+  const [receiptSaleId, setReceiptSaleId] = useState<string | null>(null) // чек по клику на продажу
 
   async function handleForceClose() {
     setClosing(true); setCloseErr(null)
@@ -431,7 +432,13 @@ function ShiftDetail({ id, onClose, onChanged }: { id: string; onClose: () => vo
                   const items = (s.items || []) as any[]
                   const names = items.map((it) => (it.item?.name || it.universal_name)).filter(Boolean)
                   return (
-                    <div key={s.id} className="flex items-center gap-3 px-3 py-2.5">
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setReceiptSaleId(String(s.id))}
+                      title="Открыть чек продажи"
+                      className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-slate-50 dark:hover:bg-white/5"
+                    >
                       <div className="w-10 shrink-0 text-xs tabular-nums text-muted-foreground">{tm(s.sold_at)}</div>
                       <span className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[11px] font-medium ${chip}`}>{PAY_LABEL[s.payment_method] || s.payment_method}</span>
                       <div className="min-w-0 flex-1">
@@ -439,7 +446,7 @@ function ShiftDetail({ id, onClose, onChanged }: { id: string; onClose: () => vo
                         {s.operator?.full_name || s.operator?.short_name ? <div className="text-[11px] text-slate-500">{s.operator?.full_name || s.operator?.short_name}</div> : null}
                       </div>
                       <div className="shrink-0 text-sm font-semibold tabular-nums text-foreground">{fmt(s.total_amount)} ₸</div>
-                    </div>
+                    </button>
                   )
                 })}
               </div>
@@ -515,6 +522,34 @@ function ShiftDetail({ id, onClose, onChanged }: { id: string; onClose: () => vo
           </div>
         )}
       </div>
+
+      {/* Чек продажи по клику — как в операторской (публичная страница /r/<saleId>) */}
+      {receiptSaleId && (
+        <div className="absolute inset-0 z-20 grid place-items-center bg-black/70 p-4" onClick={() => setReceiptSaleId(null)}>
+          <div className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-card shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <span className="text-sm font-semibold text-foreground">Чек продажи</span>
+              <button type="button" onClick={() => setReceiptSaleId(null)} className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/5 hover:text-foreground"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="flex-1 overflow-auto bg-white">
+              <iframe
+                id="shift-sale-receipt-iframe"
+                src={`/r/${receiptSaleId}`}
+                title="Чек продажи"
+                className="h-[70vh] w-full border-0"
+              />
+            </div>
+            <div className="flex justify-end gap-2 border-t border-border p-3">
+              <button type="button" onClick={() => setReceiptSaleId(null)} className="rounded-xl border border-border bg-white dark:bg-white/5 px-4 py-2 text-sm text-body hover:bg-slate-50 dark:hover:bg-white/10">Закрыть</button>
+              <button
+                type="button"
+                onClick={() => { try { (document.getElementById('shift-sale-receipt-iframe') as HTMLIFrameElement | null)?.contentWindow?.print() } catch { /* noop */ } }}
+                className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+              >🖨 Печать</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>,
     document.body,
   )
