@@ -50,6 +50,7 @@ import { getCachedSalesContext, saveSalesContextCache } from '@/lib/cache'
 import {
   beep,
   buildReceiptHtmlForPreview,
+  buildShiftReportHtml,
   formatShiftLabel,
   printReceiptFromIframe,
   type SaleReceiptPreview,
@@ -108,6 +109,19 @@ const UNIVERSAL_PRODUCT_PREFIX = 'universal:'
  */
 const QTY_CONFIRM_THRESHOLD = 10
 
+/** Печать Z-отчёта смены: buildShiftReportHtml без авто-печати → впрыскиваем onload-print. */
+function printZReportHtml(html: string) {
+  const w = window.open('', '_blank', 'width=420,height=720')
+  if (!w) {
+    toastError('Не удалось открыть окно печати Z-отчёта')
+    return
+  }
+  const printScript = '<scr' + 'ipt>window.onload=function(){setTimeout(function(){window.print()},250)}</scr' + 'ipt>'
+  w.document.open()
+  w.document.write(html.replace('</body>', printScript + '</body>'))
+  w.document.close()
+}
+
 export default function InventorySalesPageMinimal({
   config,
   bootstrap,
@@ -133,6 +147,74 @@ export default function InventorySalesPageMinimal({
   const [search, setSearch] = useState('')
   const [cart, setCart] = useState<CartLine[]>([])
   const [comment, setComment] = useState('')
+
+  // Упрощённое закрытие смены — кнопкой здесь (вкладки «Смена» нет).
+  const simpleClose = (bootstrap.device.feature_flags as any)?.simple_shift_close === true
+  const [simpleShiftId, setSimpleShiftId] = useState<string | null>(null)
+  const [simpleShiftBusy, setSimpleShiftBusy] = useState(false)
+  useEffect(() => {
+    if (!simpleClose) return
+    let cancel = false
+    api.getCurrentPointShift(config, session.company.id)
+      .then((info) => { if (!cancel) setSimpleShiftId(info?.id || null) })
+      .catch(() => { if (!cancel) setSimpleShiftId(null) })
+    return () => { cancel = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [simpleClose])
+
+  async function handleSimpleOpenShift() {
+    if (simpleShiftBusy) return
+    setSimpleShiftBusy(true)
+    try {
+      const info = await api.openPointShift(
+        config,
+        session.operator.operator_id || null,
+        runtimeShift.shift === 'night' ? 'night' : 'day',
+        session.company.id,
+        0,
+      )
+      setSimpleShiftId(info?.id || null)
+      toastSuccess('Смена открыта')
+    } catch (e: any) {
+      toastError(e?.message || 'Не удалось открыть смену')
+    } finally {
+      setSimpleShiftBusy(false)
+    }
+  }
+
+  async function handleSimpleCloseShift() {
+    if (simpleShiftBusy) return
+    if (!window.confirm('Закрыть смену и напечатать Z-отчёт? Суммы берутся из продаж — вводить ничего не нужно.')) return
+    setSimpleShiftBusy(true)
+    try {
+      const open = simpleShiftId ? { id: simpleShiftId } : await api.getCurrentPointShift(config, session.company.id)
+      const shiftId = open?.id || null
+      if (!shiftId) { toastError('Нет открытой смены'); return }
+      const pre = await api.getPointShiftReport(config, shiftId, session.company.id).catch(() => null)
+      await api.closePointShift(
+        config,
+        {
+          shift_id: shiftId,
+          closed_by: session.operator.operator_id || null,
+          closing_cash: Number((pre as any)?.cashSales || 0),
+          closing_kaspi: Number((pre as any)?.kaspiSales || 0),
+        },
+        session.company.id,
+      )
+      const report = await api.getPointShiftReport(config, shiftId, session.company.id).catch(() => null)
+      if (report) {
+        printZReportHtml(buildShiftReportHtml(report))
+        toastSuccess('Смена закрыта, Z-отчёт напечатан')
+      } else {
+        toastSuccess('Смена закрыта')
+      }
+      setSimpleShiftId(null)
+    } catch (e: any) {
+      toastError(e?.message || 'Не удалось закрыть смену')
+    } finally {
+      setSimpleShiftBusy(false)
+    }
+  }
 
   // Оплата
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'kaspi' | 'mixed'>('cash')
@@ -1063,6 +1145,29 @@ export default function InventorySalesPageMinimal({
             onArena={onSwitchToArena}
             onCabinet={onOpenCabinet}
           />
+          {simpleClose ? (
+            simpleShiftId ? (
+              <Button
+                size="sm"
+                onClick={() => void handleSimpleCloseShift()}
+                disabled={simpleShiftBusy}
+                className="h-9 gap-1.5 bg-rose-600 text-white hover:bg-rose-700"
+                title="Закрыть смену и напечатать Z-отчёт"
+              >
+                {simpleShiftBusy ? '…' : 'Закрытие смены'}
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                onClick={() => void handleSimpleOpenShift()}
+                disabled={simpleShiftBusy}
+                className="h-9 gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700"
+                title="Открыть смену"
+              >
+                {simpleShiftBusy ? '…' : 'Открыть смену'}
+              </Button>
+            )
+          ) : null}
           <SyncIndicator status={syncStatus} lastSyncedAt={lastSyncedAt} />
           <Button
             variant="outline"
