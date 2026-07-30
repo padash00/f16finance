@@ -141,6 +141,7 @@ export default function InventorySalesPageMinimal({
   const [simpleShiftBusy, setSimpleShiftBusy] = useState(false)
   const [confirmCloseShift, setConfirmCloseShift] = useState(false)
   const [shiftChecked, setShiftChecked] = useState(false) // статус смены проверен (чтобы не мигать промптом)
+  const [openCashInput, setOpenCashInput] = useState('') // старт кассы при открытии смены
   const [zReport, setZReport] = useState<any | null>(null) // данные Z для модалки-превью
   const zReportIframeRef = useRef<HTMLIFrameElement | null>(null)
   useEffect(() => {
@@ -158,14 +159,16 @@ export default function InventorySalesPageMinimal({
     if (simpleShiftBusy) return
     setSimpleShiftBusy(true)
     try {
+      const startCash = Math.max(0, parseMoney(openCashInput))
       const info = await api.openPointShift(
         config,
         session.operator.operator_id || null,
         runtimeShift.shift === 'night' ? 'night' : 'day',
         session.company.id,
-        0,
+        startCash,
       )
       setSimpleShiftId(info?.id || null)
+      setOpenCashInput('')
       toastSuccess('Смена открыта')
     } catch (e: any) {
       toastError(e?.message || 'Не удалось открыть смену')
@@ -1954,10 +1957,22 @@ export default function InventorySalesPageMinimal({
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4">
           <div className="w-full max-w-md rounded-2xl bg-card text-card-foreground shadow-xl">
             <div className="border-b border-border px-5 py-4">
-              <h3 className="text-lg font-semibold">Смена не открыта</h3>
-              <p className="mt-1 text-sm text-muted-foreground">Чтобы начать продажи, откройте смену. Вводить ничего не нужно.</p>
+              <h3 className="text-lg font-semibold">Открытие смены</h3>
+              <p className="mt-1 text-sm text-muted-foreground">Укажите старт кассы — наличные в кассе на начало смены (можно 0).</p>
             </div>
-            <div className="flex justify-between gap-3 p-4">
+            <div className="px-5 py-4">
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted-foreground">Старт кассы, ₸</label>
+              <input
+                autoFocus
+                inputMode="numeric"
+                value={openCashInput}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOpenCashInput(e.target.value)}
+                onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter' && !simpleShiftBusy) void handleSimpleOpenShift() }}
+                placeholder="0"
+                className="h-12 w-full rounded-xl border border-border bg-background px-3 text-lg outline-none focus:border-primary/50"
+              />
+            </div>
+            <div className="flex justify-between gap-3 border-t border-border p-4">
               <Button variant="outline" onClick={onLogout} disabled={simpleShiftBusy} className="h-11 px-6">Выйти</Button>
               <Button onClick={() => void handleSimpleOpenShift()} disabled={simpleShiftBusy} className="h-11 px-6 bg-emerald-600 text-white hover:bg-emerald-700">
                 {simpleShiftBusy ? 'Открываю…' : 'Открыть смену'}
