@@ -266,12 +266,11 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  /* Фолбэк-фейд входа страницы — только там, где нет View Transitions API
-     (в поддерживающих браузерах кросс-фейд делает сам браузер, см. ниже). */
-  @supports not (view-transition-name: none) {
-    .orda-main-enter {
-      animation: orda-fade-up 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
-    }
+  /* Простой opacity-фейд входа страницы (View Transitions отключены — их
+     снапшот-кросс-фейд мельтешил с асинхронной загрузкой данных). Только opacity,
+     без transform — безопасно для position:fixed модалок. */
+  .orda-main-enter {
+    animation: orda-fade-up 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
   .orda-drawer-panel {

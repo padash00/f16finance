@@ -2,9 +2,10 @@
 const nextConfig = {
   generateBuildId: async () => process.env.GITHUB_SHA ?? null,
   experimental: {
-    // Плавные переходы между страницами (View Transitions API).
-    // Используется в app/(main)/template.tsx; в браузерах без поддержки — фолбэк-фейд из globals.css.
-    viewTransition: true,
+    // View Transitions ОТКЛЮЧЕНЫ: их снапшот старой→новой страницы кросс-фейдил
+    // и с асинхронной загрузкой данных (скелетон→данные) давал мельтешение на
+    // каждой странице. Вместо них — простой opacity-фейд .orda-main-enter (globals.css).
+    viewTransition: false,
   },
   images: {
     unoptimized: true,
