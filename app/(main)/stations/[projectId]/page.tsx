@@ -2586,7 +2586,12 @@ function StationsPageContent() {
             <div className="rounded-xl border border-border bg-card p-5 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-base font-semibold flex items-center gap-2"><Gamepad2 className="h-4 w-4 text-primary" /> Каталог игр</h2>
+                  <h2 className="text-base font-semibold flex items-center gap-2">
+                    <Gamepad2 className="h-4 w-4 text-primary" /> Каталог игр
+                    {gamesCatalog.length > 0 && (
+                      <span className="rounded-full border border-border bg-surface-muted px-2 py-0.5 text-xs font-normal text-muted-foreground">{gamesCatalog.length}</span>
+                    )}
+                  </h2>
                   <p className="text-xs text-muted-foreground mt-0.5">Добавляйте, редактируйте и удаляйте игры. Назначайте их по зонам сразу всем станциям.</p>
                 </div>
               </div>
@@ -2648,10 +2653,10 @@ function StationsPageContent() {
                 </div>
               )}
 
-              {/* Games table */}
-              <div className="space-y-1">
+              {/* Games grid — на широкой странице карточки в 2-3 колонки */}
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {gamesCatalog.length === 0 && (
-                  <div className="rounded-lg border border-dashed border-border py-10 text-center text-muted-foreground">
+                  <div className="col-span-full rounded-lg border border-dashed border-border py-10 text-center text-muted-foreground">
                     <Gamepad2 className="mx-auto h-8 w-8 mb-2 opacity-30" />
                     <p className="text-sm">Каталог пуст. Добавьте первую игру выше.</p>
                   </div>
@@ -2814,7 +2819,7 @@ function StationsPageContent() {
                   ].map(({ label, value, icon: Icon, color }) => (
                     <div key={label} className="rounded-xl border border-border bg-card p-4">
                       <div className={`flex items-center gap-1.5 text-xs mb-1 ${color}`}><Icon className="h-3.5 w-3.5" />{label}</div>
-                      <p className="text-lg font-bold">{value}</p>
+                      <p className="text-2xl font-bold">{value}</p>
                     </div>
                   ))}
                 </div>
@@ -2964,7 +2969,7 @@ function StationsPageContent() {
         )}
 
         {activeTab === 'settings' && (
-          <div className="space-y-6">
+          <div className="max-w-4xl space-y-6">
             {/* Cover preview */}
             {brandingCoverUrl && (
               <div
