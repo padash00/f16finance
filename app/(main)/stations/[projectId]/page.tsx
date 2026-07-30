@@ -1810,7 +1810,7 @@ function StationsPageContent() {
   )
 
   return (
-    <div className={activeTab === 'map' ? 'app-page app-page-wide space-y-4' : activeTab === 'catalog' ? 'app-page max-w-4xl space-y-4' : activeTab === 'settings' ? 'app-page max-w-2xl space-y-4' : 'app-page max-w-5xl space-y-6'}>
+    <div className={`app-page-wide ${activeTab === 'manage' ? 'space-y-6' : 'space-y-4'}`}>
       {/* Header */}
       <AdminPageHeader
         title={projectName || 'Игровая зона'}
