@@ -322,6 +322,22 @@ export default function IncomePage() {
     if (f && isISO(f)) setDateFrom(f)
     if (t && isISO(t)) setDateTo(t)
   }, [])
+
+  // Пресетный период (Сегодня/Неделя/Месяц/Все время) пересчитываем под СЕГОДНЯ при
+  // каждом заходе — иначе сохранённый в localStorage диапазон «застывает» (был выбран
+  // «неделя», а показывается период прошлого визита — 23–27 вместо актуального).
+  // 'custom' не трогаем; URL-диапазон приоритетнее.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const sp = new URLSearchParams(window.location.search)
+    if (sp.get('from') || sp.get('to')) return
+    const today = DateUtils.todayISO()
+    if (activePreset === 'today') { setDateFrom(today); setDateTo(today) }
+    else if (activePreset === 'week') { setDateFrom(DateUtils.addDaysISO(today, -6)); setDateTo(today) }
+    else if (activePreset === 'month') { setDateFrom(DateUtils.monthStartISO()); setDateTo(today) }
+    else if (activePreset === 'all') { setDateFrom(''); setDateTo('') }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePreset])
   const [operatorFilter, setOperatorFilter] = useState<OperatorFilter>('all')
   const [shiftFilter, setShiftFilter] = useState<ShiftFilter>('all')
   const [payFilter, setPayFilter] = useState<PayFilter>('all')

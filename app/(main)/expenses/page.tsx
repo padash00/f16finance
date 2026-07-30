@@ -317,6 +317,18 @@ export default function ExpensesPage() {
   const [activePreset, setActivePreset] = usePersistentState<DateRangePreset>('expenses.preset', 'month')
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
 
+  // Пресетный период (Сегодня/Неделя/Месяц/Все время) пересчитываем под СЕГОДНЯ при
+  // каждом заходе — иначе сохранённый в localStorage диапазон «застывает» (был выбран
+  // «неделя», а показывается период прошлого визита). 'custom' не трогаем.
+  useEffect(() => {
+    const today = DateUtils.todayISO()
+    if (activePreset === 'today') { setDateFrom(today); setDateTo(today) }
+    else if (activePreset === 'week') { setDateFrom(DateUtils.addDaysISO(today, -6)); setDateTo(today) }
+    else if (activePreset === 'month') { setDateFrom(DateUtils.monthStartISO()); setDateTo(today) }
+    else if (activePreset === 'all') { setDateFrom(''); setDateTo('') }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePreset])
+
   const [companyFilter, setCompanyFilter] = usePersistentState<'all' | string>('expenses.company', 'all')
   const [categoryFilter, setCategoryFilter] = usePersistentState<'all' | string>('expenses.category', 'all')
   const [payFilter, setPayFilter] = useState<PayFilter>('all')
