@@ -112,14 +112,14 @@ export default function ExpenseWhitelistPage() {
       />
 
       {/* Что это такое */}
-      <div className="flex gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.05] p-4 text-sm text-emerald-50/80">
+      <div className="flex gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.05] p-4 text-sm text-emerald-900/80 dark:text-emerald-50/80">
         <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
         <div>
           <span className="font-semibold text-emerald-700 dark:text-emerald-200">Что это.</span> Поставщики и получатели,
           которым можно платить <span className="font-semibold text-foreground">без чека</span>. Когда добавляешь расход
           и выбираешь такого — фото чека <span className="font-semibold text-foreground">не требуется</span>.
           Удобно для зарплат, аренды, уборки, разовых выплат и регулярных услуг.
-          <div className="mt-1 text-xs text-emerald-100/50">
+          <div className="mt-1 text-xs text-emerald-800/60 dark:text-emerald-100/50">
             «Все точки» — действует на всех; можно ограничить конкретной точкой. Категория подставится в расход автоматически.
           </div>
         </div>
