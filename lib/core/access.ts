@@ -18,6 +18,10 @@
   '/set-password',
   '/auth/callback',
   '/auth/complete',
+  // Публичные онлайн-чеки: продажа (/r/<saleId>) и смена (/z/<shiftId>) — открываются
+  // по QR без входа (доступ по UUID). Данные тянутся сервером, PII минимальна.
+  '/r/*',
+  '/z/*',
 ] as const
 
 /** См. docs/roles.md — матрица staff/оператор/платформа и гостевой контур (`CLIENT_PATHS`, `customers.auth_user_id`).

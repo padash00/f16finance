@@ -2016,7 +2016,7 @@ export default function InventorySalesPageMinimal({
           Формат: полный A4 (флаг simple_close_full_report) или короткий чековый Z. */}
       {zReport && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4">
-          <div className={`flex max-h-[94vh] w-full flex-col overflow-hidden rounded-2xl bg-card text-card-foreground shadow-xl ${fullCloseReport ? 'max-w-4xl' : 'max-w-lg'}`}>
+          <div className={`flex max-h-[96vh] w-full flex-col overflow-hidden rounded-2xl bg-card text-card-foreground shadow-xl ${fullCloseReport ? 'max-w-5xl' : 'max-w-lg'}`}>
             <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
               <div>
                 <h3 className="text-lg font-semibold">Смена закрыта · {fullCloseReport ? 'Отчёт по смене' : 'Z-отчёт'}</h3>
@@ -2026,13 +2026,13 @@ export default function InventorySalesPageMinimal({
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="flex-1 overflow-auto bg-muted p-3 sm:p-5">
-              <div className={`mx-auto w-full overflow-hidden rounded-lg bg-white shadow-md ${fullCloseReport ? 'max-w-[800px]' : 'max-w-[400px]'}`}>
+            <div className="flex-1 overflow-auto bg-muted p-2 sm:p-4">
+              <div className={`mx-auto overflow-auto rounded-lg bg-white shadow-md ${fullCloseReport ? 'w-full max-w-[900px]' : 'w-full max-w-[400px]'}`}>
                 <iframe
                   ref={zReportIframeRef}
                   srcDoc={fullCloseReport ? buildShiftFullReportHtml(zReport) : buildShiftReportHtml(zReport)}
                   title="Отчёт по смене"
-                  className={`w-full border-0 ${fullCloseReport ? 'h-[70vh]' : 'h-[60vh]'}`}
+                  className={`w-full border-0 ${fullCloseReport ? 'h-[78vh]' : 'h-[60vh]'}`}
                 />
               </div>
             </div>
