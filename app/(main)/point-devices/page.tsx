@@ -44,6 +44,7 @@ type PointFeatureFlags = {
   arena_enabled: boolean
   arena_shift_auto_totals: boolean
   arena_defer_income_to_shift: boolean
+  simple_shift_close: boolean
 }
 
 type CompanyAssignment = {
@@ -99,6 +100,7 @@ const DEFAULT_FLAGS: PointFeatureFlags = {
   arena_enabled: false,
   arena_shift_auto_totals: false,
   arena_defer_income_to_shift: false,
+  simple_shift_close: false,
 }
 
 const DEFAULT_FORM: ProjectForm = {
@@ -162,6 +164,11 @@ const PROJECT_FLAG_OPTIONS: Array<{
     label: 'Арена без авто-доходов',
     hint: 'Не пишет доход при старте тарифа, учёт идёт через сменный отчёт.',
   },
+  {
+    key: 'simple_shift_close',
+    label: 'Упрощённое закрытие смены',
+    hint: 'Вкладка «Смена» скрыта. В «Продажах» кнопка «Закрытие смены» — печатает Z-чек из продаж, оператор ничего не вводит.',
+  },
 ]
 
 const POINT_OVERRIDE_OPTIONS = PROJECT_FLAG_OPTIONS.filter((option) => option.key !== 'shift_report' && option.key !== 'income_report')
@@ -189,6 +196,7 @@ function emptyAssignment(company_id: string): CompanyAssignment {
       arena_enabled: null,
       arena_shift_auto_totals: null,
       arena_defer_income_to_shift: null,
+      simple_shift_close: null,
     },
   }
 }
@@ -594,6 +602,7 @@ export default function PointDevicesPage() {
           arena_enabled: (c.feature_flags as any)?.arena_enabled ?? null,
           arena_shift_auto_totals: (c.feature_flags as any)?.arena_shift_auto_totals ?? null,
           arena_defer_income_to_shift: (c.feature_flags as any)?.arena_defer_income_to_shift ?? null,
+          simple_shift_close: (c.feature_flags as any)?.simple_shift_close ?? null,
         },
       })),
       shift_report_chat_id: project.shift_report_chat_id || '',
@@ -607,6 +616,7 @@ export default function PointDevicesPage() {
         arena_enabled: project.feature_flags.arena_enabled === true,
         arena_shift_auto_totals: project.feature_flags.arena_shift_auto_totals === true,
         arena_defer_income_to_shift: project.feature_flags.arena_defer_income_to_shift === true,
+        simple_shift_close: project.feature_flags.simple_shift_close === true,
       },
     })
   }

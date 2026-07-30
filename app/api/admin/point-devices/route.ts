@@ -17,6 +17,8 @@ type PointFeatureFlags = {
   arena_shift_auto_totals?: boolean
   /** Не создавать incomes при старте сессии арены — учёт в сменном отчёте. */
   arena_defer_income_to_shift?: boolean
+  /** Упрощённое закрытие: вкладка «Смена» скрыта, кнопка закрытия в «Продажах» → Z-чек из продаж. */
+  simple_shift_close?: boolean
 }
 
 type CompanyAssignment = {
@@ -91,6 +93,9 @@ function normalizeFlags(input: Partial<PointFeatureFlags> | null | undefined): P
   if (input?.arena_defer_income_to_shift !== undefined) {
     flags.arena_defer_income_to_shift = input.arena_defer_income_to_shift === true
   }
+  if (input?.simple_shift_close !== undefined) {
+    flags.simple_shift_close = input.simple_shift_close === true
+  }
   return flags
 }
 
@@ -105,6 +110,7 @@ function normalizeAssignmentFlags(input: Partial<PointFeatureFlags> | null | und
     'arena_enabled',
     'arena_shift_auto_totals',
     'arena_defer_income_to_shift',
+    'simple_shift_close',
   ]
   const flags: Partial<PointFeatureFlags> = {}
   for (const key of allowedKeys) {

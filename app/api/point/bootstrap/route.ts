@@ -19,6 +19,8 @@ function normalizeFlags(input: Record<string, unknown> | null | undefined) {
     arena_shift_auto_totals: input?.arena_shift_auto_totals === true,
     /** Доходы арены не пишутся в `incomes` при каждом тарифе — только сменный отчёт. */
     arena_defer_income_to_shift: input?.arena_defer_income_to_shift === true,
+    /** Упрощённое закрытие смены: «Смена» скрыта, кнопка закрытия в «Продажах» → Z-чек из продаж. */
+    simple_shift_close: input?.simple_shift_close === true,
   }
 }
 
