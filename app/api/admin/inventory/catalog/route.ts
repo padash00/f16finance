@@ -53,8 +53,12 @@ type ImportRow = {
   category: string | null
   item_type: 'product' | 'service' | 'consumable'
   article: string | null
-  /** Если задано — после импорта выставляется остаток на центральном складе */
+  /** Общая колонка «Остаток» → витрина (обратная совместимость) */
   stock_qty?: number
+  /** «Остаток склад» → warehouse */
+  warehouse_qty?: number
+  /** «Остаток витрина» → point_display */
+  showcase_qty?: number
 }
 
 export async function GET(request: Request) {
@@ -576,8 +580,10 @@ export async function POST(request: Request) {
 
       let stock_updated = 0
       let stock_warnings_count = 0
+      const isQty = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0
+      // Строка с остатками, если задана хотя бы одна из колонок: общий/склад/витрина.
       const rowsWithStock = rows.filter(
-        (row) => typeof row.stock_qty === 'number' && Number.isFinite(row.stock_qty) && row.stock_qty >= 0,
+        (row) => isQty(row.stock_qty) || isQty(row.warehouse_qty) || isQty(row.showcase_qty),
       )
       if (rowsWithStock.length > 0 && orgId) {
         // v8: Excel-импорт остатков идёт на point_display активной компании.
@@ -639,17 +645,6 @@ export async function POST(request: Request) {
           }
         }
 
-        // ─── Текущие балансы (catalog + warehouse) для diff и валидации ───
-        const targetItemIds: string[] = []
-        const itemsWithStock: Array<{ itemId: string; barcode: string; newQty: number }> = []
-        for (const row of rowsWithStock) {
-          const itemId = barcodeToId.get(row.barcode)
-          if (!itemId) continue
-          const newQty = Math.round((row.stock_qty as number + Number.EPSILON) * 1000) / 1000
-          itemsWithStock.push({ itemId, barcode: row.barcode, newQty })
-          targetItemIds.push(itemId)
-        }
-
         let warehouseLocId: string | null = null
         if (catalogCompanyId) {
           const { data: whLoc } = await supabase
@@ -660,6 +655,20 @@ export async function POST(request: Request) {
             .eq('is_active', true)
             .maybeSingle()
           warehouseLocId = whLoc?.id ? String(whLoc.id) : null
+        }
+
+        const round3 = (v: number) => Math.round((v + Number.EPSILON) * 1000) / 1000
+        // ─── Целевые остатки по товарам: витрина (showcase_qty ?? общий stock_qty) и склад (warehouse_qty) ───
+        const targetItemIds: string[] = []
+        const itemsWithStock: Array<{ itemId: string; barcode: string; showcaseQty: number | null; warehouseQty: number | null }> = []
+        for (const row of rowsWithStock) {
+          const itemId = barcodeToId.get(row.barcode)
+          if (!itemId) continue
+          const showcaseQty = isQty(row.showcase_qty) ? round3(row.showcase_qty)
+            : isQty(row.stock_qty) ? round3(row.stock_qty) : null
+          const warehouseQty = isQty(row.warehouse_qty) ? round3(row.warehouse_qty) : null
+          itemsWithStock.push({ itemId, barcode: row.barcode, showcaseQty, warehouseQty })
+          targetItemIds.push(itemId)
         }
 
         const balByItemLoc = new Map<string, number>()
@@ -680,12 +689,12 @@ export async function POST(request: Request) {
         // v8: склад и витрина независимы. Валидация warehouse vs new_showcase больше не нужна.
         stock_warnings_count = 0
 
-        // ─── Upsert балансов каталога ───
-        const upserts: Array<{ location_id: string; item_id: string; quantity: number }> = itemsWithStock.map((it) => ({
-          location_id: catalogId!,
-          item_id: it.itemId,
-          quantity: it.newQty,
-        }))
+        // ─── Upsert балансов: витрина → point_display (catalogId), склад → warehouse ───
+        const upserts: Array<{ location_id: string; item_id: string; quantity: number }> = []
+        for (const it of itemsWithStock) {
+          if (it.showcaseQty !== null) upserts.push({ location_id: catalogId!, item_id: it.itemId, quantity: it.showcaseQty })
+          if (it.warehouseQty !== null && warehouseLocId) upserts.push({ location_id: warehouseLocId, item_id: it.itemId, quantity: it.warehouseQty })
+        }
         if (upserts.length > 0) {
           for (const slice of chunkArray(upserts, 500)) {
             const { error: balErr } = await supabase.from('inventory_balances').upsert(slice, {
@@ -696,26 +705,30 @@ export async function POST(request: Request) {
           }
         }
 
-        // ─── Movements: фиксируем дельту каждого изменения ───
+        // ─── Movements: фиксируем дельту по каждой локации (склад и витрина) ───
         const actorUserId = access.staffMember?.id || null
         const nowIso = new Date().toISOString()
         const movements: any[] = []
-        for (const it of itemsWithStock) {
-          const prev = balByItemLoc.get(`${catalogId}:${it.itemId}`) || 0
-          const delta = Math.round((it.newQty - prev + Number.EPSILON) * 1000) / 1000
-          if (Math.abs(delta) < 0.0005) continue
+        const pushMovement = (itemId: string, locId: string, newQty: number, label: string) => {
+          const prev = balByItemLoc.get(`${locId}:${itemId}`) || 0
+          const delta = round3(newQty - prev)
+          if (Math.abs(delta) < 0.0005) return
           movements.push({
-            item_id: it.itemId,
+            item_id: itemId,
             movement_type: 'inventory_adjustment',
             quantity: Math.abs(delta),
-            from_location_id: delta < 0 ? catalogId : null,
-            to_location_id: delta > 0 ? catalogId : null,
-            reference_type: 'showcase_excel_import',
+            from_location_id: delta < 0 ? locId : null,
+            to_location_id: delta > 0 ? locId : null,
+            reference_type: 'stock_excel_import',
             reference_id: null,
-            comment: `Импорт Excel остатков на витрину: ${prev} → ${it.newQty}`,
+            comment: `Импорт Excel остатков (${label}): ${prev} → ${newQty}`,
             actor_user_id: actorUserId,
             created_at: nowIso,
           })
+        }
+        for (const it of itemsWithStock) {
+          if (it.showcaseQty !== null) pushMovement(it.itemId, catalogId!, it.showcaseQty, 'витрина')
+          if (it.warehouseQty !== null && warehouseLocId) pushMovement(it.itemId, warehouseLocId, it.warehouseQty, 'склад')
         }
         if (movements.length > 0) {
           for (const slice of chunkArray(movements, 500)) {

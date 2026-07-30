@@ -64,8 +64,12 @@ type ImportRow = {
   category: string | null
   item_type: 'product' | 'service'
   article: string | null
-  /** Колонка «Остаток» в Excel — выставляет общий остаток в catalog_total */
+  /** Колонка «Остаток» (общая) — выставляет остаток витрины (обратная совместимость) */
   stock_qty?: number
+  /** Колонка «Остаток склад» — остаток на складе (warehouse) */
+  warehouse_qty?: number
+  /** Колонка «Остаток витрина» — остаток на витрине (point_display) */
+  showcase_qty?: number
 }
 
 type StockDiff = {
@@ -170,7 +174,9 @@ async function parseWiponExcel(file: File): Promise<ImportRow[]> {
         const iSalePrice = colIndex(headers, 'Цена продажи', 'Продажа')
         const iPurchasePrice = colIndex(headers, 'Цена закупки', 'Закупка')
         const iCategory = colIndex(headers, 'Категория')
-        const iStock = colIndex(headers, 'Остаток', 'Количество', 'Остаток на складе')
+        const iStock = colIndex(headers, 'Остаток', 'Количество')
+        const iStockWarehouse = colIndex(headers, 'Остаток склад', 'Склад', 'Остаток на складе')
+        const iStockShowcase = colIndex(headers, 'Остаток витрина', 'Витрина')
         const iType = colIndex(headers, 'Тип')
         const iArticle = colIndex(headers, 'Артикул')
 
@@ -199,7 +205,11 @@ async function parseWiponExcel(file: File): Promise<ImportRow[]> {
             item_type: iType >= 0 && String(row[iType] || '') === 'Услуга' ? 'service' : 'product',
             article: iArticle >= 0 && row[iArticle] ? String(row[iArticle]).trim() : null,
           }
-          if (iStock >= 0 && row[iStock] !== '' && row[iStock] !== undefined && row[iStock] !== null) {
+          const hasVal = (i: number) => i >= 0 && row[i] !== '' && row[i] !== undefined && row[i] !== null
+          // Раздельные колонки склад/витрина имеют приоритет; «Остаток» — общая (→ витрина).
+          if (hasVal(iStockWarehouse)) out.warehouse_qty = parseRussianNumber(row[iStockWarehouse])
+          if (hasVal(iStockShowcase)) out.showcase_qty = parseRussianNumber(row[iStockShowcase])
+          if (out.warehouse_qty === undefined && out.showcase_qty === undefined && hasVal(iStock)) {
             out.stock_qty = parseRussianNumber(row[iStock])
           }
 
@@ -243,6 +253,35 @@ async function exportToExcel(items: CatalogItem[], filename = 'Katalog') {
       active: item.is_active ? 'Да' : 'Нет',
     })),
   }, filename.replace(/\.xlsx$/, ''))
+}
+
+// Настоящий Excel-экспорт каталога, совместимый с импортом (round-trip).
+// Остатки РАЗДЕЛЬНЫЕ: «Остаток склад» и «Остаток витрина» — чтобы при импорте
+// залить и на склад, и на витрину, а не общей суммой.
+async function exportCatalogExcel(items: CatalogItem[], filename = 'Katalog') {
+  const XLSX = await import('xlsx')
+  const header = [
+    'Название', 'Штрихкод', 'Категория', 'Единица измерения',
+    'Цена продажи', 'Цена закупки', 'Остаток склад', 'Остаток витрина', 'Тип', 'Артикул',
+  ]
+  const rows = items.map((it) => [
+    it.name,
+    it.barcode || '',
+    it.category?.name || '',
+    it.unit || 'шт',
+    Number(it.sale_price || 0),
+    Number(it.default_purchase_price || 0),
+    Number((it as any).warehouse_qty || 0),
+    Number((it as any).showcase_qty || 0),
+    it.item_type === 'service' ? 'Услуга' : it.item_type === 'consumable' ? 'Расходник' : 'Товар',
+    (it as any).notes || '',
+  ])
+  const ws = XLSX.utils.aoa_to_sheet([header, ...rows])
+  ws['!cols'] = [{ wch: 38 }, { wch: 16 }, { wch: 18 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 14 }]
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Каталог')
+  const today = new Date().toISOString().slice(0, 10)
+  XLSX.writeFile(wb, `${filename.replace(/\.xlsx$/, '')}_${today}.xlsx`)
 }
 
 // ─── ItemForm ──────────────────────────────────────────────────────────────────
@@ -1105,6 +1144,12 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
               <Button variant="outline" size="sm" onClick={() => exportToExcel(filtered)}>
                 <Download className="w-3.5 h-3.5 mr-1.5" />
                 Экспорт PDF
+              </Button>
+            )}
+            {canExport && (
+              <Button variant="outline" size="sm" onClick={() => exportCatalogExcel(filtered)} title="Excel-выгрузка каталога (склад и витрина раздельно) для импорта в другую точку/организацию">
+                <Download className="w-3.5 h-3.5 mr-1.5" />
+                Экспорт Excel
               </Button>
             )}
             {(canBulkZeroStock || canBulkDeactivate || canBulkDeleteEmpty || canBulkDeleteAll) && (
