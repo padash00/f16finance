@@ -109,19 +109,6 @@ const UNIVERSAL_PRODUCT_PREFIX = 'universal:'
  */
 const QTY_CONFIRM_THRESHOLD = 10
 
-/** Печать Z-отчёта смены: buildShiftReportHtml без авто-печати → впрыскиваем onload-print. */
-function printZReportHtml(html: string) {
-  const w = window.open('', '_blank', 'width=420,height=720')
-  if (!w) {
-    toastError('Не удалось открыть окно печати Z-отчёта')
-    return
-  }
-  const printScript = '<scr' + 'ipt>window.onload=function(){setTimeout(function(){window.print()},250)}</scr' + 'ipt>'
-  w.document.open()
-  w.document.write(html.replace('</body>', printScript + '</body>'))
-  w.document.close()
-}
-
 export default function InventorySalesPageMinimal({
   config,
   bootstrap,
@@ -152,6 +139,9 @@ export default function InventorySalesPageMinimal({
   const simpleClose = (bootstrap.device.feature_flags as any)?.simple_shift_close === true
   const [simpleShiftId, setSimpleShiftId] = useState<string | null>(null)
   const [simpleShiftBusy, setSimpleShiftBusy] = useState(false)
+  const [confirmCloseShift, setConfirmCloseShift] = useState(false)
+  const [zReport, setZReport] = useState<any | null>(null) // данные Z для модалки-превью
+  const zReportIframeRef = useRef<HTMLIFrameElement | null>(null)
   useEffect(() => {
     if (!simpleClose) return
     let cancel = false
@@ -182,9 +172,10 @@ export default function InventorySalesPageMinimal({
     }
   }
 
-  async function handleSimpleCloseShift() {
+  // Само закрытие: суммы из продаж, показываем Z в модалке (без системных окон).
+  async function doSimpleCloseShift() {
     if (simpleShiftBusy) return
-    if (!window.confirm('Закрыть смену и напечатать Z-отчёт? Суммы берутся из продаж — вводить ничего не нужно.')) return
+    setConfirmCloseShift(false)
     setSimpleShiftBusy(true)
     try {
       const open = simpleShiftId ? { id: simpleShiftId } : await api.getCurrentPointShift(config, session.company.id)
@@ -202,18 +193,24 @@ export default function InventorySalesPageMinimal({
         session.company.id,
       )
       const report = await api.getPointShiftReport(config, shiftId, session.company.id).catch(() => null)
+      setSimpleShiftId(null)
       if (report) {
-        printZReportHtml(buildShiftReportHtml(report))
-        toastSuccess('Смена закрыта, Z-отчёт напечатан')
+        setZReport(report) // показываем модалку с превью Z; закрытие модалки → выход
       } else {
         toastSuccess('Смена закрыта')
+        onLogout()
       }
-      setSimpleShiftId(null)
     } catch (e: any) {
       toastError(e?.message || 'Не удалось закрыть смену')
     } finally {
       setSimpleShiftBusy(false)
     }
+  }
+
+  // Закрытие модалки Z → выход из аккаунта на форму входа.
+  function finishZReport() {
+    setZReport(null)
+    onLogout()
   }
 
   // Оплата
@@ -1149,7 +1146,7 @@ export default function InventorySalesPageMinimal({
             simpleShiftId ? (
               <Button
                 size="sm"
-                onClick={() => void handleSimpleCloseShift()}
+                onClick={() => setConfirmCloseShift(true)}
                 disabled={simpleShiftBusy}
                 className="h-9 gap-1.5 bg-rose-600 text-white hover:bg-rose-700"
                 title="Закрыть смену и напечатать Z-отчёт"
@@ -1944,6 +1941,52 @@ export default function InventorySalesPageMinimal({
                 className="h-12 rounded-xl text-base font-semibold sm:order-2 sm:px-8"
               >
                 🖨 Печатать чек
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Подтверждение закрытия смены (упрощённый режим) */}
+      {confirmCloseShift && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={() => !simpleShiftBusy && setConfirmCloseShift(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-2xl bg-card text-card-foreground shadow-xl">
+            <div className="border-b border-border px-5 py-4">
+              <h3 className="text-lg font-semibold">Закрыть смену?</h3>
+              <p className="mt-1 text-sm text-muted-foreground">Суммы возьмутся из продаж — вводить ничего не нужно. Выйдет Z-отчёт, затем произойдёт выход из аккаунта.</p>
+            </div>
+            <div className="flex justify-end gap-3 p-4">
+              <Button variant="outline" onClick={() => setConfirmCloseShift(false)} disabled={simpleShiftBusy} className="h-11 px-6">Отмена</Button>
+              <Button onClick={() => void doSimpleCloseShift()} disabled={simpleShiftBusy} className="h-11 px-6 bg-rose-600 text-white hover:bg-rose-700">
+                {simpleShiftBusy ? 'Закрываю…' : 'Закрыть смену'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Z-отчёт после закрытия — превью внутри программы, печать по кнопке, закрытие → выход */}
+      {zReport && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4">
+          <div className="flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-card text-card-foreground shadow-xl">
+            <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
+              <div>
+                <h3 className="text-lg font-semibold">Смена закрыта · Z-отчёт</h3>
+                <p className="text-xs text-muted-foreground">Смена №{zReport.shiftNumber}</p>
+              </div>
+              <button type="button" onClick={finishZReport} className="grid h-9 w-9 place-items-center rounded-xl text-muted-foreground hover:bg-accent hover:text-foreground">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto bg-muted p-3 sm:p-5">
+              <div className="mx-auto w-full max-w-[400px] overflow-hidden rounded-lg bg-white shadow-md">
+                <iframe ref={zReportIframeRef} srcDoc={buildShiftReportHtml(zReport)} title="Z-отчёт" className="h-[60vh] w-full border-0" />
+              </div>
+            </div>
+            <div className="flex flex-col gap-2 border-t border-border p-4 sm:flex-row sm:justify-end sm:gap-3 sm:p-5">
+              <Button variant="outline" onClick={finishZReport} className="h-12 sm:order-1 sm:px-6">Закрыть и выйти</Button>
+              <Button onClick={() => printReceiptFromIframe(zReportIframeRef.current)} className="h-12 rounded-xl text-base font-semibold sm:order-2 sm:px-8">
+                🖨 Печать Z
               </Button>
             </div>
           </div>
