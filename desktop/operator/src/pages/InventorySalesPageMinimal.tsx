@@ -200,6 +200,13 @@ export default function InventorySalesPageMinimal({
       const report = await api.getPointShiftReport(config, shiftId, session.company.id).catch(() => null)
       setSimpleShiftId(null)
       if (report) {
+        // QR на онлайн-чек (поддомен организации). Не критично — если не вышло, чек без QR.
+        try {
+          if ((report as any).onlineUrl) {
+            const QRCode = (await import('qrcode')).default
+            ;(report as any).qrDataUrl = await QRCode.toDataURL(String((report as any).onlineUrl), { margin: 1, width: 240 })
+          }
+        } catch { /* QR не критичен */ }
         setZReport(report) // показываем модалку с превью Z; закрытие модалки → выход
       } else {
         toastSuccess('Смена закрыта')

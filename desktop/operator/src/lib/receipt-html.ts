@@ -344,6 +344,12 @@ export function buildShiftReportHtml(r: any): string {
     <div class="row"><span>Баланс кассы (нал)</span><span>${money(Number(r.openingCash || 0) + Number(r.cashSales || 0))}</span></div>
     <div class="line"></div>
     <div class="row tot"><span>ИТОГО ВЫРУЧКА</span><span>${money(r.total)}</span></div>
+    ${r.qrDataUrl ? `<div class="line"></div>
+    <div class="c">
+      <img src="${r.qrDataUrl}" style="width:118px;height:118px" alt="QR" />
+      <div class="mut">Чек онлайн — наведите камеру</div>
+      ${r.onlineUrl ? `<div class="mut" style="font-size:9px;word-break:break-all">${esc(r.onlineUrl)}</div>` : ''}
+    </div>` : ''}
     <div class="line"></div>
     <div class="c mut">Напечатано: ${new Date().toLocaleString('ru-RU')}</div>
     <div class="c mut">Управленческий отчёт, не является фискальным чеком</div>

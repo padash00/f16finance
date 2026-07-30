@@ -1,5 +1,6 @@
 import 'server-only'
 
+import { buildTenantUrl } from '@/lib/core/tenant-domain'
 import { fetchAllPages, chunkArray } from '@/lib/server/point-sales-core'
 
 // Данные сменного отчёта — общий источник для чекового (80мм) и A4 Z-отчёта.
@@ -30,6 +31,8 @@ export type ShiftReport = {
   goodsTotal: number
   debts: Array<{ debtor: string; item: string; quantity: number; amount: number }>
   debtsTotal: number
+  /** Публичная страница онлайн-чека на поддомене организации: https://<slug>.ordaops.kz/z/<shiftId> */
+  onlineUrl: string
 }
 
 export async function computeShiftReport(supabase: any, shiftId: string): Promise<ShiftReport | null> {
@@ -45,12 +48,21 @@ export async function computeShiftReport(supabase: any, shiftId: string): Promis
     supabase.from('point_receipt_settings')
       .select('tax_payer_name, tax_payer_bin, point_address, kkm_registration_number, ofd_name')
       .eq('company_id', companyId).maybeSingle(),
-    supabase.from('companies').select('name').eq('id', companyId).maybeSingle(),
+    supabase.from('companies').select('name, organization_id').eq('id', companyId).maybeSingle(),
     // Порядковый номер смены по точке = сколько смен открыто до этой включительно.
     supabase.from('point_shifts').select('id', { count: 'exact', head: true })
       .eq('company_id', companyId).lte('opened_at', shift.opened_at),
   ])
   const shiftNumber = priorRes?.count || 1
+
+  // Онлайн-чек на поддомене организации (Вариант B: у каждого клиента свой поддомен).
+  let orgSlug = ''
+  const orgIdForUrl = (company as any)?.organization_id || null
+  if (orgIdForUrl) {
+    const { data: orgRow } = await supabase.from('organizations').select('slug').eq('id', orgIdForUrl).maybeSingle()
+    orgSlug = String((orgRow as any)?.slug || '')
+  }
+  const onlineUrl = `${buildTenantUrl(orgSlug)}/z/${shiftId}`
 
   // Продажи по смене
   const sales = await fetchAllPages((from, to) =>
@@ -197,5 +209,6 @@ export async function computeShiftReport(supabase: any, shiftId: string): Promis
     goodsTotal,
     debts,
     debtsTotal,
+    onlineUrl,
   }
 }
