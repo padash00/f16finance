@@ -324,25 +324,29 @@ export function buildShiftReportHtml(r: any): string {
       ${r.pointName ? `<div class="mut">Точка: ${esc(r.pointName)}</div>` : ''}
       <div style="font-weight:800;margin-top:6px">СМЕННЫЙ ОТЧЁТ</div>
     </div>
+    <div class="c mut">Сменный Z-отчёт</div>
     <div class="line"></div>
     <div class="row"><span>Смена №</span><span>${r.shiftNumber}</span></div>
     <div class="row"><span>Кассир</span><span>${esc(r.cashier || '—')}</span></div>
     <div class="row mut"><span>Открыта</span><span>${dts(r.openedAt)}</span></div>
     <div class="row mut"><span>Закрыта</span><span>${dts(r.closedAt)}</span></div>
     <div class="line"></div>
-    <div class="sec">ПРОДАЖИ</div>
-    <div class="row"><span>Наличные · ${r.cashCount} чек</span><span>${money(r.cashSales)}</span></div>
-    <div class="row"><span>Безнал · ${r.kaspiCount} чек</span><span>${money(r.kaspiSales)}</span></div>
-    <div class="row"><span>Возвраты</span><span>${money(r.returns)}</span></div>
+    <div class="sec">ПРОДАЖА</div>
+    <div class="row"><span>Количество</span><span>${r.checkCount}</span></div>
+    <div class="row"><span>Наличные</span><span>${money(r.cashSales)}</span></div>
+    <div class="row"><span>Карта</span><span>${money(r.kaspiSales)}</span></div>
+    <div class="row"><span>Сумма</span><span>${money(r.total)}</span></div>
     <div class="line"></div>
-    <div class="sec">НАЛИЧНОСТЬ</div>
-    <div class="row"><span>На начало</span><span>${money(r.openingCash)}</span></div>
-    <div class="row"><span>На конец</span><span>${money(r.closingCash)}</span></div>
+    <div class="sec">ВОЗВРАТ ПРОДАЖИ</div>
+    <div class="row"><span>Сумма</span><span>${money(r.returns)}</span></div>
     <div class="line"></div>
-    <div class="row"><span>Чеков за смену</span><span>${r.checkCount}</span></div>
+    <div class="row"><span>Доход</span><span>${money(Number(r.total || 0) - Number(r.returns || 0))}</span></div>
+    <div class="row"><span>Баланс кассы (нал)</span><span>${money(Number(r.openingCash || 0) + Number(r.cashSales || 0))}</span></div>
+    <div class="line"></div>
     <div class="row tot"><span>ИТОГО ВЫРУЧКА</span><span>${money(r.total)}</span></div>
     <div class="line"></div>
     <div class="c mut">Напечатано: ${new Date().toLocaleString('ru-RU')}</div>
+    <div class="c mut">Управленческий отчёт, не является фискальным чеком</div>
     </body></html>`
 }
 

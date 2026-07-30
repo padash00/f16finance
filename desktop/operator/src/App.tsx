@@ -93,6 +93,16 @@ function canUseArena(bootstrap: BootstrapData) {
   return bootstrap.device.feature_flags?.arena_enabled === true
 }
 
+/** Упрощённое закрытие смены: вкладка «Смена» скрыта, закрытие — кнопкой в «Продажах». */
+function isSimpleShiftClose(bootstrap: BootstrapData) {
+  return (bootstrap.device.feature_flags as any)?.simple_shift_close === true
+}
+
+/** Стартовый экран: в упрощённом режиме — сразу «Продажи» (вкладки «Смена» нет). */
+function landingScreen(bootstrap: BootstrapData, session: OperatorSession): 'shift' | 'inventory-sale' {
+  return isSimpleShiftClose(bootstrap) && canUseInventorySalesForSession(session) ? 'inventory-sale' : 'shift'
+}
+
 function canUseArenaForSession(session: OperatorSession) {
   return canUseArena(session.bootstrap)
 }
@@ -575,7 +585,7 @@ export default function App() {
         api.getCurrentPointShift(cfg, session.company.id)
           .then((info) => setOpenShift(info))
           .catch(() => setOpenShift(null))
-        setView({ screen: 'shift', bootstrap, session })
+        setView({ screen: landingScreen(bootstrap, session), bootstrap, session })
         return
       }
 
@@ -593,7 +603,7 @@ export default function App() {
         api.getCurrentPointShift(cfg, session.company.id)
           .then((info) => setOpenShift(info))
           .catch(() => { /* офлайн — текущая смена восстановится при синхронизации */ })
-        setView({ screen: 'shift', bootstrap: cachedBootstrap, session })
+        setView({ screen: landingScreen(cachedBootstrap, session), bootstrap: cachedBootstrap, session })
         return
       }
 
@@ -670,7 +680,7 @@ export default function App() {
         .catch(() => setOpenShift(null))
     }
 
-    setView({ screen: 'shift', bootstrap, session: updatedSession })
+    setView({ screen: landingScreen(bootstrap, updatedSession), bootstrap, session: updatedSession })
   }
 
   // ─── Вход оператора ────────────────────────────────────────────────────────
@@ -781,9 +791,11 @@ export default function App() {
       (screen: 'shift' | 'inventory-sale' | 'inventory-return' | 'scanner' | 'inventory-request' | 'arena') => () =>
         setView({ screen, bootstrap, session })
     const hasSales = canUseInventorySalesForSession(session)
+    const simpleClose = isSimpleShiftClose(bootstrap)
     const historyReturnTo: WorkReturnTo = current === 'checklists' || current === 'history' ? 'shift' : current
     return {
-      onSwitchToShift: go('shift'),
+      // Упрощённое закрытие: вкладки «Смена» нет — закрытие идёт кнопкой в «Продажах».
+      onSwitchToShift: simpleClose ? undefined : go('shift'),
       onSwitchToSale: hasSales ? go('inventory-sale') : undefined,
       onSwitchToReturn: hasSales ? go('inventory-return') : undefined,
       onSwitchToHistory: hasSales

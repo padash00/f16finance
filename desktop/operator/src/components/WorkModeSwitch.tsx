@@ -107,13 +107,16 @@ export default function WorkModeSwitch({
 
   return (
     <div className="inline-flex items-center gap-0.5 rounded-xl border border-white/10 bg-muted/40 p-1 no-drag">
-      <ModeButton
-        active={active === 'shift'}
-        label="Смена"
-        icon={ReceiptText}
-        onClick={onShift}
-        disabled={!onShift || active === 'shift'}
-      />
+      {/* «Смена» скрыта в упрощённом режиме (onShift не передан и мы не на самой смене). */}
+      {(onShift || active === 'shift') ? (
+        <ModeButton
+          active={active === 'shift'}
+          label="Смена"
+          icon={ReceiptText}
+          onClick={onShift}
+          disabled={!onShift || active === 'shift'}
+        />
+      ) : null}
 
       {showSale ? (
         <ModeButton

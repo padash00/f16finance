@@ -48,7 +48,7 @@ interface Props {
   session: OperatorSession
   isOffline?: boolean
   onLogout: () => void
-  onSwitchToShift: () => void
+  onSwitchToShift?: () => void
   onSwitchToSale?: () => void
   onSwitchToReturn?: () => void
   onSwitchToHistory?: () => void

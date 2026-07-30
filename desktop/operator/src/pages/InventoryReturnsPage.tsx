@@ -37,7 +37,7 @@ interface Props {
   bootstrap: BootstrapData
   session: OperatorSession
   onLogout: () => void
-  onSwitchToShift: () => void
+  onSwitchToShift?: () => void
   onSwitchToSale?: () => void
   onSwitchToHistory?: () => void
   onSwitchToScanner?: () => void
