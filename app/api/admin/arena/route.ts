@@ -3,6 +3,7 @@ import { isIP } from 'node:net'
 import { randomBytes } from 'node:crypto'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { requireAddon } from '@/lib/server/entitlements'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { sanitizeOrFilterValue } from '@/lib/server/postgrest-filter'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
@@ -91,6 +92,8 @@ export async function GET(request: Request) {
   try {
     const access = await getContext(request)
     if ('response' in access) return access.response
+    const addonDenied = await requireAddon(access, 'addon.arena')
+    if (addonDenied) return addonDenied
     const denied = await requireCapability(access, 'stations.view')
     if (denied) return denied
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
@@ -235,6 +238,8 @@ export async function POST(request: Request) {
   try {
     const access = await getContext(request)
     if ('response' in access) return access.response
+    const addonDenied = await requireAddon(access, 'addon.arena')
+    if (addonDenied) return addonDenied
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const companyScope = await resolveCompanyScope({
       activeOrganizationId: access.activeOrganization?.id || null,

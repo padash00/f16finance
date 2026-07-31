@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { writeAuditLog } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { requireAddon } from '@/lib/server/entitlements'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -32,6 +33,8 @@ export async function GET(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+    const addonDenied = await requireAddon(access, 'addon.webpos')
+    if (addonDenied) return addonDenied
     const denied = await requireCapability(access, 'pos.view')
     if (denied) return denied
     if (!access.isSuperAdmin && !access.staffRole) return json({ error: 'forbidden' }, 403)
@@ -65,6 +68,8 @@ export async function POST(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+    const addonDenied = await requireAddon(access, 'addon.webpos')
+    if (addonDenied) return addonDenied
     if (!access.isSuperAdmin && !access.staffRole) return json({ error: 'forbidden' }, 403)
 
     const body = (await request.json().catch(() => ({}))) as any

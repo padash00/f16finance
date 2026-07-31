@@ -147,7 +147,7 @@ export const navSections: NavSection[] = [
       { href: '/store/vendors', label: 'Поставщики', icon: Building2, note: 'Поставщики, долги, накладные, расходники' },
       { href: '/store/sales', label: 'Аналитика', icon: Activity, note: 'Монитор продаж, товары, ABC, прогноз', badge: 'live', badgeColor: 'green', isNew: true },
       { href: '/store/cashbox', label: 'Касса', icon: Receipt, note: 'Чеки, возвраты, реклама на экране' },
-      { href: '/pos', label: 'Web POS', icon: Monitor, note: 'Веб-касса для планшета и браузера' },
+      { href: '/pos', label: 'Web POS', icon: Monitor, note: 'Веб-касса для планшета и браузера', feature: 'addon.webpos' },
       { href: '/store/clients', label: 'Клиенты', icon: Users2, note: 'Клиенты, лояльность, скидки и промокоды' },
       { href: '/store/receipt-settings', label: 'Реквизиты чека ККМ', icon: Receipt, note: 'Налогоплательщик, ККМ, ОФД, НДС — приказ МФ РК №626' },
     ],

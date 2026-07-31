@@ -94,15 +94,9 @@ export const ADDON_CATALOG: AddonDef[] = [
     price_kzt: 0,
     billing: 'flat',
   },
-  {
-    code: 'addon.loyalty',
-    name: 'Лояльность',
-    description: 'Клиенты, скидки, промокоды, карты лояльности.',
-    pages: ['/clients'],
-    grants: ['addon.loyalty'],
-    price_kzt: 0,
-    billing: 'flat',
-  },
+  // Лояльность (клиенты/скидки/карты) живёт внутри модуля «Магазин» (/store/clients)
+  // и отдельной страницы верхнего уровня не имеет → входит в addon shop.catalog.
+  // Если понадобится продавать отдельно — вынесем страницу и заведём код.
   {
     code: 'addon.branding',
     name: 'White-label / брендинг',
