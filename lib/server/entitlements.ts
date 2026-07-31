@@ -263,3 +263,13 @@ export async function requireOrgFeature(access: any, featureCode: string | strin
   }
   return NextResponse.json({ error: 'upgrade_required', feature: codes[0] }, { status: 402 })
 }
+
+/**
+ * Гейт data-API страницы аддона. Тонкая обёртка над requireOrgFeature — ставится в
+ * начале роутов, относящихся к аддону (напр. requireAddon(access, 'addon.hr')).
+ * Без него аддон обходится прямым вызовом API. Использовать код аддона из
+ * lib/core/addons.ts (ADDON_CATALOG).
+ */
+export async function requireAddon(access: any, addonCode: string | string[]): Promise<Response | null> {
+  return requireOrgFeature(access, addonCode)
+}

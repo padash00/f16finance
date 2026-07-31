@@ -60,6 +60,8 @@ import {
   ChefHat,
 } from 'lucide-react'
 
+import { getAddonForPath } from '@/lib/core/addons'
+
 export type NavItem = {
   href: string
   label: string
@@ -249,9 +251,11 @@ export const BASE_FREE_PATHS = new Set<string>([
   '/point-devices',
 ])
 
-// Модель «1 фича = 1 страница»: код фичи страницы = явный feature ИЛИ derived `page:<href>`.
+// Код фичи страницы: явный feature на пункте/секции → код именованного аддона из
+// каталога (lib/core/addons.ts) → derived `page:<href>`. Явные коды (shop.catalog,
+// ai.cfo) в приоритете, чтобы существующий энфорсмент не сломался.
 function pageFeatureCode(item: NavItem, section: NavSection): string {
-  return item.feature || section.feature || `page:${item.href}`
+  return item.feature || section.feature || getAddonForPath(item.href) || `page:${item.href}`
 }
 
 /** Код фичи (тариф), требуемый для пути. null = страница базовая/не гейтится. */

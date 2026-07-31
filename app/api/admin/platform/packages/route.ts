@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { ADDON_CATALOG } from '@/lib/core/addons'
 import { getAllCapabilityIds } from '@/lib/core/capabilities'
 import { invalidateOrgCapabilitiesCache } from '@/lib/server/capabilities'
 import { getAllPageFeatures } from '@/lib/nav/sections'
@@ -189,6 +190,19 @@ export async function POST(req: Request) {
       const { error } = await supabase.from('packages').upsert(rows, { onConflict: 'code' })
       if (error) return json({ error: error.message }, 500)
       return json({ ok: true, rebuilt: rows.map((r) => ({ code: r.code, pages: r.feature_codes.length })) })
+    }
+
+    // Сид именованных аддонов из каталога lib/core/addons.ts в таблицу addons.
+    if (action === 'seed_addons') {
+      const rows = ADDON_CATALOG.map((a) => ({
+        code: a.code, name: a.name, description: a.description,
+        feature_codes: a.grants, price_kzt: a.price_kzt,
+        billing_unit: a.billing === 'per_operator' ? 'operator' : a.billing === 'per_station' ? 'station' : a.billing === 'per_company' ? 'company' : 'flat',
+        status: 'active', updated_at: new Date().toISOString(),
+      }))
+      const { error } = await supabase.from('addons').upsert(rows, { onConflict: 'code' })
+      if (error) return json({ error: error.message }, 500)
+      return json({ ok: true, seeded: rows.map((r) => r.code) })
     }
 
     return json({ error: 'unknown action' }, 400)
