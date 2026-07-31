@@ -240,9 +240,17 @@ const ACTIVITY_PHRASE: Record<string, string> = {
   'inventory-request:reject': 'Заявка отклонена',
   'inventory-request:issue': 'Заявка выдана',
   'inventory-request:receive': 'Заявка получена',
+  'inventory-request:bulk-approve-full': 'Заявки одобрены (пакетно)',
+  'inventory-request:bulk-approve': 'Заявки одобрены (пакетно)',
+  'inventory-request:bulk-reject': 'Заявки отклонены (пакетно)',
+  'inventory-request:bulk-issue': 'Заявки выданы (пакетно)',
+  'inventory-request:bulk-receive': 'Заявки приняты (пакетно)',
   'inventory-revision:create': 'Ревизия создана',
   'inventory-revision:apply': 'Ревизия проведена',
   'inventory-posting:create': 'Оприходование',
+  'inventory-warehouse-alloc:set_warehouse': 'Склад точки назначен',
+  'inventory_warehouse_alloc:set_warehouse': 'Склад точки назначен',
+  'inventory-warehouse:alloc': 'Склад точки назначен',
 }
 const ENTITY_META: Record<string, { label: string; icon: any; color: string }> = {
   'inventory-receipt': { label: 'Приёмка', icon: PackagePlus, color: 'text-sky-500 dark:text-sky-300' },
@@ -250,11 +258,17 @@ const ENTITY_META: Record<string, { label: string; icon: any; color: string }> =
   'inventory-request': { label: 'Заявка', icon: ClipboardList, color: 'text-violet-500 dark:text-violet-300' },
   'inventory-revision': { label: 'Ревизия', icon: ScanSearch, color: 'text-amber-500 dark:text-amber-300' },
   'inventory-posting': { label: 'Оприходование', icon: Package, color: 'text-emerald-500 dark:text-emerald-300' },
+  'inventory-warehouse-alloc': { label: 'Склад', icon: Package, color: 'text-sky-500 dark:text-sky-300' },
+  'inventory_warehouse_alloc': { label: 'Склад', icon: Package, color: 'text-sky-500 dark:text-sky-300' },
+  'inventory-warehouse': { label: 'Склад', icon: Package, color: 'text-sky-500 dark:text-sky-300' },
 }
 const ACTION_FALLBACK: Record<string, string> = {
   create: 'создано', create_posting: 'оприходование', approve: 'одобрено', reject: 'отклонено',
   cancel: 'отменено', update: 'изменено', delete: 'удалено', issue: 'выдано', receive: 'получено',
   apply: 'проведено', close: 'закрыто', open: 'открыто',
+  'bulk-approve-full': 'одобрены (пакетно)', 'bulk-approve': 'одобрены (пакетно)',
+  'bulk-reject': 'отклонены (пакетно)', 'bulk-issue': 'выданы (пакетно)', 'bulk-receive': 'приняты (пакетно)',
+  set_warehouse: 'назначен', alloc: 'назначен',
 }
 function activityMeta(entity: string, action: string): { phrase: string; icon: any; color: string } {
   const meta = ENTITY_META[entity] || { label: String(entity || '').replace(/[-_]/g, ' '), icon: History, color: 'text-muted-foreground' }
