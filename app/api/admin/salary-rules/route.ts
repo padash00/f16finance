@@ -4,6 +4,7 @@ import { listOrganizationCompanyCodes } from '@/lib/server/organizations'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
 import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
+import { requireAddon } from '@/lib/server/entitlements'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 type ShiftType = 'day' | 'night'
@@ -426,6 +427,8 @@ export async function GET(req: Request) {
     if (guard) return guard
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    const addonDenied = await requireAddon(access, 'addon.salary')
+    if (addonDenied) return addonDenied
     const denied = await requireCapability(access, 'salary-rules.view')
     if (denied) return denied
 
@@ -552,6 +555,8 @@ export async function POST(req: Request) {
     if (guard) return guard
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    const addonDenied = await requireAddon(access, 'addon.salary')
+    if (addonDenied) return addonDenied
 
     const requestClient = createRequestSupabaseClient(req)
     const {

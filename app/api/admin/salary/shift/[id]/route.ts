@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { requireCapability } from '@/lib/server/capabilities'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { requireAddon } from '@/lib/server/entitlements'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 function json(data: unknown, status = 200) {
@@ -18,6 +19,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+    const addonDenied = await requireAddon(access, 'addon.salary')
+    if (addonDenied) return addonDenied
     if (!canView(access)) return json({ error: 'forbidden' }, 403)
     const denied = await requireCapability(access, 'salary.view')
     if (denied) return denied

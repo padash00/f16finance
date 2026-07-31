@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { requireAddon } from '@/lib/server/entitlements'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import {
@@ -237,6 +238,8 @@ export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    const addonDenied = await requireAddon(access, 'addon.salary')
+    if (addonDenied) return addonDenied
     const denied = await requireCapability(access, 'salary.view')
     if (denied) return denied as any
     // Capability checks выше уже отсеивают; здесь — любой staff
@@ -538,6 +541,8 @@ export async function POST(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    const addonDenied = await requireAddon(access, 'addon.salary')
+    if (addonDenied) return addonDenied
     const denied = await requireCapability(access, 'salary.create_payment')
     if (denied) return denied as any
     // Capability checks выше уже отсеивают; здесь — любой staff

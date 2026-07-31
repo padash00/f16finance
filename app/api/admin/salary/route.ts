@@ -14,6 +14,7 @@ import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
 import { listOperatorSalaryData, listSalaryReferenceData } from '@/lib/server/repositories/salary'
 import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
+import { requireAddon } from '@/lib/server/entitlements'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
 type AdjustmentKind = 'debt' | 'fine' | 'bonus' | 'advance'
@@ -550,6 +551,8 @@ export async function GET(req: Request) {
     if (guard) return guard
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    const addonDenied = await requireAddon(access, 'addon.salary')
+    if (addonDenied) return addonDenied
     const denied = await requireCapability(access, 'salary.view')
     if (denied) return denied
     const [allowedCompanyIds, allowedOperatorIds] = await Promise.all([
@@ -1172,6 +1175,8 @@ export async function POST(req: Request) {
     if (guard) return guard
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    const addonDenied = await requireAddon(access, 'addon.salary')
+    if (addonDenied) return addonDenied
     const allowedCompanyIds = await listOrganizationCompanyIds({
       activeOrganizationId: access.activeOrganization?.id || null,
       isSuperAdmin: access.isSuperAdmin,

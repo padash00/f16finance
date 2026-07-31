@@ -9,6 +9,7 @@ import {
 } from '@/lib/server/organizations'
 import { listOperatorSalaryData, listSalaryReferenceData } from '@/lib/server/repositories/salary'
 import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
+import { requireAddon } from '@/lib/server/entitlements'
 import { requireCapability } from '@/lib/server/capabilities'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
@@ -41,6 +42,8 @@ export async function GET(req: Request) {
     if (guard) return guard
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    const addonDenied = await requireAddon(access, 'addon.salary')
+    if (addonDenied) return addonDenied
 
     const denied = await requireCapability(access, 'salary-rules.view')
     if (denied) return denied
