@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { logAiUsageSafe } from '@/lib/ai/usage-tracker'
 import { generateAiText, type AiMessage } from '@/lib/ai/provider'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { requireAddon } from '@/lib/server/entitlements'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { resolveCompanyScope, listOrganizationOperatorIds } from '@/lib/server/organizations'
@@ -67,6 +68,8 @@ export async function GET(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+    const addonDenied = await requireAddon(access, 'addon.ai')
+    if (addonDenied) return addonDenied
     // canView: суперадмин ИЛИ сотрудник админ-команды
     if (!access.isSuperAdmin && !access.staffMember) return json({ error: 'forbidden' }, 403)
 

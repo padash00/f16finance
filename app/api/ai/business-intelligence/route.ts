@@ -7,6 +7,7 @@ import { computeBusinessIntelligence } from '@/lib/server/business-intelligence'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { requireAddon } from '@/lib/server/entitlements'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 export const dynamic = 'force-dynamic'
@@ -25,6 +26,8 @@ export async function POST(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+    const addonDenied = await requireAddon(access, 'addon.ai')
+    if (addonDenied) return addonDenied
     if (!canView(access)) return json({ error: 'forbidden' }, 403)
 
     const ip = getClientIp(request)

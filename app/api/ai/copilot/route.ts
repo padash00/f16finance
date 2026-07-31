@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { runCopilotForWeb } from '@/lib/ai/copilot'
 import { checkRateLimit } from '@/lib/server/rate-limit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { requireAddon } from '@/lib/server/entitlements'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status, headers: { 'Cache-Control': 'no-store' } })
@@ -11,6 +12,8 @@ export async function POST(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+    const addonDenied = await requireAddon(access, 'addon.ai')
+    if (addonDenied) return addonDenied
     if (!access.user) return json({ error: 'unauthorized' }, 401)
     if (!access.isSuperAdmin && !access.staffRole) return json({ error: 'forbidden' }, 403)
 

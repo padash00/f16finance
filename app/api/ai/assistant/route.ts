@@ -4,6 +4,7 @@ import { runAssistant, streamAssistant } from '@/lib/ai/assistant'
 import type { AssistantRequest } from '@/lib/ai/types'
 import { logAiUsageSafe } from '@/lib/ai/usage-tracker'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { requireAddon } from '@/lib/server/entitlements'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 

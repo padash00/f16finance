@@ -11,6 +11,7 @@ import { NextResponse } from 'next/server'
 import { logAiUsageSafe } from '@/lib/ai/usage-tracker'
 import { generateAiText, streamAiText, type AiMessage } from '@/lib/ai/provider'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { requireAddon } from '@/lib/server/entitlements'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -108,6 +109,8 @@ export async function POST(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+    const addonDenied = await requireAddon(access, 'addon.ai')
+    if (addonDenied) return addonDenied
 
     const ip = getClientIp(request)
     const rl = checkRateLimit(`ai-forecast:${access.user?.id || ip}`, 30, 60_000)

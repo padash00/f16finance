@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { generateAiText } from '@/lib/ai/provider'
 import { requireCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { requireAddon } from '@/lib/server/entitlements'
 
 function fmt(n: number) {
   return Math.round(Number(n) || 0).toLocaleString('ru-RU') + ' ₸'
@@ -12,6 +13,8 @@ export async function POST(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    const addonDenied = await requireAddon(access, 'addon.ai')
+    if (addonDenied) return addonDenied
     const denied = await requireCapability(access, 'forecast.generate')
     if (denied) return denied
 
