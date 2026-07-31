@@ -27,6 +27,7 @@ import {
   ensureOrganizationStaffAccess,
 } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { requireAddon } from '@/lib/server/entitlements'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
 function json(data: unknown, status = 200) {
@@ -52,6 +53,8 @@ export async function POST(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+    const addonDenied = await requireAddon(access, 'addon.hr')
+    if (addonDenied) return addonDenied
 
     const body = (await request.json().catch(() => null)) as
       | { kind?: Kind; id?: string; action?: Action; payload?: Payload }

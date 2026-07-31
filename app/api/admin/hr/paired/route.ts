@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { findPairedRecord } from '@/lib/server/hr-paired'
 import { requireCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { requireAddon } from '@/lib/server/entitlements'
 import {
   listOrganizationOperatorIds,
   listOrganizationStaffIds,
@@ -17,6 +18,8 @@ export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    const addonDenied = await requireAddon(access, 'addon.hr')
+    if (addonDenied) return addonDenied
 
     const denied = await requireCapability(access, 'staff.toggle_status')
     if (denied) return denied as any

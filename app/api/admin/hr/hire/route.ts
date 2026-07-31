@@ -32,6 +32,7 @@ import { normalizeOperatorUsername, toOperatorAuthEmail } from '@/lib/core/auth'
 import { writeAuditLog } from '@/lib/server/audit'
 import { requireCapability, canAssignStaffRole } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { requireAddon } from '@/lib/server/entitlements'
 import { listOrganizationCompanyIds } from '@/lib/server/organizations'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
@@ -96,6 +97,8 @@ export async function POST(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+    const addonDenied = await requireAddon(access, 'addon.hr')
+    if (addonDenied) return addonDenied
 
     const body = (await request.json().catch(() => null)) as HireBody | null
     if (!body) return json({ error: 'Invalid body' }, 400)

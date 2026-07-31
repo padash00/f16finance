@@ -4,6 +4,7 @@ import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
 import { ensureOrganizationOperatorAccess, ensureOrganizationStaffAccess } from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
+import { requireAddon } from '@/lib/server/entitlements'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 function json(data: unknown, status = 200) {
@@ -14,6 +15,8 @@ export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    const addonDenied = await requireAddon(access, 'addon.hr')
+    if (addonDenied) return addonDenied
 
     const denied = await requireCapability(access, 'hr.view')
     if (denied) return denied as any
