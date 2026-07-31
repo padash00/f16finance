@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { requireAddon } from '@/lib/server/entitlements'
 
 export async function POST(request: Request) {
   const access = await getRequestAccessContext(request)
   if ('response' in access) return access.response
+  const addonDenied = await requireAddon(access, 'addon.telegram')
+  if (addonDenied) return addonDenied
   // Переустановка webhook бота — только владелец/суперадмин.
   if (!access.isSuperAdmin && access.staffRole !== 'owner') {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 })

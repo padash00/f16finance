@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { requireAddon } from '@/lib/server/entitlements'
 import { ensureOrganizationOperatorAccess } from '@/lib/server/organizations'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { findOperatorByKey } from '@/lib/server/repositories/salary'
@@ -36,6 +37,8 @@ export async function POST(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    const addonDenied = await requireAddon(access, 'addon.telegram')
+    if (addonDenied) return addonDenied
 
     const body = (await req.json().catch(() => null)) as ReqBody | null
     if (!body?.operatorId?.trim()) return json({ error: 'operatorId обязателен' }, 400)

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { requireAddon } from '@/lib/server/entitlements'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { sendTelegramMessage } from '@/lib/telegram/send'
 
@@ -33,6 +34,8 @@ function fmtMoney(v: number) {
 export async function POST(request: Request) {
   const access = await getRequestAccessContext(request)
   if ('response' in access) return access.response
+  const addonDenied = await requireAddon(access, 'addon.telegram')
+  if (addonDenied) return addonDenied
 
   const chatId = process.env.TELEGRAM_CHAT_ID
   if (!chatId) {

@@ -1,11 +1,14 @@
 import { NextResponse } from 'next/server'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { requireAddon } from '@/lib/server/entitlements'
 import { ensureOrganizationStaffAccess } from '@/lib/server/organizations'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
 export async function GET(request: Request) {
   const access = await getRequestAccessContext(request)
   if ('response' in access) return access.response
+  const addonDenied = await requireAddon(access, 'addon.telegram')
+  if (addonDenied) return addonDenied
 
   // Изоляция: персонал только своей организации (service-role обходит RLS).
   const orgId = access.activeOrganization?.id || null
@@ -26,6 +29,8 @@ export async function GET(request: Request) {
 export async function PATCH(request: Request) {
   const access = await getRequestAccessContext(request)
   if ('response' in access) return access.response
+  const addonDenied = await requireAddon(access, 'addon.telegram')
+  if (addonDenied) return addonDenied
 
   const body = await request.json().catch(() => ({}))
   const { id, telegram_chat_id } = body

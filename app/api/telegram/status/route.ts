@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { requireAddon } from '@/lib/server/entitlements'
 
 export async function GET(request: Request) {
   const access = await getRequestAccessContext(request)
   if ('response' in access) return access.response
+  const addonDenied = await requireAddon(access, 'addon.telegram')
+  if (addonDenied) return addonDenied
 
   const token = process.env.TELEGRAM_BOT_TOKEN
   const chatId = process.env.TELEGRAM_CHAT_ID
