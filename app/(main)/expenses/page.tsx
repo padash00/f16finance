@@ -53,6 +53,7 @@ import {
   Upload,
   Loader2,
   Bookmark,
+  CalendarRange,
 } from 'lucide-react'
 import {
   ResponsiveContainer,
@@ -1098,6 +1099,37 @@ export default function ExpensesPage() {
     })
   }
 
+  // Удаление всей серии: одна ошибка в мастере = N строк, чистить по одной больно.
+  const deleteSeries = (row: ExpenseRow) => {
+    const seriesId = row.series_id
+    if (!seriesId) return
+    const seriesRows = rows.filter((item) => item.series_id === seriesId)
+    if (seriesRows.length === 0) return
+    const seriesTotal = seriesRows.reduce((sum, item) => sum + rowTotal(item), 0)
+    if (!window.confirm(
+      `Удалить всю серию: ${seriesRows.length} расходов на ${Formatters.moneyDetailed(seriesTotal)}?`,
+    )) return
+
+    setError(null)
+    deleteWithUndo({
+      message: `Серия из ${seriesRows.length} расходов на ${Formatters.moneyDetailed(seriesTotal)} удалена`,
+      hide: () => setRows((prev) => prev.filter((item) => item.series_id !== seriesId)),
+      restore: () => setRows((prev) => [...seriesRows, ...prev]),
+      commit: async () => {
+        const response = await fetch('/api/admin/expenses', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'deleteSeries',
+            seriesId,
+          }),
+        })
+        const json = await response.json().catch(() => null)
+        if (!response.ok) throw new Error(json?.error || 'Не удалось удалить серию')
+      },
+    })
+  }
+
   // Пока компонент не смонтирован на клиенте — рендерим null чтобы избежать
   // hydration mismatch (на странице есть new Date() в render + useState с todayISO()).
   if (!isClient) {
@@ -1486,6 +1518,7 @@ export default function ExpensesPage() {
               showControlColumns={canManageExpense}
               openExpenseEditor={openExpenseEditor}
               deleteExpense={deleteExpense}
+              deleteSeries={deleteSeries}
               onPreview={setPreviewUrl}
               totals={{ count: sortedRows.length, cash: analytics.cash, kaspi: analytics.kaspi, total: analytics.total }}
             />
@@ -2112,6 +2145,7 @@ function ListTab({
   showControlColumns,
   openExpenseEditor,
   deleteExpense,
+  deleteSeries,
   onPreview,
   totals,
 }: any) {
@@ -2322,10 +2356,21 @@ function ListTab({
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
                         )}
+                        {canDeleteExpense && row.series_id && (
+                          <Button
+                            variant="outline"
+                            size="icon-sm"
+                            title="Удалить всю серию"
+                            onClick={() => deleteSeries(row)}
+                          >
+                            <CalendarRange className="h-3.5 w-3.5 text-destructive" />
+                          </Button>
+                        )}
                         {canDeleteExpense && (
                           <Button
                             variant="destructive"
                             size="icon-sm"
+                            title="Удалить расход"
                             onClick={() => deleteExpense(row)}
                           >
                             <X className="h-3.5 w-3.5" />
@@ -2438,6 +2483,12 @@ function ListTab({
                       {row.category || 'Общее'}
                     </span>
                     <div className="mt-1 text-[11px] text-gray-500">{operatorName(row.operator_id)}</div>
+                    {row.series_id ? (
+                      <div className="mt-1 inline-flex items-center gap-1 text-[10px] text-indigo-500 dark:text-indigo-300">
+                        <CalendarRange className="h-3 w-3" />
+                        Серия{typeof row.series_index === 'number' ? ` · ${row.series_index + 1}` : ''}
+                      </div>
+                    ) : null}
                   </td>
                   {showControlColumns ? (
                     <td className="px-4 py-3">
@@ -2480,10 +2531,21 @@ function ListTab({
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
                         )}
+                        {canDeleteExpense && row.series_id && (
+                          <Button
+                            variant="outline"
+                            size="icon-sm"
+                            title="Удалить всю серию"
+                            onClick={() => deleteSeries(row)}
+                          >
+                            <CalendarRange className="h-3.5 w-3.5 text-destructive" />
+                          </Button>
+                        )}
                         {canDeleteExpense && (
                           <Button
                             variant="destructive"
                             size="icon-sm"
+                            title="Удалить расход"
                             onClick={() => deleteExpense(row)}
                           >
                             <X className="h-3.5 w-3.5" />

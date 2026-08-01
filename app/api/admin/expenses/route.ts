@@ -33,6 +33,10 @@ type Body =
       expenseId: string
     }
   | {
+      action: 'deleteSeries'
+      seriesId: string
+    }
+  | {
       action: 'removeAttachment'
       expenseId: string
     }
@@ -97,11 +101,18 @@ export async function GET(req: Request) {
       isSuperAdmin: access.isSuperAdmin,
     })
 
+    // Колонки серии появились миграцией 20260801_expense_series. Пока она не
+    // применена — PostgREST валит ВЕСЬ запрос (42703), и журнал расходов пустой.
+    // Поэтому при первой такой ошибке молча откатываемся на старый набор колонок.
+    const BASE_COLUMNS = 'id, date, company_id, operator_id, category, cash_amount, kaspi_amount, comment, attachment_url, status, document_kind, one_off_payee, created_at'
+    const SERIES_COLUMNS = `${BASE_COLUMNS}, series_id, series_index`
+    let selectColumns = SERIES_COLUMNS
+
     // Билдер с одинаковыми фильтрами — переиспользуем для пагинации >1000
     const buildBaseQuery = () => {
       let q = supabase
         .from('expenses')
-        .select('id, date, company_id, operator_id, category, cash_amount, kaspi_amount, comment, attachment_url, status, document_kind, one_off_payee, created_at')
+        .select(selectColumns)
       if (from) q = q.gte('date', from)
       if (to) q = q.lte('date', to)
       if (companyScope.allowedCompanyIds !== null) {
@@ -138,7 +149,11 @@ export async function GET(req: Request) {
     while (rows.length < pageSize) {
       const remaining = pageSize - rows.length
       const upper = cursor + Math.min(CHUNK, remaining) - 1
-      const { data, error } = await buildBaseQuery().range(cursor, upper)
+      let { data, error } = await buildBaseQuery().range(cursor, upper)
+      if (error && (error as any).code === '42703' && selectColumns === SERIES_COLUMNS) {
+        selectColumns = BASE_COLUMNS
+        ;({ data, error } = await buildBaseQuery().range(cursor, upper))
+      }
       if (error) throw error
       const batch = data ?? []
       rows.push(...batch)
@@ -301,6 +316,51 @@ export async function POST(req: Request) {
       if (attachmentDeleteError && attachmentDeleteError.code !== '42P01') throw attachmentDeleteError
 
       return json({ ok: true })
+    }
+
+    if (body.action === 'deleteSeries') {
+      const seriesDenied = await requireCapability(access, 'expenses.delete')
+      if (seriesDenied) return seriesDenied as any
+      if (!canDeleteFinance) return json({ error: 'forbidden' }, 403)
+      if (!body.seriesId?.trim()) return json({ error: 'seriesId обязателен' }, 400)
+
+      const { data: seriesRows, error: seriesError } = await supabase
+        .from('expenses')
+        .select('id, date, company_id, category, cash_amount, kaspi_amount')
+        .eq('series_id', body.seriesId)
+      if (seriesError) throw seriesError
+      if (!seriesRows || seriesRows.length === 0) return json({ error: 'Серия не найдена' }, 404)
+
+      // Изоляция: удалить серию можно только если ВСЕ её точки доступны текущему пользователю.
+      const companyIds = Array.from(new Set(seriesRows.map((row: any) => String(row.company_id || ''))))
+      for (const companyId of companyIds) {
+        await resolveCompanyScope({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          requestedCompanyId: companyId || null,
+          isSuperAdmin: access.isSuperAdmin,
+        })
+      }
+
+      const { error: seriesDeleteError } = await supabase.from('expenses').delete().eq('series_id', body.seriesId)
+      if (seriesDeleteError) throw seriesDeleteError
+
+      await writeAuditLog(supabase, {
+        actorUserId: user?.id || null,
+        entityType: 'expense_series',
+        entityId: String(body.seriesId),
+        action: 'delete',
+        payload: {
+          count: seriesRows.length,
+          expense_ids: seriesRows.map((row: any) => String(row.id)),
+          dates: seriesRows.map((row: any) => String(row.date)),
+          amount_total: seriesRows.reduce(
+            (sum: number, row: any) => sum + Number(row.cash_amount || 0) + Number(row.kaspi_amount || 0),
+            0,
+          ),
+        },
+      })
+
+      return json({ ok: true, deleted: seriesRows.length })
     }
 
     // Дошли сюда — это deleteExpense (другие actions обработаны выше)

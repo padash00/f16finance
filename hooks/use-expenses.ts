@@ -15,6 +15,9 @@ export type ExpenseRow = {
   status?: 'confirmed' | 'pending_approval' | 'approved' | 'declined' | null
   document_kind?: 'receipt' | 'invoice' | 'bill' | 'whitelist' | 'one_off' | null
   one_off_payee?: string | null
+  /** Серия расходов: один платёж, разнесённый по периодам (см. wizard/submit-series). */
+  series_id?: string | null
+  series_index?: number | null
   created_at?: string | null
   attachments?: Array<{
     id: string

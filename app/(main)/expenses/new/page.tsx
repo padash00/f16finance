@@ -14,6 +14,7 @@ import {
   HelpCircle,
   Loader2,
   Trash2,
+  CalendarRange,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -23,6 +24,17 @@ import { useUnsavedGuard } from '@/lib/client/use-unsaved-guard'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { DatePicker } from '@/components/ui/date-picker'
 import { getFinancialGroupLabel, type FinancialGroup } from '@/lib/core/financial-groups'
+import {
+  SERIES_KIND_LABELS,
+  SERIES_MAX_PERIODS,
+  addDaysISO,
+  addMonthsClamped,
+  buildSeriesRows,
+  isDateInSeriesPeriod,
+  splitPeriodAmount,
+  type SeriesKind,
+  type SeriesRow,
+} from '@/lib/domain/expense-series'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { Skeleton, CardSkeleton } from '@/components/skeleton'
 
@@ -134,7 +146,16 @@ function ExpenseWizardPageContent() {
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [done, setDone] = useState<{ status: string; id: string } | null>(null)
+  const [done, setDone] = useState<{ status: string; id: string; count?: number } | null>(null)
+
+  // Серия: платёж за несколько периодов сразу
+  const [seriesEnabled, setSeriesEnabled] = useState(false)
+  const [seriesKind, setSeriesKind] = useState<SeriesKind>('month')
+  const [seriesCount, setSeriesCount] = useState(6)
+  const [seriesStart, setSeriesStart] = useState('')
+  const [seriesRows, setSeriesRows] = useState<SeriesRow[]>([])
+  const [seriesDuplicates, setSeriesDuplicates] = useState<Record<string, number>>({})
+  const [seriesDupLoading, setSeriesDupLoading] = useState(false)
   const [aiHint, setAiHint] = useState<AiCategoryHint | null>(null)
   const [aiHintLoading, setAiHintLoading] = useState(false)
   const [aiHintError, setAiHintError] = useState<string | null>(null)
@@ -414,6 +435,87 @@ function ExpenseWizardPageContent() {
     if (payload.one_off_reason.trim().length < 30) step2Errors.push('Поле "Почему нет чека" должно быть минимум 30 символов')
   }
 
+  // Старт серии по умолчанию: так, чтобы последний период попал на месяц расхода.
+  // Налог за полгода, добавленный в августе → серия март…август.
+  useEffect(() => {
+    if (!seriesEnabled) return
+    setSeriesStart((prev) => {
+      if (prev) return prev
+      const base = payload.date || todayISO()
+      const firstOfMonth = `${base.slice(0, 7)}-01`
+      if (seriesKind === 'week') return addDaysISO(base, -7 * (seriesCount - 1))
+      return addMonthsClamped(firstOfMonth, -((seriesKind === 'quarter' ? 3 : 1) * (seriesCount - 1)))
+    })
+  }, [seriesEnabled, seriesCount, seriesKind, payload.date])
+
+  useEffect(() => {
+    if (!seriesEnabled) {
+      setSeriesRows([])
+      return
+    }
+    if (!seriesStart) return
+    setSeriesRows(buildSeriesRows(seriesStart, seriesKind, seriesCount, payload.amount_cash, payload.amount_kaspi))
+  }, [seriesEnabled, seriesStart, seriesKind, seriesCount, payload.amount_cash, payload.amount_kaspi])
+
+  // Проверка дублей: если за этот период по той же точке и категории расход уже
+  // есть — подсвечиваем строку. Двойной налог в отчётах здесь самая дорогая ошибка.
+  // Ключ по датам, а не по массиву строк: правка суммы не должна дёргать проверку дублей.
+  const seriesDatesKey = useMemo(() => seriesRows.map((row) => row.date).join(','), [seriesRows])
+
+  useEffect(() => {
+    const dates = seriesDatesKey ? seriesDatesKey.split(',') : []
+    if (!seriesEnabled || step !== 3 || dates.length === 0 || !payload.company_id || !payload.category_name) {
+      setSeriesDuplicates({})
+      return
+    }
+    let cancelled = false
+    const check = async () => {
+      setSeriesDupLoading(true)
+      try {
+        const sorted = [...dates].sort()
+        const from = `${sorted[0].slice(0, 7)}-01`
+        const lastDate = sorted[sorted.length - 1]
+        const to = seriesKind === 'week'
+          ? addDaysISO(lastDate, 6)
+          : addDaysISO(addMonthsClamped(`${lastDate.slice(0, 7)}-01`, seriesKind === 'quarter' ? 3 : 1), -1)
+        const params = new URLSearchParams({
+          from,
+          to,
+          company_id: payload.company_id,
+          category: payload.category_name,
+          page_size: '1000',
+        })
+        const response = await fetch(`/api/admin/expenses?${params.toString()}`, { cache: 'no-store' })
+        if (!response.ok) throw new Error('check failed')
+        const existing = ((await response.json()).data || []) as Array<{ date: string }>
+        if (cancelled) return
+        const map: Record<string, number> = {}
+        for (const date of dates) {
+          const hits = existing.filter((item) => isDateInSeriesPeriod(String(item.date || ''), date, seriesKind))
+          if (hits.length > 0) map[date] = hits.length
+        }
+        setSeriesDuplicates(map)
+      } catch {
+        if (!cancelled) setSeriesDuplicates({})
+      } finally {
+        if (!cancelled) setSeriesDupLoading(false)
+      }
+    }
+    check()
+    return () => {
+      cancelled = true
+    }
+  }, [seriesEnabled, step, seriesDatesKey, seriesKind, payload.company_id, payload.category_name])
+
+  function setSeriesRowAmount(index: number, raw: string) {
+    const value = Math.max(0, Number(String(raw).replace(/\s/g, '').replace(',', '.')) || 0)
+    setSeriesRows((prev) => prev.map((row, i) => (
+      i === index
+        ? { ...row, ...splitPeriodAmount(value, payload.amount_cash, payload.amount_kaspi) }
+        : row
+    )))
+  }
+
   async function patchSession(nextStep: number, partial: Partial<WizardPayload>) {
     if (!sessionId) throw new Error('session not started')
     const response = await fetch('/api/admin/expenses/wizard', {
@@ -481,8 +583,35 @@ function ExpenseWizardPageContent() {
     }
   }
 
+  const seriesTotal = useMemo(
+    () => seriesRows.reduce((sum, row) => sum + row.amount_cash + row.amount_kaspi, 0),
+    [seriesRows],
+  )
+  const seriesHasBackdated = useMemo(
+    () => seriesRows.some((row) => new Date(row.date).getTime() < Date.now() - 7 * 24 * 60 * 60 * 1000),
+    [seriesRows],
+  )
+  const seriesHasFuture = useMemo(
+    () => seriesRows.some((row) => new Date(row.date).getTime() > Date.now() + 24 * 60 * 60 * 1000),
+    [seriesRows],
+  )
+  const seriesErrors: string[] = []
+  if (seriesEnabled) {
+    if (seriesRows.length < 2) seriesErrors.push('В серии должно быть минимум 2 периода')
+    if (seriesRows.length > SERIES_MAX_PERIODS) seriesErrors.push(`Максимум ${SERIES_MAX_PERIODS} периодов за раз`)
+    if (seriesRows.some((row) => row.amount_cash + row.amount_kaspi <= 0)) {
+      seriesErrors.push('У каждого периода сумма должна быть больше 0')
+    }
+    if (seriesHasFuture) seriesErrors.push('Периоды не могут быть в будущем')
+    if (seriesHasBackdated && !payload.backdated_confirmed) {
+      seriesErrors.push('Подтвердите, что это старые расходы')
+    }
+  }
+  const seriesValid = !seriesEnabled || seriesErrors.length === 0
+
   async function handleSubmit() {
     if (!sessionId) return
+    if (!seriesValid) return
     setError(null)
     setSaving(true)
     try {
@@ -504,22 +633,42 @@ function ExpenseWizardPageContent() {
         one_off_payee: payload.one_off_payee,
         one_off_reason: payload.one_off_reason,
       })
-      const response = await fetch('/api/admin/expenses/wizard/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId }),
-      })
+      const isSeries = seriesEnabled && seriesRows.length >= 2
+      const response = isSeries
+        ? await fetch('/api/admin/expenses/wizard/submit-series', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              session_id: sessionId,
+              period_kind: seriesKind,
+              periods: seriesRows.map((row) => ({
+                date: row.date,
+                amount_cash: row.amount_cash,
+                amount_kaspi: row.amount_kaspi,
+                label: row.label,
+              })),
+            }),
+          })
+        : await fetch('/api/admin/expenses/wizard/submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sessionId }),
+          })
       const json = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(json.error || 'Не удалось создать расход')
+      if (!response.ok) {
+        throw new Error(json.error || (isSeries ? 'Не удалось создать серию расходов' : 'Не удалось создать расход'))
+      }
       // СИНХРОННО очищаем черновик ДО setDone и до любых redirect'ов.
       // Не полагаемся на useEffect — там race condition с debounce save.
       try { localStorage.removeItem(EXPENSE_WIZARD_DRAFT_KEY) } catch {}
-      setDone({ status: json.data.status, id: json.data.id })
+      const createdId = isSeries ? String(json.data.series_id) : String(json.data.id)
+      const createdStatus = String(json.data.status)
+      setDone({ status: createdStatus, id: createdId, count: isSeries ? Number(json.data.count || 0) : 1 })
       if (embedded) {
         if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
           window.parent.postMessage({
             type: 'expense-wizard-created',
-            payload: { id: json.data.id, status: json.data.status },
+            payload: { id: createdId, status: createdStatus, count: isSeries ? Number(json.data.count || 0) : 1 },
           }, window.location.origin)
         }
         return
@@ -528,7 +677,7 @@ function ExpenseWizardPageContent() {
         // Финальная страховка перед redirect — на случай если debounce setItem
         // успел отработать после первого removeItem.
         try { localStorage.removeItem(EXPENSE_WIZARD_DRAFT_KEY) } catch {}
-        if (json.data.status === 'pending_approval') {
+        if (createdStatus === 'pending_approval') {
           router.push('/expenses/pending')
         } else {
           router.push('/expenses')
@@ -618,7 +767,11 @@ function ExpenseWizardPageContent() {
         <Card className="p-8 text-center">
           <CheckCircle2 className="w-16 h-16 text-emerald-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold mb-2">
-            {done.status === 'pending_approval' ? 'Отправлено на одобрение' : 'Расход создан'}
+            {done.status === 'pending_approval'
+              ? 'Отправлено на одобрение'
+              : (done.count || 1) > 1
+                ? `Создано расходов: ${done.count}`
+                : 'Расход создан'}
           </h2>
           <p className="text-sm text-muted-foreground">
             {done.status === 'pending_approval'
@@ -1198,6 +1351,154 @@ function ExpenseWizardPageContent() {
                     : '—'
             }
           />
+
+          <div className="rounded-lg border p-4 space-y-4 mt-2">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={seriesEnabled}
+                onChange={(e) => setSeriesEnabled(e.target.checked)}
+                className="mt-1 h-4 w-4"
+              />
+              <span>
+                <span className="text-sm font-semibold flex items-center gap-2">
+                  <CalendarRange className="w-4 h-4" />
+                  Это платёж за несколько периодов
+                </span>
+                <span className="block text-xs text-muted-foreground mt-1">
+                  Налог или аренда, заплаченные одним платежом за полгода. Создадим отдельную
+                  запись на каждый период — помесячная прибыльность останется честной.
+                </span>
+              </span>
+            </label>
+
+            {seriesEnabled && (
+              <div className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Период</label>
+                    <select
+                      value={seriesKind}
+                      onChange={(e) => {
+                        setSeriesKind(e.target.value as SeriesKind)
+                        setSeriesStart('')
+                      }}
+                      className={inputBaseClass}
+                    >
+                      {(Object.keys(SERIES_KIND_LABELS) as SeriesKind[]).map((kind) => (
+                        <option key={kind} value={kind}>{SERIES_KIND_LABELS[kind]}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Сколько периодов</label>
+                    <input
+                      type="number"
+                      min={2}
+                      max={SERIES_MAX_PERIODS}
+                      value={seriesCount}
+                      onChange={(e) => {
+                        const next = Math.max(2, Math.min(SERIES_MAX_PERIODS, Number(e.target.value) || 2))
+                        setSeriesCount(next)
+                      }}
+                      className={inputBaseClass}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Первый период</label>
+                    <DatePicker
+                      value={seriesStart}
+                      onChange={(iso) => setSeriesStart(iso)}
+                      max={todayISO()}
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-md border overflow-hidden">
+                  <div className="grid grid-cols-[1fr_auto_auto] gap-2 px-3 py-2 bg-muted/40 text-[11px] uppercase tracking-wide text-muted-foreground">
+                    <div>Период</div>
+                    <div className="text-right">Сумма</div>
+                    <div />
+                  </div>
+                  <div className="divide-y">
+                    {seriesRows.map((row, index) => {
+                      const duplicateCount = seriesDuplicates[row.date] || 0
+                      return (
+                        <div
+                          key={`${row.date}-${index}`}
+                          className={`grid grid-cols-[1fr_auto_auto] gap-2 items-center px-3 py-2 ${
+                            duplicateCount > 0 ? 'bg-amber-500/10' : ''
+                          }`}
+                        >
+                          <div className="min-w-0">
+                            <div className="text-sm truncate">{row.label}</div>
+                            <div className="text-[11px] text-muted-foreground">{row.date}</div>
+                            {duplicateCount > 0 ? (
+                              <div className="text-[11px] text-amber-700 dark:text-amber-300 mt-0.5">
+                                Уже есть расход в этом периоде ({duplicateCount}) — проверьте, не задвоите
+                              </div>
+                            ) : null}
+                          </div>
+                          <MoneyInput
+                            value={String(row.amount_cash + row.amount_kaspi || '')}
+                            onValueChange={(value) => setSeriesRowAmount(index, value)}
+                            className="w-32 text-right"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setSeriesRows((prev) => prev.filter((_, i) => i !== index))}
+                            className="text-muted-foreground hover:text-destructive p-1"
+                            title="Убрать период"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )
+                    })}
+                    {seriesRows.length === 0 ? (
+                      <div className="px-3 py-4 text-sm text-muted-foreground">
+                        Выберите первый период — сгенерируем список.
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="flex items-center justify-between px-3 py-2 bg-muted/20 text-sm">
+                    <span className="text-muted-foreground">
+                      Записей: {seriesRows.length}
+                      {seriesDupLoading ? ' · проверяем дубли...' : ''}
+                    </span>
+                    <span className="font-semibold">Итого: {fmtMoney(seriesTotal)}</span>
+                  </div>
+                </div>
+
+                {seriesHasBackdated && !payload.backdated_confirmed ? (
+                  <label className="flex items-start gap-3 cursor-pointer rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
+                    <input
+                      type="checkbox"
+                      checked={payload.backdated_confirmed}
+                      onChange={(e) => setPayload((p) => ({ ...p, backdated_confirmed: e.target.checked }))}
+                      className="mt-0.5 h-4 w-4"
+                    />
+                    <span className="text-xs text-amber-800 dark:text-amber-100/90">
+                      Подтверждаю: это расходы за прошлые периоды, даты указаны верно.
+                    </span>
+                  </label>
+                ) : null}
+
+                {seriesErrors.length > 0 ? (
+                  <ul className="text-xs text-destructive space-y-1">
+                    {seriesErrors.map((err) => (
+                      <li key={err}>- {err}</li>
+                    ))}
+                  </ul>
+                ) : null}
+
+                <p className="text-[11px] text-muted-foreground">
+                  Документ, комментарий и категория одинаковые для всех записей. Серию можно
+                  будет удалить целиком в журнале расходов.
+                </p>
+              </div>
+            )}
+          </div>
         </Card>
       )}
 
@@ -1225,9 +1526,9 @@ function ExpenseWizardPageContent() {
           </Button>
         )}
         {step === 3 && can('expenses.create') && (
-          <Button onClick={handleSubmit} disabled={saving}>
+          <Button onClick={() => handleSubmit()} disabled={saving || !seriesValid}>
             {saving ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-1" />}
-            Создать расход
+            {seriesEnabled && seriesRows.length >= 2 ? `Создать ${seriesRows.length} расходов` : 'Создать расход'}
           </Button>
         )}
       </div>
