@@ -46,6 +46,8 @@ type UseApiCacheResult<T> = {
   data: T | null
   loading: boolean
   error: string | null
+  /** Идёт ручная перезагрузка через refresh() — для спиннера на кнопке «Обновить». */
+  refreshing: boolean
   /** Принудительно перезагрузить (показывает loading только если данных ещё нет). */
   refresh: () => Promise<void>
 }
@@ -59,6 +61,7 @@ export function useApiCache<T>(url: string | null, options: UseApiCacheOptions =
 
   const [data, setData] = useState<T | null>(hasFresh ? (fresh!.data as T) : null)
   const [loading, setLoading] = useState(active && !hasFresh)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // Отбрасываем ответы устаревших запросов (быстрое переключение фильтров)
   const requestSeq = useRef(0)
@@ -74,7 +77,8 @@ export function useApiCache<T>(url: string | null, options: UseApiCacheOptions =
       const target = url!
       if (!background) setLoading(true)
       try {
-        const res = await fetch(target)
+        // no-store: иначе браузер может отдать свой HTTP-кэш и «Обновить» ничего не меняет
+        const res = await fetch(target, { cache: 'no-store' })
         const json = await res.json().catch(() => null)
         if (!res.ok) throw new Error(json?.error || `Ошибка загрузки (${res.status})`)
         const payload = (json?.data ?? json) as T
@@ -116,8 +120,13 @@ export function useApiCache<T>(url: string | null, options: UseApiCacheOptions =
   }, [url, active, load])
 
   const refresh = useCallback(async () => {
-    await load(!!cache.get(url || ''))
+    setRefreshing(true)
+    try {
+      await load(!!cache.get(url || ''))
+    } finally {
+      setRefreshing(false)
+    }
   }, [load, url])
 
-  return { data, loading, error, refresh }
+  return { data, loading, error, refreshing, refresh }
 }

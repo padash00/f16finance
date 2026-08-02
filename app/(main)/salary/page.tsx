@@ -418,7 +418,7 @@ export default function SalaryPage() {
   // SWR-кэш: повторное открытие страницы мгновенно показывает прошлые данные,
   // свежие подтягиваются фоном. После мутаций зовём load() (refresh — тихая перезагрузка при наличии кэша).
   const salaryUrl = `/api/admin/salary?view=weekly&weekStart=${encodeURIComponent(weekStart)}`
-  const { data, loading, error: loadError, refresh: load } = useApiCache<SalaryData>(salaryUrl)
+  const { data, loading, error: loadError, refreshing, refresh: load } = useApiCache<SalaryData>(salaryUrl)
 
   useEffect(() => { if (!error) return; const t = setTimeout(() => setError(null), 6000); return () => clearTimeout(t) }, [error])
   useEffect(() => { if (advanceTarget) { setAdvanceCompanyId(advanceTarget.week.companyAllocations[0]?.companyId || data?.companies[0]?.id || ''); setAdvanceDate(todayISO()); setAdvanceCash(''); setAdvanceKaspi(''); setAdvanceComment('') } }, [advanceTarget, data?.companies])
@@ -665,7 +665,7 @@ export default function SalaryPage() {
   // SWR-кэш ЗП админ-состава: повторное открытие — мгновенно из кэша, свежие данные фоном.
   // После мутаций зовём loadStaffSalary() (refresh). API отдаёт плоский объект — хук вернёт его целиком.
   const staffSalaryUrl = showStaffArchived ? '/api/admin/staff-salary?include_archived=1' : '/api/admin/staff-salary'
-  const { data: staffSalary, loading: staffSalaryLoading, refresh: loadStaffSalary } = useApiCache<StaffSalaryData>(staffSalaryUrl)
+  const { data: staffSalary, loading: staffSalaryLoading, refreshing: staffRefreshing, refresh: loadStaffSalary } = useApiCache<StaffSalaryData>(staffSalaryUrl)
   const [staffAdjModal, setStaffAdjModal] = useState<StaffMember | null>(null)
   const [staffPayModal, setStaffPayModal] = useState<StaffMember | null>(null)
   const [staffAdjKind, setStaffAdjKind] = useState<'debt' | 'fine' | 'bonus' | 'advance'>('fine')
@@ -1120,9 +1120,11 @@ export default function SalaryPage() {
                     variant="outline"
                     className="h-8 w-8 rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover"
                     onClick={() => void load()}
+                    disabled={refreshing}
+                    title="Обновить"
                     aria-label="Обновить"
                   >
-                    <RefreshCw className="h-3.5 w-3.5" />
+                    <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
                   </Button>
                 </>
               ) : (
@@ -1131,9 +1133,11 @@ export default function SalaryPage() {
                   variant="outline"
                   className="h-8 w-8 rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover"
                   onClick={() => void loadStaffSalary()}
+                  disabled={staffRefreshing}
+                  title="Обновить"
                   aria-label="Обновить"
                 >
-                  <RefreshCw className="h-3.5 w-3.5" />
+                  <RefreshCw className={`h-3.5 w-3.5 ${staffRefreshing ? 'animate-spin' : ''}`} />
                 </Button>
               )
             }
@@ -1782,7 +1786,7 @@ export default function SalaryPage() {
                 >
                   {showStaffArchived ? 'Архив открыт' : 'Архив'}
                 </Button>
-                <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover" onClick={() => void loadStaffSalary()}><RefreshCw className="h-4 w-4" /></Button>
+                <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover" onClick={() => void loadStaffSalary()} disabled={staffRefreshing} title="Обновить" aria-label="Обновить"><RefreshCw className={`h-4 w-4 ${staffRefreshing ? 'animate-spin' : ''}`} /></Button>
               </div>
             </div>
             {staffSalaryLoading ? (
