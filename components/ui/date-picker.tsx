@@ -54,8 +54,14 @@ export function DatePicker({
   const minDate = fromISO(min)
   const maxDate = fromISO(max)
 
-  const disabledMatcher =
-    minDate || maxDate ? { before: minDate as Date, after: maxDate as Date } : undefined
+  // Матчер собираем только из заданных границ: ключ с undefined ломает react-day-picker
+  const disabledMatcher = React.useMemo(() => {
+    if (!minDate && !maxDate) return undefined
+    const m: { before?: Date; after?: Date } = {}
+    if (minDate) m.before = minDate
+    if (maxDate) m.after = maxDate
+    return m as { before: Date; after: Date }
+  }, [minDate?.getTime(), maxDate?.getTime()]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -64,12 +70,12 @@ export function DatePicker({
           type="button"
           disabled={disabled}
           className={cn(
-            'flex w-full items-center gap-2 rounded-xl border border-border bg-card px-4 py-3 text-left text-sm text-foreground transition hover:border-amber-400 focus:border-amber-500 outline-none disabled:opacity-50',
+            'flex w-full items-center gap-2 overflow-hidden rounded-xl border border-border bg-card px-4 py-3 text-left text-sm text-foreground transition hover:border-amber-400 focus:border-amber-500 outline-none disabled:opacity-50',
             className,
           )}
         >
           <CalendarDays className="h-4 w-4 shrink-0 text-faint" />
-          <span className={cn('whitespace-nowrap', !selected && 'text-faint')}>
+          <span className={cn('truncate whitespace-nowrap', !selected && 'text-faint')}>
             {selected ? format(selected, 'd MMMM yyyy', { locale: ru }) : placeholder}
           </span>
         </button>

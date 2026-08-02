@@ -12,7 +12,7 @@ import { useExpenses } from '@/hooks/use-expenses'
 import { useIncome } from '@/hooks/use-income'
 import type { PageSnapshot } from '@/lib/ai/types'
 import { useCapabilities } from '@/lib/client/use-capabilities'
-import { Activity, CalendarDays, Download, Loader2, Sparkles, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
+import { Activity, Download, Loader2, Sparkles, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
 import {
   Area,
   Bar,
@@ -325,11 +325,20 @@ export default function CashFlowPage() {
                     )
                   })}
                 </div>
-                <div className="flex flex-wrap items-center gap-2 px-3 py-2 bg-white dark:bg-slate-800/50 rounded-xl border border-border">
-                  <CalendarDays className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <DatePicker value={dateFrom} onChange={setDateFrom} className="w-[120px]" />
+                <div className="flex flex-wrap items-center gap-2">
+                  <DatePicker
+                    value={dateFrom}
+                    onChange={setDateFrom}
+                    max={dateTo || undefined}
+                    className="w-auto px-3 py-2 bg-white dark:bg-slate-800/50"
+                  />
                   <span className="text-slate-500">—</span>
-                  <DatePicker value={dateTo} onChange={setDateTo} className="w-[120px]" />
+                  <DatePicker
+                    value={dateTo}
+                    onChange={setDateTo}
+                    min={dateFrom || undefined}
+                    className="w-auto px-3 py-2 bg-white dark:bg-slate-800/50"
+                  />
                 </div>
                 {companies.length > 0 && (
                   <select
