@@ -55,6 +55,28 @@ type CatalogItem = {
   created_at?: string | null
 }
 
+/** Услуга: остатков не имеет, штрихкод ей не нужен — из «проблемных» счётчиков исключаем. */
+function isService(item: CatalogItem) {
+  return item.item_type === 'service'
+}
+function catalogQtyOf(item: CatalogItem) {
+  return Number(item.catalog_qty ?? item.total_balance ?? 0)
+}
+function hasNoPrice(item: CatalogItem) {
+  return !(item.sale_price > 0)
+}
+function hasNoBarcode(item: CatalogItem) {
+  return !isService(item) && !String(item.barcode || '').trim()
+}
+/** Позиция без цены продажи или без штрихкода — карточка «Требуют внимания». */
+function needsAttention(item: CatalogItem) {
+  return hasNoPrice(item) || hasNoBarcode(item)
+}
+/** Товар с нулевым остатком — карточка «Нулевой остаток». */
+function isZeroStock(item: CatalogItem) {
+  return !isService(item) && catalogQtyOf(item) <= 0
+}
+
 type ImportRow = {
   name: string
   barcode: string
@@ -521,6 +543,9 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
   const [filterCategory, setFilterCategory] = usePersistentState('catalog.filterCategory', 'all')
   const [filterType, setFilterType] = usePersistentState('catalog.filterType', 'all')
   const [sortBy, setSortBy] = usePersistentState<'newest' | 'name'>('catalog.sortBy', 'newest')
+  // Быстрый разбор по карточкам-кнопкам. Намеренно не сохраняем между сессиями:
+  // после перезагрузки список должен быть полным, а не «почему-то в 4 позиции».
+  const [flagFilter, setFlagFilter] = useState<'none' | 'attention' | 'zero'>('none')
   const [page, setPage] = useState(1)
   const [highlightId, setHighlightId] = useState<string | null>(null)
 
@@ -718,7 +743,7 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
     }
   }
 
-  const filtered = items.filter((item) => {
+  const baseFiltered = items.filter((item) => {
     if (filterType !== 'all' && item.item_type !== filterType) return false
     if (filterCategory !== 'all' && item.category?.id !== filterCategory) return false
     if (search) {
@@ -728,6 +753,16 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
     return true
   })
 
+  // Клик по карточке «Требуют внимания» / «Нулевой остаток» сужает список до этих
+  // позиций. Карточки считаются по baseFiltered, поэтому их числа не скачут,
+  // пока фильтр включён — они остаются точкой отсчёта.
+  const filtered =
+    flagFilter === 'attention'
+      ? baseFiltered.filter(needsAttention)
+      : flagFilter === 'zero'
+        ? baseFiltered.filter(isZeroStock)
+        : baseFiltered
+
   // API отдаёт по алфавиту; «Сначала новые» сортируем на клиенте по created_at
   const sorted = sortBy === 'newest'
     ? [...filtered].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
@@ -736,14 +771,14 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
   const totalPages = Math.ceil(sorted.length / PAGE_SIZE)
   const paginated = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
-  useEffect(() => { setPage(1) }, [search, filterCategory, filterType, sortBy, filterCompany, storeCompanyId])
+  useEffect(() => { setPage(1) }, [search, filterCategory, filterType, sortBy, filterCompany, storeCompanyId, flagFilter])
   // Смена точки = другой набор данных — сбрасываем выбор чекбоксами
   useEffect(() => { setSelectedItemIds(new Set()) }, [filterCompany])
 
   // Totals across all filtered items (not just current page)
-  const totals = filtered.reduce(
+  const totals = baseFiltered.reduce(
     (acc, item) => {
-      const catalogQty = Number(item.catalog_qty ?? item.total_balance ?? 0)
+      const catalogQty = catalogQtyOf(item)
       acc.warehouseQty += item.warehouse_qty
       acc.showcaseQty  += item.showcase_qty
       acc.totalQty     += catalogQty
@@ -754,17 +789,14 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
       acc.totalPurchase     += catalogQty * item.default_purchase_price
       acc.totalSale         += catalogQty * item.sale_price
 
-      // Качество каталога и мёртвый вес. Услуги (item_type='service') остатков
-      // не имеют и штрихкода обычно тоже — их в эти счётчики не берём.
-      const isService = item.item_type === 'service'
-      const noPrice = !(item.sale_price > 0)
-      const noBarcode = !isService && !String(item.barcode || '').trim()
-      if (noPrice) acc.noPrice++
-      if (noBarcode) acc.noBarcode++
-      if (noPrice || noBarcode) acc.needsAttention++
-      if (!isService) {
+      // Качество каталога и мёртвый вес — считаем теми же предикатами, которыми
+      // фильтруется список по клику на карточку, чтобы числа не разошлись с ним.
+      if (hasNoPrice(item)) acc.noPrice++
+      if (hasNoBarcode(item)) acc.noBarcode++
+      if (needsAttention(item)) acc.needsAttention++
+      if (!isService(item)) {
         acc.stockable++
-        if (catalogQty <= 0) acc.zeroStock++
+        if (isZeroStock(item)) acc.zeroStock++
       }
       return acc
     },
@@ -780,6 +812,13 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
   const totalMargin = totals.totalSale - totals.totalPurchase
   const marginPct = totals.totalPurchase > 0 ? (totalMargin / totals.totalPurchase) * 100 : 0
   const zeroStockPct = totals.stockable > 0 ? Math.round((totals.zeroStock / totals.stockable) * 100) : 0
+
+  // Счётчик обнулился (позиции починили или сменили фильтры) — кнопка гаснет,
+  // и снять фильтр кликом стало бы нечем. Снимаем сами, чтобы не залипнуть на пустом списке.
+  useEffect(() => {
+    if (flagFilter === 'attention' && totals.needsAttention === 0) setFlagFilter('none')
+    if (flagFilter === 'zero' && totals.zeroStock === 0) setFlagFilter('none')
+  }, [flagFilter, totals.needsAttention, totals.zeroStock])
 
   // ── Edit handlers ────────────────────────────────────────────────────────────
 
@@ -1313,8 +1352,19 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
             </div>
           </div>
 
-          {/* Требуют внимания */}
-          <div className={`rounded-2xl border px-4 py-3 ${totals.needsAttention > 0 ? 'border-red-500/20 bg-red-500/[0.06]' : 'border-border bg-white dark:bg-white/[0.04]'}`}>
+          {/* Требуют внимания — клик показывает эти позиции в списке */}
+          <button
+            type="button"
+            disabled={totals.needsAttention === 0}
+            aria-pressed={flagFilter === 'attention'}
+            onClick={() => { setFlagFilter((f) => (f === 'attention' ? 'none' : 'attention')); setTab('catalog') }}
+            title={totals.needsAttention === 0 ? undefined : 'Показать эти позиции в списке'}
+            className={`w-full rounded-2xl border px-4 py-3 text-left transition ${
+              totals.needsAttention > 0
+                ? 'border-red-500/20 bg-red-500/[0.06] cursor-pointer hover:border-red-500/40'
+                : 'border-border bg-white dark:bg-white/[0.04] cursor-default'
+            } ${flagFilter === 'attention' ? 'ring-2 ring-red-500/50' : ''}`}
+          >
             <div className={`flex items-center gap-2 text-xs mb-1 ${totals.needsAttention > 0 ? 'text-red-700/70 dark:text-red-300/70' : 'text-muted-foreground'}`}>
               <AlertTriangle className="w-3.5 h-3.5" />
               Требуют внимания
@@ -1323,23 +1373,38 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
               {totals.needsAttention.toLocaleString('ru-RU')}
             </div>
             <div className="text-[11px] text-muted-foreground mt-0.5">
-              {totals.needsAttention > 0
-                ? `без цены ${totals.noPrice} · без ШК ${totals.noBarcode}`
-                : 'цены и штрихкоды на месте'}
+              {flagFilter === 'attention'
+                ? 'показаны только они — нажми, чтобы снять'
+                : totals.needsAttention > 0
+                  ? `без цены ${totals.noPrice} · без ШК ${totals.noBarcode}`
+                  : 'цены и штрихкоды на месте'}
             </div>
-          </div>
+          </button>
 
-          {/* Нулевые остатки */}
-          <div className="rounded-2xl border border-border bg-white dark:bg-white/[0.04] px-4 py-3">
+          {/* Нулевые остатки — клик показывает эти позиции в списке */}
+          <button
+            type="button"
+            disabled={totals.zeroStock === 0}
+            aria-pressed={flagFilter === 'zero'}
+            onClick={() => { setFlagFilter((f) => (f === 'zero' ? 'none' : 'zero')); setTab('catalog') }}
+            title={totals.zeroStock === 0 ? undefined : 'Показать эти позиции в списке'}
+            className={`w-full rounded-2xl border border-border bg-white dark:bg-white/[0.04] px-4 py-3 text-left transition ${
+              totals.zeroStock > 0 ? 'cursor-pointer hover:border-slate-400/50' : 'cursor-default'
+            } ${flagFilter === 'zero' ? 'ring-2 ring-slate-400/60' : ''}`}
+          >
             <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
               <PackageX className="w-3.5 h-3.5 text-muted-foreground" />
               Нулевой остаток
             </div>
             <div className="text-xl font-bold text-foreground">{totals.zeroStock.toLocaleString('ru-RU')}</div>
             <div className="text-[11px] text-muted-foreground mt-0.5">
-              {totals.stockable > 0 ? `${zeroStockPct}% товаров` : 'товаров нет'}
+              {flagFilter === 'zero'
+                ? 'показаны только они — нажми, чтобы снять'
+                : totals.stockable > 0
+                  ? `${zeroStockPct}% товаров`
+                  : 'товаров нет'}
             </div>
-          </div>
+          </button>
         </div>
       )}
 
