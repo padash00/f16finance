@@ -669,7 +669,14 @@ export async function ensureOrganizationOperatorAccess(params: {
 }) {
   const { activeOrganizationId, isSuperAdmin, operatorId } = params
   if (isSuperAdmin && !activeOrganizationId) return
-  const allowedOperatorIds = await listOrganizationOperatorIds({ activeOrganizationId, isSuperAdmin })
+  // includeInactive: проверка отвечает на вопрос «этот оператор из моей организации?»,
+  // а не «активен ли он». Без этого уволенного (is_active=false) нельзя восстановить
+  // или отредактировать — он выпадает из списка и получает forbidden-operator.
+  const allowedOperatorIds = await listOrganizationOperatorIds({
+    activeOrganizationId,
+    isSuperAdmin,
+    includeInactive: true,
+  })
   if (!allowedOperatorIds?.includes(operatorId)) {
     throw new Error('forbidden-operator')
   }

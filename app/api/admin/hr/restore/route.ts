@@ -137,6 +137,10 @@ export async function POST(req: Request) {
 
     return json({ ok: true })
   } catch (error: any) {
+    const msg = String(error?.message || '')
+    if (msg === 'forbidden-operator' || msg === 'forbidden-staff') {
+      return json({ error: 'Сотрудник не принадлежит вашей организации' }, 403)
+    }
     await writeSystemErrorLogSafe({
       scope: 'server',
       area: 'api/admin/hr/restore',
