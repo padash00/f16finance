@@ -139,7 +139,10 @@ export async function POST(req: Request) {
   } catch (error: any) {
     const msg = String(error?.message || '')
     if (msg === 'forbidden-operator' || msg === 'forbidden-staff') {
-      return json({ error: 'Сотрудник не принадлежит вашей организации' }, 403)
+      return json(
+        { error: 'Сотрудник не привязан к вашей организации: нет ни organization_id, ни назначений на точки' },
+        403,
+      )
     }
     await writeSystemErrorLogSafe({
       scope: 'server',

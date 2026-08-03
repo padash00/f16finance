@@ -669,17 +669,38 @@ export async function ensureOrganizationOperatorAccess(params: {
 }) {
   const { activeOrganizationId, isSuperAdmin, operatorId } = params
   if (isSuperAdmin && !activeOrganizationId) return
-  // includeInactive: проверка отвечает на вопрос «этот оператор из моей организации?»,
-  // а не «активен ли он». Без этого уволенного (is_active=false) нельзя восстановить
-  // или отредактировать — он выпадает из списка и получает forbidden-operator.
-  const allowedOperatorIds = await listOrganizationOperatorIds({
-    activeOrganizationId,
-    isSuperAdmin,
-    includeInactive: true,
-  })
-  if (!allowedOperatorIds?.includes(operatorId)) {
-    throw new Error('forbidden-operator')
+  if (LEGACY_SINGLE_TENANT_MODE) return
+  if (!activeOrganizationId) throw new Error('forbidden-operator')
+
+  const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : null
+  if (!supabase) throw new Error('organization-scope-unavailable')
+
+  // Проверяем ОДНОГО оператора точечным запросом, а не «собрать всех своих и
+  // поискать в списке»: список фильтровался по is_active (уволенный выпадал) и
+  // упирался в лимит PostgREST на 1000 строк. Вопрос здесь один — чей это
+  // оператор, а не активен ли он.
+  const { data: op, error: opErr } = await supabase
+    .from('operators')
+    .select('id, organization_id')
+    .eq('id', operatorId)
+    .maybeSingle()
+  if (opErr) throw opErr
+  if (!op) throw new Error('forbidden-operator')
+  if (String((op as any).organization_id || '') === activeOrganizationId) return
+
+  // organization_id может быть не проставлен у старых записей — тогда смотрим
+  // на назначения по точкам (без фильтра is_active: при увольнении они гаснут).
+  const { data: assigned, error: assignErr } = await supabase
+    .from('operator_company_assignments')
+    .select('operator_id, company:company_id(organization_id)')
+    .eq('operator_id', operatorId)
+  if (assignErr) throw assignErr
+  for (const row of (assigned || []) as any[]) {
+    const company = Array.isArray(row.company) ? row.company[0] || null : row.company || null
+    if (String(company?.organization_id || '') === activeOrganizationId) return
   }
+
+  throw new Error('forbidden-operator')
 }
 
 export async function ensureOrganizationStaffAccess(params: {
