@@ -5,7 +5,7 @@ import { downloadReportPdf } from '@/lib/client/download-pdf'
 import { useApiCache } from '@/lib/client/use-api-cache'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useStoreScope } from '@/components/store/store-scope'
-import { Package, Pencil, Plus, Printer, Search, Trash2, Upload, Download, Check, X, ChevronLeft, ChevronRight, ShoppingCart, TrendingUp, Warehouse, Store, Tag, Loader2, AlertTriangle, MoreHorizontal } from 'lucide-react'
+import { Package, PackageX, Pencil, Plus, Printer, Search, Trash2, Upload, Download, Check, X, ChevronLeft, ChevronRight, Coins, ShoppingCart, TrendingUp, Warehouse, Store, Tag, Loader2, AlertTriangle, MoreHorizontal } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -753,6 +753,19 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
       acc.showcaseSale      += item.showcase_qty  * item.sale_price
       acc.totalPurchase     += catalogQty * item.default_purchase_price
       acc.totalSale         += catalogQty * item.sale_price
+
+      // Качество каталога и мёртвый вес. Услуги (item_type='service') остатков
+      // не имеют и штрихкода обычно тоже — их в эти счётчики не берём.
+      const isService = item.item_type === 'service'
+      const noPrice = !(item.sale_price > 0)
+      const noBarcode = !isService && !String(item.barcode || '').trim()
+      if (noPrice) acc.noPrice++
+      if (noBarcode) acc.noBarcode++
+      if (noPrice || noBarcode) acc.needsAttention++
+      if (!isService) {
+        acc.stockable++
+        if (catalogQty <= 0) acc.zeroStock++
+      }
       return acc
     },
     {
@@ -760,8 +773,13 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
       warehousePurchase: 0, warehouseSale: 0,
       showcasePurchase: 0, showcaseSale: 0,
       totalPurchase: 0, totalSale: 0,
+      noPrice: 0, noBarcode: 0, needsAttention: 0,
+      zeroStock: 0, stockable: 0,
     },
   )
+  const totalMargin = totals.totalSale - totals.totalPurchase
+  const marginPct = totals.totalPurchase > 0 ? (totalMargin / totals.totalPurchase) * 100 : 0
+  const zeroStockPct = totals.stockable > 0 ? Math.round((totals.zeroStock / totals.stockable) * 100) : 0
 
   // ── Edit handlers ────────────────────────────────────────────────────────────
 
@@ -1253,6 +1271,20 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
             <div className="text-[11px] text-muted-foreground mt-0.5">{totals.showcaseQty.toLocaleString('ru-RU')} ед.</div>
           </div>
 
+          {/* Витрина — продажа */}
+          <div className="rounded-2xl border border-amber-400/20 bg-amber-400/[0.04] px-4 py-3">
+            <div className="flex items-center gap-2 text-xs text-amber-700/70 dark:text-amber-200/70 mb-1">
+              <Store className="w-3.5 h-3.5" />
+              Витрина по продаже
+            </div>
+            <div className="text-xl font-bold text-amber-700 dark:text-amber-200">
+              {Math.round(totals.showcaseSale).toLocaleString('ru-RU')} ₸
+            </div>
+            <div className="text-[11px] text-emerald-400/80 mt-0.5">
+              +{Math.round(totals.showcaseSale - totals.showcasePurchase).toLocaleString('ru-RU')} ₸ наценка
+            </div>
+          </div>
+
           {/* Всего — продажа */}
           <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] px-4 py-3">
             <div className="flex items-center gap-2 text-xs text-emerald-700/70 dark:text-emerald-300/70 mb-1">
@@ -1264,6 +1296,48 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
             </div>
             <div className="text-[11px] text-muted-foreground mt-0.5">
               зак: {Math.round(totals.totalPurchase).toLocaleString('ru-RU')} ₸
+            </div>
+          </div>
+
+          {/* Потенциальная прибыль */}
+          <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.04] px-4 py-3">
+            <div className="flex items-center gap-2 text-xs text-emerald-700/70 dark:text-emerald-200/70 mb-1">
+              <Coins className="w-3.5 h-3.5" />
+              Потенц. прибыль
+            </div>
+            <div className="text-xl font-bold text-emerald-700 dark:text-emerald-200">
+              {Math.round(totalMargin).toLocaleString('ru-RU')} ₸
+            </div>
+            <div className="text-[11px] text-muted-foreground mt-0.5">
+              {totals.totalPurchase > 0 ? `наценка ${marginPct.toFixed(1)}%` : 'нет цен закупа'}
+            </div>
+          </div>
+
+          {/* Требуют внимания */}
+          <div className={`rounded-2xl border px-4 py-3 ${totals.needsAttention > 0 ? 'border-red-500/20 bg-red-500/[0.06]' : 'border-border bg-white dark:bg-white/[0.04]'}`}>
+            <div className={`flex items-center gap-2 text-xs mb-1 ${totals.needsAttention > 0 ? 'text-red-700/70 dark:text-red-300/70' : 'text-muted-foreground'}`}>
+              <AlertTriangle className="w-3.5 h-3.5" />
+              Требуют внимания
+            </div>
+            <div className={`text-xl font-bold ${totals.needsAttention > 0 ? 'text-red-700 dark:text-red-300' : 'text-foreground'}`}>
+              {totals.needsAttention.toLocaleString('ru-RU')}
+            </div>
+            <div className="text-[11px] text-muted-foreground mt-0.5">
+              {totals.needsAttention > 0
+                ? `без цены ${totals.noPrice} · без ШК ${totals.noBarcode}`
+                : 'цены и штрихкоды на месте'}
+            </div>
+          </div>
+
+          {/* Нулевые остатки */}
+          <div className="rounded-2xl border border-border bg-white dark:bg-white/[0.04] px-4 py-3">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+              <PackageX className="w-3.5 h-3.5 text-muted-foreground" />
+              Нулевой остаток
+            </div>
+            <div className="text-xl font-bold text-foreground">{totals.zeroStock.toLocaleString('ru-RU')}</div>
+            <div className="text-[11px] text-muted-foreground mt-0.5">
+              {totals.stockable > 0 ? `${zeroStockPct}% товаров` : 'товаров нет'}
             </div>
           </div>
         </div>
