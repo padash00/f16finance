@@ -94,6 +94,7 @@ final class AuthStore {
         // Токен просто выбрасываем: он короткоживущий, а refresh без него
         // бесполезен. Отдельный серверный «выход» ради этого не нужен.
         keychain.clear()
+        PushManager.shared.sessionDidEnd()
         session = nil
         role = nil
         organizationID = nil
@@ -116,6 +117,9 @@ final class AuthStore {
             let loaded: SessionRole = try await api.send(APIRequest(path: "/api/auth/session-role"))
             role = loaded
             phase = .signedIn
+            // Токен push отправляется только при живой сессии — эндпоинт
+            // регистрации требует Bearer.
+            PushManager.shared.sessionDidStart()
         } catch {
             // Роль не загрузилась при живом токене — чаще всего сеть. Оставляем
             // пользователя внутри, экраны сами покажут ошибку и предложат

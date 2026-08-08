@@ -15,6 +15,7 @@
 		AA0000000000000000000005 /* Orda.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Orda.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000000000000000000016 /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
 		AA0000000000000000000017 /* Orda-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Orda-Info.plist"; sourceTree = "<group>"; };
+		AA0000000000000000000018 /* Orda.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Orda.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -40,6 +41,7 @@
 				AA0000000000000000000009 /* Orda */,
 				AA0000000000000000000016 /* Config.xcconfig */,
 				AA0000000000000000000017 /* Orda-Info.plist */,
+				AA0000000000000000000018 /* Orda.entitlements */,
 				AA0000000000000000000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -198,6 +200,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Orda.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
@@ -226,6 +229,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Orda.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";

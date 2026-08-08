@@ -4,6 +4,14 @@ import SwiftUI
 
 @main
 struct OrdaApp: App {
+    // Токен APNs приходит только в делегат приложения — в SwiftUI-сцене его
+    // не получить, поэтому минимальный делегат нужен даже здесь.
+    #if os(iOS)
+    @UIApplicationDelegateAdaptor(OrdaAppDelegate.self) private var appDelegate
+    #else
+    @NSApplicationDelegateAdaptor(OrdaAppDelegate.self) private var appDelegate
+    #endif
+
     @State private var auth: AuthStore
     private let api: APIClient
 
@@ -20,6 +28,7 @@ struct OrdaApp: App {
         // Замыкаем цикл синхронно: первый же запрос при восстановлении сессии
         // должен уйти с токеном, иначе 401 выкинет пользователя на логин.
         provider.connect(store)
+        PushManager.shared.configure(api: api)
 
         self.api = api
         _auth = State(initialValue: store)

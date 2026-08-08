@@ -37,6 +37,16 @@ struct RootView: View {
             case .signedIn:
                 workspace
                     .transition(.opacity)
+                    .task {
+                        // Разрешение спрашиваем здесь, а не на экране входа:
+                        // до входа человек не понимает, о чём его будут
+                        // уведомлять, и почти всегда отказывает. Отказ в iOS
+                        // необратим из приложения — второй попытки не будет.
+                        await PushManager.shared.refreshStatus()
+                        if PushManager.shared.status == .notRequested {
+                            await PushManager.shared.request()
+                        }
+                    }
             }
         }
         .animation(Motion.transition, value: auth.phase)
