@@ -16,6 +16,10 @@ public struct SalaryWeek: Decodable, Sendable, Hashable {
     public let remainingAmount: Double
     public let status: String
     public let shiftsCount: Int?
+    /// Смены недели. Приходят внутри `week`, поэтому разбираем здесь же:
+    /// прошлый вариант доставал их отдельным контейнером и терял из-за
+    /// двойной опциональности — график молча оставался пустым.
+    public let shifts: [SalaryShift]
 
     /// Человеческий статус недели.
     public var statusLabel: String {
@@ -30,7 +34,7 @@ public struct SalaryWeek: Decodable, Sendable, Hashable {
     private enum CodingKeys: String, CodingKey {
         case weekStart, weekEnd, grossAmount, bonusAmount, fineAmount
         case debtAmount, advanceAmount, netAmount, paidAmount, remainingAmount
-        case status, shiftsCount
+        case status, shiftsCount, shifts
     }
 
     public init(from decoder: any Decoder) throws {
@@ -47,6 +51,7 @@ public struct SalaryWeek: Decodable, Sendable, Hashable {
         remainingAmount = try c.decodeIfPresent(Double.self, forKey: .remainingAmount) ?? 0
         status = try c.decodeIfPresent(String.self, forKey: .status) ?? "draft"
         shiftsCount = try c.decodeIfPresent(Int.self, forKey: .shiftsCount)
+        shifts = try c.decodeIfPresent([SalaryShift].self, forKey: .shifts) ?? []
     }
 }
 
@@ -240,15 +245,11 @@ public struct OperatorSalary: Decodable, Sendable {
     public let shifts: [SalaryShift]
 
     private enum CodingKeys: String, CodingKey { case week }
-    private enum WeekKeys: String, CodingKey { case shifts }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         week = try c.decodeIfPresent(SalaryWeek.self, forKey: .week)
-        // Смены лежат внутри week, но структура недели общая с обзором —
-        // достаём их отдельно, чтобы не раздувать SalaryWeek.
-        let weekContainer = try? c.nestedContainer(keyedBy: WeekKeys.self, forKey: .week)
-        shifts = (try? weekContainer?.decodeIfPresent([SalaryShift].self, forKey: .shifts)) as? [SalaryShift] ?? []
+        shifts = week?.shifts ?? []
     }
 }
 

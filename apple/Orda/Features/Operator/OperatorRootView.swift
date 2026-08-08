@@ -158,7 +158,13 @@ struct OperatorRootView: View {
     private func screen(for section: OperatorSection) -> some View {
         switch section {
         case .shift: OperatorHomeScreen()
-        case .sale: SaleScreen()
+        case .sale:
+            // На широком экране касса другая: сетка товаров и постоянная
+            // корзина. Список во всю ширину там оставляет полметра пустоты
+            // между названием и кнопкой.
+            SurfaceReader { surface in
+                if surface.isCompact { SaleScreen() } else { SaleWideScreen() }
+            }
         case .audit: AuditScreen()
         case .tasks: TasksScreen()
         case .checklists: ChecklistsScreen()
