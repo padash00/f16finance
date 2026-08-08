@@ -9,27 +9,25 @@ struct MoneyScreen: View {
     @Environment(CabinetStore.self) private var cabinet
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: Spacing.lg) {
-                if let week = cabinet.salary?.week ?? cabinet.overview?.week {
-                    heroCard(week)
+        ScreenScroll {
+            if let week = cabinet.salary?.week ?? cabinet.overview?.week {
+                heroCard(week)
+
+                SplitDashboard {
                     breakdownCard(week)
-                } else {
-                    Skeleton(height: 140, cornerRadius: Radius.lg)
+                    // Пустой график хуже отсутствия: рамка с подписями дней и
+                    // без столбцов читается как поломка.
+                    if hasShiftAmounts {
+                        CategoryBarChart(title: "Смены недели", points: shiftPoints)
+                    }
+                } side: {
+                    debtsCard
+                    incidentsCard
                 }
-
-                if !shiftPoints.isEmpty {
-                    CategoryBarChart(title: "Смены недели", points: shiftPoints)
-                }
-
-                debtsCard
-                incidentsCard
+            } else {
+                Skeleton(height: 140, cornerRadius: Radius.lg)
             }
-            .padding(Spacing.lg)
-            .frame(maxWidth: 640)
-            .frame(maxWidth: .infinity)
         }
-        .background(Theme.background)
         .navigationTitle("Мои деньги")
         .toolbar { LogoutToolbarItem() }
         .task {
@@ -105,6 +103,12 @@ struct MoneyScreen: View {
                 StatRow("Итого к выплате", value: Money.format(week.netAmount), emphasized: true)
             }
         }
+    }
+
+    /// Есть ли что показывать: суммы по сменам могут прийти нулями, и тогда
+    /// столбцов не будет вовсе.
+    private var hasShiftAmounts: Bool {
+        shiftPoints.contains { $0.value > 0 }
     }
 
     /// Смены недели столбцами. Сегодняшняя выделена — остальные приглушены.

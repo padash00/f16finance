@@ -21,7 +21,9 @@ public enum Surface: Sendable {
     public var contentWidth: CGFloat {
         switch self {
         case .handheld: 640
-        case .tablet: 760
+        // Планшет в портрете: колонка шире телефонной, но не во весь экран —
+        // строка на 1200 точек уже плохо читается.
+        case .tablet: 900
         case .desktop: .infinity
         }
     }
@@ -91,17 +93,26 @@ public struct SurfaceReader<Content: View>: View {
     }
 
     public var body: some View {
-        let surface = resolved
-        content(surface).environment(\.surface, surface)
-    }
-
-    private var resolved: Surface {
         #if os(macOS)
-        return .desktop
+        content(.desktop).environment(\.surface, .desktop)
         #else
-        return sizeClass == .compact ? .handheld : .tablet
+        // Решает реальная ширина, а не только класс размера. iPad в альбомной
+        // ориентации шире многих маков — держать там колонку в 900 точек
+        // значит оставить половину экрана пустой. В Split View тот же iPad
+        // становится узким, и телефонная раскладка уместнее.
+        GeometryReader { proxy in
+            let surface = resolve(width: proxy.size.width)
+            content(surface).environment(\.surface, surface)
+        }
         #endif
     }
+
+    #if os(iOS)
+    private func resolve(width: CGFloat) -> Surface {
+        if sizeClass == .compact { return .handheld }
+        return width >= 1000 ? .desktop : .tablet
+    }
+    #endif
 }
 
 // ── Сетка дашборда ───────────────────────────────────────────────────────────

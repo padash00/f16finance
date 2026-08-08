@@ -175,8 +175,8 @@ struct ChecklistsScreen: View {
     @State private var error: String?
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: Spacing.md) {
+        ScreenScroll {
+            Group {
                 if !store.hasOpenShift {
                     Card(accent: Theme.warning) {
                         Label(
@@ -198,6 +198,7 @@ struct ChecklistsScreen: View {
                             message: "Для вашей точки чек-листы пока не настроены."
                         )
                     } else {
+                        DashboardGrid {
                         ForEach(Array(knowledge.templates.enumerated()), id: \.element.id) { index, template in
                             ChecklistCard(
                                 template: template,
@@ -207,6 +208,7 @@ struct ChecklistsScreen: View {
                             )
                             .staggeredAppear(index: index)
                         }
+                        }
                     }
                 }
 
@@ -214,11 +216,7 @@ struct ChecklistsScreen: View {
                     Text(error).font(Typography.callout).foregroundStyle(Theme.negative)
                 }
             }
-            .padding(Spacing.lg)
-            .frame(maxWidth: 640)
-            .frame(maxWidth: .infinity)
         }
-        .background(Theme.background)
         .navigationTitle("Чек-листы")
         .toolbar { LogoutToolbarItem() }
         .task { if cabinet.knowledge == nil { await cabinet.loadKnowledge() } }
