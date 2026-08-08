@@ -176,11 +176,26 @@ final class AuthStore {
 /// Ссылка на хранилище проставляется после создания: `APIClient` нужен
 /// `AuthStore`, а `AuthStore` нужен `APIClient` — разрываем цикл здесь, а не
 /// протаскиванием опционалов через весь сетевой слой.
-actor AuthTokenProvider: TokenProvider {
-    private weak var store: AuthStore?
+///
+/// Класс с замком, а не актор: связывание обязано быть **синхронным**. Пока
+/// оно шло через `Task { await connect(...) }`, восстановление сессии успевало
+/// уйти в сеть раньше — запрос летел без заголовка Authorization, возвращался
+/// 401, и приложение разлогинивало само себя при каждом запуске.
+final class AuthTokenProvider: TokenProvider, @unchecked Sendable {
+    private let lock = NSLock()
+    private weak var _store: AuthStore?
 
+    /// Связать с хранилищем. Синхронно и до первого запроса.
     func connect(_ store: AuthStore) {
-        self.store = store
+        lock.lock()
+        defer { lock.unlock() }
+        _store = store
+    }
+
+    private var store: AuthStore? {
+        lock.lock()
+        defer { lock.unlock() }
+        return _store
     }
 
     func currentAccessToken() async -> String? {

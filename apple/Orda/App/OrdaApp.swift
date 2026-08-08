@@ -17,9 +17,9 @@ struct OrdaApp: App {
             api: api
         )
 
-        // Замыкаем цикл: провайдер отдаёт токен из хранилища, хранилище шлёт
-        // запросы через клиента.
-        Task { await provider.connect(store) }
+        // Замыкаем цикл синхронно: первый же запрос при восстановлении сессии
+        // должен уйти с токеном, иначе 401 выкинет пользователя на логин.
+        provider.connect(store)
 
         self.api = api
         _auth = State(initialValue: store)

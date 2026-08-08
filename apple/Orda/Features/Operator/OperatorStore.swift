@@ -25,6 +25,7 @@ final class OperatorStore {
     // ── Каталог и корзина ────────────────────────────────────────────────────
 
     private(set) var catalog: [SaleCatalogItem] = []
+    private(set) var recentSales: [RecentSale] = []
     private(set) var companyName = "Точка"
     private(set) var isLoadingCatalog = false
     private(set) var catalogError: String?
@@ -89,6 +90,7 @@ final class OperatorStore {
         do {
             let loaded = try await service.saleCatalog()
             catalog = loaded.items
+            recentSales = loaded.recentSales
             companyName = loaded.companyName
         } catch let error as APIError {
             catalogError = error.operatorMessage

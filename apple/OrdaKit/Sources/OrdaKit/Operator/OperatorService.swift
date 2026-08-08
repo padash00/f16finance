@@ -127,14 +127,108 @@ public struct OperatorService: Sendable {
         )
     }
 
-    // ── Прочее ───────────────────────────────────────────────────────────────
+    // ── Кабинет ──────────────────────────────────────────────────────────────
 
-    public func tasks() async throws -> Data {
-        try await api.send(APIRequest(path: "/api/operator/tasks"))
+    /// Сводка дня: неделя по зарплате, счётчики, ближайшая смена, задачи, долги.
+    public func overview() async throws -> OperatorOverview {
+        try await api.send(APIRequest(path: "/api/operator/overview"))
     }
 
-    public func salary() async throws -> Data {
+    public func tasks() async throws -> [OperatorTask] {
+        let response: OperatorTaskList = try await api.send(APIRequest(path: "/api/operator/tasks"))
+        return response.tasks
+    }
+
+    /// Перевести задачу в другой статус.
+    public func updateTask(id: String, status: String) async throws {
+        let body: [String: Any] = ["action": "updateStatus", "taskId": id, "status": status]
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/operator/tasks",
+                method: .post,
+                body: try JSONSerialization.data(withJSONObject: body)
+            )
+        )
+    }
+
+    public func addTaskComment(taskID: String, content: String) async throws {
+        let body: [String: Any] = ["action": "addComment", "taskId": taskID, "content": content]
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/operator/tasks",
+                method: .post,
+                body: try JSONSerialization.data(withJSONObject: body)
+            )
+        )
+    }
+
+    public func salary() async throws -> OperatorSalary {
         try await api.send(APIRequest(path: "/api/operator/salary"))
+    }
+
+    public func schedule() async throws -> OperatorSchedule {
+        try await api.send(APIRequest(path: "/api/operator/shifts"))
+    }
+
+    public func incidents() async throws -> [OperatorIncident] {
+        let response: OperatorIncidentList = try await api.send(APIRequest(path: "/api/operator/incidents"))
+        return response.incidents
+    }
+
+    // ── Знания и чек-листы ───────────────────────────────────────────────────
+
+    /// Статьи, чек-листы, их пункты и запуски — одним запросом.
+    public func knowledge() async throws -> KnowledgeCenter {
+        try await api.send(APIRequest(path: "/api/operator/knowledge"))
+    }
+
+    /// Подтвердить прочтение статьи. Версию передаём обязательно: подтверждение
+    /// привязано к версии, иначе правка текста осталась бы незамеченной.
+    public func confirmArticle(id: String, version: Int) async throws {
+        let body: [String: Any] = ["article_id": id, "version": version]
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/operator/knowledge/confirm",
+                method: .post,
+                body: try JSONSerialization.data(withJSONObject: body)
+            )
+        )
+    }
+
+    /// Запустить чек-лист в текущей смене. Без открытой смены сервер ответит 409.
+    public func startChecklist(templateID: String) async throws -> ChecklistRunStart {
+        let body: [String: Any] = ["template_id": templateID]
+        return try await api.send(
+            APIRequest(
+                path: "/api/operator/checklist/run",
+                method: .post,
+                body: try JSONSerialization.data(withJSONObject: body)
+            )
+        )
+    }
+
+    /// Сохранить ответы. Отправляем целиком, а не по одному: так прогресс
+    /// переживает выход из приложения посреди чек-листа.
+    public func saveChecklistAnswers(runID: String, answers: [ChecklistAnswer]) async throws {
+        let body: [String: Any] = ["answers": answers.map { $0.requestPayload() }]
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/operator/checklist/run/\(runID)",
+                method: .patch,
+                body: try JSONSerialization.data(withJSONObject: body)
+            )
+        )
+    }
+
+    /// Завершить чек-лист. В ответ приходят начисленные штрафы и бонусы.
+    public func completeChecklist(runID: String) async throws -> ChecklistRunResult {
+        try await api.send(
+            APIRequest(
+                path: "/api/operator/checklist/run/\(runID)/complete",
+                method: .post,
+                body: try JSONSerialization.data(withJSONObject: ["status": "completed"])
+            )
+        )
     }
 }
 

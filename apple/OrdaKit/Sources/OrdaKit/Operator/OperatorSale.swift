@@ -50,13 +50,58 @@ public struct SaleCatalogItem: Codable, Sendable, Identifiable, Hashable {
     }
 }
 
+/// Проведённый чек — для истории и графика выручки.
+public struct RecentSale: Decodable, Sendable, Identifiable, Hashable {
+    public let id: String
+    public let totalAmount: Double
+    public let cashAmount: Double
+    public let kaspiAmount: Double
+    public let soldAt: Date?
+    public let paymentMethod: String?
+    public let itemCount: Int
+
+    private enum CodingKeys: String, CodingKey {
+        case id, items
+        case totalAmount = "total_amount"
+        case cashAmount = "cash_amount"
+        case kaspiAmount = "kaspi_amount"
+        case soldAt = "sold_at"
+        case paymentMethod = "payment_method"
+    }
+
+    private struct LineRef: Decodable {}
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        totalAmount = try c.decodeIfPresent(Double.self, forKey: .totalAmount) ?? 0
+        cashAmount = try c.decodeIfPresent(Double.self, forKey: .cashAmount) ?? 0
+        kaspiAmount = try c.decodeIfPresent(Double.self, forKey: .kaspiAmount) ?? 0
+        soldAt = try c.decodeIfPresent(Date.self, forKey: .soldAt)
+        paymentMethod = try c.decodeIfPresent(String.self, forKey: .paymentMethod)
+        itemCount = (try c.decodeIfPresent([LineRef].self, forKey: .items))?.count ?? 0
+    }
+
+    public var paymentLabel: String {
+        switch paymentMethod {
+        case "cash": "наличные"
+        case "kaspi": "Kaspi"
+        case "mixed": "смешанная"
+        default: "оплата"
+        }
+    }
+}
+
 /// Каталог точки — ответ `GET /api/operator/inventory-sales`.
 public struct SaleCatalog: Decodable, Sendable {
     public let companyName: String
     public let items: [SaleCatalogItem]
+    /// Последние чеки точки. Сервер отдаёт 20 штук — этого хватает и на
+    /// историю, и на график выручки за смену.
+    public let recentSales: [RecentSale]
 
     private enum RootKeys: String, CodingKey { case data }
-    private enum DataKeys: String, CodingKey { case company, items }
+    private enum DataKeys: String, CodingKey { case company, items, sales }
     private struct Company: Decodable { let name: String? }
 
     public init(from decoder: any Decoder) throws {
@@ -64,6 +109,7 @@ public struct SaleCatalog: Decodable, Sendable {
         let data = try root.nestedContainer(keyedBy: DataKeys.self, forKey: .data)
         companyName = (try data.decodeIfPresent(Company.self, forKey: .company))?.name ?? "Точка"
         items = try data.decodeIfPresent([SaleCatalogItem].self, forKey: .items) ?? []
+        recentSales = try data.decodeIfPresent([RecentSale].self, forKey: .sales) ?? []
     }
 }
 

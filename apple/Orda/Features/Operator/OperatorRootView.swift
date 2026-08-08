@@ -6,8 +6,8 @@ import SwiftUI
 ///
 /// Это не урезанный интерфейс владельца, а другой продукт. Оператор держит
 /// телефон одной рукой, часто с товаром в другой, в полутьме и при очереди —
-/// поэтому здесь крупные цели нажатия, минимум вложенности и главный экран,
-/// целиком посвящённый смене.
+/// поэтому крупные цели нажатия, минимум вложенности и главный экран, целиком
+/// посвящённый смене.
 ///
 /// Каталог прав к оператору не применяется: у него свой контур
 /// `/api/operator/*`, а не `/api/admin/*`.
@@ -16,27 +16,38 @@ struct OperatorRootView: View {
 
     @Environment(\.api) private var api
     @State private var store: OperatorStore?
+    @State private var cabinet: CabinetStore?
 
     var body: some View {
         Group {
-            if let store {
-                tabs(store)
+            if let store, let cabinet {
+                tabs(store: store, cabinet: cabinet)
             } else {
                 LaunchView(message: "Загружаем смену…")
             }
         }
         .task {
             guard store == nil else { return }
-            let created = OperatorStore(api: api)
-            store = created
-            await created.bootstrap()
+            let operatorStore = OperatorStore(api: api)
+            let cabinetStore = CabinetStore(api: api)
+            store = operatorStore
+            cabinet = cabinetStore
+
+            // Смена и обзор грузятся параллельно: экран не должен ждать,
+            // пока отработает более медленный из двух запросов.
+            async let shift: Void = operatorStore.bootstrap()
+            async let overview: Void = cabinetStore.bootstrap()
+            _ = await (shift, overview)
+
+            // Чек-листы и знания нужны для блока «требует внимания» на главной.
+            await cabinetStore.loadKnowledge()
         }
     }
 
-    private func tabs(_ store: OperatorStore) -> some View {
+    private func tabs(store: OperatorStore, cabinet: CabinetStore) -> some View {
         TabView {
-            NavigationStack { ShiftScreen() }
-                .tabItem { Label("Смена", systemImage: "play.circle.fill") }
+            NavigationStack { OperatorHomeScreen() }
+                .tabItem { Label("Смена", systemImage: "square.grid.2x2.fill") }
 
             NavigationStack { SaleScreen() }
                 .tabItem { Label("Продажа", systemImage: "cart.fill") }
@@ -45,67 +56,16 @@ struct OperatorRootView: View {
             NavigationStack { AuditScreen() }
                 .tabItem { Label("Ревизия", systemImage: "list.clipboard.fill") }
 
-            NavigationStack { OperatorProfileView() }
+            NavigationStack { TasksScreen() }
+                .tabItem { Label("Задачи", systemImage: "checklist") }
+                .badge(cabinet.activeTasks.count)
+
+            NavigationStack { OperatorProfileScreen() }
                 .tabItem { Label("Профиль", systemImage: "person.crop.circle") }
+                .badge(cabinet.pendingArticles.count)
         }
         .tint(Theme.accent(for: .operator))
         .environment(store)
-    }
-}
-
-/// Профиль оператора и выход.
-struct OperatorProfileView: View {
-    @Environment(AuthStore.self) private var auth
-    @Environment(OperatorStore.self) private var store
-
-    var body: some View {
-        ScrollView {
-            VStack(spacing: Spacing.lg) {
-                Card {
-                    VStack(alignment: .leading, spacing: Spacing.sm) {
-                        Text(auth.role?.displayName ?? "Оператор")
-                            .font(Typography.title)
-                            .foregroundStyle(Theme.text)
-                        if let label = auth.role?.roleLabel {
-                            Text(label)
-                                .font(Typography.callout)
-                                .foregroundStyle(Theme.textMuted)
-                        }
-                    }
-                }
-
-                if store.queuedSalesCount > 0 {
-                    Card(accent: Theme.warning) {
-                        VStack(alignment: .leading, spacing: Spacing.md) {
-                            Label(
-                                "\(store.queuedSalesCount) неотправленных чеков",
-                                systemImage: "arrow.triangle.2.circlepath"
-                            )
-                            .font(Typography.callout.weight(.semibold))
-                            .foregroundStyle(Theme.warning)
-
-                            Text("Продажи сохранены на устройстве. Они уйдут на сервер при связи — не удаляйте приложение.")
-                                .font(Typography.caption)
-                                .foregroundStyle(Theme.textMuted)
-
-                            Button("Отправить сейчас") {
-                                Task { await store.flushQueue() }
-                            }
-                            .buttonStyle(SecondaryButtonStyle())
-                        }
-                    }
-                }
-
-                Button("Выйти") {
-                    Task { await auth.signOut() }
-                }
-                .buttonStyle(SecondaryButtonStyle())
-            }
-            .padding(Spacing.lg)
-            .frame(maxWidth: 640)
-            .frame(maxWidth: .infinity)
-        }
-        .background(Theme.background)
-        .navigationTitle("Профиль")
+        .environment(cabinet)
     }
 }

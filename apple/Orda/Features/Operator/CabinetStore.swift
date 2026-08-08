@@ -1,0 +1,188 @@
+import Foundation
+import OrdaKit
+import SwiftUI
+
+/// Состояние остальных разделов кабинета: обзор, задачи, зарплата, график,
+/// знания с чек-листами, инциденты.
+///
+/// Отдельно от `OperatorStore` намеренно: там живёт смена, корзина и очередь
+/// продаж — то, что меняется каждую секунду и должно быть одно на приложение.
+/// Здесь — справочные разделы, которые грузятся по мере открытия вкладок.
+@MainActor
+@Observable
+final class CabinetStore {
+    // ── Обзор ────────────────────────────────────────────────────────────────
+
+    private(set) var overview: OperatorOverview?
+    private(set) var isLoadingOverview = false
+
+    // ── Задачи ───────────────────────────────────────────────────────────────
+
+    private(set) var tasks: [OperatorTask] = []
+    private(set) var isLoadingTasks = false
+
+    var activeTasks: [OperatorTask] { tasks.filter { !$0.isDone } }
+    var overdueCount: Int { tasks.filter(\.isOverdue).count }
+
+    // ── Деньги ───────────────────────────────────────────────────────────────
+
+    private(set) var salary: OperatorSalary?
+    private(set) var incidents: [OperatorIncident] = []
+
+    // ── График ───────────────────────────────────────────────────────────────
+
+    private(set) var schedule: OperatorSchedule?
+
+    // ── Знания и чек-листы ───────────────────────────────────────────────────
+
+    private(set) var knowledge: KnowledgeCenter?
+    private(set) var isLoadingKnowledge = false
+
+    /// Незавершённые обязательные чек-листы — их же показывает экран смены.
+    var pendingChecklists: [ChecklistTemplate] {
+        guard let knowledge else { return [] }
+        return knowledge.templates.filter { template in
+            template.scheduleType != "onboarding" && knowledge.completedRun(for: template.id) == nil
+        }
+    }
+
+    var pendingArticles: [KnowledgeArticle] {
+        knowledge?.pendingConfirmations ?? []
+    }
+
+    // ── Общее ────────────────────────────────────────────────────────────────
+
+    private(set) var error: String?
+
+    private let service: OperatorService
+
+    init(api: APIClient) {
+        self.service = OperatorService(api: api)
+    }
+
+    // ── Загрузка ─────────────────────────────────────────────────────────────
+
+    /// Первое наполнение: обзор и задачи нужны сразу, остальное — лениво.
+    func bootstrap() async {
+        async let overviewTask: Void = loadOverview()
+        async let tasksTask: Void = loadTasks()
+        _ = await (overviewTask, tasksTask)
+    }
+
+    func loadOverview() async {
+        isLoadingOverview = true
+        defer { isLoadingOverview = false }
+        do {
+            overview = try await service.overview()
+            error = nil
+        } catch let apiError as APIError {
+            error = apiError.operatorMessage
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    func loadTasks() async {
+        isLoadingTasks = true
+        defer { isLoadingTasks = false }
+        tasks = (try? await service.tasks()) ?? tasks
+    }
+
+    func loadSalary() async {
+        salary = (try? await service.salary()) ?? salary
+    }
+
+    func loadSchedule() async {
+        schedule = (try? await service.schedule()) ?? schedule
+    }
+
+    func loadIncidents() async {
+        incidents = (try? await service.incidents()) ?? incidents
+    }
+
+    func loadKnowledge() async {
+        isLoadingKnowledge = true
+        defer { isLoadingKnowledge = false }
+        do {
+            knowledge = try await service.knowledge()
+        } catch let apiError as APIError {
+            error = apiError.operatorMessage
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    // ── Действия ─────────────────────────────────────────────────────────────
+
+    func completeTask(_ task: OperatorTask) async -> String? {
+        do {
+            // Оператор не закрывает задачу сам — отправляет на проверку.
+            // Финальное «выполнено» ставит руководитель.
+            try await service.updateTask(id: task.id, status: "review")
+            await loadTasks()
+            await loadOverview()
+            return nil
+        } catch let apiError as APIError {
+            return apiError.operatorMessage
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    func confirmArticle(_ article: KnowledgeArticle) async -> String? {
+        do {
+            try await service.confirmArticle(id: article.id, version: article.version)
+            await loadKnowledge()
+            return nil
+        } catch let apiError as APIError {
+            return apiError.operatorMessage
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    // ── Чек-листы ────────────────────────────────────────────────────────────
+
+    func startChecklist(_ template: ChecklistTemplate) async -> Result<String, OperationFailure> {
+        do {
+            let started = try await service.startChecklist(templateID: template.id)
+            return .success(started.runID)
+        } catch let apiError as APIError {
+            return .failure(OperationFailure(message: apiError.operatorMessage))
+        } catch {
+            return .failure(OperationFailure(message: error.localizedDescription))
+        }
+    }
+
+    func saveChecklist(runID: String, answers: [ChecklistAnswer]) async -> String? {
+        do {
+            try await service.saveChecklistAnswers(runID: runID, answers: answers)
+            return nil
+        } catch let apiError as APIError {
+            return apiError.operatorMessage
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    func completeChecklist(runID: String) async -> Result<ChecklistRunResult, OperationFailure> {
+        do {
+            let result = try await service.completeChecklist(runID: runID)
+            await loadKnowledge()
+            return .success(result)
+        } catch let apiError as APIError {
+            return .failure(OperationFailure(message: apiError.operatorMessage))
+        } catch {
+            return .failure(OperationFailure(message: error.localizedDescription))
+        }
+    }
+}
+
+/// Ошибка операции кабинета с готовым текстом для пользователя.
+///
+/// Отдельный тип, а не голая строка: `Result` требует, чтобы ошибка
+/// соответствовала `Error`, и заодно так виднее, что текст уже переведён
+/// в человеческий вид.
+struct OperationFailure: Error, Equatable {
+    let message: String
+}
