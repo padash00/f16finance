@@ -2,62 +2,46 @@ import OrdaKit
 import OrdaUI
 import SwiftUI
 
-/// Разделы портала, у которых есть нативный экран.
+/// Экран для раздела портала, у которого есть нативная версия.
 ///
-/// Список ведётся здесь, а не в каждой точке навигации: разделы открываются
-/// из боковой панели, из списка «Разделы» и по ссылкам с дашборда, и все три
-/// места должны согласованно выбирать нативный экран вместо веба. Забытая
-/// ветка в одном из них означала бы, что на iPad раздел нативный, а на
-/// iPhone — тот же самый в рамке браузера.
+/// Разделы открываются из боковой панели, из списка «Разделы» и по ссылкам с
+/// дашборда — все три места разрешают раздел здесь. Забытая ветка в одном из
+/// них означала бы, что на iPad раздел нативный, а на iPhone тот же самый в
+/// рамке браузера.
 ///
-/// Всё, чего здесь нет, по-прежнему открывается веб-версией: раздел остаётся
-/// рабочим, а не превращается в заглушку до того, как до него дойдут руки.
-enum NativePage: String, CaseIterable {
-    case store
-    case storeStock
-    case storeRequests
-    case operators
-    case salary
-    case reports
-    case tasks
-    case shifts
-    case customers
-    case subscription
-    case incidents
-    case pointDebts
-
-    /// Сопоставление с идентификаторами каталога прав.
-    init?(pageID: String) {
-        switch pageID {
-        case "store", "store-overview": self = .store
-        case "store-stock", "inventory": self = .storeStock
-        case "store-orders", "inventory-requests": self = .storeRequests
-        case "operators": self = .operators
-        case "salary": self = .salary
-        case "reports", "analytics": self = .reports
-        case "tasks": self = .tasks
-        case "shifts": self = .shifts
-        case "customers", "store-clients": self = .customers
-        case "subscription", "my-subscription": self = .subscription
-        case "incidents": self = .incidents
-        case "point-debts": self = .pointDebts
-        default: return nil
+/// Какие идентификаторы считаются нативными, решает `NativeSection` в OrdaKit:
+/// там это данные, покрытые тестом. Здесь остаётся только построение вида —
+/// SwiftUI в домен не тянем.
+///
+/// Всё, чего нет в списке, по-прежнему открывается веб-версией: раздел
+/// остаётся рабочим, а не превращается в заглушку до того, как до него
+/// дойдут руки.
+enum NativePage {
+    /// Экран раздела каталога, если он нативный. `nil` — открывать веб.
+    @ViewBuilder
+    static func screen(pageID: String) -> some View {
+        if let section = NativeSection.forPage(id: pageID) {
+            view(for: section)
         }
     }
 
+    static func isNative(pageID: String) -> Bool {
+        NativeSection.forPage(id: pageID) != nil
+    }
+
     @ViewBuilder
-    var screen: some View {
-        switch self {
+    private static func view(for section: NativeSection) -> some View {
+        switch section {
         case .store: StoreScreen()
-        case .storeStock: StockScreen()
-        case .storeRequests: RequestsScreen()
+        case .stock: StockScreen()
+        case .requests: RequestsScreen()
+        case .movements: MovementsScreen()
         case .operators: OperatorsScreen()
         case .salary: SalaryScreen()
         case .reports: ReportsScreen()
         case .tasks: TeamTasksScreen()
         case .shifts: ScheduleWeekScreen()
         case .customers: CustomersScreen()
-        case .subscription: SubscriptionScreen()
         case .incidents: IncidentsScreen()
         case .pointDebts: PointDebtsScreen()
         }

@@ -130,6 +130,11 @@ struct BusinessRootView: View {
                 ] + (resolver.can("expenses-pending.view")
                      ? [WorkspaceItem(id: "home.approvals", title: "Решения", icon: "checkmark.circle", badge: store?.pending.count)]
                      : [])
+                // Подписки нет в каталоге прав — это владельческий раздел,
+                // и через `visibleGroups()` он не появится ни у кого.
+                + (resolver.workspace == .owner
+                   ? [WorkspaceItem(id: "home.subscription", title: "Подписка", icon: "creditcard")]
+                   : [])
             )
         ]
 
@@ -156,9 +161,11 @@ struct BusinessRootView: View {
             LedgerScreen()
         case "home.approvals":
             ApprovalsScreen()
+        case "home.subscription":
+            SubscriptionScreen()
         default:
-            if let item, let native = NativePage(pageID: item.id) {
-                native.screen
+            if let item, NativePage.isNative(pageID: item.id) {
+                NativePage.screen(pageID: item.id)
             } else if let item, let page = CapabilityCatalog.page(id: item.id) {
                 PageScaffold(page: page, resolver: resolver)
             } else {
@@ -241,8 +248,8 @@ struct BusinessSectionsScreen: View {
                             ForEach(Array(pages.enumerated()), id: \.element.id) { index, page in
                                 if index > 0 { RowDivider() }
                                 NavigationLink {
-                                    if let native = NativePage(pageID: page.id) {
-                                        native.screen
+                                    if NativePage.isNative(pageID: page.id) {
+                                        NativePage.screen(pageID: page.id)
                                     } else {
                                         PageScaffold(page: page, resolver: resolver)
                                     }
