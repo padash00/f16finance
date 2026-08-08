@@ -44,10 +44,38 @@ final class BusinessStore {
         }
     }
 
+    private(set) var report: ReportAggregate?
+    private(set) var isLoadingReport = false
+    private(set) var reportError: APIError?
+
+    private(set) var tasks: [TeamTask] = []
+    private(set) var isLoadingTasks = false
+    private(set) var tasksError: APIError?
+
+    private(set) var schedule: ShiftSchedule?
+    private(set) var isLoadingSchedule = false
+    private(set) var scheduleError: APIError?
+
+    /// Понедельник показываемой недели графика — отдельно от зарплатной:
+    /// это разные экраны, и синхронный сдвиг обоих сбивал бы с толку.
+    var scheduleWeek: String = PayWeek.start() {
+        didSet {
+            guard oldValue != scheduleWeek else { return }
+            Task { await loadSchedule() }
+        }
+    }
+
+    private(set) var customers: [Customer] = []
+    private(set) var isLoadingCustomers = false
+    private(set) var customersError: APIError?
+
     var range: DateRange = .week {
         didSet {
             guard oldValue != range else { return }
+            // Период общий для денег и отчётов: переключив его в одном месте,
+            // человек ожидает согласованные цифры в обоих.
             Task { await loadLedger() }
+            Task { await loadReport() }
         }
     }
 
@@ -159,6 +187,61 @@ final class BusinessStore {
             salaryError = error
         } catch {
             salaryError = .transport(message: error.localizedDescription)
+        }
+    }
+
+    func loadReport() async {
+        isLoadingReport = true
+        defer { isLoadingReport = false }
+        let bounds = range.bounds
+        do {
+            report = try await service.report(from: bounds.from, to: bounds.to)
+            reportError = nil
+        } catch let error as APIError {
+            reportError = error
+        } catch {
+            reportError = .transport(message: error.localizedDescription)
+        }
+    }
+
+    func loadTasks() async {
+        isLoadingTasks = true
+        defer { isLoadingTasks = false }
+        do {
+            tasks = try await service.tasks()
+            tasksError = nil
+        } catch let error as APIError {
+            tasksError = error
+            tasks = []
+        } catch {
+            tasksError = .transport(message: error.localizedDescription)
+        }
+    }
+
+    func loadSchedule() async {
+        isLoadingSchedule = true
+        defer { isLoadingSchedule = false }
+        do {
+            schedule = try await service.schedule(weekStart: scheduleWeek)
+            scheduleError = nil
+        } catch let error as APIError {
+            scheduleError = error
+        } catch {
+            scheduleError = .transport(message: error.localizedDescription)
+        }
+    }
+
+    func loadCustomers() async {
+        isLoadingCustomers = true
+        defer { isLoadingCustomers = false }
+        do {
+            customers = try await service.customers()
+            customersError = nil
+        } catch let error as APIError {
+            customersError = error
+            customers = []
+        } catch {
+            customersError = .transport(message: error.localizedDescription)
         }
     }
 

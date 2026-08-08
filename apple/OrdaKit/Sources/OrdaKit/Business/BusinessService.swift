@@ -98,6 +98,48 @@ public struct BusinessService: Sendable {
         )
         return response.data
     }
+
+    /// График смен на неделю. Требует `shifts.view` либо `dashboard.view`.
+    public func schedule(weekStart: String) async throws -> ShiftSchedule {
+        try await api.send(
+            APIRequest(
+                path: "/api/admin/shifts",
+                query: ["weekStart": weekStart, "includeSchedule": "1"]
+            )
+        )
+    }
+
+    // ── Отчёты ───────────────────────────────────────────────────────────────
+
+    /// Сводный отчёт за период: итоги, сравнение с прошлым периодом, разрезы.
+    public func report(from: String, to: String) async throws -> ReportAggregate {
+        let response: Envelope<ReportBundle> = try await api.send(
+            APIRequest(path: "/api/admin/reports/bundle", query: ["from": from, "to": to])
+        )
+        return response.data.aggregate
+    }
+
+    // ── Операционная работа ──────────────────────────────────────────────────
+
+    /// Задачи команды. Требует `tasks.view`.
+    public func tasks(status: String? = nil) async throws -> [TeamTask] {
+        var query: [String: String] = ["pageSize": "200"]
+        if let status { query["status"] = status }
+        let response: DataList<TeamTask> = try await api.send(
+            APIRequest(path: "/api/admin/tasks", query: query)
+        )
+        return response.items
+    }
+
+    /// Клиенты с лояльностью. Требует прав сотрудника.
+    public func customers(search: String? = nil) async throws -> [Customer] {
+        var query: [String: String] = [:]
+        if let search, !search.isEmpty { query["search"] = search }
+        let response: DataList<Customer> = try await api.send(
+            APIRequest(path: "/api/admin/customers", query: query)
+        )
+        return response.items
+    }
 }
 
 // ── Конверт ответа ───────────────────────────────────────────────────────────

@@ -15,16 +15,26 @@ import SwiftUI
 enum NativePage: String, CaseIterable {
     case store
     case storeStock
+    case storeRequests
     case operators
     case salary
+    case reports
+    case tasks
+    case shifts
+    case customers
 
     /// Сопоставление с идентификаторами каталога прав.
     init?(pageID: String) {
         switch pageID {
         case "store", "store-overview": self = .store
         case "store-stock", "inventory": self = .storeStock
+        case "store-orders", "inventory-requests": self = .storeRequests
         case "operators": self = .operators
         case "salary": self = .salary
+        case "reports", "analytics": self = .reports
+        case "tasks": self = .tasks
+        case "shifts": self = .shifts
+        case "customers", "store-clients": self = .customers
         default: return nil
         }
     }
@@ -34,8 +44,13 @@ enum NativePage: String, CaseIterable {
         switch self {
         case .store: StoreScreen()
         case .storeStock: StockScreen()
+        case .storeRequests: RequestsScreen()
         case .operators: OperatorsScreen()
         case .salary: SalaryScreen()
+        case .reports: ReportsScreen()
+        case .tasks: TeamTasksScreen()
+        case .shifts: ScheduleWeekScreen()
+        case .customers: CustomersScreen()
         }
     }
 }
