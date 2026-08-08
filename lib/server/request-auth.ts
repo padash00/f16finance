@@ -210,13 +210,27 @@ export async function getRequestAccessContext(
   // x-organization-id. Безопасно: selectActiveOrganization берёт орг только из тех,
   // к которым у пользователя есть доступ (чужой id просто игнорируется).
   const headerOrganizationId = request.headers.get('x-organization-id')?.trim() || null
-  const requestedOrganizationId =
-    hostOrganization?.id || headerOrganizationId || cookieMap.get(ACTIVE_ORGANIZATION_COOKIE) || null
+
+  // Нативное приложение ходит по Bearer и всегда на один адрес (www), потому
+  // что поддомена у него нет. Но www сервер трактует как контекст организации
+  // по умолчанию — и владелец любой другой организации получал
+  // host-organization-not-accessible, то есть приложение работало только у
+  // одного клиента.
+  //
+  // Привязка к хосту нужна браузеру, где поддомен и есть выбор тенанта. У
+  // Bearer-клиента такой семантики нет: организацию он выбирает заголовком,
+  // и доступ к ней всё равно проверяет selectActiveOrganization.
+  const isBearerClient = Boolean(getBearerToken(request))
+
+  const requestedOrganizationId = isBearerClient
+    ? headerOrganizationId || hostOrganization?.id || null
+    : hostOrganization?.id || headerOrganizationId || cookieMap.get(ACTIVE_ORGANIZATION_COOKIE) || null
+
   const activeOrganization = selectActiveOrganization({
     organizations: organizationAccess.organizations,
     requestedOrganizationId,
   })
-  const hostOrganizationLocked = Boolean(hostOrganization?.id)
+  const hostOrganizationLocked = Boolean(hostOrganization?.id) && !isBearerClient
   const hostOrganizationAccessible =
     !hostOrganizationLocked || isSuperAdmin || organizationAccess.organizations.some((item) => item.id === hostOrganization?.id)
 

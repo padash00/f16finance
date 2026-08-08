@@ -156,7 +156,7 @@ public actor APIClient {
             }
         }
 
-        throw makeError(status: http.statusCode, data: data)
+        throw makeError(status: http.statusCode, data: data, path: request.path)
     }
 
     private func buildURLRequest(_ request: APIRequest) async throws -> URLRequest {
@@ -197,9 +197,18 @@ public actor APIClient {
         return urlRequest
     }
 
-    private func makeError(status: Int, data: Data) -> APIError {
+    private func makeError(status: Int, data: Data, path: String) -> APIError {
         let body = try? JSONDecoder().decode(APIErrorBody.self, from: data)
-        let message = body?.message ?? body?.error ?? ""
+        // Путь в тексте: голое «forbidden» не говорит, какой именно запрос
+        // отказал, и разбирательство превращается в угадывание.
+        // Сервер различает причины полем `code` (guest-not-linked,
+        // host-organization-not-accessible, org-disabled…). Без него все
+        // отказы выглядят одинаковым «forbidden», и понять ветку невозможно.
+        let detail = [body?.message ?? body?.error, body?.code]
+            .compactMap { $0 }
+            .filter { !$0.isEmpty }
+            .joined(separator: " / ")
+        let message = detail.isEmpty ? path : "\(detail) · \(path)"
 
         switch status {
         case 401:
