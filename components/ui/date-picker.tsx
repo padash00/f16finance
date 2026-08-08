@@ -51,17 +51,24 @@ export function DatePicker({
 }: DatePickerProps) {
   const [open, setOpen] = React.useState(false)
   const selected = fromISO(value)
-  const minDate = fromISO(min)
   const maxDate = fromISO(max)
 
-  // Матчер собираем только из заданных границ: ключ с undefined ломает react-day-picker
+  // Матчер собираем только из заданных границ: ключ с undefined ломает react-day-picker.
+  //
+  // Зависим от ISO-строк, а не от объектов Date: `fromISO` возвращает новый Date
+  // на каждый рендер, поэтому по идентичности мемо пересчитывалось бы всегда.
+  // Раньше это обходили через `minDate?.getTime()` в списке зависимостей, но
+  // такие выражения запрещены правилом react-hooks/use-memo — а строки min/max
+  // и есть настоящий вход.
   const disabledMatcher = React.useMemo(() => {
-    if (!minDate && !maxDate) return undefined
+    const from = fromISO(min)
+    const to = fromISO(max)
+    if (!from && !to) return undefined
     const m: { before?: Date; after?: Date } = {}
-    if (minDate) m.before = minDate
-    if (maxDate) m.after = maxDate
+    if (from) m.before = from
+    if (to) m.after = to
     return m as { before: Date; after: Date }
-  }, [minDate?.getTime(), maxDate?.getTime()]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [min, max])
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

@@ -13,12 +13,19 @@ export function useUrlState<T extends Record<string, string>>(defaults: T): [T, 
   // эффекты с [setFilters] в зависимостях стреляли снова и снова, каждый —
   // router.replace, а это навигация → template перемонтируется → страница
   // мигает скелетоном по кругу.
-  const defaultsRef = useRef(defaults)
-  const stableDefaults = defaultsRef.current
+  //
+  // Через useState, а не useRef: ref нельзя читать во время рендера
+  // (react-hooks/refs), а useState даёт ту же стабильную ссылку легально.
+  const [stableDefaults] = useState(defaults)
 
   // Читаем params через ref, чтобы setState был стабилен и после смены URL.
+  // Обновляем ref в эффекте, а не прямо в теле: запись во время рендера —
+  // тоже нарушение. setState вызывается из обработчиков, то есть всегда после
+  // коммита, поэтому значение к моменту вызова уже актуальное.
   const paramsRef = useRef(params)
-  paramsRef.current = params
+  useEffect(() => {
+    paramsRef.current = params
+  }, [params])
 
   const state = useMemo(() => {
     const next = { ...stableDefaults }
