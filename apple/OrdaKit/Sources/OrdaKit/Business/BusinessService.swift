@@ -168,6 +168,14 @@ public struct BusinessService: Sendable {
         return response.data
     }
 
+    /// Программы точек и их состояние. Требует `point-devices.view`.
+    public func pointProjects() async throws -> PointProjectList {
+        let response: Envelope<PointProjectList> = try await api.send(
+            APIRequest(path: "/api/admin/point-devices")
+        )
+        return response.data
+    }
+
     // ── Подписка ─────────────────────────────────────────────────────────────
 
     /// Тариф своей организации, модули и счета.

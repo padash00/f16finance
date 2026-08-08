@@ -101,6 +101,10 @@ final class BusinessStore {
         }
     }
 
+    private(set) var devices: PointProjectList?
+    private(set) var isLoadingDevices = false
+    private(set) var devicesError: APIError?
+
     var range: DateRange = .week {
         didSet {
             guard oldValue != range else { return }
@@ -328,6 +332,19 @@ final class BusinessStore {
             pnlError = error
         } catch {
             pnlError = .transport(message: error.localizedDescription)
+        }
+    }
+
+    func loadDevices() async {
+        isLoadingDevices = true
+        defer { isLoadingDevices = false }
+        do {
+            devices = try await service.pointProjects()
+            devicesError = nil
+        } catch let error as APIError {
+            devicesError = error
+        } catch {
+            devicesError = .transport(message: error.localizedDescription)
         }
     }
 

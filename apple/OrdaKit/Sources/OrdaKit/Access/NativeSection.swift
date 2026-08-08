@@ -20,6 +20,7 @@ public enum NativeSection: String, CaseIterable, Sendable {
     case incidents
     case pointDebts
     case profitability
+    case pointDevices
 
     /// Идентификаторы страниц каталога, которые ведут на этот экран.
     public var pageIDs: [String] {
@@ -41,6 +42,7 @@ public enum NativeSection: String, CaseIterable, Sendable {
         case .pointDebts: ["point-debts"]
         // Оценка бизнеса строится на той же EBITDA — открываем тем же экраном.
         case .profitability: ["profitability", "valuation"]
+        case .pointDevices: ["point-devices"]
         }
     }
 

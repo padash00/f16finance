@@ -45,6 +45,7 @@ enum NativePage {
         case .incidents: IncidentsScreen()
         case .pointDebts: PointDebtsScreen()
         case .profitability: PnlScreen()
+        case .pointDevices: PointDevicesScreen()
         }
     }
 }
