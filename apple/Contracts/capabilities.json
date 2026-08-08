@@ -621,7 +621,7 @@
           "id": "store-showcase",
           "path": "/store/showcase",
           "extraPaths": [],
-          "label": "Витрина (point_display)",
+          "label": "Витрина",
           "capabilities": [
             {
               "id": "store-showcase.view",

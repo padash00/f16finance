@@ -232,7 +232,7 @@ extension CapabilityCatalog {
                     id: "store-showcase",
                     path: "/store/showcase",
                     extraPaths: [],
-                    label: "Витрина (point_display)",
+                    label: "Витрина",
                     capabilities: [
                         Capability(id: "store-showcase.view", label: "Просмотр витрины", description: nil, severity: .low, deps: []),
                         Capability(id: "store-showcase.move", label: "Перенос со склада на витрину", description: nil, severity: .medium, deps: []),

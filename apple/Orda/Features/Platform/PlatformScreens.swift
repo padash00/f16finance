@@ -274,6 +274,47 @@ struct OrganizationDetailScreen: View {
         store.organizations.first { $0.id == organization.id } ?? organization
     }
 
+    /// Работать в этой организации как владелец — то, ради чего суперадмин
+    /// чаще всего её и открывает.
+    ///
+    /// Раньше здесь открывался портал во встроенном браузере. Теперь
+    /// переключаем активную организацию, и все нативные экраны начинают
+    /// показывать её данные.
+    private var switchOrganizationButton: some View {
+        Button {
+            Task { await auth.setOrganization(current.id) }
+        } label: {
+            Card(accent: Theme.accent(for: .platform)) {
+                NavigationRow(
+                    icon: "arrow.left.arrow.right.square",
+                    iconColor: Theme.accent(for: .platform),
+                    title: isCurrentOrganization ? "Вы работаете в этой организации" : "Работать как владелец",
+                    subtitle: isCurrentOrganization
+                        ? "разделы ниже показывают её данные"
+                        : "переключить приложение на \(current.name)"
+                )
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(isCurrentOrganization)
+    }
+
+    private var capabilitiesButton: some View {
+        NavigationLink { OrgCapabilitiesScreen(organization: current) } label: {
+            Card {
+                NavigationRow(
+                    icon: "lock.shield",
+                    iconColor: Theme.accent(for: .platform),
+                    title: "Рубильник прав",
+                    subtitle: "выключить действия для всей организации",
+                    badge: store.disabledCapabilities[current.id]?.count,
+                    badgeColor: Theme.warning
+                )
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
     /// Работает ли приложение сейчас в контексте этой организации.
     private var isCurrentOrganization: Bool {
         auth.organizationID == current.id
@@ -281,59 +322,28 @@ struct OrganizationDetailScreen: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: Spacing.lg) {
+            // На широком экране две колонки: слева состояние клиента, справа
+            // действия над ним. Одна колонка в 720 точек посреди
+            // двухтысячепиксельного окна оставляла бы пустыми обе трети.
+            SplitDashboard(mainRatio: 0.55) {
                 headerCard
                 subscriptionCard
-                controlsCard
                 companiesCard
-
-                // Работать в этой организации как владелец — то, ради чего
-                // суперадмин чаще всего её и открывает.
-                //
-                // Раньше здесь открывался портал во встроенном браузере.
-                // Теперь переключаем активную организацию, и все нативные
-                // экраны начинают показывать её данные.
-                Button {
-                    Task { await auth.setOrganization(current.id) }
-                } label: {
-                    Card(accent: Theme.accent(for: .platform)) {
-                        NavigationRow(
-                            icon: "arrow.left.arrow.right.square",
-                            iconColor: Theme.accent(for: .platform),
-                            title: isCurrentOrganization ? "Вы работаете в этой организации" : "Работать как владелец",
-                            subtitle: isCurrentOrganization
-                                ? "разделы ниже показывают её данные"
-                                : "переключить приложение на \(current.name)"
-                        )
-                    }
-                }
-                .buttonStyle(.plain)
-                .disabled(isCurrentOrganization)
-
-                NavigationLink { OrgCapabilitiesScreen(organization: current) } label: {
-                    Card {
-                        NavigationRow(
-                            icon: "lock.shield",
-                            iconColor: Theme.accent(for: .platform),
-                            title: "Рубильник прав",
-                            subtitle: "выключить действия для всей организации",
-                            badge: store.disabledCapabilities[current.id]?.count,
-                            badgeColor: Theme.warning
-                        )
-                    }
-                }
-                .buttonStyle(.plain)
-
+            } side: {
+                controlsCard
+                switchOrganizationButton
+                capabilitiesButton
                 dangerCard
-
-                if let error {
-                    Text(error).font(Typography.callout).foregroundStyle(Theme.negative)
-                }
             }
-            .padding(Spacing.lg)
-            .frame(maxWidth: 720)
-            .frame(maxWidth: .infinity)
+
+            if let error {
+                Text(error)
+                    .font(Typography.callout)
+                    .foregroundStyle(Theme.negative)
+                    .padding(.horizontal, Spacing.lg)
+            }
         }
+        .contentMargins(Spacing.lg, for: .scrollContent)
         .background(Theme.background)
         .navigationTitle(current.name)
         #if os(iOS)

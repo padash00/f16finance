@@ -138,7 +138,10 @@ struct OrganizationsScreen: View {
         .navigationTitle("Организации")
         .searchable(text: $bindable.search, prompt: "Название или поддомен")
         .toolbar { LogoutToolbarItem() }
-        .task { if store.data == nil { await store.load() } }
+        .task {
+            if store.data == nil { await store.load() }
+            if selectedID == nil { selectedID = store.filteredOrganizations.first?.id }
+        }
         .refreshable { await store.load() }
     }
 
@@ -169,26 +172,37 @@ struct OrganizationsScreen: View {
     private var splitView: some View {
         VSplitView {
             OrganizationsTable(organizations: store.filteredOrganizations, selection: $selectedID)
-                .frame(minHeight: 220)
+                // Высота под содержимое, а не половина окна: у клиента обычно
+                // несколько организаций, и `Table` дорисовывала пустые строки
+                // фоном — выглядело как оборванный список.
+                .frame(height: tableHeight)
 
             Group {
                 if let selected = store.organizations.first(where: { $0.id == selectedID }) {
                     OrganizationDetailScreen(organization: selected)
                 } else {
-                    VStack(spacing: Spacing.md) {
-                        Image(systemName: "hand.point.up.left")
-                            .font(.system(size: 24, weight: .light))
-                            .foregroundStyle(Theme.textDim)
-                        Text("Выберите организацию в таблице")
-                            .font(Typography.callout)
-                            .foregroundStyle(Theme.textDim)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Theme.background)
+                    WideEmptyState(
+                        icon: "hand.point.up.left",
+                        title: "Организация не выбрана",
+                        message: "Нажмите строку в таблице выше."
+                    )
                 }
             }
-            .frame(minHeight: 260)
+            .frame(maxHeight: .infinity)
         }
+        // Первая организация выбирается сама: пустая нижняя половина на полэкрана
+        // ничего не сообщает, а карточка сразу показывает подписку и точки.
+        .onChange(of: store.filteredOrganizations.map(\.id)) { _, ids in
+            if selectedID == nil || !ids.contains(selectedID!) {
+                selectedID = ids.first
+            }
+        }
+    }
+
+    /// Заголовок плюс строки, но не больше половины разумного окна.
+    private var tableHeight: CGFloat {
+        let rows = CGFloat(store.filteredOrganizations.count)
+        return min(44 + rows * 46, 420)
     }
 }
 

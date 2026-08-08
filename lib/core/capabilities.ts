@@ -271,7 +271,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
       {
         id: 'store-showcase',
         path: '/store/showcase',
-        label: 'Витрина (point_display)',
+        label: 'Витрина',
         capabilities: [
           { id: 'store-showcase.view', label: 'Просмотр витрины', severity: 'low' },
           { id: 'store-showcase.move', label: 'Перенос со склада на витрину', severity: 'medium' },
