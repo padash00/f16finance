@@ -98,6 +98,8 @@ enum NativePage {
         case .expenseAnalysis: ExpenseAnalysisScreen()
         case .teamAnalysis: TeamAnalysisScreen()
         case .calendar: CalendarScreen()
+        case .ledger: LedgerScreen()
+        case .approvals: ApprovalsScreen()
         }
     }
 }

@@ -67,6 +67,8 @@ public enum NativeSection: String, CaseIterable, Sendable {
     case expenseAnalysis
     case teamAnalysis
     case calendar
+    case ledger
+    case approvals
 
     /// Идентификаторы страниц каталога, которые ведут на этот экран.
     public var pageIDs: [String] {
@@ -133,6 +135,11 @@ public enum NativeSection: String, CaseIterable, Sendable {
         case .aiCfo: ["ai-cfo"]
         case .expenseAnalysis: ["expense-analysis"]
         case .teamAnalysis: ["team-analysis"]
+        // Доходы и расходы — один экран: владелец смотрит на них
+        // вместе, разделять их значило бы заставлять переключаться
+        // ради простого «сколько осталось».
+        case .ledger: ["income", "expenses"]
+        case .approvals: ["expenses-pending"]
         // Ниже — разделы, которых нет в каталоге прав. Они не
         // capability-gated и на сайте: показываются всем, кто вошёл.
         case .businessIntelligence, .calendar: []
