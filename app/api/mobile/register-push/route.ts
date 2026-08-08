@@ -1,12 +1,20 @@
 import { NextResponse } from 'next/server'
 
+import { isApnsToken } from '@/lib/server/apns'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 
 export const dynamic = 'force-dynamic'
 
-// Регистрация Expo push-токена устройства (мобилка зовёт после входа).
+/**
+ * Регистрация push-токена устройства (мобилка зовёт после входа).
+ *
+ * Принимаем оба вида токенов: Expo (`ExponentPushToken[...]`) от React Native
+ * приложения и сырой hex-токен APNs от нативного Apple-приложения. Приложения
+ * будут сосуществовать, поэтому таблица общая, а вид определяется по форме
+ * токена — при отправке `lib/server/push.ts` разведёт их по каналам.
+ */
 export async function POST(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
@@ -14,9 +22,22 @@ export async function POST(request: Request) {
 
     const body = (await request.json().catch(() => null)) as { token?: string; platform?: string } | null
     const token = String(body?.token || '').trim()
-    if (!token.startsWith('ExponentPushToken') && !token.startsWith('ExpoPushToken')) {
+
+    const isExpo = token.startsWith('ExponentPushToken') || token.startsWith('ExpoPushToken')
+    if (!isExpo && !isApnsToken(token)) {
       return NextResponse.json({ error: 'bad-token' }, { status: 400 })
     }
+
+    // `platform` присылает клиент, поэтому доверять ему нельзя — нормализуем
+    // сами по форме токена, а клиентское значение оставляем только как уточнение
+    // (ios / ipados / macos), если оно непротиворечиво.
+    const claimedPlatform = String(body?.platform || '').trim().toLowerCase()
+    const APPLE_PLATFORMS = new Set(['ios', 'ipados', 'macos'])
+    const platform = isExpo
+      ? claimedPlatform.slice(0, 16) || 'expo'
+      : APPLE_PLATFORMS.has(claimedPlatform)
+        ? claimedPlatform
+        : 'ios'
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const { error } = await supabase.from('mobile_push_tokens').upsert(
@@ -25,7 +46,7 @@ export async function POST(request: Request) {
         user_id: access.user?.id || null,
         operator_id: access.operatorAuth?.operator_id || null,
         organization_id: access.activeOrganization?.id || null,
-        platform: String(body?.platform || '').slice(0, 16),
+        platform,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'token' },

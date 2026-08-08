@@ -1,15 +1,33 @@
 import 'server-only'
 
+import { isApnsToken, sendApnsPush, type ApnsPayload } from '@/lib/server/apns'
 import type { AdminSupabaseClient } from '@/lib/server/supabase'
 
 type ExpoMessage = { to: string; title: string; body: string; data?: Record<string, unknown>; sound?: 'default' }
+
+export type PushPayload = {
+  title: string
+  body: string
+  data?: Record<string, unknown>
+  /** Значение бейджа на иконке (только Apple). */
+  badge?: number
+  /** Категория действий в уведомлении — «Одобрить»/«Отклонить» из шторки (только Apple). */
+  categoryId?: string
+  /** Схлопывать повторы с тем же идентификатором (только Apple). */
+  collapseId?: string
+}
+
+/** Токен Expo-приложения (React Native). */
+function isExpoToken(token: string): boolean {
+  return /^Expo(nent)?PushToken/.test(token)
+}
 
 /** Отправка через Expo Push API (чанки по 100). Best-effort, не кидает. */
 export async function sendExpoPush(
   tokens: string[],
   payload: { title: string; body: string; data?: Record<string, unknown> },
 ): Promise<void> {
-  const valid = Array.from(new Set(tokens.filter((t) => t && /^Expo(nent)?PushToken/.test(t))))
+  const valid = Array.from(new Set(tokens.filter((t) => t && isExpoToken(t))))
   if (valid.length === 0) return
   const messages: ExpoMessage[] = valid.map((to) => ({ to, title: payload.title, body: payload.body, data: payload.data || {}, sound: 'default' }))
   for (let i = 0; i < messages.length; i += 100) {
@@ -25,17 +43,67 @@ export async function sendExpoPush(
   }
 }
 
+/**
+ * Отправка на любые устройства: Expo и нативные Apple одновременно.
+ *
+ * Приложений два и они будут сосуществовать: Expo-версия остаётся на Android и
+ * у тех, кто ещё не перешёл, нативное — на iPhone/iPad/Mac. Токены лежат в
+ * одной таблице `mobile_push_tokens`, поэтому разделяем их по форме токена, а
+ * не по колонке `platform` — она заполняется клиентом и ей нельзя доверять.
+ *
+ * Возвращает список токенов, которые APNs признал мёртвыми навсегда.
+ */
+export async function sendPush(tokens: string[], payload: PushPayload): Promise<{ invalidTokens: string[] }> {
+  const cleaned = tokens.map((t) => String(t || '').trim()).filter(Boolean)
+  if (cleaned.length === 0) return { invalidTokens: [] }
+
+  const expoTokens = cleaned.filter(isExpoToken)
+  const apnsTokens = cleaned.filter(isApnsToken)
+
+  const apnsPayload: ApnsPayload = {
+    title: payload.title,
+    body: payload.body,
+    data: payload.data,
+    badge: payload.badge,
+    categoryId: payload.categoryId,
+    collapseId: payload.collapseId,
+  }
+
+  const [, apnsResult] = await Promise.all([
+    sendExpoPush(expoTokens, payload),
+    sendApnsPush(apnsTokens, apnsPayload),
+  ])
+
+  return { invalidTokens: apnsResult.invalidTokens }
+}
+
+/**
+ * Удалить токены, которые APNs признал невалидными.
+ *
+ * Без этого мёртвые токены копятся годами: приложение удалили, а мы продолжаем
+ * стучаться в Apple на каждом уведомлении.
+ */
+async function pruneInvalidTokens(supabase: AdminSupabaseClient, tokens: string[]): Promise<void> {
+  if (tokens.length === 0) return
+  try {
+    await supabase.from('mobile_push_tokens').delete().in('token', tokens)
+  } catch {
+    /* best-effort */
+  }
+}
+
 /** Push всем устройствам организации. */
 export async function pushToOrganization(
   supabase: AdminSupabaseClient,
   organizationId: string | null,
-  payload: { title: string; body: string; data?: Record<string, unknown> },
+  payload: PushPayload,
 ): Promise<void> {
   if (!organizationId) return
   try {
     const { data } = await supabase.from('mobile_push_tokens').select('token').eq('organization_id', organizationId)
     const tokens = ((data as any[]) || []).map((r) => String(r.token)).filter(Boolean)
-    await sendExpoPush(tokens, payload)
+    const { invalidTokens } = await sendPush(tokens, payload)
+    await pruneInvalidTokens(supabase, invalidTokens)
   } catch {
     /* best-effort */
   }
@@ -45,14 +113,33 @@ export async function pushToOrganization(
 export async function pushToUsers(
   supabase: AdminSupabaseClient,
   userIds: string[],
-  payload: { title: string; body: string; data?: Record<string, unknown> },
+  payload: PushPayload,
 ): Promise<void> {
   const ids = userIds.filter(Boolean)
   if (ids.length === 0) return
   try {
     const { data } = await supabase.from('mobile_push_tokens').select('token').in('user_id', ids)
     const tokens = ((data as any[]) || []).map((r) => String(r.token)).filter(Boolean)
-    await sendExpoPush(tokens, payload)
+    const { invalidTokens } = await sendPush(tokens, payload)
+    await pruneInvalidTokens(supabase, invalidTokens)
+  } catch {
+    /* best-effort */
+  }
+}
+
+/** Push конкретным операторам (по operator_id). Нужен для смен и чек-листов. */
+export async function pushToOperators(
+  supabase: AdminSupabaseClient,
+  operatorIds: string[],
+  payload: PushPayload,
+): Promise<void> {
+  const ids = operatorIds.filter(Boolean)
+  if (ids.length === 0) return
+  try {
+    const { data } = await supabase.from('mobile_push_tokens').select('token').in('operator_id', ids)
+    const tokens = ((data as any[]) || []).map((r) => String(r.token)).filter(Boolean)
+    const { invalidTokens } = await sendPush(tokens, payload)
+    await pruneInvalidTokens(supabase, invalidTokens)
   } catch {
     /* best-effort */
   }
