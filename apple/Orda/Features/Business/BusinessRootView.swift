@@ -131,14 +131,14 @@ struct BusinessRootView: View {
                      ? [WorkspaceItem(id: "home.approvals", title: "Решения", icon: "checkmark.circle", badge: store?.pending.count)]
                      : [])
                 // Подписки нет в каталоге прав — это владельческий раздел,
-                // и через `visibleGroups()` он не появится ни у кого.
+                // и через каталог он не появится ни у кого.
                 + (resolver.workspace == .owner
                    ? [WorkspaceItem(id: "home.subscription", title: "Подписка", icon: "creditcard")]
                    : [])
             )
         ]
 
-        result.append(contentsOf: resolver.visibleGroups().map { group, pages in
+        result.append(contentsOf: resolver.nativeGroups().map { group, pages in
             WorkspaceSection(
                 id: group.id,
                 title: group.label,
@@ -166,8 +166,6 @@ struct BusinessRootView: View {
         default:
             if let item, NativePage.isNative(pageID: item.id) {
                 NativePage.screen(pageID: item.id)
-            } else if let item, let page = CapabilityCatalog.page(id: item.id) {
-                PageScaffold(page: page, resolver: resolver)
             } else {
                 EmptyStateView(
                     icon: "square.grid.2x2",
@@ -227,7 +225,7 @@ struct BusinessSectionsScreen: View {
     var body: some View {
         ScrollView {
             VStack(spacing: Spacing.lg) {
-                ForEach(resolver.visibleGroups(), id: \.group.id) { group, pages in
+                ForEach(resolver.nativeGroups(), id: \.group.id) { group, pages in
                     Card {
                         VStack(spacing: Spacing.sm) {
                             HStack(spacing: Spacing.sm) {
@@ -248,11 +246,7 @@ struct BusinessSectionsScreen: View {
                             ForEach(Array(pages.enumerated()), id: \.element.id) { index, page in
                                 if index > 0 { RowDivider() }
                                 NavigationLink {
-                                    if NativePage.isNative(pageID: page.id) {
-                                        NativePage.screen(pageID: page.id)
-                                    } else {
-                                        PageScaffold(page: page, resolver: resolver)
-                                    }
+                                    NativePage.screen(pageID: page.id)
                                 } label: {
                                     NavigationRow(
                                         icon: BusinessRootView.icon(forPage: page.id),
@@ -267,7 +261,7 @@ struct BusinessSectionsScreen: View {
                     }
                 }
 
-                if resolver.visibleGroups().isEmpty {
+                if resolver.nativeGroups().isEmpty {
                     EmptyStateView(
                         icon: "lock",
                         title: "Разделов нет",
@@ -322,8 +316,8 @@ struct BusinessProfileScreen: View {
                             .textCase(.uppercase)
                             .frame(maxWidth: .infinity, alignment: .leading)
 
-                        StatRow("Разделов открыто", value: "\(resolver.visibleGroups().count) из \(CapabilityCatalog.groups.count)")
-                        StatRow("Страниц доступно", value: "\(resolver.visibleGroups().reduce(0) { $0 + $1.pages.count })")
+                        StatRow("Разделов открыто", value: "\(resolver.nativeGroups().count)")
+                        StatRow("Страниц доступно", value: "\(resolver.nativeGroups().reduce(0) { $0 + $1.pages.count })")
                         if resolver.isAllAccess {
                             RowDivider()
                             StatusChip("полный доступ", kind: .info)

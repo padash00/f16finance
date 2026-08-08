@@ -274,6 +274,11 @@ struct OrganizationDetailScreen: View {
         store.organizations.first { $0.id == organization.id } ?? organization
     }
 
+    /// Работает ли приложение сейчас в контексте этой организации.
+    private var isCurrentOrganization: Bool {
+        auth.organizationID == current.id
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: Spacing.lg) {
@@ -282,25 +287,28 @@ struct OrganizationDetailScreen: View {
                 controlsCard
                 companiesCard
 
-                // Войти в портал клиента как владелец — то, ради чего
-                // суперадмин чаще всего и открывает организацию.
-                NavigationLink {
-                    WebPageView(
-                        title: current.name,
-                        path: "/dashboard",
-                        host: current.appURL.flatMap(URL.init(string:))
-                    )
+                // Работать в этой организации как владелец — то, ради чего
+                // суперадмин чаще всего её и открывает.
+                //
+                // Раньше здесь открывался портал во встроенном браузере.
+                // Теперь переключаем активную организацию, и все нативные
+                // экраны начинают показывать её данные.
+                Button {
+                    Task { await auth.setOrganization(current.id) }
                 } label: {
                     Card(accent: Theme.accent(for: .platform)) {
                         NavigationRow(
-                            icon: "arrow.up.forward.square",
+                            icon: "arrow.left.arrow.right.square",
                             iconColor: Theme.accent(for: .platform),
-                            title: "Открыть портал организации",
-                            subtitle: current.appURL?.replacingOccurrences(of: "https://", with: "") ?? current.slug
+                            title: isCurrentOrganization ? "Вы работаете в этой организации" : "Работать как владелец",
+                            subtitle: isCurrentOrganization
+                                ? "разделы ниже показывают её данные"
+                                : "переключить приложение на \(current.name)"
                         )
                     }
                 }
                 .buttonStyle(.plain)
+                .disabled(isCurrentOrganization)
 
                 NavigationLink { OrgCapabilitiesScreen(organization: current) } label: {
                     Card {

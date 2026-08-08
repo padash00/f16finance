@@ -50,7 +50,97 @@ struct NativeSectionTests {
         #expect(NativeSection.forPage(id: "salary") == .salary)
         #expect(NativeSection.forPage(id: "store-warehouse") == .stock)
         #expect(NativeSection.forPage(id: "analytics") == .reports)
-        // Не заменённый раздел должен остаться веб-версией.
+        // Раздел без нативного экрана в навигацию не попадает.
         #expect(NativeSection.forPage(id: "telegram") == nil)
+    }
+}
+
+/// Навигация приложения строится из `nativeGroups()`. Проверяем, что фильтр
+/// «только нативное» не ослабил гейт по подписке: раздел, чей модуль
+/// организация не оплатила, не должен появиться, даже если экран для него
+/// написан.
+@Suite("Навигация только по нативным разделам")
+struct NativeGroupsTests {
+    private func resolver(
+        capabilities: Set<String>,
+        orgFeatures: Set<String> = [],
+        featuresAllAccess: Bool = true
+    ) -> AccessResolver {
+        AccessResolver(
+            session: SessionRole(
+                isSuperAdmin: false,
+                isStaff: true,
+                isOperator: false,
+                isCustomer: false,
+                persona: .staff,
+                staffRole: "manager",
+                capabilities: capabilities,
+                orgFeatures: orgFeatures,
+                featuresAllAccess: featuresAllAccess,
+                rolePermissionOverrides: []
+            )
+        )
+    }
+
+    @Test("Показываются только разделы с нативным экраном")
+    func onlyNativePages() {
+        // `telegram` нативного экрана не имеет — в навигацию попасть не должен,
+        // хотя право на него есть.
+        let access = resolver(capabilities: ["salary.view", "telegram.view"])
+        let pageIDs = access.nativeGroups().flatMap { $0.pages.map(\.id) }
+
+        #expect(pageIDs.contains("salary"))
+        #expect(!pageIDs.contains("telegram"))
+    }
+
+    @Test("Неоплаченный модуль прячет раздел, даже если экран написан")
+    func subscriptionStillGates() {
+        // Право есть, нативный экран есть — но модуль «Магазин / Склад»
+        // организации не подключён.
+        //
+        // Важно: пустой orgFeatures означает «организация без пакета» и
+        // ничего не ограничивает — так же ведёт себя веб. Поэтому для
+        // проверки запрета список должен быть непустым, но без нужного кода.
+        let addon = AddonCatalog.addonCode(forPath: "/store/warehouse")
+        #expect(addon == "shop.catalog")
+
+        let denied = resolver(
+            capabilities: ["store-warehouse.view"],
+            orgFeatures: ["addon.arena"],
+            featuresAllAccess: false
+        )
+        #expect(!denied.nativeGroups().flatMap { $0.pages.map(\.id) }.contains("store-warehouse"))
+
+        let allowed = resolver(
+            capabilities: ["store-warehouse.view"],
+            orgFeatures: ["shop.catalog"],
+            featuresAllAccess: false
+        )
+        #expect(allowed.nativeGroups().flatMap { $0.pages.map(\.id) }.contains("store-warehouse"))
+    }
+
+    @Test("Организация без пакета не ограничивается модулями")
+    func emptyFeaturesDoNotRestrict() {
+        // Зеркало веба: пустой список фич — это «пакет не назначен», а не
+        // «ничего не оплачено». Иначе новый клиент не увидел бы ничего.
+        let access = resolver(
+            capabilities: ["store-warehouse.view"],
+            orgFeatures: [],
+            featuresAllAccess: false
+        )
+        #expect(access.nativeGroups().flatMap { $0.pages.map(\.id) }.contains("store-warehouse"))
+    }
+
+    @Test("Без прав навигация пуста, а не показывает недоступное")
+    func nothingWithoutCapabilities() {
+        #expect(resolver(capabilities: []).nativeGroups().isEmpty)
+    }
+
+    @Test("Пустые группы не показываются")
+    func noEmptyGroups() {
+        let access = resolver(capabilities: ["salary.view"])
+        for (_, pages) in access.nativeGroups() {
+            #expect(!pages.isEmpty)
+        }
     }
 }

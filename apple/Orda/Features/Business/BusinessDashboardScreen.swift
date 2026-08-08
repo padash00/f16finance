@@ -239,7 +239,7 @@ struct BusinessDashboardScreen: View {
                         icon: "square.grid.2x2",
                         iconColor: ChartPalette.series2,
                         title: "Все разделы",
-                        subtitle: "\(resolver.visibleGroups().count) доступно"
+                        subtitle: "\(resolver.nativeGroups().count) доступно"
                     )
                 }
                 .buttonStyle(.plain)

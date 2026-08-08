@@ -168,6 +168,29 @@ public struct BusinessService: Sendable {
         return response.data
     }
 
+    /// Ревизии склада и витрин. Требует `store-revisions.view`.
+    public func revisions() async throws -> [Stocktake] {
+        let response: Envelope<RevisionList> = try await api.send(
+            APIRequest(path: "/api/admin/store/revisions")
+        )
+        return response.data.stocktakes
+    }
+
+    /// Поставщики с историей приёмок и долгами. Требует `store-suppliers.view`.
+    public func suppliers() async throws -> SupplierList {
+        let response: Envelope<SupplierList> = try await api.send(
+            APIRequest(path: "/api/admin/store/suppliers")
+        )
+        return response.data
+    }
+
+    /// Административные сотрудники и выплаты. Требует `staff.view`.
+    ///
+    /// Ответ без конверта `data` — роут отдаёт поля в корне.
+    public func staff() async throws -> StaffList {
+        try await api.send(APIRequest(path: "/api/admin/staff"))
+    }
+
     /// Программы точек и их состояние. Требует `point-devices.view`.
     public func pointProjects() async throws -> PointProjectList {
         let response: Envelope<PointProjectList> = try await api.send(

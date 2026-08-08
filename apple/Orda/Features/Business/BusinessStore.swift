@@ -105,6 +105,18 @@ final class BusinessStore {
     private(set) var isLoadingDevices = false
     private(set) var devicesError: APIError?
 
+    private(set) var revisions: [Stocktake] = []
+    private(set) var isLoadingRevisions = false
+    private(set) var revisionsError: APIError?
+
+    private(set) var suppliers: SupplierList?
+    private(set) var isLoadingSuppliers = false
+    private(set) var suppliersError: APIError?
+
+    private(set) var staff: StaffList?
+    private(set) var isLoadingStaff = false
+    private(set) var staffError: APIError?
+
     var range: DateRange = .week {
         didSet {
             guard oldValue != range else { return }
@@ -345,6 +357,46 @@ final class BusinessStore {
             devicesError = error
         } catch {
             devicesError = .transport(message: error.localizedDescription)
+        }
+    }
+
+    func loadRevisions() async {
+        isLoadingRevisions = true
+        defer { isLoadingRevisions = false }
+        do {
+            revisions = try await service.revisions()
+            revisionsError = nil
+        } catch let error as APIError {
+            revisionsError = error
+            revisions = []
+        } catch {
+            revisionsError = .transport(message: error.localizedDescription)
+        }
+    }
+
+    func loadSuppliers() async {
+        isLoadingSuppliers = true
+        defer { isLoadingSuppliers = false }
+        do {
+            suppliers = try await service.suppliers()
+            suppliersError = nil
+        } catch let error as APIError {
+            suppliersError = error
+        } catch {
+            suppliersError = .transport(message: error.localizedDescription)
+        }
+    }
+
+    func loadStaff() async {
+        isLoadingStaff = true
+        defer { isLoadingStaff = false }
+        do {
+            staff = try await service.staff()
+            staffError = nil
+        } catch let error as APIError {
+            staffError = error
+        } catch {
+            staffError = .transport(message: error.localizedDescription)
         }
     }
 

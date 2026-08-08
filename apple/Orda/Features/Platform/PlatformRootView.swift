@@ -137,7 +137,7 @@ struct PlatformRootView: View {
             ),
         ]
 
-        result.append(contentsOf: resolver.visibleGroups().map { group, pages in
+        result.append(contentsOf: resolver.nativeGroups().map { group, pages in
             WorkspaceSection(
                 id: group.id,
                 title: group.label,
@@ -163,8 +163,8 @@ struct PlatformRootView: View {
         case "business.ledger":
             LedgerScreen()
         default:
-            if let item, let page = CapabilityCatalog.page(id: item.id) {
-                PageScaffold(page: page, resolver: resolver)
+            if let item, NativePage.isNative(pageID: item.id) {
+                NativePage.screen(pageID: item.id)
             } else {
                 EmptyStateView(
                     icon: "building.2",

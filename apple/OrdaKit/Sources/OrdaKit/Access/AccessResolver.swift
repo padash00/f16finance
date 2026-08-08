@@ -134,6 +134,25 @@ public struct AccessResolver: Sendable {
         }
     }
 
+    /// Разделы, у которых есть нативный экран и доступ.
+    ///
+    /// В приложении показываем только их. Раньше остальные открывались
+    /// веб-версией портала — это давало доступ к функции, но не приложение:
+    /// жесты, поиск и раскладка оставались браузерными. Показывать пункт,
+    /// который ведёт в браузер, хуже, чем не показывать вовсе.
+    ///
+    /// Гейт по подписке при этом сохраняется целиком: `canSee` уже отсекает
+    /// страницы, чей модуль организация не оплатила, — раздел не появится,
+    /// даже если нативный экран для него написан.
+    public func nativeGroups() -> [(group: CapabilityGroup, pages: [CapabilityPage])] {
+        CapabilityCatalog.groups.compactMap { group in
+            let pages = group.pages.filter { page in
+                canSee(page: page) && NativeSection.forPage(id: page.id) != nil
+            }
+            return pages.isEmpty ? nil : (group, pages)
+        }
+    }
+
     /// Действия страницы, доступные пользователю. Для сборки меню и свайпов.
     public func availableActions(on page: CapabilityPage) -> [Capability] {
         page.capabilities.filter { can($0.id) }
