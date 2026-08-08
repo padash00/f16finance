@@ -49,6 +49,10 @@ enum NativePage {
         case .revisions: RevisionsScreen()
         case .suppliers: SuppliersScreen()
         case .staff: StaffScreen()
+        case .receipts: ReceiptsScreen()
+        case .writeoffs: WriteoffsScreen()
+        case .shiftReports: ShiftReportsScreen()
+        case .birthdays: BirthdaysScreen()
         }
     }
 }

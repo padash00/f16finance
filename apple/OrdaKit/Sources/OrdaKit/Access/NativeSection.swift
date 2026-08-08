@@ -24,6 +24,10 @@ public enum NativeSection: String, CaseIterable, Sendable {
     case revisions
     case suppliers
     case staff
+    case receipts
+    case writeoffs
+    case shiftReports
+    case birthdays
 
     /// Идентификаторы страниц каталога, которые ведут на этот экран.
     public var pageIDs: [String] {
@@ -49,6 +53,11 @@ public enum NativeSection: String, CaseIterable, Sendable {
         case .revisions: ["store-revisions"]
         case .suppliers: ["store-suppliers"]
         case .staff: ["staff"]
+        // Приёмка и оприходование — один журнал документов.
+        case .receipts: ["store-receipts", "store-postings"]
+        case .writeoffs: ["store-writeoffs"]
+        case .shiftReports: ["shifts-reports"]
+        case .birthdays: ["birthdays"]
         }
     }
 

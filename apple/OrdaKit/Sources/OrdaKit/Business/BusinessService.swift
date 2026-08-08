@@ -168,6 +168,38 @@ public struct BusinessService: Sendable {
         return response.data
     }
 
+    /// Приёмки от поставщиков. Требует `store-receipts.view`.
+    public func receipts() async throws -> [Receipt] {
+        let response: Envelope<ReceiptList> = try await api.send(
+            APIRequest(path: "/api/admin/store/receipts")
+        )
+        return response.data.receipts
+    }
+
+    /// Списания. Требует `store-writeoffs.view`.
+    public func writeoffs() async throws -> [Writeoff] {
+        let response: Envelope<WriteoffList> = try await api.send(
+            APIRequest(path: "/api/admin/store/writeoffs")
+        )
+        return response.data.writeoffs
+    }
+
+    /// Отчёты смен точек. Требует `shifts-reports.view`.
+    public func shiftReports(limit: Int = 100) async throws -> [ShiftReport] {
+        let response: Envelope<ShiftReportList> = try await api.send(
+            APIRequest(path: "/api/admin/shifts/reports", query: ["limit": String(limit)])
+        )
+        return response.data.shifts
+    }
+
+    /// Ближайшие дни рождения команды. Требует `birthdays.view`.
+    public func birthdays() async throws -> BirthdayList {
+        let response: Envelope<BirthdayList> = try await api.send(
+            APIRequest(path: "/api/admin/birthdays")
+        )
+        return response.data
+    }
+
     /// Ревизии склада и витрин. Требует `store-revisions.view`.
     public func revisions() async throws -> [Stocktake] {
         let response: Envelope<RevisionList> = try await api.send(

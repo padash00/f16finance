@@ -117,6 +117,22 @@ final class BusinessStore {
     private(set) var isLoadingStaff = false
     private(set) var staffError: APIError?
 
+    private(set) var receipts: [Receipt] = []
+    private(set) var isLoadingReceipts = false
+    private(set) var receiptsError: APIError?
+
+    private(set) var writeoffs: [Writeoff] = []
+    private(set) var isLoadingWriteoffs = false
+    private(set) var writeoffsError: APIError?
+
+    private(set) var shiftReports: [ShiftReport] = []
+    private(set) var isLoadingShiftReports = false
+    private(set) var shiftReportsError: APIError?
+
+    private(set) var birthdays: BirthdayList?
+    private(set) var isLoadingBirthdays = false
+    private(set) var birthdaysError: APIError?
+
     var range: DateRange = .week {
         didSet {
             guard oldValue != range else { return }
@@ -397,6 +413,61 @@ final class BusinessStore {
             staffError = error
         } catch {
             staffError = .transport(message: error.localizedDescription)
+        }
+    }
+
+    func loadReceipts() async {
+        isLoadingReceipts = true
+        defer { isLoadingReceipts = false }
+        do {
+            receipts = try await service.receipts()
+            receiptsError = nil
+        } catch let error as APIError {
+            receiptsError = error
+            receipts = []
+        } catch {
+            receiptsError = .transport(message: error.localizedDescription)
+        }
+    }
+
+    func loadWriteoffs() async {
+        isLoadingWriteoffs = true
+        defer { isLoadingWriteoffs = false }
+        do {
+            writeoffs = try await service.writeoffs()
+            writeoffsError = nil
+        } catch let error as APIError {
+            writeoffsError = error
+            writeoffs = []
+        } catch {
+            writeoffsError = .transport(message: error.localizedDescription)
+        }
+    }
+
+    func loadShiftReports() async {
+        isLoadingShiftReports = true
+        defer { isLoadingShiftReports = false }
+        do {
+            shiftReports = try await service.shiftReports()
+            shiftReportsError = nil
+        } catch let error as APIError {
+            shiftReportsError = error
+            shiftReports = []
+        } catch {
+            shiftReportsError = .transport(message: error.localizedDescription)
+        }
+    }
+
+    func loadBirthdays() async {
+        isLoadingBirthdays = true
+        defer { isLoadingBirthdays = false }
+        do {
+            birthdays = try await service.birthdays()
+            birthdaysError = nil
+        } catch let error as APIError {
+            birthdaysError = error
+        } catch {
+            birthdaysError = .transport(message: error.localizedDescription)
         }
     }
 
