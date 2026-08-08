@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 
 export function useUrlState<T extends Record<string, string>>(defaults: T): [T, (patch: Partial<T>) => void] {
@@ -18,15 +18,6 @@ export function useUrlState<T extends Record<string, string>>(defaults: T): [T, 
   // (react-hooks/refs), а useState даёт ту же стабильную ссылку легально.
   const [stableDefaults] = useState(defaults)
 
-  // Читаем params через ref, чтобы setState был стабилен и после смены URL.
-  // Обновляем ref в эффекте, а не прямо в теле: запись во время рендера —
-  // тоже нарушение. setState вызывается из обработчиков, то есть всегда после
-  // коммита, поэтому значение к моменту вызова уже актуальное.
-  const paramsRef = useRef(params)
-  useEffect(() => {
-    paramsRef.current = params
-  }, [params])
-
   const state = useMemo(() => {
     const next = { ...stableDefaults }
     for (const key of Object.keys(stableDefaults)) {
@@ -36,10 +27,21 @@ export function useUrlState<T extends Record<string, string>>(defaults: T): [T, 
     return next
   }, [params, stableDefaults])
 
+  // Текущий query читаем прямо из адресной строки в момент вызова, а не из
+  // `params`. Причина: если положить `params` в зависимости, setState менял бы
+  // идентичность на каждую смену URL, эффекты с [setFilters] стреляли бы снова
+  // и снова, каждый — router.replace, а это навигация → template
+  // перемонтируется → страница мигает скелетоном по кругу.
+  //
+  // Раньше ту же задачу решал ref, но его нельзя ни читать, ни писать во время
+  // рендера (react-hooks/refs). window.location.search точнее ref'а: History API
+  // обновляет его синхронно в router.replace, поэтому значение всегда свежее —
+  // даже если setState позовут до того, как отработает эффект.
   const setState = useCallback(
     (patch: Partial<T>) => {
-      const current = paramsRef.current
-      const sp = new URLSearchParams(current.toString())
+      const currentQuery =
+        typeof window === 'undefined' ? '' : window.location.search.replace(/^\?/, '')
+      const sp = new URLSearchParams(currentQuery)
       for (const [rawKey, rawValue] of Object.entries(patch)) {
         const key = rawKey as keyof T
         const value = (rawValue ?? '') as string
@@ -50,7 +52,7 @@ export function useUrlState<T extends Record<string, string>>(defaults: T): [T, 
       const query = sp.toString()
       // Ничего не изменилось — не трогаем роутер. Пустой replace тем же URL всё
       // равно считается навигацией и перезапускает анимацию входа страницы.
-      if (query === current.toString()) return
+      if (query === currentQuery) return
       router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false })
     },
     [stableDefaults, pathname, router],
