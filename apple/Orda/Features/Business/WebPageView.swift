@@ -20,6 +20,15 @@ struct WebPageView: View {
     let title: String
     /// Путь на портале, например `/income`.
     let path: String
+    /// Хост портала. По умолчанию основной; для организации — её поддомен,
+    /// чтобы сессия и данные принадлежали именно ей.
+    var host: URL?
+
+    init(title: String, path: String, host: URL? = nil) {
+        self.title = title
+        self.path = path
+        self.host = host
+    }
 
     @Environment(AuthStore.self) private var auth
 
@@ -91,8 +100,9 @@ struct WebPageView: View {
     private var bridgeRequest: URLRequest? {
         guard let session = auth.session else { return nil }
 
+        let base = host ?? AppConfiguration.current.apiBaseURL
         var components = URLComponents(
-            url: AppConfiguration.current.apiBaseURL.appending(path: "api/auth/mobile-bridge"),
+            url: base.appending(path: "api/auth/mobile-bridge"),
             resolvingAgainstBaseURL: false
         )
         components?.queryItems = [

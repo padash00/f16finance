@@ -183,58 +183,7 @@ struct PlatformOverviewScreen: View {
     }
 }
 
-// ── Организации ──────────────────────────────────────────────────────────────
-
-/// Список организаций с поиском.
-struct OrganizationsScreen: View {
-    @Environment(PlatformStore.self) private var store
-
-    var body: some View {
-        @Bindable var bindable = store
-
-        return ScrollView {
-            VStack(spacing: Spacing.md) {
-                HStack(spacing: Spacing.sm) {
-                    Image(systemName: "magnifyingglass").foregroundStyle(Theme.textDim)
-                    TextField("Название или поддомен", text: $bindable.search)
-                        .textFieldStyle(.plain)
-                        #if os(iOS)
-                        .textInputAutocapitalization(.never)
-                        #endif
-                        .autocorrectionDisabled()
-                }
-                .padding(Spacing.md)
-                .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
-
-                if store.isLoading && store.organizations.isEmpty {
-                    ForEach(0..<5, id: \.self) { _ in Skeleton(height: 96, cornerRadius: Radius.lg) }
-                } else if store.filteredOrganizations.isEmpty {
-                    EmptyStateView(
-                        icon: "building.2",
-                        title: store.search.isEmpty ? "Организаций нет" : "Ничего не найдено",
-                        message: store.search.isEmpty ? "Создайте первую организацию в веб-панели." : "Попробуйте другой запрос."
-                    )
-                } else {
-                    ForEach(Array(store.filteredOrganizations.enumerated()), id: \.element.id) { index, org in
-                        NavigationLink { OrganizationDetailScreen(organization: org) } label: {
-                            OrganizationCard(organization: org)
-                        }
-                        .buttonStyle(.plain)
-                        .staggeredAppear(index: index)
-                    }
-                }
-            }
-            .padding(Spacing.lg)
-            .frame(maxWidth: 720)
-            .frame(maxWidth: .infinity)
-        }
-        .background(Theme.background)
-        .navigationTitle("Организации")
-        .toolbar { LogoutToolbarItem() }
-        .task { if store.data == nil { await store.load() } }
-        .refreshable { await store.load() }
-    }
-}
+// ── Карточка организации в списке ──────────────────────────────────────────
 
 struct OrganizationCard: View {
     let organization: Organization
@@ -332,6 +281,26 @@ struct OrganizationDetailScreen: View {
                 subscriptionCard
                 controlsCard
                 companiesCard
+
+                // Войти в портал клиента как владелец — то, ради чего
+                // суперадмин чаще всего и открывает организацию.
+                NavigationLink {
+                    WebPageView(
+                        title: current.name,
+                        path: "/dashboard",
+                        host: current.appURL.flatMap(URL.init(string:))
+                    )
+                } label: {
+                    Card(accent: Theme.accent(for: .platform)) {
+                        NavigationRow(
+                            icon: "arrow.up.forward.square",
+                            iconColor: Theme.accent(for: .platform),
+                            title: "Открыть портал организации",
+                            subtitle: current.appURL?.replacingOccurrences(of: "https://", with: "") ?? current.slug
+                        )
+                    }
+                }
+                .buttonStyle(.plain)
 
                 NavigationLink { OrgCapabilitiesScreen(organization: current) } label: {
                     Card {
