@@ -269,6 +269,13 @@ public enum DateParsing {
         return parseDateOnly(raw)
     }
 
+    /// То же, но для необязательного поля: в JSON дата часто `null`, и
+    /// разворачивать её на каждом месте вызова — лишний шум.
+    public static func date(from raw: String?) -> Date? {
+        guard let raw, !raw.isEmpty else { return nil }
+        return parse(raw)
+    }
+
     /// `2026-08-08` → полдень UTC того же дня.
     public static func parseDateOnly(_ raw: String) -> Date? {
         let parts = raw.split(separator: "-")

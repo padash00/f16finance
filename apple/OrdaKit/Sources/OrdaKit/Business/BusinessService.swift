@@ -67,6 +67,51 @@ public struct BusinessService: Sendable {
         )
         return response.items
     }
+
+    // ── Магазин ──────────────────────────────────────────────────────────────
+
+    /// Склад целиком: точки, остатки, движения, заявки. Требует `store.view`
+    /// и модуль `shop.catalog` у организации.
+    public func storeOverview() async throws -> StoreOverview {
+        let response: Envelope<StoreOverview> = try await api.send(
+            APIRequest(path: "/api/admin/store/overview")
+        )
+        return response.data
+    }
+
+    // ── Команда ──────────────────────────────────────────────────────────────
+
+    /// Операторы с профилями и статистикой за 30 дней. Требует `operators.view`.
+    public func operators() async throws -> [TeamOperator] {
+        let response: DataList<TeamOperator> = try await api.send(
+            APIRequest(path: "/api/admin/operators")
+        )
+        return response.items
+    }
+
+    /// Зарплата за неделю. `weekStart` — понедельник в формате `YYYY-MM-DD`;
+    /// сервер отвергает произвольные даты, поэтому выравнивание на клиенте
+    /// обязательно (см. `DateRange.weekStart`).
+    public func salary(weekStart: String) async throws -> SalaryWeekReport {
+        let response: Envelope<SalaryWeekReport> = try await api.send(
+            APIRequest(path: "/api/admin/salary", query: ["weekStart": weekStart])
+        )
+        return response.data
+    }
+}
+
+// ── Конверт ответа ───────────────────────────────────────────────────────────
+
+/// `{ ok: true, data: … }` — форма ответа большинства админских роутов.
+public struct Envelope<Payload: Decodable & Sendable>: Decodable, Sendable {
+    public let data: Payload
+
+    private enum CodingKeys: String, CodingKey { case data }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        data = try c.decode(Payload.self, forKey: .data)
+    }
 }
 
 // ── Периоды ──────────────────────────────────────────────────────────────────
@@ -99,5 +144,34 @@ public enum DateRange: String, CaseIterable, Sendable, Identifiable {
         }
         let start = calendar.date(byAdding: .day, value: -days, to: today) ?? today
         return (DateParsing.dateOnlyString(from: start), DateParsing.dateOnlyString(from: today))
+    }
+}
+
+/// Границы зарплатной недели.
+///
+/// Сервер хранит недели по понедельникам и отвергает произвольную дату, а
+/// `Calendar.current` в Казахстане начинает неделю с воскресенья. Поэтому
+/// понедельник считаем сами, а не через `firstWeekday`.
+///
+/// Имя не `SalaryWeek` — так называется недельная сводка операторского
+/// кабинета, и два разных смысла под одним именем путали бы.
+public enum PayWeek {
+    /// Понедельник недели, в которую попадает дата, в формате API.
+    public static func start(containing date: Date = Date()) -> String {
+        let calendar = Calendar(identifier: .iso8601)
+        let day = calendar.startOfDay(for: date)
+        // В ISO-8601 понедельник = 2 в `weekday`; сдвигаем назад на разницу.
+        let weekday = calendar.component(.weekday, from: day)
+        let offset = (weekday + 5) % 7
+        let monday = calendar.date(byAdding: .day, value: -offset, to: day) ?? day
+        return DateParsing.dateOnlyString(from: monday)
+    }
+
+    /// Сдвиг на `weeks` недель от заданного понедельника.
+    public static func shifted(_ weekStart: String, by weeks: Int) -> String {
+        guard let date = DateParsing.parseDateOnly(weekStart) else { return weekStart }
+        let calendar = Calendar(identifier: .iso8601)
+        let moved = calendar.date(byAdding: .day, value: weeks * 7, to: date) ?? date
+        return DateParsing.dateOnlyString(from: moved)
     }
 }

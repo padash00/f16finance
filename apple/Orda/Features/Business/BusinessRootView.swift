@@ -157,7 +157,9 @@ struct BusinessRootView: View {
         case "home.approvals":
             ApprovalsScreen()
         default:
-            if let item, let page = CapabilityCatalog.page(id: item.id) {
+            if let item, let native = NativePage(pageID: item.id) {
+                native.screen
+            } else if let item, let page = CapabilityCatalog.page(id: item.id) {
                 PageScaffold(page: page, resolver: resolver)
             } else {
                 EmptyStateView(
@@ -239,7 +241,11 @@ struct BusinessSectionsScreen: View {
                             ForEach(Array(pages.enumerated()), id: \.element.id) { index, page in
                                 if index > 0 { RowDivider() }
                                 NavigationLink {
-                                    PageScaffold(page: page, resolver: resolver)
+                                    if let native = NativePage(pageID: page.id) {
+                                        native.screen
+                                    } else {
+                                        PageScaffold(page: page, resolver: resolver)
+                                    }
                                 } label: {
                                     NavigationRow(
                                         icon: BusinessRootView.icon(forPage: page.id),

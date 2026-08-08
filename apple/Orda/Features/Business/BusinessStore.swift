@@ -24,6 +24,26 @@ final class BusinessStore {
 
     private(set) var companies: [Company] = []
 
+    private(set) var store: StoreOverview?
+    private(set) var isLoadingStore = false
+    private(set) var storeError: APIError?
+
+    private(set) var operators: [TeamOperator] = []
+    private(set) var isLoadingTeam = false
+    private(set) var teamError: APIError?
+
+    private(set) var salary: SalaryWeekReport?
+    private(set) var isLoadingSalary = false
+    private(set) var salaryError: APIError?
+
+    /// Понедельник показываемой недели. Меняется стрелками в шапке зарплаты.
+    var salaryWeek: String = PayWeek.start() {
+        didSet {
+            guard oldValue != salaryWeek else { return }
+            Task { await loadSalary() }
+        }
+    }
+
     var range: DateRange = .week {
         didSet {
             guard oldValue != range else { return }
@@ -99,6 +119,46 @@ final class BusinessStore {
             ledgerError = error
         } catch {
             ledgerError = .transport(message: error.localizedDescription)
+        }
+    }
+
+    func loadStore() async {
+        isLoadingStore = true
+        defer { isLoadingStore = false }
+        do {
+            store = try await service.storeOverview()
+            storeError = nil
+        } catch let error as APIError {
+            storeError = error
+        } catch {
+            storeError = .transport(message: error.localizedDescription)
+        }
+    }
+
+    func loadTeam() async {
+        isLoadingTeam = true
+        defer { isLoadingTeam = false }
+        do {
+            operators = try await service.operators()
+            teamError = nil
+        } catch let error as APIError {
+            teamError = error
+            operators = []
+        } catch {
+            teamError = .transport(message: error.localizedDescription)
+        }
+    }
+
+    func loadSalary() async {
+        isLoadingSalary = true
+        defer { isLoadingSalary = false }
+        do {
+            salary = try await service.salary(weekStart: salaryWeek)
+            salaryError = nil
+        } catch let error as APIError {
+            salaryError = error
+        } catch {
+            salaryError = .transport(message: error.localizedDescription)
         }
     }
 
