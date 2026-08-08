@@ -104,14 +104,14 @@ struct SaleWideScreen: View {
     /// Плитки фиксированной минимальной ширины: на широком окне растёт их
     /// количество, а не размер — иначе на маке товар занимал бы пол-экрана.
     private var columns: [GridItem] {
-        [GridItem(.adaptive(minimum: 168, maximum: 240), spacing: Spacing.md, alignment: .top)]
+        [GridItem(.adaptive(minimum: 148, maximum: 200), spacing: Spacing.md, alignment: .top)]
     }
 
     private var loadingGrid: some View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: Spacing.md) {
                 ForEach(0..<12, id: \.self) { _ in
-                    Skeleton(height: 104, cornerRadius: Radius.lg)
+                    Skeleton(height: 208, cornerRadius: Radius.lg)
                 }
             }
             .padding(Spacing.lg)
@@ -297,10 +297,18 @@ struct ProductTile: View {
     var body: some View {
         Button(action: onAdd) {
             VStack(alignment: .leading, spacing: Spacing.sm) {
+                Thumbnail(
+                    url: item.imageURL,
+                    side: 96,
+                    cornerRadius: Radius.md,
+                    fallbackText: item.name
+                )
+                .frame(maxWidth: .infinity, alignment: .center)
+
                 Text(item.name)
-                    .font(Typography.callout.weight(.medium))
+                    .font(Typography.caption.weight(.medium))
                     .foregroundStyle(Theme.text)
-                    .lineLimit(3)
+                    .lineLimit(2)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -319,7 +327,7 @@ struct ProductTile: View {
                 }
             }
             .padding(Spacing.md)
-            .frame(height: 104, alignment: .topLeading)
+            .frame(height: 208, alignment: .topLeading)
             .background(Theme.surface, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)

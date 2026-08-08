@@ -50,7 +50,10 @@ public enum Theme {
         case .platform: accent
         case .owner: brand
         case .staff: info
-        case .operator: warning
+        // Оператору раньше был назначен янтарный — но это статусный цвет
+        // предупреждения. В навигации он спорил с брендом и делал выделение
+        // похожим на ошибку. Янтарный остаётся только за статусами.
+        case .operator: brand
         }
     }
 

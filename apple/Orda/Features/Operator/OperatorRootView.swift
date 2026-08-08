@@ -130,20 +130,26 @@ struct OperatorRootView: View {
                                         Text("\(badge(for: section))")
                                             .font(Typography.caption.weight(.bold))
                                             .monospacedDigit()
-                                            .foregroundStyle(Theme.accent(for: .operator))
+                                            .foregroundStyle(Theme.textDim)
                                     }
                                 }
                             }
                         }
                     } header: {
+                        // Заголовки секций — приглушённые: они разделяют, а не
+                        // привлекают. Раньше были акцентными и спорили с
+                        // выделенным пунктом.
                         Text(group.title)
                             .font(Typography.label)
-                            .foregroundStyle(Theme.accent(for: .operator))
+                            .foregroundStyle(Theme.textDim)
+                            .textCase(.uppercase)
                     }
                 }
             }
             .listStyle(.sidebar)
-            .navigationTitle("Смена")
+            // Заголовок панели — имя приложения, а не раздела: раздел
+            // «Смена» и так есть первым пунктом внутри.
+            .navigationTitle("Orda")
             .navigationSplitViewColumnWidth(min: 200, ideal: 230, max: 300)
         } detail: {
             NavigationStack { screen(for: selection ?? .shift) }

@@ -236,6 +236,8 @@ struct SaleItemRow: View {
     var body: some View {
         Button(action: onAdd) {
             HStack(spacing: Spacing.md) {
+                Thumbnail(url: item.imageURL, side: 44, fallbackText: item.name)
+
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.name)
                         .font(Typography.body)
