@@ -24,11 +24,15 @@ struct OperatorHomeScreen: View {
             if store.queuedSalesCount > 0 { offlineBanner }
             shiftCard
 
-            DashboardGrid {
+            // Две осмысленные колонки вместо потока: слева ход смены,
+            // справа то, что требует решения и денег. Поток из карточек
+            // разной высоты давал рваный край и пустые колонки.
+            SplitDashboard {
                 if store.hasOpenShift {
                     revenueChart
                     paymentSplit
                 }
+            } side: {
                 if needsAttention { attentionSection }
                 weekCard
                 if let next = cabinet.overview?.nextShift, !store.hasOpenShift {

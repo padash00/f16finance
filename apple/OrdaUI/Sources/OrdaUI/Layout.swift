@@ -159,3 +159,50 @@ public struct ScreenScroll<Content: View>: View {
         .background(Theme.background)
     }
 }
+
+/// Дашборд из двух осмысленных колонок.
+///
+/// `DashboardGrid` раскладывает карточки потоком, и при разной высоте край
+/// получается рваным: одна колонка обрывается, соседние пустуют. Здесь
+/// содержимое распределяет автор — главное слева, сопровождающее справа, —
+/// поэтому обе колонки идут до низа и выглядят собранными.
+public struct SplitDashboard<Main: View, Side: View>: View {
+    private let main: Main
+    private let side: Side
+    /// Доля ширины под главную колонку.
+    private let mainRatio: CGFloat
+
+    @Environment(\.surface) private var surface
+
+    public init(
+        mainRatio: CGFloat = 0.62,
+        @ViewBuilder main: () -> Main,
+        @ViewBuilder side: () -> Side
+    ) {
+        self.mainRatio = mainRatio
+        self.main = main()
+        self.side = side()
+    }
+
+    public var body: some View {
+        if surface.isCompact {
+            // На телефоне колонки складываются в одну: сначала главное.
+            VStack(spacing: Spacing.lg) {
+                main
+                side
+            }
+        } else {
+            GeometryReader { proxy in
+                let sideWidth = max(280, min(420, proxy.size.width * (1 - mainRatio)))
+                HStack(alignment: .top, spacing: Spacing.lg) {
+                    VStack(spacing: Spacing.lg) { main }
+                        .frame(maxWidth: .infinity, alignment: .top)
+                    VStack(spacing: Spacing.lg) { side }
+                        .frame(width: sideWidth, alignment: .top)
+                }
+            }
+            // Высоту задаём снаружи: GeometryReader сам её не имеет.
+            .frame(minHeight: 420)
+        }
+    }
+}
