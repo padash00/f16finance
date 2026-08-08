@@ -24,11 +24,14 @@ struct LoginView: View {
         ZStack {
             AuroraBackground()
 
-            ScrollView {
-                VStack(spacing: Spacing.xl) {
-                    Spacer(minLength: Spacing.xxxl)
-
-                    header
+            // Форму центрируем по высоте: на iPad и Mac экран втрое выше
+            // формы, и прижатая к верху карточка выглядит поломанной.
+            // GeometryReader задаёт минимальную высоту содержимого равной
+            // экрану, поэтому на телефоне с клавиатурой прокрутка остаётся.
+            GeometryReader { proxy in
+                ScrollView {
+                    VStack(spacing: Spacing.xl) {
+                        header
 
                     VStack(spacing: Spacing.md) {
                         field(
@@ -79,15 +82,17 @@ struct LoginView: View {
                         .font(Typography.caption)
                         .foregroundStyle(Theme.textDim)
 
-                    Spacer(minLength: Spacing.xxl)
+                    }
+                    .frame(maxWidth: 420)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, Spacing.xl)
+                    .padding(.vertical, Spacing.xxl)
+                    .frame(minHeight: proxy.size.height)
+                    .opacity(appeared ? 1 : 0)
+                    .offset(y: appeared ? 0 : 24)
                 }
-                .frame(maxWidth: 420)
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, Spacing.xl)
-                .opacity(appeared ? 1 : 0)
-                .offset(y: appeared ? 0 : 24)
+                .scrollBounceBehavior(.basedOnSize)
             }
-            .scrollBounceBehavior(.basedOnSize)
         }
         .onAppear {
             withAnimation(Motion.appear.delay(0.1)) { appeared = true }
