@@ -54,19 +54,35 @@ public struct BusinessService: Sendable {
     }
 
     /// Доходы за период. Даты в формате `YYYY-MM-DD`.
+    ///
+    /// Параметры именно `from`/`to`: роут читает эти имена. Раньше здесь
+    /// слались `dateFrom`/`dateTo`, роут их не видел и молча отдавал последние
+    /// 2000 строк независимо от периода — переключатель «Неделя / Месяц /
+    /// Квартал» не менял ничего, а суммы были не за выбранный период.
     public func incomes(from: String, to: String) async throws -> [IncomeRow] {
         let response: DataList<IncomeRow> = try await api.send(
-            APIRequest(path: "/api/admin/incomes", query: ["dateFrom": from, "dateTo": to])
+            APIRequest(
+                path: "/api/admin/incomes",
+                query: ["from": from, "to": to, "page_size": String(Self.pageSize)]
+            )
         )
         return response.items
     }
 
     public func expenses(from: String, to: String) async throws -> [ExpenseRow] {
         let response: DataList<ExpenseRow> = try await api.send(
-            APIRequest(path: "/api/admin/expenses", query: ["dateFrom": from, "dateTo": to])
+            APIRequest(
+                path: "/api/admin/expenses",
+                query: ["from": from, "to": to, "page_size": String(Self.pageSize)]
+            )
         )
         return response.items
     }
+
+    /// Потолок страницы у роутов доходов и расходов. Просим максимум: признака
+    /// «есть ещё» они не отдают, и на длинном периоде молчаливая обрезка
+    /// занизила бы итоги.
+    private static let pageSize = 5000
 
     // ── Магазин ──────────────────────────────────────────────────────────────
 

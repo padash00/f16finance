@@ -29,6 +29,12 @@ enum NativePage {
         NativeSection.forPage(id: pageID) != nil
     }
 
+    /// Экран раздела вне каталога прав.
+    @ViewBuilder
+    static func screen(section: NativeSection) -> some View {
+        view(for: section)
+    }
+
     @ViewBuilder
     private static func view(for section: NativeSection) -> some View {
         switch section {
@@ -56,6 +62,42 @@ enum NativePage {
         case .categories: ExpenseCategoriesScreen()
         case .storeAnalytics: StoreAnalyticsScreen()
         case .knowledge: KnowledgeAdminScreen()
+        case .settings: SettingsScreen()
+        case .logs: LogsScreen()
+        case .telegram: TelegramScreen()
+        case .diagnostics: DiagnosticsScreen()
+        case .production: ProductionScreen()
+        case .purchasePlan: PurchasePlanScreen()
+        case .purchaseOrders: PurchaseOrdersScreen()
+        case .consumables: ConsumablesScreen()
+        case .performance: PerformanceScreen()
+        case .ratings: RatingsScreen()
+        case .achievements: AchievementsScreen()
+        case .posReceipts: ReceiptsListScreen()
+        case .posReturns: ReturnsScreen()
+        case .receiptSettings: ReceiptSettingsScreen()
+        case .advertising: AdvertisingScreen()
+        case .salaryRules: SalaryRulesScreen()
+        case .hr: HRScreen()
+        case .structure: StructureScreen()
+        case .access: AccessScreen()
+        case .credentials: CredentialsScreen()
+        case .news: NewsScreen()
+        case .teamChat: TeamChatScreen()
+        case .messages: MessagesScreen()
+        case .moderation: ModerationScreen()
+        case .tax: TaxScreen()
+        case .cashflow: CashflowScreen()
+        case .goals: GoalsScreen()
+        case .weeklyReport: WeeklyReportScreen()
+        case .valuation: ValuationScreen()
+        case .analysis: AnalysisScreen()
+        case .forecast: ForecastScreen()
+        case .businessIntelligence: BusinessIntelligenceScreen()
+        case .aiCfo: AiCfoScreen()
+        case .expenseAnalysis: ExpenseAnalysisScreen()
+        case .teamAnalysis: TeamAnalysisScreen()
+        case .calendar: CalendarScreen()
         }
     }
 }

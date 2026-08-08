@@ -86,10 +86,27 @@ public actor APIClient {
     /// Активная организация. Меняется при переключении в шапке.
     private var organizationID: String?
 
+    /// Сессия по умолчанию.
+    ///
+    /// У `URLSession.shared` предел запроса — 60 секунд, и этого не хватает
+    /// AI-разделам: разбор финдиректора и прогноз считаются моделью и на
+    /// большом периоде идут дольше. Обрыв выглядел бы как поломка сети, хотя
+    /// сервер в этот момент честно работает.
+    ///
+    /// Три минуты — с запасом к самому долгому наблюдаемому разбору. Предел
+    /// на всю операцию оставляем больше: он покрывает и повтор после
+    /// обновления токена.
+    public static let defaultSession: URLSession = {
+        let configuration = URLSessionConfiguration.default
+        configuration.timeoutIntervalForRequest = 180
+        configuration.timeoutIntervalForResource = 300
+        return URLSession(configuration: configuration)
+    }()
+
     public init(
         baseURL: URL,
         tokenProvider: any TokenProvider,
-        session: URLSession = .shared,
+        session: URLSession = APIClient.defaultSession,
         decoder: JSONDecoder = APIClient.defaultDecoder
     ) {
         self.baseURL = baseURL
@@ -294,8 +311,21 @@ public enum DateParsing {
     }
 
     /// Обратно в `yyyy-MM-dd` для запросов к API.
+    ///
+    /// Компоненты берём по **местному** календарю, а не по UTC. Разбор голой
+    /// даты идёт в UTC (см. выше) — это верно для строки с сервера, у которой
+    /// пояса нет. Но здесь на входе обычно местная дата: «сегодня», начало
+    /// местных суток, понедельник недели.
+    ///
+    /// В UTC+5 (Алматы) местная полночь — это 19:00 предыдущего дня по UTC, и
+    /// разбор в UTC сдвигал результат на день назад: «сегодня» превращалось во
+    /// вчера, а понедельник зарплатной недели — в воскресенье, которое сервер
+    /// как начало недели не принимает.
+    ///
+    /// Обратный проход не ломается: `parseDateOnly` ставит полдень UTC, а он
+    /// попадает в те же сутки в любом поясе от UTC−11 до UTC+11.
     public static func dateOnlyString(from date: Date) -> String {
-        let components = dateOnlyCalendar.dateComponents([.year, .month, .day], from: date)
+        let components = Calendar.current.dateComponents([.year, .month, .day], from: date)
         return String(
             format: "%04d-%02d-%02d",
             components.year ?? 0,

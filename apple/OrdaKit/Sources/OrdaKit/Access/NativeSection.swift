@@ -31,6 +31,42 @@ public enum NativeSection: String, CaseIterable, Sendable {
     case categories
     case storeAnalytics
     case knowledge
+    case settings
+    case logs
+    case telegram
+    case diagnostics
+    case production
+    case purchasePlan
+    case purchaseOrders
+    case consumables
+    case performance
+    case ratings
+    case achievements
+    case posReceipts
+    case posReturns
+    case receiptSettings
+    case advertising
+    case salaryRules
+    case hr
+    case structure
+    case access
+    case credentials
+    case news
+    case teamChat
+    case messages
+    case moderation
+    case tax
+    case cashflow
+    case goals
+    case weeklyReport
+    case valuation
+    case analysis
+    case forecast
+    case businessIntelligence
+    case aiCfo
+    case expenseAnalysis
+    case teamAnalysis
+    case calendar
 
     /// Идентификаторы страниц каталога, которые ведут на этот экран.
     public var pageIDs: [String] {
@@ -50,8 +86,7 @@ public enum NativeSection: String, CaseIterable, Sendable {
         case .customers: ["customers"]
         case .incidents: ["incidents"]
         case .pointDebts: ["point-debts"]
-        // Оценка бизнеса строится на той же EBITDA — открываем тем же экраном.
-        case .profitability: ["profitability", "valuation"]
+        case .profitability: ["profitability"]
         case .pointDevices: ["point-devices"]
         case .revisions: ["store-revisions"]
         case .suppliers: ["store-suppliers"]
@@ -64,7 +99,84 @@ public enum NativeSection: String, CaseIterable, Sendable {
         case .categories: ["categories"]
         case .storeAnalytics: ["store-analytics", "store-forecast"]
         case .knowledge: ["knowledge-admin"]
+        case .settings: ["settings"]
+        case .logs: ["logs"]
+        case .telegram: ["telegram"]
+        case .diagnostics: ["debug"]
+        case .production: ["production"]
+        case .purchasePlan: ["store-purchase-plan"]
+        case .purchaseOrders: ["store-purchase-orders"]
+        case .consumables: ["store-consumables"]
+        case .performance: ["performance"]
+        case .ratings: ["ratings"]
+        case .achievements: ["operator-achievements"]
+        case .posReceipts: ["pos-receipts"]
+        case .posReturns: ["pos-returns"]
+        case .receiptSettings: ["store-receipt-settings"]
+        case .advertising: ["store-advertising"]
+        case .salaryRules: ["salary-rules"]
+        case .hr: ["hr"]
+        case .structure: ["structure"]
+        case .access: ["access"]
+        case .credentials: ["pass"]
+        case .news: ["news"]
+        case .teamChat: ["team-chat"]
+        case .messages: ["messages"]
+        case .moderation: ["moderation"]
+        case .tax: ["tax"]
+        case .cashflow: ["cashflow"]
+        case .goals: ["goals"]
+        case .weeklyReport: ["weekly-report"]
+        case .valuation: ["valuation"]
+        case .analysis: ["analysis"]
+        case .forecast: ["forecast"]
+        case .aiCfo: ["ai-cfo"]
+        case .expenseAnalysis: ["expense-analysis"]
+        case .teamAnalysis: ["team-analysis"]
+        // Ниже — разделы, которых нет в каталоге прав. Они не
+        // capability-gated и на сайте: показываются всем, кто вошёл.
+        case .businessIntelligence, .calendar: []
         }
+    }
+
+    /// Разделы вне каталога прав.
+    ///
+    /// «Бизнес-аналитика» и «Календарь» есть в меню сайта, но страницы в
+    /// каталоге у них нет: сервер их правами не закрывает. Через
+    /// `nativeGroups()` они не появились бы никогда, поэтому показываются
+    /// отдельно — по модулю организации, если он для раздела задан.
+    public static var uncatalogued: [NativeSection] {
+        allCases.filter { $0.pageIDs.isEmpty }
+    }
+
+    /// Подпись и значок для разделов вне каталога — в каталоге их взять неоткуда.
+    public var uncataloguedLabel: (title: String, icon: String)? {
+        switch self {
+        case .businessIntelligence: ("Бизнес-аналитика", "brain")
+        case .calendar: ("Календарь", "calendar")
+        default: nil
+        }
+    }
+
+    /// Модуль организации, без которого раздел не показываем.
+    public var requiredAddon: String? {
+        switch self {
+        case .businessIntelligence: "addon.ai"
+        default: nil
+        }
+    }
+
+    /// Разделы, доступные только суперадмину — независимо от прав.
+    ///
+    /// Право `logs.view` в каталоге есть, но роут `/api/admin/logs` проверяет
+    /// `isSuperAdmin` ДО него. Владелец с этим правом получит 403. Показывать
+    /// пункт, который гарантированно не откроется, — то же самое, что вести
+    /// в браузер: доступ обещан, а его нет.
+    ///
+    /// Это расхождение сервера и каталога, а не приложения: на сайте владелец
+    /// с `logs.view` тоже видит пункт и упирается в отказ.
+    public var requiresSuperAdmin: Bool {
+        self == .logs
     }
 
     /// Экран для страницы каталога, если он нативный.

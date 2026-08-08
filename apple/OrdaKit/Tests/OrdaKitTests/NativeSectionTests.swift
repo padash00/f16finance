@@ -22,10 +22,25 @@ struct NativeSectionTests {
         }
     }
 
-    @Test("У каждого раздела есть хотя бы одна страница")
-    func everySectionHasPages() {
+    @Test("Раздел достижим: либо через каталог, либо явным пунктом")
+    func everySectionIsReachable() {
         for section in NativeSection.allCases {
-            #expect(!section.pageIDs.isEmpty, "Раздел \(section.rawValue) недостижим")
+            // Пустой список страниц допустим только у разделов вне каталога —
+            // им нужна своя подпись, иначе пункт будет безымянным.
+            if section.pageIDs.isEmpty {
+                #expect(
+                    section.uncataloguedLabel != nil,
+                    "Раздел \(section.rawValue) не привязан к каталогу и не имеет подписи — он недостижим"
+                )
+            }
+        }
+    }
+
+    @Test("Разделы вне каталога перечислены явно")
+    func uncataloguedAreKnown() {
+        #expect(Set(NativeSection.uncatalogued) == [.businessIntelligence, .calendar])
+        for section in NativeSection.uncatalogued {
+            #expect(section.uncataloguedLabel != nil)
         }
     }
 
@@ -50,8 +65,8 @@ struct NativeSectionTests {
         #expect(NativeSection.forPage(id: "salary") == .salary)
         #expect(NativeSection.forPage(id: "store-warehouse") == .stock)
         #expect(NativeSection.forPage(id: "analytics") == .reports)
-        // Раздел без нативного экрана в навигацию не попадает.
-        #expect(NativeSection.forPage(id: "telegram") == nil)
+        // Выдуманного идентификатора в каталоге нет — раздел не разрешается.
+        #expect(NativeSection.forPage(id: "no-such-page") == nil)
     }
 }
 
@@ -84,13 +99,20 @@ struct NativeGroupsTests {
 
     @Test("Показываются только разделы с нативным экраном")
     func onlyNativePages() {
-        // `telegram` нативного экрана не имеет — в навигацию попасть не должен,
-        // хотя право на него есть.
-        let access = resolver(capabilities: ["salary.view", "telegram.view"])
+        // Берём страницу без нативного экрана из самого каталога, а не по
+        // имени: список нативных разделов растёт, и захардкоженный пример
+        // однажды перестал бы быть примером — тест ловил бы не то.
+        let notNative = CapabilityCatalog.groups
+            .flatMap(\.pages)
+            .first { NativeSection.forPage(id: $0.id) == nil }
+
+        guard let notNative else { return }  // всё нативное — проверять нечего
+
+        let access = resolver(capabilities: ["salary.view", notNative.viewCapabilityID])
         let pageIDs = access.nativeGroups().flatMap { $0.pages.map(\.id) }
 
         #expect(pageIDs.contains("salary"))
-        #expect(!pageIDs.contains("telegram"))
+        #expect(!pageIDs.contains(notNative.id))
     }
 
     @Test("Неоплаченный модуль прячет раздел, даже если экран написан")
@@ -142,5 +164,50 @@ struct NativeGroupsTests {
         for (_, pages) in access.nativeGroups() {
             #expect(!pages.isEmpty)
         }
+    }
+}
+
+/// Раздел, для которого сервер требует суперадмина, не должен появляться у
+/// владельца — даже если право в каталоге у него есть.
+@Suite("Разделы только для суперадмина")
+struct SuperAdminOnlySectionTests {
+    private func resolver(superAdmin: Bool, capabilities: Set<String>) -> AccessResolver {
+        AccessResolver(
+            session: SessionRole(
+                isSuperAdmin: superAdmin,
+                isStaff: !superAdmin,
+                isOperator: false,
+                isCustomer: false,
+                persona: superAdmin ? .superAdmin : .staff,
+                staffRole: superAdmin ? nil : "owner",
+                capabilities: superAdmin ? ["*"] : capabilities,
+                orgFeatures: [],
+                featuresAllAccess: true,
+                rolePermissionOverrides: []
+            )
+        )
+    }
+
+    @Test("Журнал скрыт у владельца: сервер отвергнет его с 403")
+    func logsHiddenFromOwner() {
+        // /api/admin/logs проверяет isSuperAdmin ДО logs.view — право есть,
+        // доступа нет. Пункт, ведущий в гарантированный отказ, не показываем.
+        let owner = resolver(superAdmin: false, capabilities: ["logs.view", "settings.view"])
+        let pages = owner.nativeGroups().flatMap { $0.pages.map(\.id) }
+
+        #expect(!pages.contains("logs"))
+        #expect(pages.contains("settings"))
+    }
+
+    @Test("Суперадмину журнал виден")
+    func logsVisibleToSuperAdmin() {
+        let admin = resolver(superAdmin: true, capabilities: [])
+        #expect(admin.nativeGroups().flatMap { $0.pages.map(\.id) }.contains("logs"))
+    }
+
+    @Test("Ограничение помечено только там, где сервер его действительно требует")
+    func onlyLogsIsRestricted() {
+        let restricted = NativeSection.allCases.filter(\.requiresSuperAdmin)
+        #expect(restricted == [.logs])
     }
 }

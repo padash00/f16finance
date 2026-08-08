@@ -138,6 +138,23 @@ struct BusinessRootView: View {
             )
         ]
 
+        // Разделы вне каталога прав — сервер их правами не закрывает, и через
+        // nativeGroups() они не появились бы никогда.
+        let extras = NativeSection.uncatalogued.filter { section in
+            resolver.hasFeature(section.requiredAddon)
+        }
+        if !extras.isEmpty {
+            result[0] = WorkspaceSection(
+                id: result[0].id,
+                title: result[0].title,
+                icon: result[0].icon,
+                items: result[0].items + extras.compactMap { section in
+                    guard let label = section.uncataloguedLabel else { return nil }
+                    return WorkspaceItem(id: "native.\(section.rawValue)", title: label.title, icon: label.icon)
+                }
+            )
+        }
+
         result.append(contentsOf: resolver.nativeGroups().map { group, pages in
             WorkspaceSection(
                 id: group.id,
@@ -164,7 +181,10 @@ struct BusinessRootView: View {
         case "home.subscription":
             SubscriptionScreen()
         default:
-            if let item, NativePage.isNative(pageID: item.id) {
+            if let item, item.id.hasPrefix("native."),
+               let section = NativeSection(rawValue: String(item.id.dropFirst("native.".count))) {
+                NativePage.screen(section: section)
+            } else if let item, NativePage.isNative(pageID: item.id) {
                 NativePage.screen(pageID: item.id)
             } else {
                 EmptyStateView(

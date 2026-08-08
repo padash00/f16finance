@@ -147,7 +147,10 @@ public struct AccessResolver: Sendable {
     public func nativeGroups() -> [(group: CapabilityGroup, pages: [CapabilityPage])] {
         CapabilityCatalog.groups.compactMap { group in
             let pages = group.pages.filter { page in
-                canSee(page: page) && NativeSection.forPage(id: page.id) != nil
+                guard canSee(page: page), let section = NativeSection.forPage(id: page.id) else {
+                    return false
+                }
+                return !section.requiresSuperAdmin || session.isSuperAdmin
             }
             return pages.isEmpty ? nil : (group, pages)
         }
