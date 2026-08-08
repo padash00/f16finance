@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Обязательный минимум. Xcode подставляет эти ключи сам, только когда
+	     генерирует Info.plist; у нас файл свой, поэтому пишем их явно —
+	     без CFBundleIdentifier симулятор откажется ставить сборку. -->
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+
+	<key>CFBundleDisplayName</key>
+	<string>Orda</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+
+	<!-- Адрес сайта. Приходит из Config.xcconfig, читается в AppConfiguration.
+	     Больше приложению настраивать нечего: всё остальное — через API. -->
+	<key>ORDA_API_BASE_URL</key>
+	<string>$(ORDA_API_BASE_URL)</string>
+
+	<!-- Face ID: без описания система не покажет запрос и вход молча не сработает. -->
+	<key>NSFaceIDUsageDescription</key>
+	<string>Для быстрого и безопасного входа в Orda.</string>
+	<!-- Камера нужна сканеру штрихкодов: ревизия, приёмка, продажа. -->
+	<key>NSCameraUsageDescription</key>
+	<string>Сканирование штрихкодов товара при продаже, приёмке и ревизии.</string>
+
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>LaunchBackground</string>
+	</dict>
+</dict>
+</plist>

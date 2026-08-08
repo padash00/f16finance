@@ -10,15 +10,23 @@ import SwiftUI
 struct RootView: View {
     @Environment(AuthStore.self) private var auth
 
+    /// Доиграла ли заставка запуска. Пока нет — показываем её поверх всего,
+    /// но восстановление сессии при этом уже идёт в фоне.
+    @State private var introFinished = false
+
     var body: some View {
         Group {
             switch auth.phase {
             case .restoring:
-                LaunchView()
+                LaunchAnimationView { introFinished = true }
 
             case .signedOut:
-                LoginView()
-                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                if introFinished {
+                    LoginView()
+                        .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                } else {
+                    LaunchAnimationView { introFinished = true }
+                }
 
             case .loadingRole:
                 LaunchView(message: "Проверяем доступ…")
