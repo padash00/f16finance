@@ -66,13 +66,21 @@ public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: Vie
 
     // ── iPad и Mac ───────────────────────────────────────────────────────────
 
+    @ViewBuilder
     private var wideSplit: some View {
+        // Делить нечего — не делим. Раньше разделитель и вторая колонка
+        // рисовались даже при пустом списке: экран выглядел разрезанным
+        // пополам без причины.
+        if items.isEmpty {
+            empty()
+        } else {
+            splitPanes
+        }
+    }
+
+    private var splitPanes: some View {
         HStack(spacing: 0) {
             Group {
-                if items.isEmpty {
-                    empty()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
                     ScrollView {
                         LazyVStack(spacing: Spacing.sm) {
                             ForEach(items) { item in
@@ -90,7 +98,6 @@ public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: Vie
                         }
                         .padding(Spacing.md)
                     }
-                }
             }
             .frame(width: listWidth)
             .background(Theme.elevated.opacity(0.4))
@@ -100,7 +107,7 @@ public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: Vie
             Group {
                 if let selection, items.contains(selection) {
                     detail(selection)
-                } else if !items.isEmpty {
+                } else {
                     // Пустая правая часть на широком экране выглядит как сбой —
                     // подсказываем, что делать.
                     VStack(spacing: Spacing.md) {
