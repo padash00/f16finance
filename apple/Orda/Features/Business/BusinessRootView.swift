@@ -2,69 +2,170 @@ import OrdaKit
 import OrdaUI
 import SwiftUI
 
+/// Права текущего пользователя, доступные любому экрану.
+///
+/// Через окружение, а не протаскиванием параметром: гейт нужен глубоко внутри
+/// карточек и кнопок, и тянуть резолвер через десять уровней было бы шумом.
+private struct AccessResolverEnvironmentKey: EnvironmentKey {
+    static let defaultValue: AccessResolver? = nil
+}
+
+extension EnvironmentValues {
+    var access: AccessResolver? {
+        get { self[AccessResolverEnvironmentKey.self] }
+        set { self[AccessResolverEnvironmentKey.self] = newValue }
+    }
+}
+
 /// Рабочее пространство владельца и сотрудника.
 ///
-/// Меню здесь не задано в коде — оно **выводится из прав**. Причина в том, что
-/// роли в системе динамические: владелец создаёт свои через `/access` и даёт
-/// им любой набор из 397 прав. Захардкоженный «экран менеджера» разошёлся бы
-/// с реальностью на первой же нестандартной роли.
+/// Разделы выводятся из прав, а не задаются в коде: роли в системе
+/// динамические, владелец создаёт свои через `/access` с любым набором из 397
+/// прав. Захардкоженный «экран менеджера» разошёлся бы с реальностью на первой
+/// же нестандартной роли.
 struct BusinessRootView: View {
     let resolver: AccessResolver
 
-    @Environment(AuthStore.self) private var auth
+    @Environment(\.api) private var api
+    @State private var store: BusinessStore?
     @State private var selection: WorkspaceItem?
 
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    #endif
+
     var body: some View {
+        Group {
+            if let store {
+                content
+                    .environment(store)
+                    .environment(\.access, resolver)
+            } else {
+                LaunchView(message: "Загружаем данные…")
+            }
+        }
+        .task {
+            guard store == nil else { return }
+            let created = BusinessStore(api: api)
+            store = created
+            await created.bootstrap()
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        #if os(iOS)
+        if sizeClass == .compact {
+            phoneTabs
+        } else {
+            splitLayout
+        }
+        #else
+        splitLayout
+        #endif
+    }
+
+    // ── iPhone ───────────────────────────────────────────────────────────────
+
+    private var phoneTabs: some View {
+        TabView {
+            NavigationStack { BusinessDashboardScreen(resolver: resolver) }
+                .tabItem { Label("Обзор", systemImage: "square.grid.2x2.fill") }
+
+            NavigationStack { LedgerScreen() }
+                .tabItem { Label("Деньги", systemImage: "chart.line.uptrend.xyaxis") }
+
+            if resolver.can("expenses-pending.view") {
+                NavigationStack { ApprovalsScreen() }
+                    .tabItem { Label("Решения", systemImage: "checkmark.circle") }
+                    .badge(store?.pending.count ?? 0)
+            }
+
+            NavigationStack { BusinessSectionsScreen(resolver: resolver) }
+                .tabItem { Label("Разделы", systemImage: "list.bullet") }
+
+            NavigationStack { BusinessProfileScreen(resolver: resolver) }
+                .tabItem { Label("Профиль", systemImage: "person.crop.circle") }
+        }
+        .tint(accent)
+    }
+
+    // ── iPad и Mac ───────────────────────────────────────────────────────────
+
+    private var splitLayout: some View {
         AdaptiveWorkspace(
             sections: sections,
             accent: accent,
-            title: auth.role?.roleLabel ?? "Orda",
-            selection: $selection
+            title: workspaceTitle,
+            selection: Binding(
+                get: { selection },
+                set: { selection = $0 }
+            )
         ) { item in
             destination(for: item)
         }
         .onAppear {
-            // На широком экране пустая правая колонка выглядит поломкой —
-            // открываем первый доступный раздел.
             if selection == nil { selection = sections.first?.items.first }
         }
     }
 
     private var accent: Color {
-        resolver.workspace == .owner
-            ? Theme.accent(for: .owner)
-            : Theme.accent(for: .staff)
+        resolver.workspace == .owner ? Theme.accent(for: .owner) : Theme.accent(for: .staff)
     }
 
-    /// Разделы = группы каталога прав, в которых есть хоть одна видимая
-    /// страница. Пустые группы не показываем вовсе.
+    private var workspaceTitle: String {
+        resolver.workspace == .owner ? "Бизнес" : "Работа"
+    }
+
+    /// Раздел «Главное» плюс группы каталога прав.
     private var sections: [WorkspaceSection] {
-        resolver.visibleGroups().map { group, pages in
+        var result: [WorkspaceSection] = [
+            WorkspaceSection(
+                id: "home",
+                title: "Главное",
+                icon: "square.grid.2x2",
+                items: [
+                    WorkspaceItem(id: "home.dashboard", title: "Обзор", icon: "chart.bar.fill"),
+                    WorkspaceItem(id: "home.ledger", title: "Деньги", icon: "chart.line.uptrend.xyaxis"),
+                ] + (resolver.can("expenses-pending.view")
+                     ? [WorkspaceItem(id: "home.approvals", title: "Решения", icon: "checkmark.circle", badge: store?.pending.count)]
+                     : [])
+            )
+        ]
+
+        result.append(contentsOf: resolver.visibleGroups().map { group, pages in
             WorkspaceSection(
                 id: group.id,
                 title: group.label,
-                icon: Self.icon(forGroup: group.id),
+                icon: BusinessRootView.icon(forGroup: group.id),
                 items: pages.map { page in
-                    WorkspaceItem(
-                        id: page.id,
-                        title: page.label,
-                        icon: Self.icon(forPage: page.id)
-                    )
+                    WorkspaceItem(id: page.id, title: page.label, icon: BusinessRootView.icon(forPage: page.id))
                 }
             )
-        }
+        })
+
+        return result
     }
 
     @ViewBuilder
     private func destination(for item: WorkspaceItem?) -> some View {
-        if let item, let page = CapabilityCatalog.page(id: item.id) {
-            PageScaffold(page: page, resolver: resolver)
-        } else {
-            EmptyStateView(
-                icon: "square.grid.2x2",
-                title: "Выберите раздел",
-                message: "Слева — то, к чему у вас есть доступ."
-            )
+        switch item?.id {
+        case "home.dashboard", .none:
+            BusinessDashboardScreen(resolver: resolver)
+        case "home.ledger":
+            LedgerScreen()
+        case "home.approvals":
+            ApprovalsScreen()
+        default:
+            if let item, let page = CapabilityCatalog.page(id: item.id) {
+                PageScaffold(page: page, resolver: resolver)
+            } else {
+                EmptyStateView(
+                    icon: "square.grid.2x2",
+                    title: "Выберите раздел",
+                    message: "Слева — то, к чему у вас есть доступ."
+                )
+            }
         }
     }
 
@@ -110,73 +211,125 @@ struct BusinessRootView: View {
     }
 }
 
-/// Каркас страницы раздела.
-///
-/// Показывает, какие действия доступны пользователю на этой странице — то
-/// есть делает видимой работу резолвера прав. Содержательные экраны
-/// подключаются сюда по одному, не меняя навигацию.
-struct PageScaffold: View {
-    let page: CapabilityPage
+/// Список всех доступных разделов — то же, что боковая панель на iPad.
+struct BusinessSectionsScreen: View {
     let resolver: AccessResolver
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Spacing.lg) {
-                SectionHeader(page.label, subtitle: page.path)
-
-                let actions = resolver.availableActions(on: page)
-
-                if actions.isEmpty {
-                    EmptyStateView(
-                        icon: "lock",
-                        title: "Только просмотр",
-                        message: "Действий на этой странице вам не выдано."
-                    )
-                } else {
+            VStack(spacing: Spacing.lg) {
+                ForEach(resolver.visibleGroups(), id: \.group.id) { group, pages in
                     Card {
-                        VStack(alignment: .leading, spacing: Spacing.md) {
-                            Text("Доступные действия")
-                                .font(Typography.label)
-                                .foregroundStyle(Theme.textDim)
-                                .textCase(.uppercase)
+                        VStack(spacing: Spacing.sm) {
+                            HStack(spacing: Spacing.sm) {
+                                Image(systemName: BusinessRootView.icon(forGroup: group.id))
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(Theme.brand)
+                                Text(group.label)
+                                    .font(Typography.label)
+                                    .foregroundStyle(Theme.textDim)
+                                    .textCase(.uppercase)
+                                Spacer()
+                                Text("\(pages.count)")
+                                    .font(Typography.caption)
+                                    .monospacedDigit()
+                                    .foregroundStyle(Theme.textDim)
+                            }
 
-                            ForEach(Array(actions.enumerated()), id: \.element.id) { index, action in
-                                HStack(spacing: Spacing.md) {
-                                    Image(systemName: action.severity == .high ? "exclamationmark.shield.fill" : "checkmark.circle")
-                                        .foregroundStyle(action.severity == .high ? Theme.negative : Theme.positive)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(action.label)
-                                            .font(Typography.body)
-                                            .foregroundStyle(Theme.text)
-                                        Text(action.id)
-                                            .font(Typography.caption)
-                                            .foregroundStyle(Theme.textDim)
-                                            .monospaced()
-                                    }
-                                    Spacer()
+                            ForEach(Array(pages.enumerated()), id: \.element.id) { index, page in
+                                if index > 0 { RowDivider() }
+                                NavigationLink {
+                                    PageScaffold(page: page, resolver: resolver)
+                                } label: {
+                                    NavigationRow(
+                                        icon: BusinessRootView.icon(forPage: page.id),
+                                        iconColor: Theme.brand,
+                                        title: page.label,
+                                        subtitle: "\(resolver.availableActions(on: page).count) \(pluralize(resolver.availableActions(on: page).count, "действие", "действия", "действий"))"
+                                    )
                                 }
-                                .staggeredAppear(index: index)
+                                .buttonStyle(.plain)
                             }
                         }
                     }
                 }
 
-                // Явная отметка о незавершённости — чтобы каркас не выдавали
-                // за готовый экран.
-                Card(accent: Theme.warning) {
-                    Label("Экран данных подключается на следующем этапе", systemImage: "hammer")
-                        .font(Typography.callout)
-                        .foregroundStyle(Theme.textMuted)
+                if resolver.visibleGroups().isEmpty {
+                    EmptyStateView(
+                        icon: "lock",
+                        title: "Разделов нет",
+                        message: "Вам пока не выдали доступ ни к одному разделу."
+                    )
                 }
             }
             .padding(Spacing.lg)
-            .frame(maxWidth: 720, alignment: .leading)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .frame(maxWidth: 720)
+            .frame(maxWidth: .infinity)
         }
         .background(Theme.background)
-        .navigationTitle(page.label)
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
+        .navigationTitle("Разделы")
+        .toolbar { LogoutToolbarItem() }
+    }
+}
+
+/// Профиль владельца или сотрудника.
+struct BusinessProfileScreen: View {
+    let resolver: AccessResolver
+
+    @Environment(AuthStore.self) private var auth
+    @State private var confirmingLogout = false
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: Spacing.lg) {
+                Card {
+                    HStack(spacing: Spacing.lg) {
+                        Image(systemName: "person.crop.circle.fill")
+                            .font(.system(size: 44))
+                            .foregroundStyle(Theme.brand)
+                        VStack(alignment: .leading, spacing: Spacing.xs) {
+                            Text(auth.role?.displayName ?? "Пользователь")
+                                .font(Typography.title)
+                                .foregroundStyle(Theme.text)
+                            if let label = auth.role?.roleLabel {
+                                Text(label)
+                                    .font(Typography.callout)
+                                    .foregroundStyle(Theme.textMuted)
+                            }
+                        }
+                        Spacer()
+                    }
+                }
+
+                Card {
+                    VStack(spacing: Spacing.md) {
+                        Text("Доступ")
+                            .font(Typography.label)
+                            .foregroundStyle(Theme.textDim)
+                            .textCase(.uppercase)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        StatRow("Разделов открыто", value: "\(resolver.visibleGroups().count) из \(CapabilityCatalog.groups.count)")
+                        StatRow("Страниц доступно", value: "\(resolver.visibleGroups().reduce(0) { $0 + $1.pages.count })")
+                        if resolver.isAllAccess {
+                            RowDivider()
+                            StatusChip("полный доступ", kind: .info)
+                        }
+                    }
+                }
+
+                Button("Выйти из аккаунта") { confirmingLogout = true }
+                    .buttonStyle(DestructiveButtonStyle())
+            }
+            .padding(Spacing.lg)
+            .frame(maxWidth: 640)
+            .frame(maxWidth: .infinity)
+        }
+        .background(Theme.background)
+        .navigationTitle("Профиль")
+        .confirmationDialog("Выйти из аккаунта?", isPresented: $confirmingLogout, titleVisibility: .visible) {
+            Button("Выйти", role: .destructive) { Task { await auth.signOut() } }
+            Button("Отмена", role: .cancel) {}
+        }
     }
 }
