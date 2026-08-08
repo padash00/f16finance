@@ -7,9 +7,45 @@ import SwiftUI
 /// Задачи оператора.
 struct TasksScreen: View {
     @Environment(CabinetStore.self) private var cabinet
+    @Environment(\.surface) private var surface
     @State private var error: String?
+    @State private var selected: OperatorTask?
 
     var body: some View {
+        Group {
+            if surface.isCompact { compactBody } else { wideBody }
+        }
+        .navigationTitle("Задачи")
+        .toolbar { LogoutToolbarItem() }
+        .task { if cabinet.tasks.isEmpty { await cabinet.loadTasks() } }
+        .refreshable { await cabinet.loadTasks() }
+    }
+
+    /// Широкий экран: список слева, карточка задачи справа.
+    private var wideBody: some View {
+        MasterDetail(items: cabinet.tasks, selection: $selected, listWidth: 360) { task in
+            TaskRow(task: task)
+        } detail: { task in
+            TaskDetail(task: task) {
+                Task {
+                    if let failure = await cabinet.completeTask(task) {
+                        error = failure
+                        Haptics.error()
+                    } else {
+                        Haptics.success()
+                    }
+                }
+            }
+        } empty: {
+            WideEmptyState(
+                icon: "checkmark.seal",
+                title: "Задач нет",
+                message: "Как только руководитель поставит задачу, она появится здесь."
+            )
+        }
+    }
+
+    private var compactBody: some View {
         ScrollView {
             VStack(spacing: Spacing.md) {
                 if cabinet.isLoadingTasks && cabinet.tasks.isEmpty {
@@ -62,10 +98,6 @@ struct TasksScreen: View {
             .frame(maxWidth: .infinity)
         }
         .background(Theme.background)
-        .navigationTitle("Задачи")
-        .toolbar { LogoutToolbarItem() }
-        .task { if cabinet.tasks.isEmpty { await cabinet.loadTasks() } }
-        .refreshable { await cabinet.loadTasks() }
     }
 }
 
@@ -520,181 +552,100 @@ struct ChecklistItemCard: View {
     }
 }
 
-// ── База знаний ──────────────────────────────────────────────────────────────
+// ── Задачи: строка и карточка для широкого экрана ────────────────────────────
 
-struct KnowledgeScreen: View {
-    @Environment(CabinetStore.self) private var cabinet
-    @State private var error: String?
-
-    var body: some View {
-        ScrollView {
-            VStack(spacing: Spacing.md) {
-                if cabinet.isLoadingKnowledge && cabinet.knowledge == nil {
-                    ForEach(0..<4, id: \.self) { _ in Skeleton(height: 84, cornerRadius: Radius.lg) }
-                } else if let knowledge = cabinet.knowledge {
-                    if !knowledge.pendingConfirmations.isEmpty {
-                        SectionHeader("Нужно подтвердить", subtitle: "новые или изменённые правила")
-                            .padding(.horizontal, Spacing.xs)
-
-                        ForEach(knowledge.pendingConfirmations) { article in
-                            NavigationLink {
-                                ArticleScreen(article: article, needsConfirmation: true)
-                            } label: {
-                                ArticleCard(article: article, isPending: true)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-
-                    let rest = knowledge.articles.filter { article in
-                        !knowledge.pendingConfirmations.contains { $0.id == article.id }
-                    }
-
-                    if !rest.isEmpty {
-                        SectionHeader("База знаний")
-                            .padding(.horizontal, Spacing.xs)
-                            .padding(.top, Spacing.sm)
-
-                        ForEach(rest) { article in
-                            NavigationLink {
-                                ArticleScreen(article: article, needsConfirmation: false)
-                            } label: {
-                                ArticleCard(article: article, isPending: false)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-
-                    if knowledge.articles.isEmpty {
-                        EmptyStateView(
-                            icon: "book.closed",
-                            title: "Статей нет",
-                            message: "База знаний для вашей точки пока пуста."
-                        )
-                    }
-                }
-            }
-            .padding(Spacing.lg)
-            .frame(maxWidth: 640)
-            .frame(maxWidth: .infinity)
-        }
-        .background(Theme.background)
-        .navigationTitle("Знания")
-        .toolbar { LogoutToolbarItem() }
-        .task { if cabinet.knowledge == nil { await cabinet.loadKnowledge() } }
-        .refreshable { await cabinet.loadKnowledge() }
-    }
-}
-
-struct ArticleCard: View {
-    let article: KnowledgeArticle
-    let isPending: Bool
+/// Строка задачи в списке.
+struct TaskRow: View {
+    let task: OperatorTask
 
     var body: some View {
-        Card(accent: isPending ? Theme.info : nil) {
-            HStack(spacing: Spacing.md) {
-                VStack(alignment: .leading, spacing: Spacing.xs) {
-                    Text(article.title)
-                        .font(Typography.body.weight(.medium))
-                        .foregroundStyle(Theme.text)
-                    if let summary = article.summary, !summary.isEmpty {
-                        Text(summary)
+        HStack(spacing: Spacing.md) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(accent)
+                .frame(width: 3)
+
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                Text(task.title)
+                    .font(Typography.callout.weight(.medium))
+                    .foregroundStyle(task.isDone ? Theme.textDim : Theme.text)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+
+                HStack(spacing: Spacing.sm) {
+                    if task.isOverdue {
+                        StatusChip("просрочена", kind: .danger)
+                    } else if task.isOnReview {
+                        StatusChip("на проверке", kind: .info)
+                    } else if task.isDone {
+                        StatusChip("выполнена", kind: .good)
+                    }
+                    if let due = task.dueDate, let date = DateParsing.parseDateOnly(due) {
+                        Text("до \(date.formatted(.dateTime.day().month(.abbreviated)))")
                             .font(Typography.caption)
-                            .foregroundStyle(Theme.textMuted)
-                            .lineLimit(2)
-                    }
-                    if article.isCritical {
-                        StatusChip("важное", kind: .warning)
+                            .foregroundStyle(Theme.textDim)
                     }
                 }
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Theme.textDim)
             }
+
+            Spacer(minLength: 0)
         }
+        .padding(Spacing.md)
+        .contentShape(Rectangle())
+    }
+
+    private var accent: Color {
+        if task.isOverdue { return Theme.negative }
+        if task.isDone { return Theme.positive }
+        if task.priority == "high" || task.priority == "urgent" { return Theme.warning }
+        return .clear
     }
 }
 
-struct ArticleScreen: View {
-    let article: KnowledgeArticle
-    let needsConfirmation: Bool
-
-    @Environment(CabinetStore.self) private var cabinet
-    @Environment(\.dismiss) private var dismiss
-
-    @State private var isConfirming = false
-    @State private var error: String?
+/// Карточка задачи справа.
+struct TaskDetail: View {
+    let task: OperatorTask
+    let onComplete: () -> Void
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.lg) {
-                Text(article.title)
-                    .font(Typography.title)
+                Text(task.title)
+                    .font(.system(.title, design: .rounded).weight(.bold))
                     .foregroundStyle(Theme.text)
 
-                if let body = article.body, !body.isEmpty {
-                    Text(body)
+                HStack(spacing: Spacing.sm) {
+                    StatusChip(task.statusLabel, kind: task.isDone ? .good : task.isOverdue ? .danger : .neutral)
+                    StatusChip(task.priorityLabel, kind: task.priority == "high" ? .warning : .neutral)
+                }
+
+                if let description = task.description, !description.isEmpty {
+                    Text(description)
                         .font(Typography.body)
                         .foregroundStyle(Theme.textMuted)
                         .textSelection(.enabled)
-                } else if let summary = article.summary {
-                    Text(summary)
-                        .font(Typography.body)
-                        .foregroundStyle(Theme.textMuted)
                 }
 
-                if needsConfirmation {
-                    Card(accent: Theme.info) {
-                        VStack(alignment: .leading, spacing: Spacing.md) {
-                            Text("Подтвердите, что прочитали")
-                                .font(Typography.callout.weight(.semibold))
-                                .foregroundStyle(Theme.text)
-                            Text("Подтверждение привязано к версии \(article.version): если правила изменят, вас попросят прочитать заново.")
-                                .font(Typography.caption)
-                                .foregroundStyle(Theme.textDim)
-
-                            Button {
-                                confirm()
-                            } label: {
-                                if isConfirming {
-                                    ProgressView().controlSize(.small)
-                                } else {
-                                    Text("Прочитал и понял")
-                                }
-                            }
-                            .buttonStyle(PrimaryButtonStyle(tint: Theme.info))
-                            .disabled(isConfirming)
+                Card {
+                    VStack(spacing: Spacing.sm) {
+                        if let due = task.dueDate, let date = DateParsing.parseDateOnly(due) {
+                            StatRow("Срок", value: date.formatted(.dateTime.day().month(.wide)), icon: "calendar")
+                        }
+                        if let company = task.companyName {
+                            StatRow("Точка", value: company, icon: "storefront")
                         }
                     }
                 }
 
-                if let error {
-                    Text(error).font(Typography.callout).foregroundStyle(Theme.negative)
+                if !task.isDone && !task.isOnReview {
+                    Button("Отправить на проверку", action: onComplete)
+                        .buttonStyle(PrimaryButtonStyle(tint: Theme.accent(for: .operator)))
+                        .frame(maxWidth: 320)
                 }
             }
-            .padding(Spacing.lg)
-            .frame(maxWidth: 700, alignment: .leading)
+            .frame(maxWidth: 680, alignment: .leading)
+            .padding(Spacing.xxl)
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .background(Theme.background)
-        .navigationTitle("Статья")
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
-    }
-
-    private func confirm() {
-        isConfirming = true
-        Task {
-            if let failure = await cabinet.confirmArticle(article) {
-                error = failure
-                Haptics.error()
-            } else {
-                Haptics.success()
-                dismiss()
-            }
-            isConfirming = false
-        }
     }
 }
