@@ -730,7 +730,9 @@ struct TeamChatScreen: View {
     }
 
     private func pinnedCard(_ pinned: [TeamChatMessage]) -> some View {
-        Card(accent: Theme.warning) {
+        // Закрепление — не тревога: тот же бренд-акцент, что у закреплённого
+        // поста в ленте новостей. Янтарный остаётся за предупреждениями.
+        Card(accent: Theme.brand) {
             VStack(alignment: .leading, spacing: Spacing.sm) {
                 SectionHeader("Закреплено")
                 ForEach(pinned) { message in
@@ -1154,7 +1156,7 @@ struct CalendarScreen: View {
                 )
 
                 if events.isEmpty {
-                    InlineEmpty(icon: "calendar", text: "На этот день ничего не назначено", tint: Theme.warning)
+                    InlineEmpty(icon: "calendar", text: "На этот день ничего не назначено", tint: Theme.textDim)
                 } else {
                     ForEach(Array(events.enumerated()), id: \.element.id) { index, event in
                         if index > 0 { RowDivider() }
@@ -1449,6 +1451,11 @@ private struct ModerationFlagDetail: View {
     let store: ModerationStore
     let onReviewed: () -> Void
 
+    @Environment(\.access) private var access
+
+    private var canConfirm: Bool { access?.can("moderation.confirm") == true }
+    private var canDismiss: Bool { access?.can("moderation.dismiss") == true }
+
     var body: some View {
         ScreenScroll {
             Card(accent: flag.isCritical ? Theme.negative : nil) {
@@ -1536,19 +1543,35 @@ private struct ModerationFlagDetail: View {
                     .foregroundStyle(Theme.negative)
             }
 
+            // Решение по флагу — отдельные права. Без них сервер ответит 403,
+            // а кнопка, которая заведомо не сработает, только злит.
             if flag.isPending {
-                HStack(spacing: Spacing.md) {
-                    Button("Отклонить") {
-                        Task { await store.review(flag, as: .dismissed); onReviewed() }
-                    }
-                    .buttonStyle(SecondaryButtonStyle())
+                if canConfirm || canDismiss {
+                    HStack(spacing: Spacing.md) {
+                        if canDismiss {
+                            Button("Отклонить") {
+                                Task { await store.review(flag, as: .dismissed); onReviewed() }
+                            }
+                            .buttonStyle(SecondaryButtonStyle())
+                        }
 
-                    Button("Подтвердить нарушение") {
-                        Task { await store.review(flag, as: .confirmed); onReviewed() }
+                        if canConfirm {
+                            Button("Подтвердить нарушение") {
+                                Task { await store.review(flag, as: .confirmed); onReviewed() }
+                            }
+                            .buttonStyle(DestructiveButtonStyle())
+                        }
                     }
-                    .buttonStyle(DestructiveButtonStyle())
+                    .disabled(store.actingID == flag.id)
+                } else {
+                    Card {
+                        InlineEmpty(
+                            icon: "lock.fill",
+                            text: "Решение по флагу принимает сотрудник с правом модерации",
+                            tint: Theme.textDim
+                        )
+                    }
                 }
-                .disabled(store.actingID == flag.id)
             }
         }
         .background(Theme.background)

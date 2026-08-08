@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatMoney } from '@/lib/core/format'
+import { computeSimulationProjection, tariffRatePerHour } from '@/lib/domain/simulation'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { CardSkeleton, Skeleton } from '@/components/skeleton'
 
@@ -63,12 +64,6 @@ const uid = () =>
 const n = (v: string | number) => {
   const x = Number(String(v).replace(',', '.'))
   return Number.isFinite(x) && x >= 0 ? x : 0
-}
-
-/** ₸ за час сидения по тарифу: цена / (оплаченные + бонусные часы) */
-function tariffRate(t: Tariff): number {
-  const hours = n(t.paid_hours) + n(t.bonus_hours)
-  return hours > 0 ? n(t.price) / hours : 0
 }
 
 export default function SimulationPage() {
@@ -150,54 +145,16 @@ export default function SimulationPage() {
     }
   }
 
-  // ── Расчёты (вживую, на клиенте) ───────────────────────────────────────────
-  const tariffById = useMemo(() => {
-    const m = new Map<string, Tariff>()
-    for (const t of tariffs) m.set(t.id, t)
-    return m
-  }, [tariffs])
+  // Считаем вживую при каждой правке полей — той же функцией, что и сервер:
+  // разойтись цифрам на сайте и в приложении негде.
+  const calc = useMemo(
+    () => computeSimulationProjection(zones, tariffs, fact),
+    [zones, tariffs, fact],
+  )
 
-  const calc = useMemo(() => {
-    const perZone = zones.map((z) => {
-      // средневзвешенная ставка ₸/час по миксу тарифов зоны
-      let blendedRate = 0
-      let shareSum = 0
-      for (const m of z.tariff_mix) {
-        const t = tariffById.get(m.tariff_id)
-        if (!t) continue
-        blendedRate += (n(m.share_pct) / 100) * tariffRate(t)
-        shareSum += n(m.share_pct)
-      }
-      const perDevicePerDay = n(z.assumed_occupancy_hours) * blendedRate
-      const potentialPerDay = n(z.device_count) * perDevicePerDay
-      return {
-        zone: z,
-        blendedRate,
-        shareSum,
-        perDevicePerDay,
-        potentialPerDay,
-        potentialPerMonth: potentialPerDay * 30,
-      }
-    })
-    const totalPotentialPerDay = perZone.reduce((s, r) => s + r.potentialPerDay, 0)
-    const totalDevices = zones.reduce((s, z) => s + n(z.device_count), 0)
-    // Σ (device_count × blendedRate) — «выручка за 1 час полной загрузки клуба»
-    const capacityRatePerHour = perZone.reduce((s, r) => s + n(r.zone.device_count) * r.blendedRate, 0)
-    const factPerDay = fact?.revenue_per_day || 0
-    const impliedOccupancy = capacityRatePerHour > 0 ? factPerDay / capacityRatePerHour : null
-    return {
-      perZone,
-      totalPotentialPerDay,
-      totalPotentialPerMonth: totalPotentialPerDay * 30,
-      totalDevices,
-      capacityRatePerHour,
-      impliedOccupancy,
-    }
-  }, [zones, tariffById, fact])
-
-  const totalPotentialMonth = calc.totalPotentialPerMonth
-  const factMonth = fact?.revenue_per_month || 0
-  const gapMonth = totalPotentialMonth - factMonth
+  const totalPotentialMonth = calc.potential_per_month
+  const factMonth = calc.fact_per_month
+  const gapMonth = calc.gap_per_month
 
   if (loading) {
     return (
@@ -253,7 +210,7 @@ export default function SimulationPage() {
           <div>
             <p className="text-[11px] uppercase tracking-widest text-blue-700 dark:text-blue-300/80">Потенциал клуба / мес</p>
             <p className="mt-1 text-3xl font-bold tabular-nums text-blue-700 dark:text-blue-200">{formatMoney(Math.round(totalPotentialMonth))} ₸</p>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">{formatMoney(Math.round(calc.totalPotentialPerDay))} ₸ / день · только время устройств</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">{formatMoney(Math.round(calc.potential_per_day))} ₸ / день · только время устройств</p>
           </div>
           <div>
             <p className="text-[11px] uppercase tracking-widest text-emerald-700 dark:text-emerald-300/80">Факт / мес</p>
@@ -274,17 +231,15 @@ export default function SimulationPage() {
         </div>
 
         {/* Обратный расчёт загрузки */}
-        {calc.impliedOccupancy != null && calc.capacityRatePerHour > 0 ? (
+        {calc.implied_occupancy_hours != null && calc.capacity_rate_per_hour > 0 ? (
           <div className="mt-4 rounded-xl border border-border bg-slate-50 dark:bg-black/20 px-4 py-3 text-sm">
             <span className="text-muted-foreground">Обратный расчёт: </span>
             чтобы выйти на текущую выручку, средняя загрузка должна быть{' '}
-            <span className="font-bold text-blue-700 dark:text-blue-200">{calc.impliedOccupancy.toFixed(1)} ч/устройство в сутки</span>.
+            <span className="font-bold text-blue-700 dark:text-blue-200">{calc.implied_occupancy_hours.toFixed(1)} ч/устройство в сутки</span>.
             {(() => {
-              const assumedAvg = calc.totalDevices > 0
-                ? zones.reduce((s, z) => s + n(z.device_count) * n(z.assumed_occupancy_hours), 0) / calc.totalDevices
-                : 0
-              if (assumedAvg <= 0) return null
-              const diff = calc.impliedOccupancy! - assumedAvg
+              const assumedAvg = calc.assumed_occupancy_hours || 0
+              const diff = calc.occupancy_gap_hours
+              if (assumedAvg <= 0 || diff == null) return null
               return (
                 <span className="text-muted-foreground">
                   {' '}Вы заложили в среднем {assumedAvg.toFixed(1)} ч —{' '}
@@ -301,12 +256,12 @@ export default function SimulationPage() {
       </Card>
 
       {/* ── ПО ЗОНАМ ────────────────────────────────────────────────────────── */}
-      {calc.perZone.length > 0 ? (
+      {calc.zones.length > 0 ? (
         <Card className="border-border bg-white dark:bg-white/[0.02] p-5">
           <h2 className="text-sm font-semibold">Потенциал по зонам</h2>
           <div className="mt-3 h-52">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={calc.perZone.map((r) => ({ name: r.zone.name || '—', value: Math.round(r.potentialPerMonth) }))}>
+              <BarChart data={calc.zones.map((r) => ({ name: r.name, value: Math.round(r.potential_per_month) }))}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.4} />
                 <XAxis dataKey="name" stroke="rgba(255,255,255,0.45)" fontSize={10} />
                 <YAxis stroke="rgba(255,255,255,0.45)" fontSize={10} tickFormatter={(v) => `${Math.round(Number(v) / 1000)}k`} />
@@ -315,7 +270,7 @@ export default function SimulationPage() {
                   contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
                 />
                 <Bar dataKey="value" name="Потенциал / мес" radius={[4, 4, 0, 0]}>
-                  {calc.perZone.map((_, i) => <Cell key={i} fill="#3b82f6" />)}
+                  {calc.zones.map((_, i) => <Cell key={i} fill="#3b82f6" />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -334,20 +289,20 @@ export default function SimulationPage() {
                 </tr>
               </thead>
               <tbody>
-                {calc.perZone.map((r) => (
-                  <tr key={r.zone.id} className="border-t border-slate-100 dark:border-white/[0.06]">
+                {calc.zones.map((r) => (
+                  <tr key={r.zone_id || r.name} className="border-t border-slate-100 dark:border-white/[0.06]">
                     <td className="px-3 py-2">
-                      {r.zone.name || '—'}
-                      {r.shareSum > 0 && Math.abs(r.shareSum - 100) > 1 ? (
-                        <span className="ml-1 text-[10px] text-amber-700 dark:text-amber-300">микс {Math.round(r.shareSum)}%</span>
+                      {r.name}
+                      {r.share_sum > 0 && Math.abs(r.share_sum - 100) > 1 ? (
+                        <span className="ml-1 text-[10px] text-amber-700 dark:text-amber-300">микс {Math.round(r.share_sum)}%</span>
                       ) : null}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums">{r.zone.device_count}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{r.zone.assumed_occupancy_hours} ч</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{formatMoney(Math.round(r.blendedRate))}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{formatMoney(Math.round(r.perDevicePerDay))}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{formatMoney(Math.round(r.potentialPerDay))}</td>
-                    <td className="px-3 py-2 text-right tabular-nums font-semibold text-blue-700 dark:text-blue-200">{formatMoney(Math.round(r.potentialPerMonth))}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{r.device_count}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{r.occupancy_hours} ч</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{formatMoney(Math.round(r.blended_rate))}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{formatMoney(Math.round(r.per_device_per_day))}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{formatMoney(Math.round(r.potential_per_day))}</td>
+                    <td className="px-3 py-2 text-right tabular-nums font-semibold text-blue-700 dark:text-blue-200">{formatMoney(Math.round(r.potential_per_month))}</td>
                   </tr>
                 ))}
               </tbody>
@@ -396,7 +351,7 @@ export default function SimulationPage() {
                 <div className="space-y-1">
                   {idx === 0 ? <Label className="text-[10px]">₸/час</Label> : null}
                   <div className="grid h-10 place-items-center rounded-lg border border-border bg-surface-muted text-sm tabular-nums">
-                    {formatMoney(Math.round(tariffRate(t)))}
+                    {formatMoney(Math.round(tariffRatePerHour(t)))}
                   </div>
                 </div>
                 <Button size="icon" variant="ghost" onClick={() => setTariffs((cur) => cur.filter((x) => x.id !== t.id))}>

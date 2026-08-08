@@ -677,7 +677,7 @@ struct RatingsScreen: View {
                 label: "Лидер",
                 value: working.first?.name ?? "—",
                 icon: "trophy.fill",
-                accent: Theme.warning
+                accent: Theme.positive
             )
         }
     }
@@ -818,14 +818,16 @@ private extension OperatorAchievement {
         }
     }
 
+    /// Значки — украшение, а не статус. Красный и янтарный здесь читались бы
+    /// как «проблема», поэтому награды раскрашены палитрой графиков.
     var tint: Color {
         switch self {
-        case .champion: Theme.warning
+        case .champion: ChartPalette.series3
         case .top3: Theme.brand
         case .millionaire: Theme.positive
-        case .mega: Theme.negative
+        case .mega: ChartPalette.series2
         case .marathoner: Theme.info
-        case .iron: Theme.negative
+        case .iron: ChartPalette.series3
         case .premium: Theme.accent
         case .major: Theme.accent
         }
@@ -1006,7 +1008,7 @@ private struct AchievementDetail: View {
                         label: "Место",
                         value: "\(result.rank)",
                         icon: "number",
-                        accent: result.rank <= 3 ? Theme.warning : Theme.textMuted
+                        accent: result.rank <= 3 ? Theme.positive : Theme.textMuted
                     )
                     MetricTile(
                         label: "Выручка",

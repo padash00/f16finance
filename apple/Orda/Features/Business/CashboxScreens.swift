@@ -395,7 +395,7 @@ private struct PosReceiptRow: View {
                     .monospacedDigit()
                     .foregroundStyle(Theme.text)
                 if receipt.discountAmount + receipt.loyaltyDiscountAmount > 0 {
-                    StatusChip("скидка", kind: .warning)
+                    StatusChip("скидка", kind: .neutral)
                 }
             }
         }
@@ -507,7 +507,7 @@ private struct PosReceiptDetailView: View {
             }
 
             if receipt.hasLoyalty {
-                Card(accent: Theme.warning) {
+                Card {
                     VStack(alignment: .leading, spacing: Spacing.md) {
                         SectionHeader("Бонусы")
                         if receipt.loyaltyPointsEarned > 0 {

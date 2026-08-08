@@ -39,10 +39,7 @@ struct TeamTasksScreen: View {
             if let error = store.tasksError, store.tasks.isEmpty {
                 ErrorStateView(error: error) { Task { await store.loadTasks() } }
             } else if store.isLoadingTasks && store.tasks.isEmpty {
-                VStack(spacing: Spacing.md) {
-                    ForEach(0..<6, id: \.self) { _ in Skeleton(height: 52, cornerRadius: Radius.md) }
-                }
-                .padding(Spacing.lg)
+                LoadingRows(count: 6)
             } else {
                 MasterDetail(
                     items: filtered,
@@ -362,10 +359,7 @@ struct CustomersScreen: View {
             if let error = store.customersError, store.customers.isEmpty {
                 ErrorStateView(error: error) { Task { await store.loadCustomers() } }
             } else if store.isLoadingCustomers && store.customers.isEmpty {
-                VStack(spacing: Spacing.md) {
-                    ForEach(0..<8, id: \.self) { _ in Skeleton(height: 52, cornerRadius: Radius.md) }
-                }
-                .padding(Spacing.lg)
+                LoadingRows(count: 8)
             } else {
                 MasterDetail(
                     items: filtered,

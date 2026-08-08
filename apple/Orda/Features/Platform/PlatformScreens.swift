@@ -13,7 +13,7 @@ struct PlatformOverviewScreen: View {
     @Environment(PlatformStore.self) private var store
 
     var body: some View {
-        ScrollView {
+        ScreenScroll {
             VStack(spacing: Spacing.lg) {
                 if let error = store.error {
                     ErrorStateView(error: error) { Task { await store.load() } }
@@ -22,15 +22,12 @@ struct PlatformOverviewScreen: View {
                     Skeleton(height: 200, cornerRadius: Radius.lg)
                 } else {
                     mrrCard
-                    subscriptionChart
                     scaleTiles
+                    subscriptionChart
                     if !store.attention.isEmpty { attentionCard }
                     billingCard
                 }
             }
-            .padding(Spacing.lg)
-            .frame(maxWidth: 720)
-            .frame(maxWidth: .infinity)
         }
         .background(Theme.background)
         .navigationTitle("Платформа")
@@ -72,10 +69,7 @@ struct PlatformOverviewScreen: View {
         let total = max(store.subscriptionBreakdown.reduce(0) { $0 + $1.count }, 1)
         return Card {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                Text("Подписки")
-                    .font(Typography.label)
-                    .foregroundStyle(Theme.textDim)
-                    .textCase(.uppercase)
+                SectionHeader("Подписки")
 
                 SplitBar(segments: [
                     .init(label: "Активные", value: Double(store.overview.activeSubscriptions), color: ChartPalette.series1),
@@ -91,7 +85,7 @@ struct PlatformOverviewScreen: View {
     }
 
     private var scaleTiles: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: Spacing.md) {
+        DashboardGrid {
             MetricTile(
                 label: "Организаций",
                 value: "\(store.overview.organizationCount)",
@@ -122,12 +116,7 @@ struct PlatformOverviewScreen: View {
     private var attentionCard: some View {
         Card(accent: Theme.warning) {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                HStack {
-                    Text("Требуют внимания")
-                        .font(Typography.label)
-                        .foregroundStyle(Theme.warning)
-                        .textCase(.uppercase)
-                    Spacer()
+                SectionHeader("Требуют внимания") {
                     Text("\(store.attention.count)")
                         .font(Typography.caption.weight(.bold))
                         .monospacedDigit()
@@ -155,11 +144,7 @@ struct PlatformOverviewScreen: View {
         if store.overview.overdueInvoices > 0 || store.overview.trialsEndingSoon > 0 {
             Card {
                 VStack(spacing: Spacing.md) {
-                    Text("Биллинг")
-                        .font(Typography.label)
-                        .foregroundStyle(Theme.textDim)
-                        .textCase(.uppercase)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    SectionHeader("Биллинг")
 
                     if store.overview.overdueInvoices > 0 {
                         StatRow(
@@ -399,17 +384,13 @@ struct OrganizationDetailScreen: View {
         if let subscription = current.subscription {
             Card {
                 VStack(spacing: Spacing.md) {
-                    Text("Подписка")
-                        .font(Typography.label)
-                        .foregroundStyle(Theme.textDim)
-                        .textCase(.uppercase)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    SectionHeader("Подписка")
 
                     StatRow("Тариф", value: subscription.planName ?? "—")
                     StatRow("Статус", value: subscription.statusLabel)
                     StatRow("Период", value: subscription.billingPeriod == "yearly" ? "год" : "месяц")
                     if let ends = subscription.endsAt {
-                        StatRow("Действует до", value: String(ends.prefix(10)))
+                        StatRow("Действует до", value: endsLabel(ends))
                     }
                     if let package = current.packageCode {
                         RowDivider()
@@ -423,14 +404,16 @@ struct OrganizationDetailScreen: View {
         }
     }
 
+    /// Дата окончания приходит строкой ISO — показывать её как есть нельзя.
+    private func endsLabel(_ raw: String) -> String {
+        guard let date = DateParsing.parseDateOnly(String(raw.prefix(10))) else { return raw }
+        return date.formatted(.dateTime.day().month(.wide).year())
+    }
+
     private var controlsCard: some View {
         Card {
             VStack(spacing: Spacing.md) {
-                Text("Настройки")
-                    .font(Typography.label)
-                    .foregroundStyle(Theme.textDim)
-                    .textCase(.uppercase)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                SectionHeader("Настройки")
 
                 Toggle(isOn: Binding(
                     get: { current.featuresEnforced },
@@ -476,10 +459,7 @@ struct OrganizationDetailScreen: View {
         if !current.companies.isEmpty {
             Card {
                 VStack(alignment: .leading, spacing: Spacing.md) {
-                    Text("Точки")
-                        .font(Typography.label)
-                        .foregroundStyle(Theme.textDim)
-                        .textCase(.uppercase)
+                    SectionHeader("Точки")
 
                     ForEach(current.companies) { company in
                         StatRow(company.name, value: company.code ?? "—", icon: "storefront")
@@ -494,10 +474,7 @@ struct OrganizationDetailScreen: View {
     private var dangerCard: some View {
         Card(accent: Theme.negative) {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                Text("Опасная зона")
-                    .font(Typography.label)
-                    .foregroundStyle(Theme.negative)
-                    .textCase(.uppercase)
+                SectionHeader("Опасная зона")
 
                 Text(current.isSuspended
                      ? "Организация заморожена: сотрудники не могут войти."

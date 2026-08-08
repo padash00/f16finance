@@ -28,7 +28,11 @@ public struct MetricTile: View {
     }
 
     public var body: some View {
-        Card(accent: accent) {
+        // Рамку не красим акцентом: `Card` рисует его с прозрачностью 0.35, и
+        // «нейтральная» плитка на приглушённом цвете получала обводку ярче
+        // брендовой — ряд показателей выглядел так, будто главное в нём как
+        // раз второстепенное. Цвет несёт значок, рамка у всех плиток одна.
+        Card {
             VStack(alignment: .leading, spacing: Spacing.sm) {
                 HStack(spacing: Spacing.sm) {
                     if let icon {

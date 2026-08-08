@@ -18,10 +18,7 @@ struct RevisionsScreen: View {
             if let error = store.revisionsError, store.revisions.isEmpty {
                 ErrorStateView(error: error) { Task { await store.loadRevisions() } }
             } else if store.isLoadingRevisions && store.revisions.isEmpty {
-                VStack(spacing: Spacing.md) {
-                    ForEach(0..<6, id: \.self) { _ in Skeleton(height: 56, cornerRadius: Radius.md) }
-                }
-                .padding(Spacing.lg)
+                LoadingRows(count: 6)
             } else {
                 MasterDetail(
                     items: sorted,
@@ -233,10 +230,7 @@ struct SuppliersScreen: View {
             if let error = store.suppliersError, store.suppliers == nil {
                 ErrorStateView(error: error) { Task { await store.loadSuppliers() } }
             } else if store.suppliers == nil {
-                VStack(spacing: Spacing.md) {
-                    ForEach(0..<7, id: \.self) { _ in Skeleton(height: 52, cornerRadius: Radius.md) }
-                }
-                .padding(Spacing.lg)
+                LoadingRows(count: 7)
             } else {
                 MasterDetail(
                     items: filtered,
@@ -422,10 +416,7 @@ struct StaffScreen: View {
             if let error = store.staffError, store.staff == nil {
                 ErrorStateView(error: error) { Task { await store.loadStaff() } }
             } else if store.staff == nil {
-                VStack(spacing: Spacing.md) {
-                    ForEach(0..<5, id: \.self) { _ in Skeleton(height: 52, cornerRadius: Radius.md) }
-                }
-                .padding(Spacing.lg)
+                LoadingRows(count: 5)
             } else {
                 MasterDetail(
                     items: filtered,

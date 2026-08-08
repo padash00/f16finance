@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
+import { computeSimulationProjection } from '@/lib/domain/simulation'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { humanizeDbError } from '@/lib/server/db-error-humanize'
 import { resolveCompanyScope } from '@/lib/server/organizations'
@@ -130,14 +131,21 @@ export async function GET(req: Request) {
       revenue_per_month: Math.round((totalRevenue / FACT_WINDOW_DAYS) * 30),
     }
 
+    const zones = zonesRes.data || []
+    const tariffs = tariffsRes.data || []
+
     return json({
       ok: true,
       data: {
         companies: companies || [],
         company_id: companyId,
-        zones: zonesRes.data || [],
-        tariffs: tariffsRes.data || [],
+        zones,
+        tariffs,
         fact,
+        // Готовый расчёт по сохранённой конфигурации: страница пересчитывает
+        // его на лету при правке полей, а клиентам, которые только читают,
+        // повторять формулу незачем.
+        projection: computeSimulationProjection(zones as any, tariffs as any, fact),
       },
     })
   } catch (error: any) {

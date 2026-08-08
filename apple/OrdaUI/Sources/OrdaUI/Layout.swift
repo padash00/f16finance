@@ -203,17 +203,23 @@ public struct SplitDashboard<Main: View, Side: View>: View {
                 side
             }
         } else {
-            GeometryReader { proxy in
-                let sideWidth = max(280, min(420, proxy.size.width * (1 - mainRatio)))
-                HStack(alignment: .top, spacing: Spacing.lg) {
-                    VStack(spacing: Spacing.lg) { main }
-                        .frame(maxWidth: .infinity, alignment: .top)
-                    VStack(spacing: Spacing.lg) { side }
-                        .frame(width: sideWidth, alignment: .top)
-                }
+            // Ширину боковой колонки берём у контейнера через
+            // `containerRelativeFrame`, а не через `GeometryReader`.
+            //
+            // `GeometryReader` не имеет собственной высоты: внутри `ScrollView`
+            // он схлопывался, и приходилось подпирать его `minHeight: 420` —
+            // отчего колонка выше 420 точек обрезалась, а на коротких экранах
+            // снизу оставалась пустота. Здесь высота естественная, по
+            // содержимому.
+            HStack(alignment: .top, spacing: Spacing.lg) {
+                VStack(spacing: Spacing.lg) { main }
+                    .frame(maxWidth: .infinity, alignment: .top)
+
+                VStack(spacing: Spacing.lg) { side }
+                    .containerRelativeFrame(.horizontal, alignment: .top) { width, _ in
+                        max(280, min(420, width * (1 - mainRatio)))
+                    }
             }
-            // Высоту задаём снаружи: GeometryReader сам её не имеет.
-            .frame(minHeight: 420)
         }
     }
 }

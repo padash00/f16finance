@@ -126,7 +126,10 @@ private struct SalaryRuleCard: View {
     let book: SalaryRuleBook
 
     var body: some View {
-        Card(accent: rule.isActive ? nil : Theme.textDim) {
+        // Без акцента: серая рамка «отключённого» правила получалась заметнее
+        // обычной, и выключённая ставка выделялась сильнее действующих.
+        // Состояние несёт плашка в заголовке.
+        Card {
             VStack(alignment: .leading, spacing: Spacing.md) {
                 SectionHeader(
                     book.companyName(forCode: rule.companyCode),
@@ -857,11 +860,19 @@ private struct StructureGapCard: View {
     let title: String
     let subtitle: String
     let icon: String
+    /// Цвет значка. Рамку им не красим: `Card` рисует акцент с прозрачностью
+    /// 0.35, и на приглушённом цвете обводка выходила ярче, чем у карточек
+    /// с настоящей тревогой.
     let accent: Color
     let operators: [TeamOperator]
 
+    /// Разрыв в структуре — это предупреждение, но разной силы: оператор без
+    /// точки не попадёт ни в график, ни в расчёт, а без руководителя — просто
+    /// некому спросить. Рамкой выделяем только первое.
+    var isBlocking: Bool { accent == Theme.warning || accent == Theme.negative }
+
     var body: some View {
-        Card(accent: accent) {
+        Card(accent: isBlocking ? accent : nil) {
             VStack(alignment: .leading, spacing: Spacing.md) {
                 SectionHeader(title, subtitle: subtitle) {
                     Image(systemName: icon)

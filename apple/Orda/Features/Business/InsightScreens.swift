@@ -805,7 +805,7 @@ struct ForecastScreen: View {
         Card {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
-                    Text("История \(report.dateFrom) — \(report.dateTo)")
+                    Text("История \(Self.rangeLabel(from: report.dateFrom, to: report.dateTo))")
                         .font(Typography.callout)
                         .foregroundStyle(Theme.text)
                     Text("Средняя выручка недели \(Money.compact(report.avgWeeklyIncome))")
@@ -817,6 +817,14 @@ struct ForecastScreen: View {
                     .buttonStyle(SecondaryButtonStyle())
             }
         }
+    }
+
+    /// Границы периода приходят строками ISO — читателю нужны даты, а не ключи API.
+    private static func rangeLabel(from: String, to: String) -> String {
+        guard let start = DateParsing.parseDateOnly(from), let end = DateParsing.parseDateOnly(to) else {
+            return "\(from) — \(to)"
+        }
+        return "\(start.formatted(.dateTime.day().month(.abbreviated))) — \(end.formatted(.dateTime.day().month(.abbreviated)))"
     }
 
     private func weeks(_ report: AiForecastReport) -> some View {
@@ -1590,7 +1598,7 @@ struct AiCfoScreen: View {
                         .font(Typography.headline)
                         .foregroundStyle(Theme.text)
                     Spacer(minLength: Spacing.sm)
-                    Text("\(quality.percent)%")
+                    Text(Percent.format(Double(quality.percent)))
                         .font(Typography.headline)
                         .monospacedDigit()
                         .foregroundStyle(Theme.textMuted)

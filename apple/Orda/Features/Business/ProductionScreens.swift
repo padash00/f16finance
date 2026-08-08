@@ -142,7 +142,13 @@ struct ProductionScreen: View {
             }
 
             if let totals = store.analysis?.totals, totals.revenue > 0 {
-                HStack(spacing: Spacing.md) {
+                // Четыре плашки в один ряд на телефоне превращаются в четыре
+                // обрезанные суммы — сетка переносит их во второй ряд сама.
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: 150), spacing: Spacing.md)],
+                    alignment: .leading,
+                    spacing: Spacing.md
+                ) {
                     SummaryPill(title: "Выручка блюд", value: Money.compact(totals.revenue), tint: Theme.brand)
                     SummaryPill(title: "Ушло в продукт", value: Money.compact(totals.foodCost), tint: Theme.warning)
                     SummaryPill(
@@ -602,7 +608,12 @@ struct PurchasePlanScreen: View {
                 }
             }
 
-            HStack(spacing: Spacing.md) {
+            // Плашек до четырёх — в один ряд на телефоне они не помещаются.
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 150), spacing: Spacing.md)],
+                alignment: .leading,
+                spacing: Spacing.md
+            ) {
                 SummaryPill(title: "Закупить на", value: Money.compact(plan.total), tint: Theme.brand)
                 if let share = plan.shareOfRevenue {
                     SummaryPill(

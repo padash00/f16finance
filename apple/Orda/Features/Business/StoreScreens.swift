@@ -244,10 +244,7 @@ struct StockScreen: View {
             if let error = store.storeError, store.store == nil {
                 ErrorStateView(error: error) { Task { await store.loadStore() } }
             } else if store.store == nil {
-                VStack(spacing: Spacing.md) {
-                    ForEach(0..<8, id: \.self) { _ in Skeleton(height: 44, cornerRadius: Radius.md) }
-                }
-                .padding(Spacing.lg)
+                LoadingRows(count: 8)
             } else {
                 list
             }

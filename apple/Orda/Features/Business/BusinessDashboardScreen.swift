@@ -14,41 +14,33 @@ struct BusinessDashboardScreen: View {
     @Environment(AuthStore.self) private var auth
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: Spacing.lg) {
-                if let error = store.dashboardError {
-                    Card(accent: Theme.negative) {
-                        VStack(alignment: .leading, spacing: Spacing.md) {
-                            Label(error.userMessage, systemImage: "exclamationmark.triangle")
-                                .font(Typography.callout)
-                                .foregroundStyle(Theme.textMuted)
-                            if error.isRetryable {
-                                Button("Повторить") { Task { await store.loadDashboard() } }
-                                    .buttonStyle(SecondaryButtonStyle())
-                            }
-                        }
+        ScreenScroll {
+            if let error = store.dashboardError, store.dashboard == nil {
+                ErrorStateView(error: error) { Task { await store.loadDashboard() } }
+            } else if store.isLoadingDashboard && store.dashboard == nil {
+                Skeleton(height: 170, cornerRadius: Radius.lg)
+                Skeleton(height: 200, cornerRadius: Radius.lg)
+            } else {
+                // Сетка, а не колонка: на маке и планшете карточки дашборда
+                // независимы друг от друга и раскладываются в несколько
+                // колонок, а не тянутся лентой посреди пустого окна.
+                DashboardGrid {
+                    if let dashboard = store.dashboard {
+                        todayCard(dashboard)
+                        weekChart(dashboard)
+                        paymentSplit(dashboard)
                     }
-                } else if store.isLoadingDashboard && store.dashboard == nil {
-                    Skeleton(height: 170, cornerRadius: Radius.lg)
-                    Skeleton(height: 200, cornerRadius: Radius.lg)
-                } else if let dashboard = store.dashboard {
-                    todayCard(dashboard)
-                    weekChart(dashboard)
-                    paymentSplit(dashboard)
+
+                    approvalsCard
+
+                    if let dashboard = store.dashboard {
+                        if !dashboard.lowStock.isEmpty { lowStockCard(dashboard) }
+                        if !dashboard.topItems.isEmpty { topItemsCard(dashboard) }
+                    }
+
+                    sectionsCard
                 }
-
-                approvalsCard
-
-                if let dashboard = store.dashboard {
-                    if !dashboard.lowStock.isEmpty { lowStockCard(dashboard) }
-                    if !dashboard.topItems.isEmpty { topItemsCard(dashboard) }
-                }
-
-                sectionsCard
             }
-            .padding(Spacing.lg)
-            .frame(maxWidth: 720)
-            .frame(maxWidth: .infinity)
         }
         .background(Theme.background)
         .navigationTitle("Обзор")
@@ -110,10 +102,7 @@ struct BusinessDashboardScreen: View {
     private func paymentSplit(_ dashboard: BusinessDashboard) -> some View {
         Card {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                Text("Чем платили сегодня")
-                    .font(Typography.label)
-                    .foregroundStyle(Theme.textDim)
-                    .textCase(.uppercase)
+                SectionHeader("Чем платили сегодня")
 
                 SplitBar(segments: [
                     .init(label: "Наличные", value: dashboard.today.cash, color: ChartPalette.series1),
@@ -167,12 +156,7 @@ struct BusinessDashboardScreen: View {
     private func lowStockCard(_ dashboard: BusinessDashboard) -> some View {
         Card(accent: Theme.warning) {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                HStack {
-                    Text("Заканчивается на складе")
-                        .font(Typography.label)
-                        .foregroundStyle(Theme.warning)
-                        .textCase(.uppercase)
-                    Spacer()
+                SectionHeader("Заканчивается на складе") {
                     Text("\(dashboard.lowStock.count)")
                         .font(Typography.caption.weight(.bold))
                         .monospacedDigit()
@@ -199,10 +183,7 @@ struct BusinessDashboardScreen: View {
     private func topItemsCard(_ dashboard: BusinessDashboard) -> some View {
         Card {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                Text("Топ продаж за неделю")
-                    .font(Typography.label)
-                    .foregroundStyle(Theme.textDim)
-                    .textCase(.uppercase)
+                SectionHeader("Топ продаж за неделю")
 
                 ForEach(dashboard.topItems) { item in
                     StatRow(item.name, value: "\(Quantity.format(item.quantity)) шт")
@@ -216,11 +197,7 @@ struct BusinessDashboardScreen: View {
     private var sectionsCard: some View {
         Card {
             VStack(spacing: Spacing.sm) {
-                Text("Разделы")
-                    .font(Typography.label)
-                    .foregroundStyle(Theme.textDim)
-                    .textCase(.uppercase)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                SectionHeader("Разделы")
 
                 NavigationLink { LedgerScreen() } label: {
                     NavigationRow(

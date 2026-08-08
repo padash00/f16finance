@@ -19,6 +19,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { formatMoney } from '@/lib/core/format'
+import { summarizeSupplierDebts } from '@/lib/domain/supplier-debts'
 
 type Supplier = {
   id: string
@@ -208,20 +209,16 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
     return Array.from(map.entries()).map(([id, name]) => ({ id, name }))
   }, [debts])
 
+  // Свод считает общая с сервером функция, но по отфильтрованному списку:
+  // цифры в шапке должны отвечать тому, что человек видит под ней.
   const totalsByStatus = useMemo(() => {
-    const result = { open: 0, openCount: 0, overdue: 0, overdueCount: 0 }
-    const now = Date.now()
-    for (const d of filteredDebts) {
-      if (d.status === 'open') {
-        result.open += Number(d.total_amount || 0)
-        result.openCount += 1
-        if (d.due_date && new Date(d.due_date).getTime() < now) {
-          result.overdue += Number(d.total_amount || 0)
-          result.overdueCount += 1
-        }
-      }
+    const totals = summarizeSupplierDebts(filteredDebts)
+    return {
+      open: totals.open,
+      openCount: totals.open_count,
+      overdue: totals.overdue,
+      overdueCount: totals.overdue_count,
     }
-    return result
   }, [filteredDebts])
 
   const groupedReceipts = useMemo(() => {

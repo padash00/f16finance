@@ -118,8 +118,12 @@ struct OrganizationsScreen: View {
         @Bindable var bindable = store
 
         return Group {
-            if store.isLoading && store.organizations.isEmpty {
-                loadingState
+            // Отказ загрузки раньше выглядел как «организаций нет» — то есть
+            // как приглашение завести первую вместо сообщения о сбое.
+            if let error = store.error, store.organizations.isEmpty {
+                ErrorStateView(error: error) { Task { await store.load() } }
+            } else if store.isLoading && store.organizations.isEmpty {
+                LoadingRows(count: 6)
             } else if store.filteredOrganizations.isEmpty {
                 WideEmptyState(
                     icon: "building.2",
@@ -143,13 +147,6 @@ struct OrganizationsScreen: View {
             if selectedID == nil { selectedID = store.filteredOrganizations.first?.id }
         }
         .refreshable { await store.load() }
-    }
-
-    private var loadingState: some View {
-        VStack(spacing: Spacing.md) {
-            ForEach(0..<6, id: \.self) { _ in Skeleton(height: 56, cornerRadius: Radius.md) }
-        }
-        .padding(Spacing.lg)
     }
 
     /// Телефон: карточки с переходом — таблица в 375 точек нечитаема.

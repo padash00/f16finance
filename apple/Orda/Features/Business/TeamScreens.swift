@@ -21,7 +21,7 @@ struct OperatorsScreen: View {
             if let error = store.teamError, store.operators.isEmpty {
                 ErrorStateView(error: error) { Task { await store.loadTeam() } }
             } else if store.isLoadingTeam && store.operators.isEmpty {
-                loadingState
+                LoadingRows(count: 7)
             } else {
                 MasterDetail(
                     items: filtered,
@@ -56,13 +56,6 @@ struct OperatorsScreen: View {
         }
         .task { if store.operators.isEmpty { await store.loadTeam() } }
         .refreshable { await store.loadTeam() }
-    }
-
-    private var loadingState: some View {
-        VStack(spacing: Spacing.md) {
-            ForEach(0..<7, id: \.self) { _ in Skeleton(height: 56, cornerRadius: Radius.md) }
-        }
-        .padding(Spacing.lg)
     }
 
     private var filtered: [TeamOperator] {

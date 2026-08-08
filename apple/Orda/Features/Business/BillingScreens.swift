@@ -259,10 +259,7 @@ struct IncidentsScreen: View {
             if let error = store.incidentsError, store.incidents.isEmpty {
                 ErrorStateView(error: error) { Task { await store.loadIncidents() } }
             } else if store.isLoadingIncidents && store.incidents.isEmpty {
-                VStack(spacing: Spacing.md) {
-                    ForEach(0..<6, id: \.self) { _ in Skeleton(height: 52, cornerRadius: Radius.md) }
-                }
-                .padding(Spacing.lg)
+                LoadingRows(count: 6)
             } else {
                 MasterDetail(
                     items: filtered,

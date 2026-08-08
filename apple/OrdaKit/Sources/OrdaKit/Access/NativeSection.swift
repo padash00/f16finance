@@ -69,6 +69,13 @@ public enum NativeSection: String, CaseIterable, Sendable {
     case calendar
     case ledger
     case approvals
+    case expenseWhitelist
+    case simulation
+    case supplierBilling
+    case discounts
+    case stations
+    case storeSettings
+    case storeShifts
 
     /// Идентификаторы страниц каталога, которые ведут на этот экран.
     public var pageIDs: [String] {
@@ -140,6 +147,15 @@ public enum NativeSection: String, CaseIterable, Sendable {
         // ради простого «сколько осталось».
         case .ledger: ["income", "expenses"]
         case .approvals: ["expenses-pending"]
+        case .expenseWhitelist: ["expense-whitelist"]
+        case .simulation: ["simulation"]
+        case .supplierBilling: ["store-billing"]
+        case .discounts: ["discounts"]
+        // Модуль addon.arena проверяет canSee по пути /stations —
+        // без него раздел не появится, отдельного условия не нужно.
+        case .stations: ["stations"]
+        case .storeSettings: ["store-settings"]
+        case .storeShifts: ["store-shifts"]
         // Ниже — разделы, которых нет в каталоге прав. Они не
         // capability-gated и на сайте: показываются всем, кто вошёл.
         case .businessIntelligence, .calendar: []

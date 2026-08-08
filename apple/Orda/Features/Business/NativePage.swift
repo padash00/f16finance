@@ -100,6 +100,13 @@ enum NativePage {
         case .calendar: CalendarScreen()
         case .ledger: LedgerScreen()
         case .approvals: ApprovalsScreen()
+        case .expenseWhitelist: ExpenseWhitelistScreen()
+        case .simulation: SimulationScreen()
+        case .supplierBilling: SupplierBillingScreen()
+        case .discounts: DiscountsScreen()
+        case .stations: StationsScreen()
+        case .storeSettings: StoreSettingsScreen()
+        case .storeShifts: StoreShiftsScreen()
         }
     }
 }

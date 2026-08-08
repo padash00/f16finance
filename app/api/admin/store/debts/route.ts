@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { isSupplierDebtOverdue, summarizeSupplierDebts } from '@/lib/domain/supplier-debts'
 import { requireCapability } from '@/lib/server/capabilities'
 import { requireOrgFeature } from '@/lib/server/entitlements'
 import { resolveCompanyScope } from '@/lib/server/organizations'
@@ -100,7 +101,17 @@ export async function GET(request: Request) {
       })
     }
 
-    return json({ ok: true, data: { debts: debts || [], receipts } })
+    // Свод и признак просрочки считаем здесь: «сколько должны», «сколько
+    // просрочено» и красные строки под этими цифрами обязаны сходиться, а с
+    // одним правилом на всех клиентов разойтись им негде.
+    const now = new Date()
+    const rows = (debts || []).map((row: any) => ({
+      ...row,
+      is_overdue: isSupplierDebtOverdue(row, now),
+    }))
+    const totals = summarizeSupplierDebts(rows, now)
+
+    return json({ ok: true, data: { debts: rows, receipts, totals } })
   } catch (error: any) {
     return json({ error: error?.message || 'Не удалось загрузить долги' }, 500)
   }

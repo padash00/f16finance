@@ -166,7 +166,7 @@ struct TaxScreen: View {
                     label: "За работников",
                     value: Money.compact(summary.burden.payrollTaxes),
                     icon: "person.3.fill",
-                    accent: Theme.warning
+                    accent: Theme.accent
                 )
             }
 
@@ -290,7 +290,7 @@ struct TaxScreen: View {
     // ── Пороги ───────────────────────────────────────────────────────────────
 
     private func thresholds(_ outlook: TaxYearOutlook) -> some View {
-        Card(accent: outlook.vatRisk ? Theme.warning : Theme.border) {
+        Card(accent: outlook.vatRisk ? Theme.warning : nil) {
             VStack(alignment: .leading, spacing: Spacing.md) {
                 SectionHeader("Порог НДС", subtitle: "оборот с начала года") {
                     StatusChip(
@@ -1327,7 +1327,7 @@ struct ValuationScreen: View {
                 if let cv = valuation.marginCv {
                     StatRow(
                         "Разброс маржи",
-                        value: String(format: "%.2f", cv),
+                        value: String(format: "%.2f", cv).replacingOccurrences(of: ".", with: ","),
                         valueColor: cv > 0.5 ? Theme.warning : Theme.text,
                         icon: "waveform.path.ecg"
                     )

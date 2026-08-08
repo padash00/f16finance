@@ -239,7 +239,7 @@ struct LedgerScreen: View {
     var body: some View {
         @Bindable var bindableStore = store
 
-        return ScrollView {
+        return ScreenScroll {
             VStack(spacing: Spacing.lg) {
                 Picker("Период", selection: $bindableStore.range) {
                     ForEach(DateRange.allCases) { range in
@@ -259,9 +259,6 @@ struct LedgerScreen: View {
                     categoriesCard
                 }
             }
-            .padding(Spacing.lg)
-            .frame(maxWidth: 720)
-            .frame(maxWidth: .infinity)
         }
         .background(Theme.background)
         .navigationTitle("Деньги")
@@ -295,7 +292,13 @@ struct LedgerScreen: View {
     private var incomeChart: some View {
         let points = store.incomeSeries.compactMap { entry -> TimePoint? in
             guard let date = DateParsing.parseDateOnly(entry.date) else { return nil }
-            return TimePoint(label: entry.date, date: date, value: entry.amount)
+            // Подпись оси — для человека, а не для API: «2026-08-01» под
+            // столбиком не читается.
+            return TimePoint(
+                label: date.formatted(.dateTime.day().month(.abbreviated)),
+                date: date,
+                value: entry.amount
+            )
         }
         return TrendChart(
             title: "Доходы по дням",
@@ -310,13 +313,11 @@ struct LedgerScreen: View {
         if !categories.isEmpty {
             Card {
                 VStack(alignment: .leading, spacing: Spacing.md) {
-                    Text("Расходы по категориям")
-                        .font(Typography.label)
-                        .foregroundStyle(Theme.textDim)
-                        .textCase(.uppercase)
+                    SectionHeader("Расходы по категориям")
 
                     // Доля от общей суммы полосой — так видно вес категории,
                     // а не только абсолютное число.
+                    let maximum = categories.first?.amount ?? 0
                     ForEach(categories.prefix(8), id: \.name) { category in
                         VStack(alignment: .leading, spacing: Spacing.xs) {
                             HStack {
@@ -331,22 +332,14 @@ struct LedgerScreen: View {
                                     .foregroundStyle(Theme.text)
                             }
 
-                            GeometryReader { proxy in
-                                Capsule()
-                                    .fill(ChartPalette.series1)
-                                    .frame(width: barWidth(category.amount, in: proxy.size.width))
-                            }
-                            .frame(height: 6)
+                            ProportionBar(
+                                ratio: maximum > 0 ? category.amount / maximum : 0,
+                                color: ChartPalette.series1
+                            )
                         }
                     }
                 }
             }
         }
-    }
-
-    private func barWidth(_ amount: Double, in available: CGFloat) -> CGFloat {
-        let maximum = store.expensesByCategory.first?.amount ?? 0
-        guard maximum > 0 else { return 0 }
-        return max(4, available * CGFloat(amount / maximum))
     }
 }
