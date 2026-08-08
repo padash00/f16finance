@@ -12,36 +12,34 @@ struct OperatorHomeScreen: View {
     @Environment(CabinetStore.self) private var cabinet
     @Environment(AuthStore.self) private var auth
 
+    @Environment(\.surface) private var surface
+
     @State private var showOpenSheet = false
     @State private var showCloseSheet = false
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: Spacing.lg) {
-                if store.queuedSalesCount > 0 { offlineBanner }
+        ScreenScroll {
+            // Баннер офлайна и состояние смены — всегда во всю ширину: это
+            // не «одна из карточек», а заголовок экрана.
+            if store.queuedSalesCount > 0 { offlineBanner }
+            shiftCard
 
-                shiftCard
-
+            DashboardGrid {
                 if store.hasOpenShift {
                     revenueChart
                     paymentSplit
                 }
-
-                quickActions
-
                 if needsAttention { attentionSection }
-
                 weekCard
-
                 if let next = cabinet.overview?.nextShift, !store.hasOpenShift {
                     nextShiftCard(next)
                 }
             }
-            .padding(Spacing.lg)
-            .frame(maxWidth: 640)
-            .frame(maxWidth: .infinity)
+
+            // Быстрые действия внизу на большом экране: там есть боковая
+            // панель, и дублировать её плитками сверху незачем.
+            if surface.isCompact { quickActions }
         }
-        .background(Theme.background)
         .navigationTitle(greeting)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.large)

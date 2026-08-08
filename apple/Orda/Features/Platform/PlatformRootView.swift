@@ -25,10 +25,19 @@ struct PlatformRootView: View {
     var body: some View {
         Group {
             if let store, let business {
-                content
-                    .environment(store)
-                    .environment(business)
-                    .environment(\.access, resolver)
+                VStack(spacing: 0) {
+                    OrganizationContextBanner()
+                    content
+                }
+                .environment(store)
+                .environment(business)
+                .environment(\.access, resolver)
+                // Данные бизнес-разделов зависят от выбранной организации:
+                // при переключении их надо перечитать, иначе на экране
+                // останутся цифры прошлой.
+                .onChange(of: auth.organizationID) { _, _ in
+                    Task { await business.bootstrap() }
+                }
             } else {
                 LaunchView(message: "Загружаем платформу…")
             }
@@ -61,15 +70,21 @@ struct PlatformRootView: View {
 
     private var phoneTabs: some View {
         TabView {
-            NavigationStack { PlatformOverviewScreen() }
-                .tabItem { Label("Платформа", systemImage: "chart.bar.doc.horizontal") }
+            NavigationStack {
+                PlatformOverviewScreen()
+                    .toolbar { OrganizationSwitcher() }
+            }
+            .tabItem { Label("Платформа", systemImage: "chart.bar.doc.horizontal") }
 
             NavigationStack { OrganizationsScreen() }
                 .tabItem { Label("Организации", systemImage: "building.2") }
                 .badge(store?.attention.count ?? 0)
 
-            NavigationStack { BusinessDashboardScreen(resolver: resolver) }
-                .tabItem { Label("Бизнес", systemImage: "square.grid.2x2.fill") }
+            NavigationStack {
+                BusinessDashboardScreen(resolver: resolver)
+                    .toolbar { OrganizationSwitcher() }
+            }
+            .tabItem { Label("Моя компания", systemImage: "square.grid.2x2.fill") }
 
             NavigationStack { BusinessSectionsScreen(resolver: resolver) }
                 .tabItem { Label("Разделы", systemImage: "list.bullet") }
@@ -89,6 +104,7 @@ struct PlatformRootView: View {
         ) { item in
             destination(for: item)
         }
+        .toolbar { OrganizationSwitcher() }
         .onAppear {
             if selection == nil { selection = sections.first?.items.first }
         }
@@ -112,7 +128,7 @@ struct PlatformRootView: View {
             ),
             WorkspaceSection(
                 id: "business",
-                title: "Бизнес",
+                title: "Моя компания",
                 icon: "square.grid.2x2",
                 items: [
                     WorkspaceItem(id: "business.dashboard", title: "Обзор точек", icon: "chart.bar.fill"),
