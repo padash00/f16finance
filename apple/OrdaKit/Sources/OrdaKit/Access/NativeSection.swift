@@ -28,6 +28,9 @@ public enum NativeSection: String, CaseIterable, Sendable {
     case writeoffs
     case shiftReports
     case birthdays
+    case categories
+    case storeAnalytics
+    case knowledge
 
     /// Идентификаторы страниц каталога, которые ведут на этот экран.
     public var pageIDs: [String] {
@@ -58,6 +61,9 @@ public enum NativeSection: String, CaseIterable, Sendable {
         case .writeoffs: ["store-writeoffs"]
         case .shiftReports: ["shifts-reports"]
         case .birthdays: ["birthdays"]
+        case .categories: ["categories"]
+        case .storeAnalytics: ["store-analytics", "store-forecast"]
+        case .knowledge: ["knowledge-admin"]
         }
     }
 

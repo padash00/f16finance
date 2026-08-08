@@ -133,6 +133,27 @@ final class BusinessStore {
     private(set) var isLoadingBirthdays = false
     private(set) var birthdaysError: APIError?
 
+    private(set) var expenseCategories: [ExpenseCategory] = []
+    private(set) var isLoadingCategories = false
+    private(set) var categoriesError: APIError?
+
+    private(set) var storeAnalytics: StoreAnalytics?
+    private(set) var isLoadingStoreAnalytics = false
+    private(set) var storeAnalyticsError: APIError?
+
+    /// Окно аналитики магазина в днях. Месяц — компромисс: недели мало для
+    /// вывода о залежавшемся товаре, год скрывает сезонность.
+    var analyticsDays = 30 {
+        didSet {
+            guard oldValue != analyticsDays else { return }
+            Task { await loadStoreAnalytics() }
+        }
+    }
+
+    private(set) var knowledge: KnowledgeBase?
+    private(set) var isLoadingKnowledge = false
+    private(set) var knowledgeError: APIError?
+
     var range: DateRange = .week {
         didSet {
             guard oldValue != range else { return }
@@ -468,6 +489,46 @@ final class BusinessStore {
             birthdaysError = error
         } catch {
             birthdaysError = .transport(message: error.localizedDescription)
+        }
+    }
+
+    func loadCategories() async {
+        isLoadingCategories = true
+        defer { isLoadingCategories = false }
+        do {
+            expenseCategories = try await service.expenseCategories()
+            categoriesError = nil
+        } catch let error as APIError {
+            categoriesError = error
+            expenseCategories = []
+        } catch {
+            categoriesError = .transport(message: error.localizedDescription)
+        }
+    }
+
+    func loadStoreAnalytics() async {
+        isLoadingStoreAnalytics = true
+        defer { isLoadingStoreAnalytics = false }
+        do {
+            storeAnalytics = try await service.storeAnalytics(days: analyticsDays)
+            storeAnalyticsError = nil
+        } catch let error as APIError {
+            storeAnalyticsError = error
+        } catch {
+            storeAnalyticsError = .transport(message: error.localizedDescription)
+        }
+    }
+
+    func loadKnowledge() async {
+        isLoadingKnowledge = true
+        defer { isLoadingKnowledge = false }
+        do {
+            knowledge = try await service.knowledge()
+            knowledgeError = nil
+        } catch let error as APIError {
+            knowledgeError = error
+        } catch {
+            knowledgeError = .transport(message: error.localizedDescription)
         }
     }
 

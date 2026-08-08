@@ -168,6 +168,30 @@ public struct BusinessService: Sendable {
         return response.data
     }
 
+    /// Статьи расходов с бюджетом и фактом за месяц.
+    public func expenseCategories() async throws -> [ExpenseCategory] {
+        let response: DataList<ExpenseCategory> = try await api.send(
+            APIRequest(path: "/api/admin/expense-categories")
+        )
+        return response.items
+    }
+
+    /// Аналитика магазина за окно в днях. `0` — за всё время.
+    public func storeAnalytics(days: Int) async throws -> StoreAnalytics {
+        let response: Envelope<StoreAnalytics> = try await api.send(
+            APIRequest(path: "/api/admin/store/analytics", query: ["days": String(days)])
+        )
+        return response.data
+    }
+
+    /// База знаний: разделы и статьи. Требует `knowledge-admin.view`.
+    public func knowledge() async throws -> KnowledgeBase {
+        let response: Envelope<KnowledgeBase> = try await api.send(
+            APIRequest(path: "/api/admin/knowledge")
+        )
+        return response.data
+    }
+
     /// Приёмки от поставщиков. Требует `store-receipts.view`.
     public func receipts() async throws -> [Receipt] {
         let response: Envelope<ReceiptList> = try await api.send(

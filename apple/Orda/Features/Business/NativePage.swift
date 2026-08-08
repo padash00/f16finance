@@ -53,6 +53,9 @@ enum NativePage {
         case .writeoffs: WriteoffsScreen()
         case .shiftReports: ShiftReportsScreen()
         case .birthdays: BirthdaysScreen()
+        case .categories: ExpenseCategoriesScreen()
+        case .storeAnalytics: StoreAnalyticsScreen()
+        case .knowledge: KnowledgeAdminScreen()
         }
     }
 }
