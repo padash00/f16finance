@@ -12,3 +12,14 @@ __pycache__/
 
 # приватные выгрузки
 *.xlsx
+
+# Apple-приложение (apple/)
+.build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+Packages/
+.swiftpm/
+# Config.xcconfig в репозитории лежит с пустыми ключами как шаблон.
+# Локальные боевые ключи держим в Config.local.xcconfig.
+apple/Config.local.xcconfig

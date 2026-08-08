@@ -9,7 +9,9 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "node scripts/typecheck.mjs",
-    "verify:release": "npm run typecheck && npm run lint && npm run build",
+    "capabilities:export": "node --import ./scripts/test-register.mjs scripts/export-capabilities.mjs",
+    "capabilities:check": "node --import ./scripts/test-register.mjs scripts/export-capabilities.mjs --check",
+    "verify:release": "npm run typecheck && npm run capabilities:check && npm run lint && npm run build",
     "smoke:live": "node scripts/smoke-live.mjs",
     "test": "node --import ./scripts/test-register.mjs --test \"tests/**/*.test.ts\""
   },
