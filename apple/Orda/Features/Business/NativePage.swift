@@ -22,6 +22,9 @@ enum NativePage: String, CaseIterable {
     case tasks
     case shifts
     case customers
+    case subscription
+    case incidents
+    case pointDebts
 
     /// Сопоставление с идентификаторами каталога прав.
     init?(pageID: String) {
@@ -35,6 +38,9 @@ enum NativePage: String, CaseIterable {
         case "tasks": self = .tasks
         case "shifts": self = .shifts
         case "customers", "store-clients": self = .customers
+        case "subscription", "my-subscription": self = .subscription
+        case "incidents": self = .incidents
+        case "point-debts": self = .pointDebts
         default: return nil
         }
     }
@@ -51,6 +57,9 @@ enum NativePage: String, CaseIterable {
         case .tasks: TeamTasksScreen()
         case .shifts: ScheduleWeekScreen()
         case .customers: CustomersScreen()
+        case .subscription: SubscriptionScreen()
+        case .incidents: IncidentsScreen()
+        case .pointDebts: PointDebtsScreen()
         }
     }
 }

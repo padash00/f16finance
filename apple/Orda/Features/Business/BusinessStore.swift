@@ -69,6 +69,25 @@ final class BusinessStore {
     private(set) var isLoadingCustomers = false
     private(set) var customersError: APIError?
 
+    private(set) var billing: OrganizationBilling?
+    private(set) var isLoadingBilling = false
+    private(set) var billingError: APIError?
+
+    private(set) var incidents: [Incident] = []
+    private(set) var isLoadingIncidents = false
+    private(set) var incidentsError: APIError?
+
+    private(set) var debts: PointDebtWeek?
+    private(set) var isLoadingDebts = false
+    private(set) var debtsError: APIError?
+
+    var debtsWeek: String = PayWeek.start() {
+        didSet {
+            guard oldValue != debtsWeek else { return }
+            Task { await loadDebts() }
+        }
+    }
+
     var range: DateRange = .week {
         didSet {
             guard oldValue != range else { return }
@@ -242,6 +261,46 @@ final class BusinessStore {
             customers = []
         } catch {
             customersError = .transport(message: error.localizedDescription)
+        }
+    }
+
+    func loadBilling() async {
+        isLoadingBilling = true
+        defer { isLoadingBilling = false }
+        do {
+            billing = try await service.billing()
+            billingError = nil
+        } catch let error as APIError {
+            billingError = error
+        } catch {
+            billingError = .transport(message: error.localizedDescription)
+        }
+    }
+
+    func loadIncidents() async {
+        isLoadingIncidents = true
+        defer { isLoadingIncidents = false }
+        do {
+            incidents = try await service.incidents()
+            incidentsError = nil
+        } catch let error as APIError {
+            incidentsError = error
+            incidents = []
+        } catch {
+            incidentsError = .transport(message: error.localizedDescription)
+        }
+    }
+
+    func loadDebts() async {
+        isLoadingDebts = true
+        defer { isLoadingDebts = false }
+        do {
+            debts = try await service.pointDebts(weekStart: debtsWeek)
+            debtsError = nil
+        } catch let error as APIError {
+            debtsError = error
+        } catch {
+            debtsError = .transport(message: error.localizedDescription)
         }
     }
 

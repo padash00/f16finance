@@ -252,9 +252,11 @@ struct SalaryScreen: View {
     @Environment(\.surface) private var surface
 
     var body: some View {
-        ScreenScroll {
+        @Bindable var bindable = store
+
+        return ScreenScroll {
             VStack(spacing: Spacing.lg) {
-                weekPicker
+                WeekStepper(week: $bindable.salaryWeek)
 
                 if let error = store.salaryError, store.salary == nil {
                     ErrorStateView(error: error) { Task { await store.loadSalary() } }
@@ -273,62 +275,6 @@ struct SalaryScreen: View {
         .toolbar { LogoutToolbarItem() }
         .task { if store.salary == nil { await store.loadSalary() } }
         .refreshable { await store.loadSalary() }
-    }
-
-    // ── Переключатель недели ─────────────────────────────────────────────────
-
-    private var weekPicker: some View {
-        @Bindable var bindable = store
-
-        return Card {
-            HStack(spacing: Spacing.md) {
-                Button {
-                    bindable.salaryWeek = PayWeek.shifted(store.salaryWeek, by: -1)
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 14, weight: .semibold))
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(Theme.brand)
-
-                Spacer()
-
-                VStack(spacing: 1) {
-                    Text(weekLabel)
-                        .font(Typography.headline)
-                        .foregroundStyle(Theme.text)
-                    if isCurrentWeek {
-                        Text("текущая неделя")
-                            .font(Typography.caption)
-                            .foregroundStyle(Theme.brand)
-                    }
-                }
-
-                Spacer()
-
-                Button {
-                    bindable.salaryWeek = PayWeek.shifted(store.salaryWeek, by: 1)
-                } label: {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 14, weight: .semibold))
-                }
-                .buttonStyle(.plain)
-                // Вперёд дальше текущей недели ходить незачем — начислений там
-                // ещё нет, будет пустой экран без объяснения.
-                .disabled(isCurrentWeek)
-                .foregroundStyle(isCurrentWeek ? Theme.textDim : Theme.brand)
-            }
-        }
-    }
-
-    private var isCurrentWeek: Bool {
-        store.salaryWeek == PayWeek.start()
-    }
-
-    private var weekLabel: String {
-        guard let start = DateParsing.parseDateOnly(store.salaryWeek) else { return store.salaryWeek }
-        let end = Calendar(identifier: .iso8601).date(byAdding: .day, value: 6, to: start) ?? start
-        return "\(start.formatted(.dateTime.day().month(.abbreviated))) — \(end.formatted(.dateTime.day().month(.abbreviated)))"
     }
 
     // ── Содержимое ───────────────────────────────────────────────────────────

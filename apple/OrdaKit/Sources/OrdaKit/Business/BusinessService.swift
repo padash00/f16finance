@@ -140,6 +140,47 @@ public struct BusinessService: Sendable {
         )
         return response.items
     }
+
+    /// Штрафы, бонусы и заметки по сотрудникам. Требует `incidents.view`.
+    public func incidents() async throws -> [Incident] {
+        let response: Envelope<IncidentList> = try await api.send(
+            APIRequest(path: "/api/admin/incidents")
+        )
+        return response.data.incidents
+    }
+
+    /// Долги клиентов, записанные на точке за неделю.
+    public func pointDebts(weekStart: String) async throws -> PointDebtWeek {
+        let response: Envelope<PointDebtWeek> = try await api.send(
+            APIRequest(path: "/api/admin/point-debts", query: ["weekStart": weekStart])
+        )
+        return response.data
+    }
+
+    // ── Подписка ─────────────────────────────────────────────────────────────
+
+    /// Тариф своей организации, модули и счета.
+    ///
+    /// Возвращает `nil`, когда организация не выбрана: сервер в этом случае
+    /// отдаёт `data: null`, и это не ошибка, а «нечего показывать».
+    public func billing() async throws -> OrganizationBilling? {
+        let response: OptionalEnvelope<OrganizationBilling> = try await api.send(
+            APIRequest(path: "/api/admin/my-subscription")
+        )
+        return response.data
+    }
+}
+
+/// `{ data: … | null }` — для роутов, где отсутствие данных законно.
+public struct OptionalEnvelope<Payload: Decodable & Sendable>: Decodable, Sendable {
+    public let data: Payload?
+
+    private enum CodingKeys: String, CodingKey { case data }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        data = try c.decodeIfPresent(Payload.self, forKey: .data)
+    }
 }
 
 // ── Конверт ответа ───────────────────────────────────────────────────────────

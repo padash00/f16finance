@@ -228,9 +228,11 @@ struct ScheduleWeekScreen: View {
     @Environment(\.surface) private var surface
 
     var body: some View {
-        ScreenScroll {
+        @Bindable var bindable = store
+
+        return ScreenScroll {
             VStack(spacing: Spacing.lg) {
-                weekPicker
+                WeekStepper(week: $bindable.scheduleWeek, allowsFuture: true)
 
                 if let error = store.scheduleError, store.schedule == nil {
                     ErrorStateView(error: error) { Task { await store.loadSchedule() } }
@@ -259,54 +261,10 @@ struct ScheduleWeekScreen: View {
         .refreshable { await store.loadSchedule() }
     }
 
-    private var weekPicker: some View {
-        @Bindable var bindable = store
-
-        return Card {
-            HStack(spacing: Spacing.md) {
-                Button {
-                    bindable.scheduleWeek = PayWeek.shifted(store.scheduleWeek, by: -1)
-                } label: {
-                    Image(systemName: "chevron.left").font(.system(size: 14, weight: .semibold))
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(Theme.brand)
-
-                Spacer()
-
-                VStack(spacing: 1) {
-                    Text(weekLabel)
-                        .font(Typography.headline)
-                        .foregroundStyle(Theme.text)
-                    if store.scheduleWeek == PayWeek.start() {
-                        Text("текущая неделя")
-                            .font(Typography.caption)
-                            .foregroundStyle(Theme.brand)
-                    }
-                }
-
-                Spacer()
-
-                Button {
-                    bindable.scheduleWeek = PayWeek.shifted(store.scheduleWeek, by: 1)
-                } label: {
-                    Image(systemName: "chevron.right").font(.system(size: 14, weight: .semibold))
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(Theme.brand)
-            }
-        }
-    }
-
     private var weekDays: [Date] {
         guard let start = DateParsing.parseDateOnly(store.scheduleWeek) else { return [] }
         let calendar = Calendar(identifier: .iso8601)
         return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }
-    }
-
-    private var weekLabel: String {
-        guard let first = weekDays.first, let last = weekDays.last else { return store.scheduleWeek }
-        return "\(first.formatted(.dateTime.day().month(.abbreviated))) — \(last.formatted(.dateTime.day().month(.abbreviated)))"
     }
 
     /// Сетка одной точки: строка на день, потому что семь колонок на телефоне
