@@ -37,6 +37,7 @@ struct RootView: View {
             case .signedIn:
                 workspace
                     .transition(.opacity)
+                    .overlay(alignment: .top) { roleErrorBanner }
                     .task {
                         // Разрешение спрашиваем здесь, а не на экране входа:
                         // до входа человек не понимает, о чём его будут
@@ -54,6 +55,33 @@ struct RootView: View {
         .task {
             guard auth.phase == .restoring else { return }
             await auth.restore()
+        }
+    }
+
+    /// Ошибка прав поверх работающего интерфейса.
+    ///
+    /// Раньше неудачная загрузка подменяла весь экран. Но если права уже
+    /// загружены, работать можно — сообщение должно мешать, а не блокировать.
+    @ViewBuilder
+    private var roleErrorBanner: some View {
+        if let message = auth.roleError, auth.resolver != nil {
+            HStack(spacing: Spacing.sm) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                Text(message)
+                    .font(Typography.caption.weight(.medium))
+                    .lineLimit(2)
+                Spacer(minLength: Spacing.sm)
+                Button("Понятно") { auth.dismissRoleError() }
+                    .buttonStyle(.plain)
+                    .font(Typography.caption.weight(.bold))
+            }
+            .foregroundStyle(Color.black.opacity(0.85))
+            .padding(.horizontal, Spacing.lg)
+            .padding(.vertical, Spacing.sm)
+            .frame(maxWidth: 560)
+            .background(Theme.warning, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+            .padding(Spacing.md)
+            .transition(.move(edge: .top).combined(with: .opacity))
         }
     }
 
@@ -132,7 +160,7 @@ struct RoleUnavailableView: View {
             EmptyStateView(
                 icon: "antenna.radiowaves.left.and.right.slash",
                 title: "Не удалось получить доступы",
-                message: "Проверьте связь и попробуйте ещё раз.",
+                message: auth.roleError ?? "Проверьте связь и попробуйте ещё раз.",
                 actionTitle: "Повторить"
             ) {
                 Task { await auth.reloadRole() }

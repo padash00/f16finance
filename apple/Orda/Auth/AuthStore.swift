@@ -25,6 +25,9 @@ final class AuthStore {
     private(set) var session: SessionClient.Session?
     private(set) var role: SessionRole?
     private(set) var signInError: String?
+    /// Последняя ошибка загрузки прав. Показывается поверх интерфейса, не
+    /// подменяя его: работать по прежним правам всё ещё можно.
+    private(set) var roleError: String?
     private(set) var isSigningIn = false
 
     /// Активная организация. Для мультиорганизационных владельцев и суперадмина.
@@ -102,34 +105,53 @@ final class AuthStore {
         phase = .signedOut
     }
 
+    /// Переключить активную организацию.
+    ///
+    /// При неудаче откатываемся: оставить приложение с выбранной организацией,
+    /// права по которой не загрузились, — значит показать пустой интерфейс без
+    /// объяснения, что произошло.
     func setOrganization(_ id: String?) async {
+        let previous = organizationID
         organizationID = id
         await api.setOrganization(id)
-        // Права зависят от организации: суперадмин, переключившись, получает
-        // другой набор модулей и другой рубильник.
-        await loadRole()
+
+        if await loadRole() { return }
+
+        organizationID = previous
+        await api.setOrganization(previous)
+        _ = await loadRole()
+        roleError = "Не удалось открыть организацию. Вернулись к прежней."
     }
 
     // ── Роль ─────────────────────────────────────────────────────────────────
 
-    private func loadRole() async {
+    /// Загрузить права. Возвращает `true`, если получилось.
+    ///
+    /// Ключевое: при неудаче **уже загруженная роль сохраняется**. Раньше она
+    /// обнулялась, и одна неудачная попытка выбрасывала пользователя на экран
+    /// «не удалось получить доступы» — хотя рабочие права были на руках, и
+    /// приложение могло продолжать работать.
+    @discardableResult
+    private func loadRole() async -> Bool {
         do {
             let loaded: SessionRole = try await api.send(APIRequest(path: "/api/auth/session-role"))
             role = loaded
+            roleError = nil
             phase = .signedIn
             // Токен push отправляется только при живой сессии — эндпоинт
             // регистрации требует Bearer.
             PushManager.shared.sessionDidStart()
+            return true
         } catch {
-            // Роль не загрузилась при живом токене — чаще всего сеть. Оставляем
-            // пользователя внутри, экраны сами покажут ошибку и предложат
-            // повтор; выкидывать на логин было бы грубо.
+            // Истёкшая сессия — единственный случай, когда выход оправдан.
             if case APIError.unauthorized = error {
                 await signOut()
-            } else {
-                role = nil
-                phase = .signedIn
+                return false
             }
+
+            roleError = (error as? APIError)?.userMessage ?? error.localizedDescription
+            phase = .signedIn
+            return false
         }
     }
 
@@ -208,5 +230,12 @@ final class AuthTokenProvider: TokenProvider, @unchecked Sendable {
 
     func refreshAccessToken() async throws -> String? {
         await store?.performRefresh()
+    }
+}
+
+extension AuthStore {
+    /// Скрыть сообщение об ошибке прав.
+    func dismissRoleError() {
+        roleError = nil
     }
 }
