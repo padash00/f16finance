@@ -119,6 +119,17 @@ public struct BusinessService: Sendable {
         return response.data.aggregate
     }
 
+    /// ОПиУ по месяцам. Требует `profitability.view`.
+    ///
+    /// Величины приходят посчитанными: формула живёт на сервере, чтобы сайт и
+    /// приложение показывали одну и ту же EBITDA.
+    public func pnl(from: String, to: String) async throws -> PnlReport {
+        let response: Envelope<PnlReport> = try await api.send(
+            APIRequest(path: "/api/admin/profitability/summary", query: ["from": from, "to": to])
+        )
+        return response.data
+    }
+
     // ── Операционная работа ──────────────────────────────────────────────────
 
     /// Задачи команды. Требует `tasks.view`.

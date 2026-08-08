@@ -88,6 +88,19 @@ final class BusinessStore {
         }
     }
 
+    private(set) var pnl: PnlReport?
+    private(set) var isLoadingPnl = false
+    private(set) var pnlError: APIError?
+
+    /// Сколько месяцев показывать в ОПиУ. Двенадцать — полный год для
+    /// сравнения сезонов; меньше не даёт увидеть цикл.
+    var pnlMonths = 12 {
+        didSet {
+            guard oldValue != pnlMonths else { return }
+            Task { await loadPnl() }
+        }
+    }
+
     var range: DateRange = .week {
         didSet {
             guard oldValue != range else { return }
@@ -301,6 +314,20 @@ final class BusinessStore {
             debtsError = error
         } catch {
             debtsError = .transport(message: error.localizedDescription)
+        }
+    }
+
+    func loadPnl() async {
+        isLoadingPnl = true
+        defer { isLoadingPnl = false }
+        let bounds = PnlPeriod.lastMonths(pnlMonths)
+        do {
+            pnl = try await service.pnl(from: bounds.from, to: bounds.to)
+            pnlError = nil
+        } catch let error as APIError {
+            pnlError = error
+        } catch {
+            pnlError = .transport(message: error.localizedDescription)
         }
     }
 
