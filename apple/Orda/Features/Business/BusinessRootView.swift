@@ -34,6 +34,13 @@ struct BusinessRootView: View {
     @State private var selection: WorkspaceItem?
 
     #if os(iOS)
+    /// Вкладка и путь внутри «Разделов». Нужны, чтобы открыть раздел извне:
+    /// на телефоне выбор бокового меню ни на что не влияет — там вкладки.
+    @State private var phoneTab: PhoneTab = .home
+    @State private var sectionsPath: [String] = []
+    #endif
+
+    #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
     #endif
 
@@ -56,6 +63,13 @@ struct BusinessRootView: View {
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active, let store else { return }
             Task { await store.bootstrap() }
+        }
+        // Ссылка вида orda://page/finance.income. Ею пользуются снимки экрана
+        // для App Store и служебные переходы; для человека это тот же способ
+        // попасть в раздел из письма или заметки.
+        .onOpenURL { url in
+            guard let pageID = DeepLink.pageID(from: url) else { return }
+            openIfAllowed(pageID: pageID)
         }
         // Нажали на уведомление — открываем тот раздел, о котором оно было.
         // Если права на него нет, ничего не делаем: уведомление могло прийти
@@ -103,23 +117,29 @@ struct BusinessRootView: View {
     /// выданному списку, второе — сам человек и выход. Это не бизнес-страницы,
     /// правами они не закрываются ни на сайте, ни здесь.
     private var phoneTabs: some View {
-        TabView {
+        TabView(selection: $phoneTab) {
             if resolver.can("dashboard.view") {
                 NavigationStack { BusinessDashboardScreen(resolver: resolver) }
                     .tabItem { Label("Обзор", systemImage: "square.grid.2x2.fill") }
+                    .tag(PhoneTab.home)
             }
 
             if resolver.can("expenses-pending.view") {
                 NavigationStack { ApprovalsScreen() }
                     .tabItem { Label("Решения", systemImage: "checkmark.circle") }
                     .badge(store?.pending.count ?? 0)
+                    .tag(PhoneTab.approvals)
             }
 
-            NavigationStack { BusinessSectionsScreen(resolver: resolver) }
-                .tabItem { Label("Разделы", systemImage: "list.bullet") }
+            NavigationStack(path: $sectionsPath) {
+                BusinessSectionsScreen(resolver: resolver)
+            }
+            .tabItem { Label("Разделы", systemImage: "list.bullet") }
+            .tag(PhoneTab.sections)
 
             NavigationStack { BusinessProfileScreen(resolver: resolver) }
                 .tabItem { Label("Профиль", systemImage: "person.crop.circle") }
+                .tag(PhoneTab.profile)
         }
         .tint(accent)
     }
@@ -191,13 +211,26 @@ struct BusinessRootView: View {
     }
 
     /// Перевести выбор на раздел, если он есть в меню.
+    ///
+    /// Раздел открывают не только пальцем: по уведомлению, из быстрого действия
+    /// на иконке, по ссылке `orda://page/<страница>`. На планшете это выбор в
+    /// боковом меню, на телефоне — вкладка «Разделы» и переход внутри неё.
     private func openIfAllowed(pageID: String) {
-        for section in sections {
-            if let item = section.items.first(where: { $0.id == pageID }) {
-                selection = item
-                return
-            }
+        guard let item = sections.lazy.compactMap({ section in
+            section.items.first { $0.id == pageID }
+        }).first else { return }
+
+        selection = item
+
+        #if os(iOS)
+        if item.id == "home.dashboard" {
+            phoneTab = .home
+            sectionsPath = []
+        } else {
+            phoneTab = .sections
+            sectionsPath = [item.id]
         }
+        #endif
     }
 
     @ViewBuilder
@@ -346,6 +379,25 @@ struct BusinessRootView: View {
     }
 }
 
+#if os(iOS)
+/// Вкладки телефона.
+enum PhoneTab: Hashable {
+    case home, approvals, sections, profile
+}
+#endif
+
+/// Разбор ссылок `orda://page/<страница>`.
+///
+/// Идентификатор страницы — из каталога прав (`finance.income`,
+/// `native.stocktake`), тот же, что в уведомлениях и быстрых действиях.
+enum DeepLink {
+    static func pageID(from url: URL) -> String? {
+        guard url.scheme == "orda", url.host == "page" else { return nil }
+        let path = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        return path.isEmpty ? nil : path
+    }
+}
+
 /// Список всех доступных разделов — то же, что боковая панель на iPad.
 struct BusinessSectionsScreen: View {
     let resolver: AccessResolver
@@ -375,9 +427,7 @@ struct BusinessSectionsScreen: View {
 
                             ForEach(Array(pages.enumerated()), id: \.element.id) { index, page in
                                 if index > 0 { RowDivider() }
-                                NavigationLink {
-                                    NativePage.screen(pageID: page.id)
-                                } label: {
+                                NavigationLink(value: page.id) {
                                     NavigationRow(
                                         icon: BusinessRootView.icon(forPage: page.id),
                                         iconColor: Theme.brand,
@@ -404,6 +454,11 @@ struct BusinessSectionsScreen: View {
             .frame(maxWidth: .infinity)
         }
         .background(Theme.background)
+        // По значению, а не по замыканию: только так на раздел можно перейти
+        // извне — из уведомления, из быстрого действия иконки, по ссылке.
+        .navigationDestination(for: String.self) { pageID in
+            NativePage.screen(pageID: pageID)
+        }
         .navigationTitle("Разделы")
         .toolbar { LogoutToolbarItem() }
         // Права выдают на сайте, пока человек ждёт с телефоном в руках.

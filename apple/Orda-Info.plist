@@ -40,6 +40,20 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Сканирование штрихкодов товара и съёмка чеков при заведении расхода.</string>
 
+	<!-- Ссылки orda://page/<страница>: переход в раздел из уведомления,
+	     заметки или служебного скрипта. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>kz.ordaops.apple.page</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>orda</string>
+			</array>
+		</dict>
+	</array>
+
 	<!-- Экспортное соответствие. Приложение шифрует только тем, что даёт
 	     система: HTTPS к сайту и Keychain для сессии. Такое использование
 	     освобождено от экспортных ограничений, и без этого ключа App Store

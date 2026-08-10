@@ -23,3 +23,8 @@ Packages/
 # Config.xcconfig в репозитории лежит с пустыми ключами как шаблон.
 # Локальные боевые ключи держим в Config.local.xcconfig.
 apple/Config.local.xcconfig
+
+# Копии, которые создаёт синхронизация папки при конфликте: «AccountSheet 2.swift».
+# Xcode и SwiftPM собирают их наравне с оригиналом и падают на дублях типов.
+* 2.*
+* 3.*
