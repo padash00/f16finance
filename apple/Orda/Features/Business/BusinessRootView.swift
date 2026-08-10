@@ -67,13 +67,17 @@ struct BusinessRootView: View {
 
     // ── iPhone ───────────────────────────────────────────────────────────────
 
+    /// Вкладки — то же правило, что и в боковом меню: только выданное.
+    ///
+    /// «Разделы» и «Профиль» остаются всегда: первое — навигация по тому же
+    /// выданному списку, второе — сам человек и выход. Это не бизнес-страницы,
+    /// правами они не закрываются ни на сайте, ни здесь.
     private var phoneTabs: some View {
         TabView {
-            NavigationStack { BusinessDashboardScreen(resolver: resolver) }
-                .tabItem { Label("Обзор", systemImage: "square.grid.2x2.fill") }
-
-            NavigationStack { LedgerScreen() }
-                .tabItem { Label("Деньги", systemImage: "chart.line.uptrend.xyaxis") }
+            if resolver.can("dashboard.view") {
+                NavigationStack { BusinessDashboardScreen(resolver: resolver) }
+                    .tabItem { Label("Обзор", systemImage: "square.grid.2x2.fill") }
+            }
 
             if resolver.can("expenses-pending.view") {
                 NavigationStack { ApprovalsScreen() }
@@ -117,41 +121,28 @@ struct BusinessRootView: View {
         resolver.workspace == .owner ? "Бизнес" : "Работа"
     }
 
-    /// Раздел «Главное» плюс группы каталога прав.
+    /// Меню — это ровно то, что выдано на `/access`, и ничего сверх того.
+    ///
+    /// Раньше здесь была своя группа «Главное»: «Обзор», «Деньги», «Решения»,
+    /// «Подписка», «Бизнес-аналитика», «Календарь». Половина из них не
+    /// существует в каталоге прав, то есть владелец не мог их ни выдать, ни
+    /// отобрать, а «Деньги» и «Решения» вдобавок дублировали настоящие разделы
+    /// каталога. Пункт, которого нет в `/access`, — обещание мимо той системы
+    /// прав, которую владелец настраивает.
+    ///
+    /// Осталась только сводка, и та по праву `dashboard.view` — это настоящая
+    /// страница каталога, её видно и на `/access`.
     private var sections: [WorkspaceSection] {
-        var result: [WorkspaceSection] = [
-            WorkspaceSection(
-                id: "home",
-                title: "Главное",
-                icon: "square.grid.2x2",
-                items: [
-                    WorkspaceItem(id: "home.dashboard", title: "Обзор", icon: "chart.bar.fill"),
-                    WorkspaceItem(id: "home.ledger", title: "Деньги", icon: "chart.line.uptrend.xyaxis"),
-                ] + (resolver.can("expenses-pending.view")
-                     ? [WorkspaceItem(id: "home.approvals", title: "Решения", icon: "checkmark.circle", badge: store?.pending.count)]
-                     : [])
-                // Подписки нет в каталоге прав — это владельческий раздел,
-                // и через каталог он не появится ни у кого.
-                + (resolver.workspace == .owner
-                   ? [WorkspaceItem(id: "home.subscription", title: "Подписка", icon: "creditcard")]
-                   : [])
-            )
-        ]
+        var result: [WorkspaceSection] = []
 
-        // Разделы вне каталога прав — сервер их правами не закрывает, и через
-        // nativeGroups() они не появились бы никогда.
-        let extras = NativeSection.uncatalogued.filter { section in
-            resolver.hasFeature(section.requiredAddon)
-        }
-        if !extras.isEmpty {
-            result[0] = WorkspaceSection(
-                id: result[0].id,
-                title: result[0].title,
-                icon: result[0].icon,
-                items: result[0].items + extras.compactMap { section in
-                    guard let label = section.uncataloguedLabel else { return nil }
-                    return WorkspaceItem(id: "native.\(section.rawValue)", title: label.title, icon: label.icon)
-                }
+        if resolver.can("dashboard.view") {
+            result.append(
+                WorkspaceSection(
+                    id: "home",
+                    title: "Главное",
+                    icon: "square.grid.2x2",
+                    items: [WorkspaceItem(id: "home.dashboard", title: "Обзор", icon: "chart.bar.fill")]
+                )
             )
         }
 
@@ -172,14 +163,8 @@ struct BusinessRootView: View {
     @ViewBuilder
     private func destination(for item: WorkspaceItem?) -> some View {
         switch item?.id {
-        case "home.dashboard", .none:
+        case "home.dashboard":
             BusinessDashboardScreen(resolver: resolver)
-        case "home.ledger":
-            LedgerScreen()
-        case "home.approvals":
-            ApprovalsScreen()
-        case "home.subscription":
-            SubscriptionScreen()
         default:
             if let item, item.id.hasPrefix("native."),
                let section = NativeSection(rawValue: String(item.id.dropFirst("native.".count))) {

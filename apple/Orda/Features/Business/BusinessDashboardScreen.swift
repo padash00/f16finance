@@ -25,7 +25,11 @@ struct BusinessDashboardScreen: View {
                 // независимы друг от друга и раскладываются в несколько
                 // колонок, а не тянутся лентой посреди пустого окна.
                 DashboardGrid {
-                    if let dashboard = store.dashboard {
+                    // Выручка, разбивка по способам оплаты и график недели —
+                    // это денежные показатели. Роли, которой владелец не
+                    // открывал доходы, здесь видеть нечего: сводка не должна
+                    // быть обходным путём мимо `/access`.
+                    if let dashboard = store.dashboard, canSeeRevenue {
                         todayCard(dashboard)
                         weekChart(dashboard)
                         paymentSplit(dashboard)
@@ -34,8 +38,8 @@ struct BusinessDashboardScreen: View {
                     approvalsCard
 
                     if let dashboard = store.dashboard {
-                        if !dashboard.lowStock.isEmpty { lowStockCard(dashboard) }
-                        if !dashboard.topItems.isEmpty { topItemsCard(dashboard) }
+                        if !dashboard.lowStock.isEmpty && canSeeStock { lowStockCard(dashboard) }
+                        if !dashboard.topItems.isEmpty && canSeeStock { topItemsCard(dashboard) }
                     }
 
                     sectionsCard
@@ -46,6 +50,19 @@ struct BusinessDashboardScreen: View {
         .navigationTitle("Обзор")
         .toolbar { LogoutToolbarItem() }
         .refreshable { await store.bootstrap() }
+    }
+
+    // ── Что вообще показывать ────────────────────────────────────────────────
+
+    /// Денежные показатели — по праву на доходы. Отдельного права у сводки
+    /// нет: `dashboard.view` открывает саму страницу, а не суммы на ней.
+    private var canSeeRevenue: Bool {
+        resolver.can("income.view") || resolver.can("reports.view")
+    }
+
+    /// Остатки и топ продаж — по праву на склад.
+    private var canSeeStock: Bool {
+        resolver.can("store.view") || resolver.can("store-warehouse.view")
     }
 
     // ── Сегодня ──────────────────────────────────────────────────────────────
