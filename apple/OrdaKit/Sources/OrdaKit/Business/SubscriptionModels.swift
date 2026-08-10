@@ -292,7 +292,13 @@ public struct PointDebt: Decodable, Sendable, Identifiable, Hashable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decodeFlexibleString(forKey: .id) ?? UUID().uuidString
         clientName = try c.decodeFlexibleString(forKey: .clientName) ?? "Без имени"
-        amount = try c.decodeFlexibleDouble(forKey: .amount) ?? 0
+        // Долги приходят двумя видами строк. Новые — позиции с товаром, там
+        // сумма лежит в `total_amount`. Старые — одна строка на человека с
+        // полем `amount`. Приложение знало только второе, и весь список
+        // показывал нули, хотя итог недели считался верно.
+        amount = try c.decodeFlexibleDouble(forKey: .totalAmount)
+            ?? c.decodeFlexibleDouble(forKey: .amount)
+            ?? 0
         comment = try c.decodeFlexibleString(forKey: .comment)
         weekStart = try c.decodeFlexibleString(forKey: .weekStart)
         status = try c.decodeFlexibleString(forKey: .status) ?? "open"
@@ -303,6 +309,7 @@ public struct PointDebt: Decodable, Sendable, Identifiable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case id, amount, comment, status
+        case totalAmount = "total_amount"
         case clientName = "client_name"
         case weekStart = "week_start"
         case createdAt = "created_at"

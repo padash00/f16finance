@@ -263,14 +263,35 @@ public struct ShiftReport: Decodable, Sendable, Identifiable, Hashable {
 
         init(from decoder: any Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
-            sales = try c.decodeFlexibleDouble(forKey: .sales)
+            // Итоги смены приходят двумя наборами имён. Закрытая смена хранит
+            // их в `totals_json` так, как их пишет касса: `sales_total`,
+            // `sales_cash`, `sales_count`. Открытую сервер досчитывает на лету
+            // и кладёт короткие `sales`, `cash`, `count`.
+            //
+            // Приложение знало только короткие — и в журнале смен вся выручка
+            // и все чеки показывались нулями, хотя расхождение по кассе рядом
+            // считалось верно.
+            sales = try c.decodeFlexibleDouble(forKey: .salesTotal)
+                ?? c.decodeFlexibleDouble(forKey: .sales)
                 ?? c.decodeFlexibleDouble(forKey: .total)
-            cash = try c.decodeFlexibleDouble(forKey: .cash)
-            kaspi = try c.decodeFlexibleDouble(forKey: .kaspi)
-            count = Int(try c.decodeFlexibleDouble(forKey: .count) ?? 0)
+            cash = try c.decodeFlexibleDouble(forKey: .salesCash)
+                ?? c.decodeFlexibleDouble(forKey: .cash)
+            kaspi = try c.decodeFlexibleDouble(forKey: .salesKaspi)
+                ?? c.decodeFlexibleDouble(forKey: .kaspi)
+            count = Int(
+                try c.decodeFlexibleDouble(forKey: .salesCount)
+                    ?? c.decodeFlexibleDouble(forKey: .count)
+                    ?? 0
+            )
         }
 
-        private enum CodingKeys: String, CodingKey { case sales, total, cash, kaspi, count }
+        private enum CodingKeys: String, CodingKey {
+            case sales, total, cash, kaspi, count
+            case salesTotal = "sales_total"
+            case salesCash = "sales_cash"
+            case salesKaspi = "sales_kaspi"
+            case salesCount = "sales_count"
+        }
     }
 
     public init(from decoder: any Decoder) throws {

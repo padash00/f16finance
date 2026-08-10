@@ -263,3 +263,43 @@ struct OperatorContractTests {
         #expect(schedule.operatorMessage == "Сегодня по графику работаешь не ты.")
     }
 }
+
+/// Разбор ответов, где сервер отдаёт одно и то же двумя наборами имён.
+///
+/// Оба случая нашлись на живых данных: списки показывали нули, хотя итоги
+/// рядом считались верно. Тип ошибки один — модель знала только одно имя поля.
+@Suite("Двойные имена полей")
+struct DualFieldNameTests {
+    private func decode<T: Decodable>(_ type: T.Type, _ json: String) throws -> T {
+        try APIClient.defaultDecoder.decode(type, from: Data(json.utf8))
+    }
+
+    @Test("Долг читается и из total_amount, и из amount")
+    func debtAmountFromBothShapes() throws {
+        // Новая строка: позиция с товаром.
+        let modern = try decode(PointDebt.self, #"{"id":"d1","client_name":"Олжас","total_amount":3500,"status":"open"}"#)
+        #expect(modern.amount == 3500)
+
+        // Старая: одна строка на человека.
+        let legacy = try decode(PointDebt.self, #"{"id":"d2","client_name":"Асан","amount":1200,"status":"open"}"#)
+        #expect(legacy.amount == 1200)
+    }
+
+    @Test("Итоги смены читаются и из sales_total, и из sales")
+    func shiftTotalsFromBothShapes() throws {
+        let closed = try decode(
+            ShiftReport.self,
+            #"{"id":"s1","status":"closed","totals_json":{"sales_total":11900,"sales_cash":5000,"sales_kaspi":6900,"sales_count":14}}"#
+        )
+        #expect(closed.totals.sales == 11900)
+        #expect(closed.totals.cash == 5000)
+        #expect(closed.totals.count == 14)
+
+        let open = try decode(
+            ShiftReport.self,
+            #"{"id":"s2","status":"open","live_totals":{"sales":2000,"cash":2000,"kaspi":0,"count":3}}"#
+        )
+        #expect(open.totals.sales == 2000)
+        #expect(open.totals.count == 3)
+    }
+}
