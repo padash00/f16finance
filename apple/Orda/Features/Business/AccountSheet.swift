@@ -15,6 +15,10 @@ struct AccountSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var confirmingLogout = false
+    @State private var confirmingDelete = false
+    @State private var isDeleting = false
+    @State private var deleteError: String?
+    @Environment(\.api) private var api
 
     var body: some View {
         NavigationStack {
@@ -25,6 +29,8 @@ struct AccountSheet: View {
                     AppearancePicker()
                     BiometricLockToggle()
                     logoutButton
+                    legalCard
+                    deleteAccountCard
                 }
             }
             .background(Theme.background)
@@ -64,6 +70,99 @@ struct AccountSheet: View {
                 }
                 Spacer()
             }
+        }
+    }
+
+    /// Номер сборки нужен поддержке: без него на вопрос «что у вас в
+    /// приложении» отвечают догадками.
+    private var appVersion: String {
+        let info = Bundle.main.infoDictionary
+        let short = info?["CFBundleShortVersionString"] as? String ?? "—"
+        let build = info?["CFBundleVersion"] as? String ?? ""
+        return build.isEmpty ? short : "\(short) (\(build))"
+    }
+
+    /// Документы.
+    ///
+    /// Ссылка на политику обязательна для App Store, но нужна и без него: человек
+    /// решает удалять ли аккаунт, прочитав, что именно останется у точки.
+    private var legalCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                SectionHeader("Документы")
+                Link("Политика конфиденциальности", destination: URL(string: "https://www.ordaops.kz/privacy")!)
+                    .font(Typography.callout)
+                    .foregroundStyle(Theme.brand)
+                Link("Условия использования", destination: URL(string: "https://www.ordaops.kz/terms")!)
+                    .font(Typography.callout)
+                    .foregroundStyle(Theme.brand)
+                Text("Версия \(appVersion)")
+                    .font(Typography.caption)
+                    .foregroundStyle(Theme.textDim)
+            }
+        }
+    }
+
+    /// Удаление своего аккаунта.
+    ///
+    /// Требование App Store: если в приложении можно войти, из него же должно
+    /// быть можно уйти — без писем в поддержку.
+    ///
+    /// Пишем прямо, что произойдёт. «Удалить аккаунт» человек читает как
+    /// «стереть все мои данные», а рабочие записи — смены, выручка, ведомости —
+    /// останутся: на них стоит бухгалтерия точки и деньги других людей.
+    private var deleteAccountCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                SectionHeader("Удаление аккаунта")
+                Text("Вход перестанет работать, личные данные — телефон, почта, Telegram — будут стёрты. Отменить нельзя.")
+                    .font(Typography.caption)
+                    .foregroundStyle(Theme.textMuted)
+                Text("Смены, выручка и зарплатные ведомости останутся: они принадлежат точке, а не учётной записи.")
+                    .font(Typography.caption)
+                    .foregroundStyle(Theme.textDim)
+
+                if let deleteError {
+                    Text(deleteError)
+                        .font(Typography.caption)
+                        .foregroundStyle(Theme.negative)
+                }
+
+                Button(isDeleting ? "Удаляем…" : "Удалить аккаунт") {
+                    confirmingDelete = true
+                }
+                .buttonStyle(SecondaryButtonStyle())
+                .disabled(isDeleting)
+                .confirmationDialog(
+                    "Удалить аккаунт?",
+                    isPresented: $confirmingDelete,
+                    titleVisibility: .visible
+                ) {
+                    Button("Удалить навсегда", role: .destructive) {
+                        Task { await deleteAccount() }
+                    }
+                    Button("Отмена", role: .cancel) {}
+                } message: {
+                    Text("Вход перестанет работать сразу. Восстановить аккаунт сможет только владелец — заведя новый.")
+                }
+            }
+        }
+    }
+
+    private func deleteAccount() async {
+        guard !isDeleting else { return }
+        isDeleting = true
+        defer { isDeleting = false }
+        deleteError = nil
+
+        do {
+            try await MyProfileService(api: api).deleteAccount()
+            // Сессия мертва: токен указывает на удалённого пользователя.
+            await auth.signOut()
+        } catch let error as APIError {
+            deleteError = error.userMessage
+        } catch {
+            deleteError = error.localizedDescription
         }
     }
 

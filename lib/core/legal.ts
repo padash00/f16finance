@@ -3,7 +3,7 @@
 
 export const LEGAL_VERSION = '2026-05-24'
 export const LEGAL_EFFECTIVE_DATE = '2026-05-24'
-export const LEGAL_LAST_UPDATED = '2026-05-24'
+export const LEGAL_LAST_UPDATED = '2026-08-10'
 
 export const TRIAL_DAYS = 14
 
@@ -14,6 +14,10 @@ export function getTrialEndsAt(from: Date = new Date()): Date {
 }
 
 export const LEGAL_HISTORY: { date: string; note: string }[] = [
+  {
+    date: '2026-08-10',
+    note: 'Политика: раздел 11 дополнен порядком самостоятельного удаления учётной записи из мобильного приложения — что удаляется, что остаётся у Заказчика и почему.',
+  },
   {
     date: '2026-05-24',
     note: 'Обновление реквизитов до ТОО «Turanix», фиксация пробного периода 14 дней, добавлены /terms, /sla, /cookies.',

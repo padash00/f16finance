@@ -70,4 +70,12 @@ public struct MyProfileService: Sendable {
         let body = try JSONEncoder().encode(change)
         _ = try await api.send(APIRequest(path: "/api/me/profile", method: .patch, body: body))
     }
+
+    /// Удалить свой аккаунт.
+    ///
+    /// Вход стирается, личные данные затираются, рабочие записи — смены,
+    /// выручка, ведомости — остаются: на них стоит бухгалтерия точки.
+    public func deleteAccount() async throws {
+        _ = try await api.send(APIRequest(path: "/api/me/account", method: .delete))
+    }
 }
