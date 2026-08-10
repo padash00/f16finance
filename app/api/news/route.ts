@@ -7,6 +7,7 @@
 
 import { NextResponse } from 'next/server'
 import { hasCapability, requireCapability } from '@/lib/server/capabilities'
+import { pushToOrganization } from '@/lib/server/push'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -109,7 +110,28 @@ export async function POST(request: Request) {
     .single()
 
   if (error) return json({ error: error.message }, 500)
+
+  // Новость без уведомления прочитают те, кто и так зашёл в ленту, — то есть
+  // не те, ради кого её писали. Отправка best-effort: пост уже создан, и
+  // упавший push не повод отвечать ошибкой.
+  await pushToOrganization(supabase as any, access.activeOrganization?.id || null, {
+    title: data?.title?.trim() || 'Новость',
+    body: preview(text),
+    data: { kind: 'news', postId: String(data?.id || '') },
+    collapseId: `news-${String(data?.id || '')}`,
+  })
+
   return json({ post: data })
+}
+
+/// Короткая выжимка для шторки: целиком пост туда не влезет, а обрезанный
+/// на полуслове выглядит сломанным.
+function preview(text: string, limit = 140): string {
+  const clean = text.replace(/\s+/g, ' ').trim()
+  if (clean.length <= limit) return clean
+  const cut = clean.slice(0, limit)
+  const lastSpace = cut.lastIndexOf(' ')
+  return `${(lastSpace > limit * 0.6 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`
 }
 
 export async function DELETE(request: Request) {

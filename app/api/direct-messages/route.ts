@@ -7,6 +7,7 @@
  */
 
 import { NextResponse } from 'next/server'
+import { pushToUsers } from '@/lib/server/push'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { checkProfanity } from '@/lib/ai/profanity-filter'
@@ -132,7 +133,30 @@ export async function POST(request: Request) {
     .single()
 
   if (error) return json({ error: error.message }, 500)
+
+  // Личное сообщение без уведомления бессмысленно: человек не сидит в разделе
+  // «Личные сообщения» и узнает о письме, только если случайно туда зайдёт.
+  // Отправка best-effort — сообщение уже записано.
+  await pushToUsers(supabase as any, [recipientUserId], {
+    title: senderName,
+    body: messageText ? shorten(messageText) : 'Вложение',
+    data: { kind: 'direct-message', from: access.user.id },
+    // Схлопываем по отправителю: десять сообщений подряд — это один разговор,
+    // а не десять уведомлений на экране блокировки.
+    collapseId: `dm-${access.user.id}`,
+  })
+
   return json({ message: data })
+}
+
+/// Текст для шторки. Длинное письмо там всё равно не поместится, а обрезанное
+/// на полуслове читается как сбой.
+function shorten(text: string, limit = 140): string {
+  const clean = text.replace(/\s+/g, ' ').trim()
+  if (clean.length <= limit) return clean
+  const cut = clean.slice(0, limit)
+  const lastSpace = cut.lastIndexOf(' ')
+  return `${(lastSpace > limit * 0.6 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`
 }
 
 export async function PATCH(request: Request) {

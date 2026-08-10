@@ -57,6 +57,14 @@ struct BusinessRootView: View {
             guard phase == .active, let store else { return }
             Task { await store.bootstrap() }
         }
+        // Нажали на уведомление — открываем тот раздел, о котором оно было.
+        // Если права на него нет, ничего не делаем: уведомление могло прийти
+        // раньше, чем доступ отобрали.
+        .onChange(of: PushManager.shared.pendingRoute) { _, route in
+            guard let route else { return }
+            PushManager.shared.pendingRoute = nil
+            openIfAllowed(pageID: route.pageID)
+        }
     }
 
     @ViewBuilder
@@ -165,6 +173,16 @@ struct BusinessRootView: View {
         })
 
         return result
+    }
+
+    /// Перевести выбор на раздел, если он есть в меню.
+    private func openIfAllowed(pageID: String) {
+        for section in sections {
+            if let item = section.items.first(where: { $0.id == pageID }) {
+                selection = item
+                return
+            }
+        }
     }
 
     @ViewBuilder

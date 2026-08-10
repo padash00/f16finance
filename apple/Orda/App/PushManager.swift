@@ -29,6 +29,42 @@ final class PushManager {
 
     private(set) var status: Status = .unknown
 
+    /// Куда вести после нажатия на уведомление.
+    ///
+    /// Уведомление, которое просто открывает приложение на сводке, заставляет
+    /// человека искать то, о чём его только что известили. Здесь запоминаем
+    /// раздел, а корневой экран его открывает.
+    var pendingRoute: PushRoute?
+
+    /// Раздел, на который ведёт уведомление.
+    enum PushRoute: Equatable {
+        case news
+        case directMessages
+        case birthdays
+        case approvals
+
+        /// Идентификатор страницы каталога — по нему строится и меню.
+        var pageID: String {
+            switch self {
+            case .news: "news"
+            case .directMessages: "messages"
+            case .birthdays: "birthdays"
+            case .approvals: "expenses-pending"
+            }
+        }
+
+        /// Что прислал сервер в поле `kind`.
+        init?(kind: String) {
+            switch kind {
+            case "news": self = .news
+            case "direct-message": self = .directMessages
+            case "birthday": self = .birthdays
+            case "expense-approval": self = .approvals
+            default: return nil
+            }
+        }
+    }
+
     /// Токен, полученный от APNs. Отправляется, как только появится и сессия.
     private var deviceToken: String?
     private var api: APIClient?
@@ -132,12 +168,52 @@ final class PushManager {
     }
 }
 
+// ── Показ и нажатие ──────────────────────────────────────────────────────────
+
+/// Делегат центра уведомлений.
+///
+/// Нужен ради двух вещей, которых iOS сам не делает. Первое: уведомление,
+/// пришедшее при открытом приложении, по умолчанию не показывается вовсе —
+/// человек пишет в личные сообщения, адресат сидит в приложении и не узнаёт об
+/// этом. Второе: нажатие на уведомление открывает приложение там, где его
+/// закрыли, и о чём было уведомление — искать самому.
+final class PushDelegate: NSObject, UNUserNotificationCenterDelegate, @unchecked Sendable {
+    /// Состояния у делегата нет — он только разбирает полезную нагрузку и
+    /// передаёт её в `PushManager`, который живёт на главном потоке.
+    static let shared = PushDelegate()
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification
+    ) async -> UNNotificationPresentationOptions {
+        [.banner, .sound, .badge]
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse
+    ) async {
+        let payload = response.notification.request.content.userInfo
+        guard let kind = payload["kind"] as? String,
+              let route = PushManager.PushRoute(kind: kind) else { return }
+        await MainActor.run { PushManager.shared.pendingRoute = route }
+    }
+}
+
 // ── Делегат приложения ───────────────────────────────────────────────────────
 
 #if canImport(UIKit)
 /// Токен APNs приходит только в делегат приложения — в SwiftUI-сцене его не
 /// получить, поэтому минимальный делегат нужен даже в чистом SwiftUI-приложении.
 final class OrdaAppDelegate: NSObject, UIApplicationDelegate {
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        UNUserNotificationCenter.current().delegate = PushDelegate.shared
+        return true
+    }
+
     func application(
         _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
@@ -154,6 +230,10 @@ final class OrdaAppDelegate: NSObject, UIApplicationDelegate {
 }
 #elseif canImport(AppKit)
 final class OrdaAppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        UNUserNotificationCenter.current().delegate = PushDelegate.shared
+    }
+
     func application(
         _ application: NSApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data

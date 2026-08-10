@@ -8,6 +8,7 @@
 
 import { NextResponse } from 'next/server'
 import { requiredEnv } from '@/lib/server/env'
+import { pushToOrganization } from '@/lib/server/push'
 import { listOrgReportTargets } from '@/lib/server/report-targets'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { sendTelegramMessage } from '@/lib/telegram/send'
@@ -107,6 +108,19 @@ export async function GET(request: Request) {
         notified++
       } catch {}
     }
+    // 2.4) Уведомление в приложение всей организации.
+    //
+    // Телеграм есть не у всех и не всегда под рукой, а поздравить нужно
+    // сегодня: завтра это уже не поздравление, а извинение. Best-effort —
+    // неудачная отправка не должна ронять рассылку остальным.
+    await pushToOrganization(supabase as any, bd.orgId, {
+      title: 'Сегодня день рождения',
+      body: `${bd.displayName} — не забудьте поздравить.`,
+      data: { kind: 'birthday', operatorId: bd.id },
+      // Один именинник — одно уведомление, даже если крон запустится дважды.
+      collapseId: `birthday-${bd.id}-${todayMonth}-${todayDay}`,
+    })
+
     teamReminders.push({ birthdayPerson: bd.displayName, notified })
   }
 
