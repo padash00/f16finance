@@ -188,6 +188,37 @@ final class AuthStore {
     /// Когда права загружались в последний раз.
     private var roleLoadedAt: Date?
 
+    // ── Замок ────────────────────────────────────────────────────────────────
+
+    /// Спрашивать биометрию при возврате в приложение.
+    ///
+    /// Настройка человека, а не политика: из приложения видно зарплаты и
+    /// логины команды, но телефон бывает и рабочим инструментом на стойке, где
+    /// замок на каждое переключение мешает.
+    var isLockEnabled: Bool {
+        get { UserDefaults.standard.bool(forKey: Self.lockKey) }
+        set {
+            UserDefaults.standard.set(newValue, forKey: Self.lockKey)
+            // Включили — замок срабатывает со следующего ухода в фон, а не
+            // сразу: запирать человека в момент, когда он это только что
+            // настроил, бессмысленно.
+        }
+    }
+
+    private static let lockKey = "orda.lock.biometrics"
+
+    /// Запереть интерфейс. Сессия остаётся живой — закрывается только вид.
+    func lock() {
+        guard isLockEnabled, phase == .signedIn, Biometrics.isAvailable else { return }
+        phase = .locked
+    }
+
+    /// Снять замок после успешной проверки.
+    func unlock() {
+        guard phase == .locked else { return }
+        phase = .signedIn
+    }
+
     /// Перечитать права, если они устарели.
     ///
     /// Права выдают на сайте, пока человек держит приложение в кармане. Раньше

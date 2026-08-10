@@ -58,9 +58,10 @@ struct BiometricLockView: View {
         defer { isAuthenticating = false }
 
         if await Biometrics.authenticate(reason: "Вход в Orda") {
-            // TODO(Phase 2): снятие замка в AuthStore, когда появится
-            // пользовательская настройка «запрашивать биометрию».
+            auth.unlock()
         } else {
+            // Трясём экран, а не показываем ошибку: человек и так знает, что
+            // не подтвердил, а красный текст на весь экран выглядит как сбой.
             failureCount += 1
         }
     }
@@ -72,6 +73,17 @@ enum Biometrics {
     static var isAvailable: Bool {
         var error: NSError?
         return LAContext().canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
+    }
+
+    /// Как называется на этом устройстве: Face ID, Touch ID или просто код.
+    static var displayName: String {
+        let context = LAContext()
+        _ = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil)
+        switch context.biometryType {
+        case .faceID: return "Face ID"
+        case .touchID: return "Touch ID"
+        default: return "код устройства"
+        }
     }
 
     static var iconName: String {

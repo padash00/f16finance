@@ -204,27 +204,110 @@ struct BusinessRootView: View {
         }
     }
 
+    /// Значок раздела.
+    ///
+    /// Своя иконка у каждого — не украшение. В боковой панели семьдесят
+    /// пунктов, и пятьдесят восемь из них рисовались одним и тем же листом:
+    /// глазу не за что зацепиться, и нужный раздел приходилось читать
+    /// построчно. Значок ищут раньше, чем текст.
     static func icon(forPage id: String) -> String {
         switch id {
+        // ── Деньги ───────────────────────────────────────────────────────────
         case "income": "arrow.down.circle"
-        case "expenses", "expense-whitelist": "arrow.up.circle"
+        case "expenses": "arrow.up.circle"
+        case "expense-whitelist": "checkmark.seal"
         case "expenses-pending": "clock.badge.exclamationmark"
+        case "expense-analysis": "chart.bar.doc.horizontal"
+        case "categories": "folder"
         case "cashflow": "banknote"
-        case "profitability", "valuation": "chart.pie"
+        case "profitability": "chart.pie"
+        case "valuation": "building.2.crop.circle"
+        case "simulation": "slider.horizontal.3"
         case "tax": "building.columns"
-        case "salary", "salary-rules": "wallet.bifold"
-        case "operators", "staff", "hr": "person.2"
-        case "shifts", "shifts-reports": "calendar.badge.clock"
+        case "point-debts": "creditcard.trianglebadge.exclamationmark"
+        case "goals": "target"
+
+        // ── Отчёты и аналитика ───────────────────────────────────────────────
+        case "reports": "doc.richtext"
+        case "analytics": "chart.xyaxis.line"
+        case "weekly-report": "calendar.badge.checkmark"
+        case "forecast": "chart.line.uptrend.xyaxis"
+        case "analysis": "magnifyingglass.circle"
+        case "ai-cfo": "brain.head.profile"
+        case "team-analysis": "person.3.sequence"
+
+        // ── Склад и магазин ──────────────────────────────────────────────────
+        case "store": "storefront"
+        case "store-warehouse": "shippingbox"
+        case "store-showcase": "cabinet"
+        case "store-catalog": "books.vertical"
+        case "store-receipts": "arrow.down.doc"
+        case "store-postings": "square.and.arrow.down"
+        case "store-writeoffs": "trash"
+        case "store-requests": "tray.and.arrow.down"
+        case "store-requests-journal": "clock.arrow.circlepath"
+        case "store-movements": "arrow.left.arrow.right"
+        case "store-revisions": "checklist.checked"
+        case "store-suppliers": "truck.box"
+        case "store-billing": "doc.plaintext"
+        case "store-purchase-plan": "cart.badge.plus"
+        case "store-purchase-orders": "cart"
+        case "store-consumables": "drop"
+        case "store-analytics": "chart.bar"
+        case "store-forecast": "chart.line.downtrend.xyaxis"
+        case "store-advertising": "megaphone"
+        case "store-settings": "gearshape.2"
+        case "store-shifts": "clock.badge.checkmark"
+        case "store-receipt-settings": "printer"
+        case "production": "frying.pan"
+
+        // ── Люди ─────────────────────────────────────────────────────────────
+        case "operators": "person.2"
+        case "staff": "person.text.rectangle"
+        case "hr": "briefcase"
+        case "structure": "chart.bar.doc.horizontal"
+        case "salary": "wallet.bifold"
+        case "salary-rules": "list.bullet.rectangle.portrait"
+        case "pass": "key"
+        case "performance": "speedometer"
+        case "ratings": "star"
+        case "operator-achievements": "rosette"
+        case "birthdays": "gift"
+
+        // ── Смены и операционка ──────────────────────────────────────────────
+        case "shifts": "calendar.badge.clock"
+        case "shifts-reports": "doc.badge.clock"
         case "tasks": "checklist"
         case "incidents": "exclamationmark.triangle"
-        case "pos", "pos-receipts", "pos-returns": "creditcard"
+
+        // ── Касса и клиенты ──────────────────────────────────────────────────
+        case "pos", "pos-receipts": "creditcard"
+        case "pos-returns": "arrow.uturn.backward.circle"
         case "customers": "person.crop.circle"
         case "discounts": "tag"
+
+        // ── Точки и оборудование ─────────────────────────────────────────────
+        case "point-devices": "desktopcomputer"
+        case "stations": "gamecontroller"
+
+        // ── Общение ──────────────────────────────────────────────────────────
+        case "news": "newspaper"
+        case "team-chat": "bubble.left.and.bubble.right"
+        case "messages": "envelope"
+        case "moderation": "shield.lefthalf.filled"
+        case "telegram": "paperplane"
+
+        // ── Системное ────────────────────────────────────────────────────────
         case "access": "lock.shield"
         case "settings": "gearshape"
         case "logs": "list.bullet.rectangle"
+        case "debug": "stethoscope"
+        case "knowledge-admin": "book"
         case "dashboard": "square.grid.2x2"
+
         default:
+            // Сюда попадают только новые страницы каталога, для которых значок
+            // ещё не подобрали. Раньше здесь оказывались почти все.
             id.hasPrefix("store") ? "shippingbox" : "doc.text"
         }
     }
@@ -302,6 +385,33 @@ struct BusinessProfileScreen: View {
 
     @Environment(AuthStore.self) private var auth
     @State private var confirmingLogout = false
+    @State private var isLockEnabled = false
+    @State private var didLoadSettings = false
+
+    /// Замок по биометрии. Из приложения видно зарплаты и логины всей
+    /// команды — телефон, оставленный на стойке разблокированным, не должен
+    /// давать к этому доступ. Но и запирать каждое переключение незачем,
+    /// поэтому это настройка, а не правило.
+    @ViewBuilder
+    private var lockCard: some View {
+        if Biometrics.isAvailable {
+            Card {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    Toggle(isOn: $isLockEnabled) {
+                        Label("Запрашивать \(Biometrics.displayName)", systemImage: Biometrics.iconName)
+                            .font(Typography.callout)
+                            .foregroundStyle(Theme.text)
+                    }
+                    Text("При возврате в приложение. Сессия при этом остаётся — заново входить не придётся.")
+                        .font(Typography.caption)
+                        .foregroundStyle(Theme.textDim)
+                }
+            }
+            .onChange(of: isLockEnabled) { _, value in
+                auth.isLockEnabled = value
+            }
+        }
+    }
 
     var body: some View {
         ScrollView {
@@ -342,6 +452,8 @@ struct BusinessProfileScreen: View {
                     }
                 }
 
+                lockCard
+
                 Button("Выйти из аккаунта") { confirmingLogout = true }
                     .buttonStyle(DestructiveButtonStyle())
             }
@@ -351,6 +463,11 @@ struct BusinessProfileScreen: View {
         }
         .background(Theme.background)
         .navigationTitle("Профиль")
+        .task {
+            guard !didLoadSettings else { return }
+            didLoadSettings = true
+            isLockEnabled = auth.isLockEnabled
+        }
         .confirmationDialog("Выйти из аккаунта?", isPresented: $confirmingLogout, titleVisibility: .visible) {
             Button("Выйти", role: .destructive) { Task { await auth.signOut() } }
             Button("Отмена", role: .cancel) {}

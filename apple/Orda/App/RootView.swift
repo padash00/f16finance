@@ -60,8 +60,17 @@ struct RootView: View {
             await auth.restore()
         }
         .onChange(of: scenePhase) { _, phase in
-            guard phase == .active else { return }
-            Task { await auth.refreshRoleIfStale() }
+            switch phase {
+            case .active:
+                Task { await auth.refreshRoleIfStale() }
+            case .background:
+                // Запираем при уходе в фон, а не при `.inactive`: последнее
+                // случается и от шторки уведомлений, и от звонка — замок
+                // срабатывал бы десятки раз за день ни за чем.
+                auth.lock()
+            default:
+                break
+            }
         }
     }
 
