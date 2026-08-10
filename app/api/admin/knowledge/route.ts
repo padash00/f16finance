@@ -363,6 +363,8 @@ async function seedDefaults(organizationId: string | null, actorUserId: string |
       category: 'shift-rules',
       title: 'Как правильно принять смену',
       slug: 'shift-handover-acceptance',
+      industry: 'club',
+      topic_key: 'shift_handover',
       summary: 'Смена принимается только после обхода, проверки оборудования и фиксации проблем.',
       content:
         'До принятия смены оператор вместе со сменщиком проходит зал, проверяет чистоту, оборудование, PRO/VIP, PS5/VR/SimRacing, кассу, магазин и активные брони. Все проблемы фиксируются до принятия смены. Если проблема не зафиксирована, ответственность переходит на принимающего смену.',
@@ -373,6 +375,8 @@ async function seedDefaults(organizationId: string | null, actorUserId: string |
       category: 'problem-faq',
       title: 'Что делать, если не работает компьютер',
       slug: 'pc-not-working',
+      industry: 'club',
+      topic_key: 'club_pc_failure',
       summary: 'Быстрый порядок действий при технической проблеме у клиента.',
       content:
         '1. Спокойно уточнить проблему у клиента. 2. Проверить питание, монитор, мышку, клавиатуру, интернет и запуск игры. 3. Если можно решить на месте — решить и извиниться за ожидание. 4. Если не решается — пересадить клиента, зафиксировать номер ПК и проблему, сообщить руководителю. 5. Не оставлять неисправный ПК без отметки.',
@@ -383,6 +387,8 @@ async function seedDefaults(organizationId: string | null, actorUserId: string |
       category: 'salary-rules',
       title: 'Штрафы и премии: общий принцип',
       slug: 'salary-fines-bonuses-principle',
+      industry: null,
+      topic_key: 'shift_pay_rules',
       summary: 'Штрафы фиксируют нарушения, премии поощряют стабильную качественную работу.',
       content:
         'Премия — это не подарок, а поощрение за стабильное выполнение правил. Штраф применяется за конкретное нарушение с причиной. Серьёзные случаи должны проходить проверку руководителем. Идеальная смена может давать бонус, а повторные нарушения усиливают ответственность.',
@@ -394,6 +400,8 @@ async function seedDefaults(organizationId: string | null, actorUserId: string |
       category: 'shift-rules',
       title: 'Неразглашение внутренней информации',
       slug: 'operator-confidentiality-rules',
+      industry: null,
+      topic_key: 'confidentiality',
       summary: 'Оператор не передаёт внутренние данные, цены, отчёты, доступы, переписки и данные клиентов третьим лицам.',
       content:
         '<p>Оператор получает доступ только для выполнения рабочих задач. Запрещено передавать логины, пароли, скриншоты отчётов, данные клиентов, суммы кассы, внутренние инструкции и переписки третьим лицам.</p><p>Если доступ был потерян, телефон украден или появился подозрительный запрос — нужно сразу сообщить руководителю.</p>',
@@ -405,6 +413,8 @@ async function seedDefaults(organizationId: string | null, actorUserId: string |
       category: 'shift-rules',
       title: 'Техника безопасности и ответственность на смене',
       slug: 'operator-safety-responsibility',
+      industry: null,
+      topic_key: 'safety',
       summary: 'Базовые правила безопасности для зала, кассы, техники и конфликтных ситуаций.',
       content:
         '<p>Главный принцип: не рисковать собой, клиентами и имуществом клуба. При конфликте оператор не спорит агрессивно, фиксирует ситуацию и зовёт руководителя.</p><p>Нельзя самостоятельно вскрывать опасное оборудование, переносить тяжёлые предметы без помощи, оставлять зал без контроля и игнорировать запах гари, перегрев или повреждения проводов.</p>',
@@ -416,6 +426,8 @@ async function seedDefaults(organizationId: string | null, actorUserId: string |
       category: 'salary-rules',
       title: 'Долги оператора: только просмотр',
       slug: 'operator-debts-view-only',
+      industry: null,
+      topic_key: 'shift_pay_rules',
       summary: 'Оператор видит свои долги, но не закрывает их вручную в программе.',
       content:
         '<p>Долги в кабинете оператора нужны для прозрачности: оператор видит, какие позиции и суммы закреплены за ним.</p><p>Оператор не нажимает “оплатил” и не закрывает долг самостоятельно. Погашение выполняет руководитель через расчёт зарплаты или административную часть.</p>',
@@ -449,6 +461,12 @@ async function seedDefaults(organizationId: string | null, actorUserId: string |
         severity: item.severity,
         requires_confirmation: item.requires_confirmation === true,
         sort_order: (index + 1) * 10,
+        // Ниша и тема каркаса. Без industry клубная статья («не работает
+        // компьютер») попадала бы в экзамен продавца магазина: подбор считает
+        // общесетевую статью без ниши годной для всех точек.
+        industry: item.industry ?? null,
+        topic_key: item.topic_key ?? null,
+        source: 'seed',
       },
     ])
     if (error) throw error
