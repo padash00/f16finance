@@ -165,7 +165,7 @@ struct MyContactsCard: View {
     @ViewBuilder
     private func unavailable(_ error: APIError) -> some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            if case .notFound = error {
+            if error.looksMissingOnServer {
                 Text("Правка своих данных появится после обновления сайта.")
                     .font(Typography.caption)
                     .foregroundStyle(Theme.textDim)

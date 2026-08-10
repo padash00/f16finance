@@ -972,7 +972,15 @@ private struct ContactPickerSheet: View {
     var body: some View {
         NavigationStack {
             Group {
-                if let error, contacts.isEmpty {
+                if let error, contacts.isEmpty, error.looksMissingOnServer {
+                    // Сайт старше приложения: раздел уже есть в сборке, но
+                    // сервер о нём не знает. Это не поломка у человека.
+                    EmptyStateView(
+                        icon: "clock.arrow.circlepath",
+                        title: "Скоро появится",
+                        message: "Выбор собеседника заработает после обновления сайта. Пока можно отвечать в существующих переписках."
+                    )
+                } else if let error, contacts.isEmpty {
                     ErrorStateView(error: error) { Task { await load() } }
                 } else if isLoading && contacts.isEmpty {
                     LoadingRows(count: 6)
