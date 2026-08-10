@@ -805,6 +805,12 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
             description: 'Из данных системы или из ответов интервью. Публикует всегда человек',
             severity: 'medium',
           },
+          {
+            id: 'knowledge-setup.reset',
+            label: 'Удалить регламенты и собрать заново',
+            description: 'Удаление черновиков, регламентов точки или всей базы организации',
+            severity: 'high',
+          },
         ],
       },
       {

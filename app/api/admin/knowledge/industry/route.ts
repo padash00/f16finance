@@ -229,7 +229,7 @@ export async function GET(request: Request) {
     // Покрытие каркаса: какие темы закрыты статьями этой точки или общими.
     let articlesQuery = supabase
       .from('knowledge_articles')
-      .select('id, title, topic_key, company_id, industry, is_published, source, updated_at')
+      .select('id, title, summary, content, topic_key, company_id, industry, is_published, source, updated_at')
       .or(`company_id.is.null,company_id.eq.${companyId}`)
       .limit(500)
     if (orgId) articlesQuery = articlesQuery.eq('organization_id', orgId)
@@ -255,7 +255,16 @@ export async function GET(request: Request) {
       const matched = byTopic.get(topic.key) || []
       return {
         ...topic,
-        articles: matched.map((a) => ({ id: a.id, title: a.title, is_published: a.is_published, source: a.source })),
+        articles: matched.map((a) => ({
+          id: a.id,
+          title: a.title,
+          is_published: a.is_published,
+          source: a.source,
+          // Текст нужен только для непроверенных черновиков — их читают и
+          // публикуют прямо здесь. Опубликованные правят в «Базе знаний».
+          summary: a.is_published ? null : a.summary,
+          content: a.is_published ? null : a.content,
+        })),
         published: matched.filter((a) => a.is_published).length,
         drafts: matched.filter((a) => !a.is_published).length,
         // Можно ли собрать тему из данных прямо сейчас.
@@ -296,7 +305,15 @@ export async function POST(request: Request) {
     if ('response' in access) return access.response
 
     const body = (await request.json().catch(() => null)) as
-      | { action?: string; company_id?: string; industry?: string; answers?: Record<string, string>; topic_keys?: string[] }
+      | {
+          action?: string
+          company_id?: string
+          industry?: string
+          answers?: Record<string, string>
+          topic_keys?: string[]
+          article_id?: string
+          scope?: string
+        }
       | null
     if (!body?.action) return json({ error: 'action обязателен' }, 400)
 
@@ -342,6 +359,83 @@ export async function POST(request: Request) {
       })
 
       return json({ ok: true })
+    }
+
+    // ─── Опубликовать черновик, не уходя со страницы ──────────────────────
+    if (body.action === 'publish_article') {
+      const denied = await requireCapability(access, 'knowledge-setup.generate')
+      if (denied) return denied
+
+      const articleId = String(body.article_id || '')
+      if (!articleId) return json({ error: 'article_id обязателен' }, 400)
+
+      const { data: article } = await supabase
+        .from('knowledge_articles')
+        .select('id, organization_id, company_id, title')
+        .eq('id', articleId)
+        .maybeSingle()
+      if (!article || (article as any).organization_id !== orgId) return json({ error: 'article-not-found' }, 404)
+
+      const { error } = await supabase
+        .from('knowledge_articles')
+        .update({ is_published: true })
+        .eq('id', articleId)
+      if (error) return json({ error: 'publish-failed', detail: error.message }, 500)
+
+      await writeAuditLog(supabase as any, {
+        actorUserId: access.user?.id || null,
+        action: 'knowledge.publish',
+        entityType: 'knowledge-article',
+        entityId: articleId,
+        payload: { title: (article as any).title },
+      })
+
+      return json({ ok: true })
+    }
+
+    // ─── Сброс базы, чтобы собрать заново ─────────────────────────────────
+    // Три области, от безопасной к разрушительной. Отдельные ветки, а не один
+    // «удалить всё»: чаще всего надо снести неудачную партию черновиков, а не
+    // регламенты, которые уже вычитали и опубликовали.
+    if (body.action === 'reset_knowledge') {
+      const denied = await requireCapability(access, 'knowledge-setup.reset')
+      if (denied) return denied
+
+      const scope = String(body.scope || 'drafts')
+      if (!['drafts', 'point', 'organization'].includes(scope)) {
+        return json({ error: 'Неизвестная область сброса' }, 400)
+      }
+
+      let selectQuery = supabase.from('knowledge_articles').select('id').eq('organization_id', orgId)
+      if (scope === 'drafts') {
+        selectQuery = selectQuery.eq('company_id', companyId).eq('is_published', false)
+      } else if (scope === 'point') {
+        selectQuery = selectQuery.eq('company_id', companyId)
+      }
+      // scope === 'organization' — вся база орг, включая общесетевые статьи.
+
+      const { data: doomed, error: selectError } = await selectQuery.limit(5000)
+      if (selectError) return json({ error: 'reset-failed', detail: selectError.message }, 500)
+
+      const ids = ((doomed || []) as any[]).map((row) => String(row.id))
+      if (ids.length === 0) return json({ ok: true, data: { deleted: 0 } })
+
+      // Сначала отметки об ознакомлении: на них внешний ключ, иначе удаление
+      // статьи упадёт.
+      await supabase.from('knowledge_article_confirmations').delete().in('article_id', ids)
+
+      const { error: deleteError } = await supabase.from('knowledge_articles').delete().in('id', ids)
+      if (deleteError) return json({ error: 'reset-failed', detail: deleteError.message }, 500)
+
+      await writeAuditLog(supabase as any, {
+        actorUserId: access.user?.id || null,
+        action: 'knowledge.reset',
+        entityType: 'company',
+        entityId: companyId,
+        payload: { scope, deleted: ids.length },
+      })
+
+      return json({ ok: true, data: { deleted: ids.length } })
     }
 
     const generating = body.action === 'generate_facts' || body.action === 'generate_interview'

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { CheckCircle2, Circle, Database, FileEdit, Info, Loader2, MessageSquareText, RefreshCw, Sparkles } from 'lucide-react'
+import { CheckCircle2, Circle, Database, FileEdit, Info, Loader2, MessageSquareText, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
@@ -13,7 +13,14 @@ import { useCapabilities } from '@/lib/client/use-capabilities'
 type Company = { id: string; name: string; code: string | null; industry: string | null }
 type IndustryOption = { code: string; label: string; description: string }
 
-type TopicArticle = { id: string; title: string; is_published: boolean; source: string | null }
+type TopicArticle = {
+  id: string
+  title: string
+  is_published: boolean
+  source: string | null
+  summary: string | null
+  content: string | null
+}
 type Topic = {
   key: string
   label: string
@@ -44,6 +51,7 @@ export default function KnowledgeSetupPage() {
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [showInterview, setShowInterview] = useState(false)
   const [step, setStep] = useState(0)
+  const [openDraft, setOpenDraft] = useState<string | null>(null)
 
   const load = useCallback(async (targetCompanyId?: string) => {
     setLoading(true)
@@ -103,11 +111,12 @@ export default function KnowledgeSetupPage() {
 
   const canSetIndustry = can('knowledge-setup.set_industry')
   const canGenerate = can('knowledge-setup.generate')
+  const canReset = can('knowledge-setup.reset')
 
   if (loading && companies.length === 0) return <PageSkeleton />
 
   return (
-    <div className="space-y-5">
+    <div className="app-page-wide space-y-6">
       <AdminPageHeader
         title="Настройка базы знаний"
         description="Ниша точки задаёт каркас тем. Черновики регламентов собираются из данных системы или из ваших ответов — публикуете вы"
@@ -423,21 +432,68 @@ export default function KnowledgeSetupPage() {
                       </div>
                       <div className="text-[11px] text-muted-foreground">{topic.hint}</div>
                       {topic.articles.length > 0 && (
-                        <div className="mt-1 flex flex-wrap gap-1.5">
-                          {topic.articles.map((article) => (
-                            <Link
-                              key={article.id}
-                              href="/knowledge-admin"
-                              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] transition hover:bg-slate-100 dark:hover:bg-white/5 ${
-                                article.is_published
-                                  ? 'border-emerald-400/40 text-emerald-700 dark:text-emerald-300'
-                                  : 'border-amber-400/40 text-amber-700 dark:text-amber-300'
-                              }`}
-                            >
-                              <FileEdit className="h-3 w-3" />
-                              {article.title}
-                            </Link>
-                          ))}
+                        <div className="mt-1 space-y-1.5">
+                          <div className="flex flex-wrap gap-1.5">
+                            {topic.articles.map((article) =>
+                              article.is_published ? (
+                                <Link
+                                  key={article.id}
+                                  href="/knowledge-admin"
+                                  className="inline-flex items-center gap-1 rounded-full border border-emerald-400/40 px-2 py-0.5 text-[10px] text-emerald-700 transition hover:bg-slate-100 dark:text-emerald-300 dark:hover:bg-white/5"
+                                >
+                                  <FileEdit className="h-3 w-3" />
+                                  {article.title}
+                                </Link>
+                              ) : (
+                                <button
+                                  key={article.id}
+                                  onClick={() => setOpenDraft(openDraft === article.id ? null : article.id)}
+                                  className="inline-flex items-center gap-1 rounded-full border border-amber-400/40 px-2 py-0.5 text-[10px] text-amber-700 transition hover:bg-amber-500/10 dark:text-amber-300"
+                                >
+                                  <FileEdit className="h-3 w-3" />
+                                  {article.title} · черновик {openDraft === article.id ? '▾' : '▸'}
+                                </button>
+                              ),
+                            )}
+                          </div>
+
+                          {/* Читаем и публикуем прямо здесь: уходить в другую
+                              страницу и заново искать статью — лишний шаг. */}
+                          {topic.articles
+                            .filter((article) => !article.is_published && openDraft === article.id)
+                            .map((article) => (
+                              <div key={`${article.id}-body`} className="rounded-xl border border-amber-400/30 bg-amber-500/[0.05] p-3">
+                                {article.summary && (
+                                  <div className="mb-1 text-[11px] font-medium text-body">{article.summary}</div>
+                                )}
+                                <div className="max-h-64 overflow-y-auto whitespace-pre-wrap text-[11px] leading-relaxed text-body">
+                                  {article.content}
+                                </div>
+                                <div className="mt-2 flex flex-wrap items-center gap-2">
+                                  <Button
+                                    size="sm"
+                                    disabled={busy !== null}
+                                    onClick={async () => {
+                                      await post('publish_article', { article_id: article.id }, `publish:${article.id}`)
+                                      setOpenDraft(null)
+                                    }}
+                                  >
+                                    {busy === `publish:${article.id}` ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <CheckCircle2 className="h-4 w-4" />
+                                    )}
+                                    Всё верно — опубликовать
+                                  </Button>
+                                  <Link
+                                    href="/knowledge-admin"
+                                    className="text-[11px] text-sky-600 underline dark:text-sky-300"
+                                  >
+                                    Поправить текст в базе знаний →
+                                  </Link>
+                                </div>
+                              </div>
+                            ))}
                         </div>
                       )}
                     </div>
@@ -447,11 +503,84 @@ export default function KnowledgeSetupPage() {
             </div>
           </Card>
 
-          <div className="rounded-2xl border border-sky-400/30 bg-sky-500/[0.06] p-4 text-xs text-sky-800 dark:text-sky-200">
-            Черновики не участвуют в экзамене — вопросы собираются только по опубликованным регламентам. Проверьте текст на
-            странице <Link href="/knowledge-admin" className="underline">База знаний</Link> и опубликуйте: ИИ мог упустить деталь,
-            а экзамен спросит ровно то, что там написано.
-          </div>
+          {/* Следующий шаг цепочки — чтобы не гадать, куда идти дальше */}
+          {coverage.covered > 0 ? (
+            <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
+              <div>
+                <div className="text-sm font-semibold text-foreground">Готово к экзамену</div>
+                <div className="text-xs text-muted-foreground">
+                  Опубликовано тем: {coverage.covered} из {coverage.total}. Вопросы соберутся по ним.
+                  {coverage.covered < coverage.total && ' Незакрытые темы просто не попадут в билет.'}
+                </div>
+              </div>
+              <Link
+                href="/operator-exams"
+                className="rounded-xl bg-emerald-500/15 px-4 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-500/25 dark:text-emerald-200"
+              >
+                Назначить экзамен →
+              </Link>
+            </Card>
+          ) : (
+            <div className="rounded-2xl border border-sky-400/30 bg-sky-500/[0.06] p-4 text-xs text-sky-800 dark:text-sky-200">
+              Черновики не участвуют в экзамене — вопросы собираются только по опубликованным регламентам. Прочитайте текст
+              черновика (клик по жёлтой плашке темы) и нажмите «Всё верно — опубликовать»: ИИ мог упустить деталь, а экзамен
+              спросит ровно то, что написано.
+            </div>
+          )}
+
+          {/* Сброс: собрать заново, если партия черновиков вышла неудачной */}
+          {canReset && (
+            <Card className="space-y-3 border-rose-400/30 p-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-rose-700 dark:text-rose-300">
+                <Trash2 className="h-4 w-4" />
+                Удалить и собрать заново
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Удалённое не восстанавливается. Отметки сотрудников об ознакомлении с этими регламентами удаляются вместе с ними.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy !== null}
+                  onClick={async () => {
+                    if (!confirm(`Удалить ВСЕ черновики точки «${company?.name}»? Опубликованные регламенты останутся.`)) return
+                    const data = await post('reset_knowledge', { scope: 'drafts' }, 'reset')
+                    if (data) alert(`Удалено черновиков: ${data.deleted}`)
+                  }}
+                >
+                  Только черновики точки
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy !== null}
+                  onClick={async () => {
+                    if (!confirm(`Удалить ВСЕ регламенты точки «${company?.name}», включая опубликованные?`)) return
+                    const data = await post('reset_knowledge', { scope: 'point' }, 'reset')
+                    if (data) alert(`Удалено статей: ${data.deleted}`)
+                  }}
+                >
+                  Все регламенты точки
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-rose-400/50 text-rose-700 dark:text-rose-300"
+                  disabled={busy !== null}
+                  onClick={async () => {
+                    if (!confirm('Удалить ВСЮ базу знаний организации — все точки и общесетевые правила?')) return
+                    if (!confirm('Это необратимо. Экзамены перестанут собираться, пока база не будет заполнена заново. Точно удалить?')) return
+                    const data = await post('reset_knowledge', { scope: 'organization' }, 'reset')
+                    if (data) alert(`Удалено статей: ${data.deleted}`)
+                  }}
+                >
+                  Всю базу организации
+                </Button>
+                {busy === 'reset' && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
+              </div>
+            </Card>
+          )}
         </>
       )}
     </div>

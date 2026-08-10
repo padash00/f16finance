@@ -396,7 +396,7 @@ export default function OperatorExamsPage() {
   const withoutTelegram = eligibleOperators.filter((o) => !o.telegram_chat_id)
 
   return (
-    <div className="space-y-5">
+    <div className="app-page-wide space-y-6">
       <AdminPageHeader
         title="Экзамены операторов"
         description="Аттестация по регламентам точки: ИИ собирает билет из базы знаний, бот принимает ответы в Telegram"
