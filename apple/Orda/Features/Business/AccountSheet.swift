@@ -21,6 +21,7 @@ struct AccountSheet: View {
             ScreenScroll {
                 VStack(spacing: Spacing.lg) {
                     identityCard
+                    MyContactsCard()
                     AppearancePicker()
                     BiometricLockToggle()
                     logoutButton
@@ -75,6 +76,147 @@ struct AccountSheet: View {
                 }
                 Button("Отмена", role: .cancel) {}
             }
+    }
+}
+
+/// Свои контакты — единственное, что человек правит о себе сам.
+///
+/// Раньше поменять собственный номер телефона можно было только через
+/// владельца: он открывал админский раздел и вписывал то, что ему продиктовали.
+/// Владелец при этом не знает контакты лучше самого человека — он их у него и
+/// спрашивал.
+///
+/// Имя, должность и ставка показаны, но не правятся: на них считается зарплата
+/// и строится подчинение, и менять их о себе — значит ломать учёт.
+struct MyContactsCard: View {
+    @Environment(\.api) private var api
+
+    @State private var profile: MyProfile?
+    @State private var phone = ""
+    @State private var email = ""
+    @State private var telegram = ""
+    @State private var isSaving = false
+    @State private var message: String?
+    @State private var isError = false
+    @State private var didLoad = false
+
+    var body: some View {
+        Card {
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                SectionHeader("Мои данные")
+
+                if let profile {
+                    if let position = profile.position, !position.isEmpty {
+                        StatRow("Должность", value: position, icon: "briefcase")
+                        Text("Должность и имя меняет владелец — по ним считается зарплата.")
+                            .font(Typography.caption)
+                            .foregroundStyle(Theme.textDim)
+                    }
+
+                    FieldLabel("Телефон")
+                    field($phone, placeholder: "+7 700 000 00 00", keyboard: .phone)
+
+                    FieldLabel("Почта")
+                    field($email, placeholder: "name@example.com", keyboard: .email)
+
+                    if profile.supportsTelegram {
+                        FieldLabel("Telegram для уведомлений")
+                        field($telegram, placeholder: "chat id", keyboard: .plain)
+                    }
+
+                    if let message {
+                        Text(message)
+                            .font(Typography.caption)
+                            .foregroundStyle(isError ? Theme.negative : Theme.positive)
+                    }
+
+                    Button(isSaving ? "Сохраняем…" : "Сохранить") {
+                        Task { await save() }
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .disabled(isSaving || !hasChanges)
+                } else {
+                    LoadingRows(count: 2)
+                }
+            }
+        }
+        .task {
+            guard !didLoad else { return }
+            didLoad = true
+            await load()
+        }
+    }
+
+    private enum Keyboard { case phone, email, plain }
+
+    @ViewBuilder
+    private func field(_ text: Binding<String>, placeholder: String, keyboard: Keyboard) -> some View {
+        TextField(placeholder, text: text)
+            .textFieldStyle(.plain)
+            .font(Typography.callout)
+            .foregroundStyle(Theme.text)
+            .padding(Spacing.md)
+            .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+            #if os(iOS)
+            .autocorrectionDisabled()
+            .textInputAutocapitalization(.never)
+            .keyboardType(keyboard == .phone ? .phonePad : keyboard == .email ? .emailAddress : .default)
+            #endif
+    }
+
+    private var hasChanges: Bool {
+        guard let profile else { return false }
+        return phone != (profile.phone ?? "")
+            || email != (profile.email ?? "")
+            || telegram != (profile.telegramChatID ?? "")
+    }
+
+    private func load() async {
+        do {
+            let loaded = try await MyProfileService(api: api).load()
+            profile = loaded
+            phone = loaded.phone ?? ""
+            email = loaded.email ?? ""
+            telegram = loaded.telegramChatID ?? ""
+        } catch {
+            // Профиля может не быть — например, у суперадмина, который не
+            // числится ни сотрудником, ни оператором. Это не ошибка, просто
+            // менять нечего.
+            profile = nil
+        }
+    }
+
+    private func save() async {
+        guard !isSaving, let profile else { return }
+        isSaving = true
+        defer { isSaving = false }
+
+        var change = MyProfileChange()
+        if phone != (profile.phone ?? "") { change.phone = phone }
+        if email != (profile.email ?? "") { change.email = email }
+        if profile.supportsTelegram, telegram != (profile.telegramChatID ?? "") {
+            change.telegramChatID = telegram
+        }
+
+        if let blocker = change.validationMessage {
+            message = blocker
+            isError = true
+            return
+        }
+
+        do {
+            try await MyProfileService(api: api).save(change)
+            await load()
+            message = "Сохранено"
+            isError = false
+            Haptics.success()
+        } catch let error as APIError {
+            message = error.userMessage
+            isError = true
+        } catch {
+            message = error.localizedDescription
+            isError = true
+        }
     }
 }
 
