@@ -289,6 +289,27 @@ final class BusinessStore {
         }
     }
 
+    // ── Операторы ────────────────────────────────────────────────────────────
+
+    private(set) var operatorSaveError: String?
+
+    func createOperator(_ draft: OperatorDraft) async -> Bool {
+        do {
+            try await service.createOperator(draft)
+            // Список нужен сразу: следом заводят учётную запись, а для неё
+            // нужен идентификатор только что созданного человека.
+            await loadTeam()
+            operatorSaveError = nil
+            return true
+        } catch let error as APIError {
+            operatorSaveError = error.userMessage
+            return false
+        } catch {
+            operatorSaveError = error.localizedDescription
+            return false
+        }
+    }
+
     // ── Приёмка ──────────────────────────────────────────────────────────────
 
     private(set) var receiptSaveError: String?

@@ -59,3 +59,48 @@ struct MyProfileTests {
         #expect(asOperator.telegramChatID == "123")
     }
 }
+
+/// Оформление оператора: логин и обязательные поля.
+@Suite("Оформление оператора")
+struct OperatorOnboardingTests {
+    @Test("Логин предлагается латиницей по имени")
+    func usernameSuggestion() {
+        #expect(OperatorUsername.suggestion(from: "Канат Амангелдиев") == "kanat.amangeldiev")
+        #expect(OperatorUsername.suggestion(from: "Пётр") == "petr")
+        // Дефис в фамилии — тот же разделитель, что и пробел.
+        #expect(OperatorUsername.suggestion(from: "Анна-Мария") == "anna.mariya")
+    }
+
+    /// Логин превращается в почту `<логин>@operator.local`, поэтому кириллица
+    /// и пробелы там недопустимы: вход просто не сработает.
+    @Test("Кириллица, пробелы и короткие логины отсеиваются")
+    func usernameValidation() {
+        #expect(OperatorUsername.validationMessage(for: "ab") != nil)
+        #expect(OperatorUsername.validationMessage(for: "иван") != nil)
+        #expect(OperatorUsername.validationMessage(for: "ivan petrov") != nil)
+        #expect(OperatorUsername.validationMessage(for: "ivan.petrov") == nil)
+        #expect(OperatorUsername.validationMessage(for: "kassir-2") == nil)
+    }
+
+    @Test("Оператор без имени не заводится")
+    func nameRequired() {
+        var draft = OperatorDraft()
+        #expect(draft.validationMessage == "Имя обязательно")
+        draft.name = "Канат"
+        #expect(draft.isValid)
+    }
+
+    @Test("Пустые поля карточки не отправляются пустыми строками")
+    func blanksBecomeNull() throws {
+        var draft = OperatorDraft()
+        draft.name = "Канат"
+        let body = try JSONEncoder().encode(OperatorCreateRequest(payload: draft.payload()))
+        let json = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+        let payload = try #require(json["payload"] as? [String: Any])
+
+        #expect(json["action"] as? String == "createOperator")
+        #expect(payload["name"] as? String == "Канат")
+        #expect(payload["full_name"] == nil)
+        #expect(payload["phone"] == nil)
+    }
+}

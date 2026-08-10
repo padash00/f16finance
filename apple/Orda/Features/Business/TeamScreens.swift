@@ -11,10 +11,15 @@ import SwiftUI
 /// бесполезен, а имя всё равно видно в строке.
 struct OperatorsScreen: View {
     @Environment(BusinessStore.self) private var store
+    @Environment(\.access) private var access
 
     @State private var selected: TeamOperator?
     @State private var search = ""
     @State private var showInactive = false
+    @State private var isAdding = false
+
+    /// Право `operators.create` проверяет и сервер.
+    private var canCreate: Bool { access?.can("operators.create") ?? false }
 
     var body: some View {
         Group {
@@ -45,7 +50,13 @@ struct OperatorsScreen: View {
         .background(Theme.background)
         .navigationTitle("Операторы")
         .searchable(text: $search, prompt: "Имя или должность")
+        .sheet(isPresented: $isAdding) { AddOperatorSheet() }
         .toolbar {
+            if canCreate {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { isAdding = true } label: { Image(systemName: "plus") }
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 Toggle(isOn: $showInactive) {
                     Label("С уволенными", systemImage: "person.slash")

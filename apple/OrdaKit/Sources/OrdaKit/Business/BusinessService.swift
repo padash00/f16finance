@@ -280,6 +280,59 @@ public struct BusinessService: Sendable {
         return response.data.incidents
     }
 
+    /// Завести карточку оператора. Требует `operators.create`.
+    public func createOperator(_ draft: OperatorDraft) async throws {
+        let body = try JSONEncoder().encode(OperatorCreateRequest(payload: draft.payload()))
+        _ = try await api.send(APIRequest(path: "/api/admin/operators", method: .post, body: body))
+    }
+
+    /// Завести учётную запись оператору. Требует `operators.create_account`.
+    ///
+    /// Пароль возвращается открытым ровно один раз и больше нигде не хранится:
+    /// его нужно либо показать человеку, либо сразу отправить.
+    public func createOperatorAccount(
+        operatorID: String,
+        username: String,
+        name: String
+    ) async throws -> OperatorAccount {
+        let body = try JSONEncoder().encode(
+            OperatorAccountRequest(
+                operatorId: operatorID,
+                username: username,
+                // Почта нужна серверу как признак «завести вход»; настоящий
+                // адрес входа он собирает сам из логина.
+                email: "\(username)@operator.local",
+                name: name
+            )
+        )
+        return try await api.send(
+            APIRequest(path: "/api/admin/create-operator-account", method: .post, body: body)
+        )
+    }
+
+    /// Отправить логин и пароль в Telegram.
+    /// Требует `operators.send_credentials_telegram`.
+    public func sendOperatorCredentials(
+        operatorID: String,
+        chatID: String,
+        username: String,
+        password: String,
+        name: String
+    ) async throws {
+        let body = try JSONEncoder().encode(
+            OperatorCredentialsRequest(
+                operatorId: operatorID,
+                chatId: chatID,
+                username: username,
+                password: password,
+                name: name
+            )
+        )
+        _ = try await api.send(
+            APIRequest(path: "/api/admin/send-operator-credentials", method: .post, body: body)
+        )
+    }
+
     /// Провести приёмку от поставщика. Требует `store-receipts.create`.
     public func createReceipt(_ draft: ReceiptDraft, companyID: String?) async throws {
         let body = try JSONEncoder().encode(
