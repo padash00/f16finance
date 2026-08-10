@@ -48,6 +48,12 @@ struct OrdaApp: App {
                 // nil — не вмешиваемся: цвета адаптивные и перекрашиваются
                 // вслед за системой сами.
                 .preferredColorScheme(appearance.colorScheme)
+                #if os(iOS)
+                // Листы («Аккаунт», формы ввода) показываются отдельным
+                // контроллером и тему берут у окна, а не отсюда. Ставим её и
+                // окну — иначе выбранная светлая доходила не везде.
+                .task(id: appearance) { appearance.applyToWindows() }
+                #endif
         }
         #if os(macOS)
         .defaultSize(width: 1180, height: 760)

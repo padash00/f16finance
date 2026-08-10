@@ -38,3 +38,34 @@ enum Appearance: String, CaseIterable, Identifiable {
 
     static let storageKey = "orda.appearance"
 }
+
+#if os(iOS)
+import UIKit
+
+extension Appearance {
+    var interfaceStyle: UIUserInterfaceStyle {
+        switch self {
+        case .system: .unspecified
+        case .light: .light
+        case .dark: .dark
+        }
+    }
+
+    /// Ставит тему самому окну.
+    ///
+    /// `preferredColorScheme` действует только внутри своего дерева
+    /// представлений, а лист показывается отдельным контроллером поверх окна —
+    /// и тему берёт у окна, а не у того, кто его открыл. Поэтому «Аккаунт»
+    /// оставался тёмным, когда выбрана светлая: сам экран настроек и был
+    /// листом. Окну тему видят все — и листы, и системные алерты.
+    @MainActor
+    func applyToWindows() {
+        for scene in UIApplication.shared.connectedScenes {
+            guard let windowScene = scene as? UIWindowScene else { continue }
+            for window in windowScene.windows {
+                window.overrideUserInterfaceStyle = interfaceStyle
+            }
+        }
+    }
+}
+#endif

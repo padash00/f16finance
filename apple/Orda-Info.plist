@@ -40,6 +40,13 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Сканирование штрихкодов товара и съёмка чеков при заведении расхода.</string>
 
+	<!-- Экспортное соответствие. Приложение шифрует только тем, что даёт
+	     система: HTTPS к сайту и Keychain для сессии. Такое использование
+	     освобождено от экспортных ограничений, и без этого ключа App Store
+	     Connect задаёт вопрос при каждой загрузке сборки. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>
