@@ -68,7 +68,7 @@ export async function generateExamQuestions(params: {
 
   let query = params.supabase
     .from('knowledge_articles')
-    .select('id, company_id, title, content')
+    .select('id, company_id, title, content, industry')
     .eq('organization_id', params.organizationId)
     .eq('is_published', true)
     .limit(200)
@@ -81,8 +81,31 @@ export async function generateExamQuestions(params: {
   const { data: articles, error } = await query
   if (error) return { questions: [], error: `articles-load-failed: ${error.message}` }
 
-  const usable = ((articles || []) as Array<{ id: string; company_id: string | null; title: string; content: string | null }>)
+  // Ниши выбранных точек: общесетевая статья с отраслевой пометкой годится
+  // только «своим». Иначе продавец магазина получал бы вопрос про поломку ПК.
+  const { data: companyRows } = await params.supabase
+    .from('companies')
+    .select('id, industry')
+    .in('id', params.companyIds.length > 0 ? params.companyIds : ['00000000-0000-0000-0000-000000000000'])
+  const industries = new Set(
+    ((companyRows || []) as Array<{ industry: string | null }>)
+      .map((row) => row.industry)
+      .filter((value): value is string => !!value),
+  )
+
+  const usable = ((articles || []) as Array<{
+    id: string
+    company_id: string | null
+    title: string
+    content: string | null
+    industry: string | null
+  }>)
     .filter((a) => String(a.content || '').trim().length >= 80)
+    .filter((a) => {
+      if (a.company_id) return true // статья самой точки — всегда
+      if (!a.industry) return true // общая для всех ниш
+      return industries.has(a.industry)
+    })
 
   if (usable.length < 3) {
     return { questions: [], error: 'not-enough-articles' }

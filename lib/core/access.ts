@@ -236,6 +236,7 @@ const OWNER_PATHS = [
   '/shifts/*',
   '/store/sales',
   '/knowledge-admin',
+  '/knowledge-setup',
   '/operator-exams',
 ] as const
 

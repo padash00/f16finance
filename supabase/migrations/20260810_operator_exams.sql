@@ -104,12 +104,18 @@ create trigger trg_operator_exam_attempts_updated_at
   before update on operator_exam_attempts
   for each row execute function touch_operator_exams_updated_at();
 
--- Доступ к странице. Рантайм берёт список URL роли из position_paths
--- (fail-closed): без этой строки владелец получит «нет доступа» на /operator-exams.
--- Остальным ролям путь выдаёт владелец сам на /access — новая страница не должна
--- открываться людям молча.
+-- Доступ к странице для владельца.
+--
+-- Базовых ролей (owner/manager/marketer) в таблице positions может не быть
+-- вовсе — они описаны в коде (STAFF_ROLE_MATRIX_FALLBACK), а в БД лежат только
+-- кастомные должности. Тогда прямая вставка падает по внешнему ключу
+-- position_paths.position_name → positions.name.
+--
+-- Поэтому строку добавляем только если роль реально заведена в БД. Если нет —
+-- путь берётся из OWNER_PATHS в lib/core/access.ts, куда он уже добавлен.
 insert into position_paths (position_name, path)
-values ('owner', '/operator-exams')
+select 'owner', '/operator-exams'
+where exists (select 1 from positions where name = 'owner')
 on conflict (position_name, path) do nothing;
 
 notify pgrst, 'reload schema';

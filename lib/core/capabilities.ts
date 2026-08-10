@@ -793,6 +793,21 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         ],
       },
       {
+        id: 'knowledge-setup',
+        path: '/knowledge-setup',
+        label: 'Настройка базы знаний',
+        capabilities: [
+          { id: 'knowledge-setup.view', label: 'Просмотр каркаса и покрытия', severity: 'low' },
+          { id: 'knowledge-setup.set_industry', label: 'Выбрать нишу точки', severity: 'medium' },
+          {
+            id: 'knowledge-setup.generate',
+            label: 'Собрать черновики регламентов через ИИ',
+            description: 'Из данных системы или из ответов интервью. Публикует всегда человек',
+            severity: 'medium',
+          },
+        ],
+      },
+      {
         id: 'operator-exams',
         path: '/operator-exams',
         label: 'Экзамены операторов',
