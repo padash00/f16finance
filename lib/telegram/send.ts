@@ -45,6 +45,53 @@ export async function sendTelegramMessage(
   }
 }
 
+/**
+ * Ответ на нажатие inline-кнопки. Без него Telegram крутит «часики» на кнопке
+ * секунд десять, и человек жмёт её повторно — получаем дубли ответов.
+ */
+export async function answerTelegramCallback(
+  callbackQueryId: string,
+  text?: string,
+  showAlert = false,
+): Promise<void> {
+  const token = process.env.TELEGRAM_BOT_TOKEN
+  if (!token) return
+  await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ callback_query_id: callbackQueryId, text, show_alert: showAlert }),
+  }).catch(() => null)
+}
+
+/**
+ * Перерисовать уже отправленное сообщение (снимаем кнопки после ответа, чтобы
+ * на один вопрос нельзя было ответить дважды).
+ */
+export async function editTelegramMessage(
+  chatId: string | number,
+  messageId: number,
+  text: string,
+  options?: TelegramSendOptions,
+): Promise<void> {
+  const token = process.env.TELEGRAM_BOT_TOKEN
+  if (!token) return
+  const parseMode = options?.parseMode ?? 'HTML'
+  const outgoing = parseMode === 'HTML' && !options?.skipFrame ? ordaTelegramFrame(text) : text
+  const body: Record<string, unknown> = {
+    chat_id: chatId,
+    message_id: messageId,
+    text: outgoing,
+    parse_mode: parseMode,
+    disable_web_page_preview: true,
+  }
+  if (options?.replyMarkup) body.reply_markup = options.replyMarkup
+  await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).catch(() => null)
+}
+
 export function htmlBold(text: string) {
   return `<b>${text}</b>`
 }

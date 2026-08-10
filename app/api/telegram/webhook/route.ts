@@ -6,6 +6,7 @@ import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { getStaffRoleLabel } from '@/lib/core/access'
 import { writeAuditLog, writeNotificationLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requiredEnv } from '@/lib/server/env'
+import { handleExamAnswer } from '@/lib/server/operator-exams'
 import { safeEqual } from '@/lib/server/safe-equal'
 import {
   buildInvoiceConfirmationText,
@@ -2983,6 +2984,22 @@ export async function POST(req: Request) {
       const telegramUserId = String(update.callback_query.from?.id || '')
       const chatId = update.callback_query.message?.chat?.id
       const messageId = update.callback_query.message?.message_id
+
+      // ─── Экзамен оператора: ответ на вопрос ───────────────────────────
+      // Формат: exam:<attemptId>:<questionIndex>:<choiceIndex>
+      const examMatch = callbackData.match(/^exam:([0-9a-f-]+):(\d+):(\d+)$/i)
+      if (examMatch && chatId) {
+        await handleExamAnswer({
+          supabase,
+          attemptId: examMatch[1],
+          questionIndex: Number(examMatch[2]),
+          choiceIndex: Number(examMatch[3]),
+          chatId: String(chatId),
+          callbackQueryId,
+          messageId,
+        }).catch(() => null)
+        return json({ ok: true })
+      }
 
       // ─── Меню /start: категорийные подсказки ──────────────────────────
       if (callbackData.startsWith('menu:') && chatId) {

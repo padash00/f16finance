@@ -793,6 +793,23 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         ],
       },
       {
+        id: 'operator-exams',
+        path: '/operator-exams',
+        label: 'Экзамены операторов',
+        capabilities: [
+          { id: 'operator-exams.view', label: 'Просмотр экзаменов и результатов', severity: 'low' },
+          {
+            id: 'operator-exams.create',
+            label: 'Назначить экзамен и разослать',
+            description: 'Генерирует вопросы через ИИ и отправляет операторам в Telegram',
+            severity: 'medium',
+            deps: ['operators.view'],
+          },
+          { id: 'operator-exams.remind', label: 'Напомнить о незавершённом экзамене', severity: 'low' },
+          { id: 'operator-exams.cancel', label: 'Завершить или отменить экзамен', severity: 'medium' },
+        ],
+      },
+      {
         id: 'goals',
         path: '/goals',
         label: 'Цели',
