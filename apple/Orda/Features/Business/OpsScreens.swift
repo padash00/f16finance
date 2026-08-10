@@ -11,9 +11,16 @@ import SwiftUI
 /// а не то, что он найдёт, пролистав до середины.
 struct TeamTasksScreen: View {
     @Environment(BusinessStore.self) private var store
+    @Environment(\.access) private var access
 
     @State private var selected: TeamTask?
     @State private var filter: Filter = .open
+    @State private var isAdding = false
+
+    /// Право `tasks.create` проверяет и сервер.
+    private var canCreate: Bool { access?.can("tasks.create") ?? false }
+    /// Завершение — своё право, отдельное от правки.
+    private var canComplete: Bool { access?.can("tasks.complete") ?? false }
 
     private enum Filter: String, CaseIterable, Identifiable {
         case open, done, all
@@ -48,7 +55,13 @@ struct TeamTasksScreen: View {
                 ) { task in
                     TeamTaskRowView(task: task)
                 } detail: { task in
-                    TeamTaskDetail(task: task)
+                    TeamTaskDetail(
+                        task: task,
+                        canComplete: canComplete && !task.isDone,
+                        onComplete: {
+                            Task { await store.changeTaskStatus(taskID: task.id, to: .done) }
+                        }
+                    )
                 } empty: {
                     WideEmptyState(
                         icon: "checkmark.circle",
@@ -62,9 +75,17 @@ struct TeamTasksScreen: View {
         }
         .background(Theme.background)
         .navigationTitle("Задачи")
-        .toolbar { LogoutToolbarItem() }
+        .toolbar {
+            if canCreate {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { isAdding = true } label: { Image(systemName: "plus") }
+                }
+            }
+            LogoutToolbarItem()
+        }
         .task { if store.tasks.isEmpty { await store.loadTasks() } }
         .refreshable { await store.loadTasks() }
+        .sheet(isPresented: $isAdding) { AddTaskSheet() }
     }
 
     /// Просроченные наверх, дальше срочные, дальше по сроку.
@@ -140,10 +161,19 @@ struct TeamTaskRowView: View {
 
 private struct TeamTaskDetail: View {
     let task: TeamTask
+    var canComplete = false
+    var onComplete: () -> Void = {}
 
     var body: some View {
         ScreenScroll {
             VStack(spacing: Spacing.lg) {
+                if canComplete {
+                    // Закрыть задачу — самое частое, что с ней делают, и ради
+                    // одного нажатия открывать сайт незачем.
+                    Button("Завершить задачу", action: onComplete)
+                        .buttonStyle(PrimaryButtonStyle())
+                }
+
                 Card {
                     VStack(alignment: .leading, spacing: Spacing.md) {
                         HStack(alignment: .top) {

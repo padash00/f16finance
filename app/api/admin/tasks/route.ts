@@ -887,6 +887,14 @@ export async function POST(req: Request) {
 
     if (body.action === 'changeStatus') {
       if (!body.taskId) return json({ error: 'taskId обязателен' }, 400)
+      // Завершение — отдельное право от правки: закрыть чужую задачу и
+      // переписать её условия это разные полномочия, и в каталоге они заведены
+      // по отдельности. Раньше смена статуса не спрашивала ничего.
+      const denied = await requireCapability(
+        access,
+        body.status === 'done' ? 'tasks.complete' : 'tasks.edit',
+      )
+      if (denied) return denied as any
       const existingContext = await loadTaskContext(supabase, body.taskId)
       await ensureTaskCompanyAccess(
         {

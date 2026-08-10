@@ -289,6 +289,43 @@ final class BusinessStore {
         }
     }
 
+    // ── Задачи ───────────────────────────────────────────────────────────────
+
+    private(set) var taskSaveError: String?
+
+    /// Поставить задачу. `false` — не получилось, причина в `taskSaveError`.
+    func createTask(_ draft: TaskDraft) async -> Bool {
+        do {
+            try await service.createTask(draft)
+            await loadTasks()
+            taskSaveError = nil
+            return true
+        } catch let error as APIError {
+            taskSaveError = error.userMessage
+            return false
+        } catch {
+            taskSaveError = error.localizedDescription
+            return false
+        }
+    }
+
+    /// Перевести задачу в другое состояние прямо из списка.
+    @discardableResult
+    func changeTaskStatus(taskID: String, to status: TaskState) async -> Bool {
+        do {
+            try await service.changeTaskStatus(taskID: taskID, status: status)
+            await loadTasks()
+            taskSaveError = nil
+            return true
+        } catch let error as APIError {
+            taskSaveError = error.userMessage
+            return false
+        } catch {
+            taskSaveError = error.localizedDescription
+            return false
+        }
+    }
+
     func loadLedger() async {
         async let incomeSide: Void = loadIncomes()
         async let expenseSide: Void = loadExpenses()

@@ -247,6 +247,21 @@ public struct BusinessService: Sendable {
         return response.items
     }
 
+    /// Поставить задачу. Требует `tasks.create`.
+    public func createTask(_ draft: TaskDraft) async throws {
+        let body = try JSONEncoder().encode(TaskCreateRequest(payload: draft.payload()))
+        _ = try await api.send(APIRequest(path: "/api/admin/tasks", method: .post, body: body))
+    }
+
+    /// Перевести задачу в другое состояние. Требует `tasks.complete` для
+    /// завершения и `tasks.edit` для остальных переходов — решает сервер.
+    public func changeTaskStatus(taskID: String, status: TaskState) async throws {
+        let body = try JSONEncoder().encode(
+            TaskStatusRequest(taskID: taskID, status: status.rawValue)
+        )
+        _ = try await api.send(APIRequest(path: "/api/admin/tasks", method: .post, body: body))
+    }
+
     /// Клиенты с лояльностью. Требует прав сотрудника.
     public func customers(search: String? = nil) async throws -> [Customer] {
         var query: [String: String] = [:]
