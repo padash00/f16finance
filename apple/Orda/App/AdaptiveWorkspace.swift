@@ -187,9 +187,29 @@ struct AdaptiveWorkspace<Detail: View>: View {
         .navigationSplitViewStyle(.balanced)
     }
 
+    /// Строка раздела.
+    ///
+    /// Значок в подложке — тот же, что в списке «Разделы» на телефоне. Раньше
+    /// в панели он был голым системным, и один раздел выглядел по-разному на
+    /// двух устройствах: человек, который держит оба, каждый раз заново ищет
+    /// глазами знакомое.
     private func itemLabel(_ item: WorkspaceItem) -> some View {
-        HStack {
-            Label(item.title, systemImage: item.icon)
+        HStack(spacing: Spacing.md) {
+            // Фирменный зелёный, а не акцент рабочего пространства: тот
+            // разный у владельца и сотрудника, и один раздел красился
+            // по-разному на планшете и телефоне. Акцент остаётся на выделении
+            // и заголовках групп — там он и значит «где я».
+            Image(systemName: item.icon)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Theme.brand)
+                .frame(width: 28, height: 28)
+                .background(Theme.brand.opacity(0.12), in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+
+            Text(item.title)
+                .font(Typography.callout)
+                .foregroundStyle(Theme.text)
+                .lineLimit(2)
+
             if let badge = item.badge, badge > 0 {
                 Spacer()
                 Text("\(badge)")
