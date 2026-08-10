@@ -158,9 +158,19 @@ export async function GET(request: Request) {
     }
 
     // Точки организации.
-    let companiesQuery = supabase.from('companies').select('id, name, code').order('name')
+    let companiesQuery = supabase.from('companies').select('id, name, code, industry').order('name')
     if (companyScope.allowedCompanyIds) companiesQuery = companiesQuery.in('id', companyScope.allowedCompanyIds)
     const { data: companies } = await companiesQuery
+
+    // Готовность цепочки: экзамен собирается из опубликованных регламентов, а те
+    // привязаны к нише. Показываем это на странице, чтобы «не хватает статей»
+    // не всплывало сюрпризом уже при отправке.
+    let articlesQuery = supabase
+      .from('knowledge_articles')
+      .select('id', { count: 'exact', head: true })
+      .eq('is_published', true)
+    if (orgId) articlesQuery = articlesQuery.eq('organization_id', orgId)
+    const { count: publishedArticles } = await articlesQuery
 
     // Операторы с привязкой к точкам — форма показывает только тех, кто работает
     // на выбранных точках.
@@ -214,6 +224,13 @@ export async function GET(request: Request) {
         }),
         companies: companies || [],
         operators,
+        readiness: {
+          pointsTotal: (companies || []).length,
+          pointsWithIndustry: ((companies || []) as any[]).filter((c) => !!c.industry).length,
+          publishedArticles: Number(publishedArticles || 0),
+          operatorsWithTelegram: operators.filter((o) => !!o.telegram_chat_id).length,
+          operatorsTotal: operators.length,
+        },
       },
     })
   } catch (error: any) {

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { CheckCircle2, Circle, Database, FileEdit, Loader2, MessageSquareText, RefreshCw, Sparkles } from 'lucide-react'
+import { CheckCircle2, Circle, Database, FileEdit, Info, Loader2, MessageSquareText, RefreshCw, Sparkles } from 'lucide-react'
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
@@ -127,6 +127,36 @@ export default function KnowledgeSetupPage() {
           {error}
         </div>
       )}
+
+      {/* Порядок действий: без него страница выглядит набором несвязанных кнопок */}
+      <Card className="p-4">
+        <div className="mb-2.5 flex items-center gap-2 text-sm font-semibold text-foreground">
+          <Info className="h-4 w-4 text-sky-500" />
+          Как заполнить: четыре шага
+        </div>
+        <ol className="grid gap-2 md:grid-cols-4">
+          {[
+            { n: 1, t: 'Выберите точку и нишу', d: 'Ниша задаёт список тем. У клуба, PS-зоны и магазина он разный.' },
+            { n: 2, t: 'Соберите из данных', d: 'Цены и правила оплаты подтянутся из системы — настоящие, без выдумок.' },
+            { n: 3, t: 'Пройдите интервью', d: 'Спросит только про темы без статей: общение, конфликты, ответственность.' },
+            { n: 4, t: 'Проверьте и опубликуйте', d: 'Черновики в экзамен не идут. Читаете глазами и публикуете.' },
+          ].map((step) => (
+            <li key={step.n} className="rounded-xl border border-border bg-surface-muted p-3">
+              <div className="flex items-center gap-2">
+                <span className="grid h-5 w-5 shrink-0 place-items-center rounded-md bg-violet-500/15 text-[11px] font-bold text-violet-700 dark:text-violet-300">
+                  {step.n}
+                </span>
+                <span className="text-xs font-medium text-foreground">{step.t}</span>
+              </div>
+              <div className="mt-1 text-[11px] text-muted-foreground">{step.d}</div>
+            </li>
+          ))}
+        </ol>
+        <div className="mt-2 text-[11px] text-muted-foreground">
+          Дальше — <Link href="/operator-exams" className="text-sky-600 underline dark:text-sky-300">Экзамены операторов</Link>:
+          вопросы собираются из опубликованных регламентов той точки, на которой человек работает.
+        </div>
+      </Card>
 
       {/* Выбор точки */}
       <Card className="p-4">

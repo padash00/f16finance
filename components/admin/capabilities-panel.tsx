@@ -69,6 +69,9 @@ export function CapabilitiesPanel({ scope = 'global' }: { scope?: 'global' | 'or
   const [items, setItems] = useState<RoleCapability[]>([])
   const [roles, setRoles] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
+  // Заглушка «Загружаем права…» — только на первом заходе. После пресета или
+  // «Обновить» матрица должна оставаться на месте, а не схлопываться.
+  const [firstLoad, setFirstLoad] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [savingKey, setSavingKey] = useState<string | null>(null)
   const [search, setSearch] = useState('')
@@ -103,6 +106,7 @@ export function CapabilitiesPanel({ scope = 'global' }: { scope?: 'global' | 'or
       setError(e?.message || 'load_failed')
     } finally {
       setLoading(false)
+      setFirstLoad(false)
     }
   }
 
@@ -475,7 +479,7 @@ export function CapabilitiesPanel({ scope = 'global' }: { scope?: 'global' | 'or
     }
   }
 
-  if (loading) {
+  if (firstLoad) {
     return (
       <div className={`${card} p-6`}>
         <div className="flex items-center gap-3 text-muted-foreground">

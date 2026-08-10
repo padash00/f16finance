@@ -1,7 +1,8 @@
 'use client'
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, GraduationCap, Loader2, RefreshCw, Send, XCircle } from 'lucide-react'
+import Link from 'next/link'
+import { CheckCircle2, GraduationCap, Info, Loader2, RefreshCw, Send, XCircle } from 'lucide-react'
 
 import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
@@ -72,6 +73,88 @@ const STATUS_LABELS: Record<AttemptRow['status'], { label: string; tone: string 
 
 const dt = (value: string | null) =>
   value ? new Date(value).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'
+
+type Readiness = {
+  pointsTotal: number
+  pointsWithIndustry: number
+  publishedArticles: number
+  operatorsWithTelegram: number
+  operatorsTotal: number
+}
+
+/**
+ * Цепочка «ниша → регламенты → телеграм → экзамен» с живым статусом.
+ *
+ * Без неё «в базе знаний меньше 3 статей» вылезает уже при отправке экзамена,
+ * когда владелец успел заполнить всю форму.
+ */
+function ReadinessGuide({ readiness }: { readiness: Readiness }) {
+  const steps = [
+    {
+      done: readiness.pointsWithIndustry > 0,
+      title: 'Задайте нишу точки',
+      detail: `${readiness.pointsWithIndustry} из ${readiness.pointsTotal} точек`,
+      hint: 'От ниши зависит, какие темы вообще должны быть закрыты',
+      href: '/knowledge-setup',
+      linkLabel: 'Настройка базы знаний',
+    },
+    {
+      done: readiness.publishedArticles >= 3,
+      title: 'Опубликуйте регламенты',
+      detail: `${readiness.publishedArticles} опубликовано, нужно минимум 3`,
+      hint: 'Вопросы собираются только из опубликованных статей, черновики не считаются',
+      href: '/knowledge-admin',
+      linkLabel: 'База знаний',
+    },
+    {
+      done: readiness.operatorsWithTelegram > 0,
+      title: 'Укажите операторам Telegram',
+      detail: `${readiness.operatorsWithTelegram} из ${readiness.operatorsTotal} с чатом`,
+      hint: 'Без chat ID экзамен не доставится',
+      href: '/hr',
+      linkLabel: 'Сотрудники',
+    },
+  ]
+
+  const ready = steps.every((step) => step.done)
+
+  return (
+    <Card className={`p-4 ${ready ? '' : 'border-amber-400/40'}`}>
+      <div className="mb-2.5 flex items-center gap-2 text-sm font-semibold text-foreground">
+        <Info className="h-4 w-4 text-sky-500" />
+        {ready ? 'Всё готово — можно назначать экзамен' : 'Чтобы назначить экзамен, нужно три вещи'}
+      </div>
+      <div className="grid gap-2 md:grid-cols-3">
+        {steps.map((step, index) => (
+          <div
+            key={step.title}
+            className={`rounded-xl border p-3 ${
+              step.done ? 'border-emerald-400/40 bg-emerald-500/[0.06]' : 'border-border bg-surface-muted'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              {step.done ? (
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+              ) : (
+                <span className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-slate-400/30 text-[10px] font-bold text-body">
+                  {index + 1}
+                </span>
+              )}
+              <span className="text-xs font-medium text-foreground">{step.title}</span>
+            </div>
+            <div className="mt-1 text-[11px] text-body">{step.detail}</div>
+            <div className="text-[11px] text-muted-foreground">{step.hint}</div>
+            {!step.done && (
+              <Link href={step.href} className="mt-1 inline-block text-[11px] text-sky-600 underline dark:text-sky-300">
+                {step.linkLabel} →
+              </Link>
+            )}
+          </div>
+        ))}
+      </div>
+    </Card>
+  )
+}
 
 /**
  * Развёрнутый ответ с оценкой ИИ. Обоснование и цитата из регламента показаны
@@ -155,12 +238,17 @@ function OpenAnswerCard({
 export default function OperatorExamsPage() {
   const { can } = useCapabilities()
   const [loading, setLoading] = useState(true)
+  // Скелетон только при первом заходе. Иначе любое действие (создать, напомнить,
+  // поставить балл) дёргает load() и вся страница мигает пустым каркасом —
+  // выглядит как перезагрузка.
+  const [firstLoad, setFirstLoad] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const [exams, setExams] = useState<ExamRow[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
   const [operators, setOperators] = useState<Operator[]>([])
+  const [readiness, setReadiness] = useState<Readiness | null>(null)
 
   const [openForm, setOpenForm] = useState(false)
   const [title, setTitle] = useState('')
@@ -186,10 +274,12 @@ export default function OperatorExamsPage() {
       setExams(body.data?.exams || [])
       setCompanies(body.data?.companies || [])
       setOperators(body.data?.operators || [])
+      setReadiness(body.data?.readiness || null)
     } catch (e: any) {
       setError(e?.message || 'Не удалось загрузить')
     } finally {
       setLoading(false)
+      setFirstLoad(false)
     }
   }, [])
 
@@ -301,7 +391,7 @@ export default function OperatorExamsPage() {
   const canCancel = can('operator-exams.cancel')
   const canGrade = can('operator-exams.grade')
 
-  if (loading) return <PageSkeleton />
+  if (firstLoad) return <PageSkeleton />
 
   const withoutTelegram = eligibleOperators.filter((o) => !o.telegram_chat_id)
 
@@ -334,6 +424,8 @@ export default function OperatorExamsPage() {
           {error}
         </div>
       )}
+
+      {readiness && <ReadinessGuide readiness={readiness} />}
 
       {openForm && canCreate && (
         <Card className="space-y-4 p-5">
