@@ -821,6 +821,12 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
             deps: ['operators.view'],
           },
           { id: 'operator-exams.remind', label: 'Напомнить о незавершённом экзамене', severity: 'low' },
+          {
+            id: 'operator-exams.grade',
+            label: 'Переставить балл за развёрнутый ответ',
+            description: 'Оценка ИИ — предложение; последнее слово за человеком',
+            severity: 'medium',
+          },
           { id: 'operator-exams.cancel', label: 'Завершить или отменить экзамен', severity: 'medium' },
         ],
       },

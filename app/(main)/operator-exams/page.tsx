@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { CheckCircle2, GraduationCap, Loader2, RefreshCw, Send, XCircle } from 'lucide-react'
 
 import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
@@ -27,6 +27,23 @@ type ExamRow = {
   avg_score: number | null
 }
 
+type OpenAnswerView = {
+  index: number
+  question: string
+  rubric: string[]
+  article_title: string
+  max: number
+  answer: {
+    text: string
+    score: number
+    max: number
+    justification: string
+    citation: string
+    overridden?: boolean
+    override_comment?: string | null
+  } | null
+}
+
 type AttemptRow = {
   id: string
   operator_id: string
@@ -40,6 +57,8 @@ type AttemptRow = {
   delivery_error: string | null
   sent_at: string | null
   completed_at: string | null
+  manual_override: boolean
+  open_answers: OpenAnswerView[]
 }
 
 const STATUS_LABELS: Record<AttemptRow['status'], { label: string; tone: string }> = {
@@ -53,6 +72,85 @@ const STATUS_LABELS: Record<AttemptRow['status'], { label: string; tone: string 
 
 const dt = (value: string | null) =>
   value ? new Date(value).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'
+
+/**
+ * Развёрнутый ответ с оценкой ИИ. Обоснование и цитата из регламента показаны
+ * рядом с баллом: без них спор с оценкой невозможен, а спорить будут.
+ */
+function OpenAnswerCard({
+  item,
+  canGrade,
+  busy,
+  onOverride,
+}: {
+  item: OpenAnswerView
+  canGrade: boolean
+  busy: boolean
+  onOverride: (score: number, comment: string) => void
+}) {
+  const [score, setScore] = useState(item.answer?.score ?? 0)
+  const [comment, setComment] = useState('')
+
+  if (!item.answer) {
+    return (
+      <div className="rounded-xl border border-border bg-white p-3 text-xs text-muted-foreground dark:bg-slate-950/40">
+        <div className="font-medium text-body">{item.question}</div>
+        <div className="mt-1">Ответа пока нет</div>
+      </div>
+    )
+  }
+
+  const changed = score !== item.answer.score
+
+  return (
+    <div className="rounded-xl border border-border bg-white p-3 dark:bg-slate-950/40">
+      <div className="text-xs font-medium text-foreground">{item.question}</div>
+      <div className="mt-0.5 text-[10px] text-muted-foreground">по регламенту «{item.article_title}»</div>
+
+      <div className="mt-2 whitespace-pre-wrap rounded-lg bg-slate-100 p-2.5 text-xs text-body dark:bg-white/5">
+        {item.answer.text}
+      </div>
+
+      <div className="mt-2 grid gap-1 text-[11px]">
+        <div className="text-body">
+          <b>Оценка ИИ:</b> {item.answer.score} из {item.answer.max}
+          {item.answer.overridden && <span className="ml-1 text-amber-600 dark:text-amber-300">· правил владелец</span>}
+        </div>
+        {item.answer.justification && <div className="text-muted-foreground">{item.answer.justification}</div>}
+        {item.answer.citation && (
+          <div className="border-l-2 border-emerald-400/50 pl-2 italic text-muted-foreground">
+            «{item.answer.citation}»
+          </div>
+        )}
+        {item.rubric.length > 0 && (
+          <div className="text-muted-foreground">Рубрика: {item.rubric.join(' · ')}</div>
+        )}
+      </div>
+
+      {canGrade && (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <input
+            type="number"
+            min={0}
+            max={item.max}
+            value={score}
+            onChange={(e) => setScore(Number(e.target.value))}
+            className="w-16 rounded-lg border border-border bg-white px-2 py-1 text-xs text-foreground dark:bg-slate-950/50"
+          />
+          <input
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            placeholder="Почему меняете балл"
+            className="min-w-[200px] flex-1 rounded-lg border border-border bg-white px-2 py-1 text-xs text-foreground dark:bg-slate-950/50"
+          />
+          <Button size="sm" variant="outline" disabled={!changed || busy} onClick={() => onOverride(score, comment)}>
+            Поставить балл
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function OperatorExamsPage() {
   const { can } = useCapabilities()
@@ -69,8 +167,10 @@ export default function OperatorExamsPage() {
   const [companyIds, setCompanyIds] = useState<string[]>([])
   const [operatorIds, setOperatorIds] = useState<string[]>([])
   const [questionCount, setQuestionCount] = useState(10)
+  const [openCount, setOpenCount] = useState(2)
   const [passScore, setPassScore] = useState(70)
   const [deadline, setDeadline] = useState('')
+  const [expandedAttempt, setExpandedAttempt] = useState<string | null>(null)
 
   const [detailsId, setDetailsId] = useState<string | null>(null)
   const [attempts, setAttempts] = useState<AttemptRow[]>([])
@@ -143,6 +243,7 @@ export default function OperatorExamsPage() {
           company_ids: companyIds,
           operator_ids: operatorIds,
           question_count: questionCount,
+          open_count: openCount,
           pass_score: passScore,
           deadline_at: deadline ? new Date(deadline).toISOString() : null,
         }),
@@ -198,6 +299,7 @@ export default function OperatorExamsPage() {
   const canCreate = can('operator-exams.create')
   const canRemind = can('operator-exams.remind')
   const canCancel = can('operator-exams.cancel')
+  const canGrade = can('operator-exams.grade')
 
   if (loading) return <PageSkeleton />
 
@@ -342,9 +444,9 @@ export default function OperatorExamsPage() {
             )}
           </div>
 
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid gap-3 md:grid-cols-3">
             <label className="grid gap-1 text-xs">
-              <span className="text-muted-foreground">Вопросов в билете</span>
+              <span className="text-muted-foreground">Тестовых вопросов</span>
               <input
                 type="number"
                 min={3}
@@ -353,6 +455,18 @@ export default function OperatorExamsPage() {
                 onChange={(e) => setQuestionCount(Number(e.target.value))}
                 className="rounded-xl border border-border bg-white px-3 py-2 text-sm text-foreground dark:bg-slate-950/50"
               />
+            </label>
+            <label className="grid gap-1 text-xs">
+              <span className="text-muted-foreground">Ситуационных (0–5)</span>
+              <input
+                type="number"
+                min={0}
+                max={5}
+                value={openCount}
+                onChange={(e) => setOpenCount(Number(e.target.value))}
+                className="rounded-xl border border-border bg-white px-3 py-2 text-sm text-foreground dark:bg-slate-950/50"
+              />
+              <span className="text-[10px] text-muted-foreground">Свободный ответ, оценка ИИ до 5 баллов</span>
             </label>
             <label className="grid gap-1 text-xs">
               <span className="text-muted-foreground">Порог сдачи, %</span>
@@ -478,9 +592,29 @@ export default function OperatorExamsPage() {
                 <tbody>
                   {attempts.map((attempt) => {
                     const meta = STATUS_LABELS[attempt.status]
+                    const openCountForAttempt = attempt.open_answers?.length || 0
+                    const expanded = expandedAttempt === attempt.id
                     return (
-                      <tr key={attempt.id} className="border-t border-border">
-                        <td className="px-4 py-2.5 font-medium text-foreground">{attempt.operator_name}</td>
+                      <Fragment key={attempt.id}>
+                      <tr className="border-t border-border">
+                        <td className="px-4 py-2.5 font-medium text-foreground">
+                          {openCountForAttempt > 0 ? (
+                            <button
+                              onClick={() => setExpandedAttempt(expanded ? null : attempt.id)}
+                              className="text-left hover:underline"
+                            >
+                              {attempt.operator_name}
+                              <span className="ml-1.5 text-[10px] text-sky-600 dark:text-sky-300">
+                                {expanded ? '▾' : '▸'} {openCountForAttempt} развёрнутых
+                              </span>
+                            </button>
+                          ) : (
+                            attempt.operator_name
+                          )}
+                          {attempt.manual_override && (
+                            <div className="text-[10px] text-amber-600 dark:text-amber-300">балл правился вручную</div>
+                          )}
+                        </td>
                         <td className={`px-3 py-2.5 text-xs ${meta.tone}`}>
                           {meta.label}
                           {attempt.delivery_error && (
@@ -509,6 +643,47 @@ export default function OperatorExamsPage() {
                         <td className="px-3 py-2.5 text-xs text-body">{dt(attempt.sent_at)}</td>
                         <td className="px-3 py-2.5 text-xs text-body">{dt(attempt.completed_at)}</td>
                       </tr>
+                      {expanded && (
+                        <tr className="border-t border-border bg-surface-muted">
+                          <td colSpan={6} className="px-4 py-3">
+                            <div className="space-y-3">
+                              {attempt.open_answers.map((item) => (
+                                <OpenAnswerCard
+                                  key={item.index}
+                                  item={item}
+                                  canGrade={canGrade}
+                                  busy={busy}
+                                  onOverride={async (score, comment) => {
+                                    setBusy(true)
+                                    try {
+                                      const res = await fetch('/api/admin/operator-exams', {
+                                        method: 'POST',
+                                        headers: { 'content-type': 'application/json' },
+                                        body: JSON.stringify({
+                                          action: 'grade_override',
+                                          attempt_id: attempt.id,
+                                          question_index: item.index,
+                                          score,
+                                          comment,
+                                        }),
+                                      })
+                                      const b = await res.json()
+                                      if (!res.ok) throw new Error(b?.error || `HTTP ${res.status}`)
+                                      if (detailsId) await loadDetails(detailsId)
+                                      await load()
+                                    } catch (e: any) {
+                                      alert(`Ошибка: ${e?.message || 'не удалось'}`)
+                                    } finally {
+                                      setBusy(false)
+                                    }
+                                  }}
+                                />
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      </Fragment>
                     )
                   })}
                 </tbody>

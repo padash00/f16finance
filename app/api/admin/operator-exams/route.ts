@@ -5,6 +5,9 @@ import { requireCapability } from '@/lib/server/capabilities'
 import {
   buildOperatorTicket,
   generateExamQuestions,
+  generateOpenQuestions,
+  isOpenAnswer,
+  recomputeAttempt,
   sendExamQuestion,
   type ExamAttemptRow,
   type ExamQuestion,
@@ -62,7 +65,7 @@ export async function GET(request: Request) {
 
       const { data: attempts } = await supabase
         .from('operator_exam_attempts')
-        .select('id, operator_id, status, score, passed, correct_answers, total_questions, current_index, delivery_error, sent_at, started_at, completed_at')
+        .select('id, operator_id, status, score, passed, correct_answers, total_questions, current_index, delivery_error, sent_at, started_at, completed_at, manual_override, questions, answers')
         .eq('exam_id', examId)
         .order('created_at', { ascending: true })
 
@@ -83,10 +86,42 @@ export async function GET(request: Request) {
         ok: true,
         data: {
           exam,
-          attempts: ((attempts || []) as any[]).map((a) => ({
-            ...a,
-            operator_name: namesById.get(String(a.operator_id)) || 'Без имени',
-          })),
+          attempts: ((attempts || []) as any[]).map((a) => {
+            const questions = (a.questions || []) as ExamQuestion[]
+            const answers = (a.answers || {}) as Record<string, unknown>
+            // Наружу отдаём только развёрнутые ответы с оценкой — их проверяет
+            // человек. Тестовые вопросы вместе с correct не отдаём: страницу
+            // видят и те, кому предстоит сдавать.
+            const openAnswers = questions
+              .map((question, index) => ({ question, index, answer: answers[String(index)] }))
+              .filter((item) => item.question.type === 'open')
+              .map((item) => ({
+                index: item.index,
+                question: item.question.q,
+                rubric: item.question.rubric || [],
+                article_title: item.question.article_title,
+                max: Number(item.question.max_score || 5),
+                answer: isOpenAnswer(item.answer) ? item.answer : null,
+              }))
+
+            return {
+              id: a.id,
+              operator_id: a.operator_id,
+              status: a.status,
+              score: a.score,
+              passed: a.passed,
+              correct_answers: a.correct_answers,
+              total_questions: a.total_questions,
+              current_index: a.current_index,
+              delivery_error: a.delivery_error,
+              sent_at: a.sent_at,
+              started_at: a.started_at,
+              completed_at: a.completed_at,
+              manual_override: a.manual_override,
+              open_answers: openAnswers,
+              operator_name: namesById.get(String(a.operator_id)) || 'Без имени',
+            }
+          }),
         },
       })
     }
@@ -199,8 +234,13 @@ export async function POST(request: Request) {
           company_ids?: string[]
           operator_ids?: string[]
           question_count?: number
+          open_count?: number
           pass_score?: number
           deadline_at?: string | null
+          attempt_id?: string
+          question_index?: number
+          score?: number
+          comment?: string | null
         }
       | null
     if (!body?.action) return json({ error: 'action обязателен' }, 400)
@@ -233,6 +273,7 @@ export async function POST(request: Request) {
       if (operatorIds.length === 0) return json({ error: 'Выберите операторов' }, 400)
 
       const questionCount = Math.max(3, Math.min(20, Number(body.question_count) || 10))
+      const openCount = Math.max(0, Math.min(5, Number(body.open_count) || 0))
       const passScore = Math.max(1, Math.min(100, Number(body.pass_score) || 70))
 
       // Операторы обязаны работать на выбранных точках — иначе экзамен по чужому
@@ -265,6 +306,17 @@ export async function POST(request: Request) {
         return json({ error: message }, 400)
       }
 
+      // Ситуационные генерим отдельно: у них другой промпт, рубрика и вес.
+      // Пул общий на экзамен — билеты собираются из него.
+      const openPool = openCount > 0
+        ? await generateOpenQuestions({
+            supabase,
+            organizationId: orgId,
+            companyIds,
+            count: Math.min(openCount * 2, 8),
+          })
+        : []
+
       const { data: exam, error: examError } = await supabase
         .from('operator_exams')
         .insert([{
@@ -272,6 +324,7 @@ export async function POST(request: Request) {
           title,
           company_ids: companyIds,
           question_count: questionCount,
+          open_count: Math.min(openCount, openPool.length),
           pass_score: passScore,
           deadline_at: body.deadline_at || null,
           status: 'active',
@@ -289,7 +342,7 @@ export async function POST(request: Request) {
         .in('id', operatorIds)
 
       const attemptsToInsert = ((operatorRows || []) as any[]).map((operator) => {
-        const ticket: ExamQuestion[] = buildOperatorTicket(pool, questionCount)
+        const ticket: ExamQuestion[] = buildOperatorTicket(pool, questionCount, openPool, openCount)
         const chatId = operator.telegram_chat_id ? String(operator.telegram_chat_id) : null
         return {
           exam_id: examId,
@@ -339,6 +392,76 @@ export async function POST(request: Request) {
       })
 
       return json({ ok: true, data: { exam_id: examId, assigned: attemptsToInsert.length, sent, failures } })
+    }
+
+    // ─── Ручная правка балла за развёрнутый ответ ─────────────────────────
+    // Оценка ИИ — предложение. Последнее слово за человеком, иначе первый же
+    // спорный балл убьёт доверие ко всей аттестации.
+    if (body.action === 'grade_override') {
+      const denied = await requireCapability(access, 'operator-exams.grade')
+      if (denied) return denied
+
+      const attemptId = String(body.attempt_id || '')
+      const questionIndex = Number(body.question_index)
+      if (!attemptId || !Number.isInteger(questionIndex)) {
+        return json({ error: 'attempt_id и question_index обязательны' }, 400)
+      }
+
+      const { data: attempt } = await supabase
+        .from('operator_exam_attempts')
+        .select('id, exam_id, organization_id, questions, answers')
+        .eq('id', attemptId)
+        .eq('organization_id', orgId)
+        .maybeSingle()
+      if (!attempt) return json({ error: 'attempt-not-found' }, 404)
+
+      const questions = ((attempt as any).questions || []) as ExamQuestion[]
+      const question = questions[questionIndex]
+      if (!question || question.type !== 'open') return json({ error: 'Это не развёрнутый ответ' }, 400)
+
+      const answers = { ...(((attempt as any).answers || {}) as Record<string, unknown>) }
+      const current = answers[String(questionIndex)]
+      if (!isOpenAnswer(current)) return json({ error: 'Ответа на этот вопрос ещё нет' }, 400)
+
+      const max = Number(question.max_score || 5)
+      const score = Math.max(0, Math.min(max, Math.round(Number(body.score))))
+      if (!Number.isFinite(score)) return json({ error: 'Некорректный балл' }, 400)
+
+      answers[String(questionIndex)] = {
+        ...current,
+        score,
+        overridden: true,
+        override_comment: body.comment ? String(body.comment) : null,
+      }
+
+      const { error: updateError } = await supabase
+        .from('operator_exam_attempts')
+        .update({ answers })
+        .eq('id', attemptId)
+      if (updateError) return json({ error: 'override-failed', detail: updateError.message }, 500)
+
+      const { data: exam } = await supabase
+        .from('operator_exams')
+        .select('pass_score')
+        .eq('id', (attempt as any).exam_id)
+        .maybeSingle()
+
+      const recomputed = await recomputeAttempt({
+        supabase,
+        attemptId,
+        passScore: Number((exam as any)?.pass_score ?? 70),
+        gradedBy: access.user?.id || null,
+      })
+
+      await writeAuditLog(supabase as any, {
+        actorUserId: access.user?.id || null,
+        action: 'operator_exam.grade_override',
+        entityType: 'operator_exam_attempt',
+        entityId: attemptId,
+        payload: { questionIndex, from: current.score, to: score, comment: body.comment || null },
+      })
+
+      return json({ ok: true, data: recomputed })
     }
 
     // ─── Напомнить (переслать текущий вопрос) ─────────────────────────────

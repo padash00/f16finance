@@ -315,3 +315,47 @@ export function getInterviewForIndustry(code: string | null | undefined): Interv
 export function findTopic(code: string | null | undefined, topicKey: string): KnowledgeTopic | null {
   return getTopicsForIndustry(code).find((topic) => topic.key === topicKey) || null
 }
+
+/**
+ * План интервью под конкретную точку: спрашиваем ТОЛЬКО про незакрытые темы.
+ *
+ * Два правила, без которых раздел никогда не заполнится до конца:
+ *   1. Тема, у которой уже есть статья, из интервью выпадает — иначе владелец
+ *      второй раз отвечает на то, что уже написано, а генерация всё равно
+ *      пропустит дубль.
+ *   2. Для темы, под которую в каталоге нет заготовленного вопроса, вопрос
+ *      собирается из её же подсказки. Иначе такую дыру закрыть интервью
+ *      физически невозможно, и прогресс навсегда застрянет ниже 100%.
+ */
+export function buildInterviewPlan(
+  code: string | null | undefined,
+  coveredTopicKeys: readonly string[],
+): InterviewQuestion[] {
+  const covered = new Set(coveredTopicKeys)
+  const topics = getTopicsForIndustry(code)
+  const uncovered = topics.filter((topic) => !covered.has(topic.key))
+  if (uncovered.length === 0) return []
+
+  const uncoveredKeys = new Set(uncovered.map((topic) => topic.key))
+  const plan: InterviewQuestion[] = []
+  const addressed = new Set<string>()
+
+  for (const question of getInterviewForIndustry(code)) {
+    const relevant = question.topics.filter((key) => uncoveredKeys.has(key))
+    if (relevant.length === 0) continue
+    plan.push({ ...question, topics: relevant })
+    for (const key of relevant) addressed.add(key)
+  }
+
+  for (const topic of uncovered) {
+    if (addressed.has(topic.key)) continue
+    plan.push({
+      key: `topic:${topic.key}`,
+      question: `${topic.label} — как это устроено у вас?`,
+      hint: topic.hint,
+      topics: [topic.key],
+    })
+  }
+
+  return plan
+}

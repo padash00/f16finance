@@ -43,6 +43,7 @@ export default function KnowledgeSetupPage() {
 
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [showInterview, setShowInterview] = useState(false)
+  const [step, setStep] = useState(0)
 
   const load = useCallback(async (targetCompanyId?: string) => {
     setLoading(true)
@@ -170,7 +171,13 @@ export default function KnowledgeSetupPage() {
                   <button
                     key={industry.code}
                     disabled={!canSetIndustry || busy !== null}
-                    onClick={() => post('set_industry', { industry: industry.code }, 'industry')}
+                    onClick={async () => {
+                      await post('set_industry', { industry: industry.code }, 'industry')
+                      // Ниша выбрана — сразу ведём заполнять дыры, иначе раздел
+                      // так и останется наполовину пустым.
+                      setStep(0)
+                      setShowInterview(true)
+                    }}
                     className={`rounded-xl border p-3 text-left transition disabled:opacity-60 ${
                       active
                         ? 'border-violet-400/60 bg-violet-500/10'
@@ -226,10 +233,18 @@ export default function KnowledgeSetupPage() {
                   Интервью про точку
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {interview.length} вопросов о том, чего нет в данных: как общаться, что делать в конфликте, кто за что отвечает.
-                  Отвечайте своими словами — ИИ оформит в регламент.
+                  {interview.length > 0
+                    ? `${interview.length} вопросов ровно по тем темам, которые ещё не закрыты. Отвечайте своими словами — ИИ оформит в регламент.`
+                    : 'Все темы каркаса закрыты — вопросов не осталось.'}
                 </p>
-                <Button variant="outline" disabled={!canGenerate} onClick={() => setShowInterview((v) => !v)}>
+                <Button
+                  variant="outline"
+                  disabled={!canGenerate || interview.length === 0}
+                  onClick={() => {
+                    setStep(0)
+                    setShowInterview((v) => !v)
+                  }}
+                >
                   <MessageSquareText className="h-4 w-4" />
                   {showInterview ? 'Свернуть' : 'Пройти интервью'}
                 </Button>
@@ -237,39 +252,90 @@ export default function KnowledgeSetupPage() {
             </div>
           )}
 
-          {showInterview && company?.industry && (
+          {showInterview && company?.industry && interview.length === 0 && (
+            <Card className="p-6 text-center text-sm text-muted-foreground">
+              Все темы каркаса уже закрыты статьями — спрашивать нечего. Если хотите переписать регламент, правьте его на
+              странице «База знаний».
+            </Card>
+          )}
+
+          {showInterview && company?.industry && interview.length > 0 && (
             <Card className="space-y-4 p-5">
-              <div className="text-sm font-semibold text-foreground">Интервью — отвечайте только на то, что знаете</div>
-              {interview.map((question) => (
-                <label key={question.key} className="grid gap-1">
-                  <span className="text-xs font-medium text-body">{question.question}</span>
-                  {question.hint && <span className="text-[11px] text-muted-foreground">{question.hint}</span>}
-                  <textarea
-                    rows={2}
-                    value={answers[question.key] || ''}
-                    onChange={(e) => setAnswers((prev) => ({ ...prev, [question.key]: e.target.value }))}
-                    className="rounded-xl border border-border bg-white px-3 py-2 text-sm text-foreground dark:bg-slate-950/50"
-                  />
-                </label>
-              ))}
-              <div className="flex items-center gap-2">
-                <Button
-                  disabled={busy !== null}
-                  onClick={async () => {
-                    const data = await post('generate_interview', { answers }, 'interview')
-                    if (data) {
-                      alert(`Создано черновиков: ${data.created}\n\n${(data.titles || []).join('\n')}`)
-                      setShowInterview(false)
-                    }
-                  }}
-                >
-                  {busy === 'interview' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                  Составить регламенты
-                </Button>
-                <span className="text-[11px] text-muted-foreground">
-                  Пустые вопросы пропускаются — темы по ним останутся незакрытыми
-                </span>
-              </div>
+              {(() => {
+                const current = interview[Math.min(step, interview.length - 1)]
+                const isLast = step >= interview.length - 1
+                const answered = interview.filter((q) => (answers[q.key] || '').trim().length >= 5).length
+
+                return (
+                  <>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="text-sm font-semibold text-foreground">
+                        Интервью по незакрытым темам
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span>
+                          Вопрос <b className="text-foreground">{step + 1}</b> из {interview.length}
+                        </span>
+                        <div className="h-1.5 w-24 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                          <div
+                            className="h-full bg-sky-500 transition-all"
+                            style={{ width: `${((step + 1) / interview.length) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-border bg-surface-muted p-4">
+                      <div className="text-sm font-medium text-foreground">{current.question}</div>
+                      {current.hint && <div className="mt-1 text-[11px] text-muted-foreground">{current.hint}</div>}
+                      <textarea
+                        autoFocus
+                        rows={4}
+                        value={answers[current.key] || ''}
+                        onChange={(e) => setAnswers((prev) => ({ ...prev, [current.key]: e.target.value }))}
+                        placeholder="Своими словами — как есть на самом деле"
+                        className="mt-2 w-full rounded-xl border border-border bg-white px-3 py-2 text-sm text-foreground dark:bg-slate-950/50"
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button variant="outline" size="sm" disabled={step === 0} onClick={() => setStep((s) => s - 1)}>
+                        Назад
+                      </Button>
+                      {!isLast ? (
+                        <>
+                          <Button size="sm" onClick={() => setStep((s) => s + 1)}>
+                            Дальше
+                          </Button>
+                          <span className="text-[11px] text-muted-foreground">
+                            Не знаете — жмите «Дальше», тема останется незакрытой
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-[11px] text-muted-foreground">Это последний вопрос</span>
+                      )}
+                      <div className="ml-auto flex items-center gap-2">
+                        <span className="text-[11px] text-muted-foreground">заполнено {answered} из {interview.length}</span>
+                        <Button
+                          disabled={busy !== null || answered === 0}
+                          onClick={async () => {
+                            const data = await post('generate_interview', { answers }, 'interview')
+                            if (data) {
+                              alert(`Создано черновиков: ${data.created}\n\n${(data.titles || []).join('\n')}`)
+                              setAnswers({})
+                              setStep(0)
+                              setShowInterview(false)
+                            }
+                          }}
+                        >
+                          {busy === 'interview' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                          Составить регламенты ({answered})
+                        </Button>
+                      </div>
+                    </div>
+                  </>
+                )
+              })()}
             </Card>
           )}
 

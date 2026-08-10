@@ -6,7 +6,7 @@ import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { getStaffRoleLabel } from '@/lib/core/access'
 import { writeAuditLog, writeNotificationLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requiredEnv } from '@/lib/server/env'
-import { handleExamAnswer } from '@/lib/server/operator-exams'
+import { handleExamAnswer, handleExamTextAnswer } from '@/lib/server/operator-exams'
 import { safeEqual } from '@/lib/server/safe-equal'
 import {
   buildInvoiceConfirmationText,
@@ -3570,6 +3570,17 @@ export async function POST(req: Request) {
       const telegramUserId = String(update.message.from?.id || chatId)
       const text = update.message.text.trim()
       const cmd = text.split(' ')[0]?.toLowerCase()
+
+      // ─── Экзамен: развёрнутый ответ ───────────────────────────────────
+      // Проверяем ДО копилота: если человек сейчас отвечает на ситуационный
+      // вопрос, его «клиент требует вернуть деньги...» — это ответ на экзамен,
+      // а не команда ассистенту завести расход.
+      const examHandled = await handleExamTextAnswer({
+        supabase,
+        chatId: String(chatId),
+        text,
+      }).catch(() => false)
+      if (examHandled) return json({ ok: true })
 
       // Identify user role
       const botUser = await identifyBotUser(telegramUserId)

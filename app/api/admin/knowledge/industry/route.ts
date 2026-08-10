@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import {
+  buildInterviewPlan,
   getIndustry,
   getInterviewForIndustry,
   getTopicsForIndustry,
@@ -40,6 +41,11 @@ type SupabaseLike = any
 
 function slugify(topicKey: string, companyId: string) {
   return `${topicKey}-${companyId.slice(0, 8)}`.toLowerCase()
+}
+
+function findTopicLabel(industryCode: string, topicKey: string | undefined): string | null {
+  if (!topicKey) return null
+  return getTopicsForIndustry(industryCode).find((topic) => topic.key === topicKey)?.label || null
 }
 
 // ─── Сбор фактов из системы ────────────────────────────────────────────────
@@ -257,6 +263,10 @@ export async function GET(request: Request) {
       }
     })
 
+    // Тема считается занятой, если под неё уже есть статья — пусть даже
+    // черновик: генерация всё равно её пропустит, и спрашивать повторно незачем.
+    const takenTopics = topics.filter((topic) => topic.articles.length > 0).map((topic) => topic.key)
+
     return json({
       ok: true,
       data: {
@@ -264,7 +274,8 @@ export async function GET(request: Request) {
         industries: listIndustries(),
         company,
         topics,
-        interview: getInterviewForIndustry(company.industry),
+        interview: buildInterviewPlan(company.industry, takenTopics),
+        interviewTotal: getInterviewForIndustry(company.industry).length,
         factsSummary: {
           catalog: facts.catalog ? facts.catalog.split('\n').length : 0,
           salary_rules: !!facts.salary_rules,
@@ -376,15 +387,28 @@ export async function POST(request: Request) {
       }
     } else {
       const answers = body.answers || {}
-      const questions = getInterviewForIndustry(industry.code)
-      // Ответ владельца — сырьё для тем, на которые он отвечал.
+      const curated = getInterviewForIndustry(industry.code)
+      const curatedByKey = new Map(curated.map((question) => [question.key, question]))
+
+      // Ответ владельца — сырьё для тем, на которые он отвечал. Ключ вида
+      // `topic:<key>` приходит от синтезированных вопросов (темы, под которые
+      // в каталоге нет заготовленного вопроса) — их тема берётся из ключа.
       const factsByTopic = new Map<string, string[]>()
-      for (const question of questions) {
-        const answer = String(answers[question.key] || '').trim()
+      for (const [key, rawAnswer] of Object.entries(answers)) {
+        const answer = String(rawAnswer || '').trim()
         if (answer.length < 5) continue
-        for (const topicKey of question.topics) {
+
+        const question = curatedByKey.get(key)
+        const topicKeys = question
+          ? question.topics
+          : key.startsWith('topic:')
+            ? [key.slice('topic:'.length)]
+            : []
+        const label = question?.question || findTopicLabel(industry.code, topicKeys[0]) || key
+
+        for (const topicKey of topicKeys) {
           const list = factsByTopic.get(topicKey) || []
-          list.push(`Вопрос: ${question.question}\nОтвет владельца: ${answer}`)
+          list.push(`Вопрос: ${label}\nОтвет владельца: ${answer}`)
           factsByTopic.set(topicKey, list)
         }
       }
