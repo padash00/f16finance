@@ -9,7 +9,10 @@ import Foundation
 public enum NativeSection: String, CaseIterable, Sendable {
     case store
     case stock
+    case showcase
+    case catalog
     case requests
+    case requestsJournal
     case movements
     case operators
     case salary
@@ -26,11 +29,13 @@ public enum NativeSection: String, CaseIterable, Sendable {
     case suppliers
     case staff
     case receipts
+    case postings
     case writeoffs
     case shiftReports
     case birthdays
     case categories
     case storeAnalytics
+    case storeForecast
     case knowledge
     case settings
     case logs
@@ -83,11 +88,19 @@ public enum NativeSection: String, CaseIterable, Sendable {
     public var pageIDs: [String] {
         switch self {
         case .store: ["store"]
-        // Склад, витрина и каталог — один экран с разрезом по точкам:
-        // разделять их в приложении незачем, разрез переключается на месте.
+        // Склад, витрина и каталог — три разных вопроса, а не один разрез:
+        // сколько лежит на складе, что стоит перед покупателем, что вообще
+        // заведено в номенклатуре с ценой и штрихкодом. Раньше все три пункта
+        // вели на один экран остатков.
         // `inventory` сюда не входит — это группа каталога, а не страница.
-        case .stock: ["store-warehouse", "store-showcase", "store-catalog"]
-        case .requests: ["store-requests", "store-requests-journal"]
+        case .stock: ["store-warehouse"]
+        case .showcase: ["store-showcase"]
+        case .catalog: ["store-catalog"]
+        // Заявки — рабочий список того, что ждёт решения; журнал — история,
+        // куда заходят разбираться. Раньше журнал был тумблером на том же
+        // экране, то есть его как бы и не было.
+        case .requests: ["store-requests"]
+        case .requestsJournal: ["store-requests-journal"]
         case .movements: ["store-movements"]
         case .operators: ["operators"]
         case .salary: ["salary"]
@@ -103,13 +116,20 @@ public enum NativeSection: String, CaseIterable, Sendable {
         case .revisions: ["store-revisions"]
         case .suppliers: ["store-suppliers"]
         case .staff: ["staff"]
-        // Приёмка и оприходование — один журнал документов.
-        case .receipts: ["store-receipts", "store-postings"]
+        // Приёмка и оприходование живут в одном журнале на сервере, но это
+        // разные документы: у поставки есть накладная и деньги поставщику, у
+        // оприходования нет ни того, ни другого. Разделяет их поле `kind`.
+        case .receipts: ["store-receipts"]
+        case .postings: ["store-postings"]
         case .writeoffs: ["store-writeoffs"]
         case .shiftReports: ["shifts-reports"]
         case .birthdays: ["birthdays"]
         case .categories: ["categories"]
-        case .storeAnalytics: ["store-analytics", "store-forecast"]
+        // Аналитика отвечает «что продаётся лучше всего», прогноз — «что
+        // кончится раньше всего». Один экран на оба вопроса отвечал только на
+        // первый.
+        case .storeAnalytics: ["store-analytics"]
+        case .storeForecast: ["store-forecast"]
         case .knowledge: ["knowledge-admin"]
         case .settings: ["settings"]
         case .logs: ["logs"]

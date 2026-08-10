@@ -4,11 +4,60 @@ import SwiftUI
 
 // ── Приёмки ──────────────────────────────────────────────────────────────────
 
-/// Приёмки от поставщиков.
+/// Приходы товара: поставки от поставщиков и оприходование своими силами.
+///
+/// Это два разных документа и два разных пункта меню, но один журнал на
+/// сервере: различает их поле `kind`. Раньше оба пункта открывали общий
+/// список, и оприходование терялось среди накладных.
 ///
 /// Отдельно помечены позиции с истекающим сроком: приёмку открывают повторно
 /// именно из-за них, а не чтобы посмотреть сумму накладной.
 struct ReceiptsScreen: View {
+    /// Какой из двух журналов показываем.
+    enum Kind {
+        /// Поставка по накладной от поставщика.
+        case supplier
+        /// Оприходование излишков своими силами: без поставщика и накладной.
+        case posting
+
+        var title: String {
+            switch self {
+            case .supplier: "Приёмки"
+            case .posting: "Оприходование"
+            }
+        }
+
+        var emptyTitle: String {
+            switch self {
+            case .supplier: "Приёмок нет"
+            case .posting: "Оприходований нет"
+            }
+        }
+
+        var emptyMessage: String {
+            switch self {
+            case .supplier: "Здесь появятся поставки товара на склад."
+            case .posting: "Здесь появится товар, оприходованный без поставщика."
+            }
+        }
+
+        var countLabel: String {
+            switch self {
+            case .supplier: "Приёмок"
+            case .posting: "Документов"
+            }
+        }
+
+        var amountLabel: String {
+            switch self {
+            case .supplier: "Закуплено"
+            case .posting: "На сумму"
+            }
+        }
+    }
+
+    var kind: Kind = .supplier
+
     @Environment(BusinessStore.self) private var store
     @State private var selected: Receipt?
 
@@ -31,29 +80,30 @@ struct ReceiptsScreen: View {
                     ReceiptDetail(receipt: receipt)
                 } empty: {
                     WideEmptyState(
-                        icon: "arrow.down.circle",
-                        title: "Приёмок нет",
-                        message: "Здесь появятся поставки товара на склад."
+                        icon: kind == .posting ? "square.and.arrow.down" : "arrow.down.circle",
+                        title: kind.emptyTitle,
+                        message: kind.emptyMessage
                     )
                 }
             }
         }
         .background(Theme.background)
-        .navigationTitle("Приёмки")
+        .navigationTitle(kind.title)
         .toolbar { LogoutToolbarItem() }
         .task { if store.receipts.isEmpty { await store.loadReceipts() } }
         .refreshable { await store.loadReceipts() }
     }
 
     private var summary: some View {
-        let active = store.receipts.filter { !$0.isCancelled }
-        let expiring = store.receipts.reduce(0) { $0 + $1.expiring.count }
+        let rows = ownKind
+        let active = rows.filter { !$0.isCancelled }
+        let expiring = rows.reduce(0) { $0 + $1.expiring.count }
 
         return Group {
-            if !store.receipts.isEmpty {
+            if !rows.isEmpty {
                 HStack(spacing: Spacing.md) {
-                    SummaryPill(title: "Закуплено", value: Money.compact(active.reduce(0) { $0 + $1.totalAmount }), tint: Theme.brand)
-                    SummaryPill(title: "Приёмок", value: "\(active.count)", tint: Theme.textMuted)
+                    SummaryPill(title: kind.amountLabel, value: Money.compact(active.reduce(0) { $0 + $1.totalAmount }), tint: Theme.brand)
+                    SummaryPill(title: kind.countLabel, value: "\(active.count)", tint: Theme.textMuted)
                     if expiring > 0 {
                         SummaryPill(title: "Истекает срок", value: "\(expiring)", tint: Theme.warning)
                     }
@@ -64,8 +114,12 @@ struct ReceiptsScreen: View {
         }
     }
 
+    private var ownKind: [Receipt] {
+        store.receipts.filter { kind == .posting ? $0.isPosting : !$0.isPosting }
+    }
+
     private var sorted: [Receipt] {
-        store.receipts.sorted { ($0.receivedAt ?? .distantPast) > ($1.receivedAt ?? .distantPast) }
+        ownKind.sorted { ($0.receivedAt ?? .distantPast) > ($1.receivedAt ?? .distantPast) }
     }
 }
 
@@ -80,7 +134,10 @@ private struct ReceiptRow: View {
                 .frame(width: 24)
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(receipt.supplierName ?? "Без поставщика")
+                // У оприходования поставщика нет по определению — писать
+                // «Без поставщика» на каждой строке значит кричать об
+                // отсутствии того, чего там и не должно быть.
+                Text(receipt.supplierName ?? (receipt.isPosting ? "Оприходование" : "Без поставщика"))
                     .font(Typography.callout)
                     .foregroundStyle(receipt.isCancelled ? Theme.textDim : Theme.text)
                     .strikethrough(receipt.isCancelled, color: Theme.textDim)

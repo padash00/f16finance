@@ -62,6 +62,15 @@ public enum Quantity {
             .replacingOccurrences(of: #"0+$"#, with: "", options: .regularExpression)
             .replacingOccurrences(of: ".", with: ",")
     }
+
+    /// Количество с единицей измерения: «12 шт», «1,5 кг».
+    ///
+    /// Единица приходит из каталога и бывает пустой — тогда подставляем «шт»,
+    /// иначе строка обрывается числом и читается как незаконченная.
+    public static func withUnit(_ value: Double?, unit: String?) -> String {
+        let measure = (unit?.trimmingCharacters(in: .whitespaces)).flatMap { $0.isEmpty ? nil : $0 } ?? "шт"
+        return "\(format(value)) \(measure)"
+    }
 }
 
 /// Проценты: `+23 %`, `−4 %`.

@@ -57,7 +57,7 @@ public struct DocumentLine: Decodable, Sendable, Identifiable, Hashable {
     }
 }
 
-/// Приёмка товара от поставщика.
+/// Приход товара: поставка от поставщика либо оприходование своими силами.
 public struct Receipt: Decodable, Sendable, Identifiable, Hashable {
     public let id: String
     public let receivedAt: Date?
@@ -69,6 +69,12 @@ public struct Receipt: Decodable, Sendable, Identifiable, Hashable {
     public let locationName: String?
     public let supplierName: String?
     public let items: [DocumentLine]
+    /// `supplier` — поставка по накладной, `posting` — оприходование излишков
+    /// своими силами. На сайте это две разные страницы, и путать их нельзя:
+    /// у поставки есть накладная и деньги поставщику, у оприходования нет.
+    public let kind: String
+
+    public var isPosting: Bool { kind == "posting" }
 
     public var isCancelled: Bool { status == "cancelled" || status == "canceled" }
 
@@ -98,10 +104,11 @@ public struct Receipt: Decodable, Sendable, Identifiable, Hashable {
         locationName = ((try? c.decodeIfPresent(NamedRef.self, forKey: .location)) ?? nil)?.name
         supplierName = ((try? c.decodeIfPresent(NamedRef.self, forKey: .supplier)) ?? nil)?.name
         items = (try? c.decodeIfPresent([DocumentLine].self, forKey: .items)) ?? []
+        kind = try c.decodeFlexibleString(forKey: .kind) ?? "supplier"
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, comment, status, location, supplier, items
+        case id, comment, status, location, supplier, items, kind
         case receivedAt = "received_at"
         case invoiceNumber = "invoice_number"
         case totalAmount = "total_amount"

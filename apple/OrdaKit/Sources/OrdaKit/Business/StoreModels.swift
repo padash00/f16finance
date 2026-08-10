@@ -16,12 +16,18 @@ public struct StoreLocation: Decodable, Sendable, Identifiable, Hashable {
     public let isActive: Bool
     public let companyName: String?
 
-    /// Человеческое имя типа. На сервере это перечисление в снейк-кейсе.
+    /// Человеческое имя типа.
+    ///
+    /// Значения — ровно те, что разрешает `inventory_locations_location_type_check`:
+    /// `warehouse`, `point_display`, `catalog`, `backroom`. Раньше здесь стояло
+    /// `showcase`, которого сервер не присылает никогда, и витрина подписывалась
+    /// как «Точка» с иконкой здания.
     public var kindLabel: String {
         switch kind {
         case "warehouse": "Склад"
-        case "showcase": "Витрина"
-        case "kitchen": "Кухня"
+        case "point_display": "Витрина"
+        case "backroom": "Подсобка"
+        case "catalog": "Каталог"
         default: "Точка"
         }
     }
@@ -29,10 +35,18 @@ public struct StoreLocation: Decodable, Sendable, Identifiable, Hashable {
     public var icon: String {
         switch kind {
         case "warehouse": "shippingbox"
-        case "showcase": "cabinet"
-        case "kitchen": "frying.pan"
+        case "point_display": "cabinet"
+        case "backroom": "archivebox"
+        case "catalog": "books.vertical"
         default: "building.2"
         }
+    }
+
+    /// Место, где товар лежит физически на складе: сам склад и подсобка.
+    /// Витрина и каталог — другое: одна показывает товар покупателю, второй
+    /// вообще не место хранения, а справочник.
+    public var isStockroom: Bool {
+        kind == "warehouse" || kind == "backroom"
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -313,6 +327,12 @@ public struct StoreOverview: Decodable, Sendable {
     /// Остатки, свёрнутые по товару: одна строка на позицию, количество
     /// суммой по всем точкам. Владельцу важен общий запас, а не где лежит.
     public var totalsByItem: [ItemTotal] {
+        Self.totals(of: balances)
+    }
+
+    /// То же свёртывание, но по произвольному набору строк: раздел «Склад»
+    /// считает итог только по местам хранения, без витрины.
+    public static func totals(of balances: [StockBalance]) -> [ItemTotal] {
         var totals: [String: ItemTotal] = [:]
         for balance in balances {
             if var existing = totals[balance.itemID] {

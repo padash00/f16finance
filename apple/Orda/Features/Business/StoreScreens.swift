@@ -370,15 +370,27 @@ struct StockScreen: View {
 
     // ── Фильтрация ───────────────────────────────────────────────────────────
 
+    /// Идентификаторы мест хранения: сам склад и подсобка.
+    ///
+    /// Витрина сюда не входит — у неё свой раздел. Пока все три пункта меню
+    /// вели на этот экран, показывать всё вместе было единственным вариантом;
+    /// теперь «Склад» отвечает ровно за склад, иначе его цифры не сходились бы
+    /// с соседним разделом.
+    private var stockroomLocationIDs: Set<String> {
+        Set((store.store?.locations ?? []).filter(\.isStockroom).map(\.id))
+    }
+
     private var filteredTotals: [StoreOverview.ItemTotal] {
-        var items = store.store?.totalsByItem ?? []
+        // Свод по товару считаем из тех же строк, что и разрез по точкам:
+        // готовый `totalsByItem` складывает и витрину тоже.
+        var items = StoreOverview.totals(of: stockroomBalances)
         if onlyLow { items = items.filter(\.isLow) }
         guard !search.isEmpty else { return items }
         return items.filter { $0.name.localizedCaseInsensitiveContains(search) }
     }
 
     private var filteredBalances: [StockBalance] {
-        var items = store.store?.balances ?? []
+        var items = stockroomBalances
         if onlyLow { items = items.filter(\.isLow) }
         guard !search.isEmpty else { return items }
         return items.filter {
@@ -386,18 +398,40 @@ struct StockScreen: View {
                 || ($0.barcode?.contains(search) ?? false)
         }
     }
+
+    private var stockroomBalances: [StockBalance] {
+        let allowed = stockroomLocationIDs
+        // Пустой список мест — данные ещё не пришли или сервер не отдал типы.
+        // Показать всё честнее, чем пустой склад при полных полках.
+        guard !allowed.isEmpty else { return store.store?.balances ?? [] }
+        return (store.store?.balances ?? []).filter { allowed.contains($0.locationID) }
+    }
 }
 
 // ── Заявки ───────────────────────────────────────────────────────────────────
 
 /// Заявки точек на товар: список слева, состав справа.
+///
+/// Два раздела на одном экране, но с разным вопросом. «Заявки» — рабочий
+/// список того, что ждёт решения владельца. «Журнал заявок» — история, куда
+/// заходят разбираться, что и когда отгрузили. Раньше оба пункта меню вели
+/// сюда с одним и тем же начальным состоянием, и журнал приходилось
+/// включать тумблером — то есть его как бы и не было.
 struct RequestsScreen: View {
+    enum Scope {
+        /// Только ждущие решения.
+        case pending
+        /// Вся история заявок.
+        case journal
+    }
+
+    var scope: Scope = .pending
+
     @Environment(BusinessStore.self) private var store
     @State private var selected: StockRequest?
-    @State private var showHandled = false
 
     var body: some View {
-        let requests = showHandled
+        let requests = scope == .journal
             ? (store.store?.requests ?? [])
             : (store.store?.pendingRequests ?? [])
 
@@ -411,22 +445,14 @@ struct RequestsScreen: View {
         } empty: {
             WideEmptyState(
                 icon: "tray",
-                title: showHandled ? "Заявок нет" : "Нет заявок в ожидании",
-                message: showHandled
+                title: scope == .journal ? "Заявок не было" : "Нет заявок в ожидании",
+                message: scope == .journal
                     ? "Точки ещё не отправляли заявки."
-                    : "Всё разобрано. Включите «Все», чтобы посмотреть историю."
+                    : "Всё разобрано. История — в разделе «Журнал заявок»."
             )
         }
         .background(Theme.background)
-        .navigationTitle("Заявки")
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Toggle(isOn: $showHandled) {
-                    Label("Все", systemImage: "clock.arrow.circlepath")
-                }
-                .toggleStyle(.button)
-            }
-        }
+        .navigationTitle(scope == .journal ? "Журнал заявок" : "Заявки")
         .task { if store.store == nil { await store.loadStore() } }
         .refreshable { await store.loadStore() }
     }

@@ -211,7 +211,8 @@ private struct MonthRow: View {
             HStack(spacing: Spacing.md) {
                 Text("Прибыль \(Money.compact(month.profit))")
                     .foregroundStyle(month.profit >= 0 ? Theme.positive : Theme.negative)
-                Text("Маржа \(Percent.format(month.marginPct / 100))")
+                // `margin_pct` приходит уже в процентах — делить не на что.
+                Text("Маржа \(Percent.format(month.marginPct))")
                 Text("Чеков \(month.checksCount)")
                 if month.avgCheck > 0 {
                     Text("Средний \(Money.compact(month.avgCheck))")
@@ -222,11 +223,12 @@ private struct MonthRow: View {
         }
     }
 
-    /// Доля изменения к тому же месяцу прошлого года. Без прошлогодней выручки
-    /// показывать нечего: рост «с нуля» — не рост, а первый месяц работы.
+    /// Изменение к тому же месяцу прошлого года, в процентах. Без прошлогодней
+    /// выручки показывать нечего: рост «с нуля» — не рост, а первый месяц
+    /// работы.
     private var change: Double? {
         guard let previousRevenue, previousRevenue > 0 else { return nil }
-        return (month.revenue - previousRevenue) / previousRevenue
+        return Percent.change(current: month.revenue, previous: previousRevenue)
     }
 }
 

@@ -95,6 +95,41 @@ public struct BusinessService: Sendable {
         return response.data
     }
 
+    /// Витрина выбранной точки. Требует `store-showcase.view`.
+    ///
+    /// Без `companyID` сервер сам берёт первую доступную точку и возвращает её
+    /// идентификатор — переключатель точек строится по тому же ответу.
+    public func showcase(companyID: String? = nil) async throws -> ShowcasePage {
+        var query: [String: String] = [:]
+        if let companyID, !companyID.isEmpty { query["company_id"] = companyID }
+        let response: Envelope<ShowcasePage> = try await api.send(
+            APIRequest(path: "/api/admin/store/showcase", query: query)
+        )
+        return response.data
+    }
+
+    /// Прогноз запаса: что и через сколько дней закончится.
+    /// Требует `store-forecast.view`.
+    public func stockForecast(companyID: String? = nil) async throws -> [StockForecastRow] {
+        var query: [String: String] = [:]
+        if let companyID, !companyID.isEmpty { query["company_id"] = companyID }
+        let response: DataList<StockForecastRow> = try await api.send(
+            APIRequest(path: "/api/admin/inventory/forecast", query: query)
+        )
+        return response.items
+    }
+
+    /// Номенклатура: что вообще заведено, с ценой и штрихкодом. Остаток здесь —
+    /// следствие, а не суть. Требует `store-catalog.view`.
+    public func catalogItems(companyID: String? = nil) async throws -> [CatalogItem] {
+        var query: [String: String] = [:]
+        if let companyID, !companyID.isEmpty { query["company_id"] = companyID }
+        let response: DataList<CatalogItem> = try await api.send(
+            APIRequest(path: "/api/admin/inventory/catalog", query: query)
+        )
+        return response.items
+    }
+
     // ── Команда ──────────────────────────────────────────────────────────────
 
     /// Операторы с профилями и статистикой за 30 дней. Требует `operators.view`.
