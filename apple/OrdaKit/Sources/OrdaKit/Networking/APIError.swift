@@ -71,6 +71,28 @@ public enum APIError: Error, Sendable, Equatable {
         }
     }
 
+    /// Техническая подпись под сообщением: что именно ответил сервер и какой
+    /// запрос отказал.
+    ///
+    /// Без неё «Сервер временно недоступен» выглядит одинаково для десятка
+    /// разных причин, и владелец не может сказать, что сломалось, — а значит,
+    /// и починить это по его словам нельзя. Показываем только там, где текст
+    /// для человека сам по себе ничего не объясняет.
+    public var technicalDetail: String? {
+        switch self {
+        case let .server(status, message):
+            return message.isEmpty ? "HTTP \(status)" : "HTTP \(status) · \(message)"
+        case let .decoding(message):
+            return message.isEmpty ? nil : message
+        case let .transport(message):
+            return message.isEmpty ? nil : message
+        default:
+            // 403/404/409/400 объясняют себя сами: сообщение уже содержит и
+            // причину, и путь.
+            return nil
+        }
+    }
+
     /// Имеет ли смысл повторять запрос автоматически.
     public var isRetryable: Bool {
         switch self {

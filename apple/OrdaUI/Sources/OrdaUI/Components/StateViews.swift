@@ -115,6 +115,17 @@ public struct ErrorStateView: View {
                 .foregroundStyle(Theme.textMuted)
                 .multilineTextAlignment(.center)
 
+            // Что ответил сервер и на каком запросе. Мелким и приглушённым: не
+            // для чтения каждый день, а чтобы отказ можно было назвать словами,
+            // а не «не открывается».
+            if let detail = error.technicalDetail {
+                Text(detail)
+                    .font(Typography.caption)
+                    .foregroundStyle(Theme.textDim)
+                    .multilineTextAlignment(.center)
+                    .textSelection(.enabled)
+            }
+
             // Повтор предлагаем только там, где он может помочь. Кнопка
             // «Повторить» на «нет прав» — издевательство.
             if let retry, error.isRetryable {

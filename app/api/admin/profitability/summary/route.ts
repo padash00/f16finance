@@ -116,11 +116,15 @@ export async function GET(req: Request) {
 
     // Ручные вводы принадлежат организации: без фильтра суперадмин увидел бы
     // смесь строк разных клиентов за один месяц.
+    //
+    // Границы — датами, а не `YYYY-MM`: колонка `month` типа `date`, и Postgres
+    // на `month >= '2026-01'` отвечает `invalid input syntax for type date`.
+    // Весь роут падал в 500, то есть ОПиУ в приложении не открывался вообще.
     let inputsQuery = supabase
       .from('monthly_profitability_inputs')
       .select('*')
-      .gte('month', from)
-      .lte('month', to)
+      .gte('month', `${from}-01`)
+      .lte('month', `${to}-01`)
     if (orgId) inputsQuery = inputsQuery.eq('organization_id', orgId)
 
     const [incomeRes, expenseRes, inputsRes, categoriesRes] = await Promise.all([
@@ -140,9 +144,12 @@ export async function GET(req: Request) {
       if (key) categoryGroups[key] = row.accounting_group ?? null
     }
 
+    // Ключ — `YYYY-MM`: в базе `month` хранится датой `2026-01-01`, а месяцы
+    // периода перечислены как `2026-01`. Без среза ручные вводы не находились
+    // бы никогда, и ФОТ с налогами молча выпадали из ОПиУ.
     const inputsByMonth = new Map<string, any>()
     for (const row of (inputsRes.data || []) as any[]) {
-      inputsByMonth.set(String(row.month), row)
+      inputsByMonth.set(String(row.month).slice(0, 7), row)
     }
 
     // Доходы сворачиваем по месяцам заранее: иначе каждый месяц перебирал бы
