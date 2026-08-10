@@ -587,12 +587,17 @@ final class TeamChatStore {
     private(set) var error: APIError?
     private(set) var isSending = false
     private(set) var sendError: String?
+    /// Отправленные, но ещё не подтверждённые сервером.
+    private(set) var pending: [TeamChatMessage] = []
 
     private let service: FeedService
 
     init(api: APIClient) { service = FeedService(api: api) }
 
-    var lastMessageID: String? { feed?.visible.last?.id }
+    /// Что показывать: пришедшее с сервера плюс своё, ещё летящее.
+    var visible: [TeamChatMessage] { (feed?.visible ?? []) + pending }
+
+    var lastMessageID: String? { visible.last?.id }
 
     func load() async {
         isLoading = true
@@ -607,26 +612,41 @@ final class TeamChatStore {
         }
     }
 
-    func send(_ text: String) async -> Bool {
+    /// Отправка без ожидания.
+    ///
+    /// Сообщение появляется в переписке сразу и помечается как летящее, поле
+    /// очищается. Раньше здесь стоял `await` до ответа сервера и перезагрузка
+    /// всей ленты: между нажатием и появлением текста проходила секунда с
+    /// лишним, и человек успевал нажать второй раз.
+    ///
+    /// Возвращает `true` всегда: поле очищается сразу. Неудача вернёт текст
+    /// обратно сама.
+    @discardableResult
+    func send(_ text: String, from senderName: String, role: String?) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return false }
 
-        isSending = true
-        defer { isSending = false }
-        do {
-            try await service.sendTeamMessage(trimmed)
-            sendError = nil
-            await load()
-            return true
-        } catch let e as APIError {
-            // Фильтр мата отвечает 422: сообщение не ушло, и текст в поле
-            // нужно сохранить, чтобы человек мог его переписать.
-            sendError = e.userMessage
-            return false
-        } catch {
-            sendError = error.localizedDescription
-            return false
+        let draft = TeamChatMessage(pendingText: trimmed, senderName: senderName, senderRole: role)
+        pending.append(draft)
+        sendError = nil
+
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await service.sendTeamMessage(trimmed)
+                await load()
+                pending.removeAll { $0.id == draft.id }
+            } catch let e as APIError {
+                // Фильтр мата отвечает 422: сообщение не ушло, и текст нужно
+                // вернуть человеку, а не потерять молча.
+                pending.removeAll { $0.id == draft.id }
+                sendError = "\(e.userMessage)\n\n\(trimmed)"
+            } catch {
+                pending.removeAll { $0.id == draft.id }
+                sendError = "\(error.localizedDescription)\n\n\(trimmed)"
+            }
         }
+        return true
     }
 }
 
@@ -657,8 +677,11 @@ struct TeamChatScreen: View {
                     isSending: store.isSending,
                     errorText: store.sendError
                 ) {
+                    // Очищаем поле сразу: сообщение уже в переписке, а на
+                    // сервер летит фоном.
                     let text = draft
-                    Task { if await store.send(text) { draft = "" } }
+                    draft = ""
+                    store.send(text, from: auth.role?.displayName ?? "Вы", role: auth.role?.staffRole)
                 }
             } else {
                 LoadingRows(count: 6)
@@ -679,11 +702,13 @@ struct TeamChatScreen: View {
                         pinnedCard(feed.pinned)
                     }
 
-                    if feed.visible.isEmpty {
+                    if store.visible.isEmpty {
                         InlineEmpty(icon: "bubble.left.and.bubble.right", text: "Сообщений пока нет")
                     }
 
-                    ForEach(FeedDay.group(feed.visible, date: { $0.createdAt })) { section in
+                    // Свои летящие сообщения показываем вместе с пришедшими —
+                    // иначе набранный текст исчезает до ответа сервера.
+                    ForEach(FeedDay.group(store.visible, date: { $0.createdAt })) { section in
                         FeedDayDivider(label: section.label)
 
                         ForEach(section.items) { message in
@@ -834,25 +859,33 @@ final class MessagesStore {
         }
     }
 
-    func send(_ text: String, to userID: String) async -> Bool {
+    /// Отправка без ожидания: письмо появляется в переписке сразу, на сервер
+    /// уходит фоном. Раньше между нажатием и появлением текста проходила
+    /// секунда с лишним — её съедала проверка текста через ИИ на сервере.
+    @discardableResult
+    func send(_ text: String, to userID: String, senderName: String) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return false }
 
-        isSending = true
-        defer { isSending = false }
-        do {
-            try await service.sendDirect(to: userID, text: trimmed)
-            sendError = nil
-            await open(userID)
-            await load()
-            return true
-        } catch let e as APIError {
-            sendError = e.userMessage
-            return false
-        } catch {
-            sendError = error.localizedDescription
-            return false
+        let draft = DirectMessage(pendingText: trimmed, to: userID, senderName: senderName)
+        conversation.append(draft)
+        sendError = nil
+
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await service.sendDirect(to: userID, text: trimmed)
+                await open(userID)
+                await load()
+            } catch let e as APIError {
+                conversation.removeAll { $0.id == draft.id }
+                sendError = "\(e.userMessage)\n\n\(trimmed)"
+            } catch {
+                conversation.removeAll { $0.id == draft.id }
+                sendError = "\(error.localizedDescription)\n\n\(trimmed)"
+            }
         }
+        return true
     }
 }
 
@@ -1008,8 +1041,10 @@ private struct ConversationPane: View {
                 isSending: store.isSending,
                 errorText: store.sendError
             ) {
+                // Поле очищаем сразу: письмо уже в переписке.
                 let text = draft
-                Task { if await store.send(text, to: thread.otherUserID) { draft = "" } }
+                draft = ""
+                store.send(text, to: thread.otherUserID, senderName: "Вы")
             }
         }
         .background(Theme.background)

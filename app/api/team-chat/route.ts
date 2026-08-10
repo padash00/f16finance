@@ -33,15 +33,20 @@ export async function GET(request: Request) {
   const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
   const orgId = access.activeOrganization?.id || null
 
+  // Без организации показывать нечего. Раньше при её отсутствии фильтр просто
+  // не ставился — и человек видел переписку всех организаций сразу.
+  if (!orgId) return json({ messages: [], pinned: [], hasMore: false })
+
   let query = supabase
     .from('team_chat_messages')
     .select('id, sender_user_id, sender_operator_id, sender_name, sender_role, sender_avatar_url, message, attachments, reply_to_id, edited_at, deleted_at, is_announcement, pinned_until, context_type, context_id, context_label, created_at')
     .order('created_at', { ascending: false })
     .limit(limit)
 
-  if (orgId) {
-    query = query.or(`organization_id.eq.${orgId},organization_id.is.null`)
-  }
+  // Строго по организации. Раньше сюда добавлялось `organization_id.is.null`,
+  // и сообщение без организации видели все клиенты разом: достаточно было
+  // написать в чат, не выбрав организацию, чтобы текст ушёл наружу.
+  query = query.eq('organization_id', orgId)
   if (before) {
     query = query.lt('created_at', before)
   }
@@ -74,7 +79,7 @@ export async function GET(request: Request) {
       .is('deleted_at', null)
       .order('pinned_until', { ascending: false })
       .limit(5)
-    if (orgId) pinQuery = pinQuery.or(`organization_id.eq.${orgId},organization_id.is.null`)
+    pinQuery = pinQuery.eq('organization_id', orgId)
     const { data: pinData } = await pinQuery
     pins = pinData || []
   }
@@ -184,13 +189,23 @@ export async function POST(request: Request) {
 
   // Фильтр мата — regex (мгновенно) + AI fallback (только если regex пропустил)
   if (messageText) {
-    const profanity = await checkProfanity(messageText)
+    // Только regex, без обращения к ИИ: оно занимало секунду-две на каждом
+    // сообщении, и человек ждал ответа сервера, глядя на замерший экран.
+    // Всё, что regex пропустит, разберёт крон `chat-moderation` — он и так
+    // проходит по переписке каждые пять минут и кладёт подозрительное в
+    // очередь модерации. Ту же работу дважды делать незачем.
+    const profanity = await checkProfanity(messageText, false)
     if (profanity.blocked) {
       return json({ error: profanity.reason || 'Сообщение содержит запрещённую лексику', code: 'profanity' }, 422)
     }
   }
 
   const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
+
+  // Сообщение без организации видели бы все клиенты сразу: чат читается по
+  // организации, и `null` там означает «всем». Лучше отказать, чем разослать.
+  const orgId = access.activeOrganization?.id || null
+  if (!orgId) return json({ error: 'Не выбрана организация' }, 400)
 
   // Определяем кто пишет
   let senderUserId: string | null = null
@@ -226,7 +241,7 @@ export async function POST(request: Request) {
   const { data, error } = await supabase
     .from('team_chat_messages')
     .insert({
-      organization_id: access.activeOrganization?.id || null,
+      organization_id: orgId,
       sender_user_id: senderUserId,
       sender_operator_id: senderOperatorId,
       sender_name: senderName,

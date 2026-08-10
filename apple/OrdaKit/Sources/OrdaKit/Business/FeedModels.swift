@@ -278,6 +278,11 @@ public struct TeamChatMessage: Decodable, Sendable, Identifiable, Hashable {
     public let pinnedUntil: Date?
     public let createdAt: Date?
     public let reactions: [FeedReaction]
+    /// Сообщение уже на экране, а на сервер ещё летит.
+    ///
+    /// Ждать ответа, глядя на пустое поле ввода, — худшее, что может делать
+    /// чат: человек не понимает, ушло или нет, и жмёт «отправить» второй раз.
+    public let isPending: Bool
 
     public var isDeleted: Bool { deletedAt != nil }
     public var isEdited: Bool { editedAt != nil }
@@ -295,8 +300,29 @@ public struct TeamChatMessage: Decodable, Sendable, Identifiable, Hashable {
         }
     }
 
+    /// То, что только что набрали. Живёт на экране до ответа сервера.
+    public init(pendingText: String, senderName: String, senderRole: String?) {
+        id = "pending-\(UUID().uuidString)"
+        senderUserID = nil
+        senderOperatorID = nil
+        self.senderName = senderName
+        self.senderRole = senderRole
+        senderAvatarURL = nil
+        text = pendingText
+        attachments = []
+        replyToID = nil
+        editedAt = nil
+        deletedAt = nil
+        isAnnouncement = false
+        pinnedUntil = nil
+        createdAt = Date()
+        reactions = []
+        isPending = true
+    }
+
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        isPending = false
         id = try c.decodeFlexibleString(forKey: .id) ?? UUID().uuidString
         senderUserID = try c.decodeFlexibleString(forKey: .senderUserID)
         senderOperatorID = try c.decodeFlexibleString(forKey: .senderOperatorID)
@@ -412,6 +438,9 @@ public struct DirectMessage: Decodable, Sendable, Identifiable, Hashable {
     public let readAt: Date?
     public let createdAt: Date?
 
+    /// Уже на экране, но ещё летит на сервер.
+    public let isPending: Bool
+
     public var isDeleted: Bool { deletedAt != nil }
     public var isEdited: Bool { editedAt != nil }
     public var isRead: Bool { readAt != nil }
@@ -423,8 +452,26 @@ public struct DirectMessage: Decodable, Sendable, Identifiable, Hashable {
         senderUserID != otherUserID
     }
 
+    /// Только что набранное письмо. Показывается сразу, до ответа сервера.
+    public init(pendingText: String, to recipientUserID: String, senderName: String) {
+        id = "pending-\(UUID().uuidString)"
+        senderUserID = nil
+        self.recipientUserID = recipientUserID
+        self.senderName = senderName
+        senderRole = nil
+        text = pendingText
+        attachments = []
+        replyToID = nil
+        editedAt = nil
+        deletedAt = nil
+        readAt = nil
+        createdAt = Date()
+        isPending = true
+    }
+
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        isPending = false
         id = try c.decodeFlexibleString(forKey: .id) ?? UUID().uuidString
         senderUserID = try c.decodeFlexibleString(forKey: .senderUserID)
         recipientUserID = try c.decodeFlexibleString(forKey: .recipientUserID)

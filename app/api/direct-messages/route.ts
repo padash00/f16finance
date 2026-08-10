@@ -40,13 +40,18 @@ async function resolveSender(access: any, supabase: any) {
 }
 
 async function resolveRecipientName(supabase: any, recipientUserId: string): Promise<string> {
-  // Сначала ищем staff, затем operator
-  const { data: staff } = await supabase
-    .from('staff')
-    .select('full_name')
+  // Сотрудник — через членство в организации: в `staff` нет колонки
+  // `user_id`, и прежний запрос к ней всегда возвращал пусто. Из-за этого имя
+  // получателя-сотрудника подменялось словом «Получатель».
+  const { data: member } = await supabase
+    .from('organization_members')
+    .select('email, staff:staff_id(full_name, short_name)')
     .eq('user_id', recipientUserId)
     .maybeSingle()
-  if ((staff as any)?.full_name) return String((staff as any).full_name)
+  const staffPerson = Array.isArray((member as any)?.staff) ? (member as any).staff[0] : (member as any)?.staff
+  if (staffPerson?.full_name || staffPerson?.short_name) {
+    return String(staffPerson.full_name || staffPerson.short_name)
+  }
 
   const { data: opAuth } = await supabase
     .from('operator_auth')
@@ -86,7 +91,12 @@ export async function POST(request: Request) {
   if (messageText.length > 2000) return json({ error: 'Слишком длинное (макс 2000)' }, 400)
 
   if (messageText) {
-    const profanity = await checkProfanity(messageText)
+    // Только regex, без обращения к ИИ: оно занимало секунду-две на каждом
+    // сообщении, и человек ждал ответа сервера, глядя на замерший экран.
+    // Всё, что regex пропустит, разберёт крон `chat-moderation` — он и так
+    // проходит по переписке каждые пять минут и кладёт подозрительное в
+    // очередь модерации. Ту же работу дважды делать незачем.
+    const profanity = await checkProfanity(messageText, false)
     if (profanity.blocked) {
       return json({ error: profanity.reason || 'Сообщение содержит запрещённую лексику', code: 'profanity' }, 422)
     }
