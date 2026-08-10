@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { logAiUsageSafe } from '@/lib/ai/usage-tracker'
+import { sendTelegram } from '@/lib/server/telegram'
 import { answerTelegramCallback, editTelegramMessage, sendTelegramMessage } from '@/lib/telegram/send'
 
 /**
@@ -775,6 +776,50 @@ async function advanceAttempt(params: {
   ].join('\n')
 
   await sendTelegramMessage(params.chatId, summary)
+
+  // Владельцу — короткий итог сразу. Иначе он узнаёт о результате, только если
+  // сам зайдёт на страницу, а провал важно увидеть в тот же день.
+  const { data: operator } = await supabase
+    .from('operators')
+    .select('name, short_name, operator_profiles(full_name)')
+    .eq('id', attempt.operator_id)
+    .maybeSingle()
+  const profile = Array.isArray((operator as any)?.operator_profiles)
+    ? (operator as any).operator_profiles[0]
+    : (operator as any)?.operator_profiles
+  const operatorName = profile?.full_name || (operator as any)?.name || (operator as any)?.short_name || 'Оператор'
+
+  await notifyOwnerExamFinished({
+    operatorName,
+    examTitle: params.examTitle,
+    score: result.score,
+    earned: result.earned,
+    max: result.max,
+    passed,
+    hasOpen,
+  }).catch(() => null)
+}
+
+/** Итог аттестации владельцу в общий чат отчётов. */
+async function notifyOwnerExamFinished(params: {
+  operatorName: string
+  examTitle: string
+  score: number
+  earned: number
+  max: number
+  passed: boolean
+  hasOpen: boolean
+}): Promise<void> {
+  const text = [
+    params.passed ? '✅ <b>Экзамен сдан</b>' : '❌ <b>Экзамен не сдан</b>',
+    '',
+    `👤 <b>${esc(params.operatorName)}</b>`,
+    `📝 ${esc(params.examTitle)}`,
+    `Результат: <b>${params.score}%</b> (${params.earned} из ${params.max} баллов)`,
+    ...(params.hasOpen ? ['', '<i>Есть развёрнутые ответы — их стоит проверить глазами.</i>'] : []),
+  ].join('\n')
+
+  await sendTelegram(text)
 }
 
 /**

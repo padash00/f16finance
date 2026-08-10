@@ -20,7 +20,8 @@ type ExamRow = {
   question_count: number
   pass_score: number
   deadline_at: string | null
-  status: 'active' | 'finished' | 'cancelled'
+  status: 'draft' | 'active' | 'finished' | 'cancelled'
+  open_count: number
   created_at: string
   assigned: number
   completed: number
@@ -43,6 +44,16 @@ type OpenAnswerView = {
     overridden?: boolean
     override_comment?: string | null
   } | null
+}
+
+type DraftQuestion = {
+  index: number
+  pool: 'choice' | 'open'
+  q: string
+  choices?: string[]
+  correct?: number
+  rubric?: string[]
+  article_title: string
 }
 
 type AttemptRow = {
@@ -262,6 +273,8 @@ export default function OperatorExamsPage() {
 
   const [detailsId, setDetailsId] = useState<string | null>(null)
   const [attempts, setAttempts] = useState<AttemptRow[]>([])
+  const [draftQuestions, setDraftQuestions] = useState<DraftQuestion[]>([])
+  const [draftOpen, setDraftOpen] = useState<DraftQuestion[]>([])
   const [detailsLoading, setDetailsLoading] = useState(false)
 
   const load = useCallback(async () => {
@@ -292,7 +305,11 @@ export default function OperatorExamsPage() {
     try {
       const res = await fetch(`/api/admin/operator-exams?id=${examId}`, { cache: 'no-store' })
       const body = await res.json()
-      if (res.ok) setAttempts(body.data?.attempts || [])
+      if (res.ok) {
+        setAttempts(body.data?.attempts || [])
+        setDraftQuestions(body.data?.draftQuestions || [])
+        setDraftOpen(body.data?.draftOpenQuestions || [])
+      }
     } finally {
       setDetailsLoading(false)
     }
@@ -341,11 +358,12 @@ export default function OperatorExamsPage() {
       const body = await res.json()
       if (!res.ok) throw new Error(body?.error || `HTTP ${res.status}`)
 
-      const failures = (body.data?.failures || []) as Array<{ error: string }>
       alert(
-        `Экзамен создан.\nНазначено: ${body.data?.assigned}\nОтправлено в Telegram: ${body.data?.sent}` +
-          (failures.length > 0 ? `\nНе доставлено: ${failures.length} — см. таблицу` : ''),
+        `Черновик готов.\nВопросов: ${body.data?.questions} тестовых` +
+          (body.data?.open ? ` + ${body.data.open} ситуационных` : '') +
+          `\n\nПрочитайте их и нажмите «Разослать».`,
       )
+      setDetailsId(body.data?.exam_id || null)
       setOpenForm(false)
       setTitle('')
       setCompanyIds([])
@@ -576,10 +594,10 @@ export default function OperatorExamsPage() {
           <div className="flex items-center gap-2">
             <Button onClick={createExam} disabled={busy}>
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              Создать и разослать
+              Собрать билет
             </Button>
             <span className="text-[11px] text-muted-foreground">
-              Билеты у операторов разные — вопросы и порядок вариантов перемешиваются
+              Вопросы сгенерируются, но НЕ уйдут операторам — сначала прочитаете их сами
             </span>
           </div>
         </Card>
@@ -619,8 +637,17 @@ export default function OperatorExamsPage() {
                         {exam.title}
                       </button>
                       <div className="text-[11px] text-muted-foreground">
-                        {exam.question_count} вопр. · порог {exam.pass_score}% ·{' '}
-                        {exam.status === 'active' ? 'идёт' : exam.status === 'finished' ? 'завершён' : 'отменён'}
+                        {exam.question_count} тест.{exam.open_count > 0 ? ` + ${exam.open_count} ситуац.` : ''} · порог{' '}
+                        {exam.pass_score}% ·{' '}
+                        {exam.status === 'draft' ? (
+                          <span className="text-amber-600 dark:text-amber-300">черновик, не разослан</span>
+                        ) : exam.status === 'active' ? (
+                          'идёт'
+                        ) : exam.status === 'finished' ? (
+                          'завершён'
+                        ) : (
+                          'отменён'
+                        )}
                       </div>
                     </td>
                     <td className="px-3 py-2.5 text-xs text-body">
@@ -639,6 +666,15 @@ export default function OperatorExamsPage() {
                     <td className="px-3 py-2.5 text-xs text-body">{dt(exam.deadline_at)}</td>
                     <td className="px-3 py-2.5">
                       <div className="flex justify-end gap-1.5">
+                        {exam.status === 'draft' && canCreate && (
+                          <Button
+                            size="sm"
+                            disabled={busy}
+                            onClick={() => setDetailsId(detailsId === exam.id ? null : exam.id)}
+                          >
+                            Проверить вопросы
+                          </Button>
+                        )}
                         {exam.status === 'active' && canRemind && (
                           <Button variant="outline" size="sm" disabled={busy} onClick={() => runAction('remind', exam.id)}>
                             Напомнить
@@ -659,7 +695,120 @@ export default function OperatorExamsPage() {
         </Card>
       )}
 
-      {detailsId && (
+      {detailsId && (draftQuestions.length > 0 || draftOpen.length > 0) && (
+        <Card className="overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
+            <div>
+              <div className="text-sm font-semibold text-foreground">Проверьте билет до рассылки</div>
+              <div className="text-[11px] text-muted-foreground">
+                Выкиньте вопросы, которые сформулированы неверно или спрашивают то, чего нет в регламенте.
+                После рассылки править нельзя.
+              </div>
+            </div>
+            {canCreate && (
+              <Button
+                disabled={busy || (draftQuestions.length === 0 && draftOpen.length === 0)}
+                onClick={async () => {
+                  if (!confirm('Разослать экзамен операторам? Вопросы после этого не изменить.')) return
+                  setBusy(true)
+                  try {
+                    const res = await fetch('/api/admin/operator-exams', {
+                      method: 'POST',
+                      headers: { 'content-type': 'application/json' },
+                      body: JSON.stringify({ action: 'send', exam_id: detailsId }),
+                    })
+                    const b = await res.json()
+                    if (!res.ok) throw new Error(b?.error || `HTTP ${res.status}`)
+                    const failed = (b.data?.failures || []).length
+                    alert(
+                      `Разослано: ${b.data?.sent} из ${b.data?.assigned}` +
+                        (failed > 0 ? `\nНе доставлено: ${failed} — см. таблицу` : ''),
+                    )
+                    await load()
+                    await loadDetails(detailsId)
+                  } catch (e: any) {
+                    alert(`Ошибка: ${e?.message || 'не удалось'}`)
+                  } finally {
+                    setBusy(false)
+                  }
+                }}
+              >
+                <Send className="h-4 w-4" />
+                Разослать
+              </Button>
+            )}
+          </div>
+
+          <div className="divide-y divide-border">
+            {[...draftQuestions, ...draftOpen].map((question) => (
+              <div key={`${question.pool}-${question.index}`} className="flex items-start gap-3 px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-medium text-foreground">{question.q}</span>
+                    {question.pool === 'open' && (
+                      <span className="rounded-full bg-sky-500/10 px-2 py-0.5 text-[10px] text-sky-600 dark:text-sky-300">
+                        ситуационный
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-0.5 text-[10px] text-muted-foreground">по регламенту «{question.article_title}»</div>
+                  {question.pool === 'choice' && (
+                    <div className="mt-1 space-y-0.5">
+                      {(question.choices || []).map((choice, i) => (
+                        <div
+                          key={i}
+                          className={`text-[11px] ${
+                            i === question.correct
+                              ? 'font-medium text-emerald-700 dark:text-emerald-300'
+                              : 'text-muted-foreground'
+                          }`}
+                        >
+                          {'АБВГ'[i] || i + 1}. {choice}
+                          {i === question.correct ? ' ✓' : ''}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {question.pool === 'open' && (question.rubric || []).length > 0 && (
+                    <div className="mt-1 text-[11px] text-muted-foreground">
+                      Рубрика: {(question.rubric || []).join(' · ')}
+                    </div>
+                  )}
+                </div>
+                {canCreate && (
+                  <button
+                    disabled={busy}
+                    onClick={async () => {
+                      setBusy(true)
+                      try {
+                        await fetch('/api/admin/operator-exams', {
+                          method: 'POST',
+                          headers: { 'content-type': 'application/json' },
+                          body: JSON.stringify({
+                            action: 'drop_question',
+                            exam_id: detailsId,
+                            question_index: question.index,
+                            pool: question.pool,
+                          }),
+                        })
+                        await loadDetails(detailsId!)
+                      } finally {
+                        setBusy(false)
+                      }
+                    }}
+                    className="shrink-0 rounded-lg border border-rose-400/40 px-2 py-1 text-[11px] text-rose-600 transition hover:bg-rose-500/10 dark:text-rose-300"
+                    title="Убрать вопрос из билета"
+                  >
+                    Убрать
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {detailsId && draftQuestions.length === 0 && draftOpen.length === 0 && (
         <Card className="overflow-hidden">
           <div className="border-b border-border px-4 py-3 text-sm font-semibold text-foreground">
             Кто как сдал

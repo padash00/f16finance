@@ -31,6 +31,7 @@ type ExamRow = {
   title: string
   company_ids: string[]
   question_count: number
+  open_count: number
   pass_score: number
   deadline_at: string | null
   status: string
@@ -62,6 +63,27 @@ export async function GET(request: Request) {
       if (orgId) examQuery = examQuery.eq('organization_id', orgId)
       const { data: exam } = await examQuery.maybeSingle()
       if (!exam) return json({ error: 'exam-not-found' }, 404)
+
+      // Черновик: отдаём вопросы целиком, с правильными ответами. Их читает
+      // владелец, чтобы выкинуть неудачные ДО рассылки.
+      if ((exam as any).status === 'draft') {
+        const pool = (((exam as any).question_pool || []) as ExamQuestion[]).map((q, index) => ({
+          index,
+          pool: 'choice' as const,
+          q: q.q,
+          choices: q.choices,
+          correct: q.correct,
+          article_title: q.article_title,
+        }))
+        const openPool = (((exam as any).open_pool || []) as ExamQuestion[]).map((q, index) => ({
+          index,
+          pool: 'open' as const,
+          q: q.q,
+          rubric: q.rubric || [],
+          article_title: q.article_title,
+        }))
+        return json({ ok: true, data: { exam, attempts: [], draftQuestions: pool, draftOpenQuestions: openPool } })
+      }
 
       const { data: attempts } = await supabase
         .from('operator_exam_attempts')
@@ -129,13 +151,30 @@ export async function GET(request: Request) {
     // ─── Список экзаменов + справочники для формы ─────────────────────────
     let examsQuery = supabase
       .from('operator_exams')
-      .select('id, title, company_ids, question_count, pass_score, deadline_at, status, created_at')
+      .select('id, title, company_ids, question_count, open_count, pass_score, deadline_at, status, created_at')
       .order('created_at', { ascending: false })
       .limit(100)
     if (orgId) examsQuery = examsQuery.eq('organization_id', orgId)
 
     const { data: exams, error: examsError } = await examsQuery
     if (examsError) throw examsError
+
+    // Ленивое закрытие по дедлайну: отдельного крона нет, а поле «дедлайн» без
+    // последствий — обманка. Просроченные незавершённые попытки гасим при
+    // первом же открытии страницы.
+    const overdue = ((exams || []) as ExamRow[]).filter(
+      (exam) => exam.status === 'active' && exam.deadline_at && new Date(exam.deadline_at) < new Date(),
+    )
+    if (overdue.length > 0) {
+      const overdueIds = overdue.map((exam) => exam.id)
+      await supabase
+        .from('operator_exam_attempts')
+        .update({ status: 'expired' })
+        .in('exam_id', overdueIds)
+        .in('status', ['pending', 'sent', 'in_progress'])
+      await supabase.from('operator_exams').update({ status: 'finished' }).in('id', overdueIds)
+      for (const exam of overdue) exam.status = 'finished'
+    }
 
     const examIds = ((exams || []) as ExamRow[]).map((e) => e.id)
     const statsByExam = new Map<string, { assigned: number; completed: number; passed: number; scoreSum: number }>()
@@ -247,6 +286,7 @@ export async function POST(request: Request) {
       | {
           action?: string
           exam_id?: string
+          pool?: string
           title?: string
           company_ids?: string[]
           operator_ids?: string[]
@@ -334,17 +374,23 @@ export async function POST(request: Request) {
           })
         : []
 
+      // Создание НЕ рассылает: сохраняем пул и ждём, пока владелец прочитает
+      // вопросы. Кривой вопрос дешевле выкинуть здесь, чем узнать о нём от семи
+      // человек, которым экзамен уже ушёл.
       const { data: exam, error: examError } = await supabase
         .from('operator_exams')
         .insert([{
           organization_id: orgId,
           title,
           company_ids: companyIds,
+          operator_ids: operatorIds,
           question_count: questionCount,
           open_count: Math.min(openCount, openPool.length),
           pass_score: passScore,
           deadline_at: body.deadline_at || null,
-          status: 'active',
+          status: 'draft',
+          question_pool: pool,
+          open_pool: openPool,
           created_by: access.user?.id || null,
         }])
         .select('id')
@@ -353,13 +399,90 @@ export async function POST(request: Request) {
 
       const examId = String((exam as any).id)
 
+      await writeAuditLog(supabase as any, {
+        actorUserId: access.user?.id || null,
+        action: 'operator_exam.draft',
+        entityType: 'operator_exam',
+        entityId: examId,
+        payload: { title, companyIds, operators: operatorIds.length, questions: pool.length, open: openPool.length },
+      })
+
+      return json({
+        ok: true,
+        data: { exam_id: examId, questions: pool.length, open: openPool.length, operators: operatorIds.length },
+      })
+    }
+
+    // ─── Выкинуть неудачный вопрос из черновика ───
+    if (body.action === 'drop_question') {
+      const denied = await requireCapability(access, 'operator-exams.create')
+      if (denied) return denied
+
+      const examId = String(body.exam_id || '')
+      const index = Number(body.question_index)
+      const poolField = body.pool === 'open' ? 'open_pool' : 'question_pool'
+      if (!examId || !Number.isInteger(index)) return json({ error: 'exam_id и question_index обязательны' }, 400)
+
+      const { data: exam } = await supabase
+        .from('operator_exams')
+        .select('id, status, question_pool, open_pool')
+        .eq('id', examId)
+        .eq('organization_id', orgId)
+        .maybeSingle()
+      if (!exam) return json({ error: 'exam-not-found' }, 404)
+      if ((exam as any).status !== 'draft') {
+        return json({ error: 'Вопросы можно править только до рассылки' }, 409)
+      }
+
+      const current = (((exam as any)[poolField] || []) as ExamQuestion[]).slice()
+      if (index < 0 || index >= current.length) return json({ error: 'Вопрос не найден' }, 400)
+      current.splice(index, 1)
+
+      const { error } = await supabase.from('operator_exams').update({ [poolField]: current }).eq('id', examId)
+      if (error) return json({ error: 'drop-failed', detail: error.message }, 500)
+
+      return json({ ok: true, data: { left: current.length } })
+    }
+
+    // ─── Разослать черновик ───
+    if (body.action === 'send') {
+      const denied = await requireCapability(access, 'operator-exams.create')
+      if (denied) return denied
+
+      const examId = String(body.exam_id || '')
+      if (!examId) return json({ error: 'exam_id обязателен' }, 400)
+
+      const { data: examRow } = await supabase
+        .from('operator_exams')
+        .select('*')
+        .eq('id', examId)
+        .eq('organization_id', orgId)
+        .maybeSingle()
+      if (!examRow) return json({ error: 'exam-not-found' }, 404)
+
+      const draft = examRow as any
+      if (draft.status !== 'draft') return json({ error: 'Экзамен уже разослан' }, 409)
+
+      const pool = (draft.question_pool || []) as ExamQuestion[]
+      const openPool = (draft.open_pool || []) as ExamQuestion[]
+      if (pool.length === 0 && openPool.length === 0) {
+        return json({ error: 'В черновике не осталось вопросов' }, 400)
+      }
+
+      const draftOperatorIds = ((draft.operator_ids || []) as string[]).map(String)
+      if (draftOperatorIds.length === 0) return json({ error: 'Не выбраны операторы' }, 400)
+
+      const ticketSize = Math.min(Number(draft.question_count || 10), pool.length)
+      const ticketOpen = Math.min(Number(draft.open_count || 0), openPool.length)
+      const title = String(draft.title || 'Экзамен')
+
       const { data: operatorRows } = await supabase
         .from('operators')
         .select('id, name, short_name, telegram_chat_id')
-        .in('id', operatorIds)
+        .in('id', draftOperatorIds)
 
       const attemptsToInsert = ((operatorRows || []) as any[]).map((operator) => {
-        const ticket: ExamQuestion[] = buildOperatorTicket(pool, questionCount, openPool, openCount)
+        const ticket: ExamQuestion[] = buildOperatorTicket(pool, ticketSize, openPool, ticketOpen)
         const chatId = operator.telegram_chat_id ? String(operator.telegram_chat_id) : null
         return {
           exam_id: examId,
@@ -379,7 +502,6 @@ export async function POST(request: Request) {
         .select('id, exam_id, organization_id, operator_id, telegram_chat_id, status, questions, answers, current_index, total_questions, correct_answers, score, passed')
       if (attemptsError) return json({ error: 'attempts-create-failed', detail: attemptsError.message }, 500)
 
-      // Рассылка первого вопроса.
       let sent = 0
       const failures: Array<{ operator_id: string; error: string }> = []
       for (const attempt of (inserted || []) as ExamAttemptRow[]) {
@@ -400,15 +522,20 @@ export async function POST(request: Request) {
         }
       }
 
+      await supabase
+        .from('operator_exams')
+        .update({ status: 'active', sent_at: new Date().toISOString() })
+        .eq('id', examId)
+
       await writeAuditLog(supabase as any, {
         actorUserId: access.user?.id || null,
-        action: 'operator_exam.create',
+        action: 'operator_exam.send',
         entityType: 'operator_exam',
         entityId: examId,
-        payload: { title, companyIds, operators: operatorIds.length, questionCount, passScore, sent },
+        payload: { assigned: attemptsToInsert.length, sent, failed: failures.length },
       })
 
-      return json({ ok: true, data: { exam_id: examId, assigned: attemptsToInsert.length, sent, failures } })
+      return json({ ok: true, data: { assigned: attemptsToInsert.length, sent, failures } })
     }
 
     // ─── Ручная правка балла за развёрнутый ответ ─────────────────────────
