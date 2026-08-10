@@ -314,6 +314,10 @@ public struct RevenueSimulation: Decodable, Sendable {
     public let companyID: String?
     public let fact: SimulationFact?
     public let projection: SimulationProjection
+    /// Сама модель — зоны и тарифы. Нужна не для показа (для него есть
+    /// `projection`), а чтобы её можно было править прямо в приложении.
+    public let zones: [SimulationZoneConfig]
+    public let tariffs: [SimulationTariffConfig]
 
     public var companyName: String {
         companies.first { $0.id == companyID }?.name ?? "Точка"
@@ -325,10 +329,12 @@ public struct RevenueSimulation: Decodable, Sendable {
         companyID = try c.decodeFlexibleString(forKey: .companyID)
         fact = (try? c.decodeIfPresent(SimulationFact.self, forKey: .fact)) as? SimulationFact
         projection = (try? c.decodeIfPresent(SimulationProjection.self, forKey: .projection)) as? SimulationProjection ?? .empty
+        zones = (try? c.decodeIfPresent([SimulationZoneConfig].self, forKey: .zones)) as? [SimulationZoneConfig] ?? []
+        tariffs = (try? c.decodeIfPresent([SimulationTariffConfig].self, forKey: .tariffs)) as? [SimulationTariffConfig] ?? []
     }
 
     private enum CodingKeys: String, CodingKey {
-        case companies, fact, projection
+        case companies, fact, projection, zones, tariffs
         case companyID = "company_id"
     }
 }
@@ -345,6 +351,23 @@ public struct SimulationService: Sendable {
             APIRequest(path: "/api/admin/simulation", query: query)
         )
         return response.data
+    }
+
+    /// Сохранить модель точки. Требует `simulation.edit`.
+    ///
+    /// Сервер заменяет конфиг целиком, поэтому отправляем весь набор зон и
+    /// тарифов, а не изменённые.
+    public func save(
+        companyID: String,
+        zones: [SimulationZoneConfig],
+        tariffs: [SimulationTariffConfig]
+    ) async throws {
+        let body = try JSONEncoder().encode(
+            SimulationSaveRequest(companyID: companyID, zones: zones, tariffs: tariffs)
+        )
+        _ = try await api.send(
+            APIRequest(path: "/api/admin/simulation", method: .post, body: body)
+        )
     }
 }
 

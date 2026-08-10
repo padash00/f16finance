@@ -227,7 +227,14 @@ final class SimulationStore {
 /// нему решают, поднимать ли цены или гнать рекламу.
 struct SimulationScreen: View {
     @Environment(\.api) private var api
+    @Environment(\.access) private var access
     @State private var store: SimulationStore?
+    @State private var isEditing = false
+
+    /// Право `simulation.edit` проверяет и сервер.
+    private var canEdit: Bool {
+        access?.can("simulation.edit") ?? false
+    }
 
     var body: some View {
         Group {
@@ -249,6 +256,13 @@ struct SimulationScreen: View {
             if let store, store.companies.count > 1 {
                 ToolbarItem(placement: .primaryAction) { companyMenu(store) }
             }
+            if canEdit, store?.simulation?.companyID != nil {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { isEditing = true } label: {
+                        Image(systemName: "slider.horizontal.3")
+                    }
+                }
+            }
             LogoutToolbarItem()
         }
         .task {
@@ -259,6 +273,17 @@ struct SimulationScreen: View {
             }
         }
         .refreshable { await store?.load() }
+        .sheet(isPresented: $isEditing) {
+            if let simulation = store?.simulation, let companyID = simulation.companyID {
+                SimulationEditorSheet(
+                    companyID: companyID,
+                    companyName: simulation.companyName,
+                    initialZones: simulation.zones,
+                    initialTariffs: simulation.tariffs,
+                    onSaved: { Task { await store?.load() } }
+                )
+            }
+        }
     }
 
     private func companyMenu(_ store: SimulationStore) -> some View {
@@ -280,9 +305,14 @@ struct SimulationScreen: View {
                 Card {
                     VStack(alignment: .leading, spacing: Spacing.sm) {
                         SectionHeader("Модель не заполнена")
-                        Text("Зоны и тарифы задают на сайте, в разделе «Симуляция выручки». Без них считать потенциал не из чего.")
+                        Text("Без зон и тарифов считать потенциал не из чего.")
                             .font(Typography.callout)
                             .foregroundStyle(Theme.textMuted)
+
+                        if canEdit {
+                            Button("Заполнить модель") { isEditing = true }
+                                .buttonStyle(PrimaryButtonStyle())
+                        }
                     }
                 }
             } else {
