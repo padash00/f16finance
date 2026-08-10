@@ -420,6 +420,26 @@ struct BusinessProfileScreen: View {
     @State private var confirmingLogout = false
     @State private var isLockEnabled = false
     @State private var didLoadSettings = false
+    @AppStorage(Appearance.storageKey) private var appearance: Appearance = .system
+
+    /// Выбор оформления.
+    ///
+    /// Приложение и так следует за системной темой — этот переключатель нужен,
+    /// чтобы её перебить: телефон уходит в тёмное по расписанию, а смотреть
+    /// цифры кому-то удобнее на светлом.
+    private var appearanceCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                FieldLabel("Оформление")
+                Picker("Оформление", selection: $appearance) {
+                    ForEach(Appearance.allCases) { option in
+                        Label(option.title, systemImage: option.icon).tag(option)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+        }
+    }
 
     /// Замок по биометрии. Из приложения видно зарплаты и логины всей
     /// команды — телефон, оставленный на стойке разблокированным, не должен
@@ -486,6 +506,7 @@ struct BusinessProfileScreen: View {
                 }
 
                 lockCard
+                appearanceCard
 
                 Button("Выйти из аккаунта") { confirmingLogout = true }
                     .buttonStyle(DestructiveButtonStyle())

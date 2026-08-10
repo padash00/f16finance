@@ -15,6 +15,11 @@ struct OrdaApp: App {
     @State private var auth: AuthStore
     private let api: APIClient
 
+    /// Выбранное оформление. Хранится на устройстве: это настройка глаз, а не
+    /// учётной записи — на планшете в тёмном зале и на телефоне в кармане
+    /// удобно по-разному.
+    @AppStorage(Appearance.storageKey) private var appearance: Appearance = .system
+
     init() {
         let configuration = AppConfiguration.current
         let provider = AuthTokenProvider()
@@ -40,6 +45,9 @@ struct OrdaApp: App {
                 .environment(auth)
                 .environment(\.api, api)
                 .tint(Theme.brand)
+                // nil — не вмешиваемся: цвета адаптивные и перекрашиваются
+                // вслед за системой сами.
+                .preferredColorScheme(appearance.colorScheme)
         }
         #if os(macOS)
         .defaultSize(width: 1180, height: 760)
