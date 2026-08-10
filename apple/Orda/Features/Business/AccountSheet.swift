@@ -118,7 +118,7 @@ struct AccountSheet: View {
                 Text("Вход перестанет работать, личные данные — телефон, почта, Telegram — будут стёрты. Отменить нельзя.")
                     .font(Typography.caption)
                     .foregroundStyle(Theme.textMuted)
-                Text("Смены, выручка и зарплатные ведомости останутся: они принадлежат точке, а не учётной записи.")
+                Text("Смены, выручка и зарплатные ведомости останутся: они принадлежат точке, а не учётной записи. Владелец получит уведомление.")
                     .font(Typography.caption)
                     .foregroundStyle(Theme.textDim)
 

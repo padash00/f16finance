@@ -2,10 +2,14 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- Push-уведомления. `development` для отладочных сборок; в архиве для
-	     App Store Xcode подставит production автоматически.
-	     Значение должно соответствовать APNS_ENVIRONMENT на сервере. -->
+	<!-- Push-уведомления. Значение приходит из настройки сборки: Debug —
+	     `development`, Release — `production`. Полагаться на то, что Xcode
+	     подменит его при архивации, нельзя: с зашитым `development` токены
+	     боевых устройств уходят на отладочный APNs, и уведомления молча не
+	     доходят.
+
+	     На сервере APNS_ENVIRONMENT должен совпадать. -->
 	<key>aps-environment</key>
-	<string>development</string>
+	<string>$(APS_ENVIRONMENT)</string>
 </dict>
 </plist>

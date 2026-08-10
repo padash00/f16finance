@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { pushToUsers } from '@/lib/server/push'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -58,6 +59,7 @@ export async function DELETE(request: Request) {
 
     // Последний владелец организации: без него никто не сможет выдать доступ
     // ни себе, ни другим.
+    let ownerIds: string[] = []
     if (orgId) {
       const { data: owners } = await supabase
         .from('organization_members')
@@ -66,7 +68,7 @@ export async function DELETE(request: Request) {
         .eq('role', 'owner')
         .eq('status', 'active')
 
-      const ownerIds = (owners || []).map((row: any) => String(row.user_id || '')).filter(Boolean)
+      ownerIds = (owners || []).map((row: any) => String(row.user_id || '')).filter(Boolean)
       if (ownerIds.includes(userId) && ownerIds.length <= 1) {
         return json(
           {
@@ -121,7 +123,26 @@ export async function DELETE(request: Request) {
       payload: { organization_id: orgId },
     })
 
-    // 5. Сама учётная запись.
+    // 5. Владельцу — уведомление. Удаление мгновенное, отменить его нельзя, но
+    //    узнать о нём владелец обязан сразу: человек, который вчера стоял в
+    //    графике, сегодня не войдёт, и смену надо кем-то закрывать.
+    const displayName =
+      (access.staffMember as any)?.full_name ||
+      (access.staffMember as any)?.short_name ||
+      (access.staffMember as any)?.name ||
+      access.operatorAuth?.username ||
+      'Сотрудник'
+    await pushToUsers(
+      supabase,
+      ownerIds.filter((id) => id !== userId),
+      {
+        title: 'Удалён аккаунт',
+        body: `${displayName} удалил свою учётную запись. Вход закрыт, история смен и выплат сохранена.`,
+        data: { route: 'staff' },
+      },
+    )
+
+    // 6. Сама учётная запись.
     const { error } = await supabase.auth.admin.deleteUser(userId)
     if (error) throw error
 
