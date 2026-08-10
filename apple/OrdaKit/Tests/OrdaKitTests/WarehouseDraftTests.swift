@@ -113,6 +113,61 @@ struct WarehouseDraftTests {
         #expect(json["bonus_amount"] == nil)
     }
 
+    // ── Ревизия ──────────────────────────────────────────────────────────────
+
+    private func stocktake() -> StocktakeDraft {
+        var value = StocktakeDraft(countedAt: "2026-08-10", locationID: "loc-1")
+        value.lines = [
+            StocktakeLine(itemID: "i-1", name: "Кола", unit: "шт", expected: 8, actual: 6),
+            StocktakeLine(itemID: "i-2", name: "Чипсы", unit: "шт", expected: 3),
+        ]
+        return value
+    }
+
+    @Test("Расхождение считается как факт минус учёт")
+    func differenceIsFactMinusExpected() {
+        let draft = stocktake()
+        #expect(draft.lines[0].difference == -2)
+        #expect(draft.lines[0].hasMismatch)
+        // До непосчитанной позиции не дошли — расхождения у неё нет вовсе.
+        #expect(draft.lines[1].difference == nil)
+        #expect(!draft.lines[1].hasMismatch)
+    }
+
+    @Test("Считается только то, что пересчитали")
+    func progressCountsOnlyCounted() {
+        let draft = stocktake()
+        #expect(draft.countedLines.count == 1)
+        #expect(draft.remaining == 1)
+        #expect(draft.mismatchedLines.count == 1)
+    }
+
+    /// Главное правило ревизии: непосчитанная позиция не уходит на сервер.
+    /// Отправить её нулём значит списать товар, которого никто не искал.
+    @Test("Непосчитанные позиции в акт не попадают")
+    func uncountedLinesAreNotSent() throws {
+        let body = try JSONEncoder().encode(
+            StocktakeCreateRequest(payload: stocktake().payload(), companyID: nil)
+        )
+        let json = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+        let payload = try #require(json["payload"] as? [String: Any])
+        let items = try #require(payload["items"] as? [[String: Any]])
+
+        #expect(json["action"] as? String == "createRevision")
+        #expect(items.count == 1)
+        #expect(items.first?["item_id"] as? String == "i-1")
+        #expect(items.first?["actual_qty"] as? Double == 6)
+    }
+
+    @Test("Акт без единой пересчитанной позиции не проводится")
+    func emptyStocktakeRejected() {
+        var draft = stocktake()
+        draft.lines = draft.lines.map {
+            StocktakeLine(itemID: $0.itemID, name: $0.name, unit: $0.unit, expected: $0.expected)
+        }
+        #expect(draft.validationMessage == "Ни одна позиция не пересчитана")
+    }
+
     // ── Решение по заявке ────────────────────────────────────────────────────
 
     @Test("Решение по заявке шлёт requestId тем именем, что читает роут")

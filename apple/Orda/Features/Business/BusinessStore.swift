@@ -289,6 +289,28 @@ final class BusinessStore {
         }
     }
 
+    // ── Ревизия ──────────────────────────────────────────────────────────────
+
+    private(set) var stocktakeSaveError: String?
+
+    func createStocktake(_ draft: StocktakeDraft, companyID: String?) async -> Bool {
+        do {
+            try await service.createStocktake(draft, companyID: companyID)
+            // Ревизия выравнивает остатки под факт — перечитываем и журнал, и
+            // сам склад.
+            await loadRevisions()
+            await loadStore()
+            stocktakeSaveError = nil
+            return true
+        } catch let error as APIError {
+            stocktakeSaveError = error.userMessage
+            return false
+        } catch {
+            stocktakeSaveError = error.localizedDescription
+            return false
+        }
+    }
+
     // ── Списание ─────────────────────────────────────────────────────────────
 
     private(set) var writeoffSaveError: String?

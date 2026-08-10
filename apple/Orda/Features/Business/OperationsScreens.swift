@@ -11,7 +11,12 @@ import SwiftUI
 /// расхождения, а не по алфавиту: пропажа на сто тысяч должна быть первой.
 struct RevisionsScreen: View {
     @Environment(BusinessStore.self) private var store
+    @Environment(\.access) private var access
     @State private var selected: Stocktake?
+    @State private var isCounting = false
+
+    /// Право `store-revisions.commit` проверяет и сервер.
+    private var canCount: Bool { access?.can("store-revisions.commit") ?? false }
 
     var body: some View {
         Group {
@@ -39,9 +44,17 @@ struct RevisionsScreen: View {
         }
         .background(Theme.background)
         .navigationTitle("Ревизии")
-        .toolbar { LogoutToolbarItem() }
+        .toolbar {
+            if canCount {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { isCounting = true } label: { Image(systemName: "plus") }
+                }
+            }
+            LogoutToolbarItem()
+        }
         .task { await store.loadRevisions() }
         .refreshable { await store.loadRevisions() }
+        .sheet(isPresented: $isCounting) { StocktakeSheet() }
     }
 
     private var sorted: [Stocktake] {
