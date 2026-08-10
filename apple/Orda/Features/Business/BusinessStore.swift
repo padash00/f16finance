@@ -17,10 +17,20 @@ final class BusinessStore {
     private(set) var isLoadingPending = false
     private(set) var pendingError: APIError?
 
+    // Доходы и расходы грузятся раздельно: у них свои разделы, и отказ одного
+    // журнала не должен гасить второй. Общий флаг прятал бы работающий экран
+    // из-за соседнего.
     private(set) var incomes: [IncomeRow] = []
+    private(set) var isLoadingIncomes = false
+    private(set) var incomesError: APIError?
+
     private(set) var expenses: [ExpenseRow] = []
-    private(set) var isLoadingLedger = false
-    private(set) var ledgerError: APIError?
+    private(set) var isLoadingExpenses = false
+    private(set) var expensesError: APIError?
+
+    /// Для сводного экрана «Деньги», где важны обе стороны сразу.
+    var isLoadingLedger: Bool { isLoadingIncomes || isLoadingExpenses }
+    var ledgerError: APIError? { incomesError ?? expensesError }
 
     private(set) var companies: [Company] = []
 
@@ -218,21 +228,38 @@ final class BusinessStore {
         companies = (try? await service.companies()) ?? companies
     }
 
-    func loadLedger() async {
-        isLoadingLedger = true
-        defer { isLoadingLedger = false }
+    func loadIncomes() async {
+        isLoadingIncomes = true
+        defer { isLoadingIncomes = false }
         let bounds = range.bounds
         do {
-            async let incomeRows = service.incomes(from: bounds.from, to: bounds.to)
-            async let expenseRows = service.expenses(from: bounds.from, to: bounds.to)
-            incomes = try await incomeRows
-            expenses = try await expenseRows
-            ledgerError = nil
+            incomes = try await service.incomes(from: bounds.from, to: bounds.to)
+            incomesError = nil
         } catch let error as APIError {
-            ledgerError = error
+            incomesError = error
         } catch {
-            ledgerError = .transport(message: error.localizedDescription)
+            incomesError = .transport(message: error.localizedDescription)
         }
+    }
+
+    func loadExpenses() async {
+        isLoadingExpenses = true
+        defer { isLoadingExpenses = false }
+        let bounds = range.bounds
+        do {
+            expenses = try await service.expenses(from: bounds.from, to: bounds.to)
+            expensesError = nil
+        } catch let error as APIError {
+            expensesError = error
+        } catch {
+            expensesError = .transport(message: error.localizedDescription)
+        }
+    }
+
+    func loadLedger() async {
+        async let incomeSide: Void = loadIncomes()
+        async let expenseSide: Void = loadExpenses()
+        _ = await (incomeSide, expenseSide)
     }
 
     func loadStore() async {
@@ -583,5 +610,42 @@ final class BusinessStore {
             sums[row.date, default: 0] += row.total
         }
         return sums.keys.sorted().map { ($0, sums[$0] ?? 0) }
+    }
+
+    /// Расходы по дням периода — для графика.
+    var expenseSeries: [(date: String, amount: Double)] {
+        var sums: [String: Double] = [:]
+        for row in expenses where !row.date.isEmpty {
+            sums[row.date, default: 0] += row.total
+        }
+        return sums.keys.sorted().map { ($0, sums[$0] ?? 0) }
+    }
+
+    /// Доходы по способам оплаты. Порядок постоянный: касса сверяется по нему,
+    /// и перестановка строк от периода к периоду сбивала бы сверку.
+    var incomeByMethod: [(name: String, amount: Double)] {
+        [
+            ("Наличные", incomes.reduce(0) { $0 + $1.cashAmount }),
+            ("Kaspi", incomes.reduce(0) { $0 + $1.kaspiAmount }),
+            ("Карта", incomes.reduce(0) { $0 + $1.cardAmount }),
+            ("Онлайн", incomes.reduce(0) { $0 + $1.onlineAmount }),
+        ]
+    }
+
+    /// Доходы по точкам, от крупных к мелким.
+    var incomeByCompany: [(name: String, amount: Double)] {
+        var sums: [String: Double] = [:]
+        for row in incomes {
+            let key = companyName(row.companyID) ?? "Без точки"
+            sums[key, default: 0] += row.total
+        }
+        return sums
+            .map { (name: $0.key, amount: $0.value) }
+            .sorted { $0.amount > $1.amount }
+    }
+
+    /// Расходы, ожидающие решения владельца, — среди загруженных за период.
+    var expensesAwaitingApproval: [ExpenseRow] {
+        expenses.filter(\.isPending)
     }
 }

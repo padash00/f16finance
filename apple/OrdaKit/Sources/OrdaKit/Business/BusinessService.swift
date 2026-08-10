@@ -135,6 +135,17 @@ public struct BusinessService: Sendable {
         return response.data.aggregate
     }
 
+    /// Аналитика по месяцам года. Требует `analytics.view`.
+    ///
+    /// Отдельно от `report(from:to:)`: тот считает выбранный период, этот —
+    /// год помесячно и прошлый год для сравнения.
+    public func monthlyAnalytics(year: Int) async throws -> MonthlyAnalytics {
+        let response: Envelope<MonthlyAnalytics> = try await api.send(
+            APIRequest(path: "/api/admin/analytics/monthly", query: ["year": String(year)])
+        )
+        return response.data
+    }
+
     /// ОПиУ по месяцам. Требует `profitability.view`.
     ///
     /// Величины приходят посчитанными: формула живёт на сервере, чтобы сайт и

@@ -64,7 +64,13 @@ struct NativeSectionTests {
     func lookupResolves() {
         #expect(NativeSection.forPage(id: "salary") == .salary)
         #expect(NativeSection.forPage(id: "store-warehouse") == .stock)
-        #expect(NativeSection.forPage(id: "analytics") == .reports)
+        // Отчёты и аналитика — разные экраны, как и на сайте: первый считает
+        // выбранный период, второй — год помесячно.
+        #expect(NativeSection.forPage(id: "reports") == .reports)
+        #expect(NativeSection.forPage(id: "analytics") == .analytics)
+        // То же и с журналами денег: свой пункт меню — свой экран.
+        #expect(NativeSection.forPage(id: "income") == .income)
+        #expect(NativeSection.forPage(id: "expenses") == .expenses)
         // Выдуманного идентификатора в каталоге нет — раздел не разрешается.
         #expect(NativeSection.forPage(id: "no-such-page") == nil)
     }

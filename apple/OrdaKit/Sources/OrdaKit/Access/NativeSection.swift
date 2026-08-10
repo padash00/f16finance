@@ -14,6 +14,7 @@ public enum NativeSection: String, CaseIterable, Sendable {
     case operators
     case salary
     case reports
+    case analytics
     case tasks
     case shifts
     case customers
@@ -67,7 +68,8 @@ public enum NativeSection: String, CaseIterable, Sendable {
     case expenseAnalysis
     case teamAnalysis
     case calendar
-    case ledger
+    case income
+    case expenses
     case approvals
     case expenseWhitelist
     case simulation
@@ -89,7 +91,8 @@ public enum NativeSection: String, CaseIterable, Sendable {
         case .movements: ["store-movements"]
         case .operators: ["operators"]
         case .salary: ["salary"]
-        case .reports: ["reports", "analytics"]
+        case .reports: ["reports"]
+        case .analytics: ["analytics"]
         case .tasks: ["tasks"]
         case .shifts: ["shifts"]
         case .customers: ["customers"]
@@ -142,10 +145,11 @@ public enum NativeSection: String, CaseIterable, Sendable {
         case .aiCfo: ["ai-cfo"]
         case .expenseAnalysis: ["expense-analysis"]
         case .teamAnalysis: ["team-analysis"]
-        // Доходы и расходы — один экран: владелец смотрит на них
-        // вместе, разделять их значило бы заставлять переключаться
-        // ради простого «сколько осталось».
-        case .ledger: ["income", "expenses"]
+        // Доходы и расходы — разные разделы, как на сайте. Раньше оба пункта
+        // меню вели на один экран «Деньги»: нажимаешь «Доходы» — приходишь не
+        // туда, где привык, и это читается как «не открывается».
+        case .income: ["income"]
+        case .expenses: ["expenses"]
         case .approvals: ["expenses-pending"]
         case .expenseWhitelist: ["expense-whitelist"]
         case .simulation: ["simulation"]

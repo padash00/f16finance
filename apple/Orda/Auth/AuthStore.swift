@@ -41,7 +41,23 @@ final class AuthStore {
     private let keychain: KeychainStore
     private let api: APIClient
     /// Защищает от гонки, когда несколько запросов одновременно получили 401.
-    private var refreshTask: Task<String?, Never>?
+    private var refreshTask: Task<RefreshOutcome, Never>?
+
+    /// Чем закончилась попытка продлить сессию.
+    ///
+    /// Разница принципиальная. `rejected` — сервер сказал, что этот
+    /// refresh-токен больше не действителен: сессия мертва, и держаться за неё
+    /// нечего. `temporary` — до сервера не дошли или он сам не в себе: токен,
+    /// возможно, живой, и выбрасывать человека из аккаунта не за что.
+    private enum RefreshOutcome {
+        case token(String)
+        case rejected
+        case temporary
+    }
+
+    /// Последнее продление отвергнуто сервером. Только в этом случае 401
+    /// означает конец сессии, а не оборванную связь.
+    private var lastRefreshRejected = false
 
     init(auth: SessionClient, keychain: KeychainStore, api: APIClient) {
         self.auth = auth
@@ -65,8 +81,14 @@ final class AuthStore {
 
         // Протухший токен обновляем до первого запроса — иначе главный экран
         // встретит пользователя ошибкой вместо данных.
+        //
+        // Но неудача продления сама по себе не повод разлогинивать. Раньше
+        // здесь стоял безусловный `signOut()`, и приложение, открытое в метро
+        // или при моргнувшем сервере, стирало сессию из Keychain — человек
+        // закрывал приложение вошедшим, а открывал на экране входа. Выходим
+        // только когда сервер прямо сказал, что токен недействителен.
         if stored.isExpiringSoon {
-            guard await performRefresh() != nil else {
+            if case .rejected = await refreshSession() {
                 await signOut()
                 return
             }
@@ -143,8 +165,11 @@ final class AuthStore {
             PushManager.shared.sessionDidStart()
             return true
         } catch {
-            // Истёкшая сессия — единственный случай, когда выход оправдан.
-            if case APIError.unauthorized = error {
+            // Истёкшая сессия — единственный случай, когда выход оправдан. Но
+            // 401 при оборванном продлении означает лишь, что старый токен не
+            // успели обменять: сессия могла остаться живой. Выходим, только
+            // если сервер сам отверг refresh-токен.
+            if case APIError.unauthorized = error, lastRefreshRejected {
                 await signOut()
                 return false
             }
@@ -163,34 +188,54 @@ final class AuthStore {
 
     private func persist(_ newSession: SessionClient.Session) {
         session = newSession
+        lastRefreshRejected = false
         if let data = try? JSONEncoder().encode(newSession) {
             keychain.save(data)
         }
     }
 
+    fileprivate func performRefresh() async -> String? {
+        if case let .token(value) = await refreshSession() { return value }
+        return nil
+    }
+
     /// Обновление с защитой от параллельных вызовов: несколько запросов,
     /// получивших 401 одновременно, должны использовать один refresh, иначе
     /// сервер отзовёт refresh-токен как переиспользованный.
-    fileprivate func performRefresh() async -> String? {
+    private func refreshSession() async -> RefreshOutcome {
         if let existing = refreshTask {
             return await existing.value
         }
 
-        guard let refreshToken = session?.refreshToken else { return nil }
+        guard let refreshToken = session?.refreshToken else {
+            // Токена нет вовсе — продлевать нечего, и это именно конец сессии.
+            lastRefreshRejected = true
+            return .rejected
+        }
 
-        let task = Task<String?, Never> { [auth] in
+        let task = Task<RefreshOutcome, Never> { [auth] in
             do {
                 let refreshed = try await auth.refresh(refreshToken: refreshToken)
                 await MainActor.run { self.persist(refreshed) }
-                return refreshed.accessToken
+                return .token(refreshed.accessToken)
+            } catch SessionClient.AuthError.invalidCredentials {
+                // 401 на продлении: сервер отозвал refresh-токен.
+                return .rejected
             } catch {
-                return nil
+                // Сеть, 429, 5xx, неготовый сервер — сессию не трогаем.
+                return .temporary
             }
         }
 
         refreshTask = task
         let result = await task.value
         refreshTask = nil
+
+        if case .rejected = result {
+            lastRefreshRejected = true
+        } else {
+            lastRefreshRejected = false
+        }
         return result
     }
 

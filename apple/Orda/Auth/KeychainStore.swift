@@ -32,10 +32,19 @@ struct KeychainStore: Sendable {
         ]
 
         let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
-        if status == errSecItemNotFound {
-            var insert = query
-            insert[kSecValueData as String] = data
-            insert[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        guard status != errSecSuccess else { return }
+
+        var insert = query
+        insert[kSecValueData as String] = data
+        insert[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+
+        // Любая неудача обновления — не только «записи нет». Встречается и
+        // errSecDuplicateItem от строки, оставшейся с прошлой установки, и
+        // errSecInteractionNotAllowed на заблокированном устройстве. Раньше
+        // разбирался ровно один код, а всё остальное молча теряло сессию:
+        // человек закрывал приложение вошедшим и открывал на экране входа.
+        if SecItemAdd(insert as CFDictionary, nil) == errSecDuplicateItem {
+            SecItemDelete(query as CFDictionary)
             SecItemAdd(insert as CFDictionary, nil)
         }
     }
