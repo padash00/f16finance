@@ -32,7 +32,7 @@ struct ExpenseCategoriesScreen: View {
         .background(Theme.background)
         .navigationTitle("Категории")
         .toolbar { LogoutToolbarItem() }
-        .task { if store.expenseCategories.isEmpty { await store.loadCategories() } }
+        .task { await store.loadCategories() }
         .refreshable { await store.loadCategories() }
     }
 
@@ -215,7 +215,7 @@ struct StoreAnalyticsScreen: View {
         .background(Theme.background)
         .navigationTitle("Аналитика магазина")
         .toolbar { LogoutToolbarItem() }
-        .task { if store.storeAnalytics == nil { await store.loadStoreAnalytics() } }
+        .task { await store.loadStoreAnalytics() }
         .refreshable { await store.loadStoreAnalytics() }
     }
 
@@ -329,7 +329,7 @@ struct KnowledgeAdminScreen: View {
         .navigationTitle("База знаний")
         .searchable(text: $search, prompt: "Заголовок или метка")
         .toolbar { LogoutToolbarItem() }
-        .task { if store.knowledge == nil { await store.loadKnowledge() } }
+        .task { await store.loadKnowledge() }
         .refreshable { await store.loadKnowledge() }
     }
 

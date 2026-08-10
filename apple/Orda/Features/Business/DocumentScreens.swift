@@ -90,7 +90,7 @@ struct ReceiptsScreen: View {
         .background(Theme.background)
         .navigationTitle(kind.title)
         .toolbar { LogoutToolbarItem() }
-        .task { if store.receipts.isEmpty { await store.loadReceipts() } }
+        .task { await store.loadReceipts() }
         .refreshable { await store.loadReceipts() }
     }
 
@@ -280,7 +280,7 @@ struct WriteoffsScreen: View {
         .background(Theme.background)
         .navigationTitle("Списания")
         .toolbar { LogoutToolbarItem() }
-        .task { if store.writeoffs.isEmpty { await store.loadWriteoffs() } }
+        .task { await store.loadWriteoffs() }
         .refreshable { await store.loadWriteoffs() }
     }
 
@@ -501,7 +501,7 @@ struct ShiftReportsScreen: View {
         .background(Theme.background)
         .navigationTitle("Отчёты смен")
         .toolbar { LogoutToolbarItem() }
-        .task { if store.shiftReports.isEmpty { await store.loadShiftReports() } }
+        .task { await store.loadShiftReports() }
         .refreshable { await store.loadShiftReports() }
     }
 
@@ -690,7 +690,7 @@ struct BirthdaysScreen: View {
         .background(Theme.background)
         .navigationTitle("Дни рождения")
         .toolbar { LogoutToolbarItem() }
-        .task { if store.birthdays == nil { await store.loadBirthdays() } }
+        .task { await store.loadBirthdays() }
         .refreshable { await store.loadBirthdays() }
     }
 

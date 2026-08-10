@@ -53,8 +53,12 @@ public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: Vie
                 ScrollView {
                     LazyVStack(spacing: Spacing.md) {
                         ForEach(items) { item in
-                            NavigationLink { detail(item) } label: { row(item) }
-                                .buttonStyle(.plain)
+                            NavigationLink {
+                                FreshDetail(id: item.id, fallback: item, items: items, detail: detail)
+                            } label: {
+                                row(item)
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                     .padding(Spacing.lg)
@@ -105,8 +109,11 @@ public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: Vie
             Divider()
 
             Group {
-                if let selection, items.contains(selection) {
-                    detail(selection)
+                if let selection, let fresh = items.first(where: { $0.id == selection.id }) {
+                    // Берём свежую запись из списка, а не сохранённую при
+                    // нажатии: после действия список перечитывается, и снимок
+                    // остался бы со старым статусом.
+                    detail(fresh)
                 } else {
                     // Пустая правая часть на широком экране выглядит как сбой —
                     // подсказываем, что делать.
@@ -128,10 +135,31 @@ public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: Vie
             if selection == nil { selection = items.first }
         }
         .onChange(of: items.count) { _, _ in
-            if selection == nil || !(selection.map(items.contains) ?? false) {
+            if selection == nil || !items.contains(where: { $0.id == selection?.id }) {
                 selection = items.first
             }
         }
+    }
+}
+
+/// Деталь, которая следит за списком.
+///
+/// `NavigationLink` захватывает запись значением, и после действия — закрыли
+/// задачу, одобрили заявку — открытая карточка продолжала показывать прежнее
+/// состояние, пока её не закроешь и не откроешь снова. Здесь запись каждый раз
+/// разрешается заново по идентификатору.
+///
+/// Если она пропала из списка совсем (сменился фильтр, запись удалили),
+/// показываем последний известный снимок: закрывать открытый экран под руками
+/// человека — хуже, чем показать чуть устаревшее.
+private struct FreshDetail<Item: Identifiable & Hashable, Detail: View>: View {
+    let id: Item.ID
+    let fallback: Item
+    let items: [Item]
+    let detail: (Item) -> Detail
+
+    var body: some View {
+        detail(items.first(where: { $0.id == id }) ?? fallback)
     }
 }
 

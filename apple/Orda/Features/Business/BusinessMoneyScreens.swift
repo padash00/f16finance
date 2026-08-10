@@ -59,7 +59,7 @@ struct ApprovalsScreen: View {
         .background(Theme.background)
         .navigationTitle("Ожидают одобрения")
         .toolbar { LogoutToolbarItem() }
-        .task { if store.pending.isEmpty { await store.loadPending() } }
+        .task { await store.loadPending() }
         .refreshable { await store.loadPending() }
         .sheet(item: $declining) { expense in
             declineSheet(expense)
@@ -263,7 +263,7 @@ struct LedgerScreen: View {
         .background(Theme.background)
         .navigationTitle("Деньги")
         .toolbar { LogoutToolbarItem() }
-        .task { if store.incomes.isEmpty { await store.loadLedger() } }
+        .task { await store.loadLedger() }
         .refreshable { await store.loadLedger() }
     }
 

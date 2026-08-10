@@ -27,7 +27,7 @@ struct PointDevicesScreen: View {
         .background(Theme.background)
         .navigationTitle("Точки и устройства")
         .toolbar { LogoutToolbarItem() }
-        .task { if store.devices == nil { await store.loadDevices() } }
+        .task { await store.loadDevices() }
         .refreshable { await store.loadDevices() }
     }
 

@@ -43,7 +43,7 @@ struct PnlScreen: View {
         .background(Theme.background)
         .navigationTitle("ОПиУ и EBITDA")
         .toolbar { LogoutToolbarItem() }
-        .task { if store.pnl == nil { await store.loadPnl() } }
+        .task { await store.loadPnl() }
         .refreshable { await store.loadPnl() }
         .sheet(item: $editingMonth) { target in
             ProfitabilityInputSheet(month: target.id)

@@ -83,7 +83,7 @@ struct TeamTasksScreen: View {
             }
             LogoutToolbarItem()
         }
-        .task { if store.tasks.isEmpty { await store.loadTasks() } }
+        .task { await store.loadTasks() }
         .refreshable { await store.loadTasks() }
         .sheet(isPresented: $isAdding) { AddTaskSheet() }
     }
@@ -284,7 +284,7 @@ struct ScheduleWeekScreen: View {
         .background(Theme.background)
         .navigationTitle("Смены")
         .toolbar { LogoutToolbarItem() }
-        .task { if store.schedule == nil { await store.loadSchedule() } }
+        .task { await store.loadSchedule() }
         .refreshable { await store.loadSchedule() }
     }
 
@@ -414,7 +414,7 @@ struct CustomersScreen: View {
         .navigationTitle("Клиенты")
         .searchable(text: $search, prompt: "Имя, телефон или карта")
         .toolbar { LogoutToolbarItem() }
-        .task { if store.customers.isEmpty { await store.loadCustomers() } }
+        .task { await store.loadCustomers() }
         .refreshable { await store.loadCustomers() }
     }
 

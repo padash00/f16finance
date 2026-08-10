@@ -34,7 +34,7 @@ struct SubscriptionScreen: View {
         .background(Theme.background)
         .navigationTitle("Подписка")
         .toolbar { LogoutToolbarItem() }
-        .task { if store.billing == nil { await store.loadBilling() } }
+        .task { await store.loadBilling() }
         .refreshable { await store.loadBilling() }
     }
 
@@ -289,7 +289,7 @@ struct IncidentsScreen: View {
             }
             LogoutToolbarItem()
         }
-        .task { if store.incidents.isEmpty { await store.loadIncidents() } }
+        .task { await store.loadIncidents() }
         .refreshable { await store.loadIncidents() }
     }
 
@@ -466,7 +466,7 @@ struct PointDebtsScreen: View {
         .background(Theme.background)
         .navigationTitle("Долги с точки")
         .toolbar { LogoutToolbarItem() }
-        .task { if store.debts == nil { await store.loadDebts() } }
+        .task { await store.loadDebts() }
         .refreshable { await store.loadDebts() }
     }
 

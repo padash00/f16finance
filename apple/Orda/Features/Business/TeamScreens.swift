@@ -54,7 +54,7 @@ struct OperatorsScreen: View {
             }
             LogoutToolbarItem()
         }
-        .task { if store.operators.isEmpty { await store.loadTeam() } }
+        .task { await store.loadTeam() }
         .refreshable { await store.loadTeam() }
     }
 
@@ -266,7 +266,7 @@ struct SalaryScreen: View {
         .background(Theme.background)
         .navigationTitle("Зарплата")
         .toolbar { LogoutToolbarItem() }
-        .task { if store.salary == nil { await store.loadSalary() } }
+        .task { await store.loadSalary() }
         .refreshable { await store.loadSalary() }
     }
 

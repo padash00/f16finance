@@ -32,7 +32,7 @@ struct ReportsScreen: View {
         .background(Theme.background)
         .navigationTitle("Отчёты")
         .toolbar { LogoutToolbarItem() }
-        .task { if store.report == nil { await store.loadReport() } }
+        .task { await store.loadReport() }
         .refreshable { await store.loadReport() }
     }
 

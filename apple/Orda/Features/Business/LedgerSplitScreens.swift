@@ -64,7 +64,7 @@ struct IncomeScreen: View {
             }
             LogoutToolbarItem()
         }
-        .task { if store.incomes.isEmpty { await store.loadIncomes() } }
+        .task { await store.loadIncomes() }
         .refreshable { await store.loadIncomes() }
         .sheet(isPresented: $isAdding) { AddIncomeSheet() }
     }
@@ -260,7 +260,7 @@ struct ExpensesScreen: View {
             }
             LogoutToolbarItem()
         }
-        .task { if store.expenses.isEmpty { await store.loadExpenses() } }
+        .task { await store.loadExpenses() }
         .refreshable { await store.loadExpenses() }
         .sheet(isPresented: $isAdding) { AddExpenseSheet() }
     }

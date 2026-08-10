@@ -27,6 +27,9 @@ struct BusinessRootView: View {
     let resolver: AccessResolver
 
     @Environment(\.api) private var api
+    /// Возврат в приложение — момент обновить сводку: экран мог пролежать
+    /// открытым час, а смена за это время закрылась.
+    @Environment(\.scenePhase) private var scenePhase
     @State private var store: BusinessStore?
     @State private var selection: WorkspaceItem?
 
@@ -49,6 +52,10 @@ struct BusinessRootView: View {
             let created = BusinessStore(api: api)
             store = created
             await created.bootstrap()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active, let store else { return }
+            Task { await store.bootstrap() }
         }
     }
 

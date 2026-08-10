@@ -40,7 +40,7 @@ struct RevisionsScreen: View {
         .background(Theme.background)
         .navigationTitle("Ревизии")
         .toolbar { LogoutToolbarItem() }
-        .task { if store.revisions.isEmpty { await store.loadRevisions() } }
+        .task { await store.loadRevisions() }
         .refreshable { await store.loadRevisions() }
     }
 
@@ -261,7 +261,7 @@ struct SuppliersScreen: View {
             }
             LogoutToolbarItem()
         }
-        .task { if store.suppliers == nil { await store.loadSuppliers() } }
+        .task { await store.loadSuppliers() }
         .refreshable { await store.loadSuppliers() }
     }
 
@@ -446,7 +446,7 @@ struct StaffScreen: View {
             }
             LogoutToolbarItem()
         }
-        .task { if store.staff == nil { await store.loadStaff() } }
+        .task { await store.loadStaff() }
         .refreshable { await store.loadStaff() }
     }
 

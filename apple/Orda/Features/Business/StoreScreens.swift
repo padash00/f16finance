@@ -26,7 +26,7 @@ struct StoreScreen: View {
         .background(Theme.background)
         .navigationTitle("Магазин")
         .toolbar { LogoutToolbarItem() }
-        .task { if store.store == nil { await store.loadStore() } }
+        .task { await store.loadStore() }
         .refreshable { await store.loadStore() }
     }
 
@@ -260,7 +260,7 @@ struct StockScreen: View {
                 .toggleStyle(.button)
             }
         }
-        .task { if store.store == nil { await store.loadStore() } }
+        .task { await store.loadStore() }
         .refreshable { await store.loadStore() }
     }
 
@@ -453,7 +453,7 @@ struct RequestsScreen: View {
         }
         .background(Theme.background)
         .navigationTitle(scope == .journal ? "Журнал заявок" : "Заявки")
-        .task { if store.store == nil { await store.loadStore() } }
+        .task { await store.loadStore() }
         .refreshable { await store.loadStore() }
     }
 }
@@ -566,7 +566,7 @@ struct MovementsScreen: View {
         }
         .background(Theme.background)
         .navigationTitle("Движения")
-        .task { if store.store == nil { await store.loadStore() } }
+        .task { await store.loadStore() }
         .refreshable { await store.loadStore() }
     }
 

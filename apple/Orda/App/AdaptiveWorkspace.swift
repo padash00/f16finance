@@ -154,7 +154,12 @@ struct AdaptiveWorkspace<Detail: View>: View {
             .navigationSplitViewColumnWidth(min: 260, ideal: 300, max: 380)
             #endif
         } detail: {
-            detail(selection)
+            // Стек обязателен: без него переход внутрь записи в правой колонке
+            // происходит, но рисуется без панели навигации — и вернуться
+            // назад нечем. Экран открывался в тупик.
+            NavigationStack {
+                detail(selection)
+            }
         }
         .navigationSplitViewStyle(.balanced)
     }
