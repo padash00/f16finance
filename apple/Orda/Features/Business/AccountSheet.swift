@@ -99,6 +99,10 @@ struct MyContactsCard: View {
     @State private var message: String?
     @State private var isError = false
     @State private var didLoad = false
+    @State private var isLoading = true
+    /// Почему не загрузилось. Пустое состояние и загрузка выглядят одинаково,
+    /// и без этого карточка крутила скелет бесконечно.
+    @State private var loadError: APIError?
 
     var body: some View {
         Card {
@@ -135,8 +139,16 @@ struct MyContactsCard: View {
                     }
                     .buttonStyle(SecondaryButtonStyle())
                     .disabled(isSaving || !hasChanges)
-                } else {
+                } else if isLoading {
                     LoadingRows(count: 2)
+                } else if let loadError {
+                    unavailable(loadError)
+                } else {
+                    // Ни профиля, ни ошибки: человек не числится ни
+                    // сотрудником, ни оператором — например, суперадмин.
+                    Text("Менять нечего: ваша учётная запись не привязана к сотруднику или оператору.")
+                        .font(Typography.caption)
+                        .foregroundStyle(Theme.textDim)
                 }
             }
         }
@@ -144,6 +156,26 @@ struct MyContactsCard: View {
             guard !didLoad else { return }
             didLoad = true
             await load()
+        }
+    }
+
+    /// Раздел недоступен. Отдельный случай — устаревший сервер: приложение
+    /// обновляется само, сайт выкатывают отдельно, и человек не должен гадать,
+    /// почему поле не появляется.
+    @ViewBuilder
+    private func unavailable(_ error: APIError) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            if case .notFound = error {
+                Text("Правка своих данных появится после обновления сайта.")
+                    .font(Typography.caption)
+                    .foregroundStyle(Theme.textDim)
+            } else {
+                Text(error.userMessage)
+                    .font(Typography.caption)
+                    .foregroundStyle(Theme.textMuted)
+                Button("Повторить") { Task { await load() } }
+                    .buttonStyle(SecondaryButtonStyle())
+            }
         }
     }
 
@@ -172,17 +204,25 @@ struct MyContactsCard: View {
     }
 
     private func load() async {
+        isLoading = true
+        defer { isLoading = false }
+
         do {
             let loaded = try await MyProfileService(api: api).load()
             profile = loaded
             phone = loaded.phone ?? ""
             email = loaded.email ?? ""
             telegram = loaded.telegramChatID ?? ""
-        } catch {
-            // Профиля может не быть — например, у суперадмина, который не
-            // числится ни сотрудником, ни оператором. Это не ошибка, просто
-            // менять нечего.
+            loadError = nil
+        } catch let error as APIError {
             profile = nil
+            // 404 — профиля нет вовсе: у суперадмина, который не числится ни
+            // сотрудником, ни оператором, менять действительно нечего.
+            // Остальное — настоящий отказ, и о нём надо сказать.
+            loadError = error
+        } catch {
+            profile = nil
+            loadError = .transport(message: error.localizedDescription)
         }
     }
 

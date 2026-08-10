@@ -896,6 +896,7 @@ final class MessagesStore {
 struct MessagesScreen: View {
     @Environment(\.api) private var api
     @State private var store: MessagesStore?
+    @State private var isChoosing = false
     @State private var selected: DirectThread?
 
     var body: some View {
@@ -918,7 +919,7 @@ struct MessagesScreen: View {
                         WideEmptyState(
                             icon: "envelope",
                             title: "Переписок нет",
-                            message: "Здесь появятся личные сообщения от коллег."
+                            message: "Нажмите «плюс», чтобы написать первым."
                         )
                     }
                 }
@@ -928,9 +929,115 @@ struct MessagesScreen: View {
         }
         .background(Theme.background)
         .navigationTitle("Сообщения")
-        .toolbar { LogoutToolbarItem() }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button { isChoosing = true } label: { Image(systemName: "square.and.pencil") }
+            }
+            LogoutToolbarItem()
+        }
         .task { if store == nil { let s = MessagesStore(api: api); store = s; await s.load() } }
         .refreshable { await store?.load() }
+        .sheet(isPresented: $isChoosing) {
+            ContactPickerSheet { contact in
+                Task {
+                    // Переписки может ещё не быть: открываем её сразу, чтобы
+                    // человек попал в разговор, а не обратно в пустой список.
+                    await store?.open(contact.userID)
+                    await store?.load()
+                    selected = store?.threads.first { $0.otherUserID == contact.userID }
+                        ?? DirectThread(placeholderFor: contact)
+                }
+            }
+        }
+    }
+}
+
+/// Выбор собеседника.
+///
+/// Личные сообщения умели только отвечать: адресата взять было неоткуда, и
+/// написать первым мог лишь тот, кому уже написали. Список ограничен своей
+/// организацией — оператор чужой сюда не попадёт, как и не пройдёт проверку
+/// при отправке.
+private struct ContactPickerSheet: View {
+    let onPick: (DirectContact) -> Void
+
+    @Environment(\.api) private var api
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var contacts: [DirectContact] = []
+    @State private var search = ""
+    @State private var isLoading = true
+    @State private var error: APIError?
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if let error, contacts.isEmpty {
+                    ErrorStateView(error: error) { Task { await load() } }
+                } else if isLoading && contacts.isEmpty {
+                    LoadingRows(count: 6)
+                } else if filtered.isEmpty {
+                    EmptyStateView(
+                        icon: "person.2.slash",
+                        title: search.isEmpty ? "Писать некому" : "Никого не нашлось",
+                        message: search.isEmpty
+                            ? "В организации пока нет других людей с учётной записью."
+                            : "Попробуйте другое имя."
+                    )
+                } else {
+                    List(filtered) { contact in
+                        Button {
+                            onPick(contact)
+                            dismiss()
+                        } label: {
+                            NavigationRow(
+                                icon: contact.isOperator ? "person.crop.circle" : "person.text.rectangle",
+                                iconColor: Theme.brand,
+                                title: contact.name,
+                                subtitle: contact.roleLabel
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .listRowInsets(EdgeInsets(top: Spacing.xs, leading: Spacing.lg, bottom: Spacing.xs, trailing: Spacing.lg))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                    }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                }
+            }
+            .background(Theme.background)
+            .navigationTitle("Кому написать")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .searchable(text: $search, prompt: "Имя")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Отмена") { dismiss() }
+                }
+            }
+            .task { await load() }
+        }
+    }
+
+    private var filtered: [DirectContact] {
+        let query = search.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { return contacts }
+        return contacts.filter { $0.name.localizedCaseInsensitiveContains(query) }
+    }
+
+    private func load() async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            contacts = try await FeedService(api: api).contacts()
+            error = nil
+        } catch let apiError as APIError {
+            error = apiError
+        } catch {
+            self.error = .transport(message: error.localizedDescription)
+        }
     }
 }
 

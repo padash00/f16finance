@@ -380,6 +380,45 @@ public struct TeamChatFeed: Decodable, Sendable {
 // ── Личные сообщения: /api/direct-messages ───────────────────────────────────
 
 /// Строка списка переписок.
+/// Человек, которому можно написать: `/api/direct-messages/contacts`.
+///
+/// Список ограничен своей организацией — оператор чужой в него не попадёт, как
+/// не пройдёт и проверку при отправке.
+public struct DirectContact: Decodable, Sendable, Identifiable, Hashable {
+    public let userID: String
+    public let name: String
+    public let role: String?
+    /// `staff` или `operator` — по этому в списке видно, кто перед тобой.
+    public let kind: String
+
+    public var id: String { userID }
+
+    public var isOperator: Bool { kind == "operator" }
+
+    public var roleLabel: String? {
+        switch role {
+        case "owner": "владелец"
+        case "manager": "менеджер"
+        case "marketer": "маркетолог"
+        case "operator": "оператор"
+        default: role
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case name, role, kind
+        case userID = "user_id"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        userID = try c.decodeFlexibleString(forKey: .userID) ?? ""
+        name = try c.decodeFlexibleString(forKey: .name) ?? "Без имени"
+        role = try c.decodeFlexibleString(forKey: .role)
+        kind = try c.decodeFlexibleString(forKey: .kind) ?? "staff"
+    }
+}
+
 public struct DirectThread: Decodable, Sendable, Identifiable, Hashable {
     public let otherUserID: String
     public let otherName: String
@@ -408,7 +447,21 @@ public struct DirectThread: Decodable, Sendable, Identifiable, Hashable {
     }
 }
 
-/// Ответ `GET /api/direct-messages/threads`.
+extension DirectThread {
+    /// Пустая переписка с человеком, которому ещё не писали.
+    ///
+    /// Нужна, чтобы после выбора собеседника открылся разговор, а не список:
+    /// на сервере такой переписки пока нет, она появится с первым сообщением.
+    public init(placeholderFor contact: DirectContact) {
+        otherUserID = contact.userID
+        otherName = contact.name
+        lastMessage = ""
+        lastAt = nil
+        lastFromMe = false
+        unreadCount = 0
+    }
+}
+
 public struct DirectThreadList: Decodable, Sendable {
     public let threads: [DirectThread]
 
@@ -848,6 +901,16 @@ public struct FeedService: Sendable {
 
     public func threads() async throws -> DirectThreadList {
         try await api.send(APIRequest(path: "/api/direct-messages/threads"))
+    }
+
+    /// Кому можно написать. Пустой запрос — все, кто доступен.
+    public func contacts(search: String = "") async throws -> [DirectContact] {
+        var query: [String: String] = [:]
+        if !search.isEmpty { query["search"] = search }
+        let response: DataList<DirectContact> = try await api.send(
+            APIRequest(path: "/api/direct-messages/contacts", query: query)
+        )
+        return response.items
     }
 
     public func conversation(with userID: String, limit: Int = 100) async throws -> DirectConversation {
