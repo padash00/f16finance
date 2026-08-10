@@ -156,9 +156,16 @@ public struct BusinessService: Sendable {
     /// Зарплата за неделю. `weekStart` — понедельник в формате `YYYY-MM-DD`;
     /// сервер отвергает произвольные даты, поэтому выравнивание на клиенте
     /// обязательно (см. `DateRange.weekStart`).
+    ///
+    /// `view` обязателен: роут обслуживает три разных представления
+    /// (`weekly`, `operatorWeekly`, `operatorDetail`) и без него отвечает
+    /// `unsupported-view` 400. Раздел зарплат не открывался вовсе.
     public func salary(weekStart: String) async throws -> SalaryWeekReport {
         let response: Envelope<SalaryWeekReport> = try await api.send(
-            APIRequest(path: "/api/admin/salary", query: ["weekStart": weekStart])
+            APIRequest(
+                path: "/api/admin/salary",
+                query: ["view": "weekly", "weekStart": weekStart]
+            )
         )
         return response.data
     }
