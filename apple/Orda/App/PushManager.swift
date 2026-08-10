@@ -211,6 +211,20 @@ final class OrdaAppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = PushDelegate.shared
+        // Холодный запуск из меню иконки: система кладёт выбранный пункт сюда,
+        // и другого способа его увидеть нет.
+        if let item = options?[.shortcutItem] as? UIApplicationShortcutItem {
+            Task { @MainActor in QuickActions.handle(item) }
+        }
+        return true
+    }
+
+    /// Нажали пункт меню, когда приложение уже было запущено.
+    func application(
+        _ application: UIApplication,
+        performActionFor shortcutItem: UIApplicationShortcutItem
+    ) async -> Bool {
+        await MainActor.run { QuickActions.handle(shortcutItem) }
         return true
     }
 

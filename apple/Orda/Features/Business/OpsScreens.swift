@@ -51,7 +51,18 @@ struct TeamTasksScreen: View {
                 MasterDetail(
                     items: filtered,
                     selection: $selected,
-                    listWidth: 340
+                    listWidth: 340,
+                    actions: { task in
+                        // Закрыть задачу — самое частое, что с ней делают.
+                        // Свайпом это одно движение вместо «открыть →
+                        // прочитать → нажать → вернуться».
+                        guard canComplete, !task.isDone else { return [] }
+                        return [
+                            RowAction("Завершить", icon: "checkmark.circle", tint: Theme.positive) {
+                                Task { await store.changeTaskStatus(taskID: task.id, to: .done) }
+                            }
+                        ]
+                    }
                 ) { task in
                     TeamTaskRowView(task: task)
                 } detail: { task in

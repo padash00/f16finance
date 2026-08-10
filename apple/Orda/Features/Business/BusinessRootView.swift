@@ -65,6 +65,21 @@ struct BusinessRootView: View {
             PushManager.shared.pendingRoute = nil
             openIfAllowed(pageID: route.pageID)
         }
+        #if os(iOS)
+        // Меню иконки собирается по правам — и пересобирается, когда права
+        // меняются: список должен таять и расти вместе с доступом, а не
+        // застывать таким, каким был в день установки.
+        .task(id: resolver.session.capabilities) {
+            QuickActions.refresh(for: resolver)
+            if let pending = QuickActions.take() {
+                openIfAllowed(pageID: pending.pageID)
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active, let pending = QuickActions.take() else { return }
+            openIfAllowed(pageID: pending.pageID)
+        }
+        #endif
     }
 
     @ViewBuilder

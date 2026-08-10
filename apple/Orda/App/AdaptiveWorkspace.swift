@@ -42,6 +42,8 @@ struct AdaptiveWorkspace<Detail: View>: View {
     @Binding var selection: WorkspaceItem?
     @ViewBuilder let detail: (WorkspaceItem?) -> Detail
 
+    @State private var searchText = ""
+
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
     #endif
@@ -128,10 +130,25 @@ struct AdaptiveWorkspace<Detail: View>: View {
 
     // ── iPad и Mac ───────────────────────────────────────────────────────────
 
+    /// Разделы, оставшиеся после поиска. Пустой запрос — всё как есть.
+    ///
+    /// Семьдесят пунктов в боковой панели — это два экрана прокрутки, и нужный
+    /// ищут глазами по всему списку. Строка поиска отвечает на «где тут
+    /// списания» быстрее, чем прокрутка.
+    private var visibleSections: [WorkspaceSection] {
+        let query = searchText.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { return sections }
+        return sections.compactMap { section in
+            let items = section.items.filter { $0.title.localizedCaseInsensitiveContains(query) }
+            guard !items.isEmpty else { return nil }
+            return WorkspaceSection(id: section.id, title: section.title, icon: section.icon, items: items)
+        }
+    }
+
     private var splitLayout: some View {
         NavigationSplitView {
             List(selection: $selection) {
-                ForEach(sections) { section in
+                ForEach(visibleSections) { section in
                     Section {
                         ForEach(section.items) { item in
                             NavigationLink(value: item) {
@@ -146,6 +163,12 @@ struct AdaptiveWorkspace<Detail: View>: View {
                 }
             }
             .navigationTitle(title)
+            .searchable(text: $searchText, placement: .sidebar, prompt: "Найти раздел")
+            .overlay {
+                if !searchText.isEmpty && visibleSections.isEmpty {
+                    ContentUnavailableView.search(text: searchText)
+                }
+            }
             #if os(macOS)
             .listStyle(.sidebar)
             .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 340)

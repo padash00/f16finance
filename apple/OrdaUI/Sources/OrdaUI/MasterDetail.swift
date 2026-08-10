@@ -16,6 +16,7 @@ public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: Vie
     private let detail: (Item) -> Detail
     private let empty: () -> Empty
     private let listWidth: CGFloat
+    private let actions: (Item) -> [RowAction]
 
     @Environment(\.surface) private var surface
 
@@ -23,6 +24,7 @@ public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: Vie
         items: [Item],
         selection: Binding<Item?>,
         listWidth: CGFloat = 340,
+        actions: @escaping (Item) -> [RowAction] = { _ in [] },
         @ViewBuilder row: @escaping (Item) -> Row,
         @ViewBuilder detail: @escaping (Item) -> Detail,
         @ViewBuilder empty: @escaping () -> Empty
@@ -30,6 +32,7 @@ public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: Vie
         self.items = items
         self._selection = selection
         self.listWidth = listWidth
+        self.actions = actions
         self.row = row
         self.detail = detail
         self.empty = empty
@@ -50,19 +53,23 @@ public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: Vie
             if items.isEmpty {
                 empty()
             } else {
-                ScrollView {
-                    LazyVStack(spacing: Spacing.md) {
-                        ForEach(items) { item in
-                            NavigationLink {
-                                FreshDetail(id: item.id, fallback: item, items: items, detail: detail)
-                            } label: {
-                                row(item)
-                            }
-                            .buttonStyle(.plain)
-                        }
+                // `List`, а не `LazyVStack`, ради свайпов: `swipeActions`
+                // работает только внутри списка. Разделители, фон строк и
+                // отступы сняты — карточки выглядят ровно так же, как раньше,
+                // а жест появился.
+                List(items) { item in
+                    NavigationLink {
+                        FreshDetail(id: item.id, fallback: item, items: items, detail: detail)
+                    } label: {
+                        row(item)
                     }
-                    .padding(Spacing.lg)
+                    .listRowInsets(EdgeInsets(top: Spacing.xs, leading: Spacing.lg, bottom: Spacing.xs, trailing: Spacing.lg))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                    .rowActions(actions(item))
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
             }
         }
         .background(Theme.background)
@@ -98,6 +105,7 @@ public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: Vie
                                         )
                                 }
                                 .buttonStyle(.plain)
+                                .contextMenu { RowActionMenu(actions: actions(item)) }
                             }
                         }
                         .padding(Spacing.md)
@@ -138,6 +146,72 @@ public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: Vie
             if selection == nil || !items.contains(where: { $0.id == selection?.id }) {
                 selection = items.first
             }
+        }
+    }
+}
+
+/// Действие над строкой: свайп на телефоне, долгое нажатие на планшете.
+///
+/// Одно описание на оба жеста намеренно. Разводить их — значит однажды
+/// добавить действие в свайп и забыть про меню, и человек с iPad не найдёт
+/// того, что есть у коллеги с телефоном.
+public struct RowAction: Identifiable {
+    public let id = UUID()
+    let title: String
+    let icon: String
+    let tint: Color
+    let isDestructive: Bool
+    let perform: () -> Void
+
+    public init(
+        _ title: String,
+        icon: String,
+        tint: Color = Theme.brand,
+        isDestructive: Bool = false,
+        perform: @escaping () -> Void
+    ) {
+        self.title = title
+        self.icon = icon
+        self.tint = tint
+        self.isDestructive = isDestructive
+        self.perform = perform
+    }
+}
+
+/// Пункты действий для контекстного меню.
+struct RowActionMenu: View {
+    let actions: [RowAction]
+
+    var body: some View {
+        ForEach(actions) { action in
+            Button(role: action.isDestructive ? .destructive : nil) {
+                action.perform()
+            } label: {
+                Label(action.title, systemImage: action.icon)
+            }
+        }
+    }
+}
+
+private extension View {
+    /// Свайп и меню на одной строке.
+    @ViewBuilder
+    func rowActions(_ actions: [RowAction]) -> some View {
+        if actions.isEmpty {
+            self
+        } else {
+            self
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    ForEach(actions) { action in
+                        Button(role: action.isDestructive ? .destructive : nil) {
+                            action.perform()
+                        } label: {
+                            Label(action.title, systemImage: action.icon)
+                        }
+                        .tint(action.isDestructive ? Theme.negative : action.tint)
+                    }
+                }
+                .contextMenu { RowActionMenu(actions: actions) }
         }
     }
 }

@@ -1345,8 +1345,13 @@ final class ModerationStore {
 /// сортировка на клиенте разошлась бы с бейджем «на рассмотрении» на сайте.
 struct ModerationScreen: View {
     @Environment(\.api) private var api
+    @Environment(\.access) private var access
     @State private var store: ModerationStore?
     @State private var selected: ModerationFlag?
+
+    /// Те же права, что проверяет карточка и сервер.
+    private var canConfirm: Bool { access?.can("moderation.confirm") == true }
+    private var canDismiss: Bool { access?.can("moderation.dismiss") == true }
 
     var body: some View {
         Group {
@@ -1386,7 +1391,29 @@ struct ModerationScreen: View {
                 MasterDetail(
                     items: store.list?.flags ?? [],
                     selection: $selected,
-                    listWidth: 340
+                    listWidth: 340,
+                    actions: { flag in
+                        // Те же два решения, что и в карточке, и по тем же
+                        // правам. Модерация — это разбор очереди: открывать
+                        // каждый флаг ради одного нажатия долго.
+                        guard flag.isPending else { return [] }
+                        var result: [RowAction] = []
+                        if canDismiss {
+                            result.append(
+                                RowAction("Отклонить", icon: "xmark.circle", tint: Theme.textDim) {
+                                    Task { await store.review(flag, as: .dismissed) }
+                                }
+                            )
+                        }
+                        if canConfirm {
+                            result.append(
+                                RowAction("Нарушение", icon: "exclamationmark.triangle", isDestructive: true) {
+                                    Task { await store.review(flag, as: .confirmed) }
+                                }
+                            )
+                        }
+                        return result
+                    }
                 ) { flag in
                     ModerationFlagRow(flag: flag)
                 } detail: { flag in
