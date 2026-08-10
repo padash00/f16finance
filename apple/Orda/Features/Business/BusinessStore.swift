@@ -256,6 +256,39 @@ final class BusinessStore {
         }
     }
 
+    /// Чем закончилась попытка завести доход.
+    enum IncomeSaveOutcome: Equatable {
+        case saved
+        /// Уже есть запись с теми же датой, сменой и суммами. Сервер отвечает
+        /// 409 и ждёт подтверждения: две одинаковые выручки за смену почти
+        /// всегда ошибка ввода, но иногда правда.
+        case duplicate
+        case failed(String)
+    }
+
+    private(set) var isSavingIncome = false
+
+    func createIncome(_ draft: IncomeDraft, force: Bool = false) async -> IncomeSaveOutcome {
+        guard !isSavingIncome else { return .failed("Сохранение уже идёт") }
+        isSavingIncome = true
+        defer { isSavingIncome = false }
+
+        do {
+            try await service.createIncome(draft, force: force)
+            // Свежая запись должна быть видна сразу: человек только что её
+            // завёл и ищет её глазами в списке.
+            await loadIncomes()
+            return .saved
+        } catch let error as APIError {
+            if case let .conflict(code, _) = error, code == "duplicate" {
+                return .duplicate
+            }
+            return .failed(error.userMessage)
+        } catch {
+            return .failed(error.localizedDescription)
+        }
+    }
+
     func loadLedger() async {
         async let incomeSide: Void = loadIncomes()
         async let expenseSide: Void = loadExpenses()

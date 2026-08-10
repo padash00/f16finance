@@ -12,8 +12,17 @@ import SwiftUI
 /// приложение, иначе EBITDA в двух местах разошлась бы.
 struct PnlScreen: View {
     @Environment(BusinessStore.self) private var store
+    @Environment(\.access) private var access
 
     @State private var selected: MonthlyPnl?
+    /// Месяц, который правим. Не флаг: лист должен знать, за какой именно
+    /// месяц загружать строку.
+    @State private var editingMonth: EditingMonth?
+
+    /// Право `profitability.edit` проверяет и сервер.
+    private var canEdit: Bool {
+        access?.can("profitability.edit") ?? false
+    }
 
     var body: some View {
         ScreenScroll {
@@ -36,6 +45,13 @@ struct PnlScreen: View {
         .toolbar { LogoutToolbarItem() }
         .task { if store.pnl == nil { await store.loadPnl() } }
         .refreshable { await store.loadPnl() }
+        .sheet(item: $editingMonth) { target in
+            ProfitabilityInputSheet(month: target.id)
+                // Сохранённые вводы меняют EBITDA — пересчитываем сразу,
+                // иначе владелец увидит прежнюю цифру и решит, что не
+                // сохранилось.
+                .onDisappear { Task { await store.loadPnl() } }
+        }
     }
 
     @ViewBuilder
@@ -100,6 +116,18 @@ struct PnlScreen: View {
 
                             if selected?.id == month.id {
                                 MonthBreakdown(month: month)
+
+                                // ФОТ, налоги, амортизация и комиссии банка ни
+                                // из чего не выводятся — их задают руками. Без
+                                // них EBITDA считается по неполной картине, и
+                                // отправлять за этим на сайт означает, что
+                                // цифре в приложении нельзя верить.
+                                if canEdit {
+                                    Button("Заполнить ФОТ, налоги и эквайринг") {
+                                        editingMonth = EditingMonth(month.month)
+                                    }
+                                    .buttonStyle(SecondaryButtonStyle())
+                                }
                             }
                         }
                     }

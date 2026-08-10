@@ -14,6 +14,15 @@ import SwiftUI
 /// Доходы за период: сколько, чем платили, по каким точкам и по дням.
 struct IncomeScreen: View {
     @Environment(BusinessStore.self) private var store
+    @Environment(\.access) private var access
+
+    @State private var isAdding = false
+
+    /// Право `income.create` проверяет и сервер. Кнопка без права вела бы в
+    /// гарантированный отказ уже после заполнения формы.
+    private var canCreate: Bool {
+        access?.can("income.create") ?? false
+    }
 
     var body: some View {
         @Bindable var bindable = store
@@ -47,9 +56,17 @@ struct IncomeScreen: View {
         }
         .background(Theme.background)
         .navigationTitle("Доходы")
-        .toolbar { LogoutToolbarItem() }
+        .toolbar {
+            if canCreate {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { isAdding = true } label: { Image(systemName: "plus") }
+                }
+            }
+            LogoutToolbarItem()
+        }
         .task { if store.incomes.isEmpty { await store.loadIncomes() } }
         .refreshable { await store.loadIncomes() }
+        .sheet(isPresented: $isAdding) { AddIncomeSheet() }
     }
 
     private var totalCard: some View {

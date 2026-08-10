@@ -69,6 +69,19 @@ public struct BusinessService: Sendable {
         return response.items
     }
 
+    /// Завести доход за смену.
+    ///
+    /// `force` — согласие завести запись, совпадающую с уже существующей по
+    /// дате, смене и всем суммам. Сервер отвечает на такую 409 и описанием
+    /// дубликата: две одинаковые выручки за одну смену почти всегда ошибка
+    /// ввода, но иногда правда.
+    public func createIncome(_ draft: IncomeDraft, force: Bool = false) async throws {
+        let body = try JSONEncoder().encode(IncomeCreateRequest(payload: draft, force: force))
+        _ = try await api.send(
+            APIRequest(path: "/api/admin/incomes", method: .post, body: body)
+        )
+    }
+
     public func expenses(from: String, to: String) async throws -> [ExpenseRow] {
         let response: DataList<ExpenseRow> = try await api.send(
             APIRequest(
@@ -179,6 +192,29 @@ public struct BusinessService: Sendable {
             APIRequest(path: "/api/admin/analytics/monthly", query: ["year": String(year)])
         )
         return response.data
+    }
+
+    /// Ручные вводы ОПиУ за период. Требует `profitability.view`.
+    ///
+    /// Границы — `YYYY-MM`: роут сам достраивает их до первого числа месяца.
+    public func profitabilityInputs(from: String, to: String) async throws -> [ProfitabilityInput] {
+        let response: ProfitabilityInputList = try await api.send(
+            APIRequest(path: "/api/admin/profitability", query: ["from": from, "to": to])
+        )
+        return response.items
+    }
+
+    /// Сохранить ручные вводы месяца. Требует `profitability.edit`.
+    ///
+    /// Сервер перезаписывает строку месяца целиком, поэтому отправлять нужно
+    /// весь набор, а не изменённое поле: иначе остальные обнулятся.
+    public func saveProfitabilityInput(_ input: ProfitabilityInput) async throws {
+        let body = try JSONEncoder().encode(
+            ProfitabilitySaveRequest(month: input.month, payload: input)
+        )
+        _ = try await api.send(
+            APIRequest(path: "/api/admin/profitability", method: .post, body: body)
+        )
     }
 
     /// ОПиУ по месяцам. Требует `profitability.view`.
