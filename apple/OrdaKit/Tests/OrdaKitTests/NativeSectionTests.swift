@@ -213,7 +213,8 @@ struct SuperAdminOnlySectionTests {
 
     @Test("Ограничение помечено только там, где сервер его действительно требует")
     func onlyLogsIsRestricted() {
-        let restricted = NativeSection.allCases.filter(\.requiresSuperAdmin)
-        #expect(restricted == [.logs])
+        let restricted = Set(NativeSection.allCases.filter(\.requiresSuperAdmin))
+        // Журнал и матрица ролей: оба роута проверяют суперадмина до права.
+        #expect(restricted == [.logs, .access])
     }
 }

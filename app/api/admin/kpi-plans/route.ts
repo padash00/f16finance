@@ -4,6 +4,9 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 import { addDaysISO } from '@/lib/core/date'
+// `kpi.view` в каталоге прав не существует вовсе: выдать его через /access
+// было нельзя, и раздел «Цели» отвечал отказом всем, кроме суперадмина.
+// Права страницы называются `goals.*` — их и спрашиваем.
 import { requireStaffCapability } from '@/lib/server/capabilities'
 import { humanizeDbError } from '@/lib/server/db-error-humanize'
 import { splitIncomeKaspiByCalendarDay, type ReportIncomeCalendarRow } from '@/lib/reports/income-calendar-kaspi'
@@ -59,7 +62,7 @@ export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
-    const denied = await requireStaffCapability(access, 'kpi.view')
+    const denied = await requireStaffCapability(access, 'goals.view')
     if (denied) return denied
 
     const url = new URL(req.url)
@@ -346,7 +349,7 @@ export async function POST(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
-    const denied = await requireStaffCapability(access, 'kpi.view')
+    const denied = await requireStaffCapability(access, 'goals.create')
     if (denied) return denied
 
     const body = await req.json().catch(() => null)
@@ -560,7 +563,7 @@ export async function DELETE(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
-    const denied = await requireStaffCapability(access, 'kpi.view')
+    const denied = await requireStaffCapability(access, 'goals.delete')
     if (denied) return denied
 
     const url = new URL(req.url)

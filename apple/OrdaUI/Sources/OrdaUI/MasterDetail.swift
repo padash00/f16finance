@@ -57,10 +57,13 @@ public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: Vie
                 // работает только внутри списка. Разделители, фон строк и
                 // отступы сняты — карточки выглядят ровно так же, как раньше,
                 // а жест появился.
+                // Переход по значению, а не по вложенному виду. Со вторым
+                // открытая карточка схлопывалась обратно, стоило списку
+                // перезагрузиться: ссылка держит вид внутри себя, и замена
+                // массива уносила его вместе с переходом. Экран «не
+                // открывался», хотя открывался и тут же закрывался.
                 List(items) { item in
-                    NavigationLink {
-                        FreshDetail(id: item.id, fallback: item, items: items, detail: detail)
-                    } label: {
+                    NavigationLink(value: item.id) {
                         row(item)
                     }
                     .listRowInsets(EdgeInsets(top: Spacing.xs, leading: Spacing.lg, bottom: Spacing.xs, trailing: Spacing.lg))
@@ -70,6 +73,9 @@ public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: Vie
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
+                .navigationDestination(for: Item.ID.self) { id in
+                    FreshDetail(id: id, fallback: items.first { $0.id == id }, items: items, detail: detail)
+                }
             }
         }
         .background(Theme.background)
@@ -228,12 +234,23 @@ private extension View {
 /// человека — хуже, чем показать чуть устаревшее.
 private struct FreshDetail<Item: Identifiable & Hashable, Detail: View>: View {
     let id: Item.ID
-    let fallback: Item
+    /// Последний известный снимок — на случай, если запись пропала из списка.
+    let fallback: Item?
     let items: [Item]
     let detail: (Item) -> Detail
 
     var body: some View {
-        detail(items.first(where: { $0.id == id }) ?? fallback)
+        if let item = items.first(where: { $0.id == id }) ?? fallback {
+            detail(item)
+        } else {
+            // Запись исчезла и снимка нет: показать пустоту честнее, чем
+            // рисовать чужие данные.
+            EmptyStateView(
+                icon: "questionmark.folder",
+                title: "Запись не найдена",
+                message: "Возможно, её удалили, пока экран был открыт."
+            )
+        }
     }
 }
 

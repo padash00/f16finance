@@ -128,6 +128,7 @@ const KNOWN_GOOD = new Set([
 ])
 
 const foreignCapability = []
+const orphanCapability = []
 const roleGated = []
 
 for (const apiPath of [...calledPaths].sort()) {
@@ -140,12 +141,21 @@ for (const apiPath of [...calledPaths].sort()) {
   const page = pageFor(apiPath)
   const relative = path.relative(ROOT, file)
 
-  // 1. Право не своей страницы.
+  // 1a. Право, которого нет в каталоге вовсе: выдать его через /access
+  //     нельзя, и раздел закрыт для всех, кроме суперадмина. Так было с
+  //     `kpi.view` у «Целей».
+  // 1b. Право не своей страницы.
   const required = new Set()
   for (const m of handler.matchAll(/requireCapability\([^,]+,\s*'([^']+)'/g)) required.add(m[1])
   for (const m of handler.matchAll(/requireAnyCapability\([^,]+,\s*\[([^\]]+)\]/g)) {
     for (const c of m[1].matchAll(/'([^']+)'/g)) required.add(c[1])
   }
+  const known = new Set([...pageCapabilities.values()].flatMap((set) => [...set]))
+  const unknown = [...required].filter((c) => !known.has(c))
+  if (unknown.length && !KNOWN_GOOD.has(apiPath)) {
+    orphanCapability.push({ apiPath, required: unknown, relative })
+  }
+
   if (page && required.size && !KNOWN_GOOD.has(apiPath)) {
     const own = pageCapabilities.get(page) ?? new Set()
     const satisfiedByOwn = [...required].some((c) => own.has(c))
@@ -184,6 +194,15 @@ for (const item of foreignCapability) {
   problems += 1
   console.log(`  ${item.apiPath}`)
   console.log(`    страница «${item.page}», требует ${item.required.join(', ')}`)
+  console.log(`    ${item.relative}`)
+}
+
+console.log('\n── Право, которого нет в каталоге ──')
+if (!orphanCapability.length) console.log('  чисто')
+for (const item of orphanCapability) {
+  problems += 1
+  console.log(`  ${item.apiPath}`)
+  console.log(`    требует ${item.required.join(', ')} — такого права в каталоге нет`)
   console.log(`    ${item.relative}`)
 }
 

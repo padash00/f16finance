@@ -223,7 +223,11 @@ public enum NativeSection: String, CaseIterable, Sendable {
     /// Это расхождение сервера и каталога, а не приложения: на сайте владелец
     /// с `logs.view` тоже видит пункт и упирается в отказ.
     public var requiresSuperAdmin: Bool {
-        self == .logs
+        // `/api/admin/logs` проверяет суперадмина до права `logs.view`.
+        // `/api/admin/role-capabilities` — то же самое: матрицу ролей отдаёт
+        // только суперадмину, и владелец с правом `access.view` упирался в
+        // «forbidden» на пустом экране.
+        self == .logs || self == .access
     }
 
     /// Роли сотрудников, которым сервер вообще открывает раздел.
