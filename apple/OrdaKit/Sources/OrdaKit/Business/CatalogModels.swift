@@ -10,6 +10,12 @@ public struct ExpenseCategory: Decodable, Sendable, Identifiable, Hashable {
     public let monthlyBudget: Double
     public let spentThisMonth: Double
 
+    /// `cogs` — себестоимость. Такие статьи сервер запрещает заводить руками
+    /// всем, кроме владельца: их место в приёмке, где есть накладная.
+    public var isCogs: Bool {
+        accountingGroup?.trimmingCharacters(in: .whitespaces).lowercased() == "cogs"
+    }
+
     /// Задан ли бюджет. Ноль означает «не задан», а не «нельзя тратить»:
     /// иначе любая статья без бюджета выглядела бы перерасходом.
     public var hasBudget: Bool { monthlyBudget > 0 }

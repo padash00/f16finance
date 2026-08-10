@@ -212,6 +212,14 @@ private struct IncomeRowView: View {
 /// Расходы за период: сколько, на что, по каким точкам и что ждёт согласования.
 struct ExpensesScreen: View {
     @Environment(BusinessStore.self) private var store
+    @Environment(\.access) private var access
+
+    @State private var isAdding = false
+
+    /// Право `expenses.create` проверяет и сервер — на каждом шаге мастера.
+    private var canCreate: Bool {
+        access?.can("expenses.create") ?? false
+    }
 
     var body: some View {
         @Bindable var bindable = store
@@ -244,9 +252,17 @@ struct ExpensesScreen: View {
         }
         .background(Theme.background)
         .navigationTitle("Расходы")
-        .toolbar { LogoutToolbarItem() }
+        .toolbar {
+            if canCreate {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { isAdding = true } label: { Image(systemName: "plus") }
+                }
+            }
+            LogoutToolbarItem()
+        }
         .task { if store.expenses.isEmpty { await store.loadExpenses() } }
         .refreshable { await store.loadExpenses() }
+        .sheet(isPresented: $isAdding) { AddExpenseSheet() }
     }
 
     private var totalCard: some View {

@@ -24,6 +24,9 @@ public struct APIRequest: Sendable {
     public var method: HTTPMethod
     public var query: [String: String]
     public var body: Data?
+    /// Тип тела. По умолчанию JSON; для загрузки файла — multipart со своей
+    /// границей, поэтому заголовок нельзя зашивать в клиент.
+    public var contentType: String?
     /// Не подставлять `x-organization-id` (для платформенных запросов суперадмина).
     public var skipsOrganizationHeader: Bool
 
@@ -32,13 +35,56 @@ public struct APIRequest: Sendable {
         method: HTTPMethod = .get,
         query: [String: String] = [:],
         body: Data? = nil,
+        contentType: String? = nil,
         skipsOrganizationHeader: Bool = false
     ) {
         self.path = path
         self.method = method
         self.query = query
         self.body = body
+        self.contentType = contentType
         self.skipsOrganizationHeader = skipsOrganizationHeader
+    }
+
+    /// Запрос с файлом: `multipart/form-data`.
+    ///
+    /// Собираем тело руками, а не через URLSession upload task: сервер ждёт
+    /// файл и текстовые поля в одном запросе, и порядок частей значения не
+    /// имеет, а вот граница — имеет.
+    public static func multipart(
+        _ path: String,
+        method: HTTPMethod = .post,
+        fields: [String: String] = [:],
+        fileField: String,
+        fileName: String,
+        mimeType: String,
+        fileData: Data
+    ) -> APIRequest {
+        let boundary = "orda-\(UUID().uuidString)"
+        var body = Data()
+
+        func append(_ text: String) {
+            body.append(Data(text.utf8))
+        }
+
+        for (name, value) in fields.sorted(by: { $0.key < $1.key }) {
+            append("--\(boundary)\r\n")
+            append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n")
+            append("\(value)\r\n")
+        }
+
+        append("--\(boundary)\r\n")
+        append("Content-Disposition: form-data; name=\"\(fileField)\"; filename=\"\(fileName)\"\r\n")
+        append("Content-Type: \(mimeType)\r\n\r\n")
+        body.append(fileData)
+        append("\r\n--\(boundary)--\r\n")
+
+        return APIRequest(
+            path: path,
+            method: method,
+            body: body,
+            contentType: "multipart/form-data; boundary=\(boundary)"
+        )
     }
 
     /// Запрос с JSON-телом.
@@ -200,7 +246,7 @@ public actor APIClient {
         urlRequest.httpBody = request.body
 
         if request.body != nil {
-            urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            urlRequest.setValue(request.contentType ?? "application/json", forHTTPHeaderField: "Content-Type")
         }
 
         if let token = await tokenProvider.currentAccessToken() {
