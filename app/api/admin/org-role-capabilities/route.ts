@@ -27,6 +27,29 @@ function baseGranted(role: string, capability: string, globalOff: Set<string>): 
 }
 
 /**
+ * Владелец организации — верхняя роль тенанта. loadUserCapabilities() отдаёт ему
+ * ВЕСЬ каталог и не применяет снятия ни из role_capabilities, ни из орг-слоя
+ * (lib/server/capabilities.ts). Значит и панель обязана показывать полный набор:
+ * иначе сводка врёт («Владелец 252/397» при фактических 397/397), а снятые
+ * тумблеры выглядят рабочими, ничего при этом не ограничивая.
+ */
+function isOwnerRole(role: string): boolean {
+  return role === 'owner'
+}
+
+/** Эффективный грант: владелец → всегда, иначе орг-оверрайд ⊕ глобальный fail-open. */
+function effectiveGranted(
+  role: string,
+  capability: string,
+  globalOff: Set<string>,
+  orgOverride: boolean | undefined,
+): boolean {
+  if (isOwnerRole(role)) return true
+  if (orgOverride !== undefined) return orgOverride
+  return baseGranted(role, capability, globalOff)
+}
+
+/**
  * При включении X.action автоматически включается X.view (страница нужна для
  * действия) + явные deps из каталога. Копия логики глобального роута.
  */
@@ -126,7 +149,7 @@ export async function GET(request: Request) {
   for (const role of roles) {
     for (const cap of allCaps) {
       const key = `${role}:${cap}`
-      const granted = orgMap.has(key) ? orgMap.get(key)! : baseGranted(role, cap, globalOff)
+      const granted = effectiveGranted(role, cap, globalOff, orgMap.get(key))
       items.push({ role, capability: cap, granted })
     }
   }
@@ -152,6 +175,17 @@ export async function POST(request: Request) {
   const role = String(body.role || '').trim()
   if (!role) return json({ error: 'role обязателен' }, 400)
   if (role === 'super_admin') return json({ error: 'Роль super_admin не редактируется в организации' }, 400)
+  // Запись прав владельцу — молчаливый no-op: рантайм всё равно отдаёт ему весь
+  // каталог. Лучше честная ошибка, чем тумблер, который «сохранился» и не работает.
+  if (isOwnerRole(role)) {
+    return json(
+      {
+        error:
+          'Права владельца не ограничиваются — эта роль всегда имеет полный доступ. Набор страниц владельца задаёт пакет организации.',
+      },
+      400,
+    )
+  }
 
   const upsert = (rows: Array<{ capability: string; granted: boolean }>) =>
     supabase

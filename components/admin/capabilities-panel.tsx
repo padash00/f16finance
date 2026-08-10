@@ -30,6 +30,26 @@ function roleLabel(role: string): string {
   return ROLE_LABELS[role] || role.charAt(0).toUpperCase() + role.slice(1)
 }
 
+/**
+ * Роли, чьи тумблеры ничего не решают — рантайм пропускает их мимо проверок:
+ *   super_admin — обходит requireCapability и proxy.ts;
+ *   owner       — loadUserCapabilities() отдаёт ему весь каталог и не применяет
+ *                 снятия (lib/server/capabilities.ts).
+ * Показываем их как «всё включено» и блокируем переключатели, иначе панель
+ * рисует ограничения, которых на самом деле нет.
+ */
+const ALWAYS_FULL_ROLES = new Set(['super_admin', 'owner'])
+
+function isAlwaysFull(role: string): boolean {
+  return ALWAYS_FULL_ROLES.has(role)
+}
+
+function lockedRoleHint(role: string): string {
+  return role === 'owner'
+    ? 'Владелец организации всегда имеет полный доступ — набор страниц ограничивает пакет, а не права'
+    : 'Супер-админ обходит все проверки прав в коде — настройка не нужна'
+}
+
 function severityBadge(sev: Capability['severity']) {
   if (sev === 'high') return <ShieldAlert className="h-3 w-3 text-rose-400" />
   if (sev === 'medium') return <ShieldCheck className="h-3 w-3 text-amber-400" />
@@ -193,6 +213,131 @@ export function CapabilitiesPanel({ scope = 'global' }: { scope?: 'global' | 'or
     }
   }
 
+  /**
+   * Выгрузка среза прав одной роли — открывает окно печати (→ «Сохранить в PDF»).
+   * Считает по тому же каталогу, что рисует матрица (entitledGroups), поэтому
+   * цифры в отчёте всегда совпадают со сводкой наверху страницы.
+   */
+  function exportRole(role: string) {
+    const full = isAlwaysFull(role)
+    const rows = entitledGroups.flatMap((group) =>
+      group.pages.flatMap((page) =>
+        page.capabilities.map((cap) => ({
+          group: group.label,
+          page: page.label,
+          path: page.path,
+          label: cap.label,
+          id: cap.id,
+          severity: cap.severity,
+          granted: full || isGranted(role, cap.id),
+        })),
+      ),
+    )
+
+    const total = rows.length
+    const grantedCount = rows.filter((r) => r.granted).length
+    const pct = total ? Math.round((grantedCount / total) * 100) : 0
+
+    // Страницы, которые роль реально видит = включённое право `<page>.view`.
+    const visiblePages = entitledGroups.flatMap((group) =>
+      group.pages
+        .filter((page) => {
+          const viewId = `${page.id}.view`
+          if (!page.capabilities.some((c) => c.id === viewId)) return false
+          return full || isGranted(role, viewId)
+        })
+        .map((page) => ({ group: group.label, label: page.label, path: page.path })),
+    )
+
+    const esc = (s: string) =>
+      String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string))
+
+    const w = window.open('', '_blank', 'width=900,height=1000')
+    if (!w) {
+      alert('Браузер заблокировал всплывающее окно — разрешите popup для этого сайта.')
+      return
+    }
+
+    const capRows = rows
+      .map(
+        (r) => `<tr class="${r.granted ? '' : 'off'}">
+          <td class="grp">${esc(r.group)}</td>
+          <td>${esc(r.page)}</td>
+          <td>${esc(r.label)}${r.severity === 'high' ? ' <span class="sev">critical</span>' : ''}</td>
+          <td class="mono">${esc(r.id)}</td>
+          <td class="st">${r.granted ? '<span class="yes">открыто</span>' : '<span class="no">закрыто</span>'}</td>
+        </tr>`,
+      )
+      .join('')
+
+    const pageRows = visiblePages
+      .map((p) => `<li><b>${esc(p.label)}</b> <span class="mono">${esc(p.path)}</span> <span class="grp">${esc(p.group)}</span></li>`)
+      .join('')
+
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Права роли — ${esc(roleLabel(role))}</title>
+    <style>
+    @page{size:A4;margin:12mm}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,'Segoe UI',Arial,sans-serif;font-size:11.5px;color:#1a1a1a;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .wrap{max-width:820px;margin:0 auto}
+    .hd{border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:14px}
+    .hd h1{font-size:19px;font-weight:800}
+    .hd .m{color:#666;font-size:11px;margin-top:3px}
+    .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px}
+    .kpi{border:1px solid #eee;border-radius:8px;padding:9px 10px;text-align:center}
+    .kpi .kl{font-size:9px;text-transform:uppercase;letter-spacing:.4px;color:#999}
+    .kpi .kv{font-size:17px;font-weight:800;margin-top:3px;font-variant-numeric:tabular-nums}
+    .note{border:1px solid #fde68a;background:#fffbeb;border-radius:8px;padding:9px 11px;margin-bottom:16px;font-size:11px;color:#78350f}
+    .sec{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.9px;color:#999;margin:18px 0 7px}
+    ul{list-style:none}
+    li{padding:3px 0;border-bottom:1px solid #f4f4f5}
+    table{width:100%;border-collapse:collapse}
+    thead th{text-align:left;font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;color:#999;padding:6px;border-bottom:2px solid #111}
+    tbody td{padding:4px 6px;border-bottom:1px solid #f2f2f2;vertical-align:top}
+    tbody tr.off{color:#9ca3af}
+    .grp{color:#9ca3af;font-size:10px}
+    .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10px;color:#6b7280}
+    .st{white-space:nowrap;text-align:right}
+    .yes{color:#059669;font-weight:700}
+    .no{color:#dc2626}
+    .sev{color:#dc2626;font-size:9px;text-transform:uppercase;letter-spacing:.4px}
+    .foot{margin-top:20px;padding-top:8px;border-top:1px solid #eee;color:#aaa;font-size:10px}
+    .bar{position:sticky;top:0;z-index:9;display:flex;gap:8px;justify-content:center;padding:10px;background:#f4f4f5;border-bottom:1px solid #e4e4e7;margin:-12mm -12mm 12px}
+    .bar button{border:none;border-radius:8px;padding:8px 20px;font-size:13px;font-weight:600;cursor:pointer}
+    .bar .p{background:#059669;color:#fff}.bar .c{background:#e4e4e7;color:#111}
+    @media print{.bar{display:none}}
+    </style></head>
+    <body>
+      <div class="bar"><button class="p" onclick="window.print()">🖨 Сохранить в PDF</button><button class="c" onclick="window.close()">Закрыть</button></div>
+      <div class="wrap">
+        <div class="hd">
+          <h1>Права роли «${esc(roleLabel(role))}»</h1>
+          <div class="m">Слой: ${scope === 'org' ? 'организация' : 'платформа'} · Сформировано ${esc(new Date().toLocaleString('ru-RU'))}</div>
+        </div>
+        <div class="kpis">
+          <div class="kpi"><div class="kl">Открыто прав</div><div class="kv">${grantedCount}</div></div>
+          <div class="kpi"><div class="kl">Закрыто</div><div class="kv">${total - grantedCount}</div></div>
+          <div class="kpi"><div class="kl">Всего в каталоге</div><div class="kv">${total}</div></div>
+          <div class="kpi"><div class="kl">Доля доступа</div><div class="kv">${pct}%</div></div>
+        </div>
+        ${
+          full
+            ? `<div class="note"><b>Роль обходит проверки прав в коде.</b> ${esc(lockedRoleHint(role))}. Настройки в матрице на неё не влияют.</div>`
+            : `<div class="note"><b>Модель fail-open.</b> Роль базово получает весь каталог, а на /access права только <b>отнимаются</b>. «Открыто ${grantedCount}» означает, что явно снято ${total - grantedCount} — остальное досталось по умолчанию, включая права, добавленные в систему позже.</div>`
+        }
+        <div class="sec">Видит страницы (${visiblePages.length})</div>
+        <ul>${pageRows || '<li>— ни одной</li>'}</ul>
+        <div class="sec">Все действия каталога (${total})</div>
+        <table>
+          <thead><tr><th>Раздел</th><th>Страница</th><th>Действие</th><th>ID</th><th class="st">Статус</th></tr></thead>
+          <tbody>${capRows}</tbody>
+        </table>
+        <div class="foot">Orda Control · срез прав роли «${esc(role)}»</div>
+      </div>
+    </body></html>`)
+    w.document.close()
+  }
+
   function togglePage(pageId: string) {
     setCollapsedPages((s) => {
       const next = new Set(s)
@@ -259,8 +404,8 @@ export function CapabilitiesPanel({ scope = 'global' }: { scope?: 'global' | 'or
         for (const cap of page.capabilities) {
           for (const role of roles) {
             totals[role].total++
-            // Супер-админ всегда имеет всё (bypass в коде)
-            if (role === 'super_admin' || isGranted(role, cap.id)) {
+            // Супер-админ и владелец всегда имеют всё (bypass в коде)
+            if (isAlwaysFull(role) || isGranted(role, cap.id)) {
               totals[role].granted++
             }
           }
@@ -334,6 +479,21 @@ export function CapabilitiesPanel({ scope = 'global' }: { scope?: 'global' | 'or
           <RotateCcw className="h-3.5 w-3.5" />
           Обновить
         </button>
+        <select
+          className="rounded-xl border border-border bg-slate-100 dark:bg-white/5 px-3.5 py-2 text-xs font-medium text-body transition-colors hover:bg-slate-200 dark:hover:bg-white/10 focus:outline-none"
+          value=""
+          onChange={(e) => {
+            const role = e.target.value
+            if (role) exportRole(role)
+            e.target.value = ''
+          }}
+          title="Выгрузить в PDF: что роль видит и что ей открыто"
+        >
+          <option value="">📄 Экспорт прав роли…</option>
+          {roles.map((role) => (
+            <option key={role} value={role}>{roleLabel(role)}</option>
+          ))}
+        </select>
       </div>
 
       {/* Дерево разделов */}
@@ -393,7 +553,7 @@ export function CapabilitiesPanel({ scope = 'global' }: { scope?: 'global' | 'or
           </p>
         </div>
 
-        {roles.filter((r) => r !== 'super_admin').map((role) => {
+        {roles.filter((r) => !isAlwaysFull(r)).map((role) => {
           const otherRoles = roles.filter((r) => r !== role && r !== 'super_admin')
           return (
             <div key={role} className="rounded-xl border border-border bg-surface-muted p-3">
@@ -503,7 +663,7 @@ function PageRow({
         {hasViewCap && canToggle && (
           <div className="flex shrink-0 items-center gap-1">
             <span className="mr-0.5 text-[11px] text-slate-500">видят:</span>
-            {roles.filter((r) => r !== 'super_admin').map((role) => {
+            {roles.filter((r) => !isAlwaysFull(r)).map((role) => {
               const visible = isGranted(role, viewCapId)
               const saving = savingKey === `${role}:${viewCapId}`
               return (
@@ -549,26 +709,26 @@ function PageRow({
                     </div>
                   </td>
                   {roles.map((role) => {
-                    const isSuperAdminRow = role === 'super_admin'
-                    // Супер-админ обходит проверки прав в коде (см. proxy.ts и
-                    // requireCapability). Отрисовываем как всегда включено,
-                    // свитч заблокирован.
-                    const granted = isSuperAdminRow ? true : isGranted(role, cap.id)
+                    const locked = isAlwaysFull(role)
+                    // Супер-админ и владелец обходят проверки прав в коде (см.
+                    // proxy.ts и loadUserCapabilities). Отрисовываем как всегда
+                    // включено, свитч заблокирован.
+                    const granted = locked ? true : isGranted(role, cap.id)
                     const key = `${role}:${cap.id}`
                     const saving = savingKey === key
                     return (
                       <td key={role} className="px-2 py-1.5 text-center align-top">
                         <button
-                          onClick={() => canToggle && !isSuperAdminRow && onToggle(role, cap.id, !granted)}
-                          disabled={saving || isSuperAdminRow || !canToggle}
+                          onClick={() => canToggle && !locked && onToggle(role, cap.id, !granted)}
+                          disabled={saving || locked || !canToggle}
                           className={`inline-flex h-5 w-9 items-center rounded-full transition ${
                             granted ? 'bg-emerald-500/80' : 'bg-slate-300 dark:bg-slate-700'
-                          } ${saving ? 'opacity-50' : ''} ${(isSuperAdminRow || !canToggle) ? 'cursor-not-allowed opacity-70' : ''}`}
+                          } ${saving ? 'opacity-50' : ''} ${(locked || !canToggle) ? 'cursor-not-allowed opacity-70' : ''}`}
                           title={
                             !canToggle
                               ? 'Нет прав для изменения'
-                              : isSuperAdminRow
-                                ? 'Супер-админ обходит все проверки прав в коде — настройка не нужна'
+                              : locked
+                                ? lockedRoleHint(role)
                                 : granted
                                   ? 'Право включено — клик чтобы отключить'
                                   : 'Право отключено — клик чтобы включить'
@@ -590,7 +750,7 @@ function PageRow({
           {canBulk && (
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <span className="text-xs text-slate-500">Пакетно по роли:</span>
-              {roles.map((role) => (
+              {roles.filter((r) => !isAlwaysFull(r)).map((role) => (
                 <div key={role} className="inline-flex items-center gap-1 rounded-full border border-border bg-slate-100 dark:bg-white/5 px-2 py-0.5">
                   <span className="text-[11px] text-body">{roleLabel(role)}:</span>
                   <button
