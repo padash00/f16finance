@@ -289,6 +289,66 @@ final class BusinessStore {
         }
     }
 
+    // ── Заявки склада ────────────────────────────────────────────────────────
+
+    private(set) var requestDecisionError: String?
+
+    /// Одобрить или отклонить заявку точки.
+    @discardableResult
+    func decideStockRequest(id: String, approved: Bool) async -> Bool {
+        do {
+            try await service.decideStockRequest(id: id, approved: approved)
+            // Решение меняет остатки на складе и витрине — перечитываем всё
+            // хозяйство, а не только список заявок.
+            await loadStore()
+            requestDecisionError = nil
+            return true
+        } catch let error as APIError {
+            requestDecisionError = error.userMessage
+            return false
+        } catch {
+            requestDecisionError = error.localizedDescription
+            return false
+        }
+    }
+
+    // ── Инциденты ────────────────────────────────────────────────────────────
+
+    private(set) var incidentSaveError: String?
+
+    /// Зарегистрировать инцидент.
+    func createIncident(_ draft: IncidentDraft) async -> Bool {
+        do {
+            try await service.createIncident(draft)
+            await loadIncidents()
+            incidentSaveError = nil
+            return true
+        } catch let error as APIError {
+            incidentSaveError = error.userMessage
+            return false
+        } catch {
+            incidentSaveError = error.localizedDescription
+            return false
+        }
+    }
+
+    /// Решение по инциденту.
+    @discardableResult
+    func setIncidentStatus(id: String, to status: IncidentStatus) async -> Bool {
+        do {
+            try await service.setIncidentStatus(id: id, status: status)
+            await loadIncidents()
+            incidentSaveError = nil
+            return true
+        } catch let error as APIError {
+            incidentSaveError = error.userMessage
+            return false
+        } catch {
+            incidentSaveError = error.localizedDescription
+            return false
+        }
+    }
+
     // ── Задачи ───────────────────────────────────────────────────────────────
 
     private(set) var taskSaveError: String?

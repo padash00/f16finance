@@ -248,9 +248,15 @@ private struct InvoiceRow: View {
 /// списка заставляли бы переключаться, чтобы понять итог по человеку.
 struct IncidentsScreen: View {
     @Environment(BusinessStore.self) private var store
+    @Environment(\.access) private var access
 
     @State private var selected: Incident?
     @State private var onlyPending = false
+    @State private var isAdding = false
+
+    /// Права те же, что проверяет сервер.
+    private var canCreate: Bool { access?.can("incidents.create") ?? false }
+    private var canDecide: Bool { access?.can("incidents.update") ?? false }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -264,7 +270,21 @@ struct IncidentsScreen: View {
                 MasterDetail(
                     items: filtered,
                     selection: $selected,
-                    listWidth: 340
+                    listWidth: 340,
+                    actions: { incident in
+                        // Разбор инцидента — это два решения: признать или
+                        // отменить. Открывать карточку ради одного нажатия
+                        // долго, а очередь разбирают пачкой.
+                        guard canDecide, incident.status == "draft" else { return [] }
+                        return [
+                            RowAction("Подтвердить", icon: "checkmark.circle", tint: Theme.positive) {
+                                Task { await store.setIncidentStatus(id: incident.id, to: .confirmed) }
+                            },
+                            RowAction("Отменить", icon: "xmark.circle", isDestructive: true) {
+                                Task { await store.setIncidentStatus(id: incident.id, to: .voided) }
+                            },
+                        ]
+                    }
                 ) { incident in
                     IncidentRow(incident: incident)
                 } detail: { incident in

@@ -428,7 +428,12 @@ struct RequestsScreen: View {
     var scope: Scope = .pending
 
     @Environment(BusinessStore.self) private var store
+    @Environment(\.access) private var access
     @State private var selected: StockRequest?
+
+    /// Права те же, что проверяет сервер: одобрение и отклонение раздельно.
+    private var canApprove: Bool { access?.can("store-requests.approve") ?? false }
+    private var canReject: Bool { access?.can("store-requests.reject") ?? false }
 
     var body: some View {
         let requests = scope == .journal
@@ -437,7 +442,29 @@ struct RequestsScreen: View {
 
         return MasterDetail(
             items: requests,
-            selection: $selected
+            selection: $selected,
+            actions: { request in
+                // Заявку заводит точка, решение принимает владелец. Вопрос
+                // решается одним взглядом на остаток — открывать карточку
+                // ради этого незачем.
+                guard request.isPending else { return [] }
+                var result: [RowAction] = []
+                if canApprove {
+                    result.append(
+                        RowAction("Одобрить", icon: "checkmark.circle", tint: Theme.positive) {
+                            Task { await store.decideStockRequest(id: request.id, approved: true) }
+                        }
+                    )
+                }
+                if canReject {
+                    result.append(
+                        RowAction("Отклонить", icon: "xmark.circle", isDestructive: true) {
+                            Task { await store.decideStockRequest(id: request.id, approved: false) }
+                        }
+                    )
+                }
+                return result
+            }
         ) { request in
             RequestRowView(request: request)
         } detail: { request in
@@ -461,9 +488,44 @@ struct RequestsScreen: View {
 private struct RequestDetail: View {
     let request: StockRequest
 
+    @Environment(BusinessStore.self) private var store
+    @Environment(\.access) private var access
+
+    private var canApprove: Bool { access?.can("store-requests.approve") ?? false }
+    private var canReject: Bool { access?.can("store-requests.reject") ?? false }
+
     var body: some View {
         ScreenScroll {
             VStack(spacing: Spacing.lg) {
+                // Решение и в карточке: свайп хорош для очереди, но когда
+                // человек открыл заявку и читает состав, кнопка должна быть
+                // здесь же, а не «вернитесь в список и потяните строку».
+                if request.isPending, canApprove || canReject {
+                    Card {
+                        VStack(spacing: Spacing.md) {
+                            if let message = store.requestDecisionError {
+                                Text(message)
+                                    .font(Typography.caption)
+                                    .foregroundStyle(Theme.negative)
+                            }
+                            HStack(spacing: Spacing.md) {
+                                if canReject {
+                                    Button("Отклонить") {
+                                        Task { await store.decideStockRequest(id: request.id, approved: false) }
+                                    }
+                                    .buttonStyle(SecondaryButtonStyle())
+                                }
+                                if canApprove {
+                                    Button("Одобрить") {
+                                        Task { await store.decideStockRequest(id: request.id, approved: true) }
+                                    }
+                                    .buttonStyle(PrimaryButtonStyle())
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Card {
                     VStack(alignment: .leading, spacing: Spacing.md) {
                         HStack {

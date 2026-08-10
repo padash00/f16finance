@@ -280,6 +280,35 @@ public struct BusinessService: Sendable {
         return response.data.incidents
     }
 
+    /// Решение по заявке склада: одобрить или отклонить.
+    ///
+    /// Сервер делает это одной атомарной функцией — минусует со склада и
+    /// плюсует на витрину, — поэтому решение нельзя разложить на два запроса.
+    /// Требует `store-requests.approve` либо `store-requests.reject`.
+    public func decideStockRequest(id: String, approved: Bool, comment: String? = nil) async throws {
+        let body = try JSONEncoder().encode(
+            StockRequestDecision(requestID: id, approved: approved, comment: comment)
+        )
+        _ = try await api.send(
+            APIRequest(path: "/api/admin/inventory/requests", method: .post, body: body)
+        )
+    }
+
+    /// Зарегистрировать инцидент. Требует `incidents.create`.
+    public func createIncident(_ draft: IncidentDraft) async throws {
+        let body = try JSONEncoder().encode(draft.payload())
+        _ = try await api.send(APIRequest(path: "/api/admin/incidents", method: .post, body: body))
+    }
+
+    /// Решение по инциденту: подтвердить, оспорить, отменить.
+    /// Требует `incidents.update`.
+    public func setIncidentStatus(id: String, status: IncidentStatus) async throws {
+        let body = try JSONEncoder().encode(IncidentStatusChange(status: status.rawValue))
+        _ = try await api.send(
+            APIRequest(path: "/api/admin/incidents/\(id)", method: .patch, body: body)
+        )
+    }
+
     /// Долги клиентов, записанные на точке за неделю.
     public func pointDebts(weekStart: String) async throws -> PointDebtWeek {
         let response: Envelope<PointDebtWeek> = try await api.send(

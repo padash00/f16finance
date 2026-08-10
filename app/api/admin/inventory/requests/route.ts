@@ -560,7 +560,13 @@ export async function POST(request: Request) {
 
     if (body.action !== 'decideRequest') return json({ error: 'invalid-action' }, 400)
 
-    const deniedDecide = await requireCapability(access, 'store-requests.approve')
+    // Одобрить и отклонить — разные права: в каталоге они заведены по
+    // отдельности, а роут спрашивал только `approve`, и владелец, выдавший
+    // кому-то право лишь отклонять, всё равно получал отказ.
+    const deniedDecide = await requireCapability(
+      access,
+      body.approved === true ? 'store-requests.approve' : 'store-requests.reject',
+    )
     if (deniedDecide) return deniedDecide as any
 
     const actorUserId = access.user?.id || null
