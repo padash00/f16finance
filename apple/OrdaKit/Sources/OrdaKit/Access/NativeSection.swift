@@ -226,6 +226,42 @@ public enum NativeSection: String, CaseIterable, Sendable {
         self == .logs
     }
 
+    /// Роли сотрудников, которым сервер вообще открывает раздел.
+    ///
+    /// `nil` — ограничения нет, решают права из каталога.
+    ///
+    /// Эти маршруты проверяют не право, а роль напрямую: `role === 'owner' ||
+    /// role === 'manager'`. Право `production.view` при этом может быть
+    /// выдано кому угодно — и человек упирался в «forbidden» на пустом экране,
+    /// не понимая, что дело не в нём.
+    ///
+    /// Это расхождение сервера и каталога, а не приложения: на сайте те же
+    /// пункты видны и так же отказывают. Пока роут не переведён на права,
+    /// показывать пункт, который гарантированно не откроется, — то же самое,
+    /// что обещать доступ, которого нет.
+    public var allowedStaffRoles: Set<String>? {
+        switch self {
+        // /api/admin/production/* — owner и manager.
+        case .production: ["owner", "manager"]
+        // /api/admin/advertising — owner и manager.
+        case .advertising: ["owner", "manager"]
+        // /api/admin/store/config — owner и manager.
+        case .storeSettings: ["owner", "manager"]
+        // /api/admin/moderation — только owner.
+        case .moderation: ["owner"]
+        default: nil
+        }
+    }
+
+    /// Открыт ли раздел этой роли. Суперадмин проходит всегда — так же, как
+    /// на сервере.
+    public func isAllowed(staffRole: String?, isSuperAdmin: Bool) -> Bool {
+        if isSuperAdmin { return true }
+        guard let allowedStaffRoles else { return true }
+        guard let staffRole, !staffRole.isEmpty else { return false }
+        return allowedStaffRoles.contains(staffRole)
+    }
+
     /// Экран для страницы каталога, если он нативный.
     public static func forPage(id: String) -> NativeSection? {
         lookup[id]

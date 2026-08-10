@@ -150,7 +150,12 @@ public struct AccessResolver: Sendable {
                 guard canSee(page: page), let section = NativeSection.forPage(id: page.id) else {
                     return false
                 }
-                return !section.requiresSuperAdmin || session.isSuperAdmin
+                if section.requiresSuperAdmin && !session.isSuperAdmin { return false }
+                // Часть маршрутов проверяет роль напрямую, а не право. Пункт,
+                // который такой маршрут гарантированно отвергнет, показывать
+                // незачем: человек упирается в «forbidden» на пустом экране и
+                // считает это поломкой приложения.
+                return section.isAllowed(staffRole: session.staffRole, isSuperAdmin: session.isSuperAdmin)
             }
             return pages.isEmpty ? nil : (group, pages)
         }
