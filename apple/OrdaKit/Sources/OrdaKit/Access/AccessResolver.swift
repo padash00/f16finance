@@ -151,11 +151,16 @@ public struct AccessResolver: Sendable {
                     return false
                 }
                 if section.requiresSuperAdmin && !session.isSuperAdmin { return false }
-                // Часть маршрутов проверяет роль напрямую, а не право. Пункт,
-                // который такой маршрут гарантированно отвергнет, показывать
-                // незачем: человек упирается в «forbidden» на пустом экране и
-                // считает это поломкой приложения.
-                return section.isAllowed(staffRole: session.staffRole, isSuperAdmin: session.isSuperAdmin)
+                // Часть маршрутов проверяет роль напрямую, а часть просит
+                // право соседней страницы. Пункт, который такой маршрут
+                // гарантированно отвергнет, показывать незачем: человек
+                // упирается в отказ на пустом экране и считает это поломкой
+                // приложения.
+                return section.isReachable(
+                    staffRole: session.staffRole,
+                    isSuperAdmin: session.isSuperAdmin,
+                    hasCapability: { can($0) }
+                )
             }
             return pages.isEmpty ? nil : (group, pages)
         }

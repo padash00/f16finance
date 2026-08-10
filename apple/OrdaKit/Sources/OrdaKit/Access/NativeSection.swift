@@ -241,25 +241,53 @@ public enum NativeSection: String, CaseIterable, Sendable {
     /// что обещать доступ, которого нет.
     public var allowedStaffRoles: Set<String>? {
         switch self {
-        // /api/admin/production/* — owner и manager.
+        // /api/admin/production/recipes — canManage на самом GET.
         case .production: ["owner", "manager"]
-        // /api/admin/advertising — owner и manager.
-        case .advertising: ["owner", "manager"]
-        // /api/admin/store/config — owner и manager.
-        case .storeSettings: ["owner", "manager"]
-        // /api/admin/moderation — только owner.
+        // /api/admin/moderation — canModerate на GET, только owner.
         case .moderation: ["owner"]
+        // /api/admin/store/purchase-plan/suggest — isStoreManager на GET.
+        case .purchasePlan: ["owner", "manager"]
+        // /api/telegram/allowed-users — owner и manager прямо в начале GET.
+        case .telegram: ["owner", "manager"]
         default: nil
         }
     }
 
-    /// Открыт ли раздел этой роли. Суперадмин проходит всегда — так же, как
-    /// на сервере.
-    public func isAllowed(staffRole: String?, isSuperAdmin: Bool) -> Bool {
+    /// Права, которых требует API раздела помимо права самой страницы.
+    ///
+    /// Обычно роут просит право своей страницы, и хватает `canSee`. Но
+    /// `/api/admin/store/purchase-plan/suggest` просит `store-purchase-orders.view`
+    /// — право соседней страницы, «Заказы поставщикам». Владелец, которому
+    /// выдали только «План закупа», видел пункт и упирался в «Нет доступа:
+    /// „Просмотр“» — при том, что «Просмотр» плана у него как раз был.
+    ///
+    /// Похоже на опечатку в роуте, а не на замысел. Пока она там, меню обязано
+    /// спрашивать то же право, что и сервер.
+    public var requiredCapabilities: [String] {
+        switch self {
+        // Просит право соседней страницы «Заказы поставщикам».
+        case .purchasePlan: ["store-purchase-orders.view"]
+        // `/api/admin/store/config` просит `store.view` — право «Магазина», а
+        // не «Настроек магазина», хотя обслуживает именно настройки.
+        case .storeSettings: ["store.view"]
+        default: []
+        }
+    }
+
+    /// Откроется ли раздел вообще: роль, право API, суперадмин в обход — всё,
+    /// что сервер проверит раньше, чем отдаст данные.
+    public func isReachable(
+        staffRole: String?,
+        isSuperAdmin: Bool,
+        hasCapability: (String) -> Bool
+    ) -> Bool {
         if isSuperAdmin { return true }
-        guard let allowedStaffRoles else { return true }
-        guard let staffRole, !staffRole.isEmpty else { return false }
-        return allowedStaffRoles.contains(staffRole)
+        if let allowedStaffRoles {
+            guard let staffRole, !staffRole.isEmpty, allowedStaffRoles.contains(staffRole) else {
+                return false
+            }
+        }
+        return requiredCapabilities.allSatisfy(hasCapability)
     }
 
     /// Экран для страницы каталога, если он нативный.

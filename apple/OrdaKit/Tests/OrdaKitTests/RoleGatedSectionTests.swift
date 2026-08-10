@@ -83,6 +83,39 @@ struct RoleGatedSectionTests {
     func onlyKnownSectionsAreGated() {
         let gated = Set(NativeSection.allCases.filter { $0.allowedStaffRoles != nil })
 
-        #expect(gated == [.production, .advertising, .storeSettings, .moderation])
+        // Реклама и настройки магазина сюда не входят намеренно: их GET
+        // открыт любому сотруднику, роль там решает только правки. Спрятать
+        // их значило бы отобрать чтение у того, кому оно разрешено.
+        #expect(gated == [.production, .moderation, .purchasePlan, .telegram])
+    }
+
+    /// Право соседней страницы — второй способ упереться в отказ на пустом
+    /// экране: пункт показан по своему праву, а API просит чужое.
+    @Test("План закупа требует право заказов поставщикам")
+    func purchasePlanNeedsOrdersCapability() {
+        let withoutOrders = resolver(role: "owner", capabilities: ["store-purchase-plan.view"])
+        #expect(!pages(withoutOrders).contains("store-purchase-plan"))
+
+        let withOrders = resolver(
+            role: "owner",
+            capabilities: ["store-purchase-plan.view", "store-purchase-orders.view"]
+        )
+        #expect(pages(withOrders).contains("store-purchase-plan"))
+    }
+
+    @Test("Настройки магазина требуют право магазина")
+    func storeSettingsNeedStoreView() {
+        let alone = resolver(role: "manager", capabilities: ["store-settings.view"])
+        #expect(!pages(alone).contains("store-settings"))
+
+        let paired = resolver(role: "manager", capabilities: ["store-settings.view", "store.view"])
+        #expect(pages(paired).contains("store-settings"))
+    }
+
+    @Test("Ограничение по чужому праву задано только там, где оно есть")
+    func onlyKnownSectionsNeedForeignCapabilities() {
+        let gated = Set(NativeSection.allCases.filter { !$0.requiredCapabilities.isEmpty })
+
+        #expect(gated == [.purchasePlan, .storeSettings])
     }
 }
