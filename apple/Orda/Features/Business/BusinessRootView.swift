@@ -227,6 +227,8 @@ struct BusinessRootView: View {
 struct BusinessSectionsScreen: View {
     let resolver: AccessResolver
 
+    @Environment(AuthStore.self) private var auth
+
     var body: some View {
         ScrollView {
             VStack(spacing: Spacing.lg) {
@@ -270,7 +272,7 @@ struct BusinessSectionsScreen: View {
                     EmptyStateView(
                         icon: "lock",
                         title: "Разделов нет",
-                        message: "Вам пока не выдали доступ ни к одному разделу."
+                        message: "Доступ пока не выдали. Потяните вниз — список обновится, когда его выдадут."
                     )
                 }
             }
@@ -281,6 +283,9 @@ struct BusinessSectionsScreen: View {
         .background(Theme.background)
         .navigationTitle("Разделы")
         .toolbar { LogoutToolbarItem() }
+        // Права выдают на сайте, пока человек ждёт с телефоном в руках.
+        // Потянуть список — самый очевидный способ спросить «ну что, дали?».
+        .refreshable { await auth.reloadRole() }
     }
 }
 

@@ -7,6 +7,7 @@
  */
 
 import { NextResponse } from 'next/server'
+import { hasCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { sanitizeOrFilterValue } from '@/lib/server/postgrest-filter'
@@ -218,10 +219,9 @@ export async function POST(request: Request) {
     senderRole = 'super_admin'
   }
 
-  // Только владелец/super-admin может ставить is_announcement
-  const isOwnerOrSuper =
-    access.isSuperAdmin || (access.staffMember?.role || '').toLowerCase() === 'owner'
-  const isAnnouncement = !!body?.isAnnouncement && isOwnerOrSuper
+  // Закрепление — отдельное право `team-chat.pin`, а не роль владельца:
+  // объявление в чате команды вправе повесить и тот, кому это доверили.
+  const isAnnouncement = !!body?.isAnnouncement && (await hasCapability(access, 'team-chat.pin'))
 
   const { data, error } = await supabase
     .from('team_chat_messages')

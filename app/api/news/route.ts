@@ -6,6 +6,7 @@
  */
 
 import { NextResponse } from 'next/server'
+import { hasCapability, requireCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -15,9 +16,11 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
-function canPublish(access: any): boolean {
-  if (access.isSuperAdmin) return true
-  return (access.staffMember?.role || '').toLowerCase() === 'owner'
+/// Право, а не роль: в каталоге для новостей заведены `news.create` и
+/// `news.delete`, и владелец вправе доверить ленту кому-то ещё, не делая его
+/// владельцем.
+async function canPublish(access: any): Promise<boolean> {
+  return hasCapability(access, 'news.create')
 }
 
 export async function GET(request: Request) {
@@ -60,13 +63,14 @@ export async function GET(request: Request) {
   const posts = (data || []).map((p: any) => ({ ...p, viewed: viewedIds.has(p.id) }))
   const unreadCount = posts.filter((p: any) => !p.viewed).length
 
-  return json({ posts, unreadCount, canPublish: canPublish(access) })
+  return json({ posts, unreadCount, canPublish: await canPublish(access) })
 }
 
 export async function POST(request: Request) {
   const access = await getRequestAccessContext(request)
   if ('response' in access) return access.response
-  if (!canPublish(access)) return json({ error: 'Только владелец может публиковать' }, 403)
+  const denied = await requireCapability(access, 'news.create')
+  if (denied) return denied
   if (!access.user?.id) return json({ error: 'unauthorized' }, 401)
 
   const body = (await request.json().catch(() => null)) as {
@@ -133,7 +137,7 @@ export async function DELETE(request: Request) {
   }
 
   const isAuthor = (post as any).author_user_id === access.user?.id
-  if (!isAuthor && !canPublish(access)) {
+  if (!isAuthor && !(await hasCapability(access, 'news.delete'))) {
     return json({ error: 'Можно удалять только свои' }, 403)
   }
 

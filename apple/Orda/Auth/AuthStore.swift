@@ -158,6 +158,7 @@ final class AuthStore {
         do {
             let loaded: SessionRole = try await api.send(APIRequest(path: "/api/auth/session-role"))
             role = loaded
+            roleLoadedAt = Date()
             roleError = nil
             phase = .signedIn
             // Токен push отправляется только при живой сессии — эндпоинт
@@ -181,6 +182,25 @@ final class AuthStore {
     }
 
     func reloadRole() async {
+        await loadRole()
+    }
+
+    /// Когда права загружались в последний раз.
+    private var roleLoadedAt: Date?
+
+    /// Перечитать права, если они устарели.
+    ///
+    /// Права выдают на сайте, пока человек держит приложение в кармане. Раньше
+    /// набор прав брался один раз при входе и жил до выхода из аккаунта: чтобы
+    /// увидеть только что выданный раздел, приходилось выходить и заходить
+    /// заново. Теперь достаточно вернуться в приложение или потянуть список.
+    ///
+    /// Порог нужен, чтобы каждое переключение между приложениями не тянуло
+    /// сеть: права меняются раз в недели, а в фон и обратно человек уходит
+    /// десятки раз за день.
+    func refreshRoleIfStale(minInterval: TimeInterval = 60) async {
+        guard phase == .signedIn else { return }
+        if let roleLoadedAt, Date().timeIntervalSince(roleLoadedAt) < minInterval { return }
         await loadRole()
     }
 

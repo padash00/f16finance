@@ -9,6 +9,9 @@ import SwiftUI
 /// `/access`, — поэтому единственный устойчивый признак это набор прав.
 struct RootView: View {
     @Environment(AuthStore.self) private var auth
+    /// Возвращение в приложение — момент, когда права стоит перечитать: их
+    /// могли выдать на сайте, пока телефон лежал в кармане.
+    @Environment(\.scenePhase) private var scenePhase
 
     /// Доиграла ли заставка запуска. Пока нет — показываем её поверх всего,
     /// но восстановление сессии при этом уже идёт в фоне.
@@ -55,6 +58,10 @@ struct RootView: View {
         .task {
             guard auth.phase == .restoring else { return }
             await auth.restore()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            Task { await auth.refreshRoleIfStale() }
         }
     }
 

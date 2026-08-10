@@ -11,10 +11,6 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
-function canManage(access: { isSuperAdmin: boolean; staffRole: string }) {
-  return access.isSuperAdmin || access.staffRole === 'owner' || access.staffRole === 'manager'
-}
-
 export async function GET(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
@@ -53,7 +49,8 @@ export async function POST(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
-    if (!canManage(access)) return json({ error: 'forbidden' }, 403)
+    const denied = await requireCapability(access, 'store-advertising.create')
+    if (denied) return denied
 
     const body = (await request.json().catch(() => ({}))) as {
       company_id?: string
@@ -119,7 +116,8 @@ export async function PATCH(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
-    if (!canManage(access)) return json({ error: 'forbidden' }, 403)
+    const denied = await requireCapability(access, 'store-advertising.edit')
+    if (denied) return denied
 
     const body = (await request.json().catch(() => ({}))) as {
       id?: string
@@ -176,7 +174,8 @@ export async function DELETE(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
-    if (!canManage(access)) return json({ error: 'forbidden' }, 403)
+    const denied = await requireCapability(access, 'store-advertising.delete')
+    if (denied) return denied
 
     const url = new URL(request.url)
     const id = url.searchParams.get('id')
