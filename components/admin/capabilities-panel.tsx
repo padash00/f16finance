@@ -72,6 +72,11 @@ export function CapabilitiesPanel({ scope = 'global' }: { scope?: 'global' | 'or
   const [error, setError] = useState<string | null>(null)
   const [savingKey, setSavingKey] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  // Фокус на роли: '' — матрица всех ролей сразу (широкая), иначе одна колонка
+  // + счётчики «открыто из» по каждой группе и странице. Основной сценарий —
+  // «покажи, что видит вот этот сотрудник», а не сравнение девяти ролей.
+  const [focusRole, setFocusRole] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'granted' | 'denied'>('all')
   // По умолчанию всё свёрнуто — пользователь раскрывает только нужные разделы.
   // Это сильно ускоряет рендер при 65 страницах и 265 capabilities.
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
@@ -114,6 +119,11 @@ export function CapabilitiesPanel({ scope = 'global' }: { scope?: 'global' | 'or
 
   function isGranted(role: string, capability: string): boolean {
     return grantedMap.get(`${role}:${capability}`) === true
+  }
+
+  /** Грант с учётом ролей-обходчиков (owner/super_admin всегда имеют всё). */
+  function effectiveGranted(role: string, capability: string): boolean {
+    return isAlwaysFull(role) || isGranted(role, capability)
   }
 
   async function toggleOne(role: string, capability: string, granted: boolean) {
@@ -229,7 +239,7 @@ export function CapabilitiesPanel({ scope = 'global' }: { scope?: 'global' | 'or
           label: cap.label,
           id: cap.id,
           severity: cap.severity,
-          granted: full || isGranted(role, cap.id),
+          granted: effectiveGranted(role, cap.id),
         })),
       ),
     )
@@ -244,7 +254,7 @@ export function CapabilitiesPanel({ scope = 'global' }: { scope?: 'global' | 'or
         .filter((page) => {
           const viewId = `${page.id}.view`
           if (!page.capabilities.some((c) => c.id === viewId)) return false
-          return full || isGranted(role, viewId)
+          return effectiveGranted(role, viewId)
         })
         .map((page) => ({ group: group.label, label: page.label, path: page.path })),
     )
@@ -376,24 +386,35 @@ export function CapabilitiesPanel({ scope = 'global' }: { scope?: 'global' | 'or
 
   const filteredGroups = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return entitledGroups
+    // Фильтр по статусу работает только в режиме фокуса — без выбранной роли
+    // «открытые» бессмысленны (у каждой роли свой ответ).
+    const byStatus = focusRole && statusFilter !== 'all'
+    if (!q && !byStatus) return entitledGroups
     return entitledGroups
       .map((group) => ({
         ...group,
         pages: group.pages
           .map((page) => ({
             ...page,
-            capabilities: page.capabilities.filter(
-              (c) =>
-                c.label.toLowerCase().includes(q) ||
-                c.id.toLowerCase().includes(q) ||
-                page.label.toLowerCase().includes(q),
-            ),
+            capabilities: page.capabilities.filter((c) => {
+              if (
+                q &&
+                !c.label.toLowerCase().includes(q) &&
+                !c.id.toLowerCase().includes(q) &&
+                !page.label.toLowerCase().includes(q)
+              ) {
+                return false
+              }
+              if (!byStatus) return true
+              const granted = effectiveGranted(focusRole, c.id)
+              return statusFilter === 'granted' ? granted : !granted
+            }),
           }))
           .filter((page) => page.capabilities.length > 0),
       }))
       .filter((group) => group.pages.length > 0)
-  }, [search, entitledGroups])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, entitledGroups, focusRole, statusFilter, grantedMap])
 
   // Сводка по ролям — по страницам, доступным орг (entitledGroups).
   const summary = useMemo(() => {
@@ -405,7 +426,7 @@ export function CapabilitiesPanel({ scope = 'global' }: { scope?: 'global' | 'or
           for (const role of roles) {
             totals[role].total++
             // Супер-админ и владелец всегда имеют всё (bypass в коде)
-            if (isAlwaysFull(role) || isGranted(role, cap.id)) {
+            if (effectiveGranted(role, cap.id)) {
               totals[role].granted++
             }
           }
@@ -413,7 +434,46 @@ export function CapabilitiesPanel({ scope = 'global' }: { scope?: 'global' | 'or
       }
     }
     return totals
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roles, grantedMap, entitledGroups])
+
+  // Счётчики «открыто из» по разделам и страницам для выбранной роли. Считаем по
+  // полному каталогу, а не по отфильтрованному — иначе при фильтре «только
+  // закрытые» заголовок показывал бы «0 из 0».
+  const focusCounts = useMemo(() => {
+    const groups = new Map<string, { granted: number; total: number }>()
+    const pages = new Map<string, { granted: number; total: number }>()
+    if (!focusRole) return { groups, pages }
+    for (const group of entitledGroups) {
+      const g = { granted: 0, total: 0 }
+      for (const page of group.pages) {
+        const p = { granted: 0, total: 0 }
+        for (const cap of page.capabilities) {
+          p.total++
+          if (effectiveGranted(focusRole, cap.id)) p.granted++
+        }
+        pages.set(page.id, p)
+        g.granted += p.granted
+        g.total += p.total
+      }
+      groups.set(group.id, g)
+    }
+    return { groups, pages }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusRole, entitledGroups, grantedMap])
+
+  // Роли-колонки в матрице: в режиме фокуса — одна.
+  const visibleRoles = focusRole ? [focusRole] : roles
+
+  function setAllCollapsed(collapsed: boolean) {
+    if (collapsed) {
+      setCollapsedGroups(new Set(entitledGroups.map((g) => g.id)))
+      setCollapsedPages(new Set(entitledGroups.flatMap((g) => g.pages.map((p) => p.id))))
+    } else {
+      setCollapsedGroups(new Set())
+      setCollapsedPages(new Set())
+    }
+  }
 
   if (loading) {
     return (
@@ -440,27 +500,34 @@ export function CapabilitiesPanel({ scope = 'global' }: { scope?: 'global' | 'or
           Здесь вы настраиваете права ролей <b>только для своей организации</b>. Платформенные значения по умолчанию задаёт поставщик; ваши изменения не влияют на другие компании. «Сбросить к дефолту» вернёт роль к платформенному значению.
         </div>
       )}
-      {/* Сводка по ролям */}
+      {/* Сводка по ролям — клик по чипу включает режим фокуса на роли */}
       <div className={`${card} p-4`}>
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span className="font-semibold text-body">Сводка:</span>
           {roles.map((role) => {
             const s = summary[role] || { granted: 0, total: 0 }
             const pct = s.total ? Math.round((s.granted / s.total) * 100) : 0
+            const active = focusRole === role
             return (
-              <span
+              <button
                 key={role}
-                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-slate-100 dark:bg-white/5 px-2.5 py-1 text-body"
-                title={`${s.granted} из ${s.total} прав включено`}
+                onClick={() => setFocusRole(active ? '' : role)}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 transition ${
+                  active
+                    ? 'border-emerald-400/60 bg-emerald-500/15 text-emerald-800 dark:text-emerald-200'
+                    : 'border-border bg-slate-100 dark:bg-white/5 text-body hover:bg-slate-200 dark:hover:bg-white/10'
+                }`}
+                title={active ? 'Показать все роли' : `Показать только «${roleLabel(role)}» — ${s.granted} из ${s.total} прав`}
               >
                 <span className="font-medium text-foreground">{roleLabel(role)}</span>
                 <span className="text-muted-foreground">{s.granted}/{s.total}</span>
                 <span className={pct === 100 ? 'text-emerald-400' : pct > 50 ? 'text-amber-400' : 'text-rose-400'}>
                   {pct}%
                 </span>
-              </span>
+              </button>
             )
           })}
+          <span className="text-muted-foreground">— клик по роли покажет только её</span>
         </div>
       </div>
 
@@ -494,6 +561,73 @@ export function CapabilitiesPanel({ scope = 'global' }: { scope?: 'global' | 'or
             <option key={role} value={role}>{roleLabel(role)}</option>
           ))}
         </select>
+        <button
+          onClick={() => setAllCollapsed(false)}
+          className="rounded-xl border border-border bg-slate-100 dark:bg-white/5 px-3 py-2 text-xs font-medium text-body transition-colors hover:bg-slate-200 dark:hover:bg-white/10"
+        >
+          Развернуть всё
+        </button>
+        <button
+          onClick={() => setAllCollapsed(true)}
+          className="rounded-xl border border-border bg-slate-100 dark:bg-white/5 px-3 py-2 text-xs font-medium text-body transition-colors hover:bg-slate-200 dark:hover:bg-white/10"
+        >
+          Свернуть всё
+        </button>
+      </div>
+
+      {/* Режим фокуса: одна роль + фильтр по статусу */}
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <span className="text-muted-foreground">Показать роль:</span>
+        <select
+          value={focusRole}
+          onChange={(e) => setFocusRole(e.target.value)}
+          className="rounded-xl border border-border bg-white dark:bg-slate-950/50 px-3 py-1.5 font-medium text-foreground focus:outline-none"
+        >
+          <option value="">Все роли (матрица)</option>
+          {roles.map((role) => (
+            <option key={role} value={role}>{roleLabel(role)}</option>
+          ))}
+        </select>
+
+        {focusRole && (
+          <>
+            <div className="inline-flex overflow-hidden rounded-xl border border-border">
+              {([
+                ['all', 'Все'],
+                ['granted', 'Открытые'],
+                ['denied', 'Закрытые'],
+              ] as const).map(([value, label]) => (
+                <button
+                  key={value}
+                  onClick={() => setStatusFilter(value)}
+                  className={`px-3 py-1.5 font-medium transition ${
+                    statusFilter === value
+                      ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-200'
+                      : 'bg-slate-100 dark:bg-white/5 text-body hover:bg-slate-200 dark:hover:bg-white/10'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <span className="text-muted-foreground">
+              {roleLabel(focusRole)}: открыто{' '}
+              <b className="text-foreground">{summary[focusRole]?.granted ?? 0}</b> из{' '}
+              {summary[focusRole]?.total ?? 0}
+            </span>
+            {isAlwaysFull(focusRole) && (
+              <span className="rounded-full border border-amber-400/40 bg-amber-500/10 px-2.5 py-1 text-amber-700 dark:text-amber-200">
+                {lockedRoleHint(focusRole)}
+              </span>
+            )}
+            <button
+              onClick={() => { setFocusRole(''); setStatusFilter('all') }}
+              className="rounded-xl border border-border bg-slate-100 dark:bg-white/5 px-3 py-1.5 font-medium text-body transition-colors hover:bg-slate-200 dark:hover:bg-white/10"
+            >
+              Сбросить
+            </button>
+          </>
+        )}
       </div>
 
       {/* Дерево разделов */}
@@ -513,6 +647,12 @@ export function CapabilitiesPanel({ scope = 'global' }: { scope?: 'global' | 'or
                   <span className="text-xs text-slate-500">
                     ({group.pages.length} стр., {group.pages.reduce((acc, p) => acc + p.capabilities.length, 0)} прав)
                   </span>
+                  {focusRole && focusCounts.groups.has(group.id) && (
+                    <span className="rounded-full border border-border bg-slate-100 dark:bg-white/5 px-2 py-0.5 text-[11px] text-body">
+                      {roleLabel(focusRole)}: <b className="text-foreground">{focusCounts.groups.get(group.id)!.granted}</b>
+                      {' из '}{focusCounts.groups.get(group.id)!.total}
+                    </span>
+                  )}
                 </div>
               </button>
 
@@ -522,14 +662,16 @@ export function CapabilitiesPanel({ scope = 'global' }: { scope?: 'global' | 'or
                     <PageRow
                       key={page.id}
                       page={page}
-                      roles={roles}
+                      roles={visibleRoles}
                       isGranted={isGranted}
                       onToggle={toggleOne}
                       onBulkSet={bulkSet}
                       savingKey={savingKey}
                       collapsed={collapsedPages.has(page.id)}
                       onToggleCollapse={() => togglePage(page.id)}
-                      forceExpand={!!search.trim()}
+                      forceExpand={!!search.trim() || (!!focusRole && statusFilter !== 'all')}
+                      focusRole={focusRole}
+                      focusCount={focusCounts.pages.get(page.id) || null}
                       canToggle={can('access.toggle_capability')}
                       canBulk={can('access.bulk_capabilities')}
                     />
@@ -628,6 +770,8 @@ function PageRow({
   forceExpand = false,
   canToggle = true,
   canBulk = true,
+  focusRole = '',
+  focusCount = null,
 }: {
   page: CapabilityPage
   roles: string[]
@@ -640,6 +784,8 @@ function PageRow({
   forceExpand?: boolean
   canToggle?: boolean
   canBulk?: boolean
+  focusRole?: string
+  focusCount?: { granted: number; total: number } | null
 }) {
   const allCapIds = page.capabilities.map((c) => c.id)
   const effectivelyCollapsed = forceExpand ? false : collapsed
@@ -659,6 +805,19 @@ function PageRow({
           <span className="text-xs text-slate-500" title={page.path}>
             {page.capabilities.length} {page.capabilities.length === 1 ? 'действие' : 'действий'}
           </span>
+          {focusRole && focusCount && (
+            <span
+              className={`rounded-full px-2 py-0.5 text-[11px] ${
+                focusCount.granted === 0
+                  ? 'bg-rose-500/10 text-rose-600 dark:text-rose-300'
+                  : focusCount.granted === focusCount.total
+                    ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                    : 'bg-amber-500/10 text-amber-700 dark:text-amber-300'
+              }`}
+            >
+              {focusCount.granted} из {focusCount.total}
+            </span>
+          )}
         </button>
         {hasViewCap && canToggle && (
           <div className="flex shrink-0 items-center gap-1">
