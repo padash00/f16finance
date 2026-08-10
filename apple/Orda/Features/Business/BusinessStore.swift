@@ -289,6 +289,27 @@ final class BusinessStore {
         }
     }
 
+    // ── Приёмка ──────────────────────────────────────────────────────────────
+
+    private(set) var receiptSaveError: String?
+
+    func createReceipt(_ draft: ReceiptDraft, companyID: String?) async -> Bool {
+        do {
+            try await service.createReceipt(draft, companyID: companyID)
+            // Приёмка меняет остатки и, если в долг, долги поставщикам.
+            await loadReceipts()
+            await loadStore()
+            receiptSaveError = nil
+            return true
+        } catch let error as APIError {
+            receiptSaveError = error.userMessage
+            return false
+        } catch {
+            receiptSaveError = error.localizedDescription
+            return false
+        }
+    }
+
     // ── Ревизия ──────────────────────────────────────────────────────────────
 
     private(set) var stocktakeSaveError: String?

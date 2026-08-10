@@ -168,6 +168,84 @@ struct WarehouseDraftTests {
         #expect(draft.validationMessage == "Ни одна позиция не пересчитана")
     }
 
+    // ── Приёмка ──────────────────────────────────────────────────────────────
+
+    private func receipt() -> ReceiptDraft {
+        var value = ReceiptDraft(receivedAt: "2026-08-10", locationID: "loc-1")
+        value.supplierID = "sup-1"
+        value.lines = [ReceiptLine(itemID: "i-1", name: "Кола", unit: "шт", quantity: 10, unitCost: 300)]
+        return value
+    }
+
+    @Test("Заполненная накладная проходит")
+    func validReceiptPasses() {
+        #expect(receipt().isValid)
+    }
+
+    /// Нулевая цена закупки обнуляет себестоимость товара — потом это всплывёт
+    /// в ОПиУ как небывалая маржа.
+    @Test("Платная позиция без цены не проходит")
+    func paidLineNeedsCost() {
+        var draft = receipt()
+        draft.lines[0].unitCost = 0
+        #expect(draft.validationMessage == "У платных позиций должна быть цена закупки")
+    }
+
+    /// А бонус без цены — норма: это подарок поставщика.
+    @Test("Бонусная позиция цены не требует и в сумму не идёт")
+    func bonusIsFree() {
+        var draft = receipt()
+        draft.lines[0].isBonus = true
+        draft.lines[0].unitCost = 0
+        #expect(draft.isValid)
+        #expect(draft.total == 0)
+        #expect(draft.bonusCount == 1)
+    }
+
+    @Test("Сумма накладной считается без бонусов")
+    func totalSkipsBonus() {
+        var draft = receipt()
+        draft.lines.append(
+            ReceiptLine(itemID: "i-2", name: "Чипсы", unit: "шт", quantity: 5, unitCost: 200, isBonus: true)
+        )
+        #expect(draft.total == 3000)
+    }
+
+    @Test("У долга обязателен срок, у реализации — нет")
+    func deferredNeedsDueDate() {
+        var debt = receipt()
+        debt.payment = .deferred
+        #expect(debt.validationMessage == "У долга должен быть срок оплаты")
+
+        var consignment = debt
+        consignment.isConsignment = true
+        #expect(consignment.isValid)
+    }
+
+    @Test("Наценка считается от цены закупки")
+    func markupFromCost() {
+        var line = ReceiptLine(itemID: "i-1", name: "Кола", unit: "шт", quantity: 1, unitCost: 200)
+        line.salePrice = 300
+        #expect(line.markup == 50)
+    }
+
+    @Test("Бонус уходит на сервер с нулевой ценой")
+    func bonusEncodesZeroCost() throws {
+        var draft = receipt()
+        draft.lines[0].isBonus = true
+        draft.lines[0].unitCost = 999
+
+        let body = try JSONEncoder().encode(
+            ReceiptCreateRequest(payload: draft.payload(), companyID: nil)
+        )
+        let json = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+        let payload = try #require(json["payload"] as? [String: Any])
+        let items = try #require(payload["items"] as? [[String: Any]])
+
+        #expect(items.first?["is_bonus"] as? Bool == true)
+        #expect(items.first?["unit_cost"] as? Double == 0)
+    }
+
     // ── Решение по заявке ────────────────────────────────────────────────────
 
     @Test("Решение по заявке шлёт requestId тем именем, что читает роут")

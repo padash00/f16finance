@@ -280,6 +280,16 @@ public struct BusinessService: Sendable {
         return response.data.incidents
     }
 
+    /// Провести приёмку от поставщика. Требует `store-receipts.create`.
+    public func createReceipt(_ draft: ReceiptDraft, companyID: String?) async throws {
+        let body = try JSONEncoder().encode(
+            ReceiptCreateRequest(payload: draft.payload(), companyID: companyID)
+        )
+        _ = try await api.send(
+            APIRequest(path: "/api/admin/store/receipts", method: .post, body: body)
+        )
+    }
+
     /// Провести ревизию. Требует `store-revisions.commit`.
     public func createStocktake(_ draft: StocktakeDraft, companyID: String?) async throws {
         let body = try JSONEncoder().encode(

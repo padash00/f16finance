@@ -59,7 +59,14 @@ struct ReceiptsScreen: View {
     var kind: Kind = .supplier
 
     @Environment(BusinessStore.self) private var store
+    @Environment(\.access) private var access
     @State private var selected: Receipt?
+    @State private var isAdding = false
+
+    /// Приёмку и оприходование сервер закрывает разными правами.
+    private var canCreate: Bool {
+        access?.can(kind == .posting ? "store-postings.create" : "store-receipts.create") ?? false
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -89,9 +96,20 @@ struct ReceiptsScreen: View {
         }
         .background(Theme.background)
         .navigationTitle(kind.title)
-        .toolbar { LogoutToolbarItem() }
+        .toolbar {
+            // Форма пока одна — приёмка от поставщика. Оприходование это
+            // другой документ, без накладной и денег, и делать вид, что кнопка
+            // ведёт туда же, нечестно.
+            if canCreate, kind == .supplier {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { isAdding = true } label: { Image(systemName: "plus") }
+                }
+            }
+            LogoutToolbarItem()
+        }
         .task { await store.loadReceipts() }
         .refreshable { await store.loadReceipts() }
+        .sheet(isPresented: $isAdding) { AddReceiptSheet() }
     }
 
     private var summary: some View {
