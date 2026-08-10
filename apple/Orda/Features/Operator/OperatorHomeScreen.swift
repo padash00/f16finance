@@ -398,10 +398,22 @@ struct ActionTileLabel: View {
 struct LogoutToolbarItem: ToolbarContent {
     @Environment(AuthStore.self) private var auth
     @State private var confirming = false
+    @State private var showingAccount = false
 
     var body: some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
             Menu {
+                // Настройки живут здесь, а не только во вкладке «Профиль»:
+                // вкладка есть лишь на телефоне, и на планшете с Mac до
+                // оформления и замка было не добраться вовсе.
+                Button {
+                    showingAccount = true
+                } label: {
+                    Label("Настройки аккаунта", systemImage: "gearshape")
+                }
+
+                Divider()
+
                 Button(role: .destructive) {
                     confirming = true
                 } label: {
@@ -410,6 +422,7 @@ struct LogoutToolbarItem: ToolbarContent {
             } label: {
                 Image(systemName: "person.crop.circle")
             }
+            .sheet(isPresented: $showingAccount) { AccountSheet() }
             .confirmationDialog("Выйти из аккаунта?", isPresented: $confirming, titleVisibility: .visible) {
                 Button("Выйти", role: .destructive) {
                     Task { await auth.signOut() }

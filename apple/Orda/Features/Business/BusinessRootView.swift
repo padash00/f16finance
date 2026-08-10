@@ -418,53 +418,7 @@ struct BusinessProfileScreen: View {
 
     @Environment(AuthStore.self) private var auth
     @State private var confirmingLogout = false
-    @State private var isLockEnabled = false
-    @State private var didLoadSettings = false
-    @AppStorage(Appearance.storageKey) private var appearance: Appearance = .system
 
-    /// Выбор оформления.
-    ///
-    /// Приложение и так следует за системной темой — этот переключатель нужен,
-    /// чтобы её перебить: телефон уходит в тёмное по расписанию, а смотреть
-    /// цифры кому-то удобнее на светлом.
-    private var appearanceCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                FieldLabel("Оформление")
-                Picker("Оформление", selection: $appearance) {
-                    ForEach(Appearance.allCases) { option in
-                        Label(option.title, systemImage: option.icon).tag(option)
-                    }
-                }
-                .pickerStyle(.segmented)
-            }
-        }
-    }
-
-    /// Замок по биометрии. Из приложения видно зарплаты и логины всей
-    /// команды — телефон, оставленный на стойке разблокированным, не должен
-    /// давать к этому доступ. Но и запирать каждое переключение незачем,
-    /// поэтому это настройка, а не правило.
-    @ViewBuilder
-    private var lockCard: some View {
-        if Biometrics.isAvailable {
-            Card {
-                VStack(alignment: .leading, spacing: Spacing.sm) {
-                    Toggle(isOn: $isLockEnabled) {
-                        Label("Запрашивать \(Biometrics.displayName)", systemImage: Biometrics.iconName)
-                            .font(Typography.callout)
-                            .foregroundStyle(Theme.text)
-                    }
-                    Text("При возврате в приложение. Сессия при этом остаётся — заново входить не придётся.")
-                        .font(Typography.caption)
-                        .foregroundStyle(Theme.textDim)
-                }
-            }
-            .onChange(of: isLockEnabled) { _, value in
-                auth.isLockEnabled = value
-            }
-        }
-    }
 
     var body: some View {
         ScrollView {
@@ -505,8 +459,8 @@ struct BusinessProfileScreen: View {
                     }
                 }
 
-                lockCard
-                appearanceCard
+                AppearancePicker()
+                BiometricLockToggle()
 
                 Button("Выйти из аккаунта") { confirmingLogout = true }
                     .buttonStyle(DestructiveButtonStyle())
@@ -517,11 +471,7 @@ struct BusinessProfileScreen: View {
         }
         .background(Theme.background)
         .navigationTitle("Профиль")
-        .task {
-            guard !didLoadSettings else { return }
-            didLoadSettings = true
-            isLockEnabled = auth.isLockEnabled
-        }
+
         .confirmationDialog("Выйти из аккаунта?", isPresented: $confirmingLogout, titleVisibility: .visible) {
             Button("Выйти", role: .destructive) { Task { await auth.signOut() } }
             Button("Отмена", role: .cancel) {}
