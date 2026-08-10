@@ -280,6 +280,16 @@ public struct BusinessService: Sendable {
         return response.data.incidents
     }
 
+    /// Создать акт списания. Требует `store-writeoffs.create`.
+    public func createWriteoff(_ draft: WriteoffDraft, companyID: String?) async throws {
+        let body = try JSONEncoder().encode(
+            WriteoffCreateRequest(payload: draft.payload(), companyID: companyID)
+        )
+        _ = try await api.send(
+            APIRequest(path: "/api/admin/store/writeoffs", method: .post, body: body)
+        )
+    }
+
     /// Решение по заявке склада: одобрить или отклонить.
     ///
     /// Сервер делает это одной атомарной функцией — минусует со склада и

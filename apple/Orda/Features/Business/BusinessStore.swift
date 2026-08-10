@@ -289,6 +289,28 @@ final class BusinessStore {
         }
     }
 
+    // ── Списание ─────────────────────────────────────────────────────────────
+
+    private(set) var writeoffSaveError: String?
+
+    func createWriteoff(_ draft: WriteoffDraft, companyID: String?) async -> Bool {
+        do {
+            try await service.createWriteoff(draft, companyID: companyID)
+            // Списание меняет остатки — перечитываем склад целиком, а не
+            // только журнал актов.
+            await loadWriteoffs()
+            await loadStore()
+            writeoffSaveError = nil
+            return true
+        } catch let error as APIError {
+            writeoffSaveError = error.userMessage
+            return false
+        } catch {
+            writeoffSaveError = error.localizedDescription
+            return false
+        }
+    }
+
     // ── Заявки склада ────────────────────────────────────────────────────────
 
     private(set) var requestDecisionError: String?

@@ -249,7 +249,12 @@ private struct ReceiptDetail: View {
 /// в разрезе причин.
 struct WriteoffsScreen: View {
     @Environment(BusinessStore.self) private var store
+    @Environment(\.access) private var access
     @State private var selected: Writeoff?
+    @State private var isAdding = false
+
+    /// Право `store-writeoffs.create` проверяет и сервер.
+    private var canCreate: Bool { access?.can("store-writeoffs.create") ?? false }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -279,9 +284,17 @@ struct WriteoffsScreen: View {
         }
         .background(Theme.background)
         .navigationTitle("Списания")
-        .toolbar { LogoutToolbarItem() }
+        .toolbar {
+            if canCreate {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { isAdding = true } label: { Image(systemName: "plus") }
+                }
+            }
+            LogoutToolbarItem()
+        }
         .task { await store.loadWriteoffs() }
         .refreshable { await store.loadWriteoffs() }
+        .sheet(isPresented: $isAdding) { AddWriteoffSheet() }
     }
 
     private var summary: some View {
