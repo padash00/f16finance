@@ -6,7 +6,6 @@ import { requireOrgFeature } from '@/lib/server/entitlements'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { computePurchasePlan } from '@/lib/server/purchase-plan'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
-import { isStoreManager } from '@/lib/server/store-access'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 export const dynamic = 'force-dynamic'
@@ -19,9 +18,12 @@ export async function GET(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
-    const denied = await requireCapability(access, 'store-purchase-orders.view')
+    // Право своей страницы, а не соседней: роут обслуживает «План закупа»,
+    // а спрашивал просмотр «Заказов поставщикам». Владелец, которому выдали
+    // ровно план, упирался в отказ с формулировкой про право, которое у него
+    // как раз было.
+    const denied = await requireCapability(access, 'store-purchase-plan.view')
     if (denied) return denied
-    if (!isStoreManager(access)) return json({ error: 'forbidden' }, 403)
     const entitlementGuard = await requireOrgFeature(access, 'shop.catalog')
     if (entitlementGuard) return entitlementGuard
 

@@ -12,12 +12,6 @@ export const runtime = 'nodejs'
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
-function canManage(access: any) {
-  if (access.isSuperAdmin) return true
-  const role = String(access.staffMember?.role || access.staffRole || '').toLowerCase()
-  return role === 'owner' || role === 'manager'
-}
-
 // PostgREST режет ответ до 1000 строк — продажи за период забираем постранично,
 // иначе списание по продажам считается по обрезанным данным.
 const PAGE = 1000
@@ -94,7 +88,6 @@ export async function GET(request: Request) {
     if ('response' in access) return access.response
     const denied = await requireCapability(access, 'production.view')
     if (denied) return denied
-    if (!canManage(access)) return json({ error: 'forbidden' }, 403)
     const gate = await requireOrgFeature(access, ['shop.catalog', 'restaurant.recipes_lite'])
     if (gate) return gate
     const orgId = access.activeOrganization?.id || null
@@ -121,7 +114,6 @@ export async function POST(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
-    if (!canManage(access)) return json({ error: 'forbidden' }, 403)
     const gate = await requireOrgFeature(access, ['shop.catalog', 'restaurant.recipes_lite'])
     if (gate) return gate
     const orgId = access.activeOrganization?.id || null
@@ -129,6 +121,20 @@ export async function POST(request: Request) {
     const scopeOrg = orgId
     const body = (await request.json().catch(() => null)) as any
     const action = String(body?.action || '')
+
+    // Право по действию, а не одно на весь роут: приход сырья, ревизия и
+    // списание по продажам — три разных полномочия, и в каталоге они заведены
+    // по отдельности. Раньше здесь стояла проверка роли, и владелец не мог
+    // выдать «только ревизию» никому.
+    const CAPABILITY_BY_ACTION: Record<string, string> = {
+      receipt: 'production.stock_receipt',
+      count: 'production.stock_count',
+      writeoff_sales: 'production.writeoff',
+    }
+    const requiredCapability = CAPABILITY_BY_ACTION[action]
+    if (!requiredCapability) return json({ error: 'unknown-action' }, 400)
+    const denied = await requireCapability(access, requiredCapability)
+    if (denied) return denied
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const userId = access.user?.id || null
 

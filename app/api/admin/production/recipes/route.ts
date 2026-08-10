@@ -4,19 +4,13 @@ import { resolveAllRecipeCosts } from '@/lib/domain/production'
 import { writeAuditLog } from '@/lib/server/audit'
 import { requireOrgFeature } from '@/lib/server/entitlements'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
-import { requireAnyCapability } from '@/lib/server/capabilities'
+import { requireAnyCapability, requireCapability } from '@/lib/server/capabilities'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 export const runtime = 'nodejs'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
-}
-
-function canManage(access: any) {
-  if (access.isSuperAdmin) return true
-  const role = String(access.staffMember?.role || access.staffRole || '').toLowerCase()
-  return role === 'owner' || role === 'manager'
 }
 
 function getOrgId(access: any): string | null {
@@ -39,7 +33,6 @@ export async function GET(request: Request) {
     if ('response' in access) return access.response
     const denied = await requireAnyCapability(access, ['production.view', 'store-catalog.view'])
     if (denied) return denied
-    if (!canManage(access)) return json({ error: 'forbidden' }, 403)
     const gate = await requireOrgFeature(access, ['shop.catalog', 'restaurant.recipes_lite'])
     if (gate) return gate
 
@@ -153,7 +146,8 @@ export async function POST(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
-    if (!canManage(access)) return json({ error: 'forbidden' }, 403)
+    const denied = await requireCapability(access, 'production.create')
+    if (denied) return denied
     const gate = await requireOrgFeature(access, ['shop.catalog', 'restaurant.recipes_lite'])
     if (gate) return gate
 
@@ -216,7 +210,8 @@ export async function PATCH(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
-    if (!canManage(access)) return json({ error: 'forbidden' }, 403)
+    const denied = await requireCapability(access, 'production.create')
+    if (denied) return denied
     const gate = await requireOrgFeature(access, ['shop.catalog', 'restaurant.recipes_lite'])
     if (gate) return gate
 
@@ -296,7 +291,8 @@ export async function DELETE(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
-    if (!canManage(access)) return json({ error: 'forbidden' }, 403)
+    const denied = await requireCapability(access, 'production.delete')
+    if (denied) return denied
     const orgId = getOrgId(access)
     const id = new URL(request.url).searchParams.get('id')
     if (!id) return json({ error: 'id обязателен' }, 400)

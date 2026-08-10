@@ -10,19 +10,12 @@ export const runtime = 'nodejs'
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
-function canManage(access: any) {
-  if (access.isSuperAdmin) return true
-  const role = String(access.staffMember?.role || access.staffRole || '').toLowerCase()
-  return role === 'owner' || role === 'manager'
-}
-
 export async function GET(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
     const denied = await requireCapability(access, 'production.view')
     if (denied) return denied
-    if (!canManage(access)) return json({ error: 'forbidden' }, 403)
     const gate = await requireOrgFeature(access, ['shop.catalog', 'restaurant.recipes_lite'])
     if (gate) return gate
     const orgId = access.activeOrganization?.id || null
@@ -45,7 +38,8 @@ export async function POST(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
-    if (!canManage(access)) return json({ error: 'forbidden' }, 403)
+    const denied = await requireCapability(access, 'production.create_ingredient')
+    if (denied) return denied
     const gate = await requireOrgFeature(access, ['shop.catalog', 'restaurant.recipes_lite'])
     if (gate) return gate
     const orgId = access.activeOrganization?.id || null
@@ -76,7 +70,8 @@ export async function DELETE(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
-    if (!canManage(access)) return json({ error: 'forbidden' }, 403)
+    const denied = await requireCapability(access, 'production.delete_ingredient')
+    if (denied) return denied
     const orgId = access.activeOrganization?.id || null
     const id = new URL(request.url).searchParams.get('id')
     if (!id) return json({ error: 'id обязателен' }, 400)

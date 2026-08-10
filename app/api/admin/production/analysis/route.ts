@@ -12,12 +12,6 @@ export const runtime = 'nodejs'
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
-function canManage(access: any) {
-  if (access.isSuperAdmin) return true
-  const role = String(access.staffMember?.role || access.staffRole || '').toLowerCase()
-  return role === 'owner' || role === 'manager'
-}
-
 // PostgREST режет ответ до 1000 строк — продажи за период забираем постранично,
 // иначе food cost и расход ингредиентов занижаются.
 const PAGE = 1000
@@ -41,7 +35,6 @@ export async function GET(request: Request) {
     if ('response' in access) return access.response
     const denied = await requireCapability(access, 'production.view')
     if (denied) return denied
-    if (!canManage(access)) return json({ error: 'forbidden' }, 403)
     const gate = await requireOrgFeature(access, ['shop.catalog', 'restaurant.recipes_lite'])
     if (gate) return gate
 

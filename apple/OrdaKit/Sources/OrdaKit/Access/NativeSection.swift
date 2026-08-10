@@ -241,13 +241,18 @@ public enum NativeSection: String, CaseIterable, Sendable {
     /// что обещать доступ, которого нет.
     public var allowedStaffRoles: Set<String>? {
         switch self {
-        // /api/admin/production/recipes — canManage на самом GET.
+        // Осознанное решение сервера, а не недосмотр: оценка стоимости бизнеса
+        // открыта только владельцу — «крайне чувствительно» сказано прямо в
+        // роуте. Здесь запись постоянная.
+        case .valuation: ["owner"]
+
+        // Ниже — временные записи. Роуты уже переведены на права, но правка
+        // ещё не на проде: пока она не задеплоена, эти разделы отвечают
+        // отказом по роли. Снять сразу после деплоя — `scripts/audit-native-gates.mjs`
+        // покажет их как лишние.
         case .production: ["owner", "manager"]
-        // /api/admin/moderation — canModerate на GET, только owner.
         case .moderation: ["owner"]
-        // /api/admin/store/purchase-plan/suggest — isStoreManager на GET.
         case .purchasePlan: ["owner", "manager"]
-        // /api/telegram/allowed-users — owner и manager прямо в начале GET.
         case .telegram: ["owner", "manager"]
         default: nil
         }
@@ -263,12 +268,11 @@ public enum NativeSection: String, CaseIterable, Sendable {
     ///
     /// Похоже на опечатку в роуте, а не на замысел. Пока она там, меню обязано
     /// спрашивать то же право, что и сервер.
+    /// Тоже временное: оба роута уже спрашивают право своей страницы, но
+    /// правка ждёт деплоя.
     public var requiredCapabilities: [String] {
         switch self {
-        // Просит право соседней страницы «Заказы поставщикам».
         case .purchasePlan: ["store-purchase-orders.view"]
-        // `/api/admin/store/config` просит `store.view` — право «Магазина», а
-        // не «Настроек магазина», хотя обслуживает именно настройки.
         case .storeSettings: ["store.view"]
         default: []
         }

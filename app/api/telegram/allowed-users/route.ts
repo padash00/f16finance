@@ -1,20 +1,18 @@
 import { NextResponse } from 'next/server'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { requireCapability } from '@/lib/server/capabilities'
 import { requireAddon } from '@/lib/server/entitlements'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
-
-function canManageTelegram(access: { isSuperAdmin: boolean; staffRole: string }) {
-  return access.isSuperAdmin || access.staffRole === 'owner'
-}
 
 export async function GET(request: Request) {
   const access = await getRequestAccessContext(request)
   if ('response' in access) return access.response
   const addonDenied = await requireAddon(access, 'addon.telegram')
   if (addonDenied) return addonDenied
-  if (!access.isSuperAdmin && access.staffRole !== 'owner' && access.staffRole !== 'manager') {
-    return NextResponse.json({ error: 'forbidden' }, { status: 403 })
-  }
+  // Право, а не роль: список получателей отчётов заводит тот, кому владелец
+  // это доверил, и каталог такое право предусматривает.
+  const denied = await requireCapability(access, 'telegram.view')
+  if (denied) return denied
 
   try {
     const supabase = createAdminSupabaseClient()
@@ -41,7 +39,8 @@ export async function POST(request: Request) {
   if ('response' in access) return access.response
   const addonDenied = await requireAddon(access, 'addon.telegram')
   if (addonDenied) return addonDenied
-  if (!canManageTelegram(access)) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+  const denied = await requireCapability(access, 'telegram.add_user')
+  if (denied) return denied
 
   const body = await request.json().catch(() => ({}))
   const telegramUserId = String(body.telegram_user_id || '').trim()
@@ -74,7 +73,8 @@ export async function DELETE(request: Request) {
   if ('response' in access) return access.response
   const addonDenied = await requireAddon(access, 'addon.telegram')
   if (addonDenied) return addonDenied
-  if (!canManageTelegram(access)) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+  const denied = await requireCapability(access, 'telegram.delete_user')
+  if (denied) return denied
 
   const { searchParams } = new URL(request.url)
   const id = searchParams.get('id')
@@ -95,7 +95,8 @@ export async function PATCH(request: Request) {
   if ('response' in access) return access.response
   const addonDenied = await requireAddon(access, 'addon.telegram')
   if (addonDenied) return addonDenied
-  if (!canManageTelegram(access)) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+  const denied = await requireCapability(access, 'telegram.toggle_finance')
+  if (denied) return denied
 
   const body = await request.json().catch(() => ({}))
   const { id, label, can_finance } = body

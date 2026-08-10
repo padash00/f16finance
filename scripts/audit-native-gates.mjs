@@ -96,10 +96,36 @@ function getHandler(source) {
   return source.slice(start, next < 0 ? source.length : next)
 }
 
-const ROLE_PATTERNS = [
-  /role === '([a-z_]+)'/g,
-  /staffRole === '([a-z_]+)'/g,
-]
+/**
+ * Роль ищем только в проверках доступа, а не везде в файле: строка вроде
+ * `if (op.role === 'operator')` — это разбор данных, а не запрет, и в отчёте
+ * она была бы шумом, из-за которого перестанут читать весь отчёт.
+ */
+function roleGatesIn(source) {
+  const roles = new Set()
+  const guards = [
+    // помощники: function canManage(...) { ... }
+    ...[...source.matchAll(/function can[A-Za-z]*\([^)]*\)[^{]*\{([\s\S]*?)\n\}/g)].map((m) => m[1]),
+    // и условия прямо в обработчике, где рядом стоит isSuperAdmin
+    ...source.split('\n').filter((line) => /isSuperAdmin/.test(line) && /role/i.test(line)),
+  ]
+  for (const guard of guards) {
+    for (const m of guard.matchAll(/(?:staffRole|role) [!=]== '([a-z_]+)'/g)) roles.add(m[1])
+  }
+  return roles
+}
+
+/**
+ * Известные и осознанные совпадения: роут обслуживает раздел, чьё право он и
+ * просит, но путь API короче пути страницы — сопоставление по префиксу тут
+ * ошибается, а не находит ошибку.
+ */
+const KNOWN_GOOD = new Set([
+  // «Сменные отчёты (магазин)» — раздел store-shifts, право сходится.
+  '/api/admin/shifts/z-report',
+  // «Биллинг поставщикам» — раздел store-billing, право сходится.
+  '/api/admin/store/debts',
+])
 
 const foreignCapability = []
 const roleGated = []
@@ -120,7 +146,7 @@ for (const apiPath of [...calledPaths].sort()) {
   for (const m of handler.matchAll(/requireAnyCapability\([^,]+,\s*\[([^\]]+)\]/g)) {
     for (const c of m[1].matchAll(/'([^']+)'/g)) required.add(c[1])
   }
-  if (page && required.size) {
+  if (page && required.size && !KNOWN_GOOD.has(apiPath)) {
     const own = pageCapabilities.get(page) ?? new Set()
     const satisfiedByOwn = [...required].some((c) => own.has(c))
     if (!satisfiedByOwn) {
@@ -129,10 +155,7 @@ for (const apiPath of [...calledPaths].sort()) {
   }
 
   // 2. Прямая проверка роли — в самом роуте или через общий помощник.
-  const roles = new Set()
-  for (const pattern of ROLE_PATTERNS) {
-    for (const m of source.matchAll(pattern)) roles.add(m[1])
-  }
+  const roles = roleGatesIn(source)
   if (/isStoreManager\(/.test(handler)) {
     roles.add('owner')
     roles.add('manager')

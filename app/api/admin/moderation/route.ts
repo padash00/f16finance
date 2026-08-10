@@ -16,18 +16,11 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
-function canModerate(access: any): boolean {
-  if (access.isSuperAdmin) return true
-  const role = (access.staffMember?.role || '').toLowerCase()
-  return role === 'owner'
-}
-
 export async function GET(request: Request) {
   const access = await getRequestAccessContext(request)
   if ('response' in access) return access.response
   const denied = await requireCapability(access, 'moderation.view')
   if (denied) return denied
-  if (!canModerate(access)) return json({ error: 'forbidden' }, 403)
 
   const url = new URL(request.url)
   const status = url.searchParams.get('status') || 'pending'
@@ -68,8 +61,6 @@ export async function GET(request: Request) {
 export async function PATCH(request: Request) {
   const access = await getRequestAccessContext(request)
   if ('response' in access) return access.response
-  if (!canModerate(access)) return json({ error: 'forbidden' }, 403)
-
   const body = (await request.json().catch(() => null)) as
     | { id?: string; status?: 'confirmed' | 'dismissed'; note?: string }
     | null
@@ -77,6 +68,14 @@ export async function PATCH(request: Request) {
   if (!['confirmed', 'dismissed'].includes(body.status)) {
     return json({ error: 'status: confirmed|dismissed' }, 400)
   }
+
+  // Подтвердить нарушение и отклонить его — разные права: в каталоге они
+  // заведены по отдельности, и владелец вправе выдать только одно из них.
+  const denied = await requireCapability(
+    access,
+    body.status === 'confirmed' ? 'moderation.confirm' : 'moderation.dismiss',
+  )
+  if (denied) return denied
 
   const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
   const orgId = access.activeOrganization?.id || null
