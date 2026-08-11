@@ -1091,6 +1091,42 @@ public struct FeedService: Sendable {
         )
     }
 
+    /// Пожаловаться на сообщение.
+    ///
+    /// Требование App Store к приложениям с перепиской: пожаловаться нужно
+    /// уметь из приложения, а не письмом в поддержку. Жалоба ложится в тот же
+    /// журнал модерации, что и находки ИИ, — владелец разбирает их в одном
+    /// месте.
+    public func report(messageID: String, source: String, reason: String = "") async throws {
+        var payload: [String: Any] = ["messageId": messageID, "source": source]
+        if !reason.isEmpty { payload["reason"] = reason }
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/chat/report",
+                method: .post,
+                body: try JSONSerialization.data(withJSONObject: payload)
+            )
+        )
+    }
+
+    // Блокировка собеседника
+
+    public func blockedUsers() async throws -> [String] {
+        struct Response: Decodable, Sendable { let data: [String] }
+        let response: Response = try await api.send(APIRequest(path: "/api/direct-messages/block"))
+        return response.data
+    }
+
+    public func setBlocked(_ blocked: Bool, userID: String) async throws {
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/direct-messages/block",
+                method: blocked ? .post : .delete,
+                body: try JSONSerialization.data(withJSONObject: ["userId": userID])
+            )
+        )
+    }
+
     // Опросы
 
     /// Создать опрос. Сообщение в чате сервер заведёт сам.

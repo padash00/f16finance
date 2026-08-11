@@ -471,9 +471,15 @@ struct MessageActionsSheet: View {
     let pin: () -> Void
     let edit: () -> Void
     let remove: () -> Void
+    /// Пожаловаться. Требование App Store к приложениям с перепиской: фильтр
+    /// мата и ночная проверка ИИ ловят не всё — угрозу или травлю распознаёт
+    /// только тот, кому она адресована.
+    var report: (() -> Void)?
 
     @Environment(\.dismiss) private var dismiss
     @State private var confirmingDelete = false
+    @State private var confirmingReport = false
+    @State private var reported = false
 
     /// Пять на все случаи: «принял», «сделано», «горит», «спасибо», «смешно».
     /// Полная клавиатура эмодзи в рабочем чате превращается в развлечение.
@@ -533,6 +539,17 @@ struct MessageActionsSheet: View {
                         actionRow("Удалить", icon: "trash", tint: Theme.negative) {
                             confirmingDelete = true
                         }
+                    } else if let report {
+                        RowDivider()
+                        actionRow(
+                            reported ? "Жалоба отправлена" : "Пожаловаться",
+                            icon: reported ? "checkmark.circle" : "flag",
+                            tint: reported ? Theme.positive : Theme.warning
+                        ) {
+                            guard !reported else { return }
+                            confirmingReport = true
+                        }
+                        .disabled(reported)
                     }
                 }
             }
@@ -554,6 +571,16 @@ struct MessageActionsSheet: View {
             Button("Отмена", role: .cancel) {}
         } message: {
             Text("У всех в чате оно исчезнет.")
+        }
+        .confirmationDialog("Пожаловаться на сообщение?", isPresented: $confirmingReport, titleVisibility: .visible) {
+            Button("Пожаловаться", role: .destructive) {
+                report?()
+                reported = true
+                Haptics.tap()
+            }
+            Button("Отмена", role: .cancel) {}
+        } message: {
+            Text("Владелец увидит его в разделе модерации. Отправитель об этом не узнает.")
         }
     }
 

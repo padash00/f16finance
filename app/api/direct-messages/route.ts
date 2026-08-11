@@ -85,6 +85,34 @@ export async function POST(request: Request) {
   const messageText = String(body?.message || '').trim()
   if (!recipientUserId) return json({ error: 'recipientUserId обязателен' }, 400)
   if (recipientUserId === access.user.id) return json({ error: 'Нельзя писать самому себе' }, 400)
+
+  // Блокировка. Проверяем обе стороны: заблокированный не должен доходить, а
+  // писать тому, кого сам заблокировал, — значит ждать ответа, которого не
+  // будет.
+  {
+    const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
+    const { data: blocks } = await supabase
+      .from('direct_message_blocks')
+      .select('user_id, blocked_user_id')
+      .or(
+        `and(user_id.eq.${access.user.id},blocked_user_id.eq.${recipientUserId}),` +
+          `and(user_id.eq.${recipientUserId},blocked_user_id.eq.${access.user.id})`,
+      )
+      .limit(1)
+
+    if ((blocks || []).length > 0) {
+      const mine = (blocks as any[])[0].user_id === access.user.id
+      return json(
+        {
+          error: 'blocked',
+          message: mine
+            ? 'Вы заблокировали этого человека. Снимите блокировку, чтобы написать.'
+            : 'Сообщение не доставлено.',
+        },
+        403,
+      )
+    }
+  }
   if (!messageText && !(body?.attachments?.length)) {
     return json({ error: 'Сообщение пустое' }, 400)
   }

@@ -813,6 +813,14 @@ final class TeamChatStore {
         }
     }
 
+    /// Жалоба на сообщение. Молча: отправитель об этом не узнает, а владелец
+    /// увидит её в модерации.
+    func report(_ messageID: String) {
+        Task { [weak self] in
+            try? await self?.service.report(messageID: messageID, source: "team_chat")
+        }
+    }
+
     func delete(_ messageID: String) {
         Task { [weak self] in
             guard let self else { return }
@@ -1034,7 +1042,8 @@ struct TeamChatScreen: View {
                     editText = message.text
                     editing = message
                 },
-                remove: { store?.delete(message.id) }
+                remove: { store?.delete(message.id) },
+                report: { store?.report(message.id) }
             )
         }
         .task { if store == nil { let s = TeamChatStore(api: api); store = s; await s.load() } }
@@ -1246,6 +1255,33 @@ final class MessagesStore {
         guard openedUserID == userID, !isSending else { return }
         guard let fresh = try? await service.conversation(with: userID) else { return }
         conversation = fresh.messages
+    }
+
+    /// Кого я заблокировал.
+    ///
+    /// Требование App Store к приложениям с перепиской: прекратить общение
+    /// человек должен уметь сам, не дожидаясь, пока владелец разберёт жалобу.
+    private(set) var blocked: Set<String> = []
+
+    func loadBlocked() async {
+        blocked = Set((try? await service.blockedUsers()) ?? [])
+    }
+
+    func setBlocked(_ isBlocked: Bool, userID: String) async {
+        do {
+            try await service.setBlocked(isBlocked, userID: userID)
+            if isBlocked { blocked.insert(userID) } else { blocked.remove(userID) }
+        } catch let e as APIError {
+            sendError = e.userMessage
+        } catch {
+            sendError = error.localizedDescription
+        }
+    }
+
+    func report(messageID: String) {
+        Task { [weak self] in
+            try? await self?.service.report(messageID: messageID, source: "direct_messages")
+        }
     }
 
     /// Файл в личную переписку: фото или голосовое. Ждём ответа — файл летит
@@ -1517,6 +1553,9 @@ private struct ConversationPane: View {
     let store: MessagesStore
 
     @State private var draft = ""
+    @State private var confirmingBlock = false
+
+    private var isBlocked: Bool { store.blocked.contains(thread.otherUserID) }
 
     /// Переписка загружена именно для этого собеседника. Пустой список сам по
     /// себе ещё ничего не значит: тем же он выглядит до первого ответа сервера.
@@ -1553,6 +1592,19 @@ private struct ConversationPane: View {
                                         attachments: message.attachments
                                     )
                                     .id(message.id)
+                                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                                    // Пожаловаться можно и здесь: травля чаще
+                                    // случается один на один, а не при всех.
+                                    .contextMenu {
+                                        if !message.isMine(otherUserID: thread.otherUserID) {
+                                            Button(role: .destructive) {
+                                                store.report(messageID: message.id)
+                                                Haptics.tap()
+                                            } label: {
+                                                Label("Пожаловаться", systemImage: "flag")
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1571,6 +1623,20 @@ private struct ConversationPane: View {
                 }
             }
 
+            if isBlocked {
+                // Пока заблокирован — писать некуда: сервер такое сообщение
+                // отвергнет, и поле ввода обещало бы несуществующее.
+                HStack(spacing: Spacing.sm) {
+                    Image(systemName: "hand.raised.fill")
+                        .foregroundStyle(Theme.textDim)
+                    Text("Вы заблокировали этого человека. Снимите блокировку, чтобы написать.")
+                        .font(Typography.caption)
+                        .foregroundStyle(Theme.textMuted)
+                    Spacer(minLength: 0)
+                }
+                .padding(Spacing.lg)
+                .background(Theme.surfaceRaised)
+            } else {
             FeedComposer(
                 text: $draft,
                 placeholder: "Сообщение для \(thread.otherName)",
@@ -1597,13 +1663,46 @@ private struct ConversationPane: View {
                 draft = ""
                 store.send(text, to: thread.otherUserID, senderName: "Вы")
             }
+            }
         }
         .background(Theme.background)
         .navigationTitle(thread.otherName)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        // Блокировка и жалоба — там же, где всё остальное про собеседника.
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Button(role: isBlocked ? nil : .destructive) {
+                        confirmingBlock = true
+                    } label: {
+                        Label(
+                            isBlocked ? "Разблокировать" : "Заблокировать",
+                            systemImage: isBlocked ? "person.crop.circle.badge.checkmark" : "hand.raised"
+                        )
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+            }
+        }
+        .confirmationDialog(
+            isBlocked ? "Разблокировать \(thread.otherName)?" : "Заблокировать \(thread.otherName)?",
+            isPresented: $confirmingBlock,
+            titleVisibility: .visible
+        ) {
+            Button(isBlocked ? "Разблокировать" : "Заблокировать", role: isBlocked ? nil : .destructive) {
+                Task { await store.setBlocked(!isBlocked, userID: thread.otherUserID) }
+            }
+            Button("Отмена", role: .cancel) {}
+        } message: {
+            Text(isBlocked
+                ? "Сообщения снова будут доходить."
+                : "Его сообщения перестанут доходить. Он об этом не узнает.")
+        }
         .task(id: thread.otherUserID) { await store.open(thread.otherUserID) }
+        .task { await store.loadBlocked() }
         // Ответ должен появляться сам. Иначе переписка выглядит сломанной:
         // человек смотрит в экран, ему ответили, а он тянет список вниз.
         .task(id: thread.otherUserID) {
