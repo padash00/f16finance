@@ -460,6 +460,10 @@ struct BusinessSectionsScreen: View {
 
                             ForEach(Array(pages.enumerated()), id: \.element.id) { index, page in
                                 if index > 0 { RowDivider() }
+                                // Каскад по строкам группы: восемьдесят
+                                // пунктов, возникающих разом, читаются как
+                                // вспышка.
+                                Group {
                                 NavigationLink(value: SectionRoute(pageID: page.id)) {
                                     NavigationRow(
                                         icon: BusinessRootView.icon(forPage: page.id),
@@ -469,6 +473,8 @@ struct BusinessSectionsScreen: View {
                                     )
                                 }
                                 .buttonStyle(.pressable)
+                                }
+                                .staggeredAppear(index: index)
                             }
                         }
                     }

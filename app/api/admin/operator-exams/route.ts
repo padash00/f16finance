@@ -679,6 +679,91 @@ export async function POST(request: Request) {
       return json({ ok: true, data: { reminded } })
     }
 
+    // ─── Пересдача ────────────────────────────────────────────────────────
+    //
+    // Не сдал — не приговор: человек мог заболеть, попасть на аврал или просто
+    // не понять формулировку. Сейчас единственным выходом было завести экзамен
+    // заново на всю точку — ради одного оператора.
+    //
+    // Билет собирается новый из того же пула: пересдача по тем же вопросам,
+    // ответы на которые уже разобрали, ничего не проверяет.
+    if (body.action === 'retake') {
+      const denied = await requireCapability(access, 'operator-exams.create')
+      if (denied) return denied
+
+      const attemptId = String(body.attempt_id || '')
+      if (!attemptId) return json({ error: 'attempt_id обязателен' }, 400)
+
+      const { data: attemptRow } = await supabase
+        .from('operator_exam_attempts')
+        .select('id, exam_id, organization_id, operator_id, telegram_chat_id, status')
+        .eq('id', attemptId)
+        .eq('organization_id', orgId)
+        .maybeSingle()
+      if (!attemptRow) return json({ error: 'attempt-not-found' }, 404)
+
+      const attempt = attemptRow as any
+      if (!['completed', 'expired', 'undeliverable'].includes(String(attempt.status))) {
+        return json({ error: 'Экзамен ещё не завершён — пересдавать нечего' }, 409)
+      }
+
+      const { data: examRow } = await supabase
+        .from('operator_exams')
+        .select('id, title, question_pool, open_pool, question_count, open_count')
+        .eq('id', attempt.exam_id)
+        .maybeSingle()
+      if (!examRow) return json({ error: 'exam-not-found' }, 404)
+
+      const exam = examRow as any
+      const pool = (exam.question_pool || []) as ExamQuestion[]
+      const openPool = (exam.open_pool || []) as ExamQuestion[]
+      const ticket = buildOperatorTicket(
+        pool,
+        Math.min(Number(exam.question_count || 10), pool.length),
+        openPool,
+        Math.min(Number(exam.open_count || 0), openPool.length),
+      )
+      if (ticket.length === 0) return json({ error: 'В экзамене не осталось вопросов' }, 400)
+
+      const { data: created, error: createError } = await supabase
+        .from('operator_exam_attempts')
+        .insert({
+          exam_id: attempt.exam_id,
+          organization_id: orgId,
+          operator_id: attempt.operator_id,
+          telegram_chat_id: attempt.telegram_chat_id,
+          status: 'sent',
+          sent_at: new Date().toISOString(),
+          questions: ticket,
+          total_questions: ticket.length,
+        })
+        .select('id, exam_id, organization_id, operator_id, telegram_chat_id, status, questions, answers, current_index, total_questions, correct_answers, score, passed')
+        .single()
+
+      if (createError) return json({ error: 'retake-failed', detail: createError.message }, 500)
+
+      const fresh = created as unknown as ExamAttemptRow
+      if (fresh.telegram_chat_id) {
+        await sendExamQuestion({ attempt: fresh, examTitle: String(exam.title || 'Экзамен') })
+      }
+
+      await pushToOperators(supabase as any, [String(attempt.operator_id)], {
+        title: 'Пересдача',
+        body: `${String(exam.title || 'Экзамен')}: назначена пересдача, ${ticket.length} ${pluralQuestions(ticket.length)}.`,
+        data: { kind: 'operator-exam' },
+      })
+
+      await writeAuditLog(supabase as any, {
+        actorUserId: access.user?.id || null,
+        action: 'operator_exam.retake',
+        entityType: 'operator_exam_attempt',
+        entityId: String(fresh.id),
+        payload: { exam_id: attempt.exam_id, operator_id: attempt.operator_id, previous_attempt: attemptId },
+      })
+
+      return json({ ok: true, data: { attempt_id: String(fresh.id), questions: ticket.length } })
+    }
+
     // ─── Завершить: незакрытые попытки помечаем просроченными ─────────────
     if (body.action === 'finish' || body.action === 'cancel') {
       const denied = await requireCapability(access, 'operator-exams.cancel')

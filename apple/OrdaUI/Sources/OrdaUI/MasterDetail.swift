@@ -72,11 +72,15 @@ public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: Vie
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
 
-                    ForEach(items) { item in
+                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                     Button { selection = item } label: {
                         row(item)
                     }
                     .buttonStyle(.pressable)
+                    // Каскад: строки проявляются одна за другой. Список,
+                    // возникающий целиком и мгновенно, читается как подмена
+                    // экрана — глазу не за что зацепиться.
+                    .staggeredAppear(index: index)
                     .listRowInsets(EdgeInsets(top: Spacing.xs, leading: Spacing.lg, bottom: Spacing.xs, trailing: Spacing.lg))
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
@@ -85,6 +89,9 @@ public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: Vie
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
+                // Список меняется на глазах: пришло сообщение, закрылась
+                // заявка. Мгновенная подмена строк выглядит как сбой.
+                .animation(Motion.appear, value: items.count)
                 // Переход по выбранной записи, а не по «адресу».
                 //
                 // Так работают оба случая одинаково: и нажатие на строку, и
@@ -129,7 +136,7 @@ public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: Vie
                     ScrollView {
                         LazyVStack(spacing: Spacing.sm) {
                             header()
-                            ForEach(items) { item in
+                            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                                 Button {
                                     selection = item
                                 } label: {
@@ -141,6 +148,7 @@ public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: Vie
                                 }
                                 .buttonStyle(.pressable)
                                 .contextMenu { RowActionMenu(actions: actions(item)) }
+                                .staggeredAppear(index: index)
                             }
                         }
                         .padding(Spacing.md)
