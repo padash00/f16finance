@@ -7,6 +7,15 @@ import SwiftUI
 /// Порядок блоков задан тем, что нужно человеку за стойкой: сначала состояние
 /// смены и выручка, потом быстрые действия, потом всё, что «требует меня»,
 /// и только затем справочное.
+/// Куда ведут плитки быстрых действий.
+///
+/// По значению, а не замыканием: экран смены обновляется сам — приходят чеки,
+/// меняется выручка, — и переход, созданный замыканием, схлопывался вместе с
+/// пересборкой экрана.
+enum OperatorHomeRoute: Hashable {
+    case sale, audit, checklists, knowledge
+}
+
 struct OperatorHomeScreen: View {
     @Environment(OperatorStore.self) private var store
     @Environment(CabinetStore.self) private var cabinet
@@ -47,6 +56,14 @@ struct OperatorHomeScreen: View {
             if surface.isCompact { quickActions }
         }
         .navigationTitle(greeting)
+        .navigationDestination(for: OperatorHomeRoute.self) { route in
+            switch route {
+            case .sale: SaleScreen()
+            case .audit: AuditScreen()
+            case .checklists: ChecklistsScreen()
+            case .knowledge: KnowledgeScreen()
+            }
+        }
         #if os(iOS)
         .navigationBarTitleDisplayMode(.large)
         #endif
@@ -205,17 +222,17 @@ struct OperatorHomeScreen: View {
 
     private var quickActions: some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: Spacing.md) {
-            NavigationLink { SaleScreen() } label: {
+            NavigationLink(value: OperatorHomeRoute.sale) {
                 ActionTileLabel(icon: "barcode.viewfinder", title: "Продать", tint: Theme.accent(for: .operator))
             }
             .buttonStyle(PressableTileStyle())
 
-            NavigationLink { AuditScreen() } label: {
+            NavigationLink(value: OperatorHomeRoute.audit) {
                 ActionTileLabel(icon: "list.clipboard", title: "Ревизия", tint: ChartPalette.series2)
             }
             .buttonStyle(PressableTileStyle())
 
-            NavigationLink { ChecklistsScreen() } label: {
+            NavigationLink(value: OperatorHomeRoute.checklists) {
                 ActionTileLabel(icon: "checklist", title: "Чек-листы", tint: ChartPalette.series3)
             }
             .buttonStyle(PressableTileStyle())
@@ -240,7 +257,7 @@ struct OperatorHomeScreen: View {
                     .textCase(.uppercase)
 
                 if !store.blockingChecklists.isEmpty {
-                    NavigationLink { ChecklistsScreen() } label: {
+                    NavigationLink(value: OperatorHomeRoute.checklists) {
                         NavigationRow(
                             icon: "checklist.unchecked",
                             iconColor: Theme.warning,
@@ -254,7 +271,7 @@ struct OperatorHomeScreen: View {
                 }
 
                 if !cabinet.pendingArticles.isEmpty {
-                    NavigationLink { KnowledgeScreen() } label: {
+                    NavigationLink(value: OperatorHomeRoute.knowledge) {
                         NavigationRow(
                             icon: "book.closed",
                             iconColor: Theme.info,

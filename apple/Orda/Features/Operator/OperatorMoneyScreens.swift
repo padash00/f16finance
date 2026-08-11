@@ -196,6 +196,16 @@ struct MoneyScreen: View {
 
 // ── Профиль ──────────────────────────────────────────────────────────────────
 
+/// Куда ведут пункты профиля.
+///
+/// По значению, а не замыканием с готовым экраном. Замыкание пересоздаётся на
+/// каждое обновление экрана — а профиль обновляется сам, когда приходит число
+/// непрочитанных, — и свежий переход схлопывался обратно: «с первого раза не
+/// открывается, со второго открывается».
+enum OperatorProfileRoute: Hashable {
+    case schedule, money, knowledge, exams, chat, messages
+}
+
 struct OperatorProfileScreen: View {
     @Environment(AuthStore.self) private var auth
     @Environment(OperatorStore.self) private var store
@@ -227,21 +237,21 @@ struct OperatorProfileScreen: View {
 
                 Card {
                     VStack(spacing: Spacing.sm) {
-                        NavigationLink { ScheduleScreen() } label: {
+                        NavigationLink(value: OperatorProfileRoute.schedule) {
                             NavigationRow(icon: "calendar", iconColor: ChartPalette.series2, title: "Мой график")
                         }
                         .buttonStyle(.plain)
 
                         RowDivider()
 
-                        NavigationLink { MoneyScreen() } label: {
+                        NavigationLink(value: OperatorProfileRoute.money) {
                             NavigationRow(icon: "wallet.bifold", iconColor: Theme.brand, title: "Мои деньги")
                         }
                         .buttonStyle(.plain)
 
                         RowDivider()
 
-                        NavigationLink { KnowledgeScreen() } label: {
+                        NavigationLink(value: OperatorProfileRoute.knowledge) {
                             NavigationRow(
                                 icon: "book.closed",
                                 iconColor: Theme.info,
@@ -256,7 +266,7 @@ struct OperatorProfileScreen: View {
 
                         // Экзамен раньше приходил только в Telegram: у кого его
                         // нет, тот числился обязанным сдать то, чего не видел.
-                        NavigationLink { ExamsScreen() } label: {
+                        NavigationLink(value: OperatorProfileRoute.exams) {
                             NavigationRow(
                                 icon: "graduationcap",
                                 iconColor: Theme.warning,
@@ -276,7 +286,7 @@ struct OperatorProfileScreen: View {
                 // мессенджере, мимо системы и без следа.
                 Card {
                     VStack(spacing: Spacing.sm) {
-                        NavigationLink { TeamChatScreen() } label: {
+                        NavigationLink(value: OperatorProfileRoute.chat) {
                             NavigationRow(
                                 icon: "bubble.left.and.bubble.right",
                                 iconColor: Theme.accent(for: .operator),
@@ -288,7 +298,7 @@ struct OperatorProfileScreen: View {
 
                         RowDivider()
 
-                        NavigationLink { MessagesScreen() } label: {
+                        NavigationLink(value: OperatorProfileRoute.messages) {
                             NavigationRow(
                                 icon: "envelope",
                                 iconColor: ChartPalette.series2,
@@ -332,6 +342,16 @@ struct OperatorProfileScreen: View {
         }
         .background(Theme.background)
         .navigationTitle("Профиль")
+        .navigationDestination(for: OperatorProfileRoute.self) { route in
+            switch route {
+            case .schedule: ScheduleScreen()
+            case .money: MoneyScreen()
+            case .knowledge: KnowledgeScreen()
+            case .exams: ExamsScreen()
+            case .chat: TeamChatScreen()
+            case .messages: MessagesScreen()
+            }
+        }
         .confirmationDialog("Выйти из аккаунта?", isPresented: $confirmingLogout, titleVisibility: .visible) {
             Button("Выйти", role: .destructive) { Task { await auth.signOut() } }
             Button("Отмена", role: .cancel) {}

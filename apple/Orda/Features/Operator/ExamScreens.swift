@@ -40,9 +40,10 @@ struct ExamsScreen: View {
                             SectionHeader("Сдать", subtitle: "вопросы задаются по одному")
                             ForEach(Array(open.enumerated()), id: \.element.id) { index, exam in
                                 if index > 0 { RowDivider() }
-                                NavigationLink {
-                                    ExamRunnerScreen(examID: exam.id, title: exam.title)
-                                } label: {
+                                // По значению: список экзаменов перечитывается
+                                // сам, и переход, созданный замыканием,
+                                // схлопнулся бы вместе с ним.
+                                NavigationLink(value: ExamRoute(id: exam.id, title: exam.title)) {
                                     ExamRow(exam: exam)
                                 }
                                 .buttonStyle(.plain)
@@ -66,6 +67,9 @@ struct ExamsScreen: View {
         }
         .background(Theme.background)
         .navigationTitle("Экзамены")
+        .navigationDestination(for: ExamRoute.self) { route in
+            ExamRunnerScreen(examID: route.id, title: route.title)
+        }
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -85,6 +89,12 @@ struct ExamsScreen: View {
             loadError = .transport(message: error.localizedDescription)
         }
     }
+}
+
+/// Адрес экзамена.
+struct ExamRoute: Hashable {
+    let id: String
+    let title: String
 }
 
 /// Строка экзамена: название, срок, результат.
