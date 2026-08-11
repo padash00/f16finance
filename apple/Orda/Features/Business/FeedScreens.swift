@@ -1,5 +1,6 @@
 import OrdaKit
 import OrdaUI
+import PhotosUI
 import SwiftUI
 
 // ── Общие детали ленты ───────────────────────────────────────────────────────
@@ -117,6 +118,8 @@ private struct FeedBubble: View {
     var attachments: [FeedAttachment] = []
     var replyPreview: String?
     var reactions: [FeedReactionGroup] = []
+    var poll: ChatPoll?
+    var vote: (String) -> Void = { _ in }
 
     var body: some View {
         HStack(alignment: .bottom, spacing: Spacing.sm) {
@@ -170,11 +173,19 @@ private struct FeedBubble: View {
                 ForEach(attachments) { attachment in
                     if attachment.isImage {
                         Thumbnail(url: attachment.url, side: 140, cornerRadius: Radius.sm)
-                    } else {
-                        Label(attachment.label, systemImage: attachment.isPoll ? "chart.bar" : "paperclip")
+                    } else if attachment.isAudio {
+                        VoiceAttachmentView(attachment: attachment, isMine: isMine)
+                    } else if !attachment.isPoll {
+                        // Опрос рисуется карточкой ниже — вложение у него
+                        // служебное, и «📊 Опрос» второй строкой только шумит.
+                        Label(attachment.label, systemImage: "paperclip")
                             .font(Typography.caption)
                             .foregroundStyle(Theme.textDim)
                     }
+                }
+
+                if let poll {
+                    PollCard(poll: poll, vote: vote)
                 }
 
                 HStack(spacing: Spacing.sm) {
@@ -218,12 +229,27 @@ private struct FeedBubble: View {
 }
 
 /// Поле ввода с кнопкой отправки.
+///
+/// Кроме текста умеет то, чего в смене не хватало острее всего: фотографию
+/// (показать, что именно сломалось, быстрее, чем описать словами), голосовое
+/// (руки заняты, а сказать — три секунды), опрос («кто выходит в субботу») и
+/// упоминание с уведомлением.
 private struct FeedComposer: View {
     @Binding var text: String
     var placeholder: String = "Сообщение"
     var isSending: Bool
     var errorText: String?
+    /// Ничего из дополнительного нет у личной переписки: там всё это либо не
+    /// нужно (опрос вдвоём), либо пока не поддержано сервером.
+    var extras: ComposerExtras?
     let send: () -> Void
+
+    #if os(iOS)
+    @State private var recorder = VoiceRecorder()
+    @State private var photoItem: PhotosPickerItem?
+    #endif
+    @State private var isPickingMention = false
+    @State private var isMakingPoll = false
 
     private var canSend: Bool {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isSending
@@ -235,6 +261,56 @@ private struct FeedComposer: View {
                 Text(errorText)
                     .font(Typography.caption)
                     .foregroundStyle(Theme.negative)
+            }
+
+            #if os(iOS)
+            if recorder.isRecording {
+                recordingBar
+            }
+            #endif
+
+            if let extras, !isRecordingNow {
+                HStack(spacing: Spacing.lg) {
+                    #if os(iOS)
+                    PhotosPicker(selection: $photoItem, matching: .images) {
+                        Image(systemName: "photo")
+                    }
+                    #endif
+                    // Упоминание в переписке вдвоём бессмысленно: собеседник
+                    // и так получит уведомление на каждое сообщение.
+                    if extras.allowsMentions {
+                        Button { isPickingMention = true } label: { Image(systemName: "at") }
+                    }
+                    if extras.createPoll != nil {
+                        Button { isMakingPoll = true } label: { Image(systemName: "chart.bar") }
+                    }
+                    Spacer()
+                }
+                .font(.system(size: 17))
+                .foregroundStyle(Theme.textDim)
+                .buttonStyle(.plain)
+                .sheet(isPresented: $isPickingMention) {
+                    MentionPicker { name in
+                        // Пробел в конце — чтобы дальше сразу писать текст, а
+                        // не упираться в слипшееся «@Асельпринял».
+                        text += (text.isEmpty || text.hasSuffix(" ") ? "" : " ") + "@\(name) "
+                    }
+                }
+                .sheet(isPresented: $isMakingPoll) {
+                    if let createPoll = extras.createPoll {
+                        PollComposerSheet(create: createPoll)
+                    }
+                }
+                #if os(iOS)
+                .onChange(of: photoItem) { _, item in
+                    guard let item else { return }
+                    Task {
+                        defer { photoItem = nil }
+                        guard let data = try? await item.loadTransferable(type: Data.self) else { return }
+                        _ = await extras.sendFile(data, "photo.jpg", "image/jpeg", "image")
+                    }
+                }
+                #endif
             }
 
             HStack(alignment: .bottom, spacing: Spacing.sm) {
@@ -252,13 +328,24 @@ private struct FeedComposer: View {
                     )
                     .onSubmit(send)
 
-                Button(action: send) {
-                    Image(systemName: isSending ? "hourglass" : "arrow.up.circle.fill")
-                        .font(.system(size: 26))
-                        .foregroundStyle(canSend ? Theme.brand : Theme.textDim)
+                #if os(iOS)
+                // Микрофон вместо стрелки, пока поле пустое: так же ведут себя
+                // все мессенджеры, и лишней кнопки в тесной строке не нужно.
+                if let extras, !canSend, !isSending {
+                    Button {
+                        Task { await toggleRecording(extras) }
+                    } label: {
+                        Image(systemName: recorder.isRecording ? "stop.circle.fill" : "mic.circle.fill")
+                            .font(.system(size: 26))
+                            .foregroundStyle(recorder.isRecording ? Theme.negative : Theme.textDim)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    sendButton
                 }
-                .buttonStyle(.plain)
-                .disabled(!canSend)
+                #else
+                sendButton
+                #endif
             }
         }
         .padding(Spacing.lg)
@@ -267,6 +354,67 @@ private struct FeedComposer: View {
             Rectangle().fill(Theme.border).frame(height: 1)
         }
     }
+
+    private var sendButton: some View {
+        Button(action: send) {
+            Image(systemName: isSending ? "hourglass" : "arrow.up.circle.fill")
+                .font(.system(size: 26))
+                .foregroundStyle(canSend ? Theme.brand : Theme.textDim)
+        }
+        .buttonStyle(.plain)
+        .disabled(!canSend)
+    }
+
+    private var isRecordingNow: Bool {
+        #if os(iOS)
+        recorder.isRecording
+        #else
+        false
+        #endif
+    }
+
+    #if os(iOS)
+    private var recordingBar: some View {
+        HStack(spacing: Spacing.md) {
+            Circle().fill(Theme.negative).frame(width: 8, height: 8)
+            Text("Запись \(VoiceRecorder.format(recorder.duration))")
+                .font(Typography.caption.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(Theme.text)
+            Spacer()
+            Button("Отменить") { recorder.cancel() }
+                .font(Typography.caption)
+                .foregroundStyle(Theme.textDim)
+        }
+        .padding(.horizontal, Spacing.sm)
+    }
+
+    private func toggleRecording(_ extras: ComposerExtras) async {
+        if recorder.isRecording {
+            guard let result = recorder.stop() else { return }
+            Haptics.tap()
+            _ = await extras.sendFile(
+                result.data,
+                "voice-\(VoiceRecorder.format(result.duration).replacingOccurrences(of: ":", with: "-")).m4a",
+                "audio/mp4",
+                "audio"
+            )
+        } else {
+            await recorder.start()
+            Haptics.tap()
+        }
+    }
+    #endif
+}
+
+/// Что композер умеет сверх текста. Отдельным типом, чтобы личная переписка
+/// могла ничего этого не передавать.
+struct ComposerExtras {
+    /// data, имя файла, MIME, вид вложения → текст ошибки или `nil`.
+    let sendFile: (Data, String, String, String) async -> String?
+    /// `nil` — опросов здесь не бывает.
+    let createPoll: ((String, [String]) async -> String?)?
+    var allowsMentions: Bool = false
 }
 
 // ── Лента новостей ───────────────────────────────────────────────────────────
@@ -612,6 +760,67 @@ final class TeamChatStore {
         }
     }
 
+    /// Голос в опросе. Список перечитываем: доли и имена меняются у всех.
+    func vote(pollID: String, optionID: String) {
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await service.vote(pollID: pollID, optionID: optionID)
+                await load()
+            } catch let e as APIError {
+                sendError = e.userMessage
+            } catch {
+                sendError = error.localizedDescription
+            }
+        }
+    }
+
+    func createPoll(question: String, options: [String]) async -> String? {
+        do {
+            try await service.createPoll(question: question, options: options)
+            await load()
+            return nil
+        } catch let e as APIError {
+            return e.userMessage
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    /// Отправка файла: фото, голосовое, документ.
+    ///
+    /// Здесь ждём ответа, в отличие от текста: файл летит секунды, и показать
+    /// «уже отправлено» раньше времени значило бы соврать.
+    func sendAttachment(
+        data: Data,
+        fileName: String,
+        mimeType: String,
+        kind: String,
+        caption: String = ""
+    ) async -> String? {
+        isSending = true
+        defer { isSending = false }
+        sendError = nil
+
+        do {
+            let uploaded = try await service.upload(
+                data: data,
+                fileName: fileName,
+                mimeType: mimeType,
+                kind: kind
+            )
+            try await service.sendTeamMessage(caption, attachments: [uploaded])
+            await load()
+            return nil
+        } catch let e as APIError {
+            sendError = e.userMessage
+            return e.userMessage
+        } catch {
+            sendError = error.localizedDescription
+            return error.localizedDescription
+        }
+    }
+
     /// Отправка без ожидания.
     ///
     /// Сообщение появляется в переписке сразу и помечается как летящее, поле
@@ -675,7 +884,21 @@ struct TeamChatScreen: View {
                     text: $draft,
                     placeholder: "Написать команде",
                     isSending: store.isSending,
-                    errorText: store.sendError
+                    errorText: store.sendError,
+                    extras: ComposerExtras(
+                        sendFile: { data, name, mime, kind in
+                            await store.sendAttachment(
+                                data: data,
+                                fileName: name,
+                                mimeType: mime,
+                                kind: kind
+                            )
+                        },
+                        createPoll: { question, options in
+                            await store.createPoll(question: question, options: options)
+                        },
+                        allowsMentions: true
+                    )
                 ) {
                     // Очищаем поле сразу: сообщение уже в переписке, а на
                     // сервер летит фоном.
@@ -725,7 +948,12 @@ struct TeamChatScreen: View {
                                     avatarURL: message.senderAvatarURL,
                                     attachments: message.attachments,
                                     replyPreview: replyPreview(for: message, in: feed),
-                                    reactions: message.reactionGroups
+                                    reactions: message.reactionGroups,
+                                    poll: feed.poll(for: message),
+                                    vote: { optionID in
+                                        guard let poll = feed.poll(for: message) else { return }
+                                        store.vote(pollID: poll.id, optionID: optionID)
+                                    }
                                 )
                                 .id(message.id)
                             }
@@ -863,6 +1091,36 @@ final class MessagesStore {
     /// уходит фоном. Раньше между нажатием и появлением текста проходила
     /// секунда с лишним — её съедала проверка текста через ИИ на сервере.
     @discardableResult
+    /// Файл в личную переписку: фото или голосовое. Ждём ответа — файл летит
+    /// секунды, и «уже отправлено» раньше времени было бы неправдой.
+    func sendAttachment(
+        data: Data,
+        fileName: String,
+        mimeType: String,
+        kind: String,
+        to userID: String
+    ) async -> String? {
+        sendError = nil
+        do {
+            let uploaded = try await service.upload(
+                data: data,
+                fileName: fileName,
+                mimeType: mimeType,
+                kind: kind
+            )
+            try await service.sendDirect(to: userID, text: "", attachments: [uploaded])
+            await open(userID)
+            await load()
+            return nil
+        } catch let e as APIError {
+            sendError = e.userMessage
+            return e.userMessage
+        } catch {
+            sendError = error.localizedDescription
+            return error.localizedDescription
+        }
+    }
+
     func send(_ text: String, to userID: String, senderName: String) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return false }
@@ -1154,7 +1412,22 @@ private struct ConversationPane: View {
                 text: $draft,
                 placeholder: "Сообщение для \(thread.otherName)",
                 isSending: store.isSending,
-                errorText: store.sendError
+                errorText: store.sendError,
+                // Опрос вдвоём смысла не имеет — в личной переписке его нет.
+                // Фото и голосовое есть: показать поломку или сказать на ходу
+                // нужно и здесь.
+                extras: ComposerExtras(
+                    sendFile: { data, name, mime, kind in
+                        await store.sendAttachment(
+                            data: data,
+                            fileName: name,
+                            mimeType: mime,
+                            kind: kind,
+                            to: thread.otherUserID
+                        )
+                    },
+                    createPoll: nil
+                )
             ) {
                 // Поле очищаем сразу: письмо уже в переписке.
                 let text = draft

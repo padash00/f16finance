@@ -123,12 +123,21 @@ public struct FeedAttachment: Decodable, Sendable, Identifiable, Hashable {
 
     public var isImage: Bool { kind == "image" || kind == "gif" || kind == "sticker" }
 
+    /// Голосовое. Тип приходит либо явным `audio`, либо MIME-строкой браузера
+    /// (`audio/mp4`), либо угадывается по расширению — сервер кладёт файл как
+    /// есть и не нормализует тип.
+    public var isAudio: Bool {
+        kind == "audio" || kind.hasPrefix("audio/")
+            || url.hasSuffix(".m4a") || url.hasSuffix(".mp3") || url.hasSuffix(".ogg")
+    }
+
     /// Опрос приходит вложением, но рисуется на сайте отдельным виджетом —
     /// в приложении показываем только пометку, чтобы не врать пустым блоком.
     public var isPoll: Bool { kind == "poll" }
 
     public var label: String {
         if let name, !name.isEmpty { return name }
+        if isAudio { return "Голосовое" }
         return switch kind {
         case "image", "gif", "sticker": "Изображение"
         case "poll": "Опрос"
@@ -357,9 +366,73 @@ public struct TeamChatMessage: Decodable, Sendable, Identifiable, Hashable {
 }
 
 /// Ответ `GET /api/team-chat`. Сообщения приходят уже от старых к новым.
+/// Вариант ответа опроса.
+public struct PollOption: Decodable, Sendable, Identifiable, Hashable {
+    public let id: String
+    public let label: String
+
+    private enum CodingKeys: String, CodingKey { case id, label }
+
+    public init(id: String, label: String) {
+        self.id = id
+        self.label = label
+    }
+}
+
+/// Опрос с результатами.
+///
+/// Голоса не тайные: видно, кто за что. В чате смены это и нужно — опрос там
+/// не про мнение, а про «кто выходит в субботу».
+public struct ChatPoll: Decodable, Sendable, Hashable {
+    public let id: String
+    public let question: String
+    public let options: [PollOption]
+    public let isMultipleChoice: Bool
+    public let counts: [String: Int]
+    public let voters: [String: [String]]
+    public let myVote: [String]
+    public let totalVotes: Int
+
+    public func count(for option: PollOption) -> Int { counts[option.id] ?? 0 }
+    public func hasVoted(for option: PollOption) -> Bool { myVote.contains(option.id) }
+
+    /// Доля голосов за вариант. Ноль голосов — ноль ширины, а не пустая полоса
+    /// во всю карточку.
+    public func share(for option: PollOption) -> Double {
+        guard totalVotes > 0 else { return 0 }
+        return Double(count(for: option)) / Double(totalVotes)
+    }
+
+    public func voterNames(for option: PollOption) -> [String] { voters[option.id] ?? [] }
+
+    private enum CodingKeys: String, CodingKey {
+        case poll, counts, voters, myVote, totalVotes
+    }
+
+    private enum PollKeys: String, CodingKey {
+        case id, question, options
+        case multipleChoice = "multiple_choice"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let pollContainer = try c.nestedContainer(keyedBy: PollKeys.self, forKey: .poll)
+        id = try pollContainer.decodeFlexibleString(forKey: .id) ?? ""
+        question = try pollContainer.decodeFlexibleString(forKey: .question) ?? ""
+        options = (try? pollContainer.decodeIfPresent([PollOption].self, forKey: .options)) ?? []
+        isMultipleChoice = (try? pollContainer.decodeIfPresent(Bool.self, forKey: .multipleChoice)) ?? false
+        counts = (try? c.decodeIfPresent([String: Int].self, forKey: .counts)) ?? [:]
+        voters = (try? c.decodeIfPresent([String: [String]].self, forKey: .voters)) ?? [:]
+        myVote = (try? c.decodeIfPresent([String].self, forKey: .myVote)) ?? []
+        totalVotes = (try? c.decodeIfPresent(Int.self, forKey: .totalVotes)) ?? 0
+    }
+}
+
 public struct TeamChatFeed: Decodable, Sendable {
     public let messages: [TeamChatMessage]
     public let pinned: [TeamChatMessage]
+    /// Опросы по идентификатору сообщения — так их отдаёт сервер.
+    public let polls: [String: ChatPoll]
 
     /// Удалённые сервер отдаёт с пустым текстом — в ленте им делать нечего.
     public var visible: [TeamChatMessage] { messages.filter { !$0.isDeleted } }
@@ -372,9 +445,12 @@ public struct TeamChatFeed: Decodable, Sendable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         messages = (try? c.decodeIfPresent([TeamChatMessage].self, forKey: .messages)) ?? []
         pinned = (try? c.decodeIfPresent([TeamChatMessage].self, forKey: .pinned)) ?? []
+        polls = (try? c.decodeIfPresent([String: ChatPoll].self, forKey: .polls)) ?? [:]
     }
 
-    private enum CodingKeys: String, CodingKey { case messages, pinned }
+    public func poll(for message: TeamChatMessage) -> ChatPoll? { polls[message.id] }
+
+    private enum CodingKeys: String, CodingKey { case messages, pinned, polls }
 }
 
 // ── Личные сообщения: /api/direct-messages ───────────────────────────────────
@@ -836,6 +912,24 @@ public enum ModerationStatus: String, Sendable, CaseIterable, Identifiable {
 // ── Сервис ───────────────────────────────────────────────────────────────────
 
 /// Пространство команды: лента, чаты, календарь, модерация.
+/// Загруженный файл — то, что уходит в сообщение.
+public struct UploadedAttachment: Sendable, Hashable {
+    public let type: String
+    public let url: String
+    public let name: String
+
+    public init(type: String, url: String, name: String) {
+        self.type = type
+        self.url = url
+        self.name = name
+    }
+}
+
+struct UploadResponse: Decodable, Sendable {
+    let url: String
+    let name: String?
+}
+
 public struct FeedService: Sendable {
     private let api: APIClient
 
@@ -885,14 +979,76 @@ public struct FeedService: Sendable {
         try await api.send(APIRequest(path: "/api/team-chat", query: ["limit": String(limit)]))
     }
 
-    public func sendTeamMessage(_ text: String, replyToID: String? = nil) async throws {
+    public func sendTeamMessage(
+        _ text: String,
+        replyToID: String? = nil,
+        attachments: [UploadedAttachment] = []
+    ) async throws {
         var payload: [String: Any] = ["message": text]
         if let replyToID { payload["replyToId"] = replyToID }
+        if !attachments.isEmpty {
+            payload["attachments"] = attachments.map { attachment in
+                ["type": attachment.type, "url": attachment.url, "name": attachment.name]
+            }
+        }
         _ = try await api.send(
             APIRequest(
                 path: "/api/team-chat",
                 method: .post,
                 body: try JSONSerialization.data(withJSONObject: payload)
+            )
+        )
+    }
+
+    /// Загрузить файл в чат: фото, голосовое, документ.
+    ///
+    /// Двумя шагами — сначала файл, потом сообщение с ссылкой на него: так
+    /// сервер и работает, и так же ведёт себя сайт.
+    public func upload(
+        data: Data,
+        fileName: String,
+        mimeType: String,
+        kind: String
+    ) async throws -> UploadedAttachment {
+        let response: UploadResponse = try await api.send(
+            APIRequest.multipart(
+                "/api/team-chat/upload",
+                fileField: "file",
+                fileName: fileName,
+                mimeType: mimeType,
+                fileData: data
+            )
+        )
+        return UploadedAttachment(type: kind, url: response.url, name: response.name ?? fileName)
+    }
+
+    // Опросы
+
+    /// Создать опрос. Сообщение в чате сервер заведёт сам.
+    public func createPoll(question: String, options: [String]) async throws {
+        let payload: [String: Any] = [
+            "question": question,
+            "options": options.enumerated().map { index, label in
+                ["id": "opt\(index + 1)", "label": label]
+            },
+        ]
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/team-chat/polls",
+                method: .post,
+                body: try JSONSerialization.data(withJSONObject: payload)
+            )
+        )
+    }
+
+    /// Проголосовать. Повторный голос за тот же вариант его снимает — так же,
+    /// как на сайте.
+    public func vote(pollID: String, optionID: String) async throws {
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/team-chat/polls/\(pollID)/vote",
+                method: .post,
+                body: try JSONSerialization.data(withJSONObject: ["optionId": optionID])
             )
         )
     }
@@ -919,14 +1075,22 @@ public struct FeedService: Sendable {
         )
     }
 
-    public func sendDirect(to userID: String, text: String) async throws {
+    public func sendDirect(
+        to userID: String,
+        text: String,
+        attachments: [UploadedAttachment] = []
+    ) async throws {
+        var payload: [String: Any] = ["recipientUserId": userID, "message": text]
+        if !attachments.isEmpty {
+            payload["attachments"] = attachments.map { attachment in
+                ["type": attachment.type, "url": attachment.url, "name": attachment.name]
+            }
+        }
         _ = try await api.send(
             APIRequest(
                 path: "/api/direct-messages",
                 method: .post,
-                body: try JSONSerialization.data(
-                    withJSONObject: ["recipientUserId": userID, "message": text]
-                )
+                body: try JSONSerialization.data(withJSONObject: payload)
             )
         )
     }

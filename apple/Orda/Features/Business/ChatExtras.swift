@@ -1,0 +1,356 @@
+import AVFoundation
+import OrdaKit
+import OrdaUI
+import SwiftUI
+
+// ── Голосовое в переписке ────────────────────────────────────────────────────
+
+/// Проигрывание голосового.
+///
+/// Один проигрыватель на приложение: два одновременно звучащих голосовых в
+/// чате — это не «параллельно послушал», а каша, из которой не разобрать ни
+/// одно.
+@MainActor
+@Observable
+final class VoicePlayer {
+    static let shared = VoicePlayer()
+
+    private(set) var playingURL: String?
+    private var player: AVPlayer?
+    private var endObserver: NSObjectProtocol?
+
+    private init() {}
+
+    func toggle(url: String) {
+        if playingURL == url {
+            stop()
+            return
+        }
+        guard let target = URL(string: url) else { return }
+
+        stop()
+        #if os(iOS)
+        // Динамик, а не «наушник»: категория записи оставляет вывод на верхнем
+        // разговорном динамике, и человек слышит еле-еле.
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
+        try? AVAudioSession.sharedInstance().setActive(true)
+        #endif
+
+        let item = AVPlayerItem(url: target)
+        let player = AVPlayer(playerItem: item)
+        endObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: item,
+            queue: .main
+        ) { _ in
+            Task { @MainActor in VoicePlayer.shared.stop() }
+        }
+
+        self.player = player
+        playingURL = url
+        player.play()
+    }
+
+    func stop() {
+        player?.pause()
+        player = nil
+        playingURL = nil
+        if let endObserver {
+            NotificationCenter.default.removeObserver(endObserver)
+            self.endObserver = nil
+        }
+    }
+}
+
+/// Голосовое сообщение в пузыре.
+struct VoiceAttachmentView: View {
+    let attachment: FeedAttachment
+    let isMine: Bool
+
+    @State private var player = VoicePlayer.shared
+
+    private var isPlaying: Bool { player.playingURL == attachment.url }
+
+    var body: some View {
+        Button {
+            player.toggle(url: attachment.url)
+        } label: {
+            HStack(spacing: Spacing.sm) {
+                Image(systemName: isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                    .font(.system(size: 26))
+                    .foregroundStyle(Theme.brand)
+
+                // Волна нарисованная, а не настоящая: считать амплитуды на
+                // каждое сообщение в списке — это секунды прокрутки, а смысла
+                // ровно столько же.
+                HStack(spacing: 2) {
+                    ForEach(0..<18, id: \.self) { index in
+                        Capsule()
+                            .fill(Theme.brand.opacity(isPlaying ? 0.8 : 0.35))
+                            .frame(width: 2, height: waveHeight(index))
+                    }
+                }
+
+                Text(attachment.name?.isEmpty == false ? attachment.name! : "Голосовое")
+                    .font(Typography.caption)
+                    .foregroundStyle(Theme.textDim)
+            }
+            .padding(.vertical, Spacing.xs)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func waveHeight(_ index: Int) -> CGFloat {
+        let pattern: [CGFloat] = [6, 12, 18, 10, 22, 14, 8, 16, 20, 11, 7, 15, 19, 9, 13, 17, 8, 6]
+        return pattern[index % pattern.count]
+    }
+}
+
+// ── Опрос ────────────────────────────────────────────────────────────────────
+
+/// Опрос в переписке.
+///
+/// Голоса открытые: видно, кто за что. В чате смены опрос не про мнение, а про
+/// «кто выходит в субботу», и анонимность здесь мешает.
+struct PollCard: View {
+    let poll: ChatPoll
+    let vote: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            Text(poll.question)
+                .font(Typography.callout.weight(.semibold))
+                .foregroundStyle(Theme.text)
+                .fixedSize(horizontal: false, vertical: true)
+
+            ForEach(poll.options) { option in
+                Button {
+                    vote(option.id)
+                } label: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Image(systemName: poll.hasVoted(for: option) ? "checkmark.circle.fill" : "circle")
+                                .font(.system(size: 14))
+                                .foregroundStyle(poll.hasVoted(for: option) ? Theme.brand : Theme.textDim)
+                            Text(option.label)
+                                .font(Typography.callout)
+                                .foregroundStyle(Theme.text)
+                                .multilineTextAlignment(.leading)
+                            Spacer(minLength: Spacing.sm)
+                            Text("\(poll.count(for: option))")
+                                .font(Typography.caption.weight(.semibold))
+                                .monospacedDigit()
+                                .foregroundStyle(Theme.textDim)
+                        }
+
+                        GeometryReader { geometry in
+                            ZStack(alignment: .leading) {
+                                Capsule().fill(Theme.surfaceRaised)
+                                Capsule()
+                                    .fill(Theme.brand.opacity(0.35))
+                                    .frame(width: max(0, geometry.size.width * poll.share(for: option)))
+                            }
+                        }
+                        .frame(height: 4)
+
+                        let names = poll.voterNames(for: option)
+                        if !names.isEmpty {
+                            Text(names.joined(separator: ", "))
+                                .font(Typography.caption)
+                                .foregroundStyle(Theme.textDim)
+                                .lineLimit(1)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+
+            Text("\(poll.totalVotes) \(pluralize(poll.totalVotes, "голос", "голоса", "голосов")) · нажмите ещё раз, чтобы снять")
+                .font(Typography.caption)
+                .foregroundStyle(Theme.textDim)
+        }
+        .padding(Spacing.md)
+        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+    }
+}
+
+/// Создание опроса.
+struct PollComposerSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let create: (String, [String]) async -> String?
+
+    @State private var question = ""
+    @State private var options: [String] = ["", ""]
+    @State private var isSending = false
+    @State private var error: String?
+
+    private var filled: [String] {
+        options.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+    }
+
+    private var canSend: Bool {
+        !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && filled.count >= 2
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScreenScroll {
+                Card {
+                    VStack(alignment: .leading, spacing: Spacing.md) {
+                        FieldLabel("Вопрос")
+                        TextField("Кто выходит в субботу?", text: $question, axis: .vertical)
+                            .textFieldStyle(.plain)
+                            .font(Typography.callout)
+                            .foregroundStyle(Theme.text)
+                            .lineLimit(1...3)
+                            .padding(Spacing.md)
+                            .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+
+                        FieldLabel("Варианты")
+                        ForEach(options.indices, id: \.self) { index in
+                            HStack(spacing: Spacing.sm) {
+                                TextField("Вариант \(index + 1)", text: $options[index])
+                                    .textFieldStyle(.plain)
+                                    .font(Typography.callout)
+                                    .foregroundStyle(Theme.text)
+                                    .padding(Spacing.md)
+                                    .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+
+                                if options.count > 2 {
+                                    Button(role: .destructive) {
+                                        options.remove(at: index)
+                                    } label: {
+                                        Image(systemName: "minus.circle")
+                                    }
+                                    .buttonStyle(.plain)
+                                    .foregroundStyle(Theme.negative)
+                                }
+                            }
+                        }
+
+                        // Десять — предел сервера. Больше вариантов в чате
+                        // всё равно не читают.
+                        if options.count < 10 {
+                            Button {
+                                options.append("")
+                            } label: {
+                                Label("Добавить вариант", systemImage: "plus")
+                            }
+                            .buttonStyle(SecondaryButtonStyle())
+                        }
+
+                        if let error {
+                            Text(error)
+                                .font(Typography.caption)
+                                .foregroundStyle(Theme.negative)
+                        }
+
+                        Button(isSending ? "Отправляем…" : "Создать опрос") {
+                            Task {
+                                isSending = true
+                                defer { isSending = false }
+                                if let failure = await create(question, filled) {
+                                    error = failure
+                                } else {
+                                    dismiss()
+                                }
+                            }
+                        }
+                        .buttonStyle(PrimaryButtonStyle())
+                        .disabled(!canSend || isSending)
+                    }
+                }
+            }
+            .background(Theme.background)
+            .navigationTitle("Опрос")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Отмена") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+// ── Упоминания ───────────────────────────────────────────────────────────────
+
+/// Выбор, кого упомянуть.
+///
+/// В общем чате точки за смену десятки сообщений, и адресованное конкретному
+/// человеку тонет. Упомянутый получает уведомление; `@все` зовёт всю смену.
+struct MentionPicker: View {
+    @Environment(\.api) private var api
+    @Environment(\.dismiss) private var dismiss
+
+    let pick: (String) -> Void
+
+    @State private var contacts: [DirectContact] = []
+    @State private var search = ""
+    @State private var isLoading = true
+
+    private var filtered: [DirectContact] {
+        let query = search.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { return contacts }
+        return contacts.filter { $0.name.localizedCaseInsensitiveContains(query) }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Button {
+                    pick("все")
+                    dismiss()
+                } label: {
+                    Label("Все на точке", systemImage: "person.3.fill")
+                        .font(Typography.callout)
+                        .foregroundStyle(Theme.text)
+                }
+
+                if isLoading && contacts.isEmpty {
+                    ForEach(0..<4, id: \.self) { _ in
+                        Skeleton(height: 20, cornerRadius: Radius.sm)
+                    }
+                } else {
+                    ForEach(filtered) { contact in
+                        Button {
+                            // Упоминаем первым словом: «@Асель», а не
+                            // «@Асель Кадырова» — пробел разорвал бы упоминание.
+                            pick(contact.name.split(separator: " ").first.map(String.init) ?? contact.name)
+                            dismiss()
+                        } label: {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(contact.name)
+                                    .font(Typography.callout)
+                                    .foregroundStyle(Theme.text)
+                                if let role = contact.role {
+                                    Text(role)
+                                        .font(Typography.caption)
+                                        .foregroundStyle(Theme.textDim)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .searchable(text: $search, prompt: "Кого позвать")
+            .navigationTitle("Упомянуть")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Отмена") { dismiss() }
+                }
+            }
+            .task {
+                defer { isLoading = false }
+                contacts = (try? await FeedService(api: api).contacts()) ?? []
+            }
+        }
+    }
+}

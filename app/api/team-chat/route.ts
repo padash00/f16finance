@@ -8,7 +8,8 @@
 
 import { NextResponse } from 'next/server'
 import { hasCapability } from '@/lib/server/capabilities'
-import { pushToOrganization } from '@/lib/server/push'
+import { listOrganizationCompanyIds } from '@/lib/server/organizations'
+import { pushToOrganization, pushToUsers } from '@/lib/server/push'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { sanitizeOrFilterValue } from '@/lib/server/postgrest-filter'
@@ -18,6 +19,95 @@ export const runtime = 'nodejs'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
+}
+
+/**
+ * Кого упомянули в тексте.
+ *
+ * `@все` и `@all` зовут всю организацию. Имена берём как есть — сравнивать
+ * будем по началу строки, потому что в чате пишут «@Асель», а в базе человек
+ * записан «Асель Кадырова».
+ */
+function extractMentions(text: string): { all: boolean; names: string[] } {
+  const raw = Array.from(text.matchAll(/@([\p{L}\p{N}_.-]{2,32})/gu)).map((m) => m[1].toLowerCase())
+  if (raw.length === 0) return { all: false, names: [] }
+  const all = raw.some((name) => name === 'все' || name === 'all' || name === 'всем')
+  return { all, names: Array.from(new Set(raw.filter((name) => !['все', 'all', 'всем'].includes(name)))) }
+}
+
+/** Пользователи организации, чьи имена начинаются с упомянутого. */
+async function resolveMentionTargets(
+  supabase: any,
+  orgId: string,
+  names: string[],
+  senderUserId: string | null,
+): Promise<string[]> {
+  const matches = (candidate: string | null | undefined) => {
+    const value = String(candidate || '').trim().toLowerCase()
+    if (!value) return false
+    // По первому слову: «@асель» должно находить «Асель Кадырову», но не
+    // «Асельхан» — иначе уведомление уходит не тому.
+    const first = value.split(/\s+/)[0]
+    return names.some((name) => first === name || value === name)
+  }
+
+  const targets = new Set<string>()
+
+  const { data: members } = await supabase
+    .from('organization_members')
+    .select('user_id, email, staff:staff_id(full_name, short_name)')
+    .eq('organization_id', orgId)
+    .eq('status', 'active')
+    .not('user_id', 'is', null)
+
+  for (const row of (members as any[]) || []) {
+    const person = Array.isArray(row.staff) ? row.staff[0] : row.staff
+    if (matches(person?.full_name) || matches(person?.short_name) || matches(row.email)) {
+      targets.add(String(row.user_id))
+    }
+  }
+
+  // Операторы — только своей организации, через её точки. Без этого фильтра
+  // тёзка из чужого клуба получал бы уведомление о разговоре, которого не
+  // видит.
+  const companyIds = await listOrganizationCompanyIds({
+    activeOrganizationId: orgId,
+    isSuperAdmin: false,
+  })
+
+  if (companyIds && companyIds.length > 0) {
+    const [{ data: assignments }, { data: auths }] = await Promise.all([
+      supabase
+        .from('operator_company_assignments')
+        .select('operator_id, is_active, operator:operator_id(name, short_name)')
+        .in('company_id', companyIds)
+        .eq('is_active', true),
+      supabase.from('operator_auth').select('operator_id, user_id, username, is_active'),
+    ])
+
+    const userByOperator = new Map<string, { userId: string; username: string | null }>()
+    for (const row of (auths as any[]) || []) {
+      if (row.is_active === false || !row.user_id) continue
+      userByOperator.set(String(row.operator_id), {
+        userId: String(row.user_id),
+        username: row.username || null,
+      })
+    }
+
+    for (const row of (assignments as any[]) || []) {
+      const person = Array.isArray(row.operator) ? row.operator[0] : row.operator
+      const auth = userByOperator.get(String(row.operator_id))
+      if (!auth) continue
+      if (matches(person?.short_name) || matches(person?.name) || matches(auth.username)) {
+        targets.add(auth.userId)
+      }
+    }
+  }
+
+  // Себя не дёргаем: упоминание собственного имени в своём же сообщении
+  // случается, когда цитируют переписку.
+  if (senderUserId) targets.delete(senderUserId)
+  return Array.from(targets)
 }
 
 export async function GET(request: Request) {
@@ -260,6 +350,29 @@ export async function POST(request: Request) {
     .single()
 
   if (error) return json({ error: error.message }, 500)
+
+  // Упоминания.
+  //
+  // В общем чате точки за смену десятки сообщений, и адресованное конкретному
+  // человеку тонет в общем потоке. `@все` — отдельный случай: так зовут всю
+  // смену, и это ближе к объявлению, чем к личному обращению.
+  const mentioned = extractMentions(messageText)
+  if (mentioned.all) {
+    await pushToOrganization(supabase, orgId, {
+      title: `${senderName} обращается ко всем`,
+      body: messageText.slice(0, 140),
+      data: { kind: 'team-chat-mention' },
+    })
+  } else if (mentioned.names.length > 0) {
+    const targets = await resolveMentionTargets(supabase, orgId, mentioned.names, senderUserId)
+    if (targets.length > 0) {
+      await pushToUsers(supabase, targets, {
+        title: `${senderName} упомянул вас`,
+        body: messageText.slice(0, 140),
+        data: { kind: 'team-chat-mention' },
+      })
+    }
+  }
 
   // Объявление — уведомлением всей организации.
   //
