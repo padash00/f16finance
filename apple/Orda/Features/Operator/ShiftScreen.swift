@@ -360,10 +360,16 @@ struct CloseShiftSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var cashText = ""
+    @State private var coinsText = ""
     @State private var kaspiText = ""
+    /// Ночная смена: часть Kaspi проходит до полуночи, часть после.
+    @State private var kaspiBeforeText = ""
     @State private var notes = ""
     @State private var error: String?
     @State private var isSubmitting = false
+
+    /// Ночная ли смена — от этого зависит, спрашивать ли разделение Kaspi.
+    private var isNight: Bool { store.shift?.shiftType == "night" }
 
     var body: some View {
         NavigationStack {
@@ -382,8 +388,27 @@ struct CloseShiftSheet: View {
                         }
                     }
 
-                    amountField("Наличные в кассе", text: $cashText)
-                    amountField("Kaspi за смену", text: $kaspiText)
+                    // Купюры и мелочь врозь — как в программе на точке.
+                    // Слитая сумма мешает: мелочь остаётся в кассе на размен,
+                    // а в отчёт по-хорошему идут купюры.
+                    amountField("Купюры в кассе", text: $cashText)
+                    amountField("Мелочь", text: $coinsText)
+
+                    amountField(isNight ? "Kaspi всего за смену" : "Kaspi за смену", text: $kaspiText)
+
+                    if isNight {
+                        amountField("Из них до 00:00", text: $kaspiBeforeText)
+                        // Ночная выручка делится между двумя календарными
+                        // днями: без разделения весь Kaspi ложится на дату
+                        // закрытия, и день по отчёту не сходится с кассой.
+                        Text("Остальное — после полуночи: \(Money.format(kaspiAfter)). Так же считает программа на точке и дневной отчёт Kaspi.")
+                            .font(Typography.caption)
+                            .foregroundStyle(Theme.textDim)
+                    }
+
+                    if parse(coinsText) > 0 {
+                        row("Всего наличными", Money.format(parse(cashText) + parse(coinsText)))
+                    }
 
                     if let difference = cashDifference, abs(difference) >= 1 {
                         Label(
@@ -484,9 +509,15 @@ struct CloseShiftSheet: View {
         Double(text.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: .whitespaces)) ?? 0
     }
 
+    /// Расхождение считаем по всем наличным — купюры плюс мелочь: в кассе
+    /// лежит и то и другое.
     private var cashDifference: Double? {
-        guard !cashText.isEmpty else { return nil }
-        return parse(cashText) - store.totals.expectedCash
+        guard !cashText.isEmpty || !coinsText.isEmpty else { return nil }
+        return parse(cashText) + parse(coinsText) - store.totals.expectedCash
+    }
+
+    private var kaspiAfter: Double {
+        max(0, parse(kaspiText) - parse(kaspiBeforeText))
     }
 
     private func submit() {
@@ -494,10 +525,20 @@ struct CloseShiftSheet: View {
         error = nil
 
         Task {
+            // Мелочь уходит в комментарий: сервер хранит одну сумму наличных,
+            // а разбивка нужна тому, кто утром разбирает расхождение.
+            var comment = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+            if parse(coinsText) > 0 {
+                let coins = "Мелочь: \(Money.format(parse(coinsText)))"
+                comment = comment.isEmpty ? coins : "\(comment)\n\(coins)"
+            }
+
             let failure = await store.closeShift(
-                cash: parse(cashText),
+                cash: parse(cashText) + parse(coinsText),
                 kaspi: parse(kaspiText),
-                notes: notes.isEmpty ? nil : notes
+                kaspiBeforeMidnight: isNight ? parse(kaspiBeforeText) : 0,
+                kaspiAfterMidnight: isNight ? kaspiAfter : 0,
+                notes: comment.isEmpty ? nil : comment
             )
             isSubmitting = false
             if let failure {

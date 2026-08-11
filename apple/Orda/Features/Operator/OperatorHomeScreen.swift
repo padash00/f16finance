@@ -28,7 +28,9 @@ struct OperatorHomeScreen: View {
             // справа то, что требует решения и денег. Поток из карточек
             // разной высоты давал рваный край и пустые колонки.
             SplitDashboard {
-                if store.hasOpenShift {
+                // График выручки и разбивка по оплатам — это деньги смены.
+                // На чужой смене их видеть нечего: их видит тот, кто стоит.
+                if store.isMyShift {
                     revenueChart
                     paymentSplit
                 }

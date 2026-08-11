@@ -118,7 +118,19 @@ final class OperatorStore {
         }
     }
 
-    func closeShift(cash: Double, kaspi: Double, notes: String?) async -> String? {
+    /// Закрытие смены.
+    ///
+    /// Kaspi ночной смены сервер хранит раздельно: часть выручки проходит до
+    /// полуночи, часть после, и в ОПиУ они попадают в разные дни. В программе
+    /// на точке это два поля, здесь было одно — и вся ночная выручка ложилась
+    /// на дату закрытия.
+    func closeShift(
+        cash: Double,
+        kaspi: Double,
+        kaspiBeforeMidnight: Double = 0,
+        kaspiAfterMidnight: Double = 0,
+        notes: String?
+    ) async -> String? {
         // Отправлять закрытие с неотправленными чеками нельзя: их суммы ещё не
         // попали в итоги смены, и касса не сойдётся.
         if queuedSalesCount > 0 {
@@ -129,7 +141,13 @@ final class OperatorStore {
         }
 
         do {
-            _ = try await service.closeShift(closingCash: cash, closingKaspi: kaspi, notes: notes)
+            _ = try await service.closeShift(
+                closingCash: cash,
+                closingKaspi: kaspi,
+                kaspiBeforeMidnight: kaspiBeforeMidnight,
+                kaspiAfterMidnight: kaspiAfterMidnight,
+                notes: notes
+            )
             await loadShift()
             return nil
         } catch let error as APIError {

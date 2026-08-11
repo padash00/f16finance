@@ -177,7 +177,18 @@ struct ChecklistsScreen: View {
     var body: some View {
         ScreenScroll {
             Group {
-                if !store.hasOpenShift {
+                if store.isSomeoneElsesShift {
+                    // Чек-лист привязывается к смене: пройденный на чужой
+                    // окажется в её отчёте, вместе со штрафами и премиями.
+                    Card(accent: Theme.info) {
+                        Label(
+                            "Сейчас смену ведёт \(store.shift?.operatorName ?? "сменщик"). Чек-листы проходит тот, кто на смене.",
+                            systemImage: "person.fill.checkmark"
+                        )
+                        .font(Typography.callout)
+                        .foregroundStyle(Theme.textMuted)
+                    }
+                } else if !store.hasOpenShift {
                     Card(accent: Theme.warning) {
                         Label(
                             "Чек-листы проходят в открытой смене. Откройте смену, чтобы начать.",
@@ -204,7 +215,7 @@ struct ChecklistsScreen: View {
                                 template: template,
                                 itemCount: knowledge.items(for: template.id).count,
                                 completedRun: knowledge.completedRun(for: template.id),
-                                canRun: store.hasOpenShift
+                                canRun: store.isMyShift
                             )
                             .staggeredAppear(index: index)
                         }
