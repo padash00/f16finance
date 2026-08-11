@@ -251,6 +251,22 @@ struct OperatorProfileScreen: View {
                             )
                         }
                         .buttonStyle(.plain)
+
+                        RowDivider()
+
+                        // Экзамен раньше приходил только в Telegram: у кого его
+                        // нет, тот числился обязанным сдать то, чего не видел.
+                        NavigationLink { ExamsScreen() } label: {
+                            NavigationRow(
+                                icon: "graduationcap",
+                                iconColor: Theme.warning,
+                                title: "Экзамены",
+                                subtitle: "Аттестация по регламентам точки",
+                                badge: cabinet.openExams,
+                                badgeColor: Theme.warning
+                            )
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
 

@@ -59,16 +59,21 @@ final class CabinetStore {
     /// не нужно.
     private(set) var unreadMessages = 0
 
+    /// Сколько экзаменов ждут сдачи.
+    private(set) var openExams = 0
+
     // ── Общее ────────────────────────────────────────────────────────────────
 
     private(set) var error: String?
 
     private let service: OperatorService
     private let feed: FeedService
+    private let exams: ExamService
 
     init(api: APIClient) {
         self.service = OperatorService(api: api)
         self.feed = FeedService(api: api)
+        self.exams = ExamService(api: api)
     }
 
     /// Тихо: у оператора может не быть организации (не назначен на точку), и
@@ -78,6 +83,13 @@ final class CabinetStore {
         unreadMessages = list.unreadTotal
     }
 
+    /// Тоже тихо: экзаменов может не быть вовсе, и молчаливый ноль здесь
+    /// честнее ошибки на весь экран смены.
+    func refreshExams() async {
+        guard let list = try? await exams.exams() else { return }
+        openExams = list.filter(\.isOpen).count
+    }
+
     // ── Загрузка ─────────────────────────────────────────────────────────────
 
     /// Первое наполнение: обзор и задачи нужны сразу, остальное — лениво.
@@ -85,7 +97,8 @@ final class CabinetStore {
         async let overviewTask: Void = loadOverview()
         async let tasksTask: Void = loadTasks()
         async let unreadTask: Void = refreshUnreadMessages()
-        _ = await (overviewTask, tasksTask, unreadTask)
+        async let examsTask: Void = refreshExams()
+        _ = await (overviewTask, tasksTask, unreadTask, examsTask)
     }
 
     func loadOverview() async {

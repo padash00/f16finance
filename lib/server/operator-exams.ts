@@ -708,6 +708,92 @@ export async function handleExamTextAnswer(params: {
   return true
 }
 
+/**
+ * Ответ из приложения.
+ *
+ * Telegram остаётся, но перестаёт быть единственной дверью: у половины
+ * операторов его нет, и такие попытки помечались «недоставлено» — человек
+ * числился обязанным сдать экзамен, которого не видел.
+ *
+ * Правильные ответы наружу не отдаём ни здесь, ни в ответе роута: билет
+ * утечёт следующему сдающему через один скриншот.
+ */
+export async function submitExamAnswer(params: {
+  supabase: SupabaseLike
+  attemptId: string
+  operatorId: string
+  questionIndex: number
+  choiceIndex?: number
+  text?: string
+}): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
+  const { supabase } = params
+
+  const { data: attemptRow } = await supabase
+    .from('operator_exam_attempts')
+    .select('id, exam_id, organization_id, operator_id, telegram_chat_id, status, questions, answers, current_index, total_questions')
+    .eq('id', params.attemptId)
+    .maybeSingle()
+
+  const attempt = attemptRow as ExamAttemptRow | null
+  if (!attempt) return { ok: false, error: 'Экзамен не найден', status: 404 }
+  // Чужую попытку не трогаем: иначе сдать экзамен можно было бы за товарища.
+  if (String(attempt.operator_id) !== String(params.operatorId)) {
+    return { ok: false, error: 'Это не ваш экзамен', status: 403 }
+  }
+  if (attempt.status === 'completed') return { ok: false, error: 'Экзамен уже завершён', status: 409 }
+  if (attempt.status === 'expired') return { ok: false, error: 'Экзамен закрыт', status: 409 }
+
+  // Отвечают строго на текущий вопрос: вернуться к прошлому и переписать
+  // ответ нельзя, иначе оценка перестаёт что-либо значить.
+  if (params.questionIndex !== attempt.current_index) {
+    return { ok: false, error: 'Вопрос уже пройден', status: 409 }
+  }
+
+  const answers = { ...(attempt.answers || {}) } as Record<string, StoredAnswer>
+  if (answers[String(params.questionIndex)] !== undefined) {
+    return { ok: false, error: 'На этот вопрос вы уже ответили', status: 409 }
+  }
+
+  const question = attempt.questions?.[params.questionIndex]
+  if (!question) return { ok: false, error: 'Вопрос не найден', status: 404 }
+
+  const { data: exam } = await supabase
+    .from('operator_exams')
+    .select('id, title, pass_score')
+    .eq('id', attempt.exam_id)
+    .maybeSingle()
+  const examTitle = String((exam as any)?.title || 'Экзамен')
+  const passScore = Number((exam as any)?.pass_score ?? 70)
+
+  if (question.type === 'open') {
+    const text = String(params.text || '').trim()
+    if (text.length < 15) {
+      return { ok: false, error: 'Опишите порядок действий — хотя бы пару предложений', status: 400 }
+    }
+    answers[String(params.questionIndex)] = await gradeOpenAnswer({ question, answer: text })
+  } else {
+    const choice = Number(params.choiceIndex)
+    if (!Number.isInteger(choice) || choice < 0 || choice >= (question.choices || []).length) {
+      return { ok: false, error: 'Выберите вариант ответа', status: 400 }
+    }
+    answers[String(params.questionIndex)] = choice
+  }
+
+  await advanceAttempt({
+    supabase,
+    attempt,
+    answers,
+    nextIndex: params.questionIndex + 1,
+    examTitle,
+    passScore,
+    // В Telegram дублируем, только если экзамен туда и отправляли: иначе
+    // человек, сдающий в приложении, получит те же вопросы вторым потоком.
+    chatId: attempt.telegram_chat_id ? String(attempt.telegram_chat_id) : null,
+  })
+
+  return { ok: true }
+}
+
 /** Записать ответ и либо выдать следующий вопрос, либо закрыть попытку. */
 async function advanceAttempt(params: {
   supabase: SupabaseLike
@@ -716,7 +802,9 @@ async function advanceAttempt(params: {
   nextIndex: number
   examTitle: string
   passScore: number
-  chatId: string
+  /// `null` — экзамен сдают в приложении: следующий вопрос оператор увидит
+  /// сам, слать его в Telegram некуда и незачем.
+  chatId: string | null
 }): Promise<void> {
   const { supabase, attempt, answers, nextIndex } = params
 
@@ -732,10 +820,12 @@ async function advanceAttempt(params: {
 
     await supabase.from('operator_exam_attempts').update(patch).eq('id', attempt.id)
 
-    await sendExamQuestion({
-      attempt: { ...attempt, answers, current_index: nextIndex },
-      examTitle: params.examTitle,
-    })
+    if (params.chatId) {
+      await sendExamQuestion({
+        attempt: { ...attempt, answers, current_index: nextIndex },
+        examTitle: params.examTitle,
+      })
+    }
     return
   }
 
@@ -775,7 +865,7 @@ async function advanceAttempt(params: {
     passed ? '<i>Хорошая работа.</i>' : '<i>Результат отправлен руководителю. О пересдаче сообщат отдельно.</i>',
   ].join('\n')
 
-  await sendTelegramMessage(params.chatId, summary)
+  if (params.chatId) await sendTelegramMessage(params.chatId, summary)
 
   // Владельцу — короткий итог сразу. Иначе он узнаёт о результате, только если
   // сам зайдёт на страницу, а провал важно увидеть в тот же день.

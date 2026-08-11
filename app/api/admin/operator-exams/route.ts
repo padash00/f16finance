@@ -13,17 +13,29 @@ import {
   type ExamQuestion,
 } from '@/lib/server/operator-exams'
 import { resolveCompanyScope } from '@/lib/server/organizations'
+import { pushToOperators } from '@/lib/server/push'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 /**
  * Экзамены операторов: назначение аттестации по точкам и сводка результатов.
- * Сам диалог живёт в Telegram — см. lib/server/operator-exams.ts и обработчик
- * `exam:` в /api/telegram/webhook.
+ *
+ * Диалог живёт в двух местах: Telegram (см. lib/server/operator-exams.ts и
+ * обработчик `exam:` в /api/telegram/webhook) и мобильное приложение
+ * (/api/operator/exams). Билет и подсчёт общие — сдать дважды нельзя.
  */
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
+}
+
+/** «5 вопросов», «1 вопрос», «2 вопроса». */
+function pluralQuestions(count: number): string {
+  const mod10 = count % 10
+  const mod100 = count % 100
+  if (mod10 === 1 && mod100 !== 11) return 'вопрос'
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'вопроса'
+  return 'вопросов'
 }
 
 type ExamRow = {
@@ -484,13 +496,16 @@ export async function POST(request: Request) {
       const attemptsToInsert = ((operatorRows || []) as any[]).map((operator) => {
         const ticket: ExamQuestion[] = buildOperatorTicket(pool, ticketSize, openPool, ticketOpen)
         const chatId = operator.telegram_chat_id ? String(operator.telegram_chat_id) : null
+        // Без Telegram экзамен больше не «недоставлен»: оператор сдаёт его в
+        // приложении. Раньше такая попытка сразу помечалась ошибкой, и человек
+        // числился обязанным сдать то, чего не видел.
         return {
           exam_id: examId,
           organization_id: orgId,
           operator_id: String(operator.id),
           telegram_chat_id: chatId,
-          status: chatId ? 'pending' : 'undeliverable',
-          delivery_error: chatId ? null : 'У оператора не указан Telegram',
+          status: 'pending',
+          delivery_error: null,
           questions: ticket,
           total_questions: ticket.length,
         }
@@ -506,21 +521,38 @@ export async function POST(request: Request) {
       const failures: Array<{ operator_id: string; error: string }> = []
       for (const attempt of (inserted || []) as ExamAttemptRow[]) {
         if (attempt.status !== 'pending') continue
-        const result = await sendExamQuestion({ attempt, examTitle: title })
-        if (result.ok) {
-          sent += 1
-          await supabase
-            .from('operator_exam_attempts')
-            .update({ status: 'sent', sent_at: new Date().toISOString() })
-            .eq('id', attempt.id)
-        } else {
+
+        // Telegram — если он есть. Приложение получает экзамен в любом случае:
+        // попытка уже создана, а вопрос оператор откроет сам.
+        const result = attempt.telegram_chat_id
+          ? await sendExamQuestion({ attempt, examTitle: title })
+          : { ok: true as const }
+
+        if (!result.ok) {
           failures.push({ operator_id: attempt.operator_id, error: result.error || 'Ошибка отправки' })
-          await supabase
-            .from('operator_exam_attempts')
-            .update({ status: 'undeliverable', delivery_error: result.error || 'Ошибка отправки' })
-            .eq('id', attempt.id)
         }
+        sent += 1
+        await supabase
+          .from('operator_exam_attempts')
+          .update({
+            status: 'sent',
+            sent_at: new Date().toISOString(),
+            delivery_error: result.ok ? null : result.error || 'Ошибка отправки Telegram',
+          })
+          .eq('id', attempt.id)
       }
+
+      // Уведомление на телефон. Экзамен с дедлайном, о котором узнают через
+      // неделю, — это не аттестация, а повод для спора.
+      await pushToOperators(
+        supabase as any,
+        ((inserted || []) as ExamAttemptRow[]).map((attempt) => String(attempt.operator_id)),
+        {
+          title: 'Экзамен',
+          body: `${title}: ${ticketSize + ticketOpen} ${pluralQuestions(ticketSize + ticketOpen)}. Откройте «Профиль» → «Экзамены».`,
+          data: { kind: 'operator-exam' },
+        },
+      )
 
       await supabase
         .from('operator_exams')
