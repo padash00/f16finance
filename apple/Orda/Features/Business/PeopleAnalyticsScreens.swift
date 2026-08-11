@@ -187,6 +187,9 @@ struct PerformanceScreen: View {
         }
         .background(Theme.background)
         .navigationTitle("Эффективность")
+        .navigationDestination(for: PerformanceRoute.self) { route in
+            PerformanceDetail(item: route.item, companies: store?.companies ?? [])
+        }
         .toolbar {
             if let store {
                 ToolbarItem(placement: .primaryAction) { companyMenu(store) }
@@ -289,9 +292,7 @@ struct PerformanceScreen: View {
                 } else {
                     ForEach(Array(people.enumerated()), id: \.element.id) { index, item in
                         if index > 0 { RowDivider() }
-                        NavigationLink {
-                            PerformanceDetail(item: item, companies: store.companies)
-                        } label: {
+                        NavigationLink(value: PerformanceRoute(item: item)) {
                             PerformanceRowView(
                                 rank: index + 1,
                                 item: item,
@@ -859,6 +860,9 @@ struct AchievementsScreen: View {
         }
         .background(Theme.background)
         .navigationTitle("Достижения")
+        .navigationDestination(for: AchievementRoute.self) { route in
+            AchievementDetail(result: route.result)
+        }
         .toolbar { LogoutToolbarItem() }
         .task {
             if store == nil {
@@ -899,9 +903,7 @@ struct AchievementsScreen: View {
 
                 ForEach(Array(results.enumerated()), id: \.element.id) { index, result in
                     if index > 0 { RowDivider() }
-                    NavigationLink {
-                        AchievementDetail(result: result)
-                    } label: {
+                    NavigationLink(value: AchievementRoute(result: result)) {
                         AchievementRowView(result: result)
                     }
                     .buttonStyle(.plain)
@@ -1101,3 +1103,18 @@ private struct AchievementDetail: View {
         }
     }
 }
+
+/// Адрес карточки сотрудника в «Эффективности».
+///
+/// По значению, а не замыканием: список перечитывается сам, и переход,
+/// созданный замыканием, схлопывался вместе с пересборкой.
+struct PerformanceRoute: Hashable {
+    let item: PerformanceRankingItem
+}
+
+/// Адрес карточки достижения.
+struct AchievementRoute: Hashable {
+    let result: AchievementResult
+}
+
+

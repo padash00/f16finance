@@ -229,6 +229,9 @@ struct ChecklistsScreen: View {
             }
         }
         .navigationTitle("Чек-листы")
+        .navigationDestination(for: ChecklistRoute.self) { route in
+            ChecklistRunScreen(template: route.template)
+        }
         .toolbar { LogoutToolbarItem() }
         .task { if cabinet.knowledge == nil { await cabinet.loadKnowledge() } }
         .refreshable { await cabinet.loadKnowledge() }
@@ -280,9 +283,7 @@ struct ChecklistCard: View {
                         }
                     }
                 } else {
-                    NavigationLink {
-                        ChecklistRunScreen(template: template)
-                    } label: {
+                    NavigationLink(value: ChecklistRoute(template: template)) {
                         Text("Пройти")
                             .frame(maxWidth: .infinity)
                     }
@@ -657,4 +658,9 @@ struct TaskDetail: View {
         }
         .background(Theme.background)
     }
+}
+
+/// Адрес чек-листа.
+struct ChecklistRoute: Hashable {
+    let template: ChecklistTemplate
 }

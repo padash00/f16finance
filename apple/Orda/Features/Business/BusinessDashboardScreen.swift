@@ -7,6 +7,15 @@ import SwiftUI
 /// Владелец заходит на сорок секунд по дороге, а не сидит в приложении. Поэтому
 /// сверху — сколько заработали сегодня, сразу под ним — что требует решения,
 /// и только потом аналитика. Порядок обратный веб-порталу намеренно.
+/// Куда ведут карточки сводки.
+///
+/// По значению, а не замыканием с готовым экраном: сводка обновляется сама —
+/// приходят новые суммы и очередь решений, — и переход, созданный замыканием,
+/// схлопывался вместе с пересборкой. Симптом: «с первого раза не открывается».
+enum DashboardRoute: Hashable {
+    case approvals, ledger, sections
+}
+
 struct BusinessDashboardScreen: View {
     let resolver: AccessResolver
 
@@ -48,6 +57,13 @@ struct BusinessDashboardScreen: View {
         }
         .background(Theme.background)
         .navigationTitle("Обзор")
+        .navigationDestination(for: DashboardRoute.self) { route in
+            switch route {
+            case .approvals: ApprovalsScreen()
+            case .ledger: LedgerScreen()
+            case .sections: BusinessSectionsScreen(resolver: resolver)
+            }
+        }
         .toolbar { LogoutToolbarItem() }
         .refreshable { await store.bootstrap() }
     }
@@ -137,7 +153,7 @@ struct BusinessDashboardScreen: View {
         // Экран очереди скрываем целиком, если права на просмотр нет: пустая
         // карточка «0 расходов» вводила бы в заблуждение.
         if resolver.can("expenses-pending.view") {
-            NavigationLink { ApprovalsScreen() } label: {
+            NavigationLink(value: DashboardRoute.approvals) {
                 Card(accent: store.pending.isEmpty ? nil : Theme.warning) {
                     HStack(spacing: Spacing.md) {
                         Image(systemName: store.pending.isEmpty ? "checkmark.circle" : "clock.badge.exclamationmark")
@@ -216,7 +232,7 @@ struct BusinessDashboardScreen: View {
             VStack(spacing: Spacing.sm) {
                 SectionHeader("Разделы")
 
-                NavigationLink { LedgerScreen() } label: {
+                NavigationLink(value: DashboardRoute.ledger) {
                     NavigationRow(
                         icon: "chart.line.uptrend.xyaxis",
                         iconColor: Theme.brand,
@@ -228,7 +244,7 @@ struct BusinessDashboardScreen: View {
 
                 RowDivider()
 
-                NavigationLink { BusinessSectionsScreen(resolver: resolver) } label: {
+                NavigationLink(value: DashboardRoute.sections) {
                     NavigationRow(
                         icon: "square.grid.2x2",
                         iconColor: ChartPalette.series2,

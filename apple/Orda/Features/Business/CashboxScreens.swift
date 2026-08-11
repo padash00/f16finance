@@ -121,6 +121,9 @@ struct ReceiptsListScreen: View {
         }
         .background(Theme.background)
         .navigationTitle("Чеки")
+        .navigationDestination(for: PosReceiptRoute.self) { route in
+            PosReceiptDetailView(receipt: route.receipt)
+        }
         .toolbar { LogoutToolbarItem() }
         .task {
             if store == nil {
@@ -335,9 +338,7 @@ struct ReceiptsListScreen: View {
                 } else {
                     ForEach(Array(shown.enumerated()), id: \.element.id) { index, receipt in
                         if index > 0 { RowDivider() }
-                        NavigationLink {
-                            PosReceiptDetailView(receipt: receipt)
-                        } label: {
+                        NavigationLink(value: PosReceiptRoute(receipt: receipt)) {
                             PosReceiptRow(receipt: receipt)
                         }
                         .buttonStyle(.plain)
@@ -1392,4 +1393,12 @@ private struct AdSlideRow: View {
             }
         }
     }
+}
+
+/// Адрес чека.
+///
+/// По значению: список чеков перечитывается сам, и переход, созданный
+/// замыканием, схлопывался вместе с пересборкой.
+struct PosReceiptRoute: Hashable {
+    let receipt: PosReceipt
 }

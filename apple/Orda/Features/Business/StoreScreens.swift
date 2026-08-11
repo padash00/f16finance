@@ -9,6 +9,14 @@ import SwiftUI
 /// Владелец открывает этот раздел не «посмотреть остатки», а ответить на два
 /// вопроса: что кончается и что от меня ждут. Поэтому наверху — заканчивающееся
 /// и заявки, а полный список остатков лежит отдельным экраном.
+/// Куда ведут ссылки «Весь склад» и «Все» из карточек магазина.
+///
+/// По значению: экран перечитывает остатки и заявки сам, и переход, созданный
+/// замыканием, схлопывался вместе с пересборкой.
+enum StoreRoute: Hashable {
+    case stock, movements, requests
+}
+
 struct StoreScreen: View {
     @Environment(BusinessStore.self) private var store
     @Environment(\.surface) private var surface
@@ -25,6 +33,13 @@ struct StoreScreen: View {
         }
         .background(Theme.background)
         .navigationTitle("Магазин")
+        .navigationDestination(for: StoreRoute.self) { route in
+            switch route {
+            case .stock: StockScreen()
+            case .movements: MovementsScreen()
+            case .requests: RequestsScreen()
+            }
+        }
         .toolbar { LogoutToolbarItem() }
         .task { await store.loadStore() }
         .refreshable { await store.loadStore() }
@@ -98,7 +113,7 @@ struct StoreScreen: View {
         return Card {
             VStack(alignment: .leading, spacing: Spacing.md) {
                 SectionHeader("Заканчивается", subtitle: low.isEmpty ? nil : "\(low.count) позиций ниже порога") {
-                    NavigationLink { StockScreen() } label: {
+                    NavigationLink(value: StoreRoute.stock) {
                         Text("Весь склад").font(Typography.caption)
                     }
                 }
@@ -127,7 +142,7 @@ struct StoreScreen: View {
         Card {
             VStack(alignment: .leading, spacing: Spacing.md) {
                 SectionHeader("Последние движения") {
-                    NavigationLink { MovementsScreen() } label: {
+                    NavigationLink(value: StoreRoute.movements) {
                         Text("Все").font(Typography.caption)
                     }
                 }
@@ -152,7 +167,7 @@ struct StoreScreen: View {
         return Card {
             VStack(alignment: .leading, spacing: Spacing.md) {
                 SectionHeader("Заявки точек", subtitle: pending.isEmpty ? nil : "ждут решения") {
-                    NavigationLink { RequestsScreen() } label: {
+                    NavigationLink(value: StoreRoute.requests) {
                         Text("Все").font(Typography.caption)
                     }
                 }

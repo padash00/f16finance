@@ -140,6 +140,9 @@ struct OrganizationsScreen: View {
         }
         .background(Theme.background)
         .navigationTitle("Организации")
+        .navigationDestination(for: OrganizationRoute.self) { route in
+            OrganizationDetailScreen(organization: route.organization)
+        }
         .searchable(text: $bindable.search, prompt: "Название или поддомен")
         .toolbar { LogoutToolbarItem() }
         .task {
@@ -154,7 +157,7 @@ struct OrganizationsScreen: View {
         ScrollView {
             LazyVStack(spacing: Spacing.md) {
                 ForEach(store.filteredOrganizations) { organization in
-                    NavigationLink { OrganizationDetailScreen(organization: organization) } label: {
+                    NavigationLink(value: OrganizationRoute(organization: organization)) {
                         OrganizationCard(organization: organization)
                     }
                     .buttonStyle(.plain)
@@ -219,3 +222,8 @@ struct VSplitView<Content: View>: View {
     }
 }
 #endif
+
+/// Адрес карточки организации.
+struct OrganizationRoute: Hashable {
+    let organization: Organization
+}

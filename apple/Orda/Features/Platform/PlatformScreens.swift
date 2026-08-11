@@ -285,7 +285,7 @@ struct OrganizationDetailScreen: View {
     }
 
     private var capabilitiesButton: some View {
-        NavigationLink { OrgCapabilitiesScreen(organization: current) } label: {
+        NavigationLink(value: OrgCapabilitiesRoute(organization: current)) {
             Card {
                 NavigationRow(
                     icon: "lock.shield",
@@ -331,6 +331,9 @@ struct OrganizationDetailScreen: View {
         .contentMargins(Spacing.lg, for: .scrollContent)
         .background(Theme.background)
         .navigationTitle(current.name)
+        .navigationDestination(for: OrgCapabilitiesRoute.self) { route in
+            OrgCapabilitiesScreen(organization: route.organization)
+        }
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -520,4 +523,9 @@ struct AnyButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         makeBodyClosure(configuration)
     }
+}
+
+/// Адрес экрана прав организации.
+struct OrgCapabilitiesRoute: Hashable {
+    let organization: Organization
 }

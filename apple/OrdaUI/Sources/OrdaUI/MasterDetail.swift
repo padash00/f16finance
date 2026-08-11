@@ -73,9 +73,10 @@ public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: Vie
                         .listRowSeparator(.hidden)
 
                     ForEach(items) { item in
-                    NavigationLink(value: MasterRoute<Item>(id: item.id)) {
+                    Button { selection = item } label: {
                         row(item)
                     }
+                    .buttonStyle(.plain)
                     .listRowInsets(EdgeInsets(top: Spacing.xs, leading: Spacing.lg, bottom: Spacing.xs, trailing: Spacing.lg))
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
@@ -84,20 +85,21 @@ public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: Vie
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
-                // Маршрут — свой тип на каждый вид записи, а не голый
-                // идентификатор.
+                // Переход по выбранной записи, а не по «адресу».
                 //
-                // Идентификаторы почти везде строки, и два экрана с
-                // `MasterDetail` в одном стеке навигации объявляли
-                // `navigationDestination(for: String.self)` дважды. SwiftUI в
-                // такой ситуации берёт не тот адрес: первое нажатие на
-                // переписку или статью открывало список поверх списка —
-                // «не открывается с первого раза», а после «назад» под ним
-                // обнаруживался нужный экран.
-                .navigationDestination(for: MasterRoute<Item>.self) { route in
+                // Так работают оба случая одинаково: и нажатие на строку, и
+                // выбор со стороны — например, когда собеседника выбрали в
+                // листе «Кому написать». Раньше на телефоне такой выбор просто
+                // не открывал ничего: он менял состояние, которым пользовалась
+                // только широкая раскладка.
+                //
+                // Заодно снимается спор за адрес: `navigationDestination(for:)`
+                // с одинаковым типом идентификатора в одном стеке объявляли
+                // разные экраны, и SwiftUI открывал не тот.
+                .navigationDestination(item: $selection) { item in
                     FreshDetail(
-                        id: route.id,
-                        fallback: items.first { $0.id == route.id },
+                        id: item.id,
+                        fallback: item,
                         items: items,
                         detail: detail
                     )
@@ -264,15 +266,6 @@ private extension View {
 /// Если она пропала из списка совсем (сменился фильтр, запись удалили),
 /// показываем последний известный снимок: закрывать открытый экран под руками
 /// человека — хуже, чем показать чуть устаревшее.
-/// Адрес записи внутри `MasterDetail`.
-///
-/// Обобщён по `Item`, чтобы у каждого экрана был свой тип маршрута: переписка
-/// и статья базы знаний перестают спорить за один и тот же
-/// `navigationDestination`.
-private struct MasterRoute<Item: Identifiable>: Hashable where Item.ID: Hashable {
-    let id: Item.ID
-}
-
 private struct FreshDetail<Item: Identifiable & Hashable, Detail: View>: View {
     let id: Item.ID
     /// Последний известный снимок — на случай, если запись пропала из списка.

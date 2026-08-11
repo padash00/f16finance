@@ -35,9 +35,7 @@ struct AuditScreen: View {
                 ScrollView {
                     VStack(spacing: Spacing.md) {
                         ForEach(Array(acts.enumerated()), id: \.element.id) { index, act in
-                            NavigationLink {
-                                AuditCountScreen(act: act)
-                            } label: {
+                            NavigationLink(value: AuditActRoute(act: act)) {
                                 actCard(act)
                             }
                             .buttonStyle(.plain)
@@ -52,6 +50,9 @@ struct AuditScreen: View {
         }
         .background(Theme.background)
         .navigationTitle("Ревизия")
+        .navigationDestination(for: AuditActRoute.self) { route in
+            AuditCountScreen(act: route.act)
+        }
         .task { await load() }
         .refreshable { await load() }
     }
@@ -406,4 +407,9 @@ struct AuditItemRow: View {
         .buttonStyle(.plain)
         .listRowBackground(Theme.background)
     }
+}
+
+/// Адрес акта ревизии.
+struct AuditActRoute: Hashable {
+    let act: AuditAct
 }

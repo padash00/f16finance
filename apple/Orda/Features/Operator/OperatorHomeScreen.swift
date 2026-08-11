@@ -13,7 +13,7 @@ import SwiftUI
 /// меняется выручка, — и переход, созданный замыканием, схлопывался вместе с
 /// пересборкой экрана.
 enum OperatorHomeRoute: Hashable {
-    case sale, audit, checklists, knowledge
+    case sale, audit, checklists, knowledge, tasks, money
 }
 
 struct OperatorHomeScreen: View {
@@ -62,6 +62,8 @@ struct OperatorHomeScreen: View {
             case .audit: AuditScreen()
             case .checklists: ChecklistsScreen()
             case .knowledge: KnowledgeScreen()
+            case .tasks: TasksScreen()
+            case .money: MoneyScreen()
             }
         }
         #if os(iOS)
@@ -285,7 +287,7 @@ struct OperatorHomeScreen: View {
                 }
 
                 if cabinet.overdueCount > 0 {
-                    NavigationLink { TasksScreen() } label: {
+                    NavigationLink(value: OperatorHomeRoute.tasks) {
                         NavigationRow(
                             icon: "clock.badge.exclamationmark",
                             iconColor: Theme.negative,
@@ -297,7 +299,7 @@ struct OperatorHomeScreen: View {
                 }
 
                 if let counters = cabinet.overview?.counters, counters.activeDebts > 0 {
-                    NavigationLink { MoneyScreen() } label: {
+                    NavigationLink(value: OperatorHomeRoute.money) {
                         NavigationRow(
                             icon: "creditcard.trianglebadge.exclamationmark",
                             iconColor: Theme.negative,
@@ -317,7 +319,7 @@ struct OperatorHomeScreen: View {
     @ViewBuilder
     private var weekCard: some View {
         if let week = cabinet.overview?.week {
-            NavigationLink { MoneyScreen() } label: {
+            NavigationLink(value: OperatorHomeRoute.money) {
                 Card {
                     VStack(alignment: .leading, spacing: Spacing.md) {
                         HStack {
