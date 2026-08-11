@@ -946,6 +946,8 @@ struct TeamChatScreen: View {
     /// Сообщение, которое правим. Не флаг: лист должен знать, какое именно.
     @State private var editing: TeamChatMessage?
     @State private var editText = ""
+    /// Сообщение, с которым работают: реакции и действия.
+    @State private var acting: TeamChatMessage?
 
     private var myUserID: String? { auth.session?.userID }
 
@@ -1015,6 +1017,26 @@ struct TeamChatScreen: View {
                 await store?.edit(message.id, text: text)
             }
         }
+        // Действия — листом, а не системным меню.
+        //
+        // В системном меню реакции выстраиваются в вертикальный столбик по
+        // одному значку в строке: пять пунктов, каждый с одной картинкой. Ряд
+        // значков в строку — то, как это выглядит везде, и то, чего ждёт рука.
+        .sheet(item: $acting) { message in
+            MessageActionsSheet(
+                message: message,
+                canPin: canPin,
+                isMine: isMine(message),
+                react: { emoji in store?.react(to: message.id, emoji: emoji) },
+                reply: { store?.replyTo = message },
+                pin: { store?.pin(message.id, isPinned: message.isPinned) },
+                edit: {
+                    editText = message.text
+                    editing = message
+                },
+                remove: { store?.delete(message.id) }
+            )
+        }
         .task { if store == nil { let s = TeamChatStore(api: api); store = s; await s.load() } }
         // Чат без самообновления — это не чат: сообщение сменщика видно только
         // после того, как экран закроют и откроют заново.
@@ -1023,52 +1045,6 @@ struct TeamChatScreen: View {
                 try? await Task.sleep(for: .seconds(8))
                 if Task.isCancelled { return }
                 await store?.refresh()
-            }
-        }
-    }
-
-    /// Меню сообщения.
-    ///
-    /// Вынесено из списка: собранное прямо в теле цикла, оно раздувало
-    /// выражение настолько, что компилятор отказывался выводить тип.
-    @ViewBuilder
-    private func menu(for message: TeamChatMessage, store: TeamChatStore) -> some View {
-        Button {
-            store.replyTo = message
-            Haptics.tap()
-        } label: {
-            Label("Ответить", systemImage: "arrowshape.turn.up.left")
-        }
-
-        // Пять значков на все случаи: «принял», «сделано», «горит»,
-        // «спасибо», «смешно». Полная клавиатура эмодзи в рабочем чате
-        // превращается в развлечение.
-        ForEach(["👍", "✅", "🔥", "❤️", "😂"], id: \.self) { emoji in
-            Button(emoji) { store.react(to: message.id, emoji: emoji) }
-        }
-
-        if canPin {
-            Button {
-                store.pin(message.id, isPinned: message.isPinned)
-            } label: {
-                Label(
-                    message.isPinned ? "Открепить" : "Закрепить на сутки",
-                    systemImage: message.isPinned ? "pin.slash" : "pin"
-                )
-            }
-        }
-
-        if isMine(message) {
-            Button {
-                editText = message.text
-                editing = message
-            } label: {
-                Label("Изменить", systemImage: "pencil")
-            }
-            Button(role: .destructive) {
-                store.delete(message.id)
-            } label: {
-                Label("Удалить", systemImage: "trash")
             }
         }
     }
@@ -1118,7 +1094,10 @@ struct TeamChatScreen: View {
                                 )
                                 .id(message.id)
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
-                                .contextMenu { menu(for: message, store: store) }
+                                .onLongPressGesture {
+                                    Haptics.tap()
+                                    acting = message
+                                }
                             }
                         }
                     }

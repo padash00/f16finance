@@ -172,3 +172,84 @@ public struct ExamService: Sendable {
         return response.data
     }
 }
+
+// ── Вход на точке по QR ──────────────────────────────────────────────────────
+
+/// Подтверждение входа в программу на точке.
+///
+/// Программа на точке показывает QR, оператор сканирует его своим телефоном и
+/// подтверждает — терминал входит сам. Пароль при этом нигде не звучит и не
+/// набирается на общей клавиатуре, за которой стоит очередь.
+public struct PointQRLogin: Sendable {
+    /// Что зашито в QR: ссылка вида `.../operator/point-qr-confirm?n=<nonce>`.
+    /// Иногда сканер отдаёт просто сам код — принимаем и его.
+    public static func nonce(from scanned: String) -> String? {
+        let trimmed = scanned.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        if let components = URLComponents(string: trimmed),
+           let value = components.queryItems?.first(where: { $0.name == "n" })?.value,
+           !value.isEmpty {
+            return value
+        }
+
+        // Голый код: без пробелов и не ссылка на что-то другое.
+        guard !trimmed.contains(" "), !trimmed.contains("://") else { return nil }
+        return trimmed
+    }
+}
+
+/// Чем закончилось подтверждение.
+public enum PointQRResult: Sendable, Equatable {
+    case approved
+    /// Код просрочен: программа на точке обновляет его каждые несколько минут.
+    case expired
+    /// Кодом уже вошли.
+    case used
+    case notFound
+    /// Временный пароль ещё не сменён — QR такой вход не открывает.
+    case mustChangePassword
+    case failed(String)
+
+    public var message: String {
+        switch self {
+        case .approved: "Готово — программа на точке входит"
+        case .expired: "Код просрочен. Обновите QR на терминале и отсканируйте заново."
+        case .used: "Этим кодом уже вошли. Обновите QR на терминале."
+        case .notFound: "Код не распознан. Наведите камеру на QR в программе точки."
+        case .mustChangePassword: "Сначала смените временный пароль — войдите по паролю на терминале."
+        case .failed(let text): text
+        }
+    }
+}
+
+extension ExamService {
+    /// Подтвердить вход на точке.
+    ///
+    public func confirmPointQR(nonce: String) async -> PointQRResult {
+        do {
+            _ = try await api.send(
+                APIRequest(
+                    path: "/api/operator/point-qr-confirm",
+                    method: .post,
+                    body: try JSONSerialization.data(withJSONObject: ["nonce": nonce])
+                )
+            )
+            return .approved
+        } catch let error as APIError {
+            // Сервер различает случаи — человеку нужно разное действие: обновить
+            // QR, войти паролем или позвать управляющего. Просроченный код
+            // приходит с кодом 410 и разбирается как «сервер», поэтому смотрим
+            // и на текст ответа.
+            switch error {
+            case .conflict: return .used
+            case .notFound: return .notFound
+            case .forbidden: return .mustChangePassword
+            case .server(let status, _) where status == 410: return .expired
+            default: return .failed(error.userMessage)
+            }
+        } catch {
+            return .failed(error.localizedDescription)
+        }
+    }
+}

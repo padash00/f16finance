@@ -260,7 +260,7 @@ struct MoneyScreen: View {
 /// непрочитанных, — и свежий переход схлопывался обратно: «с первого раза не
 /// открывается, со второго открывается».
 enum OperatorProfileRoute: Hashable {
-    case schedule, money, knowledge, exams, chat, messages
+    case schedule, money, knowledge, exams, chat, messages, pointQR
 }
 
 struct OperatorProfileScreen: View {
@@ -323,6 +323,21 @@ struct OperatorProfileScreen: View {
 
                         // Экзамен раньше приходил только в Telegram: у кого его
                         // нет, тот числился обязанным сдать то, чего не видел.
+                        // Вход на терминал по QR. На пересменке за спиной
+                        // очередь, а логин и пароль набираются на общей
+                        // клавиатуре у всех на виду.
+                        NavigationLink(value: OperatorProfileRoute.pointQR) {
+                            NavigationRow(
+                                icon: "qrcode.viewfinder",
+                                iconColor: Theme.accent(for: .operator),
+                                title: "Вход на точке по QR",
+                                subtitle: "Подтвердить вход в программу терминала"
+                            )
+                        }
+                        .buttonStyle(.pressable)
+
+                        RowDivider()
+
                         NavigationLink(value: OperatorProfileRoute.exams) {
                             NavigationRow(
                                 icon: "graduationcap",
@@ -407,6 +422,7 @@ struct OperatorProfileScreen: View {
             case .exams: ExamsScreen()
             case .chat: TeamChatScreen()
             case .messages: MessagesScreen()
+            case .pointQR: PointQRLoginScreen()
             }
         }
         .confirmationDialog("Выйти из аккаунта?", isPresented: $confirmingLogout, titleVisibility: .visible) {

@@ -455,3 +455,128 @@ struct EditMessageSheet: View {
         }
     }
 }
+
+/// Действия с сообщением.
+///
+/// Реакции стоят рядом, в строку — так это выглядит в любом мессенджере, и так
+/// их ставят одним движением большого пальца. Системное контекстное меню
+/// раскладывало те же пять значков в вертикальный столбик, по пункту на
+/// значок: выглядело как список команд, а не как реакции.
+struct MessageActionsSheet: View {
+    let message: TeamChatMessage
+    let canPin: Bool
+    let isMine: Bool
+    let react: (String) -> Void
+    let reply: () -> Void
+    let pin: () -> Void
+    let edit: () -> Void
+    let remove: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var confirmingDelete = false
+
+    /// Пять на все случаи: «принял», «сделано», «горит», «спасибо», «смешно».
+    /// Полная клавиатура эмодзи в рабочем чате превращается в развлечение.
+    private let emojis = ["👍", "✅", "🔥", "❤️", "😂"]
+
+    var body: some View {
+        VStack(spacing: Spacing.lg) {
+            HStack(spacing: Spacing.sm) {
+                ForEach(emojis, id: \.self) { emoji in
+                    Button {
+                        react(emoji)
+                        Haptics.tap()
+                        dismiss()
+                    } label: {
+                        Text(emoji)
+                            .font(.system(size: 30))
+                            .frame(width: 52, height: 52)
+                            .background(Theme.surfaceRaised, in: Circle())
+                    }
+                    .buttonStyle(.pressable)
+                }
+            }
+            .frame(maxWidth: .infinity)
+
+            // Само сообщение — чтобы не гадать, к какому относятся действия.
+            Text(message.displayText)
+                .font(Typography.caption)
+                .foregroundStyle(Theme.textDim)
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Card(padding: Spacing.sm) {
+                VStack(spacing: 0) {
+                    actionRow("Ответить", icon: "arrowshape.turn.up.left") {
+                        reply()
+                        dismiss()
+                    }
+
+                    if canPin {
+                        RowDivider()
+                        actionRow(
+                            message.isPinned ? "Открепить" : "Закрепить на сутки",
+                            icon: message.isPinned ? "pin.slash" : "pin"
+                        ) {
+                            pin()
+                            dismiss()
+                        }
+                    }
+
+                    if isMine {
+                        RowDivider()
+                        actionRow("Изменить", icon: "pencil") {
+                            dismiss()
+                            edit()
+                        }
+                        RowDivider()
+                        actionRow("Удалить", icon: "trash", tint: Theme.negative) {
+                            confirmingDelete = true
+                        }
+                    }
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(Spacing.lg)
+        .frame(maxWidth: .infinity)
+        .background(Theme.background)
+        #if os(iOS)
+        .presentationDetents([.height(isMine ? 380 : 280)])
+        .presentationDragIndicator(.visible)
+        #endif
+        .confirmationDialog("Удалить сообщение?", isPresented: $confirmingDelete, titleVisibility: .visible) {
+            Button("Удалить", role: .destructive) {
+                remove()
+                dismiss()
+            }
+            Button("Отмена", role: .cancel) {}
+        } message: {
+            Text("У всех в чате оно исчезнет.")
+        }
+    }
+
+    private func actionRow(
+        _ title: String,
+        icon: String,
+        tint: Color = Theme.text,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: Spacing.md) {
+                Image(systemName: icon)
+                    .font(.system(size: 15))
+                    .foregroundStyle(tint == Theme.text ? Theme.textMuted : tint)
+                    .frame(width: 22)
+                Text(title)
+                    .font(Typography.callout)
+                    .foregroundStyle(tint)
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, Spacing.sm)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.pressable)
+    }
+}
