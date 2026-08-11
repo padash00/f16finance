@@ -46,7 +46,7 @@ struct ExamsScreen: View {
                                 NavigationLink(value: ExamRoute(id: exam.id, title: exam.title)) {
                                     ExamRow(exam: exam)
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(.pressable)
                             }
                         }
                     }
@@ -272,7 +272,7 @@ struct ExamRunnerScreen: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressable)
                         .disabled(isSending)
                     }
                 }

@@ -113,7 +113,7 @@ struct SaleScreen: View {
                     Button { search = "" } label: {
                         Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.textDim)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                 }
             }
             .padding(Spacing.md)
@@ -128,7 +128,7 @@ struct SaleScreen: View {
                     .frame(width: 48, height: 48)
                     .background(Theme.accent(for: .operator).opacity(0.14), in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
         }
         .padding(Spacing.lg)
     }
@@ -271,7 +271,7 @@ struct SaleItemRow: View {
             .padding(.vertical, Spacing.xs)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
         .listRowBackground(Theme.background)
     }
 }

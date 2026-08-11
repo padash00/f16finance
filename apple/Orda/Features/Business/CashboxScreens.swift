@@ -341,7 +341,7 @@ struct ReceiptsListScreen: View {
                         NavigationLink(value: PosReceiptRoute(receipt: receipt)) {
                             PosReceiptRow(receipt: receipt)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressable)
                     }
 
                     if visible.count > shown.count {
@@ -900,7 +900,7 @@ private struct PosReturnLineRow: View {
                 }
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
 
             // Шаг количества показываем только там, где выбор вообще есть:
             // на единственной штуке возвращать «часть» нечего.
@@ -1388,7 +1388,7 @@ private struct AdSlideRow: View {
                         .font(.system(size: 15))
                         .foregroundStyle(Theme.textDim)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .fixedSize()
             }
         }

@@ -280,7 +280,7 @@ struct OrganizationDetailScreen: View {
                 )
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
         .disabled(isCurrentOrganization)
     }
 
@@ -297,7 +297,7 @@ struct OrganizationDetailScreen: View {
                 )
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
     }
 
     /// Работает ли приложение сейчас в контексте этой организации.

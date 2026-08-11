@@ -195,6 +195,36 @@ public struct PrimaryButtonStyle: ButtonStyle {
     }
 }
 
+/// Нажимаемая строка или карточка.
+///
+/// `.plain` не даёт никакого отклика: карточка под пальцем выглядит так же,
+/// как без пальца, и на медленной сети человек нажимает второй раз, решив, что
+/// не попал. Слегка уменьшаем и приглушаем — этого достаточно, чтобы касание
+/// читалось, и мало, чтобы мешать.
+public struct PressableStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    public init() {}
+
+    public func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(scale(configuration.isPressed))
+            .opacity(configuration.isPressed ? 0.82 : 1)
+            .animation(Motion.tap, value: configuration.isPressed)
+    }
+
+    /// При включённом «Уменьшении движения» масштаб не трогаем — остаётся
+    /// только затемнение.
+    private func scale(_ pressed: Bool) -> CGFloat {
+        guard pressed, !reduceMotion else { return 1 }
+        return 0.985
+    }
+}
+
+extension ButtonStyle where Self == PressableStyle {
+    public static var pressable: PressableStyle { PressableStyle() }
+}
+
 /// Второстепенное действие.
 public struct SecondaryButtonStyle: ButtonStyle {
     public init() {}

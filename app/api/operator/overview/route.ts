@@ -148,6 +148,18 @@ export async function GET(request: Request) {
       })
     }
 
+    // Стаж считается от даты найма, а она лежит в профиле оператора — не в
+    // самой записи. Без этой распаковки надбавка молча оставалась нулевой.
+    const operatorProfile = Array.isArray((context.operator as any)?.operator_profiles)
+      ? (context.operator as any).operator_profiles[0]
+      : (context.operator as any)?.operator_profiles
+    const operatorMeta = {
+      id: String(context.operator.id),
+      name: context.operator.name || 'Оператор',
+      short_name: context.operator.short_name || null,
+      hire_date: operatorProfile?.hire_date || null,
+    }
+
     // Те же исходные данные, что и у `/api/operator/salary`.
     //
     // Здесь не хватало оператора и шкалы стажа — и надбавка за стаж на главном
@@ -156,7 +168,7 @@ export async function GET(request: Request) {
     // объяснить эту разницу было нечем.
     const weekSummary = calculateOperatorWeekSummary({
       operatorId: context.operator.id,
-      operator: context.operator || null,
+      operator: operatorMeta,
       companies: references.companies,
       rules: references.rules,
       seniorityTiers: references.seniorityTiers,

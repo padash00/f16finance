@@ -858,6 +858,6 @@ struct FilterChip: View {
                 .foregroundStyle(isOn ? Theme.brand : Theme.textMuted)
                 .clipShape(Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
     }
 }

@@ -76,7 +76,7 @@ public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: Vie
                     Button { selection = item } label: {
                         row(item)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     .listRowInsets(EdgeInsets(top: Spacing.xs, leading: Spacing.lg, bottom: Spacing.xs, trailing: Spacing.lg))
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
@@ -139,7 +139,7 @@ public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: Vie
                                                 .fill(selection == item ? Theme.brand.opacity(0.14) : .clear)
                                         )
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(.pressable)
                                 .contextMenu { RowActionMenu(actions: actions(item)) }
                             }
                         }

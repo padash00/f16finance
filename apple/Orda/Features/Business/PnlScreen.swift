@@ -286,7 +286,7 @@ struct PnlScreen: View {
                             isExpanded: selected?.id == month.id
                         )
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
 
                     if selected?.id == month.id {
                         MonthBreakdown(month: month)

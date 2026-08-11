@@ -84,7 +84,7 @@ struct OrganizationContextBanner: View {
                 Button("Вся платформа") {
                     Task { await auth.setOrganization(nil) }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .font(Typography.caption.weight(.bold))
             }
             .foregroundStyle(Color.black.opacity(0.85))

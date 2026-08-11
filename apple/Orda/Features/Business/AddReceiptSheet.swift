@@ -185,7 +185,7 @@ struct AddReceiptSheet: View {
                                     .foregroundStyle(Theme.brand)
                             }
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressable)
                         RowDivider()
                     }
                 }
@@ -299,7 +299,7 @@ private struct ReceiptLineEditor: View {
                 Button(role: .destructive, action: onDelete) {
                     Image(systemName: "trash")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .foregroundStyle(Theme.negative)
             }
 

@@ -299,7 +299,7 @@ struct PerformanceScreen: View {
                                 previousPI: store.previousPI[item.operatorID]
                             )
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressable)
                     }
                 }
             }
@@ -906,7 +906,7 @@ struct AchievementsScreen: View {
                     NavigationLink(value: AchievementRoute(result: result)) {
                         AchievementRowView(result: result)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                 }
             }
         }

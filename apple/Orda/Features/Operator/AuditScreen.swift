@@ -38,7 +38,7 @@ struct AuditScreen: View {
                             NavigationLink(value: AuditActRoute(act: act)) {
                                 actCard(act)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.pressable)
                             .staggeredAppear(index: index)
                         }
                     }
@@ -405,7 +405,7 @@ struct AuditItemRow: View {
             .padding(.vertical, Spacing.xs)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
         .listRowBackground(Theme.background)
     }
 }

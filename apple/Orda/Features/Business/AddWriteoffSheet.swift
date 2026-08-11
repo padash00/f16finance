@@ -112,7 +112,7 @@ struct AddWriteoffSheet: View {
                                 } label: {
                                     Image(systemName: "trash")
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(.pressable)
                                 .foregroundStyle(Theme.negative)
                             }
                             NumberField(title: "Количество", value: $line.quantity)
@@ -174,7 +174,7 @@ struct AddWriteoffSheet: View {
                                     .foregroundStyle(Theme.brand)
                             }
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressable)
                         RowDivider()
                     }
                 }

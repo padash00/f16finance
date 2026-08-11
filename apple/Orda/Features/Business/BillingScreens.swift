@@ -592,7 +592,7 @@ struct WeekStepper: View {
                 Button { week = PayWeek.shifted(week, by: -1) } label: {
                     Image(systemName: "chevron.left").font(.system(size: 14, weight: .semibold))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .foregroundStyle(Theme.brand)
 
                 Spacer()
@@ -613,7 +613,7 @@ struct WeekStepper: View {
                 Button { week = PayWeek.shifted(week, by: 1) } label: {
                     Image(systemName: "chevron.right").font(.system(size: 14, weight: .semibold))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .disabled(!allowsFuture && isCurrent)
                 .foregroundStyle(!allowsFuture && isCurrent ? Theme.textDim : Theme.brand)
             }

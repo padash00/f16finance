@@ -114,7 +114,7 @@ struct OrgCapabilitiesScreen: View {
                     Button { search = "" } label: {
                         Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.textDim)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                 }
             }
             .padding(Spacing.md)

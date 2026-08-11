@@ -275,7 +275,7 @@ struct OperatorHomeScreen: View {
                             badgeColor: Theme.warning
                         )
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                 }
 
                 if !cabinet.pendingArticles.isEmpty {
@@ -290,7 +290,7 @@ struct OperatorHomeScreen: View {
                             badgeColor: Theme.info
                         )
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                 }
 
                 if cabinet.overdueCount > 0 {
@@ -303,7 +303,7 @@ struct OperatorHomeScreen: View {
                             badge: cabinet.overdueCount
                         )
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                 }
 
                 if let counters = cabinet.overview?.counters, counters.activeDebts > 0 {
@@ -319,7 +319,7 @@ struct OperatorHomeScreen: View {
                             badge: counters.activeDebts
                         )
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                 }
             }
         }
@@ -364,7 +364,7 @@ struct OperatorHomeScreen: View {
                     }
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
         } else if cabinet.isLoadingOverview {
             Skeleton(height: 110, cornerRadius: Radius.lg)
         }
@@ -401,7 +401,7 @@ struct OperatorHomeScreen: View {
                 }
                 Spacer()
                 Button("Отправить") { Task { await store.flushQueue() } }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     .font(Typography.caption.weight(.bold))
                     .foregroundStyle(Theme.warning)
             }

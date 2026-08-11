@@ -299,6 +299,12 @@ public struct TeamChatMessage: Decodable, Sendable, Identifiable, Hashable {
     public var displayText: String { FeedText.display(text) }
     public var reactionGroups: [FeedReactionGroup] { groupReactions(reactions) }
 
+    /// Закрепление живёт до даты: истёкшее не держит сообщение наверху.
+    public var isPinned: Bool {
+        guard let pinnedUntil else { return false }
+        return pinnedUntil.timeIntervalSinceNow > 0
+    }
+
     public var roleLabel: String? {
         switch senderRole {
         case "owner": "владелец"
@@ -975,8 +981,10 @@ public struct FeedService: Sendable {
 
     // Командный чат
 
-    public func teamChat(limit: Int = 80) async throws -> TeamChatFeed {
-        try await api.send(APIRequest(path: "/api/team-chat", query: ["limit": String(limit)]))
+    public func teamChat(limit: Int = 80, search: String = "") async throws -> TeamChatFeed {
+        var query = ["limit": String(limit)]
+        if !search.isEmpty { query["q"] = search }
+        return try await api.send(APIRequest(path: "/api/team-chat", query: query))
     }
 
     public func sendTeamMessage(
@@ -1020,6 +1028,67 @@ public struct FeedService: Sendable {
             )
         )
         return UploadedAttachment(type: kind, url: response.url, name: response.name ?? fileName)
+    }
+
+    /// Реакция на сообщение. Повторная с тем же значком — снимает.
+    public func react(messageID: String, emoji: String) async throws {
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/team-chat/reactions",
+                method: .post,
+                body: try JSONSerialization.data(
+                    withJSONObject: ["messageId": messageID, "emoji": emoji]
+                )
+            )
+        )
+    }
+
+    /// Правка своего сообщения.
+    public func editTeamMessage(id: String, text: String) async throws {
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/team-chat",
+                method: .patch,
+                body: try JSONSerialization.data(withJSONObject: ["id": id, "message": text])
+            )
+        )
+    }
+
+    public func deleteTeamMessage(id: String) async throws {
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/team-chat",
+                method: .delete,
+                body: try JSONSerialization.data(withJSONObject: ["id": id])
+            )
+        )
+    }
+
+    /// Закрепить сообщение до указанного момента.
+    ///
+    /// Срок обязателен: закрепление без срока превращает шапку чата в свалку,
+    /// которую никто не разбирает.
+    public func pinTeamMessage(id: String, until: Date) async throws {
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/team-chat/pin",
+                method: .post,
+                body: try JSONSerialization.data(withJSONObject: [
+                    "id": id,
+                    "until": ISO8601DateFormatter().string(from: until),
+                ])
+            )
+        )
+    }
+
+    public func unpinTeamMessage(id: String) async throws {
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/team-chat/pin",
+                method: .delete,
+                body: try JSONSerialization.data(withJSONObject: ["id": id])
+            )
+        )
     }
 
     // Опросы

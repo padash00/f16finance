@@ -241,7 +241,7 @@ private struct TariffEditor: View {
                 Button(role: .destructive, action: onDelete) {
                     Image(systemName: "trash")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .foregroundStyle(Theme.negative)
             }
 
@@ -281,7 +281,7 @@ private struct ZoneEditor: View {
                 Button(role: .destructive, action: onDelete) {
                     Image(systemName: "trash")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .foregroundStyle(Theme.negative)
             }
 

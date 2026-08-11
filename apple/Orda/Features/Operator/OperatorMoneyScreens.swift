@@ -297,14 +297,14 @@ struct OperatorProfileScreen: View {
                         NavigationLink(value: OperatorProfileRoute.schedule) {
                             NavigationRow(icon: "calendar", iconColor: ChartPalette.series2, title: "Мой график")
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressable)
 
                         RowDivider()
 
                         NavigationLink(value: OperatorProfileRoute.money) {
                             NavigationRow(icon: "wallet.bifold", iconColor: Theme.brand, title: "Мои деньги")
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressable)
 
                         RowDivider()
 
@@ -317,7 +317,7 @@ struct OperatorProfileScreen: View {
                                 badgeColor: Theme.info
                             )
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressable)
 
                         RowDivider()
 
@@ -333,7 +333,7 @@ struct OperatorProfileScreen: View {
                                 badgeColor: Theme.warning
                             )
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressable)
                     }
                 }
 
@@ -351,7 +351,7 @@ struct OperatorProfileScreen: View {
                                 subtitle: "Общий для всей точки"
                             )
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressable)
 
                         RowDivider()
 
@@ -365,7 +365,7 @@ struct OperatorProfileScreen: View {
                                 badgeColor: Theme.info
                             )
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressable)
                     }
                 }
                 .task { await cabinet.refreshUnreadMessages() }

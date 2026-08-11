@@ -468,7 +468,7 @@ struct BusinessSectionsScreen: View {
                                         subtitle: "\(resolver.availableActions(on: page).count) \(pluralize(resolver.availableActions(on: page).count, "действие", "действия", "действий"))"
                                     )
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(.pressable)
                             }
                         }
                     }

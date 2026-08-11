@@ -139,7 +139,7 @@ struct SaleWideScreen: View {
                 Button { search = "" } label: {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.textDim)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
             }
         }
         .padding(Spacing.md)
@@ -159,7 +159,7 @@ struct SaleWideScreen: View {
                 Spacer()
                 if !store.cart.isEmpty {
                     Button("Очистить") { store.clearCart() }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressable)
                         .font(Typography.caption.weight(.semibold))
                         .foregroundStyle(Theme.negative)
                 }
@@ -407,6 +407,6 @@ struct CartLineRow: View {
                 .frame(width: 24, height: 24)
                 .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
     }
 }

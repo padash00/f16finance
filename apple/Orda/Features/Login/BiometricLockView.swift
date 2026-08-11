@@ -42,7 +42,7 @@ struct BiometricLockView: View {
                 Button("Выйти из аккаунта") {
                     Task { await auth.signOut() }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .font(Typography.callout)
                 .foregroundStyle(Theme.negative)
             }

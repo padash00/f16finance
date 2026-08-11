@@ -274,7 +274,7 @@ private struct LogEntryRow: View {
                     .font(Typography.caption)
                     .foregroundStyle(Theme.brand)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .padding(.leading, 34)
             }
 

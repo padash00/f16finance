@@ -97,7 +97,7 @@ struct VoiceAttachmentView: View {
             }
             .padding(.vertical, Spacing.xs)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
     }
 
     private func waveHeight(_ index: Int) -> CGFloat {
@@ -163,7 +163,7 @@ struct PollCard: View {
                     }
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
             }
 
             Text("\(poll.totalVotes) \(pluralize(poll.totalVotes, "голос", "голоса", "голосов")) · нажмите ещё раз, чтобы снять")
@@ -224,7 +224,7 @@ struct PollComposerSheet: View {
                                     } label: {
                                         Image(systemName: "minus.circle")
                                     }
-                                    .buttonStyle(.plain)
+                                    .buttonStyle(.pressable)
                                     .foregroundStyle(Theme.negative)
                                 }
                             }
@@ -350,6 +350,107 @@ struct MentionPicker: View {
             .task {
                 defer { isLoading = false }
                 contacts = (try? await FeedService(api: api).contacts()) ?? []
+            }
+        }
+    }
+}
+
+// ── Ответ и правка ───────────────────────────────────────────────────────────
+
+/// Панель «отвечаю на …» над полем ввода.
+struct ReplyBar: View {
+    let message: TeamChatMessage
+    let cancel: () -> Void
+
+    var body: some View {
+        HStack(spacing: Spacing.md) {
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(Theme.brand)
+                .frame(width: 3, height: 32)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Ответ \(message.senderName)")
+                    .font(Typography.caption.weight(.semibold))
+                    .foregroundStyle(Theme.brand)
+                Text(message.displayText)
+                    .font(Typography.caption)
+                    .foregroundStyle(Theme.textDim)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
+
+            Button(action: cancel) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 18))
+                    .foregroundStyle(Theme.textDim)
+            }
+            .buttonStyle(.pressable)
+        }
+        .padding(.horizontal, Spacing.lg)
+        .padding(.vertical, Spacing.sm)
+        .background(Theme.surfaceRaised)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+}
+
+/// Правка своего сообщения.
+///
+/// Опечатка в чате смены живёт вечно: её цитируют, на неё ссылаются. Сервер
+/// правку принимал давно и помечает сообщение как изменённое.
+struct EditMessageSheet: View {
+    @Binding var text: String
+    let save: (String) async -> String?
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var isSaving = false
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            ScreenScroll {
+                Card {
+                    VStack(alignment: .leading, spacing: Spacing.md) {
+                        FieldLabel("Сообщение")
+                        TextField("Текст", text: $text, axis: .vertical)
+                            .textFieldStyle(.plain)
+                            .font(Typography.callout)
+                            .foregroundStyle(Theme.text)
+                            .lineLimit(3...10)
+                            .padding(Spacing.md)
+                            .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+
+                        if let error {
+                            Text(error)
+                                .font(Typography.caption)
+                                .foregroundStyle(Theme.negative)
+                        }
+
+                        Button(isSaving ? "Сохраняем…" : "Сохранить") {
+                            Task {
+                                isSaving = true
+                                defer { isSaving = false }
+                                if let failure = await save(text) {
+                                    error = failure
+                                } else {
+                                    dismiss()
+                                }
+                            }
+                        }
+                        .buttonStyle(PrimaryButtonStyle())
+                        .disabled(isSaving || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                }
+            }
+            .background(Theme.background)
+            .navigationTitle("Изменить")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Отмена") { dismiss() }
+                }
             }
         }
     }

@@ -120,6 +120,8 @@ private struct FeedBubble: View {
     var reactions: [FeedReactionGroup] = []
     var poll: ChatPoll?
     var vote: (String) -> Void = { _ in }
+    /// Нажатие на уже стоящую реакцию — свой голос за неё или снятие своего.
+    var react: (String) -> Void = { _ in }
 
     var body: some View {
         HStack(alignment: .bottom, spacing: Spacing.sm) {
@@ -191,11 +193,15 @@ private struct FeedBubble: View {
                 HStack(spacing: Spacing.sm) {
                     if !reactions.isEmpty {
                         ForEach(reactions) { group in
-                            Text(group.count > 1 ? "\(group.emoji) \(group.count)" : group.emoji)
-                                .font(Typography.caption)
-                                .padding(.horizontal, Spacing.sm)
-                                .padding(.vertical, 2)
-                                .background(Theme.surfaceRaised, in: Capsule())
+                            Button { react(group.emoji) } label: {
+                                Text(group.count > 1 ? "\(group.emoji) \(group.count)" : group.emoji)
+                                    .font(Typography.caption)
+                                    .padding(.horizontal, Spacing.sm)
+                                    .padding(.vertical, 2)
+                                    .background(Theme.surfaceRaised, in: Capsule())
+                            }
+                            .buttonStyle(.pressable)
+                            .transition(.scale.combined(with: .opacity))
                         }
                     }
                     if isEdited {
@@ -288,7 +294,7 @@ private struct FeedComposer: View {
                 }
                 .font(.system(size: 17))
                 .foregroundStyle(Theme.textDim)
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .sheet(isPresented: $isPickingMention) {
                     MentionPicker { name in
                         // Пробел в конце — чтобы дальше сразу писать текст, а
@@ -339,7 +345,7 @@ private struct FeedComposer: View {
                             .font(.system(size: 26))
                             .foregroundStyle(recorder.isRecording ? Theme.negative : Theme.textDim)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                 } else {
                     sendButton
                 }
@@ -361,7 +367,7 @@ private struct FeedComposer: View {
                 .font(.system(size: 26))
                 .foregroundStyle(canSend ? Theme.brand : Theme.textDim)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
         .disabled(!canSend)
     }
 
@@ -737,8 +743,12 @@ final class TeamChatStore {
     private(set) var sendError: String?
     /// Отправленные, но ещё не подтверждённые сервером.
     private(set) var pending: [TeamChatMessage] = []
+    /// На какое сообщение отвечаем. Цитату чат показывал давно, а ответить
+    /// было нельзя — половина механизма.
+    var replyTo: TeamChatMessage?
 
     private let service: FeedService
+    private var searchTask: Task<Void, Never>?
 
     init(api: APIClient) { service = FeedService(api: api) }
 
@@ -751,7 +761,7 @@ final class TeamChatStore {
         isLoading = true
         defer { isLoading = false }
         do {
-            feed = try await service.teamChat()
+            feed = try await service.teamChat(search: search)
             error = nil
         } catch let e as APIError {
             error = e
@@ -763,8 +773,65 @@ final class TeamChatStore {
     /// Тихое обновление: без скелета и без сброса того, что человек уже читает.
     func refresh() async {
         guard !isSending else { return }
-        guard let fresh = try? await service.teamChat() else { return }
+        guard let fresh = try? await service.teamChat(search: search) else { return }
         feed = fresh
+    }
+
+    /// Поиск по чату. Ищет сервер — по тексту и по имени отправителя.
+    var search = "" {
+        didSet {
+            guard oldValue != search else { return }
+            searchTask?.cancel()
+            searchTask = Task { [weak self] in
+                // Небольшая пауза: иначе запрос уходит на каждую букву.
+                try? await Task.sleep(for: .milliseconds(350))
+                guard !Task.isCancelled else { return }
+                await self?.load()
+            }
+        }
+    }
+
+    /// Реакция. Свою ставим сразу, не дожидаясь сервера: значок под пальцем
+    /// должен отзываться мгновенно.
+    func react(to messageID: String, emoji: String) {
+        Task { [weak self] in
+            guard let self else { return }
+            try? await service.react(messageID: messageID, emoji: emoji)
+            await refresh()
+        }
+    }
+
+    func edit(_ messageID: String, text: String) async -> String? {
+        do {
+            try await service.editTeamMessage(id: messageID, text: text)
+            await load()
+            return nil
+        } catch let e as APIError {
+            return e.userMessage
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    func delete(_ messageID: String) {
+        Task { [weak self] in
+            guard let self else { return }
+            try? await service.deleteTeamMessage(id: messageID)
+            await load()
+        }
+    }
+
+    /// Закрепление на сутки — обычный срок объявления по смене.
+    func pin(_ messageID: String, isPinned: Bool) {
+        Task { [weak self] in
+            guard let self else { return }
+            if isPinned {
+                try? await service.unpinTeamMessage(id: messageID)
+            } else {
+                try? await service.pinTeamMessage(id: messageID, until: Date().addingTimeInterval(24 * 3600))
+            }
+            await load()
+        }
     }
 
     /// Голос в опросе. Список перечитываем: доли и имена меняются у всех.
@@ -849,7 +916,8 @@ final class TeamChatStore {
         Task { [weak self] in
             guard let self else { return }
             do {
-                try await service.sendTeamMessage(trimmed)
+                try await service.sendTeamMessage(trimmed, replyToID: replyTo?.id)
+                replyTo = nil
                 await load()
                 pending.removeAll { $0.id == draft.id }
             } catch let e as APIError {
@@ -871,10 +939,19 @@ struct TeamChatScreen: View {
     @Environment(\.api) private var api
     @Environment(AuthStore.self) private var auth
 
+    @Environment(\.access) private var access
+
     @State private var store: TeamChatStore?
     @State private var draft = ""
+    /// Сообщение, которое правим. Не флаг: лист должен знать, какое именно.
+    @State private var editing: TeamChatMessage?
+    @State private var editText = ""
 
     private var myUserID: String? { auth.session?.userID }
+
+    /// Закрепление — отдельное право, как и на сервере: объявление в чате
+    /// команды вправе повесить не каждый.
+    private var canPin: Bool { access?.can("team-chat.pin") ?? false }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -885,6 +962,10 @@ struct TeamChatScreen: View {
                     messages(feed, store: store)
                 } else {
                     LoadingRows(count: 6)
+                }
+
+                if let reply = store.replyTo {
+                    ReplyBar(message: reply) { store.replyTo = nil }
                 }
 
                 FeedComposer(
@@ -919,7 +1000,21 @@ struct TeamChatScreen: View {
         }
         .background(Theme.background)
         .navigationTitle("Командный чат")
+        // Поиск по чату: сервер ищет и по тексту, и по имени отправителя.
+        // «Кто говорил про поставщика» иначе листают руками за неделю.
+        .searchable(
+            text: Binding(
+                get: { store?.search ?? "" },
+                set: { store?.search = $0 }
+            ),
+            prompt: "Найти в переписке"
+        )
         .toolbar { LogoutToolbarItem() }
+        .sheet(item: $editing) { message in
+            EditMessageSheet(text: $editText) { text in
+                await store?.edit(message.id, text: text)
+            }
+        }
         .task { if store == nil { let s = TeamChatStore(api: api); store = s; await s.load() } }
         // Чат без самообновления — это не чат: сообщение сменщика видно только
         // после того, как экран закроют и откроют заново.
@@ -928,6 +1023,52 @@ struct TeamChatScreen: View {
                 try? await Task.sleep(for: .seconds(8))
                 if Task.isCancelled { return }
                 await store?.refresh()
+            }
+        }
+    }
+
+    /// Меню сообщения.
+    ///
+    /// Вынесено из списка: собранное прямо в теле цикла, оно раздувало
+    /// выражение настолько, что компилятор отказывался выводить тип.
+    @ViewBuilder
+    private func menu(for message: TeamChatMessage, store: TeamChatStore) -> some View {
+        Button {
+            store.replyTo = message
+            Haptics.tap()
+        } label: {
+            Label("Ответить", systemImage: "arrowshape.turn.up.left")
+        }
+
+        // Пять значков на все случаи: «принял», «сделано», «горит»,
+        // «спасибо», «смешно». Полная клавиатура эмодзи в рабочем чате
+        // превращается в развлечение.
+        ForEach(["👍", "✅", "🔥", "❤️", "😂"], id: \.self) { emoji in
+            Button(emoji) { store.react(to: message.id, emoji: emoji) }
+        }
+
+        if canPin {
+            Button {
+                store.pin(message.id, isPinned: message.isPinned)
+            } label: {
+                Label(
+                    message.isPinned ? "Открепить" : "Закрепить на сутки",
+                    systemImage: message.isPinned ? "pin.slash" : "pin"
+                )
+            }
+        }
+
+        if isMine(message) {
+            Button {
+                editText = message.text
+                editing = message
+            } label: {
+                Label("Изменить", systemImage: "pencil")
+            }
+            Button(role: .destructive) {
+                store.delete(message.id)
+            } label: {
+                Label("Удалить", systemImage: "trash")
             }
         }
     }
@@ -969,9 +1110,15 @@ struct TeamChatScreen: View {
                                     vote: { optionID in
                                         guard let poll = feed.poll(for: message) else { return }
                                         store.vote(pollID: poll.id, optionID: optionID)
+                                    },
+                                    react: { emoji in
+                                        Haptics.tap()
+                                        store.react(to: message.id, emoji: emoji)
                                     }
                                 )
                                 .id(message.id)
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                                .contextMenu { menu(for: message, store: store) }
                             }
                         }
                     }
@@ -1294,7 +1441,7 @@ private struct ContactPickerSheet: View {
                                 subtitle: contact.roleLabel
                             )
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressable)
                         .listRowInsets(EdgeInsets(top: Spacing.xs, leading: Spacing.lg, bottom: Spacing.xs, trailing: Spacing.lg))
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
@@ -1570,7 +1717,7 @@ struct CalendarScreen: View {
                     Button { Task { await store.step(-1) } } label: {
                         Image(systemName: "chevron.left").font(.system(size: 14, weight: .semibold))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     .foregroundStyle(Theme.brand)
 
                     Spacer()
@@ -1584,7 +1731,7 @@ struct CalendarScreen: View {
                     Button { Task { await store.step(1) } } label: {
                         Image(systemName: "chevron.right").font(.system(size: 14, weight: .semibold))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     .foregroundStyle(Theme.brand)
                 }
             }

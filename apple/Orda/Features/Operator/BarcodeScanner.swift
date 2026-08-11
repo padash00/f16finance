@@ -134,7 +134,7 @@ struct ScannerPane: View {
                     .onSubmit(submitManual)
 
                 Button("Найти", action: submitManual)
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     .font(Typography.callout.weight(.semibold))
                     .foregroundStyle(manualCode.isEmpty ? Theme.textDim : Theme.brand)
                     .disabled(manualCode.isEmpty)

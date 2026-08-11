@@ -224,7 +224,7 @@ struct ShiftScreen: View {
                 Button("Отправить") {
                     Task { await store.flushQueue() }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .font(Typography.caption.weight(.bold))
                 .foregroundStyle(Theme.warning)
             }

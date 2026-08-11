@@ -1335,7 +1335,7 @@ private struct ArenaStationRow: View {
                         .font(.system(size: 15))
                         .foregroundStyle(Theme.textDim)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .fixedSize()
             }
         }
@@ -1651,7 +1651,7 @@ private struct RetailPointToggleRow: View {
             .contentShape(Rectangle())
             .opacity(isEnabled ? 1 : 0.6)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
         .disabled(!isEnabled)
     }
 }

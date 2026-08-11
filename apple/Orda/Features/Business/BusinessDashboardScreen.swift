@@ -180,7 +180,7 @@ struct BusinessDashboardScreen: View {
                     }
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
         }
     }
 
@@ -240,7 +240,7 @@ struct BusinessDashboardScreen: View {
                         subtitle: "динамика, категории, прибыль"
                     )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
 
                 RowDivider()
 
@@ -252,7 +252,7 @@ struct BusinessDashboardScreen: View {
                         subtitle: "\(resolver.nativeGroups().count) доступно"
                     )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
             }
         }
     }

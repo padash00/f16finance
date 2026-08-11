@@ -1040,7 +1040,7 @@ struct WeeklyReportScreen: View {
                         } label: {
                             WeeklyCompanyRow(company: company, isExpanded: expanded == company.id)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressable)
 
                         if expanded == company.id {
                             WeeklyCompanyDetail(company: company)

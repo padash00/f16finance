@@ -160,7 +160,7 @@ struct OrganizationsScreen: View {
                     NavigationLink(value: OrganizationRoute(organization: organization)) {
                         OrganizationCard(organization: organization)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                 }
             }
             .padding(Spacing.lg)
