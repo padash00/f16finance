@@ -148,10 +148,18 @@ export async function GET(request: Request) {
       })
     }
 
+    // Те же исходные данные, что и у `/api/operator/salary`.
+    //
+    // Здесь не хватало оператора и шкалы стажа — и надбавка за стаж на главном
+    // экране просто не считалась. Получались две разные цифры за одну неделю:
+    // «заработано» на «Смене» меньше, чем «к выплате» в «Моих деньгах», и
+    // объяснить эту разницу было нечем.
     const weekSummary = calculateOperatorWeekSummary({
       operatorId: context.operator.id,
+      operator: context.operator || null,
       companies: references.companies,
       rules: references.rules,
+      seniorityTiers: references.seniorityTiers,
       shiftRules,
       assignments: references.assignments,
       incomes: operatorData.incomes,
@@ -187,6 +195,9 @@ export async function GET(request: Request) {
         debtAmount: weekSummary.debtAmount,
         advanceAmount: weekSummary.advanceAmount,
         netAmount: weekSummary.netAmount,
+        autoBonusTotal: weekSummary.autoBonusTotal,
+        seniorityBonusTotal: weekSummary.seniorityBonusTotal,
+        shiftsCount: weekSummary.shiftsCount,
         paidAmount,
         remainingAmount,
         status: weekRowRes.data?.status || (paidAmount > 0 ? (remainingAmount <= 0.009 ? 'paid' : 'partial') : 'draft'),

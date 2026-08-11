@@ -32,6 +32,7 @@ struct SaleScreen: View {
                 content
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.background)
         .navigationTitle("Продажа")
         .task {

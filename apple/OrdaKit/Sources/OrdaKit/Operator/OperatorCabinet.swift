@@ -16,6 +16,15 @@ public struct SalaryWeek: Decodable, Sendable, Hashable {
     public let remainingAmount: Double
     public let status: String
     public let shiftsCount: Int?
+    /// Автобонус за смены — считается правилами точки и в `bonusAmount` не
+    /// входит.
+    ///
+    /// Его отсутствие и ломало арифметику: «начислено 10 500, аванс −248, итого
+    /// 12 252» — разница ровно на автобонус, о котором на экране не было ни
+    /// слова.
+    public let autoBonusTotal: Double
+    /// Надбавка за стаж. Входит в начисление по сменам, показываем справочно.
+    public let seniorityBonusTotal: Double
     /// Смены недели. Приходят внутри `week`, поэтому разбираем здесь же:
     /// прошлый вариант доставал их отдельным контейнером и терял из-за
     /// двойной опциональности — график молча оставался пустым.
@@ -34,7 +43,7 @@ public struct SalaryWeek: Decodable, Sendable, Hashable {
     private enum CodingKeys: String, CodingKey {
         case weekStart, weekEnd, grossAmount, bonusAmount, fineAmount
         case debtAmount, advanceAmount, netAmount, paidAmount, remainingAmount
-        case status, shiftsCount, shifts
+        case status, shiftsCount, shifts, autoBonusTotal, seniorityBonusTotal
     }
 
     public init(from decoder: any Decoder) throws {
@@ -51,7 +60,20 @@ public struct SalaryWeek: Decodable, Sendable, Hashable {
         remainingAmount = try c.decodeIfPresent(Double.self, forKey: .remainingAmount) ?? 0
         status = try c.decodeIfPresent(String.self, forKey: .status) ?? "draft"
         shiftsCount = try c.decodeIfPresent(Int.self, forKey: .shiftsCount)
+        autoBonusTotal = try c.decodeIfPresent(Double.self, forKey: .autoBonusTotal) ?? 0
+        seniorityBonusTotal = try c.decodeIfPresent(Double.self, forKey: .seniorityBonusTotal) ?? 0
         shifts = try c.decodeIfPresent([SalaryShift].self, forKey: .shifts) ?? []
+    }
+
+    /// Что не сошлось.
+    ///
+    /// Сумма строк должна давать «итого». Если сервер добавит новую
+    /// составляющую, а приложение о ней ещё не знает, разница окажется здесь —
+    /// лучше строка «прочее», чем цифры, которые не сходятся на экране.
+    public var unexplainedAmount: Double {
+        let explained = grossAmount + autoBonusTotal + bonusAmount
+            - fineAmount - debtAmount - advanceAmount
+        return netAmount - explained
     }
 }
 
@@ -220,22 +242,47 @@ public struct OperatorTaskList: Decodable, Sendable {
 public struct SalaryShift: Decodable, Sendable, Hashable, Identifiable {
     public let date: String
     public let shift: String?
-    public let amount: Double?
     public let companyName: String?
+    /// Выручка смены — от неё считается процент.
+    public let totalIncome: Double
+    /// Ставка или процент от выручки — то, что начислено за саму смену.
+    public let baseSalary: Double
+    /// Надбавка за стаж и её процент.
+    public let seniorityBonus: Double
+    public let seniorityPercent: Double
+    /// Автобонус по правилам точки.
+    public let autoBonus: Double
+    /// Доплата за роль (старший смены и подобное).
+    public let roleBonus: Double
+    /// Итог за смену.
+    public let salary: Double
 
     public var id: String { "\(date)-\(shift ?? "")" }
 
+    public var isNight: Bool { shift == "night" }
+    public var shiftLabel: String { isNight ? "ночная" : "дневная" }
+
+    /// Сумма за смену. Раньше читалось несуществующее поле `amount`, и график
+    /// смен всегда оставался пустым, а «за что начислено» — без единой цифры.
+    public var amount: Double? { salary > 0 ? salary : nil }
+
     private enum CodingKeys: String, CodingKey {
-        case date, shift, amount
-        case companyName = "companyName"
+        case date, shift, companyName, totalIncome, baseSalary
+        case seniorityBonus, seniorityPercent, autoBonus, roleBonus, salary
     }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         date = try c.decodeIfPresent(String.self, forKey: .date) ?? ""
         shift = try c.decodeIfPresent(String.self, forKey: .shift)
-        amount = try c.decodeIfPresent(Double.self, forKey: .amount)
         companyName = try c.decodeIfPresent(String.self, forKey: .companyName)
+        totalIncome = try c.decodeFlexibleDouble(forKey: .totalIncome) ?? 0
+        baseSalary = try c.decodeFlexibleDouble(forKey: .baseSalary) ?? 0
+        seniorityBonus = try c.decodeFlexibleDouble(forKey: .seniorityBonus) ?? 0
+        seniorityPercent = try c.decodeFlexibleDouble(forKey: .seniorityPercent) ?? 0
+        autoBonus = try c.decodeFlexibleDouble(forKey: .autoBonus) ?? 0
+        roleBonus = try c.decodeFlexibleDouble(forKey: .roleBonus) ?? 0
+        salary = try c.decodeFlexibleDouble(forKey: .salary) ?? 0
     }
 }
 

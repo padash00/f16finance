@@ -15,6 +15,7 @@ struct MoneyScreen: View {
 
                 SplitDashboard {
                     breakdownCard(week)
+                    shiftsCard
                     // Пустой график хуже отсутствия: рамка с подписями дней и
                     // без столбцов читается как поломка.
                     if hasShiftAmounts {
@@ -86,6 +87,25 @@ struct MoneyScreen: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 StatRow("Начислено за смены", value: Money.format(week.grossAmount), icon: "calendar")
+                if week.seniorityBonusTotal > 0 {
+                    // Стаж уже внутри начисления за смены — показываем
+                    // справочно, отдельной суммой к итогу не идёт.
+                    StatRow(
+                        "· из них надбавка за стаж",
+                        value: Money.format(week.seniorityBonusTotal),
+                        valueColor: Theme.textMuted
+                    )
+                }
+                if week.autoBonusTotal > 0 {
+                    // Автобонус считают правила точки. Его отсутствие на экране
+                    // и ломало арифметику: строки не сходились с итогом.
+                    StatRow(
+                        "Бонусы за смены",
+                        value: Money.signed(week.autoBonusTotal),
+                        valueColor: Theme.positive,
+                        icon: "sparkles"
+                    )
+                }
                 if week.bonusAmount > 0 {
                     StatRow("Бонусы", value: Money.signed(week.bonusAmount), valueColor: Theme.positive, icon: "plus.circle")
                 }
@@ -99,8 +119,45 @@ struct MoneyScreen: View {
                     StatRow("Удержано в счёт долга", value: Money.signed(-week.debtAmount), valueColor: Theme.negative, icon: "creditcard")
                 }
 
+                // Если сервер добавит составляющую, о которой приложение ещё
+                // не знает, разница окажется здесь. Строка «прочее» честнее,
+                // чем цифры, которые на экране не сходятся.
+                if abs(week.unexplainedAmount) >= 1 {
+                    StatRow(
+                        week.unexplainedAmount > 0 ? "Прочие начисления" : "Прочие удержания",
+                        value: Money.signed(week.unexplainedAmount),
+                        valueColor: week.unexplainedAmount > 0 ? Theme.positive : Theme.negative,
+                        icon: "questionmark.circle"
+                    )
+                }
+
                 RowDivider()
                 StatRow("Итого к выплате", value: Money.format(week.netAmount), emphasized: true)
+            }
+        }
+    }
+
+    /// За что начислено — по сменам.
+    ///
+    /// Раньше на экране была одна строка «начислено за смены» общей суммой:
+    /// сколько дала конкретная ночь и почему у соседней смены вышло больше,
+    /// понять было нельзя. Спор с управляющим начинался ровно отсюда.
+    @ViewBuilder
+    private var shiftsCard: some View {
+        let shifts = cabinet.salary?.shifts.filter { $0.salary > 0 } ?? []
+        if !shifts.isEmpty {
+            Card {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    SectionHeader(
+                        "За что начислено",
+                        subtitle: "\(shifts.count) \(pluralize(shifts.count, "смена", "смены", "смен"))"
+                    )
+
+                    ForEach(Array(shifts.enumerated()), id: \.element.id) { index, shift in
+                        if index > 0 { RowDivider() }
+                        SalaryShiftRow(shift: shift)
+                    }
+                }
             }
         }
     }
@@ -358,5 +415,55 @@ struct OperatorProfileScreen: View {
         } message: {
             Text("Неотправленные чеки останутся на устройстве.")
         }
+    }
+}
+
+/// Одна смена в разборе зарплаты: дата, точка и из чего сложилась сумма.
+private struct SalaryShiftRow: View {
+    let shift: SalaryShift
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(dayLabel)
+                    .font(Typography.callout.weight(.semibold))
+                    .foregroundStyle(Theme.text)
+                Text(shift.shiftLabel)
+                    .font(Typography.caption)
+                    .foregroundStyle(Theme.textDim)
+                Spacer(minLength: Spacing.sm)
+                Text(Money.format(shift.salary))
+                    .font(Typography.callout.weight(.semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.text)
+            }
+
+            // Из чего сложилась смена. Выручку показываем рядом: процент
+            // считается от неё, и без неё цифра выглядит взятой с потолка.
+            Text(parts)
+                .font(Typography.caption)
+                .foregroundStyle(Theme.textDim)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, Spacing.xs)
+    }
+
+    private var dayLabel: String {
+        guard let date = DateParsing.parseDateOnly(shift.date) else { return shift.date }
+        return date.formatted(.dateTime.day().month(.abbreviated))
+    }
+
+    private var parts: String {
+        var items: [String] = []
+        if shift.baseSalary > 0 { items.append("ставка \(Money.format(shift.baseSalary))") }
+        if shift.seniorityBonus > 0 {
+            let percent = shift.seniorityPercent > 0 ? " (\(Percent.format(shift.seniorityPercent)))" : ""
+            items.append("стаж \(Money.format(shift.seniorityBonus))\(percent)")
+        }
+        if shift.autoBonus > 0 { items.append("бонус \(Money.format(shift.autoBonus))") }
+        if shift.roleBonus > 0 { items.append("за роль \(Money.format(shift.roleBonus))") }
+        if shift.totalIncome > 0 { items.append("выручка \(Money.format(shift.totalIncome))") }
+        if let company = shift.companyName, !company.isEmpty { items.append(company) }
+        return items.joined(separator: " · ")
     }
 }

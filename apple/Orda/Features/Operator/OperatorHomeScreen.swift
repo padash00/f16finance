@@ -250,13 +250,19 @@ struct OperatorHomeScreen: View {
             || (cabinet.overview?.counters?.activeDebts ?? 0) > 0
     }
 
+    /// Что требует внимания.
+    ///
+    /// Пункты разделены линиями: без них четыре строки с иконками и значками
+    /// сливаются в сплошную стену, и понять, где кончается одна и начинается
+    /// другая, можно только по цвету значка.
     private var attentionSection: some View {
         Card(accent: Theme.warning) {
-            VStack(alignment: .leading, spacing: Spacing.md) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
                 Text("Требует внимания")
                     .font(Typography.label)
                     .foregroundStyle(Theme.warning)
                     .textCase(.uppercase)
+                    .padding(.bottom, Spacing.xs)
 
                 if !store.blockingChecklists.isEmpty {
                     NavigationLink(value: OperatorHomeRoute.checklists) {
@@ -273,6 +279,7 @@ struct OperatorHomeScreen: View {
                 }
 
                 if !cabinet.pendingArticles.isEmpty {
+                    if !store.blockingChecklists.isEmpty { RowDivider() }
                     NavigationLink(value: OperatorHomeRoute.knowledge) {
                         NavigationRow(
                             icon: "book.closed",
@@ -287,6 +294,7 @@ struct OperatorHomeScreen: View {
                 }
 
                 if cabinet.overdueCount > 0 {
+                    if !store.blockingChecklists.isEmpty || !cabinet.pendingArticles.isEmpty { RowDivider() }
                     NavigationLink(value: OperatorHomeRoute.tasks) {
                         NavigationRow(
                             icon: "clock.badge.exclamationmark",
@@ -299,6 +307,9 @@ struct OperatorHomeScreen: View {
                 }
 
                 if let counters = cabinet.overview?.counters, counters.activeDebts > 0 {
+                    if !store.blockingChecklists.isEmpty || !cabinet.pendingArticles.isEmpty || cabinet.overdueCount > 0 {
+                        RowDivider()
+                    }
                     NavigationLink(value: OperatorHomeRoute.money) {
                         NavigationRow(
                             icon: "creditcard.trianglebadge.exclamationmark",

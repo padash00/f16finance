@@ -69,27 +69,42 @@ public struct EmptyStateView: View {
 
     public var body: some View {
         VStack(spacing: Spacing.lg) {
-            Image(systemName: icon)
-                .font(.system(size: 40, weight: .light))
-                .foregroundStyle(Theme.textDim)
+            // Значок в круге, как на большом экране: одинокая иконка на пустом
+            // поле читается как ошибка отрисовки, а не как «пока пусто».
+            ZStack {
+                Circle()
+                    .fill(Theme.surfaceRaised)
+                    .frame(width: 76, height: 76)
+                Image(systemName: icon)
+                    .font(.system(size: 30, weight: .light))
+                    .foregroundStyle(Theme.textDim)
+            }
 
             VStack(spacing: Spacing.sm) {
                 Text(title)
                     .font(Typography.title)
                     .foregroundStyle(Theme.text)
+                    .multilineTextAlignment(.center)
                 Text(message)
                     .font(Typography.callout)
                     .foregroundStyle(Theme.textMuted)
                     .multilineTextAlignment(.center)
             }
+            .frame(maxWidth: 360)
 
             if let actionTitle, let action {
                 Button(actionTitle, action: action)
                     .buttonStyle(PrimaryButtonStyle())
+                    .frame(maxWidth: 280)
             }
         }
-        .frame(maxWidth: 360)
         .padding(Spacing.xxl)
+        // Во всю доступную площадь и по центру.
+        //
+        // Раньше блок занимал ровно свою высоту, и на пустом экране получалась
+        // серая полоса под заголовком, а ниже — белое поле: выглядело как
+        // недогруженная страница, а не как «здесь пусто».
+        .frame(maxWidth: .infinity, minHeight: 320, maxHeight: .infinity, alignment: .center)
     }
 }
 

@@ -48,6 +48,7 @@ struct AuditScreen: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.background)
         .navigationTitle("Ревизия")
         .navigationDestination(for: AuditActRoute.self) { route in
