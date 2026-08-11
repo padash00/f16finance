@@ -28,3 +28,6 @@ apple/Config.local.xcconfig
 # Xcode и SwiftPM собирают их наравне с оригиналом и падают на дублях типов.
 * 2.*
 * 3.*
+
+# Служебные файлы Finder.
+.DS_Store
