@@ -6,20 +6,41 @@ import SwiftUI
 ///
 /// На большом экране читают подряд — открыл одну, тут же следующую. Переход
 /// «назад в список» между каждой статьёй только мешает.
+///
+/// Список был плоским: два десятка одинаковых строк подряд, а то, что четыре
+/// из них требуют подтверждения, читалось по тонкой синей полоске слева и
+/// значку «подтвердить», похожему на кнопку. Оператор в начале смены не видел
+/// главного — сколько ему осталось прочитать и что именно.
 struct KnowledgeScreen: View {
     @Environment(CabinetStore.self) private var cabinet
     @Environment(\.surface) private var surface
 
     @State private var selected: KnowledgeArticle?
+    @State private var search = ""
 
-    private var articles: [KnowledgeArticle] {
+    /// Все статьи: сначала непрочитанные, потом важные, потом остальные.
+    private var ordered: [KnowledgeArticle] {
         guard let knowledge = cabinet.knowledge else { return [] }
-        // Требующие подтверждения — наверх: их читают не по желанию.
         let pending = knowledge.pendingConfirmations
-        let rest = knowledge.articles.filter { article in
-            !pending.contains { $0.id == article.id }
+        let pendingIDs = Set(pending.map(\.id))
+        let rest = knowledge.articles.filter { !pendingIDs.contains($0.id) }
+        // Важное выше обычного: правила про кассу и безопасность ищут в спешке.
+        let critical = rest.filter(\.isCritical)
+        let ordinary = rest.filter { !$0.isCritical }
+        return pending + critical + ordinary
+    }
+
+    /// Поиск по названию и краткому описанию.
+    ///
+    /// Статей десятки, а нужную ищут в конкретной ситуации — «не работает
+    /// компьютер», «долг клиента». Листать до неё в такой момент некогда.
+    private var articles: [KnowledgeArticle] {
+        let query = search.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { return ordered }
+        return ordered.filter { article in
+            article.title.localizedCaseInsensitiveContains(query)
+                || (article.summary ?? "").localizedCaseInsensitiveContains(query)
         }
-        return pending + rest
     }
 
     private var pendingIDs: Set<String> {
@@ -38,10 +59,18 @@ struct KnowledgeScreen: View {
         } empty: {
             WideEmptyState(
                 icon: "book.closed",
-                title: "Статей нет",
-                message: "База знаний для вашей точки пока пуста."
+                title: search.isEmpty ? "Статей нет" : "Ничего не нашлось",
+                message: search.isEmpty
+                    ? "База знаний для вашей точки пока пуста."
+                    : "По запросу «\(search)» статей нет."
+            )
+        } header: {
+            KnowledgeSummary(
+                pending: pendingIDs.count,
+                total: cabinet.knowledge?.articles.count ?? 0
             )
         }
+        .searchable(text: $search, prompt: "Найти статью")
         .navigationTitle("Знания")
         .toolbar { LogoutToolbarItem() }
         .task { if cabinet.knowledge == nil { await cabinet.loadKnowledge() } }
@@ -49,42 +78,117 @@ struct KnowledgeScreen: View {
     }
 }
 
+/// Сводка над списком.
+///
+/// Отвечает на единственный вопрос, с которым сюда заходят в начале смены:
+/// «сколько мне ещё читать». Раньше это число было только значком на вкладке.
+private struct KnowledgeSummary: View {
+    let pending: Int
+    let total: Int
+
+    var body: some View {
+        Card(accent: pending > 0 ? Theme.info : nil) {
+            HStack(spacing: Spacing.md) {
+                Image(systemName: pending > 0 ? "book.pages" : "checkmark.seal.fill")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(pending > 0 ? Theme.info : Theme.positive)
+                    .frame(width: 34, height: 34)
+                    .background(
+                        (pending > 0 ? Theme.info : Theme.positive).opacity(0.12),
+                        in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                    )
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(pending > 0
+                        ? "\(pending) \(pluralize(pending, "статья ждёт", "статьи ждут", "статей ждут")) подтверждения"
+                        : "Всё прочитано")
+                        .font(Typography.callout.weight(.semibold))
+                        .foregroundStyle(Theme.text)
+                    Text(pending > 0
+                        ? "Они наверху списка. Откройте и подтвердите — это фиксируется по версии правила."
+                        : "В базе \(total) \(pluralize(total, "статья", "статьи", "статей")). Пригодится, когда что-то пойдёт не так.")
+                        .font(Typography.caption)
+                        .foregroundStyle(Theme.textDim)
+                }
+
+                Spacer(minLength: 0)
+            }
+        }
+    }
+}
+
 /// Строка статьи в списке.
+///
+/// Карточка со значком слева — как в остальном приложении. Значок несёт
+/// состояние: непрочитанное синим, важное жёлтым, прочитанное спокойным серым.
+/// Раньше состояние читалось значком «подтвердить», который выглядел кнопкой,
+/// хотя нажимать надо было саму строку.
 struct ArticleRow: View {
     let article: KnowledgeArticle
     let needsConfirmation: Bool
 
+    private var accent: Color {
+        if needsConfirmation { return Theme.info }
+        if article.isCritical { return Theme.warning }
+        return Theme.textDim
+    }
+
+    private var icon: String {
+        if needsConfirmation { return "exclamationmark.circle.fill" }
+        if article.isCritical { return "exclamationmark.triangle.fill" }
+        return "doc.text"
+    }
+
     var body: some View {
-        HStack(spacing: Spacing.md) {
-            RoundedRectangle(cornerRadius: 2)
-                .fill(needsConfirmation ? Theme.info : .clear)
-                .frame(width: 3)
+        Card(padding: Spacing.md, accent: needsConfirmation ? Theme.info : nil) {
+            HStack(alignment: .top, spacing: Spacing.md) {
+                Image(systemName: icon)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(accent)
+                    .frame(width: 30, height: 30)
+                    .background(
+                        accent.opacity(0.12),
+                        in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                    )
 
-            VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text(article.title)
-                    .font(Typography.callout.weight(.medium))
-                    .foregroundStyle(Theme.text)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-
-                if let summary = article.summary, !summary.isEmpty {
-                    Text(summary)
-                        .font(Typography.caption)
-                        .foregroundStyle(Theme.textDim)
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text(article.title)
+                        .font(Typography.callout.weight(.semibold))
+                        .foregroundStyle(Theme.text)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    if let summary = article.summary, !summary.isEmpty {
+                        Text(summary)
+                            .font(Typography.caption)
+                            .foregroundStyle(Theme.textMuted)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    HStack(spacing: Spacing.xs) {
+                        if needsConfirmation {
+                            Text("нужно подтвердить")
+                                .font(Typography.caption.weight(.semibold))
+                                .foregroundStyle(Theme.info)
+                        } else if article.isCritical {
+                            Text("важное")
+                                .font(Typography.caption.weight(.semibold))
+                                .foregroundStyle(Theme.warning)
+                        }
+                    }
                 }
 
-                if needsConfirmation {
-                    StatusChip("подтвердить", kind: .info)
-                } else if article.isCritical {
-                    StatusChip("важное", kind: .warning)
-                }
+                Spacer(minLength: 0)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Theme.textDim)
+                    .padding(.top, Spacing.xs)
             }
-
-            Spacer(minLength: 0)
         }
-        .padding(Spacing.md)
         .contentShape(Rectangle())
     }
 }

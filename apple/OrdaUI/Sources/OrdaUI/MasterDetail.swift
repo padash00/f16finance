@@ -9,12 +9,14 @@ import SwiftUI
 ///
 /// На телефоне вырождается в обычный список с переходом — там колонки негде
 /// взять.
-public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: View, Empty: View>: View {
+public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: View, Empty: View, Header: View>: View {
     private let items: [Item]
     @Binding private var selection: Item?
     private let row: (Item) -> Row
     private let detail: (Item) -> Detail
     private let empty: () -> Empty
+    /// Шапка над списком: сводка, счётчик, подсказка. Пустая по умолчанию.
+    private let header: () -> Header
     private let listWidth: CGFloat
     private let actions: (Item) -> [RowAction]
 
@@ -27,7 +29,8 @@ public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: Vie
         actions: @escaping (Item) -> [RowAction] = { _ in [] },
         @ViewBuilder row: @escaping (Item) -> Row,
         @ViewBuilder detail: @escaping (Item) -> Detail,
-        @ViewBuilder empty: @escaping () -> Empty
+        @ViewBuilder empty: @escaping () -> Empty,
+        @ViewBuilder header: @escaping () -> Header
     ) {
         self.items = items
         self._selection = selection
@@ -36,6 +39,7 @@ public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: Vie
         self.row = row
         self.detail = detail
         self.empty = empty
+        self.header = header
     }
 
     public var body: some View {
@@ -62,7 +66,13 @@ public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: Vie
                 // перезагрузиться: ссылка держит вид внутри себя, и замена
                 // массива уносила его вместе с переходом. Экран «не
                 // открывался», хотя открывался и тут же закрывался.
-                List(items) { item in
+                List {
+                    header()
+                        .listRowInsets(EdgeInsets(top: Spacing.sm, leading: Spacing.lg, bottom: Spacing.sm, trailing: Spacing.lg))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+
+                    ForEach(items) { item in
                     NavigationLink(value: item.id) {
                         row(item)
                     }
@@ -70,6 +80,7 @@ public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: Vie
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
                     .rowActions(actions(item))
+                    }
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
@@ -100,6 +111,7 @@ public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: Vie
             Group {
                     ScrollView {
                         LazyVStack(spacing: Spacing.sm) {
+                            header()
                             ForEach(items) { item in
                                 Button {
                                     selection = item
@@ -293,5 +305,29 @@ public struct WideEmptyState: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.background)
+    }
+}
+
+extension MasterDetail where Header == EmptyView {
+    /// Без шапки — как было у всех экранов до её появления.
+    public init(
+        items: [Item],
+        selection: Binding<Item?>,
+        listWidth: CGFloat = 340,
+        actions: @escaping (Item) -> [RowAction] = { _ in [] },
+        @ViewBuilder row: @escaping (Item) -> Row,
+        @ViewBuilder detail: @escaping (Item) -> Detail,
+        @ViewBuilder empty: @escaping () -> Empty
+    ) {
+        self.init(
+            items: items,
+            selection: selection,
+            listWidth: listWidth,
+            actions: actions,
+            row: row,
+            detail: detail,
+            empty: empty,
+            header: { EmptyView() }
+        )
     }
 }
