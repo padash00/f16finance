@@ -50,14 +50,32 @@ final class CabinetStore {
         knowledge?.pendingConfirmations ?? []
     }
 
+    // ── Общение ──────────────────────────────────────────────────────────────
+
+    /// Непрочитанные личные сообщения — для значка на вкладке.
+    ///
+    /// Оператор смотрит в приложение между клиентами, а не сидит в нём: без
+    /// значка сообщение от управляющего он увидит в конце смены, когда оно уже
+    /// не нужно.
+    private(set) var unreadMessages = 0
+
     // ── Общее ────────────────────────────────────────────────────────────────
 
     private(set) var error: String?
 
     private let service: OperatorService
+    private let feed: FeedService
 
     init(api: APIClient) {
         self.service = OperatorService(api: api)
+        self.feed = FeedService(api: api)
+    }
+
+    /// Тихо: у оператора может не быть организации (не назначен на точку), и
+    /// ошибка счётчика не должна мешать смене.
+    func refreshUnreadMessages() async {
+        guard let list = try? await feed.threads() else { return }
+        unreadMessages = list.unreadTotal
     }
 
     // ── Загрузка ─────────────────────────────────────────────────────────────
@@ -66,7 +84,8 @@ final class CabinetStore {
     func bootstrap() async {
         async let overviewTask: Void = loadOverview()
         async let tasksTask: Void = loadTasks()
-        _ = await (overviewTask, tasksTask)
+        async let unreadTask: Void = refreshUnreadMessages()
+        _ = await (overviewTask, tasksTask, unreadTask)
     }
 
     func loadOverview() async {

@@ -40,6 +40,8 @@ final class PushManager {
     enum PushRoute: Equatable {
         case news
         case directMessages
+        case teamChat
+        case staff
         case birthdays
         case approvals
 
@@ -48,6 +50,8 @@ final class PushManager {
             switch self {
             case .news: "news"
             case .directMessages: "messages"
+            case .teamChat: "team-chat"
+            case .staff: "staff"
             case .birthdays: "birthdays"
             case .approvals: "expenses-pending"
             }
@@ -58,6 +62,8 @@ final class PushManager {
             switch kind {
             case "news": self = .news
             case "direct-message": self = .directMessages
+            case "team-chat-announcement": self = .teamChat
+            case "staff-account-deleted": self = .staff
             case "birthday": self = .birthdays
             case "expense-approval": self = .approvals
             default: return nil

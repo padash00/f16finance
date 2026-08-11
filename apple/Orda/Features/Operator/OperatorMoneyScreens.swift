@@ -254,6 +254,39 @@ struct OperatorProfileScreen: View {
                     }
                 }
 
+                // Общение. Смена — работа в одиночку у стойки: спросить
+                // сменщика, что с должником, или сказать управляющему, что
+                // кончилась бумага, раньше можно было только в личном
+                // мессенджере, мимо системы и без следа.
+                Card {
+                    VStack(spacing: Spacing.sm) {
+                        NavigationLink { TeamChatScreen() } label: {
+                            NavigationRow(
+                                icon: "bubble.left.and.bubble.right",
+                                iconColor: Theme.accent(for: .operator),
+                                title: "Командный чат",
+                                subtitle: "Общий для всей точки"
+                            )
+                        }
+                        .buttonStyle(.plain)
+
+                        RowDivider()
+
+                        NavigationLink { MessagesScreen() } label: {
+                            NavigationRow(
+                                icon: "envelope",
+                                iconColor: ChartPalette.series2,
+                                title: "Сообщения",
+                                subtitle: "Лично сменщику или управляющему",
+                                badge: cabinet.unreadMessages,
+                                badgeColor: Theme.info
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .task { await cabinet.refreshUnreadMessages() }
+
                 if store.queuedSalesCount > 0 {
                     Card(accent: Theme.warning) {
                         VStack(alignment: .leading, spacing: Spacing.md) {

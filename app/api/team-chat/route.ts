@@ -8,6 +8,7 @@
 
 import { NextResponse } from 'next/server'
 import { hasCapability } from '@/lib/server/capabilities'
+import { pushToOrganization } from '@/lib/server/push'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { sanitizeOrFilterValue } from '@/lib/server/postgrest-filter'
@@ -259,6 +260,20 @@ export async function POST(request: Request) {
     .single()
 
   if (error) return json({ error: error.message }, 500)
+
+  // Объявление — уведомлением всей организации.
+  //
+  // Обычные сообщения не шлём намеренно: в чате точки за смену их десятки, и
+  // push на каждое приучает выключать уведомления вообще — вместе с теми, что
+  // действительно важны. Объявление вешают, когда его должны прочитать все:
+  // смена переносится, точка закрывается, поменялись цены.
+  if (isAnnouncement) {
+    await pushToOrganization(supabase, orgId, {
+      title: 'Объявление',
+      body: `${senderName}: ${messageText.slice(0, 120)}`,
+      data: { kind: 'team-chat-announcement' },
+    })
+  }
 
   return json({ message: data })
 }

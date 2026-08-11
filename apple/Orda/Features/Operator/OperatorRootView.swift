@@ -22,7 +22,7 @@ struct OperatorRootView: View {
 
     /// Разделы операторского контура.
     enum OperatorSection: String, CaseIterable, Identifiable, Hashable {
-        case shift, sale, audit, tasks, checklists, knowledge, money, schedule, profile
+        case shift, sale, audit, tasks, checklists, knowledge, chat, messages, money, schedule, profile
 
         var id: String { rawValue }
 
@@ -34,6 +34,8 @@ struct OperatorRootView: View {
             case .tasks: "Задачи"
             case .checklists: "Чек-листы"
             case .knowledge: "Знания"
+            case .chat: "Командный чат"
+            case .messages: "Сообщения"
             case .money: "Мои деньги"
             case .schedule: "График"
             case .profile: "Профиль"
@@ -48,6 +50,8 @@ struct OperatorRootView: View {
             case .tasks: "checklist"
             case .checklists: "checkmark.seal"
             case .knowledge: "book.closed"
+            case .chat: "bubble.left.and.bubble.right"
+            case .messages: "envelope"
             case .money: "wallet.bifold"
             case .schedule: "calendar"
             case .profile: "person.crop.circle"
@@ -61,6 +65,7 @@ struct OperatorRootView: View {
         static let sidebarGroups: [(title: String, items: [OperatorSection])] = [
             ("Работа", [.shift, .sale, .audit]),
             ("Задачи", [.tasks, .checklists, .knowledge]),
+            ("Общение", [.chat, .messages]),
             ("Личное", [.money, .schedule, .profile]),
         ]
     }
@@ -175,6 +180,11 @@ struct OperatorRootView: View {
         case .tasks: TasksScreen()
         case .checklists: ChecklistsScreen()
         case .knowledge: KnowledgeScreen()
+        // Те же экраны, что у владельца и сотрудников: чат один на всю
+        // организацию, и отдельный «операторский» был бы вторым чатом,
+        // в котором половина людей не сидит.
+        case .chat: TeamChatScreen()
+        case .messages: MessagesScreen()
         case .money: MoneyScreen()
         case .schedule: ScheduleScreen()
         case .profile: OperatorProfileScreen()
@@ -185,7 +195,11 @@ struct OperatorRootView: View {
         switch section {
         case .sale: store?.cartCount ?? 0
         case .tasks: cabinet?.activeTasks.count ?? 0
-        case .knowledge, .profile: cabinet?.pendingArticles.count ?? 0
+        case .knowledge: cabinet?.pendingArticles.count ?? 0
+        case .messages: cabinet?.unreadMessages ?? 0
+        // В профиле живут и статьи, и переписка: значок собирает всё, до чего
+        // с таб-бара иначе не докопаться.
+        case .profile: (cabinet?.pendingArticles.count ?? 0) + (cabinet?.unreadMessages ?? 0)
         case .checklists: store?.blockingChecklists.count ?? 0
         default: 0
         }

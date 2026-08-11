@@ -138,7 +138,7 @@ export async function DELETE(request: Request) {
       {
         title: 'Удалён аккаунт',
         body: `${displayName} удалил свою учётную запись. Вход закрыт, история смен и выплат сохранена.`,
-        data: { route: 'staff' },
+        data: { kind: 'staff-account-deleted' },
       },
     )
 
