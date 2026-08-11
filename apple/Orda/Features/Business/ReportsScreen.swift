@@ -52,28 +52,28 @@ struct ReportsScreen: View {
             DashboardGrid {
                 MetricTile(
                     label: "Выручка",
-                    value: Money.compact(totals.totalIncome),
+                    value: Money.format(totals.totalIncome),
                     change: report.incomeChange,
                     icon: "arrow.down.circle.fill",
                     accent: Theme.brand
                 )
                 MetricTile(
                     label: "Расходы",
-                    value: Money.compact(totals.totalExpense),
+                    value: Money.format(totals.totalExpense),
                     change: report.expenseChange,
                     icon: "arrow.up.circle.fill",
                     accent: Theme.negative
                 )
                 MetricTile(
                     label: "Прибыль",
-                    value: Money.compact(totals.profit),
+                    value: Money.format(totals.profit),
                     change: report.profitChange,
                     icon: "chart.line.uptrend.xyaxis",
                     accent: totals.profit >= 0 ? Theme.positive : Theme.negative
                 )
                 MetricTile(
                     label: "Средний чек",
-                    value: Money.compact(totals.avgTransaction),
+                    value: Money.format(totals.avgTransaction),
                     icon: "receipt.fill",
                     accent: Theme.info
                 )
@@ -194,7 +194,7 @@ struct ReportsScreen: View {
                                     .foregroundStyle(Theme.text)
                                     .lineLimit(1)
                                 Spacer(minLength: Spacing.sm)
-                                Text(Money.compact(row.amount))
+                                Text(Money.format(row.amount))
                                     .font(Typography.callout.weight(.medium))
                                     .monospacedDigit()
                                     .foregroundStyle(Theme.text)

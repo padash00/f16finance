@@ -146,25 +146,25 @@ struct TaxScreen: View {
             DashboardGrid {
                 MetricTile(
                     label: "Облагаемый оборот",
-                    value: Money.compact(summary.revenue),
+                    value: Money.format(summary.revenue),
                     icon: "arrow.down.circle.fill",
                     accent: Theme.brand
                 )
                 MetricTile(
                     label: "ИПН \(Percent.format(summary.rate))",
-                    value: Money.compact(summary.ipn),
+                    value: Money.format(summary.ipn),
                     icon: "percent",
                     accent: Theme.info
                 )
                 MetricTile(
                     label: "Соцплатежи за себя",
-                    value: Money.compact(summary.selfSocial),
+                    value: Money.format(summary.selfSocial),
                     icon: "person.fill",
                     accent: Theme.accent
                 )
                 MetricTile(
                     label: "За работников",
-                    value: Money.compact(summary.burden.payrollTaxes),
+                    value: Money.format(summary.burden.payrollTaxes),
                     icon: "person.3.fill",
                     accent: Theme.accent
                 )
@@ -190,7 +190,7 @@ struct TaxScreen: View {
                     .foregroundStyle(Theme.textDim)
                     .textCase(.uppercase)
 
-                Text(Money.compact(summary.burden.total))
+                Text(Money.format(summary.burden.total))
                     .font(Typography.hero)
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
@@ -315,7 +315,7 @@ struct TaxScreen: View {
                 RowDivider()
                 StatRow(
                     "Прогноз на конец года",
-                    value: Money.compact(outlook.projected),
+                    value: Money.format(outlook.projected),
                     valueColor: outlook.vatRisk ? Theme.warning : Theme.text,
                     icon: "chart.line.uptrend.xyaxis"
                 )
@@ -453,25 +453,25 @@ struct CashflowScreen: View {
                 DashboardGrid {
                     MetricTile(
                         label: "Пришло",
-                        value: Money.compact(totals.income),
+                        value: Money.format(totals.income),
                         icon: "arrow.down.circle.fill",
                         accent: Theme.brand
                     )
                     MetricTile(
                         label: "Ушло",
-                        value: Money.compact(totals.expense),
+                        value: Money.format(totals.expense),
                         icon: "arrow.up.circle.fill",
                         accent: Theme.negative
                     )
                     MetricTile(
                         label: "Чистый поток",
-                        value: Money.compact(totals.net),
+                        value: Money.format(totals.net),
                         icon: "chart.line.uptrend.xyaxis",
                         accent: totals.net >= 0 ? Theme.positive : Theme.negative
                     )
                     MetricTile(
                         label: "Баланс на конец",
-                        value: Money.compact(totals.endingBalance),
+                        value: Money.format(totals.endingBalance),
                         icon: "wallet.pass",
                         accent: totals.endingBalance >= 0 ? Theme.info : Theme.negative
                     )
@@ -579,7 +579,7 @@ private struct DayCashRow: View {
                 .frame(width: 72, alignment: .leading)
 
             VStack(alignment: .leading, spacing: 1) {
-                Text("\(Money.compact(day.income)) · \(Money.compact(day.expense))")
+                Text("\(Money.format(day.income)) · \(Money.format(day.expense))")
                     .font(Typography.caption)
                     .monospacedDigit()
                     .foregroundStyle(Theme.textDim)
@@ -596,7 +596,7 @@ private struct DayCashRow: View {
                     .font(Typography.callout.weight(.medium))
                     .monospacedDigit()
                     .foregroundStyle(day.net >= 0 ? Theme.text : Theme.negative)
-                Text(Money.compact(day.balance))
+                Text(Money.format(day.balance))
                     .font(Typography.caption)
                     .monospacedDigit()
                     .foregroundStyle(Theme.textDim)
@@ -914,25 +914,25 @@ struct WeeklyReportScreen: View {
                 DashboardGrid {
                     MetricTile(
                         label: "Выручка",
-                        value: Money.compact(totals.income.total),
+                        value: Money.format(totals.income.total),
                         icon: "arrow.down.circle.fill",
                         accent: Theme.brand
                     )
                     MetricTile(
                         label: "Расходы",
-                        value: Money.compact(totals.expenseTotal),
+                        value: Money.format(totals.expenseTotal),
                         icon: "arrow.up.circle.fill",
                         accent: Theme.negative
                     )
                     MetricTile(
                         label: "Итог недели",
-                        value: Money.compact(totals.net),
+                        value: Money.format(totals.net),
                         icon: "equal.circle.fill",
                         accent: totals.net >= 0 ? Theme.positive : Theme.negative
                     )
                     MetricTile(
                         label: "Остаток наличных",
-                        value: Money.compact(totals.remainCash),
+                        value: Money.format(totals.remainCash),
                         icon: "banknote",
                         accent: totals.remainCash >= 0 ? Theme.info : Theme.negative
                     )
@@ -1073,7 +1073,7 @@ private struct WeeklyCompanyRow: View {
             Spacer(minLength: Spacing.sm)
 
             VStack(alignment: .trailing, spacing: 1) {
-                Text(Money.compact(company.income.total))
+                Text(Money.format(company.income.total))
                     .font(Typography.callout.weight(.medium))
                     .monospacedDigit()
                     .foregroundStyle(Theme.text)
@@ -1222,13 +1222,13 @@ struct ValuationScreen: View {
             DashboardGrid {
                 MetricTile(
                     label: "Выручка за 12 мес",
-                    value: Money.compact(valuation.revenue12mo),
+                    value: Money.format(valuation.revenue12mo),
                     icon: "arrow.down.circle.fill",
                     accent: Theme.brand
                 )
                 MetricTile(
                     label: "EBITDA за 12 мес",
-                    value: Money.compact(valuation.ebitda12mo),
+                    value: Money.format(valuation.ebitda12mo),
                     change: valuation.trendPct,
                     icon: "chart.line.uptrend.xyaxis",
                     accent: valuation.ebitda12mo >= 0 ? Theme.positive : Theme.negative
@@ -1241,7 +1241,7 @@ struct ValuationScreen: View {
                 )
                 MetricTile(
                     label: "Чистая прибыль",
-                    value: Money.compact(valuation.netProfit12mo),
+                    value: Money.format(valuation.netProfit12mo),
                     icon: "banknote.fill",
                     accent: valuation.netProfit12mo >= 0 ? Theme.positive : Theme.negative
                 )
@@ -1269,13 +1269,13 @@ struct ValuationScreen: View {
                         .foregroundStyle(Theme.textDim)
                         .textCase(.uppercase)
 
-                    Text(Money.compact(valuation.valuation.mid))
+                    Text(Money.format(valuation.valuation.mid))
                         .font(Typography.hero)
                         .foregroundStyle(Theme.text)
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
 
-                    Text("Вилка \(Money.compact(valuation.valuation.low)) — \(Money.compact(valuation.valuation.high))")
+                    Text("Вилка \(Money.format(valuation.valuation.low)) — \(Money.format(valuation.valuation.high))")
                         .font(Typography.callout)
                         .foregroundStyle(Theme.textMuted)
 

@@ -121,13 +121,13 @@ struct ShiftScreen: View {
         HStack(spacing: Spacing.md) {
             MetricTile(
                 label: "Наличные",
-                value: Money.compact(totals.expectedCash),
+                value: Money.format(totals.expectedCash),
                 icon: "banknote",
                 accent: Theme.positive
             )
             MetricTile(
                 label: "Kaspi",
-                value: Money.compact(totals.expectedKaspi),
+                value: Money.format(totals.expectedKaspi),
                 icon: "creditcard",
                 accent: Theme.info
             )

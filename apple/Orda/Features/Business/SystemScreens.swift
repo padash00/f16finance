@@ -394,7 +394,7 @@ struct SettingsScreen: View {
                 )
                 MetricTile(
                     label: "Бюджет в месяц",
-                    value: Money.compact(data.monthlyBudgetTotal),
+                    value: Money.format(data.monthlyBudgetTotal),
                     icon: "chart.pie",
                     accent: Theme.textMuted
                 )

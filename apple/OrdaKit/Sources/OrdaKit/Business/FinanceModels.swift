@@ -417,7 +417,7 @@ public struct GoalPlan: Decodable, Sendable, Identifiable, Hashable {
         switch metric {
         case "checks": Quantity.format(value)
         case "margin": Percent.format(value)
-        default: Money.compact(value)
+        default: Money.format(value)
         }
     }
 

@@ -93,7 +93,7 @@ struct BusinessDashboardScreen: View {
                     Text("\(dashboard.today.count) \(pluralize(dashboard.today.count, "чек", "чека", "чеков"))")
                         .font(Typography.caption)
                         .foregroundStyle(Theme.textDim)
-                    Text("вчера \(Money.compact(dashboard.yesterdayTotal))")
+                    Text("вчера \(Money.format(dashboard.yesterdayTotal))")
                         .font(Typography.caption)
                         .foregroundStyle(Theme.textDim)
                 }
@@ -151,7 +151,7 @@ struct BusinessDashboardScreen: View {
                             Text(
                                 store.pending.isEmpty
                                     ? "Расходов на одобрении нет"
-                                    : "\(store.pending.count) \(pluralize(store.pending.count, "расход", "расхода", "расходов")) · \(Money.compact(store.pending.reduce(0) { $0 + $1.total }))"
+                                    : "\(store.pending.count) \(pluralize(store.pending.count, "расход", "расхода", "расходов")) · \(Money.format(store.pending.reduce(0) { $0 + $1.total }))"
                             )
                             .font(Typography.caption)
                             .foregroundStyle(Theme.textDim)

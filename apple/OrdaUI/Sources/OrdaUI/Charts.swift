@@ -79,7 +79,7 @@ public struct TrendChart: View {
         subtitle: String? = nil,
         points: [TimePoint],
         color: Color = ChartPalette.series1,
-        formatter: @escaping (Double) -> String = { Money.compact($0) }
+        formatter: @escaping (Double) -> String = { Money.format($0) }
     ) {
         self.title = title
         self.subtitle = subtitle
@@ -165,7 +165,7 @@ public struct TrendChart: View {
                 AxisGridLine().foregroundStyle(ChartPalette.grid.opacity(0.5))
                 AxisValueLabel {
                     if let amount = value.as(Double.self) {
-                        Text(Money.compact(amount))
+                        Text(Money.axisTick(amount))
                             .font(.system(size: 10))
                             .foregroundStyle(Theme.textDim)
                     }
@@ -218,7 +218,7 @@ public struct CategoryBarChart: View {
         title: String,
         points: [CategoryPoint],
         color: Color = ChartPalette.series1,
-        formatter: @escaping (Double) -> String = { Money.compact($0) }
+        formatter: @escaping (Double) -> String = { Money.format($0) }
     ) {
         self.title = title
         self.points = points
@@ -265,7 +265,7 @@ public struct CategoryBarChart: View {
                             AxisGridLine().foregroundStyle(ChartPalette.grid.opacity(0.5))
                             AxisValueLabel {
                                 if let amount = value.as(Double.self) {
-                                    Text(Money.compact(amount))
+                                    Text(Money.axisTick(amount))
                                         .font(.system(size: 10))
                                         .foregroundStyle(Theme.textDim)
                                 }
@@ -380,7 +380,7 @@ public struct SplitBar: View {
                         Text(segment.label)
                             .font(Typography.caption)
                             .foregroundStyle(Theme.textMuted)
-                        Text(Money.compact(segment.value))
+                        Text(Money.format(segment.value))
                             .font(Typography.caption.weight(.semibold))
                             .monospacedDigit()
                             .foregroundStyle(Theme.text)

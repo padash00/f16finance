@@ -464,7 +464,7 @@ struct CustomerRowView: View {
             Spacer(minLength: Spacing.sm)
 
             VStack(alignment: .trailing, spacing: 1) {
-                Text(Money.compact(customer.totalSpent))
+                Text(Money.format(customer.totalSpent))
                     .font(Typography.callout.weight(.medium))
                     .monospacedDigit()
                     .foregroundStyle(Theme.text)
@@ -511,7 +511,7 @@ private struct CustomerDetail: View {
                 DashboardGrid {
                     MetricTile(
                         label: "Потрачено",
-                        value: Money.compact(customer.totalSpent),
+                        value: Money.format(customer.totalSpent),
                         icon: "banknote.fill",
                         accent: Theme.brand
                     )
@@ -523,7 +523,7 @@ private struct CustomerDetail: View {
                     )
                     MetricTile(
                         label: "Средний чек",
-                        value: Money.compact(customer.averageCheck),
+                        value: Money.format(customer.averageCheck),
                         icon: "receipt.fill",
                         accent: Theme.textMuted
                     )

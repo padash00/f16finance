@@ -183,7 +183,7 @@ struct ReceiptsListScreen: View {
                 DashboardGrid {
                     MetricTile(
                         label: "Выручка",
-                        value: Money.compact(summary.revenue),
+                        value: Money.format(summary.revenue),
                         icon: "creditcard.fill",
                         accent: Theme.brand
                     )
@@ -195,7 +195,7 @@ struct ReceiptsListScreen: View {
                     )
                     MetricTile(
                         label: "Средний чек",
-                        value: Money.compact(summary.averageCheck),
+                        value: Money.format(summary.averageCheck),
                         icon: "arrow.up.arrow.down",
                         accent: Theme.info
                     )
@@ -207,7 +207,7 @@ struct ReceiptsListScreen: View {
                     )
                     MetricTile(
                         label: "Скидки",
-                        value: Money.compact(summary.discounts + summary.loyaltyDiscounts),
+                        value: Money.format(summary.discounts + summary.loyaltyDiscounts),
                         icon: "tag.fill",
                         accent: summary.discounts + summary.loyaltyDiscounts > 0 ? Theme.warning : Theme.textDim
                     )
@@ -301,7 +301,7 @@ struct ReceiptsListScreen: View {
                     ForEach(Array(sources.enumerated()), id: \.element.id) { index, share in
                         if index > 0 { RowDivider() }
                         VStack(alignment: .leading, spacing: Spacing.xs) {
-                            StatRow(share.label, value: Money.compact(share.amount))
+                            StatRow(share.label, value: Money.format(share.amount))
                             Text("\(share.count) \(pluralize(share.count, "чек", "чека", "чеков"))")
                                 .font(Typography.caption)
                                 .foregroundStyle(Theme.textDim)

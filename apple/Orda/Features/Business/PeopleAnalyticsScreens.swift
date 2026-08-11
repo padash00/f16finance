@@ -345,7 +345,7 @@ struct PerformanceScreen: View {
                 RowDivider()
                 StatRow("Смен в истории", value: "\(baseline.shiftsCount)", icon: "clock.arrow.circlepath")
                 StatRow("Слотов", value: "\(baseline.slotsCount)", icon: "square.grid.3x3")
-                StatRow("Медиана смены", value: Money.compact(baseline.globalMedian), icon: "chart.bar")
+                StatRow("Медиана смены", value: Money.format(baseline.globalMedian), icon: "chart.bar")
             }
         }
     }
@@ -384,7 +384,7 @@ private struct PerformanceRowView: View {
                     .font(Typography.callout)
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
-                Text("\(item.shifts) \(pluralize(item.shifts, "смена", "смены", "смен")) · \(Money.compact(item.totalRevenue))")
+                Text("\(item.shifts) \(pluralize(item.shifts, "смена", "смены", "смен")) · \(Money.format(item.totalRevenue))")
                     .font(Typography.caption)
                     .monospacedDigit()
                     .foregroundStyle(Theme.textDim)
@@ -438,19 +438,19 @@ private struct PerformanceDetail: View {
                     )
                     MetricTile(
                         label: "Сверх нормы",
-                        value: Money.compact(item.aboveNorm),
+                        value: Money.format(item.aboveNorm),
                         icon: "plusminus",
                         accent: item.aboveNorm >= 0 ? Theme.positive : Theme.negative
                     )
                     MetricTile(
                         label: "Выручка",
-                        value: Money.compact(item.totalRevenue),
+                        value: Money.format(item.totalRevenue),
                         icon: "banknote.fill",
                         accent: Theme.info
                     )
                     MetricTile(
                         label: "В среднем за смену",
-                        value: Money.compact(item.avgRevenuePerShift),
+                        value: Money.format(item.avgRevenuePerShift),
                         icon: "chart.bar.fill",
                         accent: Theme.textMuted
                     )
@@ -523,11 +523,11 @@ private struct PerformanceDetail: View {
             Spacer(minLength: Spacing.sm)
 
             VStack(alignment: .trailing, spacing: 1) {
-                Text(Money.compact(shift.actual))
+                Text(Money.format(shift.actual))
                     .font(Typography.callout.weight(.medium))
                     .monospacedDigit()
                     .foregroundStyle(Theme.text)
-                Text("норма \(Money.compact(shift.expected))")
+                Text("норма \(Money.format(shift.expected))")
                     .font(Typography.caption)
                     .monospacedDigit()
                     .foregroundStyle(Theme.textDim)
@@ -663,7 +663,7 @@ struct RatingsScreen: View {
         DashboardGrid {
             MetricTile(
                 label: "Суммарная выручка",
-                value: Money.compact(store.totalRevenue),
+                value: Money.format(store.totalRevenue),
                 icon: "banknote.fill",
                 accent: Theme.brand
             )
@@ -738,12 +738,12 @@ private struct LeaderboardRowView: View {
             Spacer(minLength: Spacing.sm)
 
             VStack(alignment: .trailing, spacing: 1) {
-                Text(entry.revenue > 0 ? Money.compact(entry.revenue) : "—")
+                Text(entry.revenue > 0 ? Money.format(entry.revenue) : "—")
                     .font(Typography.callout.weight(.medium))
                     .monospacedDigit()
                     .foregroundStyle(entry.revenue > 0 ? Theme.text : Theme.textDim)
                 if entry.shifts > 0 {
-                    Text("\(entry.shifts) \(pluralize(entry.shifts, "смена", "смены", "смен")) · \(Money.compact(entry.avgPerShift))")
+                    Text("\(entry.shifts) \(pluralize(entry.shifts, "смена", "смены", "смен")) · \(Money.format(entry.avgPerShift))")
                         .font(Typography.caption)
                         .monospacedDigit()
                         .foregroundStyle(Theme.textDim)
@@ -981,7 +981,7 @@ private struct AchievementRowView: View {
             Spacer(minLength: Spacing.sm)
 
             VStack(alignment: .trailing, spacing: 1) {
-                Text(Money.compact(result.stat.revenue))
+                Text(Money.format(result.stat.revenue))
                     .font(Typography.callout.weight(.medium))
                     .monospacedDigit()
                     .foregroundStyle(Theme.text)
@@ -1012,7 +1012,7 @@ private struct AchievementDetail: View {
                     )
                     MetricTile(
                         label: "Выручка",
-                        value: Money.compact(result.stat.revenue),
+                        value: Money.format(result.stat.revenue),
                         icon: "banknote.fill",
                         accent: Theme.brand
                     )

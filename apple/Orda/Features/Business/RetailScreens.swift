@@ -1056,7 +1056,7 @@ struct StationsScreen: View {
             if store.canReadRevenue {
                 MetricTile(
                     label: "Выручка · \(store.period.title.lowercased())",
-                    value: Money.compact(revenue.amount),
+                    value: Money.format(revenue.amount),
                     icon: "banknote.fill",
                     accent: Theme.brand
                 )
@@ -1068,7 +1068,7 @@ struct StationsScreen: View {
                 )
                 MetricTile(
                     label: "Средний чек",
-                    value: Money.compact(revenue.averageCheck),
+                    value: Money.format(revenue.averageCheck),
                     icon: "arrow.up.arrow.down",
                     accent: Theme.textMuted
                 )
@@ -1254,7 +1254,7 @@ struct StationsScreen: View {
                     ForEach(Array(revenue.byStation.prefix(8).enumerated()), id: \.element.id) { index, share in
                         if index > 0 { RowDivider() }
                         VStack(alignment: .leading, spacing: Spacing.xs) {
-                            StatRow(share.name, value: Money.compact(share.amount))
+                            StatRow(share.name, value: Money.format(share.amount))
                             Text("\(share.count) \(pluralize(share.count, "сессия", "сессии", "сессий")) · \(share.minutes / 60) ч")
                                 .font(Typography.caption)
                                 .foregroundStyle(Theme.textDim)
@@ -1821,7 +1821,7 @@ struct StoreShiftsScreen: View {
             if !store.shifts.isEmpty {
                 HStack(spacing: Spacing.md) {
                     SummaryPill(title: "Смен", value: "\(store.shifts.count)", tint: Theme.textMuted)
-                    SummaryPill(title: "Выручка", value: Money.compact(revenue), tint: Theme.brand)
+                    SummaryPill(title: "Выручка", value: Money.format(revenue), tint: Theme.brand)
                     SummaryPill(
                         title: "Открыто сейчас",
                         value: "\(open.count)",
@@ -1901,7 +1901,7 @@ private struct StoreShiftRow: View {
             Spacer(minLength: Spacing.sm)
 
             VStack(alignment: .trailing, spacing: 2) {
-                Text(Money.compact(shift.totals.sales))
+                Text(Money.format(shift.totals.sales))
                     .font(Typography.callout.weight(.medium))
                     .monospacedDigit()
                     .foregroundStyle(Theme.text)
@@ -1998,7 +1998,7 @@ private struct StoreShiftDetailView: View {
         DashboardGrid {
             MetricTile(
                 label: "Итог смены",
-                value: Money.compact(report.total),
+                value: Money.format(report.total),
                 icon: "sum",
                 accent: Theme.brand
             )
@@ -2010,13 +2010,13 @@ private struct StoreShiftDetailView: View {
             )
             MetricTile(
                 label: "Средний чек",
-                value: Money.compact(report.averageCheck),
+                value: Money.format(report.averageCheck),
                 icon: "arrow.up.arrow.down",
                 accent: Theme.info
             )
             MetricTile(
                 label: "Возвраты",
-                value: Money.compact(report.returns),
+                value: Money.format(report.returns),
                 icon: "arrow.uturn.left",
                 accent: report.returns > 0 ? Theme.warning : Theme.textDim
             )

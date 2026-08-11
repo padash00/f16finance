@@ -321,19 +321,19 @@ struct SimulationScreen: View {
                 DashboardGrid {
                     MetricTile(
                         label: "Потенциал / мес",
-                        value: Money.compact(projection.potentialPerMonth),
+                        value: Money.format(projection.potentialPerMonth),
                         icon: "chart.bar.fill",
                         accent: Theme.brand
                     )
                     MetricTile(
                         label: "Факт / мес",
-                        value: Money.compact(projection.factPerMonth),
+                        value: Money.format(projection.factPerMonth),
                         icon: "banknote.fill",
                         accent: Theme.positive
                     )
                     MetricTile(
                         label: projection.isUnderPotential ? "Недобор / мес" : "Сверх модели / мес",
-                        value: Money.compact(abs(projection.gapPerMonth)),
+                        value: Money.format(abs(projection.gapPerMonth)),
                         icon: projection.isUnderPotential ? "arrow.down.right" : "arrow.up.right",
                         accent: projection.isUnderPotential ? Theme.warning : Theme.positive
                     )
@@ -368,7 +368,7 @@ struct SimulationScreen: View {
                     .foregroundStyle(Theme.textDim)
                     .textCase(.uppercase)
 
-                Text(Money.compact(abs(projection.gapPerMonth)))
+                Text(Money.format(abs(projection.gapPerMonth)))
                     .font(Typography.hero)
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
@@ -522,7 +522,7 @@ private struct SimulationZoneRow: View {
                 Spacer(minLength: Spacing.sm)
 
                 VStack(alignment: .trailing, spacing: 1) {
-                    Text(Money.compact(zone.potentialPerMonth))
+                    Text(Money.format(zone.potentialPerMonth))
                         .font(Typography.callout.weight(.medium))
                         .monospacedDigit()
                         .foregroundStyle(Theme.text)
@@ -654,12 +654,12 @@ struct SupplierBillingScreen: View {
             HStack(spacing: Spacing.md) {
                 SummaryPill(
                     title: "Должны",
-                    value: Money.compact(board.totals.open),
+                    value: Money.format(board.totals.open),
                     tint: board.totals.open > 0 ? Theme.warning : Theme.positive
                 )
                 SummaryPill(
                     title: "Просрочено",
-                    value: Money.compact(board.totals.overdue),
+                    value: Money.format(board.totals.overdue),
                     tint: board.totals.hasOverdue ? Theme.negative : Theme.textMuted
                 )
                 SummaryPill(
@@ -745,7 +745,7 @@ private struct SupplierDebtRow: View {
             Spacer(minLength: Spacing.sm)
 
             VStack(alignment: .trailing, spacing: 2) {
-                Text(Money.compact(debt.amount))
+                Text(Money.format(debt.amount))
                     .font(Typography.callout.weight(.medium))
                     .monospacedDigit()
                     .foregroundStyle(debt.isOpen ? Theme.text : Theme.textDim)

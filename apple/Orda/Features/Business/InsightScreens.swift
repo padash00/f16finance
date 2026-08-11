@@ -342,20 +342,20 @@ struct AnalysisScreen: View {
             DashboardGrid {
                 MetricTile(
                     label: "Доход, \(report.targetMonthLabel)",
-                    value: Money.compact(report.income.expected),
+                    value: Money.format(report.income.expected),
                     change: report.income.momGrowthPct,
                     icon: "arrow.down.circle.fill",
                     accent: Theme.brand
                 )
                 MetricTile(
                     label: "Расход",
-                    value: Money.compact(report.expense.expected),
+                    value: Money.format(report.expense.expected),
                     icon: "arrow.up.circle.fill",
                     accent: Theme.negative
                 )
                 MetricTile(
                     label: "Прибыль",
-                    value: Money.compact(report.profit.expected),
+                    value: Money.format(report.profit.expected),
                     icon: "chart.line.uptrend.xyaxis",
                     accent: report.profit.expected >= 0 ? Theme.positive : Theme.negative
                 )
@@ -626,12 +626,12 @@ struct AnalysisScreen: View {
                                     .foregroundStyle(Theme.text)
                                     .lineLimit(1)
                                 Spacer(minLength: Spacing.sm)
-                                Text(Money.compact(row.income))
+                                Text(Money.format(row.income))
                                     .font(Typography.callout.weight(.medium))
                                     .monospacedDigit()
                                     .foregroundStyle(Theme.text)
                             }
-                            Text("прибыль \(Money.compact(row.profit)) · маржа \(Percent.format(row.marginPct))")
+                            Text("прибыль \(Money.format(row.profit)) · маржа \(Percent.format(row.marginPct))")
                                 .font(Typography.caption)
                                 .foregroundStyle(Theme.textDim)
                             ProportionBar(ratio: maximum > 0 ? row.income / maximum : 0)
@@ -763,25 +763,25 @@ struct ForecastScreen: View {
             DashboardGrid {
                 MetricTile(
                     label: report.projected.month0Label.isEmpty ? "Текущий месяц" : report.projected.month0Label,
-                    value: Money.compact(report.projected.month0Income),
+                    value: Money.format(report.projected.month0Income),
                     icon: "calendar",
                     accent: Theme.brand
                 )
                 MetricTile(
                     label: report.projected.month1Label.isEmpty ? "Через месяц" : report.projected.month1Label,
-                    value: Money.compact(report.projected.month1Income),
+                    value: Money.format(report.projected.month1Income),
                     icon: "calendar",
                     accent: Theme.info
                 )
                 MetricTile(
                     label: report.projected.month2Label.isEmpty ? "Через два месяца" : report.projected.month2Label,
-                    value: Money.compact(report.projected.month2Income),
+                    value: Money.format(report.projected.month2Income),
                     icon: "calendar",
                     accent: Theme.accent
                 )
                 MetricTile(
                     label: "Прибыль текущего месяца",
-                    value: Money.compact(report.projected.month0Profit),
+                    value: Money.format(report.projected.month0Profit),
                     icon: "banknote.fill",
                     accent: report.projected.month0Profit >= 0 ? Theme.positive : Theme.negative
                 )
@@ -808,7 +808,7 @@ struct ForecastScreen: View {
                     Text("История \(Self.rangeLabel(from: report.dateFrom, to: report.dateTo))")
                         .font(Typography.callout)
                         .foregroundStyle(Theme.text)
-                    Text("Средняя выручка недели \(Money.compact(report.avgWeeklyIncome))")
+                    Text("Средняя выручка недели \(Money.format(report.avgWeeklyIncome))")
                         .font(Typography.caption)
                         .foregroundStyle(Theme.textDim)
                 }
@@ -877,7 +877,7 @@ struct ForecastScreen: View {
                                     .foregroundStyle(Theme.text)
                                     .lineLimit(1)
                                 Spacer(minLength: Spacing.sm)
-                                Text(Money.compact(category.total))
+                                Text(Money.format(category.total))
                                     .font(Typography.callout.weight(.medium))
                                     .monospacedDigit()
                                     .foregroundStyle(Theme.text)
@@ -946,7 +946,7 @@ struct ForecastScreen: View {
                                     .font(Typography.callout)
                                     .foregroundStyle(Theme.text)
                                 Spacer(minLength: Spacing.sm)
-                                Text(Money.compact(day.avg))
+                                Text(Money.format(day.avg))
                                     .font(Typography.caption)
                                     .monospacedDigit()
                                     .foregroundStyle(Theme.textMuted)
@@ -1000,7 +1000,7 @@ struct ForecastScreen: View {
                                     .foregroundStyle(Theme.text)
                                     .lineLimit(1)
                                 Spacer(minLength: Spacing.sm)
-                                Text(Money.compact(outlier.amount))
+                                Text(Money.format(outlier.amount))
                                     .font(Typography.callout.weight(.medium))
                                     .monospacedDigit()
                                     .foregroundStyle(Theme.warning)
@@ -1242,7 +1242,7 @@ struct BusinessIntelligenceScreen: View {
                             .foregroundStyle(Theme.textDim)
                             .textCase(.uppercase)
                         ForEach(section.vital.prefix(8)) { item in
-                            StatRow(item.name, value: Money.compact(item.revenue))
+                            StatRow(item.name, value: Money.format(item.revenue))
                         }
                     }
                 }
@@ -1327,7 +1327,7 @@ struct BusinessIntelligenceScreen: View {
                                         .font(Typography.callout)
                                         .foregroundStyle(Theme.text)
                                     Spacer(minLength: Spacing.sm)
-                                    Text(Money.compact(day.revenue))
+                                    Text(Money.format(day.revenue))
                                         .font(Typography.callout.weight(.medium))
                                         .monospacedDigit()
                                         .foregroundStyle(day.isAbove ? Theme.positive : Theme.negative)
@@ -1358,7 +1358,7 @@ struct BusinessIntelligenceScreen: View {
                                     .font(Typography.callout)
                                     .foregroundStyle(Theme.text)
                                 Spacer(minLength: Spacing.sm)
-                                Text("\(segment.count) · \(Money.compact(segment.monetary))")
+                                Text("\(segment.count) · \(Money.format(segment.monetary))")
                                     .font(Typography.caption)
                                     .monospacedDigit()
                                     .foregroundStyle(Theme.textMuted)
@@ -1386,12 +1386,12 @@ struct BusinessIntelligenceScreen: View {
                                     .foregroundStyle(Theme.text)
                                     .lineLimit(1)
                                 Spacer(minLength: Spacing.sm)
-                                Text(Money.compact(row.clv))
+                                Text(Money.format(row.clv))
                                     .font(Typography.callout.weight(.medium))
                                     .monospacedDigit()
                                     .foregroundStyle(Theme.brand)
                             }
-                            Text("средний чек \(Money.compact(row.avgOrder)) · \(row.frequency) \(pluralize(row.frequency, "покупка", "покупки", "покупок"))")
+                            Text("средний чек \(Money.format(row.avgOrder)) · \(row.frequency) \(pluralize(row.frequency, "покупка", "покупки", "покупок"))")
                                 .font(Typography.caption)
                                 .foregroundStyle(Theme.textDim)
                         }
@@ -1533,21 +1533,21 @@ struct AiCfoScreen: View {
             DashboardGrid {
                 MetricTile(
                     label: "Выручка",
-                    value: Money.compact(report.executive.revenue),
+                    value: Money.format(report.executive.revenue),
                     change: report.executive.revenueDeltaPct,
                     icon: "arrow.down.circle.fill",
                     accent: Theme.brand
                 )
                 MetricTile(
                     label: "Расходы",
-                    value: Money.compact(report.executive.expenses),
+                    value: Money.format(report.executive.expenses),
                     change: report.executive.expensesDeltaPct,
                     icon: "arrow.up.circle.fill",
                     accent: Theme.negative
                 )
                 MetricTile(
                     label: "Прибыль",
-                    value: Money.compact(report.executive.profit),
+                    value: Money.format(report.executive.profit),
                     change: report.executive.profitDeltaPct,
                     icon: "banknote.fill",
                     accent: report.executive.profit >= 0 ? Theme.positive : Theme.negative
@@ -1992,12 +1992,12 @@ struct AiCfoScreen: View {
                                     .foregroundStyle(Theme.text)
                                     .lineLimit(1)
                                 Spacer(minLength: Spacing.sm)
-                                Text(Money.compact(row.profit))
+                                Text(Money.format(row.profit))
                                     .font(Typography.callout.weight(.medium))
                                     .monospacedDigit()
                                     .foregroundStyle(row.profit >= 0 ? Theme.positive : Theme.negative)
                             }
-                            Text("выручка \(Money.compact(row.revenue)) · маржа \(Percent.format(row.margin))")
+                            Text("выручка \(Money.format(row.revenue)) · маржа \(Percent.format(row.margin))")
                                 .font(Typography.caption)
                                 .foregroundStyle(Theme.textDim)
                         }
@@ -2027,7 +2027,7 @@ struct AiCfoScreen: View {
                                     .monospacedDigit()
                                     .foregroundStyle(row.delta > 0 ? Theme.negative : Theme.positive)
                             }
-                            Text("\(Money.compact(row.previous)) → \(Money.compact(row.current))")
+                            Text("\(Money.format(row.previous)) → \(Money.format(row.current))")
                                 .font(Typography.caption)
                                 .foregroundStyle(Theme.textDim)
                         }
@@ -2205,7 +2205,7 @@ struct ExpenseAnalysisScreen: View {
                                 .foregroundStyle(Theme.text)
                                 .lineLimit(1)
                             Spacer(minLength: Spacing.sm)
-                            Text(Money.compact(category.amount))
+                            Text(Money.format(category.amount))
                                 .font(Typography.callout.weight(.medium))
                                 .monospacedDigit()
                                 .foregroundStyle(Theme.text)
@@ -2247,7 +2247,7 @@ struct ExpenseAnalysisScreen: View {
                                     .monospacedDigit()
                                     .foregroundStyle(Theme.negative)
                             }
-                            Text("\(Money.compact(category.previous)) → \(Money.compact(category.amount))")
+                            Text("\(Money.format(category.previous)) → \(Money.format(category.amount))")
                                 .font(Typography.caption)
                                 .foregroundStyle(Theme.textDim)
                         }
@@ -2369,19 +2369,19 @@ struct TeamAnalysisScreen: View {
             DashboardGrid {
                 MetricTile(
                     label: "Оборот команды",
-                    value: Money.compact(aggregates.totalTurnover),
+                    value: Money.format(aggregates.totalTurnover),
                     icon: "arrow.down.circle.fill",
                     accent: Theme.brand
                 )
                 MetricTile(
                     label: "Зарплата к выплате",
-                    value: Money.compact(aggregates.totalNet),
+                    value: Money.format(aggregates.totalNet),
                     icon: "banknote.fill",
                     accent: Theme.info
                 )
                 MetricTile(
                     label: "Выручка за смену",
-                    value: Money.compact(aggregates.avgRevenuePerShift),
+                    value: Money.format(aggregates.avgRevenuePerShift),
                     icon: "clock.fill",
                     accent: Theme.accent
                 )
@@ -2440,12 +2440,12 @@ struct TeamAnalysisScreen: View {
                                 .foregroundStyle(Theme.text)
                                 .lineLimit(1)
                             Spacer(minLength: Spacing.sm)
-                            Text(Money.compact(member.turnover))
+                            Text(Money.format(member.turnover))
                                 .font(Typography.callout.weight(.medium))
                                 .monospacedDigit()
                                 .foregroundStyle(Theme.text)
                         }
-                        Text("\(member.shifts) \(pluralize(member.shifts, "смена", "смены", "смен")) · \(Money.compact(member.revenuePerShift)) за смену · зарплата \(Money.compact(member.net))")
+                        Text("\(member.shifts) \(pluralize(member.shifts, "смена", "смены", "смен")) · \(Money.format(member.revenuePerShift)) за смену · зарплата \(Money.format(member.net))")
                             .font(Typography.caption)
                             .foregroundStyle(Theme.textDim)
                         ProportionBar(

@@ -87,7 +87,7 @@ private struct RevisionRow: View {
 
             VStack(alignment: .trailing, spacing: 1) {
                 if stocktake.shortageAmount > 0 {
-                    Text(Money.compact(stocktake.shortageAmount))
+                    Text(Money.format(stocktake.shortageAmount))
                         .font(Typography.callout.weight(.medium))
                         .monospacedDigit()
                         .foregroundStyle(Theme.negative)
@@ -205,7 +205,7 @@ private struct RevisionLineRow: View {
                     .monospacedDigit()
                     .foregroundStyle(line.isShortage ? Theme.negative : Theme.positive)
                 if line.amount != 0 {
-                    Text(Money.compact(abs(line.amount)))
+                    Text(Money.format(abs(line.amount)))
                         .font(Typography.caption)
                         .monospacedDigit()
                         .foregroundStyle(Theme.textDim)
@@ -233,7 +233,7 @@ struct SuppliersScreen: View {
         VStack(spacing: 0) {
             if let list = store.suppliers, list.totalDebt > 0 {
                 HStack(spacing: Spacing.md) {
-                    SummaryPill(title: "Долг поставщикам", value: Money.compact(list.totalDebt), tint: Theme.warning)
+                    SummaryPill(title: "Долг поставщикам", value: Money.format(list.totalDebt), tint: Theme.warning)
                     SummaryPill(title: "Поставщиков", value: "\(list.suppliers.count)", tint: Theme.textMuted)
                 }
                 .padding(.horizontal, Spacing.lg)
@@ -321,12 +321,12 @@ private struct SupplierRow: View {
             Spacer(minLength: Spacing.sm)
 
             VStack(alignment: .trailing, spacing: 2) {
-                Text(Money.compact(supplier.receiptsTotal))
+                Text(Money.format(supplier.receiptsTotal))
                     .font(Typography.callout.weight(.medium))
                     .monospacedDigit()
                     .foregroundStyle(Theme.text)
                 if supplier.hasDebt {
-                    StatusChip("долг \(Money.compact(supplier.openDebtsAmount))", kind: .warning)
+                    StatusChip("долг \(Money.format(supplier.openDebtsAmount))", kind: .warning)
                 }
             }
         }
@@ -367,7 +367,7 @@ private struct SupplierDetail: View {
                 DashboardGrid {
                     MetricTile(
                         label: "Закуплено всего",
-                        value: Money.compact(supplier.receiptsTotal),
+                        value: Money.format(supplier.receiptsTotal),
                         icon: "shippingbox.fill",
                         accent: Theme.brand
                     )
@@ -379,7 +379,7 @@ private struct SupplierDetail: View {
                     )
                     MetricTile(
                         label: "Долг",
-                        value: Money.compact(supplier.openDebtsAmount),
+                        value: Money.format(supplier.openDebtsAmount),
                         icon: "creditcard.fill",
                         accent: supplier.hasDebt ? Theme.warning : Theme.positive
                     )
@@ -499,12 +499,12 @@ private struct StaffRow: View {
             Spacer(minLength: Spacing.sm)
 
             VStack(alignment: .trailing, spacing: 1) {
-                Text(Money.compact(member.monthlySalary))
+                Text(Money.format(member.monthlySalary))
                     .font(Typography.callout.weight(.medium))
                     .monospacedDigit()
                     .foregroundStyle(Theme.text)
                 if member.monthlySalary > 0 {
-                    Text("выплачено \(Money.compact(paid))")
+                    Text("выплачено \(Money.format(paid))")
                         .font(Typography.caption)
                         .monospacedDigit()
                         .foregroundStyle(paid >= member.monthlySalary ? Theme.positive : Theme.textDim)

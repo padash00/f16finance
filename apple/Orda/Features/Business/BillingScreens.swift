@@ -319,8 +319,8 @@ struct IncidentsScreen: View {
         let pending = store.incidents.filter(\.isPending).count
 
         return HStack(spacing: Spacing.md) {
-            SummaryPill(title: "Штрафы", value: Money.compact(fines), tint: Theme.negative)
-            SummaryPill(title: "Бонусы", value: Money.compact(bonuses), tint: Theme.positive)
+            SummaryPill(title: "Штрафы", value: Money.format(fines), tint: Theme.negative)
+            SummaryPill(title: "Бонусы", value: Money.format(bonuses), tint: Theme.positive)
             SummaryPill(title: "Ждут решения", value: "\(pending)", tint: pending > 0 ? Theme.warning : Theme.textDim)
         }
         .padding(.horizontal, Spacing.lg)
@@ -496,13 +496,13 @@ struct PointDebtsScreen: View {
             DashboardGrid {
                 MetricTile(
                     label: "Всего за неделю",
-                    value: Money.compact(week.totalAmount),
+                    value: Money.format(week.totalAmount),
                     icon: "sum",
                     accent: Theme.brand
                 )
                 MetricTile(
                     label: "Не погашено",
-                    value: Money.compact(week.unpaidAmount),
+                    value: Money.format(week.unpaidAmount),
                     icon: "exclamationmark.circle.fill",
                     accent: week.unpaidAmount > 0 ? Theme.warning : Theme.positive
                 )

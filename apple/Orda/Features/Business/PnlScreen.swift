@@ -73,13 +73,13 @@ struct PnlScreen: View {
                 DashboardGrid {
                     MetricTile(
                         label: "Выручка за период",
-                        value: Money.compact(totals.revenue),
+                        value: Money.format(totals.revenue),
                         icon: "arrow.down.circle.fill",
                         accent: Theme.brand
                     )
                     MetricTile(
                         label: "EBITDA",
-                        value: Money.compact(totals.ebitda),
+                        value: Money.format(totals.ebitda),
                         icon: "chart.line.uptrend.xyaxis",
                         accent: totals.ebitda >= 0 ? Theme.positive : Theme.negative
                     )
@@ -91,7 +91,7 @@ struct PnlScreen: View {
                     )
                     MetricTile(
                         label: "Чистая прибыль",
-                        value: Money.compact(totals.netProfit),
+                        value: Money.format(totals.netProfit),
                         icon: "banknote.fill",
                         accent: totals.netProfit >= 0 ? Theme.positive : Theme.negative
                     )
@@ -175,11 +175,11 @@ private struct MonthRow: View {
             Spacer(minLength: Spacing.sm)
 
             VStack(alignment: .trailing, spacing: 1) {
-                Text(Money.compact(month.ebitda))
+                Text(Money.format(month.ebitda))
                     .font(Typography.callout.weight(.medium))
                     .monospacedDigit()
                     .foregroundStyle(month.ebitda >= 0 ? Theme.text : Theme.negative)
-                Text("\(Percent.format(month.ebitdaMargin)) от \(Money.compact(month.revenue))")
+                Text("\(Percent.format(month.ebitdaMargin)) от \(Money.format(month.revenue))")
                     .font(Typography.caption)
                     .monospacedDigit()
                     .foregroundStyle(Theme.textDim)

@@ -81,7 +81,7 @@ struct SalaryRulesScreen: View {
                     )
                     MetricTile(
                         label: "Потолок смены",
-                        value: Money.compact(book.activeRules.map(\.ceilingPerShift).max() ?? 0),
+                        value: Money.format(book.activeRules.map(\.ceilingPerShift).max() ?? 0),
                         icon: "arrow.up.right",
                         accent: Theme.info
                     )

@@ -76,17 +76,17 @@ struct MonthlyAnalyticsScreen: View {
         DashboardGrid {
             MetricTile(
                 label: "Выручка за год",
-                value: Money.compact(data.revenueTotal),
+                value: Money.format(data.revenueTotal),
                 icon: "arrow.down.circle"
             )
             MetricTile(
                 label: "Расходы за год",
-                value: Money.compact(data.expensesTotal),
+                value: Money.format(data.expensesTotal),
                 icon: "arrow.up.circle"
             )
             MetricTile(
                 label: "Прибыль",
-                value: Money.compact(data.profitTotal),
+                value: Money.format(data.profitTotal),
                 icon: "chart.line.uptrend.xyaxis",
                 accent: data.profitTotal >= 0 ? Theme.positive : Theme.negative
             )
@@ -209,13 +209,13 @@ private struct MonthRow: View {
             }
 
             HStack(spacing: Spacing.md) {
-                Text("Прибыль \(Money.compact(month.profit))")
+                Text("Прибыль \(Money.format(month.profit))")
                     .foregroundStyle(month.profit >= 0 ? Theme.positive : Theme.negative)
                 // `margin_pct` приходит уже в процентах — делить не на что.
                 Text("Маржа \(Percent.format(month.marginPct))")
                 Text("Чеков \(month.checksCount)")
                 if month.avgCheck > 0 {
-                    Text("Средний \(Money.compact(month.avgCheck))")
+                    Text("Средний \(Money.format(month.avgCheck))")
                 }
             }
             .font(Typography.caption)

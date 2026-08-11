@@ -13,8 +13,13 @@ public enum Money {
         return "\(groupedInteger(value.rounded())) \(currencySymbol)"
     }
 
-    /// Компактная форма для плиток и виджетов: `1,8 млн ₸`, `184к ₸`.
-    public static func compact(_ value: Double?) -> String {
+    /// Сокращённая форма — **только для делений оси графика**: `1,8 млн ₸`.
+    ///
+    /// Больше нигде. Сокращение прячет ровно то, ради чего в приложение и
+    /// заходят: «1,8 млн» — это и 1 750 000, и 1 849 999, а между ними сто
+    /// тысяч разницы. На оси же полная сумма в каждом делении не помещается и
+    /// налезает сама на себя.
+    public static func axisTick(_ value: Double?) -> String {
         guard let value, value.isFinite else { return "—" }
         let magnitude = abs(value)
 
@@ -73,13 +78,22 @@ public enum Quantity {
     }
 }
 
-/// Проценты: `+23 %`, `−4 %`.
+/// Проценты: `+23 %`, `23,4 %`, `−4 %`.
 public enum Percent {
+    /// Десятая доля показывается, когда она есть.
+    ///
+    /// Целое число прятало разницу между 23 % и 23,4 % — а на марже и наценке
+    /// это деньги. Ровные значения при этом остаются ровными: «23 %», а не
+    /// «23,0 %».
     public static func format(_ value: Double?, signed: Bool = false) -> String {
         guard let value, value.isFinite else { return "—" }
-        let rounded = Int(value.rounded())
+        let rounded = (value * 10).rounded() / 10
+        let magnitude = abs(rounded)
+        let text = magnitude == magnitude.rounded()
+            ? String(Int(magnitude))
+            : String(format: "%.1f", magnitude).replacingOccurrences(of: ".", with: ",")
         let sign = signed && rounded > 0 ? "+" : rounded < 0 ? "−" : ""
-        return "\(sign)\(abs(rounded))\u{202F}%"
+        return "\(sign)\(text)\u{202F}%"
     }
 
     /// Изменение относительно прошлого периода. `nil`, если сравнивать не с чем:

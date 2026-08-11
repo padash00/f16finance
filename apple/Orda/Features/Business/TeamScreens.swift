@@ -108,7 +108,7 @@ struct OperatorRowView: View {
             Spacer(minLength: Spacing.sm)
 
             VStack(alignment: .trailing, spacing: 1) {
-                Text(Money.compact(person.stats.totalTurnover))
+                Text(Money.format(person.stats.totalTurnover))
                     .font(Typography.callout.weight(.medium))
                     .monospacedDigit()
                     .foregroundStyle(Theme.text)
@@ -160,7 +160,7 @@ private struct OperatorDetail: View {
                 DashboardGrid {
                     MetricTile(
                         label: "Оборот за 30 дней",
-                        value: Money.compact(person.stats.totalTurnover),
+                        value: Money.format(person.stats.totalTurnover),
                         icon: "banknote.fill",
                         accent: Theme.brand
                     )
@@ -172,13 +172,13 @@ private struct OperatorDetail: View {
                     )
                     MetricTile(
                         label: "В среднем за смену",
-                        value: Money.compact(person.stats.avgPerShift),
+                        value: Money.format(person.stats.avgPerShift),
                         icon: "chart.bar.fill",
                         accent: Theme.textMuted
                     )
                     MetricTile(
                         label: "Долги",
-                        value: Money.compact(person.stats.totalDebts),
+                        value: Money.format(person.stats.totalDebts),
                         icon: "creditcard.fill",
                         accent: person.stats.totalDebts > 0 ? Theme.warning : Theme.positive
                     )
@@ -291,19 +291,19 @@ struct SalaryScreen: View {
             DashboardGrid {
                 MetricTile(
                     label: "К выплате",
-                    value: Money.compact(totals.netAmount),
+                    value: Money.format(totals.netAmount),
                     icon: "wallet.bifold.fill",
                     accent: Theme.brand
                 )
                 MetricTile(
                     label: "Выплачено",
-                    value: Money.compact(totals.paidAmount),
+                    value: Money.format(totals.paidAmount),
                     icon: "checkmark.circle.fill",
                     accent: Theme.positive
                 )
                 MetricTile(
                     label: "Осталось",
-                    value: Money.compact(totals.remainingAmount),
+                    value: Money.format(totals.remainingAmount),
                     icon: "hourglass",
                     accent: totals.remainingAmount > 0 ? Theme.warning : Theme.positive
                 )

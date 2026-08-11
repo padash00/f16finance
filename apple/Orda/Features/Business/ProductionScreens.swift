@@ -149,14 +149,14 @@ struct ProductionScreen: View {
                     alignment: .leading,
                     spacing: Spacing.md
                 ) {
-                    SummaryPill(title: "Выручка блюд", value: Money.compact(totals.revenue), tint: Theme.brand)
-                    SummaryPill(title: "Ушло в продукт", value: Money.compact(totals.foodCost), tint: Theme.warning)
+                    SummaryPill(title: "Выручка блюд", value: Money.format(totals.revenue), tint: Theme.brand)
+                    SummaryPill(title: "Ушло в продукт", value: Money.format(totals.foodCost), tint: Theme.warning)
                     SummaryPill(
                         title: "Food cost",
                         value: Percent.format(totals.foodCostPercent),
                         tint: totals.isHigh ? Theme.negative : Theme.positive
                     )
-                    SummaryPill(title: "Осталось", value: Money.compact(totals.margin), tint: Theme.textMuted)
+                    SummaryPill(title: "Осталось", value: Money.format(totals.margin), tint: Theme.textMuted)
                 }
                 .padding(.horizontal, Spacing.lg)
             }
@@ -614,7 +614,7 @@ struct PurchasePlanScreen: View {
                 alignment: .leading,
                 spacing: Spacing.md
             ) {
-                SummaryPill(title: "Закупить на", value: Money.compact(plan.total), tint: Theme.brand)
+                SummaryPill(title: "Закупить на", value: Money.format(plan.total), tint: Theme.brand)
                 if let share = plan.shareOfRevenue {
                     SummaryPill(
                         title: "От недельной выручки",
@@ -714,7 +714,7 @@ private struct PlanSupplierRow: View {
 
                 Spacer(minLength: Spacing.sm)
 
-                Text(Money.compact(group.total))
+                Text(Money.format(group.total))
                     .font(Typography.callout.weight(.medium))
                     .monospacedDigit()
                     .foregroundStyle(Theme.text)

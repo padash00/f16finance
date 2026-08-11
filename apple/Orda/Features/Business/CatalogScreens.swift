@@ -47,13 +47,13 @@ struct ExpenseCategoriesScreen: View {
             DashboardGrid {
                 MetricTile(
                     label: "Потрачено за месяц",
-                    value: Money.compact(all.reduce(0) { $0 + $1.spentThisMonth }),
+                    value: Money.format(all.reduce(0) { $0 + $1.spentThisMonth }),
                     icon: "arrow.up.circle.fill",
                     accent: Theme.brand
                 )
                 MetricTile(
                     label: "Бюджет месяца",
-                    value: Money.compact(budgeted.reduce(0) { $0 + $1.monthlyBudget }),
+                    value: Money.format(budgeted.reduce(0) { $0 + $1.monthlyBudget }),
                     icon: "target",
                     accent: Theme.info
                 )
@@ -153,17 +153,17 @@ private struct BudgetRow: View {
                 Spacer(minLength: Spacing.sm)
 
                 VStack(alignment: .trailing, spacing: 1) {
-                    Text("\(Money.compact(category.spentThisMonth)) из \(Money.compact(category.monthlyBudget))")
+                    Text("\(Money.format(category.spentThisMonth)) из \(Money.format(category.monthlyBudget))")
                         .font(Typography.callout.weight(.medium))
                         .monospacedDigit()
                         .foregroundStyle(tint)
                     if category.isOverBudget {
-                        Text("сверх на \(Money.compact(category.spentThisMonth - category.monthlyBudget))")
+                        Text("сверх на \(Money.format(category.spentThisMonth - category.monthlyBudget))")
                             .font(Typography.caption)
                             .monospacedDigit()
                             .foregroundStyle(Theme.negative)
                     } else {
-                        Text("осталось \(Money.compact(category.remaining))")
+                        Text("осталось \(Money.format(category.remaining))")
                             .font(Typography.caption)
                             .monospacedDigit()
                             .foregroundStyle(Theme.textDim)
@@ -228,7 +228,7 @@ struct StoreAnalyticsScreen: View {
             DashboardGrid {
                 MetricTile(
                     label: "Продано за период",
-                    value: Money.compact(analytics.totalSales),
+                    value: Money.format(analytics.totalSales),
                     icon: "cart.fill",
                     accent: Theme.brand
                 )
@@ -436,9 +436,9 @@ private struct AdminArticleRow: View {
             // Штраф или бонус превращают статью из совета в правило —
             // это стоит видеть в списке, а не открывая её.
             if article.fineAmount > 0 {
-                StatusChip("−\(Money.compact(article.fineAmount))", kind: .danger)
+                StatusChip("−\(Money.format(article.fineAmount))", kind: .danger)
             } else if article.bonusAmount > 0 {
-                StatusChip("+\(Money.compact(article.bonusAmount))", kind: .good)
+                StatusChip("+\(Money.format(article.bonusAmount))", kind: .good)
             }
         }
     }

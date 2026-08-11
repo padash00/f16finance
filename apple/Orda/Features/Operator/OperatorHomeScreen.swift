@@ -299,7 +299,7 @@ struct OperatorHomeScreen: View {
                         HStack(spacing: Spacing.sm) {
                             StatusChip(week.statusLabel, kind: week.status == "paid" ? .good : .neutral)
                             if week.remainingAmount > 0 {
-                                Text("к выплате \(Money.compact(week.remainingAmount))")
+                                Text("к выплате \(Money.format(week.remainingAmount))")
                                     .font(Typography.caption)
                                     .foregroundStyle(Theme.textDim)
                             }

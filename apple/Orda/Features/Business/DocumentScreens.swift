@@ -120,7 +120,7 @@ struct ReceiptsScreen: View {
         return Group {
             if !rows.isEmpty {
                 HStack(spacing: Spacing.md) {
-                    SummaryPill(title: kind.amountLabel, value: Money.compact(active.reduce(0) { $0 + $1.totalAmount }), tint: Theme.brand)
+                    SummaryPill(title: kind.amountLabel, value: Money.format(active.reduce(0) { $0 + $1.totalAmount }), tint: Theme.brand)
                     SummaryPill(title: kind.countLabel, value: "\(active.count)", tint: Theme.textMuted)
                     if expiring > 0 {
                         SummaryPill(title: "Истекает срок", value: "\(expiring)", tint: Theme.warning)
@@ -169,7 +169,7 @@ private struct ReceiptRow: View {
             Spacer(minLength: Spacing.sm)
 
             VStack(alignment: .trailing, spacing: 2) {
-                Text(Money.compact(receipt.totalAmount))
+                Text(Money.format(receipt.totalAmount))
                     .font(Typography.callout.weight(.medium))
                     .monospacedDigit()
                     .foregroundStyle(receipt.isCancelled ? Theme.textDim : Theme.text)
@@ -329,11 +329,11 @@ struct WriteoffsScreen: View {
                 HStack(spacing: Spacing.md) {
                     SummaryPill(
                         title: "Списано всего",
-                        value: Money.compact(active.reduce(0) { $0 + $1.totalAmount }),
+                        value: Money.format(active.reduce(0) { $0 + $1.totalAmount }),
                         tint: Theme.negative
                     )
                     if let top {
-                        SummaryPill(title: top.key, value: Money.compact(top.value), tint: Theme.warning)
+                        SummaryPill(title: top.key, value: Money.format(top.value), tint: Theme.warning)
                     }
                     SummaryPill(title: "Документов", value: "\(active.count)", tint: Theme.textMuted)
                 }
@@ -372,7 +372,7 @@ private struct WriteoffRow: View {
 
             Spacer(minLength: Spacing.sm)
 
-            Text(Money.compact(writeoff.totalAmount))
+            Text(Money.format(writeoff.totalAmount))
                 .font(Typography.callout.weight(.medium))
                 .monospacedDigit()
                 .foregroundStyle(writeoff.isCancelled ? Theme.textDim : Theme.negative)
@@ -547,7 +547,7 @@ struct ShiftReportsScreen: View {
                     SummaryPill(title: "Открыто сейчас", value: "\(open.count)", tint: open.isEmpty ? Theme.textDim : Theme.info)
                     SummaryPill(
                         title: "Выручка",
-                        value: Money.compact(store.shiftReports.reduce(0) { $0 + $1.totals.sales }),
+                        value: Money.format(store.shiftReports.reduce(0) { $0 + $1.totals.sales }),
                         tint: Theme.brand
                     )
                     SummaryPill(
@@ -587,7 +587,7 @@ private struct ShiftReportRow: View {
             Spacer(minLength: Spacing.sm)
 
             VStack(alignment: .trailing, spacing: 2) {
-                Text(Money.compact(shift.totals.sales))
+                Text(Money.format(shift.totals.sales))
                     .font(Typography.callout.weight(.medium))
                     .monospacedDigit()
                     .foregroundStyle(Theme.text)
@@ -645,19 +645,19 @@ private struct ShiftReportDetail: View {
                 DashboardGrid {
                     MetricTile(
                         label: "Продажи",
-                        value: Money.compact(shift.totals.sales),
+                        value: Money.format(shift.totals.sales),
                         icon: "cart.fill",
                         accent: Theme.brand
                     )
                     MetricTile(
                         label: "Наличные",
-                        value: Money.compact(shift.totals.cash),
+                        value: Money.format(shift.totals.cash),
                         icon: "banknote.fill",
                         accent: Theme.info
                     )
                     MetricTile(
                         label: "Kaspi",
-                        value: Money.compact(shift.totals.kaspi),
+                        value: Money.format(shift.totals.kaspi),
                         icon: "creditcard.fill",
                         accent: Theme.textMuted
                     )

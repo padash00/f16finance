@@ -54,7 +54,7 @@ struct PlatformOverviewScreen: View {
                 // Триальная выручка отдельной строкой: это ещё не деньги, и
                 // складывать её с живой было бы самообманом.
                 if store.overview.trialMrr > 0 {
-                    Text("на триале ещё \(Money.compact(store.overview.trialMrr))")
+                    Text("на триале ещё \(Money.format(store.overview.trialMrr))")
                         .font(Typography.caption)
                         .foregroundStyle(Theme.textDim)
                 }
@@ -149,7 +149,7 @@ struct PlatformOverviewScreen: View {
                     if store.overview.overdueInvoices > 0 {
                         StatRow(
                             "Просроченных счетов",
-                            value: "\(store.overview.overdueInvoices) · \(Money.compact(store.overview.overdueInvoicesSum))",
+                            value: "\(store.overview.overdueInvoices) · \(Money.format(store.overview.overdueInvoicesSum))",
                             valueColor: Theme.negative,
                             icon: "exclamationmark.circle"
                         )
