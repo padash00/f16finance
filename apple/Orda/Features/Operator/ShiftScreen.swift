@@ -36,6 +36,8 @@ struct ShiftScreen: View {
                         Skeleton(height: 140, cornerRadius: Radius.lg)
                         Skeleton(height: 90, cornerRadius: Radius.lg)
                     }
+                } else if store.isSomeoneElsesShift {
+                    othersShiftContent
                 } else if store.hasOpenShift {
                     openShiftContent
                 } else {
@@ -51,6 +53,41 @@ struct ShiftScreen: View {
         .refreshable { await store.loadShift() }
         .sheet(isPresented: $showOpenSheet) { OpenShiftSheet() }
         .sheet(isPresented: $showCloseSheet) { CloseShiftSheet() }
+    }
+
+    // ── Смена чужая ──────────────────────────────────────────────────────────
+
+    /// На точке стоит сменщик.
+    ///
+    /// Раньше здесь показывалась его выручка, разбивка по наличным и Kaspi и
+    /// кнопка «Закрыть смену»: с телефона, из дома, любой оператор точки видел
+    /// чужие деньги. Сервер закрыть чужую смену не даёт, но и показывать это
+    /// нечего.
+    private var othersShiftContent: some View {
+        VStack(spacing: Spacing.lg) {
+            Card(accent: Theme.info) {
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    Label("На смене другой", systemImage: "person.fill.checkmark")
+                        .font(Typography.label)
+                        .foregroundStyle(Theme.info)
+                        .textCase(.uppercase)
+
+                    Text(store.shift?.operatorName ?? "Сменщик")
+                        .font(Typography.metric)
+                        .foregroundStyle(Theme.text)
+
+                    if let opened = store.shift?.openedAt {
+                        Text("смена идёт \(elapsed(since: opened))")
+                            .font(Typography.caption)
+                            .foregroundStyle(Theme.textDim)
+                    }
+
+                    Text("Выручка и закрытие смены — у того, кто её открыл. Своя смена появится здесь, когда сменщик закроет эту.")
+                        .font(Typography.callout)
+                        .foregroundStyle(Theme.textMuted)
+                }
+            }
+        }
     }
 
     // ── Смена закрыта ────────────────────────────────────────────────────────

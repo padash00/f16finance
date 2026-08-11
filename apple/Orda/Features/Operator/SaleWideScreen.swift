@@ -24,7 +24,14 @@ struct SaleWideScreen: View {
 
     var body: some View {
         Group {
-            if !store.hasOpenShift {
+            if store.isSomeoneElsesShift {
+                // Продажа ушла бы в чужую смену и в чужой отчёт.
+                EmptyStateView(
+                    icon: "person.fill.checkmark",
+                    title: "На смене другой",
+                    message: "Сейчас смену ведёт \(store.shift?.operatorName ?? "сменщик"). Продавать можно только на своей смене."
+                )
+            } else if !store.hasOpenShift {
                 closedShiftState
             } else {
                 HStack(spacing: 0) {

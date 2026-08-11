@@ -14,7 +14,15 @@ struct SaleScreen: View {
 
     var body: some View {
         Group {
-            if !store.hasOpenShift {
+            if store.isSomeoneElsesShift {
+                // Продажа уйдёт в чужую смену и в чужой отчёт: деньги окажутся
+                // записаны не на того, кто их взял.
+                EmptyStateView(
+                    icon: "person.fill.checkmark",
+                    title: "На смене другой",
+                    message: "Сейчас смену ведёт \(store.shift?.operatorName ?? "сменщик"). Продавать можно только на своей смене."
+                )
+            } else if !store.hasOpenShift {
                 EmptyStateView(
                     icon: "lock.circle",
                     title: "Смена не открыта",

@@ -20,6 +20,11 @@ final class OperatorStore {
     var shift: OperatorShift? { shiftState?.shift }
     var totals: ShiftTotals { shiftState?.totals ?? .empty }
     var hasOpenShift: Bool { shift?.isOpen == true }
+    /// Смена открыта, но не мной: на точке стоит сменщик. Смотреть чужую
+    /// выручку и закрывать чужую смену нельзя — сервер такой запрос и так
+    /// отвергнет, но кнопку показывать незачем.
+    var isSomeoneElsesShift: Bool { hasOpenShift && shiftState?.isMine == false }
+    var isMyShift: Bool { hasOpenShift && shiftState?.isMine != false }
     var blockingChecklists: [ChecklistTemplate] { shiftState?.blockingChecklists ?? [] }
 
     // ── Каталог и корзина ────────────────────────────────────────────────────

@@ -73,7 +73,7 @@ public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: Vie
                         .listRowSeparator(.hidden)
 
                     ForEach(items) { item in
-                    NavigationLink(value: item.id) {
+                    NavigationLink(value: MasterRoute<Item>(id: item.id)) {
                         row(item)
                     }
                     .listRowInsets(EdgeInsets(top: Spacing.xs, leading: Spacing.lg, bottom: Spacing.xs, trailing: Spacing.lg))
@@ -84,8 +84,23 @@ public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: Vie
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
-                .navigationDestination(for: Item.ID.self) { id in
-                    FreshDetail(id: id, fallback: items.first { $0.id == id }, items: items, detail: detail)
+                // Маршрут — свой тип на каждый вид записи, а не голый
+                // идентификатор.
+                //
+                // Идентификаторы почти везде строки, и два экрана с
+                // `MasterDetail` в одном стеке навигации объявляли
+                // `navigationDestination(for: String.self)` дважды. SwiftUI в
+                // такой ситуации берёт не тот адрес: первое нажатие на
+                // переписку или статью открывало список поверх списка —
+                // «не открывается с первого раза», а после «назад» под ним
+                // обнаруживался нужный экран.
+                .navigationDestination(for: MasterRoute<Item>.self) { route in
+                    FreshDetail(
+                        id: route.id,
+                        fallback: items.first { $0.id == route.id },
+                        items: items,
+                        detail: detail
+                    )
                 }
             }
         }
@@ -244,6 +259,15 @@ private extension View {
 /// Если она пропала из списка совсем (сменился фильтр, запись удалили),
 /// показываем последний известный снимок: закрывать открытый экран под руками
 /// человека — хуже, чем показать чуть устаревшее.
+/// Адрес записи внутри `MasterDetail`.
+///
+/// Обобщён по `Item`, чтобы у каждого экрана был свой тип маршрута: переписка
+/// и статья базы знаний перестают спорить за один и тот же
+/// `navigationDestination`.
+private struct MasterRoute<Item: Identifiable>: Hashable where Item.ID: Hashable {
+    let id: Item.ID
+}
+
 private struct FreshDetail<Item: Identifiable & Hashable, Detail: View>: View {
     let id: Item.ID
     /// Последний известный снимок — на случай, если запись пропала из списка.

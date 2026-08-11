@@ -25,7 +25,7 @@ export async function GET(request: Request) {
   const ctx = await requireOperator(request)
   if ('response' in ctx) return ctx.response
 
-  const { supabase, companyId, staffId } = ctx
+  const { supabase, companyId, staffId, operatorId } = ctx
 
   const { data: shift, error } = await supabase
     .from('point_shifts')
@@ -122,8 +122,21 @@ export async function GET(request: Request) {
     }
   }
 
+  // Чья это смена.
+  //
+  // Смену на точке открывает один человек, а приложение стоит у каждого. Без
+  // этой пометки оператор, зашедший со своего телефона, видел выручку чужой
+  // смены и кнопку «Закрыть» — то есть мог закрыть смену сменщицы, стоя дома.
+  // В программе на точке такой путаницы нет: там устройство и есть точка, за
+  // ним стоит тот, кто смену открыл.
+  const shiftOperatorId = String((shift as any).operator_id || '')
+  const isMine =
+    (!!staffId && shiftOperatorId === String(staffId)) ||
+    (!!operatorId && shiftOperatorId === String(operatorId))
+
   return json({
     shift,
+    is_mine: isMine,
     totals: {
       sales_count: sales.length,
       sales_total: sum(sales, 'total_amount'),

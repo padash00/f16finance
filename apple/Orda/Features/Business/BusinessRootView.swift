@@ -37,7 +37,7 @@ struct BusinessRootView: View {
     /// Вкладка и путь внутри «Разделов». Нужны, чтобы открыть раздел извне:
     /// на телефоне выбор бокового меню ни на что не влияет — там вкладки.
     @State private var phoneTab: PhoneTab = .home
-    @State private var sectionsPath: [String] = []
+    @State private var sectionsPath: [SectionRoute] = []
     #endif
 
     #if os(iOS)
@@ -232,7 +232,7 @@ struct BusinessRootView: View {
             sectionsPath = []
         } else {
             phoneTab = .sections
-            sectionsPath = [item.id]
+            sectionsPath = [SectionRoute(pageID: item.id)]
         }
         #endif
     }
@@ -390,6 +390,11 @@ enum PhoneTab: Hashable {
 }
 #endif
 
+/// Адрес раздела в списке «Разделы».
+struct SectionRoute: Hashable {
+    let pageID: String
+}
+
 /// Раздел, заданный при запуске: `Orda.app -ordaPage income`.
 ///
 /// `UserDefaults` сам разбирает аргументы командной строки, поэтому отдельного
@@ -455,7 +460,7 @@ struct BusinessSectionsScreen: View {
 
                             ForEach(Array(pages.enumerated()), id: \.element.id) { index, page in
                                 if index > 0 { RowDivider() }
-                                NavigationLink(value: page.id) {
+                                NavigationLink(value: SectionRoute(pageID: page.id)) {
                                     NavigationRow(
                                         icon: BusinessRootView.icon(forPage: page.id),
                                         iconColor: Theme.brand,
@@ -484,8 +489,12 @@ struct BusinessSectionsScreen: View {
         .background(Theme.background)
         // По значению, а не по замыканию: только так на раздел можно перейти
         // извне — из уведомления, из быстрого действия иконки, по ссылке.
-        .navigationDestination(for: String.self) { pageID in
-            NativePage.screen(pageID: pageID)
+        // Свой тип маршрута, а не голая строка: внутри этого же стека
+        // открываются экраны с `MasterDetail`, и второй
+        // `navigationDestination(for: String.self)` заставлял SwiftUI выбирать
+        // не тот адрес.
+        .navigationDestination(for: SectionRoute.self) { route in
+            NativePage.screen(pageID: route.pageID)
         }
         .navigationTitle("Разделы")
         .toolbar { LogoutToolbarItem() }

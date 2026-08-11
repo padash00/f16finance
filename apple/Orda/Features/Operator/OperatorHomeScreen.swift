@@ -73,6 +73,27 @@ struct OperatorHomeScreen: View {
     private var shiftCard: some View {
         if store.isLoadingShift && store.shiftState == nil {
             Skeleton(height: 150, cornerRadius: Radius.lg)
+        } else if store.isSomeoneElsesShift {
+            // Чужая смена: имя того, кто стоит, и ничего больше. Раньше здесь
+            // была выручка сменщика и кнопка «Закрыть смену» — оператор со
+            // своего телефона видел чужие деньги и мог попробовать закрыть
+            // смену, стоя дома.
+            Card(accent: Theme.info) {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    StatusChip("на смене другой", kind: .info)
+                    Text(store.shift?.operatorName ?? "Сменщик")
+                        .font(Typography.metric)
+                        .foregroundStyle(Theme.text)
+                    if let opened = store.shift?.openedAt {
+                        Text("на смене \(elapsed(since: opened))")
+                            .font(Typography.caption)
+                            .foregroundStyle(Theme.textDim)
+                    }
+                    Text("Выручку и закрытие смены видит тот, кто её открыл.")
+                        .font(Typography.caption)
+                        .foregroundStyle(Theme.textMuted)
+                }
+            }
         } else if store.hasOpenShift {
             Card(accent: Theme.positive) {
                 VStack(alignment: .leading, spacing: Spacing.md) {

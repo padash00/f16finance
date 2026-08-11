@@ -22,7 +22,7 @@ struct PlatformRootView: View {
     /// Вкладка и путь «Разделов» — на телефоне переход снаружи упирается в них,
     /// а не в боковое меню.
     @State private var phoneTab: PlatformTab = .platform
-    @State private var sectionsPath: [String] = []
+    @State private var sectionsPath: [SectionRoute] = []
     #endif
 
     #if os(iOS)
@@ -93,7 +93,7 @@ struct PlatformRootView: View {
             sectionsPath = []
         default:
             phoneTab = .sections
-            sectionsPath = [item.id]
+            sectionsPath = [SectionRoute(pageID: item.id)]
         }
         #endif
     }

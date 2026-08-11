@@ -760,6 +760,13 @@ final class TeamChatStore {
         }
     }
 
+    /// Тихое обновление: без скелета и без сброса того, что человек уже читает.
+    func refresh() async {
+        guard !isSending else { return }
+        guard let fresh = try? await service.teamChat() else { return }
+        feed = fresh
+    }
+
     /// Голос в опросе. Список перечитываем: доли и имена меняются у всех.
     func vote(pollID: String, optionID: String) {
         Task { [weak self] in
@@ -914,6 +921,15 @@ struct TeamChatScreen: View {
         .navigationTitle("Командный чат")
         .toolbar { LogoutToolbarItem() }
         .task { if store == nil { let s = TeamChatStore(api: api); store = s; await s.load() } }
+        // Чат без самообновления — это не чат: сообщение сменщика видно только
+        // после того, как экран закроют и откроют заново.
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(8))
+                if Task.isCancelled { return }
+                await store?.refresh()
+            }
+        }
     }
 
     @ViewBuilder
@@ -962,6 +978,11 @@ struct TeamChatScreen: View {
                 }
                 .padding(Spacing.lg)
             }
+            // Открывают чат ради последнего сообщения, а не первого.
+            .defaultScrollAnchor(.bottom)
+            #if os(iOS)
+            .scrollDismissesKeyboard(.interactively)
+            #endif
             .refreshable { await store.load() }
             .onChange(of: store.lastMessageID) { _, id in
                 guard let id else { return }
@@ -1091,6 +1112,16 @@ final class MessagesStore {
     /// уходит фоном. Раньше между нажатием и появлением текста проходила
     /// секунда с лишним — её съедала проверка текста через ИИ на сервере.
     @discardableResult
+    /// Тихое обновление открытой переписки.
+    ///
+    /// Без «загружаем»: экран уже показан, и мигать скелетом каждые восемь
+    /// секунд значит мешать читать.
+    func refreshConversation(_ userID: String) async {
+        guard openedUserID == userID, !isSending else { return }
+        guard let fresh = try? await service.conversation(with: userID) else { return }
+        conversation = fresh.messages
+    }
+
     /// Файл в личную переписку: фото или голосовое. Ждём ответа — файл летит
     /// секунды, и «уже отправлено» раньше времени было бы неправдой.
     func sendAttachment(
@@ -1401,6 +1432,12 @@ private struct ConversationPane: View {
                         }
                         .padding(Spacing.lg)
                     }
+                    // Переписку открывают, чтобы прочитать последнее, а не
+                    // первое: начало сверху означало пролистать весь разговор.
+                    .defaultScrollAnchor(.bottom)
+                    #if os(iOS)
+                    .scrollDismissesKeyboard(.interactively)
+                    #endif
                     .onChange(of: store.lastMessageID) { _, id in
                         guard let id else { return }
                         withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(id, anchor: .bottom) }
@@ -1441,6 +1478,15 @@ private struct ConversationPane: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .task(id: thread.otherUserID) { await store.open(thread.otherUserID) }
+        // Ответ должен появляться сам. Иначе переписка выглядит сломанной:
+        // человек смотрит в экран, ему ответили, а он тянет список вниз.
+        .task(id: thread.otherUserID) {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(8))
+                if Task.isCancelled { return }
+                await store.refreshConversation(thread.otherUserID)
+            }
+        }
     }
 }
 

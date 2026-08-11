@@ -201,9 +201,16 @@ public struct ShiftState: Decodable, Sendable {
     public let templates: [ChecklistTemplate]
     public let runs: [ChecklistRun]
     public let pendingKnowledge: [PendingKnowledgeArticle]
+    /// Моя ли это смена.
+    ///
+    /// Смену на точке открывает один человек, а приложение стоит у каждого:
+    /// оператор, зашедший со своего телефона, видел выручку чужой смены и
+    /// кнопку «Закрыть». Считает сервер — на клиенте такое не решают.
+    public let isMine: Bool
 
     private enum CodingKeys: String, CodingKey {
         case shift, totals, checklists, knowledge
+        case isMine = "is_mine"
     }
 
     private struct Checklists: Decodable {
@@ -226,6 +233,9 @@ public struct ShiftState: Decodable, Sendable {
 
         let knowledge = try container.decodeIfPresent(Knowledge.self, forKey: .knowledge)
         pendingKnowledge = knowledge?.pending_confirmations ?? []
+        // Старый сервер поля не отдаёт: до его обновления считаем смену своей,
+        // иначе приложение отберёт кнопку у того, кто смену и открыл.
+        isMine = try container.decodeIfPresent(Bool.self, forKey: .isMine) ?? true
     }
 
     /// Обязательные чек-листы, которые ещё не завершены. Именно они не дадут
