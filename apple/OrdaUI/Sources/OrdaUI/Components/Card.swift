@@ -24,12 +24,20 @@ public struct Card<Content: View>: View {
         content
             .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.surface, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+            // Тень — у подложки, а не у всей карточки вместе с содержимым.
+            // `.shadow` поверх готового слоя заставляет систему размывать и
+            // текст с цифрами: получается офскрин-проход на каждую карточку, и
+            // на длинных экранах прокрутка начинает дёргаться. Форме тень
+            // считается один раз и остаётся такой же на вид.
+            .background {
+                RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+                    .fill(Theme.surface)
+                    .shadow(color: .black.opacity(shadowOpacity), radius: 18, x: 0, y: 10)
+            }
             .overlay {
                 RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
                     .strokeBorder(accent?.opacity(0.35) ?? Theme.border, lineWidth: 1)
             }
-            .shadow(color: .black.opacity(shadowOpacity), radius: 18, x: 0, y: 10)
     }
 
     private var shadowOpacity: Double {

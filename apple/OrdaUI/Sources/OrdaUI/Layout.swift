@@ -162,7 +162,10 @@ public struct ScreenScroll<Content: View>: View {
 
     public var body: some View {
         ScrollView {
-            VStack(spacing: Spacing.lg) { content }
+            // Лениво: экраны здесь длинные — два десятка карточек, каждая со
+            // своими запросами и графиками. Обычный VStack строит их все сразу,
+            // включая те, до которых человек не долистает.
+            LazyVStack(spacing: Spacing.lg) { content }
                 .padding(surface.screenPadding)
                 .frame(maxWidth: surface.contentWidth)
                 .frame(maxWidth: .infinity, alignment: surface == .desktop ? .topLeading : .top)

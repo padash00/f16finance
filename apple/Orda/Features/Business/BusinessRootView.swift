@@ -420,10 +420,22 @@ struct BusinessSectionsScreen: View {
 
     @Environment(AuthStore.self) private var auth
 
+    /// Группы считаются один раз на построение экрана.
+    ///
+    /// `nativeGroups()` перебирает весь каталог — 82 страницы, — а вызывался он
+    /// и в списке, и в проверке на пустоту, и заново при каждом обновлении
+    /// экрана.
+    private var groups: [(group: CapabilityGroup, pages: [CapabilityPage])] {
+        resolver.nativeGroups()
+    }
+
     var body: some View {
-        ScrollView {
-            VStack(spacing: Spacing.lg) {
-                ForEach(resolver.nativeGroups(), id: \.group.id) { group, pages in
+        let groups = groups
+        return ScrollView {
+            // Лениво: разделов бывает под восемьдесят, и строить их все разом
+            // ради первого экрана незачем.
+            LazyVStack(spacing: Spacing.lg) {
+                ForEach(groups, id: \.group.id) { group, pages in
                     Card {
                         VStack(spacing: Spacing.sm) {
                             HStack(spacing: Spacing.sm) {
@@ -457,7 +469,7 @@ struct BusinessSectionsScreen: View {
                     }
                 }
 
-                if resolver.nativeGroups().isEmpty {
+                if groups.isEmpty {
                     EmptyStateView(
                         icon: "lock",
                         title: "Разделов нет",
