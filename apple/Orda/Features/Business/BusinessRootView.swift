@@ -59,6 +59,10 @@ struct BusinessRootView: View {
             let created = BusinessStore(api: api)
             store = created
             await created.bootstrap()
+            // Раздел из аргумента запуска: так снимки экрана обходят разделы
+            // без подтверждения «Открыть в приложении?», которое iOS показывает
+            // на внешнюю ссылку.
+            if let page = LaunchOptions.requestedPage { openIfAllowed(pageID: page) }
         }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active, let store else { return }
@@ -385,6 +389,18 @@ enum PhoneTab: Hashable {
     case home, approvals, sections, profile
 }
 #endif
+
+/// Раздел, заданный при запуске: `Orda.app -ordaPage income`.
+///
+/// `UserDefaults` сам разбирает аргументы командной строки, поэтому отдельного
+/// парсера не нужно.
+enum LaunchOptions {
+    static var requestedPage: String? {
+        let value = UserDefaults.standard.string(forKey: "ordaPage")?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return value.isEmpty ? nil : value
+    }
+}
 
 /// Разбор ссылок `orda://page/<страница>`.
 ///
