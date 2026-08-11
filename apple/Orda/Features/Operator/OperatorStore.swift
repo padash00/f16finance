@@ -124,12 +124,22 @@ final class OperatorStore {
     /// полуночи, часть после, и в ОПиУ они попадают в разные дни. В программе
     /// на точке это два поля, здесь было одно — и вся ночная выручка ложилась
     /// на дату закрытия.
+    /// Сегодняшняя дата в формате отчёта.
+    static func today() -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: Date())
+    }
+
     func closeShift(
         cash: Double,
         kaspi: Double,
         kaspiBeforeMidnight: Double = 0,
         kaspiAfterMidnight: Double = 0,
-        notes: String?
+        notes: String?,
+        report: ShiftReportDraft? = nil
     ) async -> String? {
         // Отправлять закрытие с неотправленными чеками нельзя: их суммы ещё не
         // попали в итоги смены, и касса не сойдётся.
@@ -141,6 +151,9 @@ final class OperatorStore {
         }
 
         do {
+            let shiftID = shift?.id
+            let shiftType = shift?.shiftType ?? "day"
+
             _ = try await service.closeShift(
                 closingCash: cash,
                 closingKaspi: kaspi,
@@ -148,6 +161,37 @@ final class OperatorStore {
                 kaspiAfterMidnight: kaspiAfterMidnight,
                 notes: notes
             )
+
+            // Отчёт — отдельным шагом после закрытия: закрытие фиксирует
+            // пересчёт кассы, а выручка дня берётся из отчёта. Раньше из
+            // приложения уходило только закрытие, и смены не было ни в ОПиУ,
+            // ни в зарплате.
+            if let report {
+                do {
+                    try await service.sendShiftReport(
+                        ShiftReportDraft(
+                            date: Self.today(),
+                            shift: shiftType,
+                            shiftID: shiftID,
+                            cash: report.cash,
+                            coins: report.coins,
+                            kaspiPOS: report.kaspiPOS,
+                            kaspiOnline: report.kaspiOnline,
+                            kaspiBeforeMidnight: report.kaspiBeforeMidnight,
+                            debts: report.debts,
+                            startCash: report.startCash,
+                            wipon: report.wipon,
+                            comment: notes
+                        )
+                    )
+                } catch {
+                    // Смена уже закрыта — молчать об этом нельзя, но и
+                    // «не удалось закрыть» сказать неправда.
+                    await loadShift()
+                    return "Смена закрыта, но отчёт не ушёл. Отправьте его из программы на точке или повторите позже."
+                }
+            }
+
             await loadShift()
             return nil
         } catch let error as APIError {

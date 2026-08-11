@@ -364,6 +364,10 @@ struct CloseShiftSheet: View {
     @State private var kaspiText = ""
     /// Ночная смена: часть Kaspi проходит до полуночи, часть после.
     @State private var kaspiBeforeText = ""
+    @State private var kaspiOnlineText = ""
+    @State private var debtsText = ""
+    @State private var startCashText = ""
+    @State private var wiponText = ""
     @State private var notes = ""
     @State private var error: String?
     @State private var isSubmitting = false
@@ -406,8 +410,31 @@ struct CloseShiftSheet: View {
                             .foregroundStyle(Theme.textDim)
                     }
 
-                    if parse(coinsText) > 0 {
-                        row("Всего наличными", Money.format(parse(cashText) + parse(coinsText)))
+                    amountField("Kaspi онлайн", text: $kaspiOnlineText)
+
+                    // Долги, старт кассы и wipon — то же, что спрашивает
+                    // программа на точке. Без них «итог» не сходится с тем,
+                    // что реально в ящике.
+                    amountField("Долги за смену", text: $debtsText)
+                    amountField("Старт кассы", text: $startCashText)
+                    amountField("Wipon", text: $wiponText)
+
+                    Card {
+                        VStack(spacing: Spacing.sm) {
+                            row("Наличными в кассе", Money.format(parse(cashText) + parse(coinsText)))
+                            row("Безналично", Money.format(parse(kaspiText) + parse(kaspiOnlineText)))
+                            if parse(debtsText) > 0 {
+                                row("Долги", Money.format(parse(debtsText)))
+                            }
+                            if parse(startCashText) > 0 {
+                                row("Минус старт кассы", Money.format(-parse(startCashText)))
+                            }
+                            if parse(wiponText) > 0 {
+                                row("Минус wipon", Money.format(-parse(wiponText)))
+                            }
+                            RowDivider()
+                            StatRow("Итог по факту", value: Money.format(reportTotal), emphasized: true)
+                        }
                     }
 
                     if let difference = cashDifference, abs(difference) >= 1 {
@@ -469,6 +496,13 @@ struct CloseShiftSheet: View {
                     Button("Отмена") { dismiss() }
                 }
             }
+            // Старт кассы уже вводили при открытии — подставляем, а не просим
+            // вспоминать.
+            .onAppear {
+                if startCashText.isEmpty, let opening = store.shift?.openingCash, opening > 0 {
+                    startCashText = String(Int(opening))
+                }
+            }
         }
     }
 
@@ -520,6 +554,13 @@ struct CloseShiftSheet: View {
         max(0, parse(kaspiText) - parse(kaspiBeforeText))
     }
 
+    /// Тот же расчёт, что в программе на точке: всё, что пришло, минус то, что
+    /// лежало в ящике до смены, минус комиссия сервиса.
+    private var reportTotal: Double {
+        parse(cashText) + parse(coinsText) + parse(kaspiText) + parse(debtsText)
+            - parse(startCashText) - parse(wiponText)
+    }
+
     private func submit() {
         isSubmitting = true
         error = nil
@@ -535,10 +576,24 @@ struct CloseShiftSheet: View {
 
             let failure = await store.closeShift(
                 cash: parse(cashText) + parse(coinsText),
-                kaspi: parse(kaspiText),
+                kaspi: parse(kaspiText) + parse(kaspiOnlineText),
                 kaspiBeforeMidnight: isNight ? parse(kaspiBeforeText) : 0,
                 kaspiAfterMidnight: isNight ? kaspiAfter : 0,
-                notes: comment.isEmpty ? nil : comment
+                notes: comment.isEmpty ? nil : comment,
+                report: ShiftReportDraft(
+                    date: OperatorStore.today(),
+                    shift: isNight ? "night" : "day",
+                    shiftID: store.shift?.id,
+                    cash: parse(cashText),
+                    coins: parse(coinsText),
+                    kaspiPOS: parse(kaspiText),
+                    kaspiOnline: parse(kaspiOnlineText),
+                    kaspiBeforeMidnight: isNight ? parse(kaspiBeforeText) : nil,
+                    debts: parse(debtsText),
+                    startCash: parse(startCashText),
+                    wipon: parse(wiponText),
+                    comment: comment.isEmpty ? nil : comment
+                )
             )
             isSubmitting = false
             if let failure {

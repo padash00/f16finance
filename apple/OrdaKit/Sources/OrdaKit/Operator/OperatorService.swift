@@ -169,6 +169,21 @@ public struct OperatorService: Sendable {
         )
     }
 
+    /// Отчёт смены: создаёт доход за смену.
+    ///
+    /// Закрытие смены фиксирует пересчёт кассы, а выручка дня берётся отсюда.
+    /// Из приложения смену можно было закрыть, но доход за неё никуда не
+    /// записывался — в ОПиУ и в зарплате её просто не было.
+    public func sendShiftReport(_ report: ShiftReportDraft) async throws {
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/operator/shift-report",
+                method: .post,
+                body: try JSONEncoder().encode(report)
+            )
+        )
+    }
+
     public func salary() async throws -> OperatorSalary {
         try await api.send(APIRequest(path: "/api/operator/salary"))
     }

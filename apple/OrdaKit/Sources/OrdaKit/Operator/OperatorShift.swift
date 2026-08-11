@@ -266,3 +266,70 @@ public struct ShiftCloseResult: Decodable, Sendable {
         case shiftID = "shift_id"
     }
 }
+
+// ── Отчёт смены ──────────────────────────────────────────────────────────────
+
+/// Отчёт смены — то же, что заполняют в программе на точке.
+///
+/// Купюры и мелочь врозь: мелочь остаётся в кассе на размен. Долги — это ещё
+/// не деньги, но касса без них не сойдётся. Старт кассы вычитается: он был в
+/// ящике до смены. Wipon — комиссия сервиса, её вычитают из итога.
+public struct ShiftReportDraft: Encodable, Sendable {
+    /// `YYYY-MM-DD`.
+    public let date: String
+    public let shift: String
+    public let shiftID: String?
+    public let cash: Double
+    public let coins: Double
+    public let kaspiPOS: Double
+    public let kaspiOnline: Double
+    public let kaspiBeforeMidnight: Double?
+    public let debts: Double
+    public let startCash: Double
+    public let wipon: Double
+    public let comment: String?
+
+    public init(
+        date: String,
+        shift: String,
+        shiftID: String?,
+        cash: Double,
+        coins: Double,
+        kaspiPOS: Double,
+        kaspiOnline: Double,
+        kaspiBeforeMidnight: Double?,
+        debts: Double,
+        startCash: Double,
+        wipon: Double,
+        comment: String?
+    ) {
+        self.date = date
+        self.shift = shift
+        self.shiftID = shiftID
+        self.cash = cash
+        self.coins = coins
+        self.kaspiPOS = kaspiPOS
+        self.kaspiOnline = kaspiOnline
+        self.kaspiBeforeMidnight = kaspiBeforeMidnight
+        self.debts = debts
+        self.startCash = startCash
+        self.wipon = wipon
+        self.comment = comment
+    }
+
+    /// Сколько получилось по факту: всё, что в кассе и на терминале, минус то,
+    /// что лежало там до смены.
+    public var fact: Double { cash + coins + kaspiPOS + debts - startCash }
+
+    /// Итог с учётом комиссии сервиса.
+    public var total: Double { fact - wipon }
+
+    private enum CodingKeys: String, CodingKey {
+        case date, shift, cash, coins, debts, wipon, comment
+        case shiftID = "shift_id"
+        case kaspiPOS = "kaspi_pos"
+        case kaspiOnline = "kaspi_online"
+        case kaspiBeforeMidnight = "kaspi_before_midnight"
+        case startCash = "start_cash"
+    }
+}
