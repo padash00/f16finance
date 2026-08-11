@@ -4,6 +4,7 @@ import { computeMonthlyPnl, type MonthlyPnl } from '@/lib/domain/profitability'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
 import { resolveCompanyScope } from '@/lib/server/organizations'
+import { buildDailyKaspiSeriesFromRows } from '@/lib/server/services/daily-kaspi'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -31,6 +32,13 @@ function json(data: unknown, status = 200) {
 function normalizeMonth(raw: string | null): string | null {
   const value = (raw || '').trim()
   return /^\d{4}-\d{2}$/.test(value) ? value : null
+}
+
+/** Сутки назад — ночная смена частью выручки уходит за полночь. */
+function prevDayISO(dateISO: string): string {
+  const date = new Date(`${dateISO}T00:00:00Z`)
+  date.setUTCDate(date.getUTCDate() - 1)
+  return date.toISOString().slice(0, 10)
 }
 
 /** Последний день месяца — границы запроса к журналам. */
@@ -97,21 +105,41 @@ export async function GET(req: Request) {
     const dateTo = monthEnd(to)
     const orgId = access.activeOrganization?.id || null
 
-    let incomeQuery = supabase
-      .from('incomes')
-      .select('date, company_id, cash_amount, kaspi_amount, card_amount, online_amount')
-      .gte('date', dateFrom)
-      .lte('date', dateTo)
+    // Сутки до начала периода: ночная смена начинается вечером и часть выручки
+    // проводит уже после полуночи. Без предыдущего дня первый день периода
+    // считался бы по обрубленной смене.
+    const previousDate = prevDayISO(dateFrom)
 
-    let expenseQuery = supabase
-      .from('expenses')
-      .select('date, company_id, category, cash_amount, kaspi_amount')
-      .gte('date', dateFrom)
-      .lte('date', dateTo)
+    // PostgREST отдаёт максимум 1000 строк за запрос. Без постраничной
+    // выборки период в несколько месяцев обрезался молча: сумма считалась по
+    // первой тысяче записей, и месяцы с конца периода приходили заниженными
+    // или пустыми. Сайт страницу за страницей догружает всё — оттого его
+    // цифры и расходились с приложением.
+    const PAGE = 1000
 
-    if (companyScope.allowedCompanyIds !== null) {
-      incomeQuery = incomeQuery.in('company_id', companyScope.allowedCompanyIds)
-      expenseQuery = expenseQuery.in('company_id', companyScope.allowedCompanyIds)
+    const fetchAllPages = async (
+      table: 'incomes' | 'expenses',
+      columns: string,
+    ): Promise<any[]> => {
+      const out: any[] = []
+      for (let offset = 0; ; offset += PAGE) {
+        let query = supabase
+          .from(table)
+          .select(columns)
+          .gte('date', table === 'incomes' ? previousDate : dateFrom)
+          .lte('date', dateTo)
+          .order('date', { ascending: true })
+          .range(offset, offset + PAGE - 1)
+        if (companyScope.allowedCompanyIds !== null) {
+          query = query.in('company_id', companyScope.allowedCompanyIds)
+        }
+        const { data, error } = await query
+        if (error) throw error
+        const rows = (data || []) as any[]
+        out.push(...rows)
+        if (rows.length < PAGE) break
+      }
+      return out
     }
 
     // Ручные вводы принадлежат организации: без фильтра суперадмин увидел бы
@@ -127,15 +155,21 @@ export async function GET(req: Request) {
       .lte('month', `${to}-01`)
     if (orgId) inputsQuery = inputsQuery.eq('organization_id', orgId)
 
-    const [incomeRes, expenseRes, inputsRes, categoriesRes] = await Promise.all([
-      incomeQuery,
-      expenseQuery,
+    const [incomeRows, expenseRows, inputsRes, categoriesRes, devicesRes, projectsRes] = await Promise.all([
+      fetchAllPages(
+        'incomes',
+        'date, company_id, shift, cash_amount, kaspi_amount, kaspi_before_midnight, card_amount, online_amount',
+      ),
+      fetchAllPages('expenses', 'date, company_id, category, cash_amount, kaspi_amount'),
       inputsQuery,
       supabase.from('expense_categories').select('name, accounting_group'),
+      supabase.from('point_devices').select('company_id, feature_flags').eq('is_active', true),
+      supabase
+        .from('point_projects')
+        .select('point_project_companies(company_id, feature_flags)')
+        .eq('is_active', true),
     ])
 
-    if (incomeRes.error) throw incomeRes.error
-    if (expenseRes.error) throw expenseRes.error
     if (inputsRes.error) throw inputsRes.error
 
     const categoryGroups: Record<string, string | null> = {}
@@ -152,11 +186,59 @@ export async function GET(req: Request) {
       inputsByMonth.set(String(row.month).slice(0, 7), row)
     }
 
+    // Дневной Kaspi. На точках с посменным разделением выручка ночной смены
+    // приходит одной строкой на две календарные даты, и в журнале она лежит
+    // на дате смены. Сайт раскладывает её по дням и берёт в ОПиУ уже
+    // исправленную сумму — приложение считало по сырой, отсюда и расхождение
+    // именно в отдельных месяцах.
+    const splitCompanyIds = new Set<string>()
+    for (const row of (devicesRes.data || []) as any[]) {
+      if (row?.company_id && row?.feature_flags?.kaspi_daily_split === true) {
+        splitCompanyIds.add(String(row.company_id))
+      }
+    }
+    for (const project of (projectsRes.data || []) as any[]) {
+      const links = Array.isArray(project?.point_project_companies) ? project.point_project_companies : []
+      for (const link of links) {
+        const flags = link?.feature_flags
+        const on =
+          flags && typeof flags === 'object' && !Array.isArray(flags) &&
+          (flags as Record<string, unknown>).kaspi_daily_split === true
+        if (on && link?.company_id) splitCompanyIds.add(String(link.company_id))
+      }
+    }
+
+    const correctedKaspiByMonth = new Map<string, number>()
+    if (splitCompanyIds.size > 0) {
+      const splitRows = incomeRows
+        .filter((row) => splitCompanyIds.has(String(row.company_id || '')))
+        .map((row) => ({
+          id: `${row.company_id}:${row.date}:${row.shift}`,
+          date: String(row.date),
+          shift: (row.shift === 'night' ? 'night' : 'day') as 'day' | 'night',
+          kaspi_amount: Number(row.kaspi_amount || 0),
+          kaspi_before_midnight: row.kaspi_before_midnight == null ? null : Number(row.kaspi_before_midnight || 0),
+        }))
+
+      const daily = buildDailyKaspiSeriesFromRows({ dateFrom, dateTo, rows: splitRows })
+      for (const day of daily) {
+        const month = String(day.date || '').slice(0, 7)
+        if (!month) continue
+        correctedKaspiByMonth.set(month, Number(correctedKaspiByMonth.get(month) || 0) + Number(day.total || 0))
+      }
+    }
+
     // Доходы сворачиваем по месяцам заранее: иначе каждый месяц перебирал бы
     // весь массив, а за год это заметно.
+    //
+    // День до периода в свёртку не берём: он нужен только дневному Kaspi,
+    // чтобы дотянуть ночную смену, а в выручку месяца не входит.
     const incomeByMonth = new Map<string, { cash: number; kaspi: number; card: number; online: number }>()
-    for (const row of (incomeRes.data || []) as any[]) {
-      const month = String(row.date || '').slice(0, 7)
+    const rawSplitKaspiByMonth = new Map<string, number>()
+    for (const row of incomeRows) {
+      const date = String(row.date || '')
+      if (date < dateFrom) continue
+      const month = date.slice(0, 7)
       if (!month) continue
       const current = incomeByMonth.get(month) || { cash: 0, kaspi: 0, card: 0, online: 0 }
       current.cash += Number(row.cash_amount || 0)
@@ -164,9 +246,21 @@ export async function GET(req: Request) {
       current.card += Number(row.card_amount || 0)
       current.online += Number(row.online_amount || 0)
       incomeByMonth.set(month, current)
+
+      if (splitCompanyIds.has(String(row.company_id || ''))) {
+        rawSplitKaspiByMonth.set(month, Number(rawSplitKaspiByMonth.get(month) || 0) + Number(row.kaspi_amount || 0))
+      }
     }
 
-    const expenses = (expenseRes.data || []) as any[]
+    // Заменяем сырой Kaspi исправленным только у точек с разделением: у
+    // остальных обе величины совпадают, и подмена ничего не изменила бы.
+    for (const [month, corrected] of correctedKaspiByMonth) {
+      const current = incomeByMonth.get(month)
+      if (!current) continue
+      current.kaspi = current.kaspi - Number(rawSplitKaspiByMonth.get(month) || 0) + corrected
+    }
+
+    const expenses = expenseRows
 
     const rows: MonthlyPnl[] = months.map((month) =>
       computeMonthlyPnl(

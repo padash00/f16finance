@@ -19,6 +19,13 @@ struct PlatformRootView: View {
     @State private var selection: WorkspaceItem?
 
     #if os(iOS)
+    /// Вкладка и путь «Разделов» — на телефоне переход снаружи упирается в них,
+    /// а не в боковое меню.
+    @State private var phoneTab: PlatformTab = .platform
+    @State private var sectionsPath: [String] = []
+    #endif
+
+    #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
     #endif
 
@@ -52,7 +59,43 @@ struct PlatformRootView: View {
             async let platformLoad: Void = platform.load()
             async let businessLoad: Void = businessStore.bootstrap()
             _ = await (platformLoad, businessLoad)
+
+            if let page = LaunchOptions.requestedPage { openIfAllowed(pageID: page) }
         }
+        // Суперадмину уведомления приходят те же, что и остальным, — и вести
+        // должны туда же. Раньше нажатие на них здесь не делало ничего.
+        .onChange(of: PushManager.shared.pendingRoute) { _, route in
+            guard let route else { return }
+            PushManager.shared.pendingRoute = nil
+            openIfAllowed(pageID: route.pageID)
+        }
+        .onOpenURL { url in
+            guard let pageID = DeepLink.pageID(from: url) else { return }
+            openIfAllowed(pageID: pageID)
+        }
+    }
+
+    /// Открыть раздел по идентификатору страницы каталога.
+    private func openIfAllowed(pageID: String) {
+        guard let item = sections.lazy.compactMap({ section in
+            section.items.first { $0.id == pageID }
+        }).first else { return }
+
+        selection = item
+
+        #if os(iOS)
+        switch item.id {
+        case "platform.overview", "platform.organizations":
+            phoneTab = item.id == "platform.overview" ? .platform : .organizations
+            sectionsPath = []
+        case "business.dashboard", "business.ledger":
+            phoneTab = .company
+            sectionsPath = []
+        default:
+            phoneTab = .sections
+            sectionsPath = [item.id]
+        }
+        #endif
     }
 
     @ViewBuilder
@@ -69,28 +112,35 @@ struct PlatformRootView: View {
     }
 
     private var phoneTabs: some View {
-        TabView {
+        TabView(selection: $phoneTab) {
             NavigationStack {
                 PlatformOverviewScreen()
                     .toolbar { OrganizationSwitcher() }
             }
             .tabItem { Label("Платформа", systemImage: "chart.bar.doc.horizontal") }
+            .tag(PlatformTab.platform)
 
             NavigationStack { OrganizationsScreen() }
                 .tabItem { Label("Организации", systemImage: "building.2") }
                 .badge(store?.attention.count ?? 0)
+                .tag(PlatformTab.organizations)
 
             NavigationStack {
                 BusinessDashboardScreen(resolver: resolver)
                     .toolbar { OrganizationSwitcher() }
             }
             .tabItem { Label("Моя компания", systemImage: "square.grid.2x2.fill") }
+            .tag(PlatformTab.company)
 
-            NavigationStack { BusinessSectionsScreen(resolver: resolver) }
-                .tabItem { Label("Разделы", systemImage: "list.bullet") }
+            NavigationStack(path: $sectionsPath) {
+                BusinessSectionsScreen(resolver: resolver)
+            }
+            .tabItem { Label("Разделы", systemImage: "list.bullet") }
+            .tag(PlatformTab.sections)
 
             NavigationStack { BusinessProfileScreen(resolver: resolver) }
                 .tabItem { Label("Профиль", systemImage: "person.crop.circle") }
+                .tag(PlatformTab.profile)
         }
         .tint(Theme.accent(for: .platform))
     }
@@ -175,3 +225,10 @@ struct PlatformRootView: View {
         }
     }
 }
+
+#if os(iOS)
+/// Вкладки суперадмина.
+enum PlatformTab: Hashable {
+    case platform, organizations, company, sections, profile
+}
+#endif

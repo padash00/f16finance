@@ -42,6 +42,19 @@ public struct MonthlyPnl: Decodable, Sendable, Identifiable, Hashable {
         return date.formatted(.dateTime.month(.abbreviated).year())
     }
 
+    /// Доля строки в выручке месяца.
+    public func share(_ value: Double) -> Double? {
+        guard revenue > 0 else { return nil }
+        return value / revenue * 100
+    }
+
+    /// Заполнены ли руками ФОТ и налоги с него.
+    ///
+    /// Из журналов они не выводятся: зарплату платят вне расходов точки. Пока
+    /// их не задали, EBITDA завышена — и об этом надо сказать прямо, иначе
+    /// владелец сравнит её с чужой и решит, что у него дела лучше, чем есть.
+    public var hasManualPayroll: Bool { payroll > 0 || payrollTaxes > 0 }
+
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         month = try c.decodeFlexibleString(forKey: .month) ?? ""
@@ -89,13 +102,80 @@ public struct PnlReport: Decodable, Sendable {
 
     private enum CodingKeys: String, CodingKey { case months }
 
-    /// Итог по всем месяцам. Маржа считается от суммарной выручки, а не как
-    /// среднее месячных: среднее из процентов даёт неверную величину.
-    public var totals: (revenue: Double, ebitda: Double, netProfit: Double, ebitdaMargin: Double) {
-        let revenue = months.reduce(0) { $0 + $1.revenue }
-        let ebitda = months.reduce(0) { $0 + $1.ebitda }
-        let net = months.reduce(0) { $0 + $1.netProfit }
-        return (revenue, ebitda, net, revenue > 0 ? ebitda / revenue * 100 : 0)
+    /// Отчёт за произвольный набор месяцев — например, за отфильтрованный
+    /// период без пустых месяцев.
+    public init(months: [MonthlyPnl]) {
+        self.months = months
+    }
+
+    /// Итог по всем месяцам — той же цепочкой строк, что и месяц.
+    ///
+    /// Считается здесь, а не на сервере: сервер отдаёт месяцы, а период
+    /// владелец выбирает сам. Складываются только суммы; маржа берётся от
+    /// суммарной выручки, а не как среднее месячных — среднее из процентов
+    /// даёт величину, не сходящуюся ни с чем.
+    public var totals: PnlTotals {
+        var result = PnlTotals()
+        for month in months {
+            result.revenue += month.revenue
+            result.cashRevenue += month.cashRevenue
+            result.cashlessRevenue += month.cashlessRevenue
+            result.cogs += month.cogs
+            result.grossProfit += month.grossProfit
+            result.operatingExpenses += month.operatingExpenses
+            result.posCommission += month.posCommission
+            result.payroll += month.payroll
+            result.payrollTaxes += month.payrollTaxes
+            result.otherOperating += month.otherOperating
+            result.ebitda += month.ebitda
+            result.depreciation += month.depreciation
+            result.amortization += month.amortization
+            result.operatingProfit += month.operatingProfit
+            result.financialExpenses += month.financialExpenses
+            result.incomeTax += month.incomeTax
+            result.nonOperating += month.nonOperating
+            result.netProfit += month.netProfit
+            result.capex += month.capex
+            result.profitDistribution += month.profitDistribution
+        }
+        return result
+    }
+}
+
+/// Суммы за период.
+public struct PnlTotals: Sendable, Equatable {
+    public var revenue: Double = 0
+    public var cashRevenue: Double = 0
+    public var cashlessRevenue: Double = 0
+    public var cogs: Double = 0
+    public var grossProfit: Double = 0
+    public var operatingExpenses: Double = 0
+    public var posCommission: Double = 0
+    public var payroll: Double = 0
+    public var payrollTaxes: Double = 0
+    public var otherOperating: Double = 0
+    public var ebitda: Double = 0
+    public var depreciation: Double = 0
+    public var amortization: Double = 0
+    public var operatingProfit: Double = 0
+    public var financialExpenses: Double = 0
+    public var incomeTax: Double = 0
+    public var nonOperating: Double = 0
+    public var netProfit: Double = 0
+    public var capex: Double = 0
+    public var profitDistribution: Double = 0
+
+    public init() {}
+
+    public var ebitdaMargin: Double { revenue > 0 ? ebitda / revenue * 100 : 0 }
+    public var netMargin: Double { revenue > 0 ? netProfit / revenue * 100 : 0 }
+    public var grossMargin: Double { revenue > 0 ? grossProfit / revenue * 100 : 0 }
+
+    /// Доля строки в выручке. `nil`, если выручки нет: делить не на что, а
+    /// «0 %» читалось бы как «расходов не было».
+    public func share(_ value: Double) -> Double? {
+        guard revenue > 0 else { return nil }
+        return value / revenue * 100
     }
 }
 
