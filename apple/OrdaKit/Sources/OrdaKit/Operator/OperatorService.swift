@@ -139,9 +139,16 @@ public struct OperatorService: Sendable {
         return response.tasks
     }
 
-    /// Перевести задачу в другой статус.
-    public func updateTask(id: String, status: String) async throws {
-        let body: [String: Any] = ["action": "updateStatus", "taskId": id, "status": status]
+    /// Ответ оператора по задаче.
+    ///
+    /// Сервер принимает не «статус», а ответ человека: принял, нужны
+    /// уточнения, не могу выполнить, уже сделано, завершил. Статус он выводит
+    /// сам и заодно пишет комментарий в историю задачи — чтобы потом было
+    /// видно, кто и когда что сказал. Приложение слало «updateStatus», и
+    /// сервер честно отвечал «Неизвестное действие».
+    public func respondToTask(id: String, response: TaskResponse, note: String? = nil) async throws {
+        var body: [String: Any] = ["action": "respondTask", "taskId": id, "response": response.rawValue]
+        if let note, !note.isEmpty { body["note"] = note }
         _ = try await api.send(
             APIRequest(
                 path: "/api/operator/tasks",

@@ -10,6 +10,8 @@ struct TasksScreen: View {
     @Environment(\.surface) private var surface
     @State private var error: String?
     @State private var selected: OperatorTask?
+    /// Ответ, для которого нужна причина.
+    @State private var noteRequest: TaskNoteRequest?
 
     var body: some View {
         Group {
@@ -19,6 +21,35 @@ struct TasksScreen: View {
         .toolbar { LogoutToolbarItem() }
         .task { if cabinet.tasks.isEmpty { await cabinet.loadTasks() } }
         .refreshable { await cabinet.loadTasks() }
+        .sheet(item: $noteRequest) { request in
+            TaskNoteSheet(response: request.response) { note in
+                if let failure = await cabinet.respondToTask(request.task, response: request.response, note: note) {
+                    return failure
+                }
+                Haptics.success()
+                return nil
+            }
+        }
+    }
+
+    /// Ответить по задаче.
+    ///
+    /// «Нужны уточнения» и «не могу выполнить» без причины бесполезны:
+    /// руководитель всё равно придёт спрашивать. Поэтому у них спрашиваем
+    /// пояснение, у остальных — нет.
+    private func respond(_ task: OperatorTask, _ response: TaskResponse) {
+        if response.needsNote {
+            noteRequest = TaskNoteRequest(task: task, response: response)
+            return
+        }
+        Task {
+            if let failure = await cabinet.respondToTask(task, response: response) {
+                error = failure
+                Haptics.error()
+            } else {
+                Haptics.success()
+            }
+        }
     }
 
     /// Широкий экран: список слева, карточка задачи справа.
@@ -26,15 +57,8 @@ struct TasksScreen: View {
         MasterDetail(items: cabinet.tasks, selection: $selected, listWidth: 360) { task in
             TaskRow(task: task)
         } detail: { task in
-            TaskDetail(task: task) {
-                Task {
-                    if let failure = await cabinet.completeTask(task) {
-                        error = failure
-                        Haptics.error()
-                    } else {
-                        Haptics.success()
-                    }
-                }
+            TaskDetail(task: task) { response in
+                respond(task, response)
             }
         } empty: {
             WideEmptyState(
@@ -62,15 +86,8 @@ struct TasksScreen: View {
                             .padding(.horizontal, Spacing.xs)
 
                         ForEach(Array(cabinet.activeTasks.enumerated()), id: \.element.id) { index, task in
-                            TaskCard(task: task) {
-                                Task {
-                                    if let failure = await cabinet.completeTask(task) {
-                                        error = failure
-                                        Haptics.error()
-                                    } else {
-                                        Haptics.success()
-                                    }
-                                }
+                            TaskCard(task: task) { response in
+                                respond(task, response)
                             }
                             .staggeredAppear(index: index)
                         }
@@ -82,7 +99,7 @@ struct TasksScreen: View {
                             .padding(.horizontal, Spacing.xs)
                             .padding(.top, Spacing.md)
                         ForEach(done) { task in
-                            TaskCard(task: task, onComplete: nil)
+                            TaskCard(task: task, onRespond: nil)
                         }
                     }
                 }
@@ -103,7 +120,8 @@ struct TasksScreen: View {
 
 struct TaskCard: View {
     let task: OperatorTask
-    let onComplete: (() -> Void)?
+    /// Ответ по задаче. `nil` — карточка только для чтения (выполненные).
+    let onRespond: ((TaskResponse) -> Void)?
 
     var body: some View {
         Card(accent: task.isOverdue ? Theme.negative : nil) {
@@ -151,10 +169,31 @@ struct TaskCard: View {
                     Spacer(minLength: 0)
                 }
 
-                if let onComplete, !task.isOnReview {
-                    Button("Отправить на проверку", action: onComplete)
-                        .buttonStyle(SecondaryButtonStyle())
-                        .padding(.top, Spacing.xs)
+                if let onRespond, !task.isOnReview {
+                    HStack(spacing: Spacing.sm) {
+                        Button("Отправить на проверку") { onRespond(.alreadyDone) }
+                            .buttonStyle(SecondaryButtonStyle())
+
+                        // Остальные ответы — под многоточием. Раньше сказать
+                        // «принял» или «не могу» из приложения было нечем:
+                        // оставался звонок.
+                        Menu {
+                            ForEach(TaskResponse.allCases) { response in
+                                if response != .alreadyDone {
+                                    Button {
+                                        onRespond(response)
+                                    } label: {
+                                        Label(response.title, systemImage: response.icon)
+                                    }
+                                }
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis.circle")
+                                .font(.system(size: 22))
+                                .foregroundStyle(Theme.textDim)
+                        }
+                    }
+                    .padding(.top, Spacing.xs)
                 }
             }
         }
@@ -614,7 +653,7 @@ struct TaskRow: View {
 /// Карточка задачи справа.
 struct TaskDetail: View {
     let task: OperatorTask
-    let onComplete: () -> Void
+    let onRespond: (TaskResponse) -> Void
 
     var body: some View {
         ScrollView {
@@ -647,9 +686,20 @@ struct TaskDetail: View {
                 }
 
                 if !task.isDone && !task.isOnReview {
-                    Button("Отправить на проверку", action: onComplete)
-                        .buttonStyle(PrimaryButtonStyle(tint: Theme.accent(for: .operator)))
-                        .frame(maxWidth: 320)
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        Button("Отправить на проверку") { onRespond(.alreadyDone) }
+                            .buttonStyle(PrimaryButtonStyle(tint: Theme.accent(for: .operator)))
+                            .frame(maxWidth: 320)
+
+                        HStack(spacing: Spacing.sm) {
+                            ForEach(TaskResponse.allCases) { response in
+                                if response != .alreadyDone {
+                                    Button(response.title) { onRespond(response) }
+                                        .buttonStyle(SecondaryButtonStyle())
+                                }
+                            }
+                        }
+                    }
                 }
             }
             .frame(maxWidth: 680, alignment: .leading)
@@ -663,4 +713,83 @@ struct TaskDetail: View {
 /// Адрес чек-листа.
 struct ChecklistRoute: Hashable {
     let template: ChecklistTemplate
+}
+
+/// Ответ, которому нужна причина.
+struct TaskNoteRequest: Identifiable {
+    let task: OperatorTask
+    let response: TaskResponse
+
+    var id: String { "\(task.id)-\(response.rawValue)" }
+}
+
+/// Причина к ответу по задаче.
+struct TaskNoteSheet: View {
+    let response: TaskResponse
+    let send: (String) async -> String?
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var note = ""
+    @State private var isSending = false
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            ScreenScroll {
+                Card {
+                    VStack(alignment: .leading, spacing: Spacing.md) {
+                        Text(response == .blocked
+                            ? "Что мешает выполнить задачу?"
+                            : "Что именно нужно уточнить?")
+                            .font(Typography.callout.weight(.semibold))
+                            .foregroundStyle(Theme.text)
+
+                        TextField("Коротко, своими словами", text: $note, axis: .vertical)
+                            .textFieldStyle(.plain)
+                            .font(Typography.callout)
+                            .foregroundStyle(Theme.text)
+                            .lineLimit(3...8)
+                            .padding(Spacing.md)
+                            .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+
+                        // Ответ попадёт в историю задачи — руководитель увидит
+                        // его вместе с задачей, а не отдельным сообщением.
+                        Text("Ответ появится в истории задачи.")
+                            .font(Typography.caption)
+                            .foregroundStyle(Theme.textDim)
+
+                        if let error {
+                            Text(error)
+                                .font(Typography.caption)
+                                .foregroundStyle(Theme.negative)
+                        }
+
+                        Button(isSending ? "Отправляем…" : "Отправить") {
+                            Task {
+                                isSending = true
+                                defer { isSending = false }
+                                if let failure = await send(note) {
+                                    error = failure
+                                } else {
+                                    dismiss()
+                                }
+                            }
+                        }
+                        .buttonStyle(PrimaryButtonStyle(tint: Theme.accent(for: .operator)))
+                        .disabled(isSending || note.trimmingCharacters(in: .whitespacesAndNewlines).count < 3)
+                    }
+                }
+            }
+            .background(Theme.background)
+            .navigationTitle(response.title)
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Отмена") { dismiss() }
+                }
+            }
+        }
+    }
 }

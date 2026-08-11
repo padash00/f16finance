@@ -146,11 +146,14 @@ final class CabinetStore {
 
     // ── Действия ─────────────────────────────────────────────────────────────
 
-    func completeTask(_ task: OperatorTask) async -> String? {
+    /// Ответ по задаче.
+    ///
+    /// Оператор не закрывает задачу сам — «выполнено» ставит руководитель.
+    /// Остальные ответы («принял», «нужны уточнения», «не могу») тоже нужны:
+    /// без них единственным способом сказать «не получится» был звонок.
+    func respondToTask(_ task: OperatorTask, response: TaskResponse, note: String? = nil) async -> String? {
         do {
-            // Оператор не закрывает задачу сам — отправляет на проверку.
-            // Финальное «выполнено» ставит руководитель.
-            try await service.updateTask(id: task.id, status: "review")
+            try await service.respondToTask(id: task.id, response: response, note: note)
             await loadTasks()
             await loadOverview()
             return nil
@@ -159,6 +162,10 @@ final class CabinetStore {
         } catch {
             return error.localizedDescription
         }
+    }
+
+    func completeTask(_ task: OperatorTask) async -> String? {
+        await respondToTask(task, response: .alreadyDone)
     }
 
     func confirmArticle(_ article: KnowledgeArticle) async -> String? {

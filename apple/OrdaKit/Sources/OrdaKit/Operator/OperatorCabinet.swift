@@ -589,3 +589,41 @@ public struct OperatorIncidentList: Decodable, Sendable {
             ?? []
     }
 }
+
+/// Что оператор может ответить по задаче.
+///
+/// Не «статус», а именно ответ: статус из него выводит сервер, а в историю
+/// задачи попадает человеческая формулировка.
+public enum TaskResponse: String, Sendable, CaseIterable, Identifiable {
+    case accept
+    case needInfo = "need_info"
+    case blocked
+    case alreadyDone = "already_done"
+    case complete
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .accept: "Принять в работу"
+        case .needInfo: "Нужны уточнения"
+        case .blocked: "Не могу выполнить"
+        case .alreadyDone: "Уже сделано"
+        case .complete: "Отправить на проверку"
+        }
+    }
+
+    public var icon: String {
+        switch self {
+        case .accept: "play.circle"
+        case .needInfo: "questionmark.circle"
+        case .blocked: "exclamationmark.octagon"
+        case .alreadyDone: "checkmark.circle"
+        case .complete: "paperplane"
+        }
+    }
+
+    /// Требует пояснения: «не могу» и «нужны уточнения» без причины бесполезны
+    /// — руководитель всё равно придёт спрашивать.
+    public var needsNote: Bool { self == .needInfo || self == .blocked }
+}
