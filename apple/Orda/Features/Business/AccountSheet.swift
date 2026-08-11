@@ -28,6 +28,7 @@ struct AccountSheet: View {
                     MyContactsCard()
                     AppearancePicker()
                     BiometricLockToggle()
+                    quickEntryCard
                     logoutButton
                     legalCard
                     deleteAccountCard
@@ -69,6 +70,30 @@ struct AccountSheet: View {
                     }
                 }
                 Spacer()
+            }
+        }
+    }
+
+    /// Быстрый вход по Face ID.
+    ///
+    /// Включается сам при первом входе — иначе про него никто не узнает.
+    /// Отключить нужно уметь: телефон могут сдать в ремонт или передать
+    /// сменщику, и тогда лицо на нём будет чужое.
+    @ViewBuilder
+    private var quickEntryCard: some View {
+        if auth.hasQuickEntry {
+            Card {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    SectionHeader("Быстрый вход")
+                    Text("После выхода можно вернуться по Face ID — пароль вводить не нужно. Само устройство помнит только токен доступа, а не пароль.")
+                        .font(Typography.caption)
+                        .foregroundStyle(Theme.textMuted)
+                    Button("Забыть это устройство") {
+                        auth.forgetQuickEntry()
+                        Haptics.tap()
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                }
             }
         }
     }
@@ -157,7 +182,9 @@ struct AccountSheet: View {
 
         do {
             try await MyProfileService(api: api).deleteAccount()
-            // Сессия мертва: токен указывает на удалённого пользователя.
+            // Сессия мертва: токен указывает на удалённого пользователя. И
+            // быстрый вход забываем — возвращаться больше некуда.
+            auth.forgetQuickEntry()
             await auth.signOut()
         } catch let error as APIError {
             deleteError = error.userMessage

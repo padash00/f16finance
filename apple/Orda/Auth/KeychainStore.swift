@@ -11,10 +11,60 @@ import Security
 struct KeychainStore: Sendable {
     let service: String
     let account: String
+    /// Запись под биометрией: прочитать её нельзя без Face ID или кода
+    /// устройства. Нужна для быстрого возврата после выхода — токен лежит
+    /// рядом с сессией, но достать его может только владелец лица.
+    let requiresBiometry: Bool
 
-    init(service: String = "kz.ordaops.apple.session", account: String = "supabase-session") {
+    init(
+        service: String = "kz.ordaops.apple.session",
+        account: String = "supabase-session",
+        requiresBiometry: Bool = false
+    ) {
         self.service = service
         self.account = account
+        self.requiresBiometry = requiresBiometry
+    }
+
+    /// Правила доступа к записи.
+    ///
+    /// Обычная сессия — `AfterFirstUnlock`: приложение обновляет токен в фоне,
+    /// и без этого фоновая работа ломалась бы после перезагрузки телефона.
+    /// Быстрый вход — только с этого устройства, только при заданном коде и
+    /// только по биометрии: это ключ от чужой зарплаты, а не удобство.
+    private func accessAttributes() -> [String: Any] {
+        guard requiresBiometry else {
+            return [kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock]
+        }
+        guard let control = SecAccessControlCreateWithFlags(
+            nil,
+            kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly,
+            .userPresence,
+            nil
+        ) else {
+            return [kSecAttrAccessible as String: kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly]
+        }
+        return [kSecAttrAccessControl as String: control]
+    }
+
+    /// Есть ли запись, не спрашивая биометрию.
+    ///
+    /// Нужно, чтобы решить, показывать ли кнопку «Войти по Face ID». Спрашивать
+    /// лицо ради того, чтобы узнать о существовании кнопки, — абсурд.
+    func exists() -> Bool {
+        var query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        if requiresBiometry {
+            // Просим систему не показывать запрос: наличие записи выдаст код
+            // ошибки `interactionNotAllowed`.
+            query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail
+        }
+        let status = SecItemCopyMatching(query as CFDictionary, nil)
+        return status == errSecSuccess || status == errSecInteractionNotAllowed
     }
 
     func save(_ data: Data) {
@@ -26,17 +76,15 @@ struct KeychainStore: Sendable {
             kSecAttrAccount as String: account,
         ]
 
-        let attributes: [String: Any] = [
-            kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
-        ]
+        var attributes: [String: Any] = [kSecValueData as String: data]
+        attributes.merge(accessAttributes()) { current, _ in current }
 
         let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
         guard status != errSecSuccess else { return }
 
         var insert = query
         insert[kSecValueData as String] = data
-        insert[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        insert.merge(accessAttributes()) { current, _ in current }
 
         // Любая неудача обновления — не только «записи нет». Встречается и
         // errSecDuplicateItem от строки, оставшейся с прошлой установки, и
@@ -49,14 +97,16 @@ struct KeychainStore: Sendable {
         }
     }
 
-    func load() -> Data? {
-        let query: [String: Any] = [
+    /// Прочитать. У биометрической записи здесь и появится запрос Face ID.
+    func load(prompt: String? = nil) -> Data? {
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
+        if let prompt { query[kSecUseOperationPrompt as String] = prompt }
 
         var item: CFTypeRef?
         guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess else { return nil }

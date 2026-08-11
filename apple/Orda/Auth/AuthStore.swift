@@ -39,6 +39,8 @@ final class AuthStore {
 
     private let auth: SessionClient
     private let keychain: KeychainStore
+    /// Отдельная запись под биометрией: по ней возвращаются после выхода.
+    private let quickEntry: KeychainStore
     private let api: APIClient
     /// Защищает от гонки, когда несколько запросов одновременно получили 401.
     private var refreshTask: Task<RefreshOutcome, Never>?
@@ -63,6 +65,64 @@ final class AuthStore {
         self.auth = auth
         self.keychain = keychain
         self.api = api
+        quickEntry = KeychainStore(account: "quick-entry", requiresBiometry: true)
+        hasQuickEntry = quickEntry.exists()
+    }
+
+    // ── Быстрый возврат по Face ID ───────────────────────────────────────────
+
+    /// Есть ли сохранённый быстрый вход.
+    ///
+    /// Выход из приложения — не редкость: промахнулись по кнопке, сменили
+    /// организацию, приложение обновилось. Заново вводить логин и пароль от
+    /// рабочей системы стоя за стойкой — то, из-за чего пароли пишут на
+    /// стикере и клеят к монитору. Банки решают это одинаково: лицо вместо
+    /// пароля.
+    private(set) var hasQuickEntry = false
+    private(set) var quickEntryError: String?
+
+    /// Сохранить возможность быстрого возврата.
+    ///
+    /// Храним refresh-токен, а не пароль: пароль в связке ключей — это пароль,
+    /// который можно украсть целиком, а токен отзывается на сервере и живёт
+    /// ограниченно.
+    private func rememberQuickEntry(_ session: SessionClient.Session) {
+        guard let data = try? JSONEncoder().encode(session) else { return }
+        quickEntry.save(data)
+        hasQuickEntry = quickEntry.exists()
+    }
+
+    /// Забыть устройство. Вызывается из настроек аккаунта и при удалении.
+    func forgetQuickEntry() {
+        quickEntry.clear()
+        hasQuickEntry = false
+    }
+
+    /// Войти по Face ID. Запрос лица покажет сама система — при чтении записи.
+    func signInWithBiometrics() async {
+        quickEntryError = nil
+        guard let data = quickEntry.load(prompt: "Вход в Orda"),
+              let stored = try? JSONDecoder().decode(SessionClient.Session.self, from: data)
+        else {
+            // Отказ Face ID и отсутствие записи выглядят одинаково: и то и
+            // другое означает «войдите паролем», без обвинений.
+            quickEntryError = "Не удалось подтвердить личность. Войдите логином и паролем."
+            return
+        }
+
+        isSigningIn = true
+        defer { isSigningIn = false }
+
+        do {
+            let session = try await auth.refresh(refreshToken: stored.refreshToken)
+            persist(session)
+            await loadRole()
+        } catch {
+            // Токен мёртв: пароль сменили, вход отозвали или прошло слишком
+            // много времени. Держаться за него незачем.
+            forgetQuickEntry()
+            quickEntryError = "Быстрый вход устарел — войдите логином и паролем."
+        }
     }
 
     // ── Жизненный цикл ───────────────────────────────────────────────────────
@@ -119,6 +179,9 @@ final class AuthStore {
         // Токен просто выбрасываем: он короткоживущий, а refresh без него
         // бесполезен. Отдельный серверный «выход» ради этого не нужен.
         keychain.clear()
+        // Запись быстрого входа переживает выход намеренно: ради неё всё и
+        // затевалось. Стереть её можно в настройках аккаунта — «забыть это
+        // устройство».
         PushManager.shared.sessionDidEnd()
         session = nil
         role = nil
@@ -243,6 +306,9 @@ final class AuthStore {
         if let data = try? JSONEncoder().encode(newSession) {
             keychain.save(data)
         }
+        // Refresh-токен вращается: сохранённый при входе устареет через
+        // несколько обновлений, и быстрый вход перестал бы работать сам собой.
+        rememberQuickEntry(newSession)
     }
 
     fileprivate func performRefresh() async -> String? {

@@ -69,6 +69,27 @@ struct LoginView: View {
                         .buttonStyle(PrimaryButtonStyle())
                         .disabled(!canSubmit)
                         .padding(.top, Spacing.sm)
+
+                        // Быстрый возврат. Выход случается: промахнулись по
+                        // кнопке, обновилось приложение. Набирать рабочий
+                        // пароль заново стоя за стойкой — то, из-за чего его
+                        // пишут на стикере и клеят к монитору.
+                        if auth.hasQuickEntry {
+                            Button {
+                                Task { await auth.signInWithBiometrics() }
+                            } label: {
+                                Label("Войти по Face ID", systemImage: "faceid")
+                            }
+                            .buttonStyle(SecondaryButtonStyle())
+                            .disabled(auth.isSigningIn)
+
+                            if let quickError = auth.quickEntryError {
+                                Text(quickError)
+                                    .font(Typography.caption)
+                                    .foregroundStyle(Theme.textMuted)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
                     }
                     .padding(Spacing.lg)
                     .background(Theme.surface.opacity(0.9), in: RoundedRectangle(cornerRadius: Radius.xl, style: .continuous))

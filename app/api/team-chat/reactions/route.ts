@@ -74,19 +74,30 @@ export async function POST(request: Request) {
 
   if (!userId) return json({ error: 'unauthorized' }, 401)
 
-  // Toggle: если уже есть → удалить, иначе добавить
-  const { data: existing } = await supabase
+  // Одна реакция на человека.
+  //
+  // Раньше каждый значок жил сам по себе, и один человек навешивал на
+  // сообщение хоть все пять: под коротким «принял» вырастала гирлянда из
+  // эмодзи одного и того же автора. Реакция — это ответ, а не украшение:
+  // повторный тот же значок снимает её, другой — заменяет.
+  const { data: mine } = await supabase
     .from('team_chat_reactions')
-    .select('id')
+    .select('id, emoji')
     .eq('message_id', body.messageId)
     .eq('user_id', userId)
-    .eq('emoji', body.emoji)
-    .maybeSingle()
 
-  if (existing) {
-    await supabase.from('team_chat_reactions').delete().eq('id', existing.id)
-    return json({ ok: true, removed: true })
+  const existing = (mine || []) as Array<{ id: string; emoji: string }>
+  const same = existing.find((row) => row.emoji === body.emoji)
+
+  if (existing.length > 0) {
+    await supabase
+      .from('team_chat_reactions')
+      .delete()
+      .in('id', existing.map((row) => row.id))
   }
+
+  // Тот же значок — значит человек снимает реакцию, новой записи не нужно.
+  if (same) return json({ ok: true, removed: true })
 
   const { error } = await supabase
     .from('team_chat_reactions')
