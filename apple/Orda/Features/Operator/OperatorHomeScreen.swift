@@ -351,8 +351,12 @@ struct OperatorHomeScreen: View {
 
                         HStack(spacing: Spacing.sm) {
                             StatusChip(week.statusLabel, kind: week.status == "paid" ? .good : .neutral)
-                            if week.remainingAmount > 0 {
-                                Text("к выплате \(Money.format(week.remainingAmount))")
+                            // Остаток показываем, только если часть уже
+                            // выплачена. Пока не платили, «к выплате» равно
+                            // заработанному — и рядом стояли две одинаковые по
+                            // смыслу суммы, которые читались как расхождение.
+                            if week.paidAmount > 0, week.remainingAmount > 0 {
+                                Text("осталось \(Money.format(week.remainingAmount))")
                                     .font(Typography.caption)
                                     .foregroundStyle(Theme.textDim)
                             }
