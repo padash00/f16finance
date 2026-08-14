@@ -66,6 +66,29 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 
+	<!-- Ориентации экрана.
+	     Они были заданы настройками сборки (INFOPLIST_KEY_…), но те
+	     подмешиваются только в Info.plist, который Xcode генерирует сам. У нас
+	     файл свой, и до сборки они не доезжали: App Store отклонял загрузку с
+	     кодом 90474 «No orientations were specified».
+
+	     На iPad обязательны все четыре — иначе не работает многозадачность и
+	     приложение нельзя показать рядом с другим. На iPhone «вверх ногами» не
+	     нужен: телефон в этом положении держат разве что случайно. -->
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>
