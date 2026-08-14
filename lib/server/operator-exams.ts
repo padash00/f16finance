@@ -13,6 +13,8 @@ import { answerTelegramCallback, editTelegramMessage, sendTelegramMessage } from
  */
 
 const OPENAI_MODEL = process.env.OPENAI_QUIZ_MODEL || process.env.OPENAI_MODEL || 'gpt-4o-mini'
+import { analyzeOpenAnswer, type IntegrityReport } from '@/lib/server/exam-integrity'
+
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions'
 
 export type ExamQuestion = {
@@ -41,6 +43,8 @@ export type OpenAnswer = {
   citation: string
   overridden?: boolean
   override_comment?: string | null
+  /** Признаки несамостоятельного ответа. Не вердикт — повод посмотреть глазами. */
+  integrity?: IntegrityReport
 }
 
 export type StoredAnswer = number | OpenAnswer
@@ -635,7 +639,7 @@ export async function handleExamAnswer(params: {
 
   const { data: attemptRow } = await supabase
     .from('operator_exam_attempts')
-    .select('id, exam_id, organization_id, operator_id, telegram_chat_id, status, questions, answers, current_index, total_questions')
+    .select('id, exam_id, organization_id, operator_id, telegram_chat_id, status, questions, answers, current_index, total_questions, updated_at')
     .eq('id', params.attemptId)
     .maybeSingle()
 
@@ -839,7 +843,19 @@ export async function submitExamAnswer(params: {
     if (text.length < 15) {
       return { ok: false, error: 'Опишите порядок действий — хотя бы пару предложений', status: 400 }
     }
-    answers[String(params.questionIndex)] = await gradeOpenAnswer({ question, answer: text })
+
+    // Время думания: updated_at обновляется при выдаче вопроса, поэтому разница
+    // до текущего момента — это ровно столько, сколько человек отвечал.
+    const askedAt = (attemptRow as any)?.updated_at ? new Date(String((attemptRow as any).updated_at)).getTime() : null
+    const seconds = askedAt ? Math.max(0, Math.round((Date.now() - askedAt) / 1000)) : null
+
+    const graded = await gradeOpenAnswer({ question, answer: text })
+    const integrity = analyzeOpenAnswer({
+      text,
+      seconds,
+      others: await siblingAnswers(supabase, attempt, question.q, params.questionIndex),
+    })
+    answers[String(params.questionIndex)] = integrity.risk > 0 ? { ...graded, integrity } : graded
   } else {
     const choice = Number(params.choiceIndex)
     if (!Number.isInteger(choice) || choice < 0 || choice >= (question.choices || []).length) {
@@ -861,6 +877,50 @@ export async function submitExamAnswer(params: {
   })
 
   return { ok: true }
+}
+
+/**
+ * Ответы других сотрудников на этот же вопрос в рамках экзамена.
+ *
+ * Билеты генерируются на каждую попытку отдельно, поэтому сравниваем по тексту
+ * вопроса, а не по индексу: у коллеги тот же вопрос может стоять третьим.
+ */
+async function siblingAnswers(
+  supabase: SupabaseLike,
+  attempt: ExamAttemptRow,
+  questionText: string,
+  questionIndex: number,
+): Promise<Array<{ operatorName?: string | null; text: string }>> {
+  const needle = String(questionText || '').trim()
+  if (!needle) return []
+
+  const { data } = await supabase
+    .from('operator_exam_attempts')
+    .select('id, operator_id, questions, answers')
+    .eq('exam_id', attempt.exam_id)
+    .neq('id', attempt.id)
+    .limit(50)
+
+  const rows = (data || []) as Array<{ operator_id: string; questions: ExamQuestion[]; answers: Record<string, StoredAnswer> }>
+  if (rows.length === 0) return []
+
+  const operatorIds = Array.from(new Set(rows.map((row) => String(row.operator_id)).filter(Boolean)))
+  const { data: operators } = await supabase.from('operators').select('id, name').in('id', operatorIds)
+  const nameById = new Map(
+    ((operators || []) as Array<{ id: string; name: string | null }>).map((row) => [String(row.id), row.name]),
+  )
+
+  const result: Array<{ operatorName?: string | null; text: string }> = []
+  for (const row of rows) {
+    const index = (row.questions || []).findIndex((item) => String(item?.q || '').trim() === needle)
+    if (index < 0) continue
+    const answer = (row.answers || {})[String(index)]
+    if (!isOpenAnswer(answer)) continue
+    const text = String(answer.text || '').trim()
+    if (text.length < 15) continue
+    result.push({ operatorName: nameById.get(String(row.operator_id)) || null, text })
+  }
+  return result
 }
 
 /** Записать ответ и либо выдать следующий вопрос, либо закрыть попытку. */

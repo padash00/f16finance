@@ -42,6 +42,13 @@ type OpenAnswerView = {
     max: number
     justification: string
     citation: string
+    integrity?: {
+      risk: number
+      seconds: number | null
+      chars: number
+      chars_per_second: number | null
+      signals: Array<{ code: string; label: string; detail: string }>
+    }
     overridden?: boolean
     override_comment?: string | null
   } | null
@@ -205,6 +212,24 @@ function OpenAnswerCard({
       <div className="mt-2 whitespace-pre-wrap rounded-lg bg-slate-100 p-2.5 text-xs text-body dark:bg-white/5">
         {item.answer.text}
       </div>
+
+      {item.answer.integrity && item.answer.integrity.risk > 0 && (
+        <div className="mt-2 rounded-lg border border-amber-400/40 bg-amber-400/10 p-2.5 text-[11px]">
+          <div className="font-semibold text-amber-700 dark:text-amber-300">
+            Стоит проверить: ответ мог быть написан не самостоятельно
+          </div>
+          <ul className="mt-1 space-y-0.5 text-body">
+            {item.answer.integrity.signals.map((signal, signalIndex) => (
+              <li key={signalIndex}>
+                · <b>{signal.label}.</b> {signal.detail}
+              </li>
+            ))}
+          </ul>
+          <div className="mt-1 text-muted-foreground">
+            Это не доказательство: решение за вами. Балл система не снижает.
+          </div>
+        </div>
+      )}
 
       <div className="mt-2 grid gap-1 text-[11px]">
         <div className="text-body">
