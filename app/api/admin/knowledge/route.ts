@@ -94,6 +94,8 @@ type ImportChecklist = {
 type ImportPayload = {
   articles?: ImportArticle[]
   checklists?: ImportChecklist[]
+  /** true — существующие статьи обновляются новой редакцией, иначе пропускаются. */
+  update_existing?: boolean
 }
 
 type Body =
@@ -743,6 +745,7 @@ async function applyImport(
   const existingSlugs = new Set((existingArticles || []).map((row: any) => String(row.slug)))
 
   let createdArticles = 0
+  let updatedArticles = 0
   let skippedArticles = 0
   for (let index = 0; index < articles.length; index += 1) {
     const item = articles[index]
@@ -750,12 +753,34 @@ async function applyImport(
     if (!title) continue
 
     const slug = slugify(title)
+    const categoryId = await ensureCategory(String(item.category || 'Регламент'))
+
     if (existingSlugs.has(slug)) {
-      skippedArticles += 1
+      if (!payload?.update_existing) {
+        skippedArticles += 1
+        continue
+      }
+      // Триггер в БД поднимает version при смене текста и обнуляет силу старых
+      // подтверждений — сотрудникам придётся ознакомиться с новой редакцией.
+      const { error: updateError } = await supabase
+        .from('knowledge_articles')
+        .update({
+          category_id: categoryId,
+          title,
+          summary: item.summary?.trim() || null,
+          content: item.content?.trim() || '',
+          tags: Array.isArray(item.tags) ? item.tags.map(String) : [],
+          severity: SEVERITIES.has(String(item.severity || 'normal')) ? String(item.severity || 'normal') : 'normal',
+          requires_confirmation: item.requires_confirmation === true,
+          company_id: companyAllowed(item.company_id),
+          is_published: true,
+        })
+        .eq('slug', slug)
+      if (updateError) throw updateError
+      updatedArticles += 1
       continue
     }
 
-    const categoryId = await ensureCategory(String(item.category || 'Регламент'))
     const { error } = await supabase.from('knowledge_articles').insert([
       {
         organization_id: organizationId,
@@ -852,10 +877,10 @@ async function applyImport(
     entityType: 'knowledge-center',
     entityId: organizationId || 'global',
     action: 'import-document',
-    payload: { createdArticles, createdChecklists, createdItems, skippedArticles, skippedChecklists },
+    payload: { createdArticles, updatedArticles, createdChecklists, createdItems, skippedArticles, skippedChecklists },
   })
 
-  return { createdArticles, createdChecklists, createdItems, skippedArticles, skippedChecklists }
+  return { createdArticles, updatedArticles, createdChecklists, createdItems, skippedArticles, skippedChecklists }
 }
 
 export async function GET(req: Request) {

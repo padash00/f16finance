@@ -19,6 +19,8 @@ type PreviewArticle = {
   tags: string[]
   point: string | null
   company_id: string | null
+  exists: boolean
+  existing_version: number | null
 }
 
 type PreviewChecklist = {
@@ -36,7 +38,6 @@ type PreviewChecklist = {
 type Preview = {
   file_name: string
   chars: number
-  chunks: number
   companies: Company[]
   articles: PreviewArticle[]
   checklists: PreviewChecklist[]
@@ -76,43 +77,87 @@ export default function ImportDocumentDialog({
   const [preview, setPreview] = useState<Preview | null>(null)
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [companyByKey, setCompanyByKey] = useState<Record<string, string>>({})
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+  const [updateExisting, setUpdateExisting] = useState(false)
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const fileRef = useRef<HTMLInputElement | null>(null)
 
   function reset() {
     setPreview(null)
     setSelected({})
     setCompanyByKey({})
+    setExpanded({})
     setError(null)
   }
 
+  /**
+   * Два шага: сервер сначала достаёт текст и режет его на части, потом каждая
+   * часть разбирается отдельным запросом. Так виден прогресс, а длинный
+   * регламент не упирается в таймаут одной функции.
+   */
   async function parseFile(file: File) {
     setBusy(true)
     setError(null)
+    setProgress(null)
     try {
       const body = new FormData()
       body.append('file', file)
       const response = await fetch('/api/admin/knowledge/import', { method: 'POST', body })
       const payload = await response.json()
-      if (!response.ok) throw new Error(payload?.error || 'Не удалось разобрать документ')
+      if (!response.ok) throw new Error(payload?.error || 'Не удалось прочитать документ')
 
-      const data = payload.data as Preview
-      setPreview(data)
+      const chunks: string[] = payload.data?.chunks || []
+      const companies: Company[] = payload.data?.companies || []
+      const collectedArticles: PreviewArticle[] = []
+      const collectedChecklists: PreviewChecklist[] = []
       const nextSelected: Record<string, boolean> = {}
       const nextCompanies: Record<string, string> = {}
-      for (const article of data.articles) {
-        nextSelected[article.key] = true
-        nextCompanies[article.key] = article.company_id || ''
+
+      setProgress({ done: 0, total: chunks.length })
+
+      for (let index = 0; index < chunks.length; index += 1) {
+        const chunkResponse = await fetch('/api/admin/knowledge/import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chunk: chunks[index], offset: index }),
+        })
+        const chunkPayload = await chunkResponse.json()
+        if (!chunkResponse.ok) throw new Error(chunkPayload?.error || 'Не удалось разобрать фрагмент')
+
+        for (const article of chunkPayload.data?.articles || []) {
+          // Один и тот же раздел может попасть в два куска — берём первый.
+          if (collectedArticles.some((row) => row.title.toLowerCase() === article.title.toLowerCase())) continue
+          collectedArticles.push(article)
+          nextSelected[article.key] = true
+          nextCompanies[article.key] = article.company_id || ''
+        }
+        for (const checklist of chunkPayload.data?.checklists || []) {
+          if (collectedChecklists.some((row) => row.title.toLowerCase() === checklist.title.toLowerCase())) continue
+          collectedChecklists.push(checklist)
+          nextSelected[checklist.key] = true
+          nextCompanies[checklist.key] = checklist.company_id || ''
+        }
+
+        setProgress({ done: index + 1, total: chunks.length })
+        setPreview({
+          file_name: payload.data?.file_name || file.name,
+          chars: payload.data?.chars || 0,
+          companies,
+          articles: [...collectedArticles],
+          checklists: [...collectedChecklists],
+        })
+        setSelected({ ...nextSelected })
+        setCompanyByKey({ ...nextCompanies })
       }
-      for (const checklist of data.checklists) {
-        nextSelected[checklist.key] = true
-        nextCompanies[checklist.key] = checklist.company_id || ''
+
+      if (!collectedArticles.length && !collectedChecklists.length) {
+        throw new Error('В документе не нашлось материалов для базы знаний')
       }
-      setSelected(nextSelected)
-      setCompanyByKey(nextCompanies)
     } catch (e: any) {
       setError(e?.message || 'Ошибка разбора')
     } finally {
       setBusy(false)
+      setProgress(null)
     }
   }
 
@@ -152,14 +197,18 @@ export default function ImportDocumentDialog({
       const response = await fetch('/api/admin/knowledge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'applyImport', payload: { articles, checklists } }),
+        body: JSON.stringify({
+          action: 'applyImport',
+          payload: { articles, checklists, update_existing: updateExisting },
+        }),
       })
       const payload = await response.json()
       if (!response.ok) throw new Error(payload?.error || 'Не удалось добавить материалы')
 
       const r = payload.result || {}
       const parts = [
-        `статей: ${r.createdArticles || 0}`,
+        `создано статей: ${r.createdArticles || 0}`,
+        r.updatedArticles ? `обновлено: ${r.updatedArticles}` : '',
         `чек-листов: ${r.createdChecklists || 0}`,
         r.skippedArticles ? `пропущено дублей: ${r.skippedArticles}` : '',
       ].filter(Boolean)
@@ -174,6 +223,7 @@ export default function ImportDocumentDialog({
   }
 
   const selectedCount = Object.values(selected).filter(Boolean).length
+  const existingCount = (preview?.articles || []).filter((item) => item.exists).length
 
   return (
     <>
@@ -247,14 +297,49 @@ export default function ImportDocumentDialog({
                   </p>
                   <Button type="button" size="sm" disabled={busy} onClick={() => fileRef.current?.click()} className="mt-4">
                     {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
-                    {busy ? 'Читаю документ…' : 'Выбрать файл'}
+                    {busy ? 'Разбираю…' : 'Выбрать файл'}
                   </Button>
+                  {progress && (
+                    <div className="mx-auto mt-4 max-w-sm">
+                      <div className="h-1.5 overflow-hidden rounded-full bg-border">
+                        <div
+                          className="h-full rounded-full bg-emerald-500 transition-all"
+                          style={{ width: `${Math.round((progress.done / Math.max(1, progress.total)) * 100)}%` }}
+                        />
+                      </div>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Разобрано {progress.done} из {progress.total} частей
+                      </p>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-5">
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-300">
                     <b>{preview.file_name}</b> — нашлось статей: {preview.articles.length}, чек-листов:{' '}
                     {preview.checklists.length}. Отмечено: {selectedCount}.
+                    {progress && progress.done < progress.total && (
+                      <div className="mt-2 flex items-center gap-2 border-t border-slate-200 pt-2 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Разбираю дальше: {progress.done} из {progress.total} частей
+                      </div>
+                    )}
+                    {existingCount > 0 && (
+                      <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-slate-200 pt-2 dark:border-slate-800">
+                        <span className="text-xs">
+                          {existingCount} статей уже есть в базе — это новая редакция того же регламента?
+                        </span>
+                        <label className="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-200">
+                          <input
+                            type="checkbox"
+                            checked={updateExisting}
+                            onChange={(event) => setUpdateExisting(event.target.checked)}
+                            className="h-4 w-4"
+                          />
+                          Обновить их текстом из документа
+                        </label>
+                      </div>
+                    )}
                   </div>
 
                   {preview.articles.length > 0 && (
@@ -300,8 +385,31 @@ export default function ImportDocumentDialog({
                                   </span>
                                 )}
                               </div>
+                              {item.exists && (
+                                <span className="mt-1 inline-block rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-medium text-violet-700 dark:bg-violet-500/15 dark:text-violet-200">
+                                  уже в базе, редакция {item.existing_version}
+                                </span>
+                              )}
                               {item.summary && (
                                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.summary}</p>
+                              )}
+                              {item.content && (
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.preventDefault()
+                                    setExpanded((prev) => ({ ...prev, [item.key]: !prev[item.key] }))
+                                  }}
+                                  className="mt-1 text-xs font-medium text-emerald-700 underline underline-offset-2 dark:text-emerald-300"
+                                >
+                                  {expanded[item.key] ? 'Скрыть текст' : 'Показать текст — проверить цифры'}
+                                </button>
+                              )}
+                              {expanded[item.key] && (
+                                <div
+                                  className="mt-2 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-700 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-300 [&_li]:my-0.5 [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1 [&_strong]:font-semibold [&_table]:my-1 [&_td]:border [&_td]:border-slate-200 [&_td]:px-1.5 [&_th]:border [&_th]:border-slate-200 [&_th]:px-1.5 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5"
+                                  dangerouslySetInnerHTML={{ __html: item.content }}
+                                />
                               )}
                               <select
                                 value={companyByKey[item.key] || ''}
@@ -369,6 +477,26 @@ export default function ImportDocumentDialog({
                               </div>
                               {item.description && (
                                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.description}</p>
+                              )}
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.preventDefault()
+                                  setExpanded((prev) => ({ ...prev, [item.key]: !prev[item.key] }))
+                                }}
+                                className="mt-1 text-xs font-medium text-emerald-700 underline underline-offset-2 dark:text-emerald-300"
+                              >
+                                {expanded[item.key] ? 'Скрыть пункты' : 'Показать пункты'}
+                              </button>
+                              {expanded[item.key] && (
+                                <ol className="mt-2 list-decimal space-y-0.5 rounded-xl border border-slate-200 bg-slate-50 p-3 pl-7 text-xs text-slate-700 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-300">
+                                  {item.items.map((row, rowIndex) => (
+                                    <li key={rowIndex}>
+                                      {row.title}
+                                      {row.requires_photo ? ' · фото' : ''}
+                                    </li>
+                                  ))}
+                                </ol>
                               )}
                               <select
                                 value={companyByKey[item.key] || ''}

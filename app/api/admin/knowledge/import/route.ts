@@ -154,6 +154,17 @@ function parseModelJson(text: string): { articles: ParsedArticle[]; checklists: 
   }
 }
 
+/** Тот же slug, что и при записи, — иначе «уже есть» и «пропущено» разойдутся. */
+function slugify(value: string) {
+  const slug = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+    .replace(/[^a-zа-я0-9]+/gi, '-')
+    .replace(/^-+|-+$/g, '')
+  return slug || `item-${Date.now()}`
+}
+
 /** Сопоставляем «точку» из текста с реальной компанией организации по вхождению слов. */
 function matchCompany(pointName: string | null | undefined, companies: Array<{ id: string; name: string }>) {
   const hint = String(pointName || '').trim().toLowerCase()
@@ -173,6 +184,74 @@ function matchCompany(pointName: string | null | undefined, companies: Array<{ i
   return null
 }
 
+type CompanyRef = { id: string; name: string }
+
+/** Приведение статей модели к виду превью: одно место правды для обоих шагов. */
+function normalizeArticles(
+  raw: ParsedArticle[],
+  companies: CompanyRef[],
+  existing: Map<string, number>,
+  offset = 0,
+) {
+  const seen = new Set<string>()
+  return raw
+    .filter((item) => String(item.title || '').trim())
+    .filter((item) => {
+      const key = String(item.title).trim().toLowerCase()
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    .map((item, index) => {
+      const title = String(item.title).trim()
+      const slug = slugify(title)
+      return {
+        key: `article-${offset}-${index}`,
+        title,
+        category: String(item.category || 'Регламент').trim(),
+        summary: String(item.summary || '').trim(),
+        content: String(item.content || '').trim(),
+        severity: ['info', 'normal', 'warning', 'critical'].includes(String(item.severity))
+          ? String(item.severity)
+          : 'normal',
+        requires_confirmation: item.requires_confirmation === true,
+        tags: Array.isArray(item.tags) ? item.tags.map(String).slice(0, 8) : [],
+        point: item.point || null,
+        company_id: matchCompany(item.point, companies),
+        exists: existing.has(slug),
+        existing_version: existing.get(slug) || null,
+      }
+    })
+}
+
+/** То же для чек-листов. */
+function normalizeChecklists(raw: ParsedChecklist[], companies: CompanyRef[], offset = 0) {
+  return raw
+    .filter((item) => String(item.title || '').trim() && Array.isArray(item.items) && item.items.length > 0)
+    .map((item, index) => ({
+      key: `checklist-${offset}-${index}`,
+      title: String(item.title).trim(),
+      description: String(item.description || '').trim(),
+      schedule_type: ['opening', 'periodic', 'closing', 'onboarding', 'handover'].includes(String(item.schedule_type))
+        ? String(item.schedule_type)
+        : 'opening',
+      recurrence_minutes: Number(item.recurrence_minutes) > 0 ? Math.round(Number(item.recurrence_minutes)) : null,
+      blocks_shift: item.blocks_shift === true,
+      point: item.point || null,
+      company_id: matchCompany(item.point, companies),
+      items: (item.items || [])
+        .filter((row) => String(row.title || '').trim())
+        .map((row) => ({
+          title: String(row.title).trim(),
+          answer_type: ['boolean', 'text', 'number', 'photo', 'choice'].includes(String(row.answer_type))
+            ? String(row.answer_type)
+            : 'boolean',
+          is_required: row.is_required !== false,
+          requires_photo: row.requires_photo === true,
+        })),
+    }))
+}
+
 /** Разбор документа. Ничего не пишет в базу — возвращает предпросмотр. */
 export async function POST(request: Request) {
   try {
@@ -183,6 +262,56 @@ export async function POST(request: Request) {
     const denied = await requireCapability(access, 'knowledge-admin.create')
     if (denied) return denied
 
+    // Второй шаг: клиент присылает один кусок текста и получает его разбор.
+    // Так на экране идёт «разобрано 3 из 7», а не бесконечная крутилка.
+    const contentType = request.headers.get('content-type') || ''
+    if (contentType.includes('application/json')) {
+      const body = (await request.json().catch(() => null)) as { chunk?: string; offset?: number } | null
+      const chunk = String(body?.chunk || '').trim()
+      if (!chunk) return json({ error: 'Пустой фрагмент' }, 400)
+
+      const supabaseForChunk = createAdminSupabaseClient()
+      const allowedForChunk = await listOrganizationCompanyIds({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+      })
+      let chunkCompaniesQuery = supabaseForChunk.from('companies').select('id, name').order('name')
+      if (allowedForChunk) {
+        if (allowedForChunk.length === 0) return json({ error: 'У организации нет точек' }, 400)
+        chunkCompaniesQuery = chunkCompaniesQuery.in('id', allowedForChunk)
+      }
+      const { data: chunkCompanies } = await chunkCompaniesQuery
+      const companyList = (chunkCompanies || []).map((row: any) => ({ id: String(row.id), name: String(row.name) }))
+
+      const result = await generateAiText({
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: chunk },
+        ],
+        maxTokens: 4000,
+      })
+      const parsed = parseModelJson(result.text)
+
+      const orgScopeForChunk = access.activeOrganization?.id
+        ? `organization_id.is.null,organization_id.eq.${access.activeOrganization.id}`
+        : null
+      let existingChunkQuery = supabaseForChunk.from('knowledge_articles').select('slug, version')
+      if (orgScopeForChunk) existingChunkQuery = existingChunkQuery.or(orgScopeForChunk)
+      const { data: existingChunkRows } = await existingChunkQuery
+      const existingChunk = new Map(
+        (existingChunkRows || []).map((row: any) => [String(row.slug), Number(row.version || 1)]),
+      )
+
+      const offset = Number(body?.offset || 0)
+      return json({
+        ok: true,
+        data: {
+          articles: normalizeArticles(parsed.articles, companyList, existingChunk, offset),
+          checklists: normalizeChecklists(parsed.checklists, companyList, offset),
+        },
+      })
+    }
+
     const formData = await request.formData()
     const file = formData.get('file') as File | null
     if (!file) return json({ error: 'Файл обязателен' }, 400)
@@ -192,6 +321,7 @@ export async function POST(request: Request) {
     if (text.length < 200) return json({ error: 'В файле почти нет текста — проверьте документ' }, 400)
 
     const supabase = createAdminSupabaseClient()
+
     const allowedCompanyIds = await listOrganizationCompanyIds({
       activeOrganizationId: access.activeOrganization?.id || null,
       isSuperAdmin: access.isSuperAdmin,
@@ -205,81 +335,16 @@ export async function POST(request: Request) {
     if (companiesError) throw companiesError
     const companies = (companiesData || []).map((row: any) => ({ id: String(row.id), name: String(row.name) }))
 
+    // Куски отдаём клиенту: он разберёт их по одному и покажет прогресс.
     const chunks = splitIntoChunks(text)
-    const articles: ParsedArticle[] = []
-    const checklists: ParsedChecklist[] = []
-
-    for (const chunk of chunks) {
-      const result = await generateAiText({
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: chunk },
-        ],
-        maxTokens: 4000,
-      })
-      const parsed = parseModelJson(result.text)
-      articles.push(...parsed.articles)
-      checklists.push(...parsed.checklists)
-    }
-
-    const seenArticles = new Set<string>()
-    const previewArticles = articles
-      .filter((item) => String(item.title || '').trim())
-      .filter((item) => {
-        const key = String(item.title).trim().toLowerCase()
-        if (seenArticles.has(key)) return false
-        seenArticles.add(key)
-        return true
-      })
-      .map((item, index) => ({
-        key: `article-${index}`,
-        title: String(item.title).trim(),
-        category: String(item.category || 'Регламент').trim(),
-        summary: String(item.summary || '').trim(),
-        content: String(item.content || '').trim(),
-        severity: ['info', 'normal', 'warning', 'critical'].includes(String(item.severity))
-          ? String(item.severity)
-          : 'normal',
-        requires_confirmation: item.requires_confirmation === true,
-        tags: Array.isArray(item.tags) ? item.tags.map(String).slice(0, 8) : [],
-        point: item.point || null,
-        company_id: matchCompany(item.point, companies),
-      }))
-
-    const previewChecklists = checklists
-      .filter((item) => String(item.title || '').trim() && Array.isArray(item.items) && item.items.length > 0)
-      .map((item, index) => ({
-        key: `checklist-${index}`,
-        title: String(item.title).trim(),
-        description: String(item.description || '').trim(),
-        schedule_type: ['opening', 'periodic', 'closing', 'onboarding', 'handover'].includes(String(item.schedule_type))
-          ? String(item.schedule_type)
-          : 'opening',
-        recurrence_minutes: Number(item.recurrence_minutes) > 0 ? Math.round(Number(item.recurrence_minutes)) : null,
-        blocks_shift: item.blocks_shift === true,
-        point: item.point || null,
-        company_id: matchCompany(item.point, companies),
-        items: (item.items || [])
-          .filter((row) => String(row.title || '').trim())
-          .map((row) => ({
-            title: String(row.title).trim(),
-            answer_type: ['boolean', 'text', 'number', 'photo', 'choice'].includes(String(row.answer_type))
-              ? String(row.answer_type)
-              : 'boolean',
-            is_required: row.is_required !== false,
-            requires_photo: row.requires_photo === true,
-          })),
-      }))
 
     return json({
       ok: true,
       data: {
         file_name: file.name,
         chars: text.length,
-        chunks: chunks.length,
+        chunks,
         companies,
-        articles: previewArticles,
-        checklists: previewChecklists,
       },
     })
   } catch (error: any) {
