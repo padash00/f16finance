@@ -13,5 +13,6 @@ ORDA_API_BASE_URL = www.ordaops.kz
 // Идентификатор приложения. Должен совпадать с APNS_BUNDLE_ID на сервере.
 PRODUCT_BUNDLE_IDENTIFIER = kz.ordaops.apple
 
-// Команда разработчика Apple. Заполняется при первой сборке на устройство.
-DEVELOPMENT_TEAM =
+// Команда разработчика Apple: ТОО «Turanix». Нужен для подписи архива —
+// без него Xcode не соберёт сборку для App Store.
+DEVELOPMENT_TEAM = YRA24D32N2
