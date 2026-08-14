@@ -681,6 +681,31 @@ export async function confirmPointKnowledgeArticle(
   return data.data
 }
 
+/**
+ * «Объясни проще»: пересказ правила своими словами и ответ на вопрос оператора.
+ * Отвечает модель строго по тексту статьи — придуманный порядок действий в
+ * регламенте опаснее непонятного.
+ */
+export async function explainPointKnowledgeArticle(
+  config: AppConfig,
+  session: OperatorSession,
+  articleId: string,
+  question?: string,
+): Promise<string> {
+  const data = await request<{ ok: boolean; answer: string }>(
+    config,
+    'POST',
+    '/api/point/knowledge/explain',
+    {
+      article_id: articleId,
+      question: question || null,
+      operator_id: session.operator.operator_id,
+    },
+    operatorHeaders(session),
+  )
+  return data.answer
+}
+
 export async function startPointChecklistRun(
   config: AppConfig,
   session: OperatorSession,

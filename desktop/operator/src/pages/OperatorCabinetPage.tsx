@@ -552,6 +552,7 @@ export default function OperatorCabinetPage({
                             required
                             confirming={confirmingArticleId === article.id}
                             onConfirm={() => void handleConfirmArticle(article.id)}
+                            onExplain={(question) => api.explainPointKnowledgeArticle(config, session, article.id, question)}
                           />
                         ))}
                       </div>
@@ -565,6 +566,7 @@ export default function OperatorCabinetPage({
                         article={article}
                         required={pendingConfirmationIds.has(article.id)}
                         confirming={confirmingArticleId === article.id}
+                        onExplain={(question) => api.explainPointKnowledgeArticle(config, session, article.id, question)}
                         onConfirm={
                           article.requires_confirmation
                             ? () => void handleConfirmArticle(article.id)
@@ -838,14 +840,34 @@ function KnowledgeArticleCard({
   required,
   confirming,
   onConfirm,
+  onExplain,
 }: {
   article: PointKnowledgeArticle
   required?: boolean
   confirming?: boolean
   onConfirm?: () => void
+  onExplain?: (question: string) => Promise<string>
 }) {
   const severityLabel = SEVERITY_LABELS[article.severity] || article.severity
   const isDanger = article.severity === 'critical' || article.severity === 'warning'
+  const [explainOpen, setExplainOpen] = useState(false)
+  const [question, setQuestion] = useState('')
+  const [answer, setAnswer] = useState<string | null>(null)
+  const [explaining, setExplaining] = useState(false)
+  const [explainError, setExplainError] = useState<string | null>(null)
+
+  async function ask() {
+    if (!onExplain) return
+    setExplaining(true)
+    setExplainError(null)
+    try {
+      setAnswer(await onExplain(question.trim()))
+    } catch (error) {
+      setExplainError(error instanceof Error ? error.message : 'Не удалось получить объяснение')
+    } finally {
+      setExplaining(false)
+    }
+  }
 
   return (
     <article className={`rounded-xl border p-4 ${required ? 'border-amber-500/25 bg-amber-500/10' : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50'}`}>
@@ -866,6 +888,60 @@ function KnowledgeArticleCard({
               className="mt-3 max-h-48 overflow-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/60 dark:bg-slate-900/60 p-3 text-sm leading-6 text-slate-700 dark:text-slate-200"
               dangerouslySetInnerHTML={{ __html: article.content }}
             />
+          ) : null}
+          {onExplain ? (
+            <div className="mt-3">
+              {!explainOpen ? (
+                <button
+                  type="button"
+                  onClick={() => setExplainOpen(true)}
+                  className="text-xs font-medium text-emerald-600 underline underline-offset-2 dark:text-emerald-300"
+                >
+                  Не понял — объясни проще
+                </button>
+              ) : (
+                <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-3">
+                  <div className="text-xs font-semibold text-emerald-700 dark:text-emerald-200">
+                    Объяснение по правилу
+                  </div>
+                  <input
+                    value={question}
+                    onChange={(event) => setQuestion(event.target.value)}
+                    placeholder="Что именно непонятно? Можно оставить пустым"
+                    className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs outline-none dark:border-slate-700 dark:bg-slate-900"
+                  />
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Button type="button" size="sm" onClick={() => void ask()} disabled={explaining}>
+                      {explaining ? 'Объясняю…' : 'Объяснить'}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setExplainOpen(false)
+                        setAnswer(null)
+                        setExplainError(null)
+                        setQuestion('')
+                      }}
+                    >
+                      Закрыть
+                    </Button>
+                  </div>
+                  {explainError ? (
+                    <p className="mt-2 text-xs text-rose-500">{explainError}</p>
+                  ) : null}
+                  {answer ? (
+                    <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700 dark:text-slate-200">
+                      {answer}
+                    </p>
+                  ) : null}
+                  <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+                    Ответ собран по тексту правила. Если ответа в нём нет — спроси руководителя.
+                  </p>
+                </div>
+              )}
+            </div>
           ) : null}
           {article.tags?.length ? (
             <div className="mt-3 flex flex-wrap gap-1.5">
