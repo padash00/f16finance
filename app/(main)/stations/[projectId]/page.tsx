@@ -24,6 +24,22 @@ import { formatTariffWindowLabel, parseTimeToMinutes } from '@/lib/core/arena-ta
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { DatePicker } from '@/components/ui/date-picker'
 
+/**
+ * Единые стили управляющих элементов.
+ *
+ * Страница исторически размечалась вручную: у каждой кнопки свои отступы,
+ * радиусы и цвет, из-за чего раздел выглядел чужим на фоне остального портала.
+ * Дальше правим только эти константы, а не тридцать мест по файлу.
+ */
+const uiBtnPrimary =
+  'inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-50'
+const uiBtnGhost =
+  'inline-flex items-center justify-center gap-1.5 rounded-xl border border-border bg-white px-3 py-1.5 text-xs font-medium text-body transition hover:border-slate-400 hover:text-foreground disabled:opacity-50 dark:bg-slate-900/60 dark:hover:border-white/25'
+const uiBtnDanger =
+  'inline-flex items-center justify-center gap-1.5 rounded-xl border border-rose-300 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-600 transition hover:bg-rose-100 disabled:opacity-50 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300'
+const uiInput =
+  'rounded-xl border border-border bg-background px-2.5 py-1.5 text-xs outline-none transition focus:border-emerald-400/60'
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type Zone = {
@@ -838,7 +854,7 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
                 value={newDecoLabel}
                 onChange={e => setNewDecoLabel(e.target.value)}
                 placeholder="Текст надписи"
-                className="rounded border border-slate-200 dark:border-white/20 bg-background px-2 py-1 text-sm"
+                className={`${uiInput} text-sm`}
               />
             )}
             <div className="flex items-center gap-3 text-xs">
@@ -2113,7 +2129,7 @@ function StationsPageContent() {
                           <input
                             value={zoneEditName}
                             onChange={e => setZoneEditName(e.target.value)}
-                            className="w-full rounded border border-slate-200 dark:border-white/20 bg-background px-2 py-1 text-sm"
+                            className={`${uiInput} w-full text-sm`}
                             placeholder="Название зоны"
                           />
                           <div className="flex flex-wrap items-end gap-2">
@@ -2126,7 +2142,7 @@ function StationsPageContent() {
                                 min={0}
                                 step="1"
                                 placeholder="напр. 1200"
-                                className="w-full rounded border border-slate-200 dark:border-white/20 bg-background px-2 py-1 text-xs"
+                                className={`${uiInput} w-full`}
                               />
                             </label>
                             <div className="flex gap-1">
@@ -2134,20 +2150,20 @@ function StationsPageContent() {
                                 type="button"
                                 onClick={() => void handleSaveZoneEdit(zone.id)}
                                 disabled={saving}
-                                className="rounded bg-primary px-2 py-1 text-xs text-primary-foreground"
+                                className={uiBtnPrimary}
                               >
                                 Сохранить
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setEditingZoneId(null)}
-                                className="rounded bg-surface-hover px-2 py-1 text-xs"
+                                className={uiBtnGhost}
                               >
                                 Отмена
                               </button>
                             </div>
                           </div>
-                          <div className="rounded border border-slate-200 dark:border-white/15 p-2">
+                          <div className="rounded-xl border border-border p-2.5">
                             <div className="text-[10px] font-medium text-foreground">Характеристики зоны</div>
                             <p className="mb-1.5 mt-0.5 text-[10px] text-muted-foreground leading-snug">
                               Что отвечать клиенту про железо. По этим полям собираются вопросы аттестации.
@@ -2193,7 +2209,7 @@ function StationsPageContent() {
                                   type="number"
                                   min={0}
                                   placeholder="165"
-                                  className="w-full rounded border border-slate-200 dark:border-white/20 bg-background px-2 py-1 text-xs"
+                                  className={`${uiInput} w-full`}
                                 />
                               </label>
                             </div>
@@ -2300,26 +2316,26 @@ function StationsPageContent() {
                                   <input
                                     value={stationEditName}
                                     onChange={e => setStationEditName(e.target.value)}
-                                    className="w-full rounded border border-slate-200 dark:border-white/20 bg-background px-2 py-1 text-xs"
+                                    className={`${uiInput} w-full`}
                                     placeholder="Название станции"
                                   />
                                   <input
                                     value={stationEditCode}
                                     onChange={e => setStationEditCode(e.target.value)}
-                                    className="w-full rounded border border-slate-200 dark:border-white/20 bg-background px-2 py-1 text-xs"
+                                    className={`${uiInput} w-full`}
                                     placeholder="Код станции для установщика (например VIP-111)"
                                   />
                                   <div className="grid grid-cols-2 gap-1">
                                     <input
                                       value={stationEditIp}
                                       onChange={e => setStationEditIp(e.target.value)}
-                                      className="rounded border border-slate-200 dark:border-white/20 bg-background px-2 py-1 text-xs"
+                                      className={uiInput}
                                       placeholder="IP (например 192.168.0.111)"
                                     />
                                     <input
                                       value={stationEditMac}
                                       onChange={e => setStationEditMac(e.target.value)}
-                                      className="rounded border border-slate-200 dark:border-white/20 bg-background px-2 py-1 text-xs uppercase"
+                                      className={`${uiInput} uppercase`}
                                       placeholder="MAC (например AA:BB:CC:DD:EE:FF)"
                                     />
                                   </div>
@@ -2328,14 +2344,14 @@ function StationsPageContent() {
                                       type="button"
                                       onClick={() => void handleUpdateStation(st.id, { name: stationEditName, station_code: stationEditCode, device_ip: stationEditIp, device_mac: stationEditMac })}
                                       disabled={saving || !stationEditName.trim()}
-                                      className="rounded bg-primary px-2 py-1 text-xs text-primary-foreground disabled:opacity-50"
+                                      className={uiBtnPrimary}
                                     >
                                       Сохранить
                                     </button>
                                     <button
                                       type="button"
                                       onClick={() => setEditingStationId(null)}
-                                      className="rounded bg-surface-hover px-2 py-1 text-xs"
+                                      className={uiBtnGhost}
                                     >
                                       Отмена
                                     </button>
@@ -2357,19 +2373,19 @@ function StationsPageContent() {
                                       })()}
                                       <span className="text-sm">{st.name}</span>
                                       {st.active_session_id && st.active_session_ends_at && (
-                                        <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] text-red-400 shrink-0">
+                                        <span className="rounded-md bg-red-500/15 px-1.5 py-0.5 text-[10px] text-red-500 dark:text-red-400 shrink-0">
                                           до {new Date(st.active_session_ends_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
                                         </span>
                                       )}
                                     </div>
                                     <div className="mt-0.5 flex flex-wrap gap-1 text-[10px] text-muted-foreground">
-                                      <span className="rounded bg-slate-100 dark:bg-white/5 px-1.5 py-0.5">
+                                      <span className="rounded-md bg-slate-100 dark:bg-white/5 px-1.5 py-0.5">
                                         Код: {st.station_code || st.name}
                                       </span>
-                                      <span className="rounded bg-slate-100 dark:bg-white/5 px-1.5 py-0.5">
+                                      <span className="rounded-md bg-slate-100 dark:bg-white/5 px-1.5 py-0.5">
                                         IP: {st.device_ip || 'не задан'}
                                       </span>
-                                      <span className="rounded bg-slate-100 dark:bg-white/5 px-1.5 py-0.5">
+                                      <span className="rounded-md bg-slate-100 dark:bg-white/5 px-1.5 py-0.5">
                                         Игр: {stationGames.filter((g) => g.station_id === st.id).length}
                                       </span>
                                     </div>
@@ -2391,7 +2407,7 @@ function StationsPageContent() {
                                           type="button"
                                           onClick={() => void handleAdminStartSession(st.id)}
                                           disabled={quickStartSaving || !quickTariffId}
-                                          className="flex items-center gap-1 rounded bg-emerald-600 px-2 py-1 text-xs text-white disabled:opacity-40"
+                                          className={uiBtnPrimary}
                                         >
                                           {quickStartSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : null} Старт
                                         </button>
@@ -2406,7 +2422,7 @@ function StationsPageContent() {
                                         <button
                                           type="button"
                                           onClick={() => { setQuickStartStationId(st.id); setQuickTariffId('') }}
-                                          className="rounded px-2 py-1 text-[10px] font-medium bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/40 transition-colors"
+                                          className={uiBtnPrimary}
                                           title="Запустить сессию"
                                         >
                                           ▶ Старт
@@ -2418,7 +2434,7 @@ function StationsPageContent() {
                                           type="button"
                                           onClick={() => void handleAdminEndSession(st.id)}
                                           disabled={saving}
-                                          className="rounded px-2 py-1 text-[10px] font-medium bg-red-500/20 text-red-400 hover:bg-red-500/40 transition-colors disabled:opacity-40"
+                                          className={uiBtnDanger}
                                           title="Завершить сессию"
                                         >
                                           ■ Стоп
@@ -2468,7 +2484,7 @@ function StationsPageContent() {
                                     <select
                                       value={kioskBgType}
                                       onChange={(e) => setKioskBgType(e.target.value as any)}
-                                      className="rounded border border-border bg-background px-2 py-1 text-xs"
+                                      className={uiInput}
                                     >
                                       <option value="color">Цвет фона</option>
                                       <option value="gradient">Градиент</option>
@@ -2479,19 +2495,19 @@ function StationsPageContent() {
                                       value={kioskBgValue}
                                       onChange={(e) => setKioskBgValue(e.target.value)}
                                       placeholder={kioskBgType === 'color' ? '#07080a' : kioskBgType === 'gradient' ? 'linear-gradient(...)' : 'https://...'}
-                                      className="rounded border border-border bg-background px-2 py-1 text-xs"
+                                      className={uiInput}
                                     />
                                     <input
                                       value={kioskAccent}
                                       onChange={(e) => setKioskAccent(e.target.value)}
                                       placeholder="Акцент (#3b82f6)"
-                                      className="rounded border border-border bg-background px-2 py-1 text-xs"
+                                      className={uiInput}
                                     />
                                     <input
                                       value={kioskLogoUrl}
                                       onChange={(e) => setKioskLogoUrl(e.target.value)}
                                       placeholder="URL логотипа клуба"
-                                      className="rounded border border-border bg-background px-2 py-1 text-xs"
+                                      className={uiInput}
                                     />
                                   </div>
                                   <input
@@ -2505,14 +2521,14 @@ function StationsPageContent() {
                                       type="button"
                                       onClick={() => void handleSaveKioskTheme(st.id)}
                                       disabled={saving}
-                                      className="rounded bg-violet-600 px-2 py-1 text-xs text-white disabled:opacity-50"
+                                      className={uiBtnPrimary}
                                     >
                                       Сохранить
                                     </button>
                                     <button
                                       type="button"
                                       onClick={() => setKioskThemeStationId(null)}
-                                      className="rounded bg-surface-hover px-2 py-1 text-xs"
+                                      className={uiBtnGhost}
                                     >
                                       Отмена
                                     </button>
@@ -2546,10 +2562,10 @@ function StationsPageContent() {
                             <div key={t.id} className="group">
                               {editingTariff?.id === t.id ? (
                                 <div className="space-y-1.5 rounded-lg border border-primary/30 bg-primary/5 p-2">
-                                  <input value={editingTariff.name} onChange={e => setEditingTariff(p => p ? ({ ...p, name: e.target.value }) : p)} className="w-full rounded border border-slate-200 dark:border-white/20 bg-background px-2 py-1 text-xs" />
+                                  <input value={editingTariff.name} onChange={e => setEditingTariff(p => p ? ({ ...p, name: e.target.value }) : p)} className={`${uiInput} w-full`} />
                                   <div className="grid grid-cols-2 gap-1">
-                                    <input value={editingTariff.duration_minutes} onChange={e => setEditingTariff(p => p ? ({ ...p, duration_minutes: Number(e.target.value) }) : p)} type="number" min={1} className="rounded border border-slate-200 dark:border-white/20 bg-background px-2 py-1 text-xs" />
-                                    <input value={editingTariff.price} onChange={e => setEditingTariff(p => p ? ({ ...p, price: Number(e.target.value) }) : p)} type="number" min={0} step="1" className="rounded border border-slate-200 dark:border-white/20 bg-background px-2 py-1 text-xs" />
+                                    <input value={editingTariff.duration_minutes} onChange={e => setEditingTariff(p => p ? ({ ...p, duration_minutes: Number(e.target.value) }) : p)} type="number" min={1} className={uiInput} />
+                                    <input value={editingTariff.price} onChange={e => setEditingTariff(p => p ? ({ ...p, price: Number(e.target.value) }) : p)} type="number" min={0} step="1" className={uiInput} />
                                   </div>
                                   <div className="grid grid-cols-2 gap-1">
                                     <select
@@ -2566,7 +2582,7 @@ function StationsPageContent() {
                                             }
                                           : p)
                                       }}
-                                      className="rounded border border-slate-200 dark:border-white/20 bg-background px-2 py-1 text-xs"
+                                      className={uiInput}
                                     >
                                       <option value="fixed">Фикс. длительность</option>
                                       <option value="time_window">Пакет по окну</option>
@@ -2578,21 +2594,21 @@ function StationsPageContent() {
                                         value={editingTariff.window_start_time || ''}
                                         onChange={e => setEditingTariff(p => p ? ({ ...p, window_start_time: e.target.value }) : p)}
                                         type="time"
-                                        className="rounded border border-slate-200 dark:border-white/20 bg-background px-2 py-1 text-xs"
+                                        className={uiInput}
                                         title="Начало окна"
                                       />
                                       <input
                                         value={editingTariff.window_end_time || ''}
                                         onChange={e => setEditingTariff(p => p ? ({ ...p, window_end_time: e.target.value }) : p)}
                                         type="time"
-                                        className="rounded border border-slate-200 dark:border-white/20 bg-background px-2 py-1 text-xs"
+                                        className={uiInput}
                                         title="Конец окна"
                                       />
                                     </div>
                                   )}
                                   <div className="flex gap-1">
                                     <button type="button" onClick={handleUpdateTariff} className="flex-1 rounded bg-primary py-1 text-xs text-primary-foreground">Сохранить</button>
-                                    <button type="button" onClick={() => setEditingTariff(null)} className="rounded bg-surface-hover px-2 py-1 text-xs">Отмена</button>
+                                    <button type="button" onClick={() => setEditingTariff(null)} className={uiBtnGhost}>Отмена</button>
                                   </div>
                                 </div>
                               ) : (
@@ -2731,7 +2747,7 @@ function StationsPageContent() {
                           <option value="browser">Браузер</option>
                           <option value="app">Программа</option>
                         </select>
-                        <button type="button" onClick={() => void handleCreateGameCatalog()} disabled={saving || !newGameTitle.trim()} className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50 whitespace-nowrap">
+                        <button type="button" onClick={() => void handleCreateGameCatalog()} disabled={saving || !newGameTitle.trim()} className={`${uiBtnPrimary} whitespace-nowrap`}>
                           + Добавить
                         </button>
                       </div>
@@ -3553,14 +3569,14 @@ function StationsPageContent() {
                           <img src={newGameLogo} alt="" className="h-10 w-10 rounded object-cover bg-surface-hover shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
                         )}
                         <div className="flex-1 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-                          <input value={newGameTitle} onChange={(e) => setNewGameTitle(e.target.value)} placeholder="Название" className="rounded border border-border bg-background px-2 py-1.5 text-xs" />
-                          <input value={newGameLogo} onChange={(e) => setNewGameLogo(e.target.value)} placeholder="URL обложки" className="rounded border border-border bg-background px-2 py-1.5 text-xs" />
-                          <select value={newGameCategory} onChange={(e) => setNewGameCategory(e.target.value as any)} className="rounded border border-border bg-background px-2 py-1.5 text-xs">
+                          <input value={newGameTitle} onChange={(e) => setNewGameTitle(e.target.value)} placeholder="Название" className={uiInput} />
+                          <input value={newGameLogo} onChange={(e) => setNewGameLogo(e.target.value)} placeholder="URL обложки" className={uiInput} />
+                          <select value={newGameCategory} onChange={(e) => setNewGameCategory(e.target.value as any)} className={uiInput}>
                             <option value="game">Игра</option>
                             <option value="browser">Браузер</option>
                             <option value="app">Программа</option>
                           </select>
-                          <button type="button" onClick={() => void handleCreateGameCatalog()} disabled={saving || !newGameTitle.trim()} className="rounded bg-primary px-3 py-1.5 text-xs text-primary-foreground disabled:opacity-50">
+                          <button type="button" onClick={() => void handleCreateGameCatalog()} disabled={saving || !newGameTitle.trim()} className={uiBtnPrimary}>
                             + Добавить
                           </button>
                         </div>
@@ -3577,9 +3593,9 @@ function StationsPageContent() {
                           <img src={editGameLogo} alt="" className="h-10 w-10 rounded object-cover bg-surface-hover shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
                         )}
                         <div className="flex-1 grid grid-cols-2 gap-1.5">
-                          <input value={editGameTitle} onChange={(e) => setEditGameTitle(e.target.value)} placeholder="Название" className="rounded border border-border bg-background px-2 py-1.5 text-xs" />
-                          <input value={editGameLogo} onChange={(e) => setEditGameLogo(e.target.value)} placeholder="URL обложки" className="rounded border border-border bg-background px-2 py-1.5 text-xs" />
-                          <select value={editGameCategory} onChange={(e) => setEditGameCategory(e.target.value as any)} className="rounded border border-border bg-background px-2 py-1.5 text-xs">
+                          <input value={editGameTitle} onChange={(e) => setEditGameTitle(e.target.value)} placeholder="Название" className={uiInput} />
+                          <input value={editGameLogo} onChange={(e) => setEditGameLogo(e.target.value)} placeholder="URL обложки" className={uiInput} />
+                          <select value={editGameCategory} onChange={(e) => setEditGameCategory(e.target.value as any)} className={uiInput}>
                             <option value="game">Игра</option>
                             <option value="browser">Браузер</option>
                             <option value="app">Программа</option>
@@ -3591,8 +3607,8 @@ function StationsPageContent() {
                         </div>
                       </div>
                       <div className="flex gap-1">
-                        <button type="button" onClick={() => void handleUpdateGame()} disabled={saving || !editGameTitle.trim()} className="rounded bg-blue-600 px-2 py-1 text-xs text-white disabled:opacity-50">Сохранить</button>
-                        <button type="button" onClick={() => setEditingGame(null)} className="rounded bg-surface-hover px-2 py-1 text-xs">Отмена</button>
+                        <button type="button" onClick={() => void handleUpdateGame()} disabled={saving || !editGameTitle.trim()} className={uiBtnPrimary}>Сохранить</button>
+                        <button type="button" onClick={() => setEditingGame(null)} className={uiBtnGhost}>Отмена</button>
                       </div>
                     </div>
                   )}
@@ -3645,7 +3661,7 @@ function StationsPageContent() {
                     type="button"
                     onClick={() => void handleBindGameToStation(crudDialog.stationId)}
                     disabled={saving || !bindGameId || !bindExePath.trim()}
-                    className="rounded bg-primary px-3 py-1.5 text-xs text-primary-foreground disabled:opacity-50"
+                    className={uiBtnPrimary}
                   >
                     Сохранить привязку
                   </button>
@@ -3655,7 +3671,7 @@ function StationsPageContent() {
                   {stationGames.filter((x) => x.station_id === crudDialog.stationId).map((x) => {
                     const game = gamesCatalog.find((g) => g.id === x.game_id)
                     return (
-                      <div key={x.id} className="rounded border border-border bg-surface-muted p-2 text-xs">
+                      <div key={x.id} className="rounded-xl border border-border bg-surface-muted p-2.5 text-xs">
                         <p className="font-medium">{game?.title || x.game_id}</p>
                         <p className="text-muted-foreground truncate">{x.exe_path}</p>
                         {x.launch_args ? <p className="text-muted-foreground truncate">args: {x.launch_args}</p> : null}
