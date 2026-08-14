@@ -117,23 +117,76 @@ async function loadExamArticles(params: {
   const { data: articles, error } = await query
   if (error) return []
 
-  const { data: companyRows } = await params.supabase
+  // Все точки организации, а не только выбранные: нужно знать, как называются
+  // чужие, чтобы узнать их в тексте общей статьи.
+  const { data: allCompanyRows } = await params.supabase
     .from('companies')
-    .select('id, industry')
-    .in('id', params.companyIds.length > 0 ? params.companyIds : ['00000000-0000-0000-0000-000000000000'])
+    .select('id, name, industry')
+    .eq('organization_id', params.organizationId)
+
+  const allCompanies = ((allCompanyRows || []) as Array<{ id: string; name: string | null; industry: string | null }>)
+  const selectedSet = new Set(params.companyIds)
   const industries = new Set(
-    ((companyRows || []) as Array<{ industry: string | null }>)
+    allCompanies
+      .filter((row) => selectedSet.has(row.id))
       .map((row) => row.industry)
       .filter((value): value is string => !!value),
+  )
+
+  const ownWords = companyWords(allCompanies.filter((row) => selectedSet.has(row.id)))
+  const foreignWords = companyWords(allCompanies.filter((row) => !selectedSet.has(row.id))).filter(
+    (word) => !ownWords.includes(word),
   )
 
   return ((articles || []) as ExamArticle[])
     .filter((a) => String(a.content || '').trim().length >= 80)
     .filter((a) => {
       if (a.company_id) return true
-      if (!a.industry) return true
-      return industries.has(a.industry)
+      if (a.industry && !industries.has(a.industry)) return false
+      // Регламент часто пишут одним документом на всю сеть: раздел про Arena
+      // лежит как общий и без правки утекает в экзамен для Ramen. Если общая
+      // статья говорит про чужую точку и молчит про свою — она не наша.
+      return !mentionsForeignPoint(a, ownWords, foreignWords)
     })
+    .sort((left, right) => {
+      // Статьи своей точки идут первыми: их всегда должно хватить на билет.
+      const l = left.company_id ? 0 : 1
+      const r = right.company_id ? 0 : 1
+      return l - r
+    })
+}
+
+/** Названия точек экзамена — их модель должна видеть в промпте. */
+async function examPointNames(supabase: SupabaseLike, companyIds: string[]): Promise<string[]> {
+  if (!companyIds.length) return []
+  const { data } = await supabase.from('companies').select('name').in('id', companyIds)
+  return ((data || []) as Array<{ name: string | null }>)
+    .map((row) => String(row.name || '').trim())
+    .filter(Boolean)
+}
+
+/** Опорные слова названий точек: «F16 Ramen» → ['f16 ramen', 'ramen']. */
+function companyWords(companies: Array<{ name: string | null }>): string[] {
+  const words: string[] = []
+  for (const company of companies) {
+    const name = String(company.name || '').trim().toLowerCase()
+    if (!name) continue
+    words.push(name)
+    const last = name.split(/\s+/).filter(Boolean).pop() || ''
+    // Короткие хвосты вроде «б» или «№2» ловят что попало — берём от 4 букв.
+    if (last.length >= 4 && last !== name) words.push(last)
+  }
+  return Array.from(new Set(words))
+}
+
+/** Общая статья явно про чужую точку и ни разу не про нашу. */
+function mentionsForeignPoint(article: ExamArticle, ownWords: string[], foreignWords: string[]): boolean {
+  if (foreignWords.length === 0) return false
+  const haystack = `${article.title || ''} ${String(article.content || '').slice(0, 4000)}`.toLowerCase()
+  const hitsForeign = foreignWords.some((word) => haystack.includes(word))
+  if (!hitsForeign) return false
+  const hitsOwn = ownWords.some((word) => haystack.includes(word))
+  return !hitsOwn
 }
 
 export async function generateExamQuestions(params: {
@@ -160,9 +213,15 @@ export async function generateExamQuestions(params: {
   const shuffled = [...usable].sort(() => Math.random() - 0.5)
   const selected = shuffled.slice(0, Math.min(params.questionCount, shuffled.length))
 
+  const pointNames = await examPointNames(params.supabase, params.companyIds)
+  const scopeLine = pointNames.length
+    ? `Экзамен для точек: ${pointNames.join(', ')}. Спрашивай только то, что относится к этим точкам: не упоминай оборудование, системы и правила других точек сети, даже если они есть в тексте.`
+    : ''
+
   const systemPrompt = [
     'Ты составляешь экзамен для оператора точки (игровой клуб / магазин / общепит).',
     'На основе регламента точки сформулируй ОДИН вопрос с 4 вариантами ответа.',
+    scopeLine,
     'Требования:',
     '- вопрос должен проверять знание КОНКРЕТИКИ этого регламента (суммы, порядок действий, к кому обращаться), а не общую эрудицию;',
     '- один вариант верный, три правдоподобных но неверных;',
@@ -172,7 +231,9 @@ export async function generateExamQuestions(params: {
     'Формат ответа — строго JSON:',
     '{ "q": "Вопрос?", "choices": ["A", "B", "C", "D"], "correct": 0 }',
     'correct — индекс правильного варианта (0..3).',
-  ].join('\n')
+  ]
+    .filter(Boolean)
+    .join('\n')
 
   const results = await Promise.all(
     selected.map(async (article): Promise<ExamQuestion | null> => {
@@ -271,8 +332,14 @@ export async function generateOpenQuestions(params: {
   })
   const selected = sorted.slice(0, Math.min(params.count, sorted.length))
 
+  const openPointNames = await examPointNames(params.supabase, params.companyIds)
+  const openScopeLine = openPointNames.length
+    ? `Задание для точек: ${openPointNames.join(', ')}. Описывай только их работу: оборудование, системы и правила других точек сети упоминать нельзя.`
+    : ''
+
   const systemPrompt = [
     'Ты составляешь ситуационное задание для аттестации сотрудника точки.',
+    openScopeLine,
     'На основе регламента придумай РЕАЛЬНУЮ рабочую ситуацию и спроси, как сотрудник поступит.',
     'Требования:',
     '- ситуация конкретная и правдоподобная, из повседневной работы;',
@@ -282,7 +349,9 @@ export async function generateOpenQuestions(params: {
     '',
     'Формат ответа — строго JSON:',
     '{ "q": "Ситуация и вопрос", "rubric": ["критерий 1", "критерий 2", "критерий 3"] }',
-  ].join('\n')
+  ]
+    .filter(Boolean)
+    .join('\n')
 
   const results = await Promise.all(
     selected.map(async (article): Promise<ExamQuestion | null> => {
