@@ -273,46 +273,25 @@ function weekday(iso: string): number {
 }
 
 /**
- * Выгрузка эффективности в CSV.
+ * Выгрузка эффективности в Excel.
  *
- * Сводка «оператор — смен — выручка» не отвечает на главный вопрос владельца:
- * где именно просели. Поэтому выгружаем три блока в одном файле: каждая смена
- * с точкой и отклонением от нормы, свод по точкам и свод по операторам. Excel
- * спокойно читает пустую строку как разделитель разделов.
+ * Не CSV: русский Excel считает запятую разделителем дробей и сваливает такой
+ * файл в один столбец — выгрузку приходится чинить руками. Здесь готовая книга
+ * из трёх листов, числа лежат числами, и сводить их можно сразу.
+ *
+ * Листы отвечают на разные вопросы: «Смены» — кто как отработал каждую смену,
+ * «По точкам» — где просели, «По операторам» — итог по людям.
  */
 const SHIFT_LABEL: Record<string, string> = { day: 'День', night: 'Ночь' }
 const WEEKDAY_LABEL = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']
 
-function csvCell(value: string | number): string {
-  const text = String(value ?? '')
-  return /[",;\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
-}
-
-function csvRow(cells: Array<string | number>): string {
-  return cells.map(csvCell).join(',')
-}
-
-function exportCsv(
+async function exportCsv(
   rows: RankingItem[],
   bonusPct: number,
   companyName: (id: string) => string,
   period: { from: string; to: string },
 ) {
-  const lines: string[] = []
-
-  lines.push(csvRow(['Эффективность операторов']))
-  lines.push(csvRow(['Период', `${period.from} — ${period.to}`]))
-  lines.push(csvRow(['Выгружено', new Date().toLocaleString('ru-RU')]))
-  lines.push('')
-
-  // ── Блок 1: каждая смена ────────────────────────────────────────────────
-  lines.push(csvRow(['СМЕНЫ ПОДРОБНО']))
-  lines.push(
-    csvRow([
-      'Дата', 'День недели', 'Точка', 'Смена', 'Оператор',
-      'Факт, ₸', 'Ожидалось, ₸', 'Отклонение, ₸', 'Отклонение, %', 'PI', 'Источник',
-    ]),
-  )
+  const XLSX = await import('xlsx')
 
   const details = rows
     .flatMap((operator) =>
@@ -323,97 +302,89 @@ function exportCsv(
     )
     .sort((left, right) => left.date.localeCompare(right.date) || left.shift.localeCompare(right.shift))
 
-  for (const shift of details) {
-    const diff = Math.round(shift.actual - shift.expected)
-    const diffPct = shift.expected > 0 ? Math.round((shift.actual / shift.expected - 1) * 100) : 0
-    lines.push(
-      csvRow([
-        shift.date,
-        WEEKDAY_LABEL[weekday(shift.date)],
-        companyName(shift.company_id),
-        SHIFT_LABEL[shift.shift] || shift.shift,
-        shift.operator,
-        Math.round(shift.actual),
-        Math.round(shift.expected),
-        diff,
-        diffPct,
-        shift.pi.toFixed(2),
-        shift.source || '',
-      ]),
-    )
-  }
+  // ── Лист 1: каждая смена ────────────────────────────────────────────────
+  const shiftRows = details.map((shift) => ({
+    'Дата': shift.date,
+    'День недели': WEEKDAY_LABEL[weekday(shift.date)],
+    'Точка': companyName(shift.company_id),
+    'Смена': SHIFT_LABEL[shift.shift] || shift.shift,
+    'Оператор': shift.operator,
+    'Ожидалось, ₸': Math.round(shift.expected),
+    'Сделал, ₸': Math.round(shift.actual),
+    'Отклонение, ₸': Math.round(shift.actual - shift.expected),
+    'Выполнение, %': shift.expected > 0 ? Math.round((shift.actual / shift.expected) * 100) : 0,
+    'PI': Number(shift.pi.toFixed(2)),
+    'Источник нормы': shift.source || '',
+  }))
 
-  // ── Блок 2: свод по точкам ──────────────────────────────────────────────
+  // ── Лист 2: свод по точкам ──────────────────────────────────────────────
   const byCompany = new Map<string, { actual: number; expected: number; shifts: number; day: number; night: number }>()
   for (const shift of details) {
-    const key = shift.company_id
-    const entry = byCompany.get(key) || { actual: 0, expected: 0, shifts: 0, day: 0, night: 0 }
+    const entry = byCompany.get(shift.company_id) || { actual: 0, expected: 0, shifts: 0, day: 0, night: 0 }
     entry.actual += shift.actual
     entry.expected += shift.expected
     entry.shifts += 1
     if (shift.shift === 'night') entry.night += 1
     else entry.day += 1
-    byCompany.set(key, entry)
+    byCompany.set(shift.company_id, entry)
   }
 
-  lines.push('')
-  lines.push(csvRow(['ИТОГО ПО ТОЧКАМ']))
-  lines.push(
-    csvRow(['Точка', 'Смен', 'Дневных', 'Ночных', 'Факт, ₸', 'Ожидалось, ₸', 'Отклонение, ₸', 'Выполнение, %']),
-  )
-  for (const [companyId, entry] of byCompany) {
-    lines.push(
-      csvRow([
-        companyName(companyId),
-        entry.shifts,
-        entry.day,
-        entry.night,
-        Math.round(entry.actual),
-        Math.round(entry.expected),
-        Math.round(entry.actual - entry.expected),
-        entry.expected > 0 ? Math.round((entry.actual / entry.expected) * 100) : 0,
-      ]),
-    )
-  }
+  const companyRows = Array.from(byCompany.entries()).map(([companyId, entry]) => ({
+    'Точка': companyName(companyId),
+    'Смен': entry.shifts,
+    'Дневных': entry.day,
+    'Ночных': entry.night,
+    'Ожидалось, ₸': Math.round(entry.expected),
+    'Сделали, ₸': Math.round(entry.actual),
+    'Отклонение, ₸': Math.round(entry.actual - entry.expected),
+    'Выполнение, %': entry.expected > 0 ? Math.round((entry.actual / entry.expected) * 100) : 0,
+  }))
 
-  // ── Блок 3: свод по операторам ──────────────────────────────────────────
-  lines.push('')
-  lines.push(csvRow(['ИТОГО ПО ОПЕРАТОРАМ']))
-  const operatorHead = [
-    'Оператор', 'Смен', 'Точки', 'Факт, ₸', 'Ожидалось, ₸', 'Сверх нормы, ₸',
-    'Выполнение, %', 'Средняя за смену, ₸', 'PI', 'В рейтинге',
-  ]
-  if (bonusPct > 0) operatorHead.push(`Бонус (${bonusPct}%), ₸`)
-  lines.push(csvRow(operatorHead))
-
-  for (const operator of rows) {
+  // ── Лист 3: свод по операторам ──────────────────────────────────────────
+  const operatorRows = rows.map((operator) => {
     const expected = Math.round(expectedTotal(operator))
     const above = Math.round(aboveNorm(operator))
     const points = Array.from(new Set(operator.shift_details.map((shift) => companyName(shift.company_id))))
-    const cells: Array<string | number> = [
-      operator.operator_short_name || operator.operator_name,
-      operator.shifts,
-      points.join(' · '),
-      Math.round(operator.total_revenue),
-      expected,
-      above,
-      expected > 0 ? Math.round((operator.total_revenue / expected) * 100) : 0,
-      Math.round(operator.avg_revenue_per_shift),
-      operator.pi.toFixed(2),
-      operator.qualifying ? 'да' : 'нет (мало смен)',
-    ]
-    if (bonusPct > 0) cells.push(Math.round(Math.max(0, above) * bonusPct / 100))
-    lines.push(csvRow(cells))
-  }
+    const row: Record<string, string | number> = {
+      'Оператор': operator.operator_short_name || operator.operator_name,
+      'Смен': operator.shifts,
+      'Точки': points.join(' · '),
+      'Ожидалось, ₸': expected,
+      'Сделал, ₸': Math.round(operator.total_revenue),
+      'Сверх нормы, ₸': above,
+      'Выполнение, %': expected > 0 ? Math.round((operator.total_revenue / expected) * 100) : 0,
+      'Средняя за смену, ₸': Math.round(operator.avg_revenue_per_shift),
+      'PI': Number(operator.pi.toFixed(2)),
+      'В рейтинге': operator.qualifying ? 'да' : 'нет (мало смен)',
+    }
+    if (bonusPct > 0) row[`Бонус ${bonusPct}%, ₸`] = Math.round(Math.max(0, above) * bonusPct / 100)
+    return row
+  })
 
-  const csv = '\ufeff' + lines.join('\n')
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `performance_${period.from}_${period.to}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+  const book = XLSX.utils.book_new()
+
+  const shiftsSheet = XLSX.utils.json_to_sheet(shiftRows)
+  shiftsSheet['!cols'] = [
+    { wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 9 }, { wch: 16 },
+    { wch: 14 }, { wch: 13 }, { wch: 15 }, { wch: 14 }, { wch: 7 }, { wch: 14 },
+  ]
+  // Шапка прилипает: смен за месяц под сотню, и без этого через экран уже
+  // непонятно, какая колонка «ожидалось», а какая «сделал».
+  shiftsSheet['!freeze'] = { xSplit: 0, ySplit: 1 }
+  XLSX.utils.book_append_sheet(book, shiftsSheet, 'Смены')
+
+  const companySheet = XLSX.utils.json_to_sheet(companyRows)
+  companySheet['!cols'] = [{ wch: 18 }, { wch: 7 }, { wch: 9 }, { wch: 9 }, { wch: 14 }, { wch: 14 }, { wch: 15 }, { wch: 14 }]
+  XLSX.utils.book_append_sheet(book, companySheet, 'По точкам')
+
+  const operatorSheet = XLSX.utils.json_to_sheet(operatorRows)
+  operatorSheet['!cols'] = [
+    { wch: 18 }, { wch: 7 }, { wch: 24 }, { wch: 14 }, { wch: 14 },
+    { wch: 15 }, { wch: 14 }, { wch: 18 }, { wch: 7 }, { wch: 16 }, { wch: 14 },
+  ]
+  XLSX.utils.book_append_sheet(book, operatorSheet, 'По операторам')
+
+  XLSX.writeFile(book, `Эффективность ${period.from} — ${period.to}.xlsx`)
 }
 
 export default function PerformancePage() {
@@ -672,10 +643,10 @@ export default function PerformancePage() {
               {can('performance.export') && (
               <button
                 type="button"
-                onClick={() => exportCsv(filteredRanking, bonusPct, companyName, range)}
+                onClick={() => void exportCsv(filteredRanking, bonusPct, companyName, range)}
                 disabled={filteredRanking.length === 0}
                 className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-zinc-900/50 border border-border rounded-xl px-3 py-1.5 text-xs font-medium text-body hover:bg-slate-200 dark:hover:bg-zinc-900/70 disabled:opacity-40"
-                title="Выгрузка в Excel: каждая смена, свод по точкам и по операторам"
+                title="Скачать Excel: смены, свод по точкам и по операторам"
               >
                 <Download className="w-3.5 h-3.5" />Экспорт
               </button>

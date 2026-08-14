@@ -320,7 +320,10 @@ export async function POST(request: Request) {
           extH != null && Number.isFinite(extH) && extH > 0 ? extH : null
       }
       // Характеристики зоны: их спрашивает клиент у стойки и экзамен у оператора.
-      for (const field of ['cpu', 'gpu', 'ram', 'monitor', 'peripherals', 'specs_note'] as const) {
+      for (const field of [
+        'cpu', 'gpu', 'ram', 'monitor', 'mouse', 'keyboard', 'headset', 'chair',
+        'peripherals', 'specs_note',
+      ] as const) {
         if (body[field] !== undefined) {
           const value = String(body[field] ?? '').trim()
           update[field] = value || null
