@@ -2,7 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { CheckCircle2, GraduationCap, Info, Loader2, RefreshCw, Send, XCircle } from 'lucide-react'
+import { CheckCircle2, GraduationCap, Info, Loader2, RefreshCw, Send, Trash2, XCircle } from 'lucide-react'
 
 import RegulationsTabs from '../RegulationsTabs'
 import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
@@ -377,13 +377,19 @@ export default function OperatorExamsPage() {
     }
   }
 
-  async function runAction(action: 'remind' | 'finish' | 'cancel', examId: string) {
+  async function runAction(action: 'remind' | 'finish' | 'cancel' | 'delete', examId: string) {
+    const exam = exams.find((row) => row.id === examId)
+    const answered = Number(exam?.completed || 0)
     const confirmText =
       action === 'remind'
         ? 'Переслать текущий вопрос всем, кто ещё не закончил?'
         : action === 'finish'
           ? 'Завершить экзамен? Незаконченные попытки станут просроченными.'
-          : 'Отменить экзамен?'
+          : action === 'delete'
+            ? answered > 0
+              ? `Удалить экзамен «${exam?.title || ''}»? Вместе с ним пропадут результаты (${answered} сдали). Отменить нельзя — если нужно просто закрыть, используйте «Завершить».`
+              : `Удалить экзамен «${exam?.title || ''}»? Восстановить нельзя.`
+            : 'Отменить экзамен?'
     if (!confirm(confirmText)) return
 
     setBusy(true)
@@ -396,8 +402,9 @@ export default function OperatorExamsPage() {
       const body = await res.json()
       if (!res.ok) throw new Error(body?.error || `HTTP ${res.status}`)
       if (action === 'remind') alert(`Напоминание отправлено: ${body.data?.reminded || 0}`)
+      if (action === 'delete' && detailsId === examId) setDetailsId(null)
       await load()
-      if (detailsId === examId) await loadDetails(examId)
+      if (action !== 'delete' && detailsId === examId) await loadDetails(examId)
     } catch (e: any) {
       alert(`Ошибка: ${e?.message || 'не удалось'}`)
     } finally {
@@ -685,6 +692,18 @@ export default function OperatorExamsPage() {
                         {exam.status === 'active' && canCancel && (
                           <Button variant="outline" size="sm" disabled={busy} onClick={() => runAction('finish', exam.id)}>
                             Завершить
+                          </Button>
+                        )}
+                        {canCancel && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={busy}
+                            onClick={() => runAction('delete', exam.id)}
+                            className="border-rose-300 text-rose-600 hover:bg-rose-50 dark:border-rose-500/40 dark:text-rose-300 dark:hover:bg-rose-500/10"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Удалить
                           </Button>
                         )}
                       </div>

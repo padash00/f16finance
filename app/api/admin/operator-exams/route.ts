@@ -764,6 +764,48 @@ export async function POST(request: Request) {
       return json({ ok: true, data: { attempt_id: String(fresh.id), questions: ticket.length } })
     }
 
+    // ─── Удалить экзамен вместе с попытками ───────────────────────────────
+    if (body.action === 'delete') {
+      const denied = await requireCapability(access, 'operator-exams.cancel')
+      if (denied) return denied
+
+      const examId = String(body.exam_id || '')
+      if (!examId) return json({ error: 'exam_id обязателен' }, 400)
+
+      const { data: exam } = await supabase
+        .from('operator_exams')
+        .select('id, title, status, created_at')
+        .eq('id', examId)
+        .eq('organization_id', orgId)
+        .maybeSingle()
+      if (!exam) return json({ error: 'exam-not-found' }, 404)
+
+      // Что удаляем — фиксируем ДО удаления: попытки уйдут каскадом, и потом
+      // по журналу нельзя будет понять, сколько результатов потеряно.
+      const { data: attempts } = await supabase
+        .from('operator_exam_attempts')
+        .select('id, status, score')
+        .eq('exam_id', examId)
+
+      const { error: deleteError } = await supabase.from('operator_exams').delete().eq('id', examId)
+      if (deleteError) return json({ error: 'exam-delete-failed', detail: deleteError.message }, 400)
+
+      await writeAuditLog(supabase as any, {
+        actorUserId: access.user?.id || null,
+        action: 'operator_exam.delete',
+        entityType: 'operator_exam',
+        entityId: examId,
+        payload: {
+          title: (exam as any).title,
+          status: (exam as any).status,
+          attempts: (attempts || []).length,
+          completed: (attempts || []).filter((row: any) => row.status === 'completed').length,
+        },
+      })
+
+      return json({ ok: true, data: { deleted: true, attempts: (attempts || []).length } })
+    }
+
     // ─── Завершить: незакрытые попытки помечаем просроченными ─────────────
     if (body.action === 'finish' || body.action === 'cancel') {
       const denied = await requireCapability(access, 'operator-exams.cancel')
