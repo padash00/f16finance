@@ -65,6 +65,37 @@ type ItemPayload = {
   sort_order?: number | null
 }
 
+type ImportArticle = {
+  title: string
+  category?: string | null
+  summary?: string | null
+  content?: string | null
+  severity?: string | null
+  requires_confirmation?: boolean
+  tags?: string[] | null
+  company_id?: string | null
+}
+
+type ImportChecklist = {
+  title: string
+  description?: string | null
+  schedule_type?: string | null
+  recurrence_minutes?: number | null
+  blocks_shift?: boolean
+  company_id?: string | null
+  items?: Array<{
+    title: string
+    answer_type?: string | null
+    is_required?: boolean
+    requires_photo?: boolean
+  }>
+}
+
+type ImportPayload = {
+  articles?: ImportArticle[]
+  checklists?: ImportChecklist[]
+}
+
 type Body =
   | { action: 'upsertCategory'; payload: CategoryPayload }
   | { action: 'deleteCategory'; id: string }
@@ -75,6 +106,7 @@ type Body =
   | { action: 'upsertItem'; payload: ItemPayload }
   | { action: 'deleteItem'; id: string }
   | { action: 'seedDefaults' }
+  | { action: 'applyImport'; payload: ImportPayload }
 
 const CATEGORY_KINDS = new Set(['rules', 'faq', 'salary', 'problem', 'checklist'])
 const SEVERITIES = new Set(['info', 'normal', 'warning', 'critical'])
@@ -638,6 +670,193 @@ async function seedDefaults(organizationId: string | null, actorUserId: string |
   })
 }
 
+/**
+ * Запись разобранного документа в базу знаний.
+ *
+ * Импорт не трогает то, что уже есть: категория ищется по названию, статья с
+ * таким же slug пропускается. Иначе повторная загрузка того же файла удвоила бы
+ * всю базу, а операторы получили бы дубли в обязательных материалах.
+ */
+async function applyImport(
+  supabase: ReturnType<typeof createAdminSupabaseClient>,
+  params: {
+    payload: ImportPayload
+    organizationId: string | null
+    isSuperAdmin: boolean
+    actorUserId: string | null
+  },
+) {
+  const { payload, organizationId, isSuperAdmin, actorUserId } = params
+  const articles = Array.isArray(payload?.articles) ? payload.articles : []
+  const checklists = Array.isArray(payload?.checklists) ? payload.checklists : []
+
+  const allowedCompanyIds = await listOrganizationCompanyIds({
+    activeOrganizationId: organizationId,
+    isSuperAdmin,
+  })
+  const companyAllowed = (companyId: string | null | undefined) => {
+    if (!companyId) return null
+    if (!allowedCompanyIds) return companyId
+    return allowedCompanyIds.includes(companyId) ? companyId : null
+  }
+
+  const { data: existingCategories } = await supabase
+    .from('knowledge_categories')
+    .select('id, title, slug')
+    .or(scopedOr(organizationId) || 'organization_id.is.null')
+  const categoryByTitle = new Map<string, string>()
+  for (const row of existingCategories || []) {
+    categoryByTitle.set(String((row as any).title || '').trim().toLowerCase(), String((row as any).id))
+  }
+
+  async function ensureCategory(title: string): Promise<string | null> {
+    const clean = title.trim() || 'Регламент'
+    const key = clean.toLowerCase()
+    const existing = categoryByTitle.get(key)
+    if (existing) return existing
+
+    const { data, error } = await supabase
+      .from('knowledge_categories')
+      .insert([
+        {
+          organization_id: organizationId,
+          title: clean,
+          slug: slugify(clean),
+          kind: 'rules',
+          sort_order: (categoryByTitle.size + 1) * 10,
+          is_active: true,
+        },
+      ])
+      .select('id')
+      .single()
+    if (error) throw error
+    const id = String((data as any).id)
+    categoryByTitle.set(key, id)
+    return id
+  }
+
+  const { data: existingArticles } = await supabase
+    .from('knowledge_articles')
+    .select('slug')
+    .or(scopedOr(organizationId) || 'organization_id.is.null')
+  const existingSlugs = new Set((existingArticles || []).map((row: any) => String(row.slug)))
+
+  let createdArticles = 0
+  let skippedArticles = 0
+  for (let index = 0; index < articles.length; index += 1) {
+    const item = articles[index]
+    const title = String(item?.title || '').trim()
+    if (!title) continue
+
+    const slug = slugify(title)
+    if (existingSlugs.has(slug)) {
+      skippedArticles += 1
+      continue
+    }
+
+    const categoryId = await ensureCategory(String(item.category || 'Регламент'))
+    const { error } = await supabase.from('knowledge_articles').insert([
+      {
+        organization_id: organizationId,
+        company_id: companyAllowed(item.company_id),
+        category_id: categoryId,
+        title,
+        slug,
+        summary: item.summary?.trim() || null,
+        content: item.content?.trim() || '',
+        tags: Array.isArray(item.tags) ? item.tags.map(String) : [],
+        audience: ['operator', 'cashier'],
+        severity: SEVERITIES.has(String(item.severity || 'normal')) ? String(item.severity || 'normal') : 'normal',
+        requires_confirmation: item.requires_confirmation === true,
+        sort_order: (index + 1) * 10,
+        is_published: true,
+        source: 'import',
+      },
+    ])
+    if (error) throw error
+    existingSlugs.add(slug)
+    createdArticles += 1
+  }
+
+  const { data: existingTemplates } = await supabase
+    .from('checklist_templates')
+    .select('id, title')
+    .or(scopedOr(organizationId) || 'organization_id.is.null')
+  const existingTemplateTitles = new Set(
+    (existingTemplates || []).map((row: any) => String(row.title || '').trim().toLowerCase()),
+  )
+
+  let createdChecklists = 0
+  let createdItems = 0
+  let skippedChecklists = 0
+  for (let index = 0; index < checklists.length; index += 1) {
+    const item = checklists[index]
+    const title = String(item?.title || '').trim()
+    if (!title) continue
+    if (existingTemplateTitles.has(title.toLowerCase())) {
+      skippedChecklists += 1
+      continue
+    }
+
+    const scheduleType = SCHEDULE_TYPES.has(String(item.schedule_type || 'opening'))
+      ? String(item.schedule_type || 'opening')
+      : 'opening'
+
+    const { data: template, error: templateError } = await supabase
+      .from('checklist_templates')
+      .insert([
+        {
+          organization_id: organizationId,
+          company_id: companyAllowed(item.company_id),
+          title,
+          description: item.description?.trim() || null,
+          role_scope: 'operator',
+          shift_scope: scheduleType === 'periodic' ? 'any' : scheduleType,
+          schedule_type: scheduleType,
+          recurrence_minutes:
+            scheduleType === 'periodic' ? Math.max(0, Number(item.recurrence_minutes || 0)) || null : null,
+          blocks_shift: item.blocks_shift === true,
+          sort_order: (index + 1) * 10,
+          is_active: true,
+        },
+      ])
+      .select('id')
+      .single()
+    if (templateError) throw templateError
+
+    const rows = (item.items || [])
+      .filter((row) => String(row?.title || '').trim())
+      .map((row, rowIndex) => ({
+        template_id: String((template as any).id),
+        title: String(row.title).trim(),
+        answer_type: ANSWER_TYPES.has(String(row.answer_type || 'boolean')) ? String(row.answer_type || 'boolean') : 'boolean',
+        is_required: row.is_required !== false,
+        requires_photo: row.requires_photo === true,
+        severity: 'normal',
+        sort_order: (rowIndex + 1) * 10,
+      }))
+
+    if (rows.length) {
+      const { error: itemsError } = await supabase.from('checklist_items').insert(rows)
+      if (itemsError) throw itemsError
+      createdItems += rows.length
+    }
+
+    existingTemplateTitles.add(title.toLowerCase())
+    createdChecklists += 1
+  }
+
+  await writeAuditLog(supabase, {
+    actorUserId,
+    entityType: 'knowledge-center',
+    entityId: organizationId || 'global',
+    action: 'import-document',
+    payload: { createdArticles, createdChecklists, createdItems, skippedArticles, skippedChecklists },
+  })
+
+  return { createdArticles, createdChecklists, createdItems, skippedArticles, skippedChecklists }
+}
+
 export async function GET(req: Request) {
   try {
     const guard = await requireStaffCapabilityRequest(req, 'staff')
@@ -699,6 +918,24 @@ export async function POST(req: Request) {
     if (body.action === 'seedDefaults') {
       await seedDefaults(organizationId, user?.id || null)
       return json({ ok: true, data: await loadKnowledgeData({ organizationId, isSuperAdmin: access.isSuperAdmin }) })
+    }
+
+    if (body.action === 'applyImport') {
+      const denied = await requireCapability(access, 'knowledge-admin.create')
+      if (denied) return denied as any
+
+      const result = await applyImport(supabase, {
+        payload: body.payload,
+        organizationId,
+        isSuperAdmin: access.isSuperAdmin,
+        actorUserId: user?.id || null,
+      })
+
+      return json({
+        ok: true,
+        result,
+        data: await loadKnowledgeData({ organizationId, isSuperAdmin: access.isSuperAdmin }),
+      })
     }
 
     if (body.action === 'upsertCategory') {

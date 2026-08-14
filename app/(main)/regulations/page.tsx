@@ -28,6 +28,7 @@ import {
   type ChecklistItemEditorValue,
   type ChecklistTemplateEditorValue,
 } from '@/components/admin/knowledge-editor-types'
+import ImportDocumentDialog from './ImportDocumentDialog'
 import RegulationsTabs from './RegulationsTabs'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { useCapabilities } from '@/lib/client/use-capabilities'
@@ -808,6 +809,14 @@ export default function KnowledgeAdminPage() {
           backHref="/"
           actions={
             <>
+              {can('knowledge-admin.create') && (
+                <ImportDocumentDialog
+                  onApplied={(data, summary) => {
+                    setData(normalizeKnowledgeResponse(data as any))
+                    setNotice(summary)
+                  }}
+                />
+              )}
               <button
                 onClick={() => load()}
                 disabled={loading || saving}
