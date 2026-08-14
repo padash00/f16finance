@@ -4,6 +4,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { CheckCircle2, GraduationCap, Info, Loader2, RefreshCw, Send, XCircle } from 'lucide-react'
 
+import RegulationsTabs from '../RegulationsTabs'
 import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -420,7 +421,8 @@ export default function OperatorExamsPage() {
         description="Аттестация по регламентам точки: ИИ собирает билет из базы знаний, бот принимает ответы в Telegram"
         icon={<GraduationCap className="h-5 w-5" />}
         accent="blue"
-        backHref="/"
+        toolbar={<RegulationsTabs />}
+        backHref="/regulations"
         actions={
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => load()} disabled={loading || busy}>

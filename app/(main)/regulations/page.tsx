@@ -28,6 +28,7 @@ import {
   type ChecklistItemEditorValue,
   type ChecklistTemplateEditorValue,
 } from '@/components/admin/knowledge-editor-types'
+import RegulationsTabs from './RegulationsTabs'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 
@@ -800,8 +801,8 @@ export default function KnowledgeAdminPage() {
     <main className="min-h-screen overflow-x-hidden bg-white px-4 py-8 text-slate-900 dark:bg-[#07111c] dark:text-slate-100 sm:px-6">
       <section className="app-page-wide flex flex-col gap-6">
         <AdminPageHeader
-          title="База знаний"
-          description="Правила, FAQ, штрафы, бонусы, решения проблем и обязательные чек-листы смены."
+          title="Регламенты точки"
+          description="Правила и FAQ для операторов, чек-листы смены, штрафы и премии, журнал прохождений."
           icon={<BookOpen className="h-5 w-5" />}
           accent="blue"
           backHref="/"
@@ -826,17 +827,20 @@ export default function KnowledgeAdminPage() {
                 className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 px-4 py-3 text-sm font-bold text-slate-950 shadow-lg shadow-orange-950/30 transition hover:brightness-110 disabled:opacity-50"
               >
                 <Sparkles className="h-4 w-4" />
-                Создать базу F16
+                Создать стартовую базу
               </button>
               )}
             </>
           }
           toolbar={
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <StatCard label="Категорий" value={data.categories.length} />
-              <StatCard label="Статей" value={data.articles.length} />
-              <StatCard label="Чек-листов" value={data.templates.length} />
-              <StatCard label="Прохождений" value={data.runs.length} />
+            <div className="space-y-4">
+              <RegulationsTabs />
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <StatCard label="Категорий" value={data.categories.length} />
+                <StatCard label="Статей" value={data.articles.length} />
+                <StatCard label="Чек-листов" value={data.templates.length} />
+                <StatCard label="Прохождений" value={data.runs.length} />
+              </div>
             </div>
           }
         />

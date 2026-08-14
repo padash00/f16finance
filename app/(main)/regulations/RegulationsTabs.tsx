@@ -12,11 +12,11 @@ type Tab = {
 }
 
 /**
- * Вкладки раздела «Регламенты точки».
+ * Переключатель вкладок раздела «Регламенты точки».
  *
- * Три бывшие страницы (база знаний, экзамены, мастер настройки) — один цикл:
- * написали правило → проверили чек-листом → спросили на экзамене. Раньше они
- * жили в разных местах меню, и связь между ними приходилось держать в голове.
+ * Живёт внутри шапки страницы (слот toolbar у AdminPageHeader), а не отдельной
+ * полосой сверху: иначе получается два разных ряда вкладок и пустая плашка над
+ * содержимым.
  */
 const TABS: Tab[] = [
   { href: '/regulations', label: 'Правила и чек-листы', note: 'Материалы, чек-листы, журнал', icon: BookOpen },
@@ -28,9 +28,9 @@ export default function RegulationsTabs() {
   const pathname = usePathname()
 
   return (
-    <nav className="app-page-wide flex flex-wrap gap-2 px-4 pt-6 sm:px-6" aria-label="Разделы регламентов">
+    <nav className="flex flex-wrap gap-2" aria-label="Разделы регламентов">
       {TABS.map((tab) => {
-        // '/regulations' — точное совпадение, иначе он подсвечивался бы на всех вложенных.
+        // '/regulations' — точное совпадение, иначе он подсвечивался бы на вложенных.
         const active = tab.href === '/regulations' ? pathname === tab.href : pathname.startsWith(tab.href)
         const Icon = tab.icon
         return (
@@ -39,10 +39,10 @@ export default function RegulationsTabs() {
             href={tab.href}
             aria-current={active ? 'page' : undefined}
             title={tab.note}
-            className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2.5 text-sm font-semibold transition ${
+            className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-[13px] font-semibold transition ${
               active
-                ? 'border-emerald-400/70 bg-emerald-400/15 text-emerald-700 dark:text-emerald-100'
-                : 'border-slate-200 bg-white text-slate-500 hover:border-slate-400 hover:text-slate-900 dark:border-slate-800 dark:bg-slate-900/70 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-slate-100'
+                ? 'border-slate-900/10 bg-slate-900 text-white shadow-sm dark:border-white/20 dark:bg-white dark:text-slate-900'
+                : 'border-slate-200 bg-white/70 text-slate-600 hover:border-slate-400 hover:text-slate-900 dark:border-white/10 dark:bg-slate-900/50 dark:text-slate-300 dark:hover:border-white/25 dark:hover:text-white'
             }`}
           >
             <Icon className="h-4 w-4" />

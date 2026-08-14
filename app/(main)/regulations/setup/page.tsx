@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { CheckCircle2, Circle, Database, FileEdit, Info, Loader2, MessageSquareText, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
 
+import RegulationsTabs from '../RegulationsTabs'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -122,6 +123,7 @@ export default function KnowledgeSetupPage() {
         description="Ниша точки задаёт каркас тем. Черновики регламентов собираются из данных системы или из ваших ответов — публикуете вы"
         icon={<Sparkles className="h-5 w-5" />}
         accent="violet"
+        toolbar={<RegulationsTabs />}
         backHref="/regulations"
         actions={
           <Button variant="outline" size="sm" onClick={() => load(companyId)} disabled={loading}>
