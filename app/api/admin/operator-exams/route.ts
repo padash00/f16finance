@@ -260,9 +260,27 @@ export async function GET(request: Request) {
       })
     }
 
+    // Настройки автоаттестации: колонок может не быть до применения миграции,
+    // поэтому ошибку читаем как «выключено», а не как поломку страницы.
+    const { data: orgSettings } = orgId
+      ? await supabase
+          .from('organizations')
+          .select('auto_exam_enabled, auto_exam_days, auto_exam_questions, auto_exam_open, auto_exam_pass_score')
+          .eq('id', orgId)
+          .maybeSingle()
+      : { data: null }
+
     return json({
       ok: true,
       data: {
+        auto_exam: {
+          available: !!orgSettings,
+          enabled: (orgSettings as any)?.auto_exam_enabled === true,
+          days: Number((orgSettings as any)?.auto_exam_days ?? 7),
+          questions: Number((orgSettings as any)?.auto_exam_questions ?? 10),
+          open: Number((orgSettings as any)?.auto_exam_open ?? 2),
+          pass_score: Number((orgSettings as any)?.auto_exam_pass_score ?? 70),
+        },
         exams: ((exams || []) as ExamRow[]).map((exam) => {
           const stat = statsByExam.get(exam.id) || { assigned: 0, completed: 0, passed: 0, scoreSum: 0 }
           return {
@@ -310,6 +328,11 @@ export async function POST(request: Request) {
           question_index?: number
           score?: number
           comment?: string | null
+          // Настройки автоаттестации новичка.
+          enabled?: boolean
+          days?: number
+          questions?: number
+          open?: number
         }
       | null
     if (!body?.action) return json({ error: 'action обязателен' }, 400)
@@ -762,6 +785,36 @@ export async function POST(request: Request) {
       })
 
       return json({ ok: true, data: { attempt_id: String(fresh.id), questions: ticket.length } })
+    }
+
+    // ─── Настройки автоаттестации новичка ─────────────────────────────────
+    if (body.action === 'auto_settings') {
+      const denied = await requireCapability(access, 'operator-exams.create')
+      if (denied) return denied
+      if (!orgId) return json({ error: 'no-organization' }, 400)
+
+      const patch = {
+        auto_exam_enabled: body.enabled === true,
+        auto_exam_days: Math.max(1, Math.min(90, Number(body.days) || 7)),
+        auto_exam_questions: Math.max(3, Math.min(20, Number(body.questions) || 10)),
+        auto_exam_open: Math.max(0, Math.min(5, Number(body.open) || 0)),
+        auto_exam_pass_score: Math.max(1, Math.min(100, Number(body.pass_score) || 70)),
+      }
+
+      const { error: settingsError } = await supabase.from('organizations').update(patch).eq('id', orgId)
+      if (settingsError) {
+        return json({ error: 'Не удалось сохранить: примените миграцию 20260815_auto_exam_for_newcomers', detail: settingsError.message }, 400)
+      }
+
+      await writeAuditLog(supabase as any, {
+        actorUserId: access.user?.id || null,
+        action: 'operator_exam.auto_settings',
+        entityType: 'organization',
+        entityId: orgId,
+        payload: patch,
+      })
+
+      return json({ ok: true, data: patch })
     }
 
     // ─── Удалить экзамен вместе с попытками ───────────────────────────────

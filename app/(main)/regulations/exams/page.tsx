@@ -280,6 +280,14 @@ export default function OperatorExamsPage() {
   // выглядит как перезагрузка.
   const [firstLoad, setFirstLoad] = useState(true)
   const [busy, setBusy] = useState(false)
+  const [autoExam, setAutoExam] = useState<{
+    available: boolean
+    enabled: boolean
+    days: number
+    questions: number
+    open: number
+    pass_score: number
+  } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const [exams, setExams] = useState<ExamRow[]>([])
@@ -314,6 +322,7 @@ export default function OperatorExamsPage() {
       setCompanies(body.data?.companies || [])
       setOperators(body.data?.operators || [])
       setReadiness(body.data?.readiness || null)
+      setAutoExam(body.data?.auto_exam || null)
     } catch (e: any) {
       setError(e?.message || 'Не удалось загрузить')
     } finally {
@@ -402,6 +411,32 @@ export default function OperatorExamsPage() {
     }
   }
 
+  async function saveAutoExam(next: NonNullable<typeof autoExam>) {
+    setAutoExam(next)
+    setBusy(true)
+    try {
+      const res = await fetch('/api/admin/operator-exams', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          action: 'auto_settings',
+          enabled: next.enabled,
+          days: next.days,
+          questions: next.questions,
+          open: next.open,
+          pass_score: next.pass_score,
+        }),
+      })
+      const body = await res.json()
+      if (!res.ok) throw new Error(body?.error || `HTTP ${res.status}`)
+    } catch (e: any) {
+      alert(`Ошибка: ${e?.message || 'не удалось сохранить'}`)
+      await load()
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function runAction(action: 'remind' | 'finish' | 'cancel' | 'delete', examId: string) {
     const exam = exams.find((row) => row.id === examId)
     const answered = Number(exam?.completed || 0)
@@ -478,6 +513,87 @@ export default function OperatorExamsPage() {
       )}
 
       {readiness && <ReadinessGuide readiness={readiness} />}
+
+      {autoExam && canCreate && (
+        <Card className="p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-foreground">Аттестация новичка автоматически</div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Новому оператору билет собирается сам и ждёт вашей проверки — рассылка всё равно ручная.
+                {!autoExam.available ? ' Требуется миграция 20260815_auto_exam_for_newcomers.' : ''}
+              </p>
+            </div>
+            <label className="flex shrink-0 items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={autoExam.enabled}
+                disabled={busy || !autoExam.available}
+                onChange={(e) => void saveAutoExam({ ...autoExam, enabled: e.target.checked })}
+                className="h-4 w-4"
+              />
+              Включено
+            </label>
+          </div>
+
+          {autoExam.enabled && (
+            <div className="mt-3 grid gap-3 border-t border-border pt-3 sm:grid-cols-4">
+              <label className="text-xs text-muted-foreground">
+                Через сколько дней
+                <input
+                  type="number"
+                  min={1}
+                  max={90}
+                  value={autoExam.days}
+                  disabled={busy}
+                  onChange={(e) => setAutoExam({ ...autoExam, days: Number(e.target.value) })}
+                  onBlur={() => void saveAutoExam(autoExam)}
+                  className="mt-1 w-full rounded-lg border border-border bg-white px-2 py-1.5 text-sm text-foreground dark:bg-slate-950/50"
+                />
+              </label>
+              <label className="text-xs text-muted-foreground">
+                Тестовых вопросов
+                <input
+                  type="number"
+                  min={3}
+                  max={20}
+                  value={autoExam.questions}
+                  disabled={busy}
+                  onChange={(e) => setAutoExam({ ...autoExam, questions: Number(e.target.value) })}
+                  onBlur={() => void saveAutoExam(autoExam)}
+                  className="mt-1 w-full rounded-lg border border-border bg-white px-2 py-1.5 text-sm text-foreground dark:bg-slate-950/50"
+                />
+              </label>
+              <label className="text-xs text-muted-foreground">
+                Ситуационных
+                <input
+                  type="number"
+                  min={0}
+                  max={5}
+                  value={autoExam.open}
+                  disabled={busy}
+                  onChange={(e) => setAutoExam({ ...autoExam, open: Number(e.target.value) })}
+                  onBlur={() => void saveAutoExam(autoExam)}
+                  className="mt-1 w-full rounded-lg border border-border bg-white px-2 py-1.5 text-sm text-foreground dark:bg-slate-950/50"
+                />
+              </label>
+              <label className="text-xs text-muted-foreground">
+                Порог сдачи, %
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={autoExam.pass_score}
+                  disabled={busy}
+                  onChange={(e) => setAutoExam({ ...autoExam, pass_score: Number(e.target.value) })}
+                  onBlur={() => void saveAutoExam(autoExam)}
+                  className="mt-1 w-full rounded-lg border border-border bg-white px-2 py-1.5 text-sm text-foreground dark:bg-slate-950/50"
+                />
+              </label>
+            </div>
+          )}
+        </Card>
+      )}
 
       {openForm && canCreate && (
         <Card className="space-y-4 p-5">

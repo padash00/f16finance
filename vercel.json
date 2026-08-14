@@ -22,6 +22,14 @@
       "schedule": "0 6 * * *"
     },
     {
+      "path": "/api/cron/knowledge-confirmations",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/auto-exam-newcomers",
+      "schedule": "30 8 * * *"
+    },
+    {
       "path": "/api/cron/shift-reminders",
       "schedule": "0 * * * *"
     },

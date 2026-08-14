@@ -10,6 +10,7 @@ import {
   FileText,
   History,
   Layers3,
+  MessageCircleQuestion,
   Pencil,
   Plus,
   RefreshCw,
@@ -31,6 +32,7 @@ import {
 } from '@/components/admin/knowledge-editor-types'
 import ConfirmationsPanel from './ConfirmationsPanel'
 import ImportDocumentDialog from './ImportDocumentDialog'
+import QuestionsPanel from './QuestionsPanel'
 import RegulationsTabs from './RegulationsTabs'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { useCapabilities } from '@/lib/client/use-capabilities'
@@ -798,7 +800,7 @@ export default function KnowledgeAdminPage() {
     { id: 'articles' as const, label: 'Статьи и FAQ', icon: FileText, count: data.articles.length },
     { id: 'checklists' as const, label: 'Чек-листы', icon: ClipboardList, count: data.templates.length },
     { id: 'runs' as const, label: 'Журнал и дисциплина', icon: History, count: data.runs.length },
-    { id: 'confirmations' as const, label: 'Подтверждения', icon: ShieldCheck, count: null },
+    { id: 'confirmations' as const, label: 'Подтверждения и вопросы', icon: ShieldCheck, count: null },
     { id: 'categories' as const, label: 'Категории', icon: Layers3, count: data.categories.length },
   ]
 
@@ -1358,6 +1360,16 @@ export default function KnowledgeAdminPage() {
                   />
                   <ConfirmationsPanel />
                 </Panel>
+
+                <div className="mt-4">
+                  <Panel title="Что операторам непонятно" icon={MessageCircleQuestion}>
+                    <TabHint
+                      title="Откуда это"
+                      text="Оператор на кассе жмёт «Не понял — объясни проще», и вопрос попадает сюда. Чем чаще спрашивают об одном правиле, тем яснее, что его надо переписать."
+                    />
+                    <QuestionsPanel />
+                  </Panel>
+                </div>
               </div>
             )}
 
