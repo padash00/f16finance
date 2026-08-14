@@ -319,6 +319,18 @@ export async function POST(request: Request) {
         update.extension_hourly_price =
           extH != null && Number.isFinite(extH) && extH > 0 ? extH : null
       }
+      // Характеристики зоны: их спрашивает клиент у стойки и экзамен у оператора.
+      for (const field of ['cpu', 'gpu', 'ram', 'monitor', 'peripherals', 'specs_note'] as const) {
+        if (body[field] !== undefined) {
+          const value = String(body[field] ?? '').trim()
+          update[field] = value || null
+        }
+      }
+      if (body.refresh_hz !== undefined) {
+        const hz = Number(body.refresh_hz)
+        update.refresh_hz = Number.isFinite(hz) && hz > 0 ? Math.round(hz) : null
+      }
+
       const { data, error } = await supabase.from('arena_zones').update(update).eq('id', zoneId).select().single()
       if (error) throw error
       return json({ ok: true, data })

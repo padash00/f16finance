@@ -54,6 +54,14 @@ type OpenAnswerView = {
   } | null
 }
 
+const FACT_TOPICS: Array<{ id: string; label: string; hint: string }> = [
+  { id: 'tariffs', label: 'Тарифы зала', hint: 'Цены, длительность, ночные окна' },
+  { id: 'hardware', label: 'Техника зон', hint: 'Процессор, видеокарта, монитор, герцовка' },
+  { id: 'stations', label: 'Станции и игры', hint: 'Какое место в какой зоне' },
+  { id: 'catalog', label: 'Товары и цены', hint: 'Ходовые позиции витрины' },
+  { id: 'warehouse', label: 'Склад и заявки', hint: 'Статусы заявок и порядок' },
+]
+
 type ChoiceAnswerView = {
   index: number
   question: string
@@ -364,6 +372,7 @@ export default function OperatorExamsPage() {
   const [openCount, setOpenCount] = useState(2)
   const [passScore, setPassScore] = useState(70)
   const [deadline, setDeadline] = useState('')
+  const [topics, setTopics] = useState<string[]>([])
   const [expandedAttempt, setExpandedAttempt] = useState<string | null>(null)
 
   const [detailsId, setDetailsId] = useState<string | null>(null)
@@ -449,6 +458,7 @@ export default function OperatorExamsPage() {
           open_count: openCount,
           pass_score: passScore,
           deadline_at: deadline ? new Date(deadline).toISOString() : null,
+          topics,
         }),
       })
       const body = await res.json()
@@ -762,6 +772,43 @@ export default function OperatorExamsPage() {
               <div className="mt-2 text-[11px] text-amber-600 dark:text-amber-300">
                 ⚠ У {withoutTelegram.length} оператор(ов) не указан Telegram — им экзамен не уйдёт. Заполните chat ID в карточке сотрудника.
               </div>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-border bg-surface-muted p-3">
+            <div className="text-xs font-medium text-foreground">Из чего собрать билет</div>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              Регламенты берутся всегда. Отметьте, что ещё спросить: эти вопросы собираются прямо из
+              данных точки — цены и характеристики всегда актуальные, ИИ их не выдумывает.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {FACT_TOPICS.map((topic) => {
+                const active = topics.includes(topic.id)
+                return (
+                  <button
+                    key={topic.id}
+                    type="button"
+                    title={topic.hint}
+                    onClick={() =>
+                      setTopics((prev) =>
+                        prev.includes(topic.id) ? prev.filter((id) => id !== topic.id) : [...prev, topic.id],
+                      )
+                    }
+                    className={`rounded-xl border px-3 py-1.5 text-xs font-medium transition ${
+                      active
+                        ? 'border-emerald-400/60 bg-emerald-500/15 text-emerald-800 dark:text-emerald-200'
+                        : 'border-border bg-white text-body hover:border-slate-400 dark:bg-slate-950/40'
+                    }`}
+                  >
+                    {topic.label}
+                  </button>
+                )
+              })}
+            </div>
+            {topics.length > 0 && (
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                Данные займут не больше половины билета — остальное регламенты.
+              </p>
             )}
           </div>
 

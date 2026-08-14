@@ -12,6 +12,7 @@ import {
   type ExamAttemptRow,
   type ExamQuestion,
 } from '@/lib/server/operator-exams'
+import { collectFactQuestions, type FactTopic } from '@/lib/server/exam-facts'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { pushToOperators } from '@/lib/server/push'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
@@ -373,6 +374,7 @@ export async function POST(request: Request) {
           score?: number
           comment?: string | null
           // Настройки автоаттестации новичка.
+          topics?: string[]
           enabled?: boolean
           days?: number
           questions?: number
@@ -426,19 +428,50 @@ export async function POST(request: Request) {
 
       // Пул вопросов: с запасом, чтобы билеты у людей отличались.
       const poolSize = Math.min(questionCount * 2, 20)
-      const { questions: pool, error: generationError } = await generateExamQuestions({
+      const { questions: generated, error: generationError } = await generateExamQuestions({
         supabase,
         organizationId: orgId,
         companyIds,
         questionCount: poolSize,
       })
-      if (generationError || pool.length === 0) {
+      // Пустой регламент — ещё не приговор: экзамен может состоять только из
+      // вопросов по данным точки. Ошибку показываем, когда не набралось ничего.
+      const pool = [...generated]
+
+      // Вопросы по данным точки: цены, тарифы, железо, товары, склад.
+      // Их не пишет модель — факт берётся из базы, поэтому в билете они
+      // всегда точные и обновляются вместе с прайсом.
+      const factTopics = (body.topics || [])
+        .map(String)
+        .filter((topic): topic is FactTopic =>
+          ['catalog', 'tariffs', 'hardware', 'stations', 'warehouse'].includes(topic),
+        )
+
+      if (factTopics.length > 0) {
+        const facts = await collectFactQuestions({ supabase, companyIds, topics: factTopics })
+        // Половина билета максимум: экзамен по одним ценникам не проверяет,
+        // умеет ли человек работать.
+        const factLimit = Math.min(facts.length, Math.ceil(questionCount / 2))
+        for (const fact of facts.slice(0, factLimit)) {
+          pool.push({
+            article_id: '',
+            company_id: companyIds[0] || null,
+            article_title: fact.source,
+            type: 'choice' as const,
+            q: fact.q,
+            choices: fact.choices,
+            correct: fact.correct,
+          })
+        }
+      }
+
+      if (pool.length === 0) {
         const message =
           generationError === 'not-enough-articles'
-            ? 'В базе знаний выбранных точек меньше 3 статей с текстом. Заполните регламенты на странице «База знаний».'
+            ? 'Нечего спрашивать: в регламентах точки меньше 3 статей с текстом, а темы по данным не выбраны или пусты.'
             : generationError === 'openai-not-configured'
               ? 'Не настроен OPENAI_API_KEY.'
-              : 'Не удалось сгенерировать вопросы.'
+              : 'Не удалось собрать вопросы.'
         return json({ error: message }, 400)
       }
 
@@ -467,6 +500,7 @@ export async function POST(request: Request) {
           open_count: Math.min(openCount, openPool.length),
           pass_score: passScore,
           deadline_at: body.deadline_at || null,
+          topics: factTopics,
           status: 'draft',
           question_pool: pool,
           open_pool: openPool,

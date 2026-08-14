@@ -29,6 +29,12 @@ type Zone = {
   is_active: boolean
   /** ₸/час для продления по сумме на станциях зоны */
   extension_hourly_price: number | null
+  cpu?: string | null
+  gpu?: string | null
+  ram?: string | null
+  monitor?: string | null
+  refresh_hz?: number | null
+  peripherals?: string | null
   grid_x: number | null; grid_y: number | null; grid_w: number | null; grid_h: number | null; color: string | null
 }
 type Station = {
@@ -130,6 +136,12 @@ function arenaRowToZone(row: Record<string, unknown>): Zone {
     id: String(row.id),
     name: String(row.name ?? ''),
     is_active: Boolean(row.is_active),
+    cpu: (row.cpu as string) ?? null,
+    gpu: (row.gpu as string) ?? null,
+    ram: (row.ram as string) ?? null,
+    monitor: (row.monitor as string) ?? null,
+    refresh_hz: row.refresh_hz != null ? Number(row.refresh_hz) : null,
+    peripherals: (row.peripherals as string) ?? null,
     extension_hourly_price: (() => {
       if (extH == null || extH === '') return null
       const n = Number(extH)
@@ -1022,6 +1034,8 @@ function StationsPageContent() {
   const [editingZoneId, setEditingZoneId] = useState<string | null>(null)
   const [zoneEditName, setZoneEditName] = useState('')
   const [zoneEditHourly, setZoneEditHourly] = useState('')
+  // Характеристики зоны: их спрашивает клиент у стойки и аттестация у оператора.
+  const [zoneSpecs, setZoneSpecs] = useState({ cpu: '', gpu: '', ram: '', monitor: '', refresh_hz: '', peripherals: '' })
 
   const [crudDialog, setCrudDialog] = useState<CrudDialogState>(null)
   const [newStationName, setNewStationName] = useState('')
@@ -1329,7 +1343,18 @@ function StationsPageContent() {
     }
     setSaving(true)
     try {
-      const out = await apiPost({ action: 'updateZone', zoneId, name, extension_hourly_price })
+      const out = await apiPost({
+        action: 'updateZone',
+        zoneId,
+        name,
+        extension_hourly_price,
+        cpu: zoneSpecs.cpu,
+        gpu: zoneSpecs.gpu,
+        ram: zoneSpecs.ram,
+        monitor: zoneSpecs.monitor,
+        refresh_hz: zoneSpecs.refresh_hz === '' ? null : Number(zoneSpecs.refresh_hz),
+        peripherals: zoneSpecs.peripherals,
+      })
       if (!out.data || typeof out.data !== 'object') throw new Error('Нет данных зоны')
       const z = arenaRowToZone(out.data as Record<string, unknown>)
       setZones(prev => prev.map(x => x.id === zoneId ? z : x))
@@ -2092,6 +2117,43 @@ function StationsPageContent() {
                               </button>
                             </div>
                           </div>
+                          <div className="rounded border border-slate-200 dark:border-white/15 p-2">
+                            <div className="text-[10px] font-medium text-foreground">Характеристики зоны</div>
+                            <p className="mb-1.5 mt-0.5 text-[10px] text-muted-foreground leading-snug">
+                              Что отвечать клиенту про железо. По этим полям собираются вопросы аттестации.
+                            </p>
+                            <div className="grid gap-1.5 sm:grid-cols-2">
+                              {([
+                                ['gpu', 'Видеокарта', 'напр. RTX 4060'],
+                                ['cpu', 'Процессор', 'напр. i5-12400F'],
+                                ['ram', 'Оперативная память', 'напр. 16 ГБ'],
+                                ['monitor', 'Монитор', 'напр. 24" IPS'],
+                                ['peripherals', 'Периферия и кресло', 'мышь, клавиатура, гарнитура'],
+                              ] as const).map(([key, label, placeholder]) => (
+                                <label key={key} className="text-[10px] text-muted-foreground">
+                                  <span className="mb-0.5 block">{label}</span>
+                                  <input
+                                    value={zoneSpecs[key]}
+                                    onChange={e => setZoneSpecs(prev => ({ ...prev, [key]: e.target.value }))}
+                                    placeholder={placeholder}
+                                    className="w-full rounded border border-slate-200 dark:border-white/20 bg-background px-2 py-1 text-xs"
+                                  />
+                                </label>
+                              ))}
+                              <label className="text-[10px] text-muted-foreground">
+                                <span className="mb-0.5 block">Частота монитора, Гц</span>
+                                <input
+                                  value={zoneSpecs.refresh_hz}
+                                  onChange={e => setZoneSpecs(prev => ({ ...prev, refresh_hz: e.target.value }))}
+                                  type="number"
+                                  min={0}
+                                  placeholder="напр. 165"
+                                  className="w-full rounded border border-slate-200 dark:border-white/20 bg-background px-2 py-1 text-xs"
+                                />
+                              </label>
+                            </div>
+                          </div>
+
                           <p className="text-[10px] text-muted-foreground/90 leading-snug">
                             Если оставить пустым — для продления по сумме подставится минимальная цена среди фикс. тарифов зоны ровно на 60 мин (например «Час»).
                           </p>
@@ -2136,6 +2198,14 @@ function StationsPageContent() {
                               setEditingZoneId(null)
                             } else {
                               setEditingZoneId(zone.id)
+                              setZoneSpecs({
+                                cpu: zone.cpu || '',
+                                gpu: zone.gpu || '',
+                                ram: zone.ram || '',
+                                monitor: zone.monitor || '',
+                                refresh_hz: zone.refresh_hz != null ? String(zone.refresh_hz) : '',
+                                peripherals: zone.peripherals || '',
+                              })
                               setZoneEditName(zone.name)
                               setZoneEditHourly(
                                 zone.extension_hourly_price != null && zone.extension_hourly_price > 0
