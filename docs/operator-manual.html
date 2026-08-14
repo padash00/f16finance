@@ -1,0 +1,1808 @@
+<title>Регламент оператора F16</title>
+<style>
+:root{
+  --paper:#ffffff;
+  --paper-2:#f6f7f8;
+  --paper-3:#eceff1;
+  --ink:#12181f;
+  --ink-2:#3d4855;
+  --ink-3:#6b7684;
+  --line:#dfe4e8;
+  --line-strong:#c3ccd3;
+  --accent:#0d6b45;
+  --accent-soft:#e6f2ec;
+  --accent-ink:#0a5334;
+  --warn:#9a5b06;
+  --warn-soft:#fdf1de;
+  --crit:#a5231d;
+  --crit-soft:#fbeae9;
+  --info:#1a5590;
+  --info-soft:#e8f0f8;
+  --shadow:0 1px 2px rgba(18,24,31,.06),0 8px 24px rgba(18,24,31,.05);
+  --serif:Georgia,"Times New Roman",serif;
+  --sans:"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:Consolas,"SF Mono",Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#111619;
+    --paper-2:#171d21;
+    --paper-3:#1e262b;
+    --ink:#e9eef1;
+    --ink-2:#bcc7ce;
+    --ink-3:#8d9aa4;
+    --line:#2a343a;
+    --line-strong:#3b474e;
+    --accent:#4bbd8b;
+    --accent-soft:#14312a;
+    --accent-ink:#7fd3ac;
+    --warn:#e0a44e;
+    --warn-soft:#332612;
+    --crit:#e97b74;
+    --crit-soft:#3a1d1c;
+    --info:#79b0e8;
+    --info-soft:#152634;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#111619;
+  --paper-2:#171d21;
+  --paper-3:#1e262b;
+  --ink:#e9eef1;
+  --ink-2:#bcc7ce;
+  --ink-3:#8d9aa4;
+  --line:#2a343a;
+  --line-strong:#3b474e;
+  --accent:#4bbd8b;
+  --accent-soft:#14312a;
+  --accent-ink:#7fd3ac;
+  --warn:#e0a44e;
+  --warn-soft:#332612;
+  --crit:#e97b74;
+  --crit-soft:#3a1d1c;
+  --info:#79b0e8;
+  --info-soft:#152634;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px rgba(0,0,0,.35);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--sans);
+  font-size:16px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{
+  display:grid;
+  grid-template-columns:1fr;
+  max-width:1180px;
+  margin:0 auto;
+  padding:0 20px 96px;
+}
+@media (min-width:1080px){
+  .wrap{grid-template-columns:250px minmax(0,1fr);gap:56px;padding:0 32px 120px}
+}
+
+/* ── Оглавление ───────────────────────────────────────────── */
+nav.toc{display:none}
+@media (min-width:1080px){
+  nav.toc{
+    display:block;
+    position:sticky;
+    top:0;
+    align-self:start;
+    max-height:100vh;
+    overflow-y:auto;
+    padding:40px 0;
+    font-size:13.5px;
+    line-height:1.45;
+    border-right:1px solid var(--line);
+  }
+  nav.toc .toc-title{
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--ink-3);
+    margin-bottom:14px;
+  }
+  nav.toc a{
+    display:block;
+    color:var(--ink-2);
+    text-decoration:none;
+    padding:4px 14px 4px 0;
+    border-left:2px solid transparent;
+    padding-left:12px;
+    margin-left:-12px;
+  }
+  nav.toc a:hover{color:var(--accent-ink);border-left-color:var(--accent)}
+  nav.toc a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  nav.toc .part{
+    font-family:var(--mono);
+    font-size:10.5px;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    color:var(--ink-3);
+    margin:20px 0 6px;
+  }
+}
+main{min-width:0;max-width:78ch;padding-top:40px}
+
+/* ── Титул ────────────────────────────────────────────────── */
+.cover{border-bottom:3px double var(--line-strong);padding-bottom:40px;margin-bottom:48px}
+.stamp{
+  display:inline-flex;align-items:center;gap:10px;
+  font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--accent-ink);background:var(--accent-soft);
+  border:1px solid var(--accent);border-radius:2px;
+  padding:6px 12px;
+}
+.cover h1{
+  font-family:var(--serif);
+  font-size:clamp(34px,6vw,54px);
+  line-height:1.08;
+  letter-spacing:-.01em;
+  margin:24px 0 12px;
+  text-wrap:balance;
+}
+.cover .sub{font-size:19px;color:var(--ink-2);margin:0 0 8px;max-width:52ch}
+.cover .org{font-family:var(--mono);font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);margin-top:18px}
+
+/* ── Типографика ──────────────────────────────────────────── */
+h2,h3,h4{font-family:var(--serif);text-wrap:balance;letter-spacing:-.005em}
+h2{
+  font-size:30px;line-height:1.18;margin:64px 0 8px;padding-top:24px;
+  border-top:2px solid var(--ink);
+}
+h2 .num{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.16em;color:var(--accent-ink);text-transform:uppercase;margin-bottom:10px;font-weight:600}
+h3{font-size:21px;margin:40px 0 6px}
+h4{font-size:17px;margin:28px 0 4px}
+.part-head{
+  margin:88px 0 0;padding:22px 0 18px;
+  border-top:3px double var(--line-strong);border-bottom:3px double var(--line-strong);
+  font-family:var(--mono);font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent-ink);
+}
+p{margin:12px 0}
+ul,ol{margin:12px 0;padding-left:22px}
+li{margin:6px 0}
+a{color:var(--accent-ink)}
+strong{font-weight:650}
+.lead{font-size:17.5px;color:var(--ink-2)}
+.muted{color:var(--ink-3)}
+code{font-family:var(--mono);font-size:.88em;background:var(--paper-3);padding:1px 5px;border-radius:3px}
+hr{border:0;border-top:1px solid var(--line);margin:48px 0}
+
+/* ── Таблицы ──────────────────────────────────────────────── */
+.tw{overflow-x:auto;margin:20px 0;border:1px solid var(--line);border-radius:4px;box-shadow:var(--shadow)}
+table{border-collapse:collapse;width:100%;font-size:14.5px;background:var(--paper)}
+caption{
+  caption-side:top;text-align:left;
+  font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--ink-3);padding:12px 16px 10px;border-bottom:1px solid var(--line);background:var(--paper-2);
+}
+th,td{padding:11px 16px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}
+thead th{
+  background:var(--paper-2);color:var(--ink);font-weight:650;font-size:13px;
+  letter-spacing:.02em;border-bottom:2px solid var(--line-strong);white-space:nowrap;
+}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:nth-child(even){background:var(--paper-2)}
+td.num,th.num{font-variant-numeric:tabular-nums;white-space:nowrap;width:1%}
+td.step{font-family:var(--mono);font-weight:700;color:var(--accent-ink);width:1%;white-space:nowrap}
+.chk{font-size:19px;color:var(--ink-3);text-align:center}
+.blank td{height:34px}
+
+/* ── Выноски ──────────────────────────────────────────────── */
+.call{
+  margin:24px 0;padding:16px 20px 18px;border-radius:4px;
+  border:1px solid var(--line);border-left:4px solid var(--ink-3);background:var(--paper-2);
+}
+.call .kicker{
+  font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+  font-weight:700;margin-bottom:6px;display:block;
+}
+.call p{margin:6px 0 0}
+.call.rule{border-left-color:var(--accent);background:var(--accent-soft);border-color:var(--accent)}
+.call.rule .kicker{color:var(--accent-ink)}
+.call.warn{border-left-color:var(--warn);background:var(--warn-soft);border-color:var(--warn)}
+.call.warn .kicker{color:var(--warn)}
+.call.crit{border-left-color:var(--crit);background:var(--crit-soft);border-color:var(--crit)}
+.call.crit .kicker{color:var(--crit)}
+.call.info{border-left-color:var(--info);background:var(--info-soft);border-color:var(--info)}
+.call.info .kicker{color:var(--info)}
+
+/* ── Слот под иллюстрацию ─────────────────────────────────── */
+figure.slot{
+  margin:28px 0;padding:0;border:2px dashed var(--line-strong);border-radius:5px;background:var(--paper-2);
+}
+figure.slot .slot-head{
+  display:flex;flex-wrap:wrap;gap:10px;align-items:baseline;
+  padding:12px 18px;border-bottom:1px dashed var(--line-strong);
+}
+figure.slot .tag{
+  font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  font-weight:700;color:var(--paper);background:var(--ink);padding:3px 8px;border-radius:2px;
+}
+figure.slot .tag.scheme{background:var(--accent)}
+figure.slot .kind{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+figure.slot .body{padding:16px 18px;font-size:14.5px;color:var(--ink-2)}
+figure.slot .body dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0}
+figure.slot .body dt{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);padding-top:3px}
+figure.slot .body dd{margin:0}
+figure.slot figcaption{
+  padding:12px 18px;border-top:1px dashed var(--line-strong);
+  font-size:14px;color:var(--ink);background:var(--paper-3);border-radius:0 0 3px 3px;
+}
+figure.slot figcaption b{font-family:var(--mono);font-size:12px;letter-spacing:.06em}
+.place{
+  display:block;margin:14px 0 2px;padding:26px 18px;text-align:center;
+  border:1px solid var(--line);border-radius:3px;background:var(--paper);
+  font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);
+}
+
+/* ── Схемы ────────────────────────────────────────────────── */
+figure.scheme{margin:28px 0;padding:0;border:1px solid var(--line);border-radius:5px;background:var(--paper-2);box-shadow:var(--shadow)}
+figure.scheme .scheme-body{padding:22px 18px;overflow-x:auto}
+figure.scheme figcaption{padding:12px 18px;border-top:1px solid var(--line);font-size:14px;color:var(--ink-2);background:var(--paper-3);border-radius:0 0 4px 4px}
+figure.scheme figcaption b{font-family:var(--mono);font-size:12px;letter-spacing:.06em;color:var(--ink)}
+svg{display:block;max-width:100%;height:auto}
+.svg-t{font-family:var(--sans);font-size:12.5px;fill:var(--ink)}
+.svg-s{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;fill:var(--ink-3);text-transform:uppercase}
+.svg-box{fill:var(--paper);stroke:var(--line-strong);stroke-width:1.5}
+.svg-box-a{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1.5}
+.svg-box-w{fill:var(--warn-soft);stroke:var(--warn);stroke-width:1.5}
+.svg-box-c{fill:var(--crit-soft);stroke:var(--crit);stroke-width:1.5}
+.svg-arrow{stroke:var(--ink-3);stroke-width:1.5;fill:none}
+
+/* ── Формула ──────────────────────────────────────────────── */
+.formula{
+  margin:22px 0;padding:20px 22px;border:1px solid var(--accent);border-left:4px solid var(--accent);
+  border-radius:4px;background:var(--accent-soft);
+  font-family:var(--mono);font-size:15px;line-height:2;color:var(--ink);
+  overflow-x:auto;
+}
+.formula .op{color:var(--accent-ink);font-weight:700}
+.formula .res{font-weight:700}
+
+/* ── Разное ───────────────────────────────────────────────── */
+.keys{display:inline-block;font-family:var(--mono);font-size:12.5px;border:1px solid var(--line-strong);border-bottom-width:2px;border-radius:3px;padding:1px 7px;background:var(--paper);white-space:nowrap}
+.badge{display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;border-radius:2px;border:1px solid currentColor}
+.badge.ok{color:var(--accent-ink)}
+.badge.w{color:var(--warn)}
+.badge.c{color:var(--crit)}
+.sign{margin-top:64px;padding-top:20px;border-top:1px solid var(--line);font-size:13px;color:var(--ink-3);font-family:var(--mono);letter-spacing:.06em}
+
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ── Печать ───────────────────────────────────────────────── */
+@media print{
+  @page{size:A4;margin:18mm 16mm}
+  body{background:#fff;color:#000;font-size:10.5pt;line-height:1.45}
+  .wrap{display:block;max-width:none;padding:0}
+  nav.toc{display:none}
+  main{max-width:none;padding-top:0}
+  .cover{page-break-after:always}
+  h2{page-break-before:auto;page-break-after:avoid;border-top:1.5pt solid #000}
+  h3,h4{page-break-after:avoid}
+  .tw,figure,.call,.formula{page-break-inside:avoid;box-shadow:none}
+  .part-head{page-break-before:always}
+  tbody tr:nth-child(even){background:#f4f4f4}
+}
+</style>
+
+<div class="wrap">
+
+<nav class="toc" aria-label="Содержание">
+  <div class="toc-title">Содержание</div>
+  <div class="part">Часть I · Общие положения</div>
+  <a href="#s1">1. Назначение</a>
+  <a href="#s2">2. Термины</a>
+  <a href="#s3">3. Роли</a>
+  <a href="#s4">4. Карта точек</a>
+  <div class="part">Часть II · Порядок работы</div>
+  <a href="#s5">5. Устройство и вход</a>
+  <a href="#s6">6. Рабочий экран</a>
+  <a href="#s7">7. Открытие смены</a>
+  <a href="#s8">8. Чек-листы</a>
+  <a href="#s9">9. Продажи</a>
+  <a href="#s10">10. Возвраты</a>
+  <a href="#s11">11. История и копия чека</a>
+  <a href="#s12">12. Долги</a>
+  <a href="#s13">13. Заявки на склад</a>
+  <a href="#s14">14. Игровые зоны</a>
+  <a href="#s15">15. Работа без интернета</a>
+  <a href="#s16">16. Закрытие смены</a>
+  <div class="part">Часть III · По точкам</div>
+  <a href="#s17">17. F16 Arena</a>
+  <a href="#s18">18. F16 Extra</a>
+  <a href="#s19">19. F16 Ramen</a>
+  <div class="part">Часть IV · Ответственность</div>
+  <a href="#s20">20. Личный кабинет</a>
+  <a href="#s21">21. Зарплата и штрафы</a>
+  <a href="#s22">22. Проблемы и эскалация</a>
+  <div class="part">Приложения</div>
+  <a href="#pa">А. Открытие смены</a>
+  <a href="#pb">Б. Закрытие по точкам</a>
+  <a href="#pv">В. Горячие клавиши</a>
+  <a href="#pg">Г. Формула дисциплины</a>
+  <a href="#pd">Д. Лист ознакомления</a>
+  <a href="#pe">Е. Реестр иллюстраций</a>
+</nav>
+
+<main>
+
+<!-- ══════════ ТИТУЛ ══════════ -->
+<header class="cover">
+  <span class="stamp">Внутренний обязательный документ</span>
+  <h1>Регламент оператора Orda Point</h1>
+  <p class="sub">Порядок работы на смене в системе Orda на точках F16&nbsp;Arena, F16&nbsp;Extra и F16&nbsp;Ramen.</p>
+  <p class="org">F16 · Orda Point 2.17.x · ordaops.kz</p>
+
+  <div class="tw" style="margin-top:32px">
+    <table>
+      <caption>Реквизиты документа</caption>
+      <tbody>
+        <tr><th scope="row">Наименование</th><td>Регламент (инструкция) оператора Orda Point</td></tr>
+        <tr><th scope="row">Статус</th><td>Внутренний обязательный документ для сотрудников</td></tr>
+        <tr><th scope="row">Действует для точек</th><td>F16 Arena; F16 Extra; F16 Ramen</td></tr>
+        <tr><th scope="row">Программа</th><td>Orda Point — десктопный терминал точки, версия 2.17.x</td></tr>
+        <tr><th scope="row">Сервер системы</th><td>https://ordaops.kz</td></tr>
+        <tr><th scope="row">Версия документа</th><td>2.0</td></tr>
+        <tr><th scope="row">Дата редакции</th><td>Август 2026</td></tr>
+        <tr><th scope="row">Владелец документа</th><td>Управляющий / менеджер точки</td></tr>
+        <tr><th scope="row">Кто обязан знать</th><td>Оператор, кассир, старший смены, менеджер, администратор</td></tr>
+        <tr><th scope="row">Пересмотр</th><td>При каждом мажорном обновлении программы, но не реже одного раза в полгода</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="call rule">
+    <span class="kicker">Главный принцип документа</span>
+    <p>Оператор сначала выбирает свою точку, затем работает только по сценарию этой точки. Часть I и Часть II обязательны для всех. Особенности Arena, Extra и Ramen вынесены в Часть III: оператор обязан знать раздел своей точки.</p>
+  </div>
+
+  <div class="tw">
+    <table>
+      <caption>Лист изменений</caption>
+      <thead><tr><th class="num">Версия</th><th>Дата</th><th>Что изменено</th><th>Ответственный</th></tr></thead>
+      <tbody>
+        <tr><td class="num">1.0</td><td>Май 2026</td><td>Первичная инструкция по программе оператора</td><td>Менеджер / владелец</td></tr>
+        <tr><td class="num">1.1</td><td>Май 2026</td><td>Документ разделён по точкам: Arena, Extra, Ramen; добавлены контрольные матрицы</td><td>Менеджер / владелец</td></tr>
+        <tr><td class="num">2.0</td><td>Август 2026</td><td>Приведено в соответствие с программой 2.17.x: офлайн-очередь, история продаж и копия чека, отложенные корзины, статусы заявок склада, технические компенсации, актуальная формула закрытия смены, обязательные материалы базы знаний, горячие клавиши, настройки терминала и обновления</td><td>Менеджер / владелец</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="tw">
+    <table>
+      <caption>Согласование</caption>
+      <thead><tr><th>Роль</th><th>Ф. И. О.</th><th>Дата</th><th>Подпись</th></tr></thead>
+      <tbody>
+        <tr class="blank"><td>Владелец / управляющий</td><td></td><td></td><td></td></tr>
+        <tr class="blank"><td>Менеджер точки</td><td></td><td></td><td></td></tr>
+        <tr class="blank"><td>Технический ответственный</td><td></td><td></td><td></td></tr>
+      </tbody>
+    </table>
+  </div>
+</header>
+
+<!-- ══════════ ЧАСТЬ I ══════════ -->
+<div class="part-head">Часть I. Общие положения</div>
+
+<h2 id="s1"><span class="num">Раздел 1</span>Назначение и область применения</h2>
+
+<p class="lead">Регламент устанавливает единый обязательный порядок работы оператора в программе Orda Point и в личном кабинете на сайте ordaops.kz.</p>
+
+<p>Документ применяется ежедневно: при входе в программу, открытии смены, продаже товаров и услуг, оформлении возвратов и долгов, подаче заявок на склад, работе с игровыми зонами и закрытии смены.</p>
+
+<div class="tw">
+  <table>
+    <caption>Что регулирует документ</caption>
+    <thead><tr><th>Блок</th><th>Содержание блока</th></tr></thead>
+    <tbody>
+      <tr><td>Устройство и вход</td><td>Настройка терминала, вход по паролю, вход по QR-коду, выбор точки</td></tr>
+      <tr><td>Смена</td><td>Открытие смены, стартовая касса, чек-листы, закрытие смены, сменный отчёт</td></tr>
+      <tr><td>Касса и продажи</td><td>Продажи, способы оплаты, скидки, лояльность, печать чека, возвраты, копия чека</td></tr>
+      <tr><td>Долги</td><td>Создание долга, окно удаления 15 минут, синхронизация</td></tr>
+      <tr><td>Склад</td><td>Заявки на инвентарь, статусы заявок, приём выданного товара</td></tr>
+      <tr><td>Залы и оборудование</td><td>Игровые зоны, сессии, тарифы, технические компенсации</td></tr>
+      <tr><td>Надёжность</td><td>Работа без интернета, очередь отправки, обновления программы</td></tr>
+      <tr><td>Ответственность</td><td>Штрафы, премии, зарплата, спорные ситуации, эскалация</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>Незнание положений настоящего регламента не освобождает сотрудника от ответственности. Критичные правила подтверждаются сотрудником в разделе «Обязательные материалы» личного кабинета (п. 20.5).</p>
+
+<figure class="scheme">
+  <div class="scheme-body">
+    <svg viewBox="0 0 760 132" role="img" aria-label="Схема смены: вход, открытие, работа, закрытие">
+      <defs>
+        <marker id="ar" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+          <path d="M0,0 L9,4.5 L0,9 z" fill="var(--ink-3)"/>
+        </marker>
+      </defs>
+      <g>
+        <rect class="svg-box" x="2" y="34" width="130" height="60" rx="4"/>
+        <text class="svg-s" x="16" y="56">Шаг 1</text>
+        <text class="svg-t" x="16" y="76">Вход и точка</text>
+
+        <path class="svg-arrow" d="M134 64 H 168" marker-end="url(#ar)"/>
+
+        <rect class="svg-box-a" x="172" y="34" width="150" height="60" rx="4"/>
+        <text class="svg-s" x="186" y="56">Шаг 2</text>
+        <text class="svg-t" x="186" y="76">Открытие смены</text>
+
+        <path class="svg-arrow" d="M324 64 H 358" marker-end="url(#ar)"/>
+
+        <rect class="svg-box" x="362" y="14" width="180" height="100" rx="4"/>
+        <text class="svg-s" x="376" y="36">Шаг 3</text>
+        <text class="svg-t" x="376" y="56">Работа на смене</text>
+        <text class="svg-t" x="376" y="76" style="font-size:11.5px;fill:var(--ink-3)">продажи · долги · зал</text>
+        <text class="svg-t" x="376" y="94" style="font-size:11.5px;fill:var(--ink-3)">заявки · обходы</text>
+
+        <path class="svg-arrow" d="M544 64 H 578" marker-end="url(#ar)"/>
+
+        <rect class="svg-box-a" x="582" y="34" width="176" height="60" rx="4"/>
+        <text class="svg-s" x="596" y="56">Шаг 4</text>
+        <text class="svg-t" x="596" y="76">Закрытие смены</text>
+      </g>
+    </svg>
+  </div>
+  <figcaption><b>Схема 1.</b> Маршрут смены оператора. Каждый шаг раскрыт в Части II: вход — раздел 5, открытие — раздел 7, работа — разделы 9–14, закрытие — раздел 16.</figcaption>
+</figure>
+
+<h2 id="s2"><span class="num">Раздел 2</span>Термины и определения</h2>
+
+<div class="tw">
+  <table>
+    <thead><tr><th>Термин</th><th>Значение</th></tr></thead>
+    <tbody>
+      <tr><td>Orda Point</td><td>Десктопная программа оператора — терминал точки</td></tr>
+      <tr><td>Токен устройства</td><td>Уникальный ключ, привязывающий терминал к конкретной точке. Выдаёт менеджер</td></tr>
+      <tr><td>Точка</td><td>Отдельная торговая или игровая площадка: F16 Arena, F16 Extra, F16 Ramen</td></tr>
+      <tr><td>Смена</td><td>Рабочий период оператора от открытия до закрытия в программе</td></tr>
+      <tr><td>Стартовая касса</td><td>Сумма наличных, физически пересчитанная в кассовом ящике при приёме смены</td></tr>
+      <tr><td>ФАКТ</td><td>Фактически собранная за смену сумма по формуле п. 16.4</td></tr>
+      <tr><td>ИТОГ</td><td>ФАКТ за вычетом системного итога продаж. Отрицательный ИТОГ — недостача</td></tr>
+      <tr><td>Тех. компенсация</td><td>Сумма, возвращённая или компенсированная клиенту из-за технической проблемы</td></tr>
+      <tr><td>Очередь отправки</td><td>Локальное хранилище операций, ещё не ушедших на сервер</td></tr>
+      <tr><td>Чек-лист</td><td>Обязательная проверка с фиксацией результата: приём, обход, закрытие, онбординг</td></tr>
+      <tr><td>Копия чека</td><td>Повторная печать ранее пробитого чека с крупной пометкой «КОПИЯ»</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h2 id="s3"><span class="num">Раздел 3</span>Роли и ответственность</h2>
+
+<div class="tw">
+  <table>
+    <thead><tr><th>Роль</th><th>Ответственность</th></tr></thead>
+    <tbody>
+      <tr><td>Оператор / кассир</td><td>Ведёт смену, принимает оплату, фиксирует проблемы, проходит чек-листы и закрывает смену без искажения данных</td></tr>
+      <tr><td>Старший смены</td><td>Контролирует работу операторов на смене, первым реагирует на инциденты</td></tr>
+      <tr><td>Менеджер точки</td><td>Выдаёт токен устройства, проводит онбординг, разбирает спорные штрафы, удаляет ошибочные долги после 15 минут, решает заявки склада</td></tr>
+      <tr><td>Владелец / управляющий</td><td>Утверждает правила, зарплату, доступы, тарифы и итоговую дисциплину точек</td></tr>
+      <tr><td>Технический ответственный</td><td>Разбирает сбои программы, оборудования, кассы, терминала оплаты, игровых зон и синхронизации</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="call warn">
+  <span class="kicker">Разграничение ответственности за деньги</span>
+  <p>За фактическое наличие денег в кассовом ящике и за корректность сумм при закрытии смены отвечает оператор, закрывающий смену. Любое расхождение фиксируется в комментарии к смене <b>до</b> отправки отчёта, а не после.</p>
+</div>
+
+<h2 id="s4"><span class="num">Раздел 4</span>Карта точек F16 и обязательные модули</h2>
+
+<div class="call crit">
+  <span class="kicker">Критично · Выбор точки после входа</span>
+  <p>Если к аккаунту привязано несколько точек, после входа программа предлагает выбор точки. Ошибка выбора приводит к неправильному учёту смены, кассы, долгов, склада и зарплаты.</p>
+</div>
+
+<div class="tw">
+  <table>
+    <caption>Точки и обязательные модули</caption>
+    <thead><tr><th>Точка</th><th>Что обслуживает оператор</th><th>Обязательные модули</th><th>Особые поля при закрытии</th></tr></thead>
+    <tbody>
+      <tr><td><b>F16 Arena</b></td><td>Компьютерный зал, игровые зоны, сессии, посадка клиентов, техника</td><td>Смена; Чек-листы; Зал; Продажи; Долги; Заявки</td><td>Тех. компенсации; безнал; наличные; мелочь; комментарий по техсбоям</td></tr>
+      <tr><td><b>F16 Extra</b></td><td>PlayStation 5, Simracing, оборудование по ID, доп. зона</td><td>Смена; Чек-листы; Зал; Продажи; Долги; Заявки</td><td>Тех. компенсации; безнал; наличные; мелочь; комментарий по оборудованию</td></tr>
+      <tr><td><b>F16 Ramen</b></td><td>Продажи кухни, напитков и товаров, склад, возвраты</td><td>Смена; Чек-листы; Продажи; Возвраты; Долги; Заявки</td><td>Итог системы продаж; безнал; наличные; мелочь; комментарий по остаткам</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h3>4.1. Состав вкладок задаётся настройками устройства</h3>
+<p>Набор доступных разделов определяется режимом точки и настройками терминала на сервере. Если нужной вкладки нет — это настройка, а не поломка: обратиться к менеджеру, а не искать обход.</p>
+
+<h3>4.2. Критические ошибки точки</h3>
+<div class="tw">
+  <table>
+    <thead><tr><th>Ошибка</th><th>Почему опасно</th><th>Как правильно</th></tr></thead>
+    <tbody>
+      <tr><td>Выбрана не та точка</td><td>Выручка, долги, склад и отчёт уходят не туда</td><td>Сразу сообщить менеджеру; не продолжать смену в неверной точке</td></tr>
+      <tr><td>Не внесён итог внешней системы</td><td>Невозможно сверить кассу с системой учёта</td><td>Внести итог соответствующей системы при закрытии</td></tr>
+      <tr><td>Нет комментария по инциденту</td><td>Невозможно доказать причину расхождения</td><td>Фиксировать событие в комментарии к смене</td></tr>
+      <tr><td>Долг создан без пояснения</td><td>Неясно, кто должен и за что</td><td>Указать клиента, товар или услугу и причину</td></tr>
+      <tr><td>Терминал выключен с непустой очередью</td><td>Операции не дошли до сервера</td><td>Дождаться отправки очереди (раздел 15)</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ══════════ ЧАСТЬ II ══════════ -->
+<div class="part-head">Часть II. Общий порядок работы</div>
+
+<h2 id="s5"><span class="num">Раздел 5</span>Устройство и вход в программу</h2>
+
+<h3>5.1. Первичная настройка терминала — выполняет менеджер</h3>
+<div class="tw">
+  <table>
+    <thead><tr><th class="num">Шаг</th><th>Действие</th></tr></thead>
+    <tbody>
+      <tr><td class="step">1</td><td>На экране входа открыть настройку устройства</td></tr>
+      <tr><td class="step">2</td><td>Ввести адрес сервера: <code>https://ordaops.kz</code></td></tr>
+      <tr><td class="step">3</td><td>Ввести токен устройства, полученный у менеджера. Токен уникален для точки</td></tr>
+      <tr><td class="step">4</td><td>Нажать «Проверить», затем «Сохранить»</td></tr>
+    </tbody>
+  </table>
+</div>
+<p>Токен устройства — служебный доступ. Передавать его посторонним, фотографировать и пересылать в мессенджерах запрещено.</p>
+
+<figure class="slot">
+  <div class="slot-head"><span class="tag">Рис. 1</span><span class="kind">Скриншот программы</span></div>
+  <div class="body">
+    <dl>
+      <dt>Экран</dt><dd>Окно настройки устройства (адрес сервера + токен)</dd>
+      <dt>Видно</dt><dd>Поле адреса с заполненным <code>https://ordaops.kz</code>, поле токена, кнопки «Проверить» и «Сохранить»</dd>
+      <dt>Пометить</dt><dd>Обвести кнопку «Проверить»; токен на скриншоте замазать</dd>
+    </dl>
+    <span class="place">Место под рисунок 1</span>
+  </div>
+  <figcaption><b>Рисунок 1.</b> Настройка устройства: адрес сервера и токен точки.</figcaption>
+</figure>
+
+<h3>5.2. Вход по логину и паролю</h3>
+<div class="tw">
+  <table>
+    <thead><tr><th class="num">Шаг</th><th>Действие</th></tr></thead>
+    <tbody>
+      <tr><td class="step">1</td><td>Выбрать вход оператора</td></tr>
+      <tr><td class="step">2</td><td>Ввести логин и пароль</td></tr>
+      <tr><td class="step">3</td><td>Нажать «Войти»</td></tr>
+      <tr><td class="step">4</td><td>Если пароль временный — задать новый пароль и повторить его в поле «Повторите пароль»</td></tr>
+      <tr><td class="step">5</td><td>Если точек несколько — выбрать свою точку</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<figure class="slot">
+  <div class="slot-head"><span class="tag">Рис. 2</span><span class="kind">Скриншот программы</span></div>
+  <div class="body">
+    <dl>
+      <dt>Экран</dt><dd>Экран входа оператора</dd>
+      <dt>Видно</dt><dd>Поля «Логин» и «Пароль», кнопка входа, переключатель входа по QR</dd>
+      <dt>Пометить</dt><dd>Стрелкой указать на переключатель «Войти по QR» — он используется в п. 5.3</dd>
+    </dl>
+    <span class="place">Место под рисунок 2</span>
+  </div>
+  <figcaption><b>Рисунок 2.</b> Экран входа: вход по паролю и переход к входу по QR-коду.</figcaption>
+</figure>
+
+<h3>5.3. Вход по QR-коду</h3>
+<div class="tw">
+  <table>
+    <thead><tr><th class="num">Шаг</th><th>Действие</th></tr></thead>
+    <tbody>
+      <tr><td class="step">1</td><td>Выбрать вход по QR — на экране терминала появится код</td></tr>
+      <tr><td class="step">2</td><td>На телефоне открыть приложение Orda или сайт ordaops.kz и войти под своим аккаунтом</td></tr>
+      <tr><td class="step">3</td><td>Подтвердить вход по QR в приложении или кабинете</td></tr>
+      <tr><td class="step">4</td><td>Отсканировать код с экрана терминала — программа выполнит вход автоматически</td></tr>
+      <tr><td class="step">5</td><td>Выбрать точку, если система предложила выбор</td></tr>
+    </tbody>
+  </table>
+</div>
+<p>Вход по QR недоступен без интернета. Если сети нет, используется вход по паролю с сохранённой сессией.</p>
+
+<figure class="slot">
+  <div class="slot-head"><span class="tag">Рис. 3</span><span class="kind">Два скриншота рядом</span></div>
+  <div class="body">
+    <dl>
+      <dt>Слева</dt><dd>Экран терминала с QR-кодом</dd>
+      <dt>Справа</dt><dd>Экран телефона с подтверждением входа</dd>
+      <dt>Пометить</dt><dd>Пронумеровать 1 → 2 по порядку действий оператора</dd>
+    </dl>
+    <span class="place">Место под рисунок 3</span>
+  </div>
+  <figcaption><b>Рисунок 3.</b> Вход по QR: код на терминале и подтверждение с телефона.</figcaption>
+</figure>
+
+<figure class="slot">
+  <div class="slot-head"><span class="tag">Рис. 4</span><span class="kind">Скриншот программы</span></div>
+  <div class="body">
+    <dl>
+      <dt>Экран</dt><dd>Выбор точки после входа</dd>
+      <dt>Видно</dt><dd>Список точек: F16 Arena, F16 Extra, F16 Ramen</dd>
+      <dt>Пометить</dt><dd>Подпись у списка: «Выбирается фактическое место работы»</dd>
+    </dl>
+    <span class="place">Место под рисунок 4</span>
+  </div>
+  <figcaption><b>Рисунок 4.</b> Выбор точки. Ошибка на этом экране портит всю смену.</figcaption>
+</figure>
+
+<h3>5.4. Правила учётной записи</h3>
+<ul>
+  <li>Работать под чужой учётной записью запрещено: все действия привязываются к вошедшему оператору.</li>
+  <li>При передаче терминала другому сотруднику выполнять выход из аккаунта.</li>
+  <li>Если сессия устарела, программа сама возвращает на экран входа — это норма, нужно войти заново.</li>
+</ul>
+
+<h2 id="s6"><span class="num">Раздел 6</span>Рабочий экран программы</h2>
+
+<h3>6.1. Разделы</h3>
+<div class="tw">
+  <table>
+    <thead><tr><th>Раздел</th><th>Назначение</th><th>Пункт регламента</th></tr></thead>
+    <tbody>
+      <tr><td>Смена</td><td>Открытие и закрытие смены, сменный отчёт</td><td>7, 16</td></tr>
+      <tr><td>Продажи</td><td>Продажа товаров и услуг, оплата, печать чека</td><td>9</td></tr>
+      <tr><td>Возвраты</td><td>Возврат товара по чеку</td><td>10</td></tr>
+      <tr><td>История</td><td>Продажи за 7 дней, печать копии чека</td><td>11</td></tr>
+      <tr><td>Долги (Сканер)</td><td>Оформление долга за товар</td><td>12</td></tr>
+      <tr><td>Заявки</td><td>Заявка на склад и история заявок</td><td>13</td></tr>
+      <tr><td>Зал</td><td>Игровые зоны и сессии</td><td>14</td></tr>
+      <tr><td>Мой кабинет</td><td>Смены, задачи, долги, обязательные материалы, профиль</td><td>20</td></tr>
+    </tbody>
+  </table>
+</div>
+<p>Набор вкладок одинаков на всех рабочих экранах и зависит только от настроек точки.</p>
+
+<figure class="slot">
+  <div class="slot-head"><span class="tag">Рис. 5</span><span class="kind">Скриншот программы · опорный</span></div>
+  <div class="body">
+    <dl>
+      <dt>Экран</dt><dd>Рабочий экран с открытой сменой</dd>
+      <dt>Видно</dt><dd>Все вкладки, имя оператора, название точки, статус смены</dd>
+      <dt>Пометить</dt><dd>Пронумеровать выноски: ① вкладки, ② точка и оператор, ③ бейдж очереди, ④ настройки, ⑤ выход</dd>
+    </dl>
+    <span class="place">Место под рисунок 5</span>
+  </div>
+  <figcaption><b>Рисунок 5.</b> Рабочий экран программы. Опорная иллюстрация: на неё ссылаются разделы 9–16.</figcaption>
+</figure>
+
+<h3>6.2. Служебные индикаторы</h3>
+<div class="tw">
+  <table>
+    <thead><tr><th>Индикатор</th><th>Значение</th><th>Действие оператора</th></tr></thead>
+    <tbody>
+      <tr><td><span class="badge w">⏳ N в очереди</span></td><td>Операции ждут отправки на сервер</td><td>Дождаться отправки; не выключать терминал</td></tr>
+      <tr><td><span class="badge c">⚠ N требует внимания</span></td><td>Сервер отклонил операции</td><td>Открыть очередь, прочитать причину, сообщить менеджеру</td></tr>
+      <tr><td><span class="badge ok">Баннер обновления</span></td><td>Вышла новая версия программы</td><td>Обновиться в спокойный момент смены</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h3>6.3. Настройки терминала</h3>
+<p>Доступны: тема оформления, размер текста, звуки, вид кассы и экран клиента для второго монитора. Настройки меняют только внешний вид терминала и не влияют на учёт.</p>
+
+<h2 id="s7"><span class="num">Раздел 7</span>Открытие смены</h2>
+
+<div class="tw">
+  <table>
+    <caption>Порядок открытия смены</caption>
+    <thead><tr><th class="num">Шаг</th><th>Действие</th><th>Контроль</th></tr></thead>
+    <tbody>
+      <tr><td class="step">1</td><td>Запустить Orda Point</td><td>Программа открывается без ошибки</td></tr>
+      <tr><td class="step">2</td><td>Войти по паролю или QR</td><td>Оператор видит своё имя</td></tr>
+      <tr><td class="step">3</td><td>Выбрать точку</td><td>Точка соответствует месту работы</td></tr>
+      <tr><td class="step">4</td><td>Физически пересчитать наличные в кассовом ящике</td><td>Сумма пересчитана, а не принята со слов</td></tr>
+      <tr><td class="step">5</td><td>Ввести стартовую кассу</td><td>Введена фактическая сумма</td></tr>
+      <tr><td class="step">6</td><td>Выбрать тип смены: ☀️ дневная или 🌙 ночная</td><td>Соответствует графику</td></tr>
+      <tr><td class="step">7</td><td>Открыть смену</td><td>Смена активна</td></tr>
+      <tr><td class="step">8</td><td>Пройти чек-лист приёма или открытия смены</td><td>Чек-лист завершён</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<figure class="slot">
+  <div class="slot-head"><span class="tag">Рис. 6</span><span class="kind">Скриншот программы</span></div>
+  <div class="body">
+    <dl>
+      <dt>Экран</dt><dd>Окно открытия смены</dd>
+      <dt>Видно</dt><dd>Поле «Старт кассы, ₸», выбор типа смены, кнопка открытия</dd>
+      <dt>Пометить</dt><dd>Обвести поле стартовой кассы, подпись: «Только физически пересчитанная сумма»</dd>
+    </dl>
+    <span class="place">Место под рисунок 6</span>
+  </div>
+  <figcaption><b>Рисунок 6.</b> Открытие смены: стартовая касса и тип смены.</figcaption>
+</figure>
+
+<div class="call warn">
+  <span class="kicker">Важно · Стартовая касса</span>
+  <p>Стартовая касса — сумма наличных, которую оператор физически пересчитал при приёме смены. Вводить «примерно», «как вчера» или со слов сменщика запрещено. После открытия смены поле блокируется: значение зафиксировано и самостоятельно не изменяется.</p>
+</div>
+
+<h3>7.1. Ошибки при открытии смены</h3>
+<div class="tw">
+  <table>
+    <thead><tr><th>Ситуация</th><th>Действие оператора</th></tr></thead>
+    <tbody>
+      <tr><td>Не пройден онбординг</td><td>Сообщить менеджеру, пройти вводный чек-лист</td></tr>
+      <tr><td>Предыдущая смена ещё открыта</td><td>Найти предыдущего оператора и закрыть его смену. Открывать вторую смену поверх незакрытой запрещено</td></tr>
+      <tr><td>Требуется указать стартовую кассу</td><td>Пересчитать наличные и ввести сумму</td></tr>
+      <tr><td>Нет связи с сервером</td><td>Работать по кэшу; операции уйдут в очередь (раздел 15)</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h2 id="s8"><span class="num">Раздел 8</span>Чек-листы</h2>
+
+<figure class="scheme">
+  <div class="scheme-body">
+    <svg viewBox="0 0 760 150" role="img" aria-label="Чек-листы по ходу смены">
+      <line x1="20" y1="112" x2="740" y2="112" stroke="var(--line-strong)" stroke-width="2"/>
+      <g>
+        <circle cx="70" cy="112" r="6" fill="var(--accent)"/>
+        <rect class="svg-box-a" x="14" y="30" width="118" height="58" rx="4"/>
+        <text class="svg-t" x="28" y="52">Приём смены</text>
+        <text class="svg-s" x="28" y="72">блокирует</text>
+        <text class="svg-s" x="40" y="136">старт</text>
+      </g>
+      <g>
+        <circle cx="238" cy="112" r="6" fill="var(--ink-3)"/>
+        <rect class="svg-box" x="176" y="30" width="124" height="58" rx="4"/>
+        <text class="svg-t" x="190" y="52">Открытие</text>
+        <text class="svg-s" x="190" y="72">фиксирует старт</text>
+      </g>
+      <g>
+        <circle cx="420" cy="112" r="6" fill="var(--ink-3)"/>
+        <rect class="svg-box" x="352" y="30" width="136" height="58" rx="4"/>
+        <text class="svg-t" x="366" y="52">Обход зала</text>
+        <text class="svg-s" x="366" y="72">по расписанию</text>
+        <text class="svg-s" x="360" y="136">каждые 2 часа</text>
+      </g>
+      <g>
+        <circle cx="620" cy="112" r="6" fill="var(--crit)"/>
+        <rect class="svg-box-c" x="552" y="30" width="150" height="58" rx="4"/>
+        <text class="svg-t" x="566" y="52">Закрытие</text>
+        <text class="svg-s" x="566" y="72">блокирует закрытие</text>
+        <text class="svg-s" x="596" y="136">финиш</text>
+      </g>
+    </svg>
+  </div>
+  <figcaption><b>Схема 2.</b> Чек-листы по ходу смены. Онбординг проходится один раз перед первой сменой и блокирует её начало.</figcaption>
+</figure>
+
+<h3>8.1. Виды чек-листов</h3>
+<div class="tw">
+  <table>
+    <thead><tr><th>Вид</th><th>Когда проходить</th><th>Поведение системы</th></tr></thead>
+    <tbody>
+      <tr><td>Приём смены / пересменка</td><td>До принятия ответственности за смену</td><td>Может блокировать работу до прохождения</td></tr>
+      <tr><td>Открытие</td><td>После открытия смены</td><td>Фиксирует стартовое состояние точки</td></tr>
+      <tr><td>Периодический обход</td><td>По расписанию точки; типовое значение — каждые 2 часа</td><td>Напоминает проверить зал, технику, чистоту и остатки</td></tr>
+      <tr><td>Закрытие</td><td>Перед закрытием смены</td><td>Блокирует закрытие смены до прохождения</td></tr>
+      <tr><td>Онбординг</td><td>Перед первой сменой нового сотрудника</td><td>Блокирует первую смену до прохождения</td></tr>
+    </tbody>
+  </table>
+</div>
+<p>Чек-лист с пометкой «Блокирует смену» обязателен: пока он не завершён, соответствующее действие недоступно.</p>
+
+<h3>8.2. Порядок прохождения</h3>
+<div class="tw">
+  <table>
+    <thead><tr><th class="num">Шаг</th><th>Действие</th></tr></thead>
+    <tbody>
+      <tr><td class="step">1</td><td>Открыть раздел «Чек-листы»</td></tr>
+      <tr><td class="step">2</td><td>Выбрать нужный чек-лист и начать его</td></tr>
+      <tr><td class="step">3</td><td>По каждому пункту дать ответ: отметка, текст, число или выбор — в зависимости от пункта</td></tr>
+      <tr><td class="step">4</td><td>Если пункт требует фото-доказательства — приложить фото. Без фото такой чек-лист завершить нельзя</td></tr>
+      <tr><td class="step">5</td><td>По проблемному пункту оставить комментарий с сутью проблемы</td></tr>
+      <tr><td class="step">6</td><td>Завершить чек-лист</td></tr>
+    </tbody>
+  </table>
+</div>
+<p>Пункты с пометкой «обязательно» заполняются полностью: незаполненные система перечислит при попытке завершения.</p>
+
+<figure class="slot">
+  <div class="slot-head"><span class="tag">Рис. 7</span><span class="kind">Скриншот программы</span></div>
+  <div class="body">
+    <dl>
+      <dt>Экран</dt><dd>Чек-лист в процессе прохождения</dd>
+      <dt>Видно</dt><dd>Пункт с пометками «обязательно» и «фото», кнопка добавления фото, поле комментария, сводка внизу</dd>
+      <dt>Пометить</dt><dd>Обвести бейдж «Блокирует смену» и кнопку «Добавить фото»</dd>
+    </dl>
+    <span class="place">Место под рисунок 7</span>
+  </div>
+  <figcaption><b>Рисунок 7.</b> Прохождение чек-листа: обязательный пункт с фото-доказательством.</figcaption>
+</figure>
+
+<div class="call warn">
+  <span class="kicker">Важно · Автоматические штрафы и премии</span>
+  <p>К пункту чек-листа может быть привязана сумма штрафа или премии. Проваленный обязательный пункт создаёт штраф, выполненный премируемый пункт — начисление. Суммы задаёт руководство точки.</p>
+</div>
+
+<h3>8.3. Запрещено</h3>
+<p>Отмечать пункты не выходя в зал; прикладывать старые фотографии; проходить чек-лист заранее «на всю смену вперёд». Это нарушение с последствиями по разделу 21.</p>
+
+<h2 id="s9"><span class="num">Раздел 9</span>Продажи через кассу</h2>
+
+<h3>9.1. Порядок продажи</h3>
+<div class="tw">
+  <table>
+    <thead><tr><th class="num">Шаг</th><th>Действие</th></tr></thead>
+    <tbody>
+      <tr><td class="step">1</td><td>Открыть раздел «Продажи»</td></tr>
+      <tr><td class="step">2</td><td>Отсканировать штрихкод или найти товар по названию либо артикулу — товар добавляется в чек</td></tr>
+      <tr><td class="step">3</td><td>Проверить количество и цену в чеке</td></tr>
+      <tr><td class="step">4</td><td>При необходимости применить скидку: ручной процент или промокод</td></tr>
+      <tr><td class="step">5</td><td>При наличии программы лояльности — найти клиента и при необходимости списать бонусы</td></tr>
+      <tr><td class="step">6</td><td>При необходимости добавить комментарий к продаже</td></tr>
+      <tr><td class="step">7</td><td>Выбрать способ оплаты и подтвердить оплату</td></tr>
+      <tr><td class="step">8</td><td>Распечатать чек и передать клиенту</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<figure class="slot">
+  <div class="slot-head"><span class="tag">Рис. 8</span><span class="kind">Скриншот программы</span></div>
+  <div class="body">
+    <dl>
+      <dt>Экран</dt><dd>Раздел «Продажи» с непустым чеком</dd>
+      <dt>Видно</dt><dd>Строка поиска, позиции чека, кнопки «Клиент» и «Скидка», сумма к оплате</dd>
+      <dt>Пометить</dt><dd>Подписать <span class="keys">F2</span> у строки поиска и <span class="keys">F4</span> у кнопки оплаты</dd>
+    </dl>
+    <span class="place">Место под рисунок 8</span>
+  </div>
+  <figcaption><b>Рисунок 8.</b> Экран продаж: чек, скидка, клиент, сумма к оплате.</figcaption>
+</figure>
+
+<h3>9.2. Способы оплаты</h3>
+<div class="tw">
+  <table>
+    <thead><tr><th>Способ</th><th>Порядок</th></tr></thead>
+    <tbody>
+      <tr><td>Наличные</td><td>Ввести сумму, полученную от покупателя. Программа покажет сдачу</td></tr>
+      <tr><td>Безналичная оплата</td><td>Провести оплату на терминале и подтвердить сумму в программе. Сумма попадёт в безналичный итог смены</td></tr>
+      <tr><td>Смешанная</td><td>Разделить чек: часть наличными, часть безналично. Каждая доля вводится отдельно</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<figure class="slot">
+  <div class="slot-head"><span class="tag">Рис. 9</span><span class="kind">Скриншот программы</span></div>
+  <div class="body">
+    <dl>
+      <dt>Экран</dt><dd>Окно подтверждения оплаты</dd>
+      <dt>Видно</dt><dd>Три способа оплаты, поле полученной суммы, расчёт сдачи, итог</dd>
+      <dt>Пометить</dt><dd>Обвести расчёт сдачи</dd>
+    </dl>
+    <span class="place">Место под рисунок 9</span>
+  </div>
+  <figcaption><b>Рисунок 9.</b> Подтверждение оплаты и расчёт сдачи.</figcaption>
+</figure>
+
+<h3>9.3. Дополнительные возможности</h3>
+<div class="tw">
+  <table>
+    <thead><tr><th>Возможность</th><th>Когда применять</th></tr></thead>
+    <tbody>
+      <tr><td>Универсальная продажа</td><td>Товара нет в каталоге: наименование и сумма вводятся вручную. Только с разрешения менеджера</td></tr>
+      <tr><td>Отложенная корзина</td><td>Клиент отошёл или собирает заказ: корзина откладывается и возвращается из списка отложенных этой смены</td></tr>
+      <tr><td>Исправление оплаты</td><td>Способ оплаты выбран ошибочно — исправить сразу, а не «переписать потом»</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="call rule">
+  <span class="kicker">Правило · Всё через кассу</span>
+  <p>Любая передача товара клиенту оформляется в программе: продажей, возвратом или долгом. Товар «на словах», «запишу потом» и «сам занесу вечером» — нарушение кассовой дисциплины.</p>
+</div>
+
+<h2 id="s10"><span class="num">Раздел 10</span>Возвраты</h2>
+
+<div class="tw">
+  <table>
+    <thead><tr><th class="num">Шаг</th><th>Действие</th></tr></thead>
+    <tbody>
+      <tr><td class="step">1</td><td>Открыть раздел «Возвраты»</td></tr>
+      <tr><td class="step">2</td><td>Найти нужный чек продажи</td></tr>
+      <tr><td class="step">3</td><td>Выбрать позиции к возврату и указать количество</td></tr>
+      <tr><td class="step">4</td><td>Выбрать способ возврата — тем же способом, которым платил клиент</td></tr>
+      <tr><td class="step">5</td><td>Указать причину возврата</td></tr>
+      <tr><td class="step">6</td><td>Оформить возврат</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<figure class="slot">
+  <div class="slot-head"><span class="tag">Рис. 10</span><span class="kind">Скриншот программы</span></div>
+  <div class="body">
+    <dl>
+      <dt>Экран</dt><dd>Раздел «Возвраты» с выбранным чеком</dd>
+      <dt>Видно</dt><dd>Позиции чека, количество к возврату, способ возврата, сумма «К возврату»</dd>
+      <dt>Пометить</dt><dd>Обвести выбор способа возврата</dd>
+    </dl>
+    <span class="place">Место под рисунок 10</span>
+  </div>
+  <figcaption><b>Рисунок 10.</b> Оформление возврата по чеку смены.</figcaption>
+</figure>
+
+<div class="call rule">
+  <span class="kicker">Правило · Возврат</span>
+  <p>Возврат автоматически учитывается в итогах смены и восстанавливает остаток товара. Возврат наличными по безналичной оплате без разрешения менеджера запрещён.</p>
+</div>
+
+<h2 id="s11"><span class="num">Раздел 11</span>История продаж и копия чека</h2>
+
+<p>Раздел «История» показывает продажи за последние 7 дней по всем кассирам точки, с поиском в том числе по сумме чека.</p>
+
+<div class="tw">
+  <table>
+    <thead><tr><th class="num">Шаг</th><th>Повторная печать чека</th></tr></thead>
+    <tbody>
+      <tr><td class="step">1</td><td>Открыть раздел «История»</td></tr>
+      <tr><td class="step">2</td><td>Найти чек по дате, кассиру или сумме</td></tr>
+      <tr><td class="step">3</td><td>Открыть чек и нажать «Печать копии»</td></tr>
+      <tr><td class="step">4</td><td>Проверить превью и подтвердить печать</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<ul>
+  <li>На копии печатается крупная пометка «КОПИЯ».</li>
+  <li>Копия не является новой продажей и не влияет на итоги смены.</li>
+  <li>Выдавать копию вместо оформления возврата запрещено.</li>
+  <li>Если у чека нет позиций (не синхронизирован), печать копии недоступна — дождаться отправки очереди.</li>
+</ul>
+
+<figure class="slot">
+  <div class="slot-head"><span class="tag">Рис. 11</span><span class="kind">Скриншот + фото</span></div>
+  <div class="body">
+    <dl>
+      <dt>Слева</dt><dd>Скриншот истории продаж с найденным чеком</dd>
+      <dt>Справа</dt><dd>Фото распечатанной копии с пометкой «КОПИЯ»</dd>
+      <dt>Пометить</dt><dd>Обвести пометку «КОПИЯ» на бумажном чеке</dd>
+    </dl>
+    <span class="place">Место под рисунок 11</span>
+  </div>
+  <figcaption><b>Рисунок 11.</b> История продаж и печать копии чека.</figcaption>
+</figure>
+
+<h2 id="s12"><span class="num">Раздел 12</span>Долги (Сканер)</h2>
+
+<h3>12.1. Оформление долга</h3>
+<div class="tw">
+  <table>
+    <thead><tr><th class="num">Шаг</th><th>Действие</th></tr></thead>
+    <tbody>
+      <tr><td class="step">1</td><td>Открыть раздел «Долги» (Сканер)</td></tr>
+      <tr><td class="step">2</td><td>Отсканировать штрихкод товара или найти товар по названию</td></tr>
+      <tr><td class="step">3</td><td>Выбрать должника из списка</td></tr>
+      <tr><td class="step">4</td><td>Указать количество и сумму</td></tr>
+      <tr><td class="step">5</td><td>Написать комментарий: кто клиент, за что долг, причина</td></tr>
+      <tr><td class="step">6</td><td>Добавить запись</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<figure class="scheme">
+  <div class="scheme-body">
+    <svg viewBox="0 0 760 118" role="img" aria-label="Жизненный цикл записи долга">
+      <defs><marker id="ar3" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="var(--ink-3)"/></marker></defs>
+      <g>
+        <rect class="svg-box-a" x="2" y="30" width="176" height="58" rx="4"/>
+        <text class="svg-t" x="18" y="54">Долг создан</text>
+        <text class="svg-s" x="18" y="74">оператором</text>
+
+        <path class="svg-arrow" d="M180 59 H 214" marker-end="url(#ar3)"/>
+
+        <rect class="svg-box-w" x="218" y="30" width="216" height="58" rx="4"/>
+        <text class="svg-t" x="234" y="54">Первые 15 минут</text>
+        <text class="svg-s" x="234" y="74">оператор может удалить сам</text>
+
+        <path class="svg-arrow" d="M436 59 H 470" marker-end="url(#ar3)"/>
+
+        <rect class="svg-box-c" x="474" y="30" width="284" height="58" rx="4"/>
+        <text class="svg-t" x="490" y="54">После 15 минут</text>
+        <text class="svg-s" x="490" y="74">удаление только через руководителя</text>
+      </g>
+    </svg>
+  </div>
+  <figcaption><b>Схема 3.</b> Жизненный цикл записи долга. Окно самостоятельного исправления — 15 минут.</figcaption>
+</figure>
+
+<div class="call crit">
+  <span class="kicker">Критично · Окно удаления 15 минут</span>
+  <p>Оператор может удалить свою ошибочную запись долга только в течение 15 минут после создания. Далее программа откажет: удаление выполняет только руководитель.</p>
+</div>
+
+<h3>12.2. Правила по долгам</h3>
+<ul>
+  <li>Долг без комментария считается неоформленным: невозможно установить, кто и за что должен.</li>
+  <li>Оператор не закрывает долги самостоятельно. Погашение проводит руководитель через расчёт зарплаты или административную часть.</li>
+  <li>Свои долги оператор видит в личном кабинете (п. 20.4).</li>
+</ul>
+
+<figure class="slot">
+  <div class="slot-head"><span class="tag">Рис. 12</span><span class="kind">Скриншот программы</span></div>
+  <div class="body">
+    <dl>
+      <dt>Экран</dt><dd>Раздел «Долги» с найденным товаром</dd>
+      <dt>Видно</dt><dd>Поле штрихкода, выбор должника, количество, сумма, комментарий, список долгов смены</dd>
+      <dt>Пометить</dt><dd>Обвести поле комментария и значок удаления записи</dd>
+    </dl>
+    <span class="place">Место под рисунок 12</span>
+  </div>
+  <figcaption><b>Рисунок 12.</b> Оформление долга через сканер.</figcaption>
+</figure>
+
+<h2 id="s13"><span class="num">Раздел 13</span>Заявки на склад</h2>
+
+<div class="tw">
+  <table>
+    <thead><tr><th class="num">Шаг</th><th>Действие</th></tr></thead>
+    <tbody>
+      <tr><td class="step">1</td><td>Открыть раздел «Заявки»</td></tr>
+      <tr><td class="step">2</td><td>Найти товары в каталоге склада</td></tr>
+      <tr><td class="step">3</td><td>Добавить позиции с нужным количеством</td></tr>
+      <tr><td class="step">4</td><td>Написать комментарий, например: «заканчивается, нужно к вечеру»</td></tr>
+      <tr><td class="step">5</td><td>Отправить заявку</td></tr>
+      <tr><td class="step">6</td><td>После выдачи — физически проверить товар и подтвердить получение</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>Количество ограничено фактическим остатком склада: заказать больше, чем есть, нельзя. Черновик заявки сохраняется автоматически; при смене кассира черновик обнуляется.</p>
+
+<figure class="scheme">
+  <div class="scheme-body">
+    <svg viewBox="0 0 760 176" role="img" aria-label="Статусы заявки на склад">
+      <defs><marker id="ar4" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="var(--ink-3)"/></marker></defs>
+      <g>
+        <rect class="svg-box-a" x="2" y="14" width="150" height="52" rx="4"/>
+        <text class="svg-t" x="16" y="38">Новая</text>
+        <text class="svg-s" x="16" y="56">можно отменить</text>
+
+        <path class="svg-arrow" d="M154 40 H 192" marker-end="url(#ar4)"/>
+
+        <rect class="svg-box" x="196" y="2" width="168" height="52" rx="4"/>
+        <text class="svg-t" x="210" y="26">Одобрена</text>
+        <text class="svg-s" x="210" y="44">полностью</text>
+
+        <rect class="svg-box" x="196" y="62" width="168" height="52" rx="4"/>
+        <text class="svg-t" x="210" y="86">Одобрена частично</text>
+        <text class="svg-s" x="210" y="104">остаток уточнить</text>
+
+        <rect class="svg-box-c" x="196" y="122" width="168" height="46" rx="4"/>
+        <text class="svg-t" x="210" y="146">Отклонена</text>
+        <text class="svg-s" x="210" y="162">читать комментарий</text>
+
+        <path class="svg-arrow" d="M366 28 H 404" marker-end="url(#ar4)"/>
+        <path class="svg-arrow" d="M366 88 H 404" marker-end="url(#ar4)"/>
+
+        <rect class="svg-box-w" x="408" y="30" width="150" height="58" rx="4"/>
+        <text class="svg-t" x="422" y="54">Выдана</text>
+        <text class="svg-s" x="422" y="74">проверить факт</text>
+
+        <path class="svg-arrow" d="M560 59 H 598" marker-end="url(#ar4)"/>
+
+        <rect class="svg-box-a" x="602" y="30" width="156" height="58" rx="4"/>
+        <text class="svg-t" x="616" y="54">Получена</text>
+        <text class="svg-s" x="616" y="74">подтвердил оператор</text>
+
+        <text class="svg-s" x="408" y="112">расхождение → статус «Спор»</text>
+      </g>
+    </svg>
+  </div>
+  <figcaption><b>Схема 4.</b> Статусы заявки на склад — от создания до подтверждения получения.</figcaption>
+</figure>
+
+<div class="tw">
+  <table>
+    <caption>Статусы и действия оператора</caption>
+    <thead><tr><th>Статус</th><th>Значение</th><th>Действие оператора</th></tr></thead>
+    <tbody>
+      <tr><td>Новая</td><td>Создана и ждёт решения менеджера</td><td>Можно отменить свою заявку</td></tr>
+      <tr><td>Одобрена</td><td>Менеджер одобрил полностью</td><td>Ожидать выдачи</td></tr>
+      <tr><td>Одобрена частично</td><td>Выдаётся часть позиций</td><td>Уточнить остаток у менеджера</td></tr>
+      <tr><td>Выдана</td><td>Товар передан на точку</td><td>Проверить фактически и подтвердить получение</td></tr>
+      <tr><td>Получена</td><td>Оператор подтвердил получение</td><td>Действий не требуется</td></tr>
+      <tr><td>Отклонена</td><td>Отказано</td><td>Прочитать комментарий менеджера</td></tr>
+      <tr><td>Спор</td><td>Расхождение между выданным и полученным</td><td>Разбирается с менеджером, с фиксацией фактов</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="call rule">
+  <span class="kicker">Правило · Подтверждать по факту</span>
+  <p>Подтверждать получение заявки следует только после физической проверки товара. Подтверждение «не глядя» переносит ответственность за недостачу на оператора.</p>
+</div>
+
+<figure class="slot">
+  <div class="slot-head"><span class="tag">Рис. 13</span><span class="kind">Скриншот программы</span></div>
+  <div class="body">
+    <dl>
+      <dt>Экран</dt><dd>Раздел «Заявки», вкладка «История заявок»</dd>
+      <dt>Видно</dt><dd>Карточки заявок с цветными статусами, кнопка подтверждения получения</dd>
+      <dt>Пометить</dt><dd>Обвести кнопку подтверждения получения</dd>
+    </dl>
+    <span class="place">Место под рисунок 13</span>
+  </div>
+  <figcaption><b>Рисунок 13.</b> История заявок и подтверждение получения товара.</figcaption>
+</figure>
+
+<h2 id="s14"><span class="num">Раздел 14</span>Игровые зоны и сессии</h2>
+
+<p>Раздел доступен на точках с игровым залом: Arena и Extra.</p>
+
+<h3>14.1. Запуск сессии</h3>
+<div class="tw">
+  <table>
+    <thead><tr><th class="num">Шаг</th><th>Действие</th></tr></thead>
+    <tbody>
+      <tr><td class="step">1</td><td>Открыть раздел «Зал»</td></tr>
+      <tr><td class="step">2</td><td>Выбрать свободную станцию — статус «СВОБОДНО»</td></tr>
+      <tr><td class="step">3</td><td>Убедиться физически: клиент за нужным местом, оборудование исправно</td></tr>
+      <tr><td class="step">4</td><td>Выбрать тариф и длительность</td></tr>
+      <tr><td class="step">5</td><td>При необходимости указать скидку</td></tr>
+      <tr><td class="step">6</td><td>Выбрать способ оплаты и указать сумму</td></tr>
+      <tr><td class="step">7</td><td>Запустить сессию и убедиться, что таймер пошёл</td></tr>
+      <tr><td class="step">8</td><td>При необходимости распечатать чек</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<figure class="slot">
+  <div class="slot-head"><span class="tag">Рис. 14</span><span class="kind">Скриншот программы</span></div>
+  <div class="body">
+    <dl>
+      <dt>Экран</dt><dd>Карта зала со станциями</dd>
+      <dt>Видно</dt><dd>Станции в трёх состояниях: «СВОБОДНО», активная с таймером, «ИСТЕКЛО»; касса зала за день</dd>
+      <dt>Пометить</dt><dd>Подписать три состояния станций разными выносками</dd>
+    </dl>
+    <span class="place">Место под рисунок 14</span>
+  </div>
+  <figcaption><b>Рисунок 14.</b> Карта зала: состояния станций и касса зала за день.</figcaption>
+</figure>
+
+<h3>14.2. Работа с активной сессией</h3>
+<div class="tw">
+  <table>
+    <thead><tr><th>Действие</th><th>Как выполнить</th><th>Контроль</th></tr></thead>
+    <tbody>
+      <tr><td>Продление</td><td>Открыть активную станцию, продлить время и принять оплату</td><td>Новое время видно на таймере</td></tr>
+      <tr><td>Завершение</td><td>Завершить сессию на станции</td><td>Станция освободилась</td></tr>
+      <tr><td>Тех. компенсация</td><td>Оформить компенсацию с суммой и причиной</td><td>Сумма учитывается при закрытии смены</td></tr>
+      <tr><td>Пересадка клиента</td><td>Зафиксировать причину, старую и новую станцию</td><td>Касса и время не потеряны</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>Станция со статусом «ИСТЕКЛО» обрабатывается сразу: продление или завершение. История сессий и касса зала за день служат для самопроверки перед закрытием смены.</p>
+
+<div class="call rule">
+  <span class="kicker">Правило · Компенсация оформляется в момент проблемы</span>
+  <p>Компенсация за технический сбой оформляется в программе с причиной сразу, а не восстанавливается по памяти при закрытии смены.</p>
+</div>
+
+<h2 id="s15"><span class="num">Раздел 15</span>Работа без интернета</h2>
+
+<p>При потере связи программа продолжает работать: витрина и каталог берутся из локального кэша, а операции — продажи, возвраты, долги, заявки, сменный отчёт — сохраняются в очередь отправки.</p>
+
+<figure class="scheme">
+  <div class="scheme-body">
+    <svg viewBox="0 0 760 176" role="img" aria-label="Работа очереди отправки">
+      <defs><marker id="ar5" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="var(--ink-3)"/></marker></defs>
+      <g>
+        <rect class="svg-box" x="2" y="52" width="164" height="58" rx="4"/>
+        <text class="svg-t" x="16" y="76">Операция</text>
+        <text class="svg-s" x="16" y="96">продажа · долг · отчёт</text>
+
+        <path class="svg-arrow" d="M168 81 H 206" marker-end="url(#ar5)"/>
+
+        <rect class="svg-box-w" x="210" y="52" width="180" height="58" rx="4"/>
+        <text class="svg-t" x="224" y="76">⏳ В очереди</text>
+        <text class="svg-s" x="224" y="96">ждёт отправки</text>
+
+        <path class="svg-arrow" d="M392 66 H 430" marker-end="url(#ar5)"/>
+        <path class="svg-arrow" d="M392 96 H 430" marker-end="url(#ar5)"/>
+
+        <rect class="svg-box-a" x="434" y="14" width="324" height="58" rx="4"/>
+        <text class="svg-t" x="448" y="38">Отправлено на сервер</text>
+        <text class="svg-s" x="448" y="58">очередь пуста — терминал можно выключать</text>
+
+        <rect class="svg-box-c" x="434" y="92" width="324" height="58" rx="4"/>
+        <text class="svg-t" x="448" y="116">⚠ Требует внимания</text>
+        <text class="svg-s" x="448" y="136">сервер отклонил — сообщить менеджеру</text>
+      </g>
+    </svg>
+  </div>
+  <figcaption><b>Схема 5.</b> Очередь отправки: два исхода операции, оформленной без связи.</figcaption>
+</figure>
+
+<div class="tw">
+  <table>
+    <thead><tr><th>Состояние</th><th>Значение</th><th>Действие оператора</th></tr></thead>
+    <tbody>
+      <tr><td><span class="badge w">⏳ Ждут отправки</span></td><td>Связь ещё не восстановилась</td><td>Продолжать работу; программа отправит операции сама</td></tr>
+      <tr><td><span class="badge c">⚠ Требует внимания</span></td><td>Сервер отклонил операцию</td><td>Открыть очередь, прочитать причину, сообщить менеджеру</td></tr>
+      <tr><td><span class="badge ok">Все операции отправлены</span></td><td>Очередь пуста</td><td>Терминал можно выключать</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="call crit">
+  <span class="kicker">Критично · Не выключать терминал с непустой очередью</span>
+  <p>Пока в очереди есть операции, программу и компьютер выключать нельзя: данные ещё не на сервере. Дождаться сообщения о пустой очереди либо согласовать действия с менеджером.</p>
+</div>
+
+<p>Вход по QR и часть серверных операций без интернета недоступны. Это ожидаемое поведение, а не поломка.</p>
+
+<figure class="slot">
+  <div class="slot-head"><span class="tag">Рис. 15</span><span class="kind">Скриншот программы</span></div>
+  <div class="body">
+    <dl>
+      <dt>Экран</dt><dd>Окно очереди отправки с операциями</dd>
+      <dt>Видно</dt><dd>Список операций, счётчики «в очереди» и «требует внимания», кнопка синхронизации</dd>
+      <dt>Пометить</dt><dd>Обвести бейдж очереди вверху экрана</dd>
+    </dl>
+    <span class="place">Место под рисунок 15</span>
+  </div>
+  <figcaption><b>Рисунок 15.</b> Очередь отправки: что оператор видит без связи.</figcaption>
+</figure>
+
+<h2 id="s16"><span class="num">Раздел 16</span>Закрытие смены и кассовая дисциплина</h2>
+
+<h3>16.1. Подготовка</h3>
+<div class="tw">
+  <table>
+    <thead><tr><th>Контроль</th><th>Что сделать</th></tr></thead>
+    <tbody>
+      <tr><td>Чек-лист закрытия</td><td>Пройти полностью — без него смена не закрывается</td></tr>
+      <tr><td>Терминал оплаты</td><td>Снять итоговый отчёт по терминалу</td></tr>
+      <tr><td>Наличные</td><td>Пересчитать купюры в кассовом ящике</td></tr>
+      <tr><td>Мелочь</td><td>Пересчитать отдельно</td></tr>
+      <tr><td>Зал</td><td>Завершить или передать активные сессии</td></tr>
+      <tr><td>Очередь</td><td>Убедиться, что операции отправлены</td></tr>
+      <tr><td>Инциденты</td><td>Собрать факты: техсбои, пересадки, конфликты, расхождения</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h3>16.2. Поля формы закрытия</h3>
+<div class="tw">
+  <table>
+    <thead><tr><th>Поле</th><th>Что вводить</th></tr></thead>
+    <tbody>
+      <tr><td>Дата</td><td>Дата смены</td></tr>
+      <tr><td>Смена</td><td>☀️ дневная или 🌙 ночная</td></tr>
+      <tr><td>Наличные</td><td>Сумма купюр в кассе, без мелочи</td></tr>
+      <tr><td>Мелочь</td><td>Сумма монет отдельно</td></tr>
+      <tr><td>Безналичная оплата (POS)</td><td>Итог по терминалу за смену</td></tr>
+      <tr><td>Безнал до 00:00 / после 00:00</td><td>Только для ночной смены при включённом разделении по суткам</td></tr>
+      <tr><td>Тех. компенсации</td><td>Сумма компенсаций, выданных за смену</td></tr>
+      <tr><td>Старт кассы</td><td>Подставляется из открытия смены; правке не подлежит</td></tr>
+      <tr><td>Итог системы продаж</td><td>Подставляется из раздела «Продажи»; при внешней системе учёта вводится вручную</td></tr>
+      <tr><td>Комментарий</td><td>Все существенные события смены</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="call warn">
+  <span class="kicker">Важно · Порядок ввода наличных</span>
+  <p>Сначала вводится мелочь, затем наличные: мелочь вычитается из суммы наличных, чтобы в отчёт ушли только купюры.</p>
+</div>
+
+<figure class="slot">
+  <div class="slot-head"><span class="tag">Рис. 16</span><span class="kind">Скриншот программы · опорный</span></div>
+  <div class="body">
+    <dl>
+      <dt>Экран</dt><dd>Форма закрытия смены целиком</dd>
+      <dt>Видно</dt><dd>Все денежные поля, блок «Вычеты», карточка «Формула расчёта», ФАКТ и ИТОГ, поле комментария</dd>
+      <dt>Пометить</dt><dd>Пронумеровать поля в порядке заполнения: ① мелочь, ② наличные, ③ безнал, ④ тех. компенсации, ⑤ комментарий</dd>
+    </dl>
+    <span class="place">Место под рисунок 16</span>
+  </div>
+  <figcaption><b>Рисунок 16.</b> Форма закрытия смены. Опорная иллюстрация раздела 16.</figcaption>
+</figure>
+
+<h3>16.3. Ночная смена</h3>
+<p>При включённом разделении по суткам безналичная выручка ночной смены вводится двумя суммами: до 00:00 и после 00:00. В сумме они дают общий безналичный итог смены. Разделение нужно для корректного учёта суток и отчётности.</p>
+
+<h3>16.4. Формула расчёта</h3>
+<div class="formula">
+<span class="res">ФАКТ</span> = Наличные <span class="op">+</span> Мелочь <span class="op">+</span> Безнал (POS) <span class="op">+</span> Тех. компенсации <span class="op">−</span> Старт кассы<br>
+<span class="res">ИТОГ</span> = ФАКТ <span class="op">−</span> Итог системы продаж
+</div>
+
+<div class="tw">
+  <table>
+    <thead><tr><th>Значение ИТОГ</th><th>Что означает</th><th>Что делать</th></tr></thead>
+    <tbody>
+      <tr><td><span class="badge ok">≈ 0</span></td><td>Касса сходится</td><td>Закрывать смену</td></tr>
+      <tr><td><span class="badge w">Больше нуля</span></td><td>Излишек</td><td>Описать причину в комментарии</td></tr>
+      <tr><td><span class="badge c">Меньше нуля</span></td><td>Недостача</td><td>Сообщить менеджеру и описать причину до закрытия смены</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>Программа показывает формулу построчно и подписывает состояние отчёта. Закрывать смену с недостачей молча запрещено.</p>
+
+<h3>16.5. Отправка отчёта</h3>
+<div class="tw">
+  <table>
+    <thead><tr><th class="num">Шаг</th><th>Действие</th></tr></thead>
+    <tbody>
+      <tr><td class="step">1</td><td>Проверить все суммы и формулу</td></tr>
+      <tr><td class="step">2</td><td>Заполнить комментарий, если были инциденты или расхождения</td></tr>
+      <tr><td class="step">3</td><td>Отправить отчёт — кнопкой или сочетанием <span class="keys">Ctrl + Enter</span></td></tr>
+      <tr><td class="step">4</td><td>Подтвердить закрытие смены в окне подтверждения</td></tr>
+      <tr><td class="step">5</td><td>При необходимости распечатать сменный отчёт</td></tr>
+      <tr><td class="step">6</td><td>Убедиться, что очередь отправки пуста</td></tr>
+    </tbody>
+  </table>
+</div>
+<p>Если связи нет, отчёт попадает в очередь и уходит автоматически при восстановлении интернета.</p>
+
+<figure class="slot">
+  <div class="slot-head"><span class="tag">Рис. 17</span><span class="kind">Скриншот + фото</span></div>
+  <div class="body">
+    <dl>
+      <dt>Слева</dt><dd>Окно подтверждения закрытия смены с итоговой суммой</dd>
+      <dt>Справа</dt><dd>Фото распечатанного сменного отчёта</dd>
+      <dt>Пометить</dt><dd>Обвести строку ИТОГ в обоих случаях</dd>
+    </dl>
+    <span class="place">Место под рисунок 17</span>
+  </div>
+  <figcaption><b>Рисунок 17.</b> Подтверждение закрытия смены и печатный сменный отчёт.</figcaption>
+</figure>
+
+<h3>16.6. Финальная проверка перед закрытием</h3>
+<div class="tw">
+  <table>
+    <thead><tr><th class="num">№</th><th>Вопрос</th><th>Ответ должен быть</th></tr></thead>
+    <tbody>
+      <tr><td class="step">1</td><td>Точка выбрана правильно?</td><td>Да</td></tr>
+      <tr><td class="step">2</td><td>Чек-лист закрытия завершён?</td><td>Да</td></tr>
+      <tr><td class="step">3</td><td>Наличные и мелочь пересчитаны физически?</td><td>Да</td></tr>
+      <tr><td class="step">4</td><td>Безналичный итог совпадает с отчётом терминала?</td><td>Да</td></tr>
+      <tr><td class="step">5</td><td>Все сессии зала завершены или переданы?</td><td>Да / не применимо</td></tr>
+      <tr><td class="step">6</td><td>Итог внешней системы внесён?</td><td>Да / не применимо</td></tr>
+      <tr><td class="step">7</td><td>Все долги, возвраты и компенсации оформлены?</td><td>Да</td></tr>
+      <tr><td class="step">8</td><td>Есть комментарий по расхождениям и инцидентам?</td><td>Да / инцидентов не было</td></tr>
+      <tr><td class="step">9</td><td>Очередь отправки пуста?</td><td>Да</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ══════════ ЧАСТЬ III ══════════ -->
+<div class="part-head">Часть III. Порядок работы по точкам</div>
+
+<h2 id="s17"><span class="num">Раздел 17</span>F16 Arena</h2>
+<p class="lead">Раздел обязателен для операторов компьютерного зала F16 Arena.</p>
+
+<h3>17.1. Зоны контроля</h3>
+<div class="tw">
+  <table>
+    <thead><tr><th>Зона ответственности</th><th>Что проверять</th></tr></thead>
+    <tbody>
+      <tr><td>Карта зала</td><td>Занятость мест в программе соответствует фактической</td></tr>
+      <tr><td>Запуск сессии</td><td>Станция, тариф, время, способ оплаты и сумма введены верно</td></tr>
+      <tr><td>Продление</td><td>Оформляется через активную станцию с оплатой</td></tr>
+      <tr><td>Технические проблемы</td><td>Фиксируются сразу: станция, суть, принятое решение</td></tr>
+      <tr><td>Тех. компенсации</td><td>Оформляются в момент решения вопроса с клиентом</td></tr>
+      <tr><td>Порядок в зале</td><td>Обход по расписанию: чистота, периферия, посадка, забытые вещи</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h3>17.2. Порядок работы на смене</h3>
+<ol>
+  <li>Открыть смену и пройти чек-лист приёма (разделы 7 и 8).</li>
+  <li>Принять зал: станции, периферия, чистота, активные сессии.</li>
+  <li>В течение смены запускать и продлевать сессии, продавать товары через кассу, проходить обходы по расписанию.</li>
+  <li>Технические проблемы фиксировать сразу, при необходимости с компенсацией.</li>
+  <li>Перед закрытием завершить или передать все активные сессии, сверить кассу зала за день.</li>
+  <li>Закрыть смену по разделу 16.</li>
+</ol>
+
+<figure class="slot">
+  <div class="slot-head"><span class="tag">Рис. 18</span><span class="kind">Фото точки</span></div>
+  <div class="body">
+    <dl>
+      <dt>Кадр</dt><dd>Общий план зала Arena с зонами</dd>
+      <dt>Пометить</dt><dd>Подписать зоны и номера станций так же, как они названы в программе</dd>
+    </dl>
+    <span class="place">Место под рисунок 18</span>
+  </div>
+  <figcaption><b>Рисунок 18.</b> F16 Arena: зоны зала и соответствие номеров станций программе.</figcaption>
+</figure>
+
+<h3>17.3. Особые требования при закрытии</h3>
+<div class="tw">
+  <table>
+    <thead><tr><th>Поле / контроль</th><th>Обязательно</th><th>Что вносить</th></tr></thead>
+    <tbody>
+      <tr><td>Чек-лист закрытия</td><td>Да</td><td>Завершён до закрытия смены</td></tr>
+      <tr><td>Наличные / Мелочь</td><td>Да</td><td>Купюры и монеты раздельно</td></tr>
+      <tr><td>Безнал (POS)</td><td>Да</td><td>Итог терминала</td></tr>
+      <tr><td>Тех. компенсации</td><td>Если были</td><td>Сумма компенсаций за смену</td></tr>
+      <tr><td>Комментарий</td><td>При инциденте</td><td>Техсбой, пересадка, конфликт, расхождение</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h2 id="s18"><span class="num">Раздел 18</span>F16 Extra</h2>
+<p class="lead">Раздел обязателен для операторов F16 Extra: PlayStation 5, Simracing, оборудование по ID.</p>
+
+<h3>18.1. Оборудование и идентификаторы</h3>
+<div class="tw">
+  <table>
+    <thead><tr><th>Оборудование</th><th class="num">ID</th><th>Что контролировать</th></tr></thead>
+    <tbody>
+      <tr><td>PlayStation 5</td><td class="num">301</td><td>Консоль, геймпады, ТВ, оплата, время</td></tr>
+      <tr><td>PlayStation 5</td><td class="num">302</td><td>Консоль, геймпады, ТВ, оплата, время</td></tr>
+      <tr><td>PlayStation 5</td><td class="num">303</td><td>Консоль, геймпады, ТВ, оплата, время</td></tr>
+      <tr><td>PlayStation 5</td><td class="num">304</td><td>Консоль, геймпады, ТВ, оплата, время</td></tr>
+      <tr><td>Simracing</td><td class="num">777</td><td>Руль, педали, кресло, экран, кабели</td></tr>
+      <tr><td>Simracing</td><td class="num">888</td><td>Руль, педали, кресло, экран, кабели</td></tr>
+    </tbody>
+  </table>
+</div>
+<p class="muted">Перечень ID актуализируется менеджером точки при изменении парка оборудования.</p>
+
+<figure class="slot">
+  <div class="slot-head"><span class="tag">Рис. 19</span><span class="kind">Фото точки</span></div>
+  <div class="body">
+    <dl>
+      <dt>Кадр</dt><dd>Зона Extra: консоли и симрейсинг</dd>
+      <dt>Пометить</dt><dd>Подписать каждое место его ID: 301–304, 777, 888</dd>
+    </dl>
+    <span class="place">Место под рисунок 19</span>
+  </div>
+  <figcaption><b>Рисунок 19.</b> F16 Extra: соответствие оборудования и ID в системе.</figcaption>
+</figure>
+
+<h3>18.2. Обязательная фиксация</h3>
+<div class="tw">
+  <table>
+    <thead><tr><th>Ситуация</th><th>Что делать</th></tr></thead>
+    <tbody>
+      <tr><td>Не работает геймпад, руль, педали, экран</td><td>Зафиксировать ID оборудования и суть проблемы; сообщить менеджеру</td></tr>
+      <tr><td>Клиент пересажен</td><td>Указать старый и новый ID в комментарии</td></tr>
+      <tr><td>Оборудование повреждено</td><td>Немедленно сообщить менеджеру и зафиксировать состояние</td></tr>
+      <tr><td>Клиент закончил раньше</td><td>Завершить сессию в программе; при необходимости оформить компенсацию</td></tr>
+      <tr><td>Полная посадка</td><td>Убедиться, что все сессии отражены в программе — премия начисляется только при корректной фиксации</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h3>18.3. Особые требования при закрытии</h3>
+<div class="tw">
+  <table>
+    <thead><tr><th>Поле / контроль</th><th>Обязательно</th><th>Что вносить</th></tr></thead>
+    <tbody>
+      <tr><td>Чек-лист закрытия</td><td>Да</td><td>Проверка оборудования и порядка</td></tr>
+      <tr><td>Наличные / Мелочь</td><td>Да</td><td>Купюры и монеты раздельно</td></tr>
+      <tr><td>Безнал (POS)</td><td>Да</td><td>Итог терминала</td></tr>
+      <tr><td>Тех. компенсации</td><td>Если были</td><td>Сумма компенсаций за смену</td></tr>
+      <tr><td>Комментарий по оборудованию</td><td>При проблеме</td><td>ID оборудования, проблема, кому сообщили</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h2 id="s19"><span class="num">Раздел 19</span>F16 Ramen</h2>
+<p class="lead">Раздел обязателен для операторов F16 Ramen: продажи кухни, напитков и товаров.</p>
+
+<h3>19.1. Зоны контроля</h3>
+<div class="tw">
+  <table>
+    <thead><tr><th>Зона ответственности</th><th>Что проверять</th></tr></thead>
+    <tbody>
+      <tr><td>Продажи</td><td>Все позиции проходят через кассу; количество, скидка и способ оплаты указаны верно</td></tr>
+      <tr><td>Возвраты</td><td>Оформляются только через раздел «Возвраты», с причиной</td></tr>
+      <tr><td>Остатки и склад</td><td>Заканчивающийся товар — заявка заранее, а не по факту нуля</td></tr>
+      <tr><td>Долги</td><td>Оформляются с комментарием: кто, за что, сумма</td></tr>
+      <tr><td>Санитария</td><td>Чистота рабочей зоны, хранение товара, порядок на витрине и стойке</td></tr>
+      <tr><td>Итог системы учёта</td><td>При закрытии вносится итог внешней системы, если она используется на точке</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h3>19.2. Порядок работы на смене</h3>
+<ol>
+  <li>Открыть смену, пересчитать кассу, пройти чек-лист приёма.</li>
+  <li>Принять витрину и остатки; заявку на пополнение оформить в начале смены, а не в конце.</li>
+  <li>Продажи вести только через кассу; чек выдавать клиенту.</li>
+  <li>Возвраты оформлять сразу, с причиной.</li>
+  <li>Перед закрытием проверить остатки, оформить заявки, свести кассу.</li>
+  <li>Закрыть смену по разделу 16.</li>
+</ol>
+
+<figure class="slot">
+  <div class="slot-head"><span class="tag">Рис. 20</span><span class="kind">Фото точки</span></div>
+  <div class="body">
+    <dl>
+      <dt>Кадр</dt><dd>Витрина и рабочая зона Ramen в состоянии «принято по стандарту»</dd>
+      <dt>Пометить</dt><dd>Это эталон для чек-листа приёма смены — подписать ключевые точки порядка</dd>
+    </dl>
+    <span class="place">Место под рисунок 20</span>
+  </div>
+  <figcaption><b>Рисунок 20.</b> F16 Ramen: эталонное состояние витрины и рабочей зоны.</figcaption>
+</figure>
+
+<h3>19.3. Особые требования при закрытии</h3>
+<div class="tw">
+  <table>
+    <thead><tr><th>Поле / контроль</th><th>Обязательно</th><th>Что вносить</th></tr></thead>
+    <tbody>
+      <tr><td>Чек-лист закрытия</td><td>Да</td><td>Касса, чистота, остатки, закрытые операции</td></tr>
+      <tr><td>Наличные / Мелочь</td><td>Да</td><td>Купюры и монеты раздельно</td></tr>
+      <tr><td>Безнал (POS)</td><td>Да</td><td>Итог терминала</td></tr>
+      <tr><td>Итог системы учёта</td><td>Да, если система используется</td><td>Итог внешней системы за смену</td></tr>
+      <tr><td>Комментарий</td><td>При расхождении</td><td>Возвраты, списания, проблемы по складу</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="call rule">
+  <span class="kicker">Правило · Не продавать «в минус»</span>
+  <p>Если товар физически закончился, но числится в остатках — не пробивать продажу задним числом и не отпускать без оформления. Зафиксировать расхождение и сообщить менеджеру.</p>
+</div>
+
+<!-- ══════════ ЧАСТЬ IV ══════════ -->
+<div class="part-head">Часть IV. Ответственность и поддержка</div>
+
+<h2 id="s20"><span class="num">Раздел 20</span>Личный кабинет оператора</h2>
+
+<p>Кабинет доступен в программе — раздел «Мой кабинет» — и на сайте ordaops.kz под своим логином.</p>
+
+<div class="tw">
+  <table>
+    <thead><tr><th>Раздел</th><th>Что содержит</th></tr></thead>
+    <tbody>
+      <tr><td>Профиль</td><td>Данные оператора, точка, роль, контакты</td></tr>
+      <tr><td>Мои смены</td><td>История смен за период: дата, тип, итоги</td></tr>
+      <tr><td>Мои задачи</td><td>Задачи от руководителя со статусами; новые приходят уведомлением</td></tr>
+      <tr><td>Мои долги</td><td>Активные долги оператора</td></tr>
+      <tr><td>Обязательные материалы</td><td>Статьи базы знаний, требующие подтверждения</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h3>20.5. Подтверждение обязательных материалов</h3>
+<div class="tw">
+  <table>
+    <thead><tr><th class="num">Шаг</th><th>Действие</th></tr></thead>
+    <tbody>
+      <tr><td class="step">1</td><td>Открыть «Обязательные материалы»</td></tr>
+      <tr><td class="step">2</td><td>Найти статьи с пометкой о необходимости подтверждения</td></tr>
+      <tr><td class="step">3</td><td>Прочитать статью полностью</td></tr>
+      <tr><td class="step">4</td><td>Подтвердить ознакомление</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="call warn">
+  <span class="kicker">Важно · Критичные правила</span>
+  <p>Если сотрудник не подтвердил критичное правило, ссылаться на «не знал» в спорной ситуации нельзя. Подтверждение — фиксация ознакомления, а не формальность.</p>
+</div>
+
+<figure class="slot">
+  <div class="slot-head"><span class="tag">Рис. 21</span><span class="kind">Скриншот программы</span></div>
+  <div class="body">
+    <dl>
+      <dt>Экран</dt><dd>«Мой кабинет» с открытой вкладкой обязательных материалов</dd>
+      <dt>Видно</dt><dd>Статья с пометкой «нужно подтверждение», кнопка подтверждения, активные задачи и долги</dd>
+      <dt>Пометить</dt><dd>Обвести кнопку подтверждения ознакомления</dd>
+    </dl>
+    <span class="place">Место под рисунок 21</span>
+  </div>
+  <figcaption><b>Рисунок 21.</b> Личный кабинет: обязательные материалы и подтверждение ознакомления.</figcaption>
+</figure>
+
+<h2 id="s21"><span class="num">Раздел 21</span>Зарплата, штрафы и премии</h2>
+
+<div class="tw">
+  <table>
+    <thead><tr><th>Тип</th><th>Примеры</th></tr></thead>
+    <tbody>
+      <tr><td>Начисляется</td><td>Ставка за смену; премия за порог выручки; премия за полную посадку зала; премия за пункт чек-листа</td></tr>
+      <tr><td>Вычитается</td><td>Штраф по чек-листу; штраф-инцидент от менеджера; долг оператора; материальная ответственность</td></tr>
+      <tr><td>Итог</td><td>Базовая сумма + премии − штрафы − долги</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>Конкретные суммы ставок, премий и штрафов устанавливаются руководством и могут отличаться по точкам и типам смен.</p>
+
+<div class="call info">
+  <span class="kicker">Инфо · Спорный штраф</span>
+  <p>Если штраф кажется несправедливым, оператор обращается к менеджеру. Менеджер переводит штраф в статус оспаривания или аннулирует его при наличии оснований. Самостоятельное «исправление» данных в программе запрещено и рассматривается как отдельное нарушение.</p>
+</div>
+
+<h2 id="s22"><span class="num">Раздел 22</span>Типовые проблемы и эскалация</h2>
+
+<div class="tw">
+  <table>
+    <caption>Что делать при проблеме</caption>
+    <thead><tr><th>Блок</th><th>Проблема</th><th>Решение</th></tr></thead>
+    <tbody>
+      <tr><td>Вход</td><td>Ошибка при входе</td><td>Проверить интернет; при наличии связи — сообщить менеджеру</td></tr>
+      <tr><td>Вход</td><td>Выкинуло на экран входа</td><td>Сессия истекла — войти заново</td></tr>
+      <tr><td>Смена</td><td>Не открывается: не пройден онбординг</td><td>Сообщить менеджеру, пройти онбординг</td></tr>
+      <tr><td>Смена</td><td>Не открывается: смена уже открыта</td><td>Найти предыдущего оператора и закрыть его смену</td></tr>
+      <tr><td>Смена</td><td>Не закрывается: не пройден чек-лист</td><td>Завершить обязательный чек-лист закрытия</td></tr>
+      <tr><td>Чек-лист</td><td>Чек-лист не появляется</td><td>Перезапустить программу; если не помогает — менеджеру</td></tr>
+      <tr><td>Долги</td><td>Введена неверная сумма</td><td>Удалить свою запись в течение 15 минут и оформить заново</td></tr>
+      <tr><td>Долги</td><td>Запись не удаляется</td><td>Окно 15 минут истекло — обратиться к менеджеру</td></tr>
+      <tr><td>Касса</td><td>Терминал оплаты не проводит платёж</td><td>Зафиксировать и немедленно сообщить менеджеру; не проводить оплату мимо кассы</td></tr>
+      <tr><td>Оборудование</td><td>Проблема с ПК, PS5 или Simracing</td><td>Зафиксировать ID или номер станции и суть проблемы; сообщить менеджеру</td></tr>
+      <tr><td>Программа</td><td>Белый экран, зависание</td><td>Закрыть и открыть программу заново; смена и отправленные данные не теряются</td></tr>
+      <tr><td>Связь</td><td>Нет интернета</td><td>Продолжать работу; следить за очередью отправки (раздел 15)</td></tr>
+      <tr><td>Очередь</td><td>⚠ «требует внимания»</td><td>Открыть очередь, прочитать причину отклонения, сообщить менеджеру</td></tr>
+      <tr><td>Обновление</td><td>Баннер обновления</td><td>Обновиться в спокойный момент смены, не в очередь клиентов</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h3>22.1. Куда обращаться</h3>
+<div class="tw">
+  <table>
+    <thead><tr><th>Ситуация</th><th>Адресат</th></tr></thead>
+    <tbody>
+      <tr><td>Технические проблемы с программой</td><td>Менеджер точки</td></tr>
+      <tr><td>Проблема с оборудованием</td><td>Менеджер точки, с фиксацией в программе</td></tr>
+      <tr><td>Расхождение по кассе</td><td>Менеджер немедленно, до закрытия смены, с комментарием в отчёте</td></tr>
+      <tr><td>Несправедливый штраф</td><td>Менеджер точки</td></tr>
+      <tr><td>Ошибки в расчёте зарплаты</td><td>Менеджер или владелец через ordaops.kz</td></tr>
+      <tr><td>Утеря доступа, подозрительный запрос доступа</td><td>Менеджер немедленно</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ══════════ ПРИЛОЖЕНИЯ ══════════ -->
+<div class="part-head">Приложения</div>
+
+<h2 id="pa"><span class="num">Приложение А</span>Быстрый чек-лист открытия смены</h2>
+<div class="tw">
+  <table>
+    <thead><tr><th class="num">№</th><th>Действие</th><th class="num">Отметка</th></tr></thead>
+    <tbody>
+      <tr><td class="step">1</td><td>Запустил Orda Point</td><td class="chk">☐</td></tr>
+      <tr><td class="step">2</td><td>Вошёл под своим аккаунтом</td><td class="chk">☐</td></tr>
+      <tr><td class="step">3</td><td>Выбрал правильную точку</td><td class="chk">☐</td></tr>
+      <tr><td class="step">4</td><td>Физически пересчитал наличные</td><td class="chk">☐</td></tr>
+      <tr><td class="step">5</td><td>Ввёл стартовую кассу</td><td class="chk">☐</td></tr>
+      <tr><td class="step">6</td><td>Выбрал тип смены</td><td class="chk">☐</td></tr>
+      <tr><td class="step">7</td><td>Открыл смену</td><td class="chk">☐</td></tr>
+      <tr><td class="step">8</td><td>Прошёл чек-лист приёма или открытия</td><td class="chk">☐</td></tr>
+      <tr><td class="step">9</td><td>Проверил, что очередь отправки пуста</td><td class="chk">☐</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h2 id="pb"><span class="num">Приложение Б</span>Быстрый чек-лист закрытия по точкам</h2>
+<div class="tw">
+  <table>
+    <thead><tr><th>Точка</th><th>Что проверить перед закрытием</th></tr></thead>
+    <tbody>
+      <tr><td><b>F16 Arena</b></td><td>Чек-лист закрытия; итог терминала; наличные; мелочь; завершённые сессии; тех. компенсации; комментарии по техсбоям и пересадкам; пустая очередь</td></tr>
+      <tr><td><b>F16 Extra</b></td><td>Чек-лист закрытия; итог терминала; наличные; мелочь; состояние PS5 и Simracing по ID; тех. компенсации; комментарии по оборудованию; пустая очередь</td></tr>
+      <tr><td><b>F16 Ramen</b></td><td>Чек-лист закрытия; итог терминала; наличные; мелочь; итог системы учёта; возвраты; заявки на склад; комментарии по остаткам; пустая очередь</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h2 id="pv"><span class="num">Приложение В</span>Горячие клавиши и обозначения</h2>
+<div class="tw">
+  <table>
+    <thead><tr><th>Клавиши</th><th>Действие</th></tr></thead>
+    <tbody>
+      <tr><td><span class="keys">F2</span></td><td>Перейти к поиску товара в продажах</td></tr>
+      <tr><td><span class="keys">F4</span></td><td>Открыть подтверждение оплаты, если чек не пуст</td></tr>
+      <tr><td><span class="keys">Esc</span></td><td>Закрыть открытое окно подтверждения</td></tr>
+      <tr><td><span class="keys">Ctrl + Enter</span></td><td>Отправить сменный отчёт</td></tr>
+    </tbody>
+  </table>
+</div>
+<div class="tw">
+  <table>
+    <thead><tr><th>Обозначение</th><th>Значение</th></tr></thead>
+    <tbody>
+      <tr><td>⏳ N в очереди</td><td>Операции ждут отправки на сервер</td></tr>
+      <tr><td>⚠ N требует внимания</td><td>Операции отклонены сервером</td></tr>
+      <tr><td>«Блокирует смену»</td><td>Чек-лист обязателен, без него действие недоступно</td></tr>
+      <tr><td>«КОПИЯ» на чеке</td><td>Повторная печать ранее пробитого чека</td></tr>
+      <tr><td>«Недостача» в отчёте</td><td>ИТОГ отрицательный</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h2 id="pg"><span class="num">Приложение Г</span>Формула дисциплины оператора</h2>
+<div class="call rule">
+  <span class="kicker">Правило смены</span>
+  <p>Не выбрал точку — не начинай смену.<br>
+  Не пересчитал кассу — не вводи сумму.<br>
+  Не зафиксировал проблему — считай, что её не было.<br>
+  Не прошёл чек-лист — смена не закрыта.<br>
+  Очередь не пуста — терминал не выключай.</p>
+</div>
+
+<h2 id="pd"><span class="num">Приложение Д</span>Лист ознакомления сотрудников</h2>
+<div class="tw">
+  <table>
+    <thead><tr><th class="num">№</th><th>Ф. И. О. сотрудника</th><th>Должность</th><th>Точка</th><th>Дата</th><th>Подпись</th></tr></thead>
+    <tbody>
+      <tr class="blank"><td class="step">1</td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr class="blank"><td class="step">2</td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr class="blank"><td class="step">3</td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr class="blank"><td class="step">4</td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr class="blank"><td class="step">5</td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr class="blank"><td class="step">6</td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr class="blank"><td class="step">7</td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr class="blank"><td class="step">8</td><td></td><td></td><td></td><td></td><td></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h2 id="pe"><span class="num">Приложение Е</span>Реестр иллюстраций</h2>
+<p>Список для одного прохода: снять все экраны за одну смену, затем вставить в документ по номерам. Схемы 1–5 уже готовы и вставки не требуют.</p>
+
+<div class="tw">
+  <table>
+    <caption>Скриншоты и фото — снимает менеджер точки</caption>
+    <thead><tr><th class="num">№</th><th>Что снять</th><th>Тип</th><th>Раздел</th></tr></thead>
+    <tbody>
+      <tr><td class="step">1</td><td>Окно настройки устройства: адрес сервера и токен</td><td>Скриншот</td><td>5.1</td></tr>
+      <tr><td class="step">2</td><td>Экран входа оператора</td><td>Скриншот</td><td>5.2</td></tr>
+      <tr><td class="step">3</td><td>QR на терминале + подтверждение на телефоне</td><td>2 скриншота</td><td>5.3</td></tr>
+      <tr><td class="step">4</td><td>Выбор точки</td><td>Скриншот</td><td>5.3</td></tr>
+      <tr><td class="step">5</td><td>Рабочий экран с открытой сменой и всеми вкладками</td><td>Скриншот</td><td>6.1</td></tr>
+      <tr><td class="step">6</td><td>Окно открытия смены со стартовой кассой</td><td>Скриншот</td><td>7</td></tr>
+      <tr><td class="step">7</td><td>Чек-лист с обязательным пунктом и фото</td><td>Скриншот</td><td>8.2</td></tr>
+      <tr><td class="step">8</td><td>Экран продаж с непустым чеком</td><td>Скриншот</td><td>9.1</td></tr>
+      <tr><td class="step">9</td><td>Окно подтверждения оплаты и сдачи</td><td>Скриншот</td><td>9.2</td></tr>
+      <tr><td class="step">10</td><td>Оформление возврата по чеку</td><td>Скриншот</td><td>10</td></tr>
+      <tr><td class="step">11</td><td>История продаж + бумажная копия чека</td><td>Скриншот + фото</td><td>11</td></tr>
+      <tr><td class="step">12</td><td>Оформление долга через сканер</td><td>Скриншот</td><td>12.1</td></tr>
+      <tr><td class="step">13</td><td>История заявок со статусами</td><td>Скриншот</td><td>13</td></tr>
+      <tr><td class="step">14</td><td>Карта зала: свободно, активна, истекло</td><td>Скриншот</td><td>14.1</td></tr>
+      <tr><td class="step">15</td><td>Очередь отправки с операциями</td><td>Скриншот</td><td>15</td></tr>
+      <tr><td class="step">16</td><td>Форма закрытия смены целиком</td><td>Скриншот</td><td>16.2</td></tr>
+      <tr><td class="step">17</td><td>Подтверждение закрытия + печатный сменный отчёт</td><td>Скриншот + фото</td><td>16.5</td></tr>
+      <tr><td class="step">18</td><td>Общий план зала Arena с подписями станций</td><td>Фото</td><td>17.2</td></tr>
+      <tr><td class="step">19</td><td>Зона Extra с подписанными ID 301–304, 777, 888</td><td>Фото</td><td>18.1</td></tr>
+      <tr><td class="step">20</td><td>Эталонное состояние витрины Ramen</td><td>Фото</td><td>19.2</td></tr>
+      <tr><td class="step">21</td><td>Кабинет: обязательные материалы</td><td>Скриншот</td><td>20.5</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="tw">
+  <table>
+    <caption>Схемы — готовы в документе</caption>
+    <thead><tr><th class="num">№</th><th>Схема</th><th>Раздел</th></tr></thead>
+    <tbody>
+      <tr><td class="step">1</td><td>Маршрут смены: вход → открытие → работа → закрытие</td><td>1</td></tr>
+      <tr><td class="step">2</td><td>Чек-листы по ходу смены</td><td>8</td></tr>
+      <tr><td class="step">3</td><td>Жизненный цикл записи долга и окно 15 минут</td><td>12.1</td></tr>
+      <tr><td class="step">4</td><td>Статусы заявки на склад</td><td>13</td></tr>
+      <tr><td class="step">5</td><td>Очередь отправки при работе без интернета</td><td>15</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="call info">
+  <span class="kicker">Инфо · Требования к скриншотам</span>
+  <p>Снимать на рабочем терминале в светлой теме, в рабочее время с реальными данными. Суммы можно оставить, персональные данные клиентов и токен устройства — закрасить. Выноски и номера наносить одним стилем во всём документе.</p>
+</div>
+
+<p class="sign">Регламент оператора Orda Point · Версия 2.0 · Август 2026 · Orda Point 2.17.x · ordaops.kz</p>
+
+</main>
+</div>
