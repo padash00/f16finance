@@ -54,6 +54,17 @@ type OpenAnswerView = {
   } | null
 }
 
+type ChoiceAnswerView = {
+  index: number
+  question: string
+  choices: string[]
+  article_title: string
+  selected: number | null
+  correct: number
+  answered: boolean
+  is_correct: boolean
+}
+
 type DraftQuestion = {
   index: number
   pool: 'choice' | 'open'
@@ -79,6 +90,8 @@ type AttemptRow = {
   completed_at: string | null
   manual_override: boolean
   open_answers: OpenAnswerView[]
+  choice_answers?: ChoiceAnswerView[]
+  answers_hidden?: boolean
 }
 
 const STATUS_LABELS: Record<AttemptRow['status'], { label: string; tone: string }> = {
@@ -179,6 +192,54 @@ function ReadinessGuide({ readiness }: { readiness: Readiness }) {
  * Развёрнутый ответ с оценкой ИИ. Обоснование и цитата из регламента показаны
  * рядом с баллом: без них спор с оценкой невозможен, а спорить будут.
  */
+/** Тестовый вопрос: что спросили, что выбрал человек, где верный вариант. */
+function ChoiceAnswerCard({ item }: { item: ChoiceAnswerView }) {
+  const letters = ['А', 'Б', 'В', 'Г', 'Д']
+  return (
+    <div className="rounded-xl border border-border bg-white p-3 dark:bg-slate-950/40">
+      <div className="flex items-start gap-2">
+        {item.answered ? (
+          item.is_correct ? (
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+          ) : (
+            <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-500" />
+          )
+        ) : (
+          <span className="mt-0.5 h-4 w-4 shrink-0 rounded-full border border-border" />
+        )}
+        <div className="min-w-0">
+          <div className="text-xs font-medium text-foreground">{item.question}</div>
+          <div className="mt-0.5 text-[10px] text-muted-foreground">по регламенту «{item.article_title}»</div>
+        </div>
+      </div>
+
+      <div className="mt-2 space-y-1 pl-6">
+        {item.choices.map((choice, index) => {
+          const chosen = item.selected === index
+          const right = item.correct === index
+          return (
+            <div
+              key={index}
+              className={`text-xs ${
+                right
+                  ? 'font-medium text-emerald-700 dark:text-emerald-300'
+                  : chosen
+                    ? 'font-medium text-rose-600 dark:text-rose-300'
+                    : 'text-muted-foreground'
+              }`}
+            >
+              {letters[index] || index + 1}. {choice}
+              {right && ' ✓'}
+              {chosen && !right && ' — выбрал оператор'}
+            </div>
+          )
+        })}
+        {!item.answered && <div className="text-xs text-muted-foreground">Ответа нет</div>}
+      </div>
+    </div>
+  )
+}
+
 function OpenAnswerCard({
   item,
   canGrade,
@@ -996,19 +1057,21 @@ export default function OperatorExamsPage() {
                   {attempts.map((attempt) => {
                     const meta = STATUS_LABELS[attempt.status]
                     const openCountForAttempt = attempt.open_answers?.length || 0
+                    const choiceCountForAttempt = attempt.choice_answers?.length || 0
+                    const reviewCount = openCountForAttempt + choiceCountForAttempt
                     const expanded = expandedAttempt === attempt.id
                     return (
                       <Fragment key={attempt.id}>
                       <tr className="border-t border-border">
                         <td className="px-4 py-2.5 font-medium text-foreground">
-                          {openCountForAttempt > 0 ? (
+                          {reviewCount > 0 ? (
                             <button
                               onClick={() => setExpandedAttempt(expanded ? null : attempt.id)}
                               className="text-left hover:underline"
                             >
                               {attempt.operator_name}
                               <span className="ml-1.5 text-[10px] text-sky-600 dark:text-sky-300">
-                                {expanded ? '▾' : '▸'} {openCountForAttempt} развёрнутых
+                                {expanded ? '▾' : '▸'} разбор ответов
                               </span>
                             </button>
                           ) : (
@@ -1050,6 +1113,29 @@ export default function OperatorExamsPage() {
                         <tr className="border-t border-border bg-surface-muted">
                           <td colSpan={6} className="px-4 py-3">
                             <div className="space-y-3">
+                              {attempt.answers_hidden && (
+                                <div className="rounded-xl border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs text-body">
+                                  Ответы скрыты: у вас самого есть незавершённая попытка по этому экзамену.
+                                </div>
+                              )}
+
+                              {choiceCountForAttempt > 0 && (
+                                <div className="space-y-2">
+                                  <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                    Тестовые вопросы
+                                  </div>
+                                  {(attempt.choice_answers || []).map((item) => (
+                                    <ChoiceAnswerCard key={`choice-${item.index}`} item={item} />
+                                  ))}
+                                </div>
+                              )}
+
+                              {openCountForAttempt > 0 && (
+                                <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                  Развёрнутые ответы
+                                </div>
+                              )}
+
                               {attempt.open_answers.map((item) => (
                                 <OpenAnswerCard
                                   key={item.index}

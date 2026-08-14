@@ -103,6 +103,28 @@ export async function GET(request: Request) {
         .eq('exam_id', examId)
         .order('created_at', { ascending: true })
 
+      // Разбор с правильными вариантами прячем только от того, кому этот же
+      // экзамен ещё предстоит сдавать: свою незакрытую попытку видно сразу.
+      let viewerHasOpenAttempt = false
+      if (access.staffMember?.id) {
+        const { data: viewerLink } = await supabase
+          .from('operator_staff_links')
+          .select('operator_id')
+          .eq('staff_id', String(access.staffMember.id))
+          .maybeSingle()
+        const viewerOperatorId = (viewerLink as any)?.operator_id
+        if (viewerOperatorId) {
+          const { data: viewerAttempt } = await supabase
+            .from('operator_exam_attempts')
+            .select('id')
+            .eq('exam_id', examId)
+            .eq('operator_id', String(viewerOperatorId))
+            .in('status', ['pending', 'sent', 'in_progress'])
+            .maybeSingle()
+          viewerHasOpenAttempt = !!viewerAttempt
+        }
+      }
+
       const operatorIds = Array.from(new Set(((attempts || []) as any[]).map((a) => a.operator_id)))
       const namesById = new Map<string, string>()
       if (operatorIds.length > 0) {
@@ -123,9 +145,29 @@ export async function GET(request: Request) {
           attempts: ((attempts || []) as any[]).map((a) => {
             const questions = (a.questions || []) as ExamQuestion[]
             const answers = (a.answers || {}) as Record<string, unknown>
-            // Наружу отдаём только развёрнутые ответы с оценкой — их проверяет
-            // человек. Тестовые вопросы вместе с correct не отдаём: страницу
-            // видят и те, кому предстоит сдавать.
+            // Тестовые ответы: что спросили, что выбрал человек и где ошибся.
+            // Без этого владелец видит «7 из 10» и не знает, чего не знает
+            // оператор, — а именно это и нужно, чтобы дообучить.
+            const choiceAnswers = viewerHasOpenAttempt
+              ? []
+              : questions
+                  .map((question, index) => ({ question, index, answer: answers[String(index)] }))
+                  .filter((item) => item.question.type !== 'open')
+                  .map((item) => {
+                    const selected = typeof item.answer === 'number' ? item.answer : null
+                    const correct = Number(item.question.correct ?? -1)
+                    return {
+                      index: item.index,
+                      question: item.question.q,
+                      choices: item.question.choices || [],
+                      article_title: item.question.article_title,
+                      selected,
+                      correct,
+                      answered: selected !== null,
+                      is_correct: selected !== null && selected === correct,
+                    }
+                  })
+
             const openAnswers = questions
               .map((question, index) => ({ question, index, answer: answers[String(index)] }))
               .filter((item) => item.question.type === 'open')
@@ -153,6 +195,8 @@ export async function GET(request: Request) {
               completed_at: a.completed_at,
               manual_override: a.manual_override,
               open_answers: openAnswers,
+              choice_answers: choiceAnswers,
+              answers_hidden: viewerHasOpenAttempt,
               operator_name: namesById.get(String(a.operator_id)) || 'Без имени',
             }
           }),
