@@ -272,30 +272,146 @@ function weekday(iso: string): number {
   return new Date(y, (m || 1) - 1, d || 1).getDay()
 }
 
-// CSV-экспорт рейтинга (открывается в Excel).
-function exportCsv(rows: RankingItem[], bonusPct: number) {
-  const head = ['Оператор', 'Смен', 'Выручка', 'Норма', 'Сверх нормы', 'PI', bonusPct > 0 ? 'Бонус' : '']
-    .filter(Boolean)
-  const lines = rows.map((r) => {
-    const exp = Math.round(expectedTotal(r))
-    const above = Math.round(aboveNorm(r))
-    const cells = [
-      `"${(r.operator_short_name || r.operator_name).replace(/"/g, '""')}"`,
-      r.shifts,
-      Math.round(r.total_revenue),
-      exp,
+/**
+ * Выгрузка эффективности в CSV.
+ *
+ * Сводка «оператор — смен — выручка» не отвечает на главный вопрос владельца:
+ * где именно просели. Поэтому выгружаем три блока в одном файле: каждая смена
+ * с точкой и отклонением от нормы, свод по точкам и свод по операторам. Excel
+ * спокойно читает пустую строку как разделитель разделов.
+ */
+const SHIFT_LABEL: Record<string, string> = { day: 'День', night: 'Ночь' }
+const WEEKDAY_LABEL = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']
+
+function csvCell(value: string | number): string {
+  const text = String(value ?? '')
+  return /[",;\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
+}
+
+function csvRow(cells: Array<string | number>): string {
+  return cells.map(csvCell).join(',')
+}
+
+function exportCsv(
+  rows: RankingItem[],
+  bonusPct: number,
+  companyName: (id: string) => string,
+  period: { from: string; to: string },
+) {
+  const lines: string[] = []
+
+  lines.push(csvRow(['Эффективность операторов']))
+  lines.push(csvRow(['Период', `${period.from} — ${period.to}`]))
+  lines.push(csvRow(['Выгружено', new Date().toLocaleString('ru-RU')]))
+  lines.push('')
+
+  // ── Блок 1: каждая смена ────────────────────────────────────────────────
+  lines.push(csvRow(['СМЕНЫ ПОДРОБНО']))
+  lines.push(
+    csvRow([
+      'Дата', 'День недели', 'Точка', 'Смена', 'Оператор',
+      'Факт, ₸', 'Ожидалось, ₸', 'Отклонение, ₸', 'Отклонение, %', 'PI', 'Источник',
+    ]),
+  )
+
+  const details = rows
+    .flatMap((operator) =>
+      operator.shift_details.map((shift) => ({
+        ...shift,
+        operator: operator.operator_short_name || operator.operator_name,
+      })),
+    )
+    .sort((left, right) => left.date.localeCompare(right.date) || left.shift.localeCompare(right.shift))
+
+  for (const shift of details) {
+    const diff = Math.round(shift.actual - shift.expected)
+    const diffPct = shift.expected > 0 ? Math.round((shift.actual / shift.expected - 1) * 100) : 0
+    lines.push(
+      csvRow([
+        shift.date,
+        WEEKDAY_LABEL[weekday(shift.date)],
+        companyName(shift.company_id),
+        SHIFT_LABEL[shift.shift] || shift.shift,
+        shift.operator,
+        Math.round(shift.actual),
+        Math.round(shift.expected),
+        diff,
+        diffPct,
+        shift.pi.toFixed(2),
+        shift.source || '',
+      ]),
+    )
+  }
+
+  // ── Блок 2: свод по точкам ──────────────────────────────────────────────
+  const byCompany = new Map<string, { actual: number; expected: number; shifts: number; day: number; night: number }>()
+  for (const shift of details) {
+    const key = shift.company_id
+    const entry = byCompany.get(key) || { actual: 0, expected: 0, shifts: 0, day: 0, night: 0 }
+    entry.actual += shift.actual
+    entry.expected += shift.expected
+    entry.shifts += 1
+    if (shift.shift === 'night') entry.night += 1
+    else entry.day += 1
+    byCompany.set(key, entry)
+  }
+
+  lines.push('')
+  lines.push(csvRow(['ИТОГО ПО ТОЧКАМ']))
+  lines.push(
+    csvRow(['Точка', 'Смен', 'Дневных', 'Ночных', 'Факт, ₸', 'Ожидалось, ₸', 'Отклонение, ₸', 'Выполнение, %']),
+  )
+  for (const [companyId, entry] of byCompany) {
+    lines.push(
+      csvRow([
+        companyName(companyId),
+        entry.shifts,
+        entry.day,
+        entry.night,
+        Math.round(entry.actual),
+        Math.round(entry.expected),
+        Math.round(entry.actual - entry.expected),
+        entry.expected > 0 ? Math.round((entry.actual / entry.expected) * 100) : 0,
+      ]),
+    )
+  }
+
+  // ── Блок 3: свод по операторам ──────────────────────────────────────────
+  lines.push('')
+  lines.push(csvRow(['ИТОГО ПО ОПЕРАТОРАМ']))
+  const operatorHead = [
+    'Оператор', 'Смен', 'Точки', 'Факт, ₸', 'Ожидалось, ₸', 'Сверх нормы, ₸',
+    'Выполнение, %', 'Средняя за смену, ₸', 'PI', 'В рейтинге',
+  ]
+  if (bonusPct > 0) operatorHead.push(`Бонус (${bonusPct}%), ₸`)
+  lines.push(csvRow(operatorHead))
+
+  for (const operator of rows) {
+    const expected = Math.round(expectedTotal(operator))
+    const above = Math.round(aboveNorm(operator))
+    const points = Array.from(new Set(operator.shift_details.map((shift) => companyName(shift.company_id))))
+    const cells: Array<string | number> = [
+      operator.operator_short_name || operator.operator_name,
+      operator.shifts,
+      points.join(' · '),
+      Math.round(operator.total_revenue),
+      expected,
       above,
-      r.pi.toFixed(2),
+      expected > 0 ? Math.round((operator.total_revenue / expected) * 100) : 0,
+      Math.round(operator.avg_revenue_per_shift),
+      operator.pi.toFixed(2),
+      operator.qualifying ? 'да' : 'нет (мало смен)',
     ]
     if (bonusPct > 0) cells.push(Math.round(Math.max(0, above) * bonusPct / 100))
-    return cells.join(',')
-  })
-  const csv = '﻿' + [head.join(','), ...lines].join('\n')
+    lines.push(csvRow(cells))
+  }
+
+  const csv = '\ufeff' + lines.join('\n')
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = 'performance.csv'
+  a.download = `performance_${period.from}_${period.to}.csv`
   a.click()
   URL.revokeObjectURL(url)
 }
@@ -556,10 +672,10 @@ export default function PerformancePage() {
               {can('performance.export') && (
               <button
                 type="button"
-                onClick={() => exportCsv(viewQualifying, bonusPct)}
-                disabled={viewQualifying.length === 0}
+                onClick={() => exportCsv(filteredRanking, bonusPct, companyName, range)}
+                disabled={filteredRanking.length === 0}
                 className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-zinc-900/50 border border-border rounded-xl px-3 py-1.5 text-xs font-medium text-body hover:bg-slate-200 dark:hover:bg-zinc-900/70 disabled:opacity-40"
-                title="Скачать CSV (Excel)"
+                title="Выгрузка в Excel: каждая смена, свод по точкам и по операторам"
               >
                 <Download className="w-3.5 h-3.5" />Экспорт
               </button>
@@ -1011,7 +1127,7 @@ function OperatorDetailModal({
             <table className="w-full min-w-[520px] text-sm">
               <thead>
                 <tr className="border-b border-border bg-surface-muted text-[11px] uppercase tracking-wide text-muted-foreground">
-                  <th className="px-3 py-2 text-left font-medium">Дата</th>
+                  <th className="px-3 py-2 text-left font-medium">Дата и день</th>
                   <th className="px-3 py-2 text-left font-medium">Смена</th>
                   <th className="px-3 py-2 text-right font-medium">Ожидалось</th>
                   <th className="px-3 py-2 text-right font-medium">Сделано</th>
@@ -1028,6 +1144,11 @@ function OperatorDetailModal({
                     <tr key={idx} className="border-b border-slate-100 dark:border-white/5 last:border-0 hover:bg-slate-50 dark:hover:bg-white/[0.02]">
                       <td className="px-3 py-2 text-body whitespace-nowrap">
                         {anomaly && <Zap className="inline w-3 h-3 mr-1 text-amber-500" />}{sh.date}
+                        {/* День недели: без него непонятно, почему пятница
+                            выбивается из ряда, а вторник просел. */}
+                        <span className="ml-1.5 text-[11px] uppercase text-muted-foreground">
+                          {WEEKDAY_LABEL[weekday(sh.date)]}
+                        </span>
                       </td>
                       <td className="px-3 py-2 text-muted-foreground">
                         {sh.shift === 'night' ? '🌙 ночь' : '☀️ день'}
