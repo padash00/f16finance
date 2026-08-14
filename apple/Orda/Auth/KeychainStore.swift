@@ -1,4 +1,5 @@
 import Foundation
+import LocalAuthentication
 import Security
 
 /// Хранилище сессии в Keychain.
@@ -61,7 +62,9 @@ struct KeychainStore: Sendable {
         if requiresBiometry {
             // Просим систему не показывать запрос: наличие записи выдаст код
             // ошибки `interactionNotAllowed`.
-            query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail
+            let context = LAContext()
+            context.interactionNotAllowed = true
+            query[kSecUseAuthenticationContext as String] = context
         }
         let status = SecItemCopyMatching(query as CFDictionary, nil)
         return status == errSecSuccess || status == errSecInteractionNotAllowed
@@ -106,7 +109,11 @@ struct KeychainStore: Sendable {
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
-        if let prompt { query[kSecUseOperationPrompt as String] = prompt }
+        if let prompt {
+            let context = LAContext()
+            context.localizedReason = prompt
+            query[kSecUseAuthenticationContext as String] = context
+        }
 
         var item: CFTypeRef?
         guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess else { return nil }

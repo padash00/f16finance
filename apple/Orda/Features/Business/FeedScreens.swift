@@ -1243,10 +1243,6 @@ final class MessagesStore {
         }
     }
 
-    /// Отправка без ожидания: письмо появляется в переписке сразу, на сервер
-    /// уходит фоном. Раньше между нажатием и появлением текста проходила
-    /// секунда с лишним — её съедала проверка текста через ИИ на сервере.
-    @discardableResult
     /// Тихое обновление открытой переписки.
     ///
     /// Без «загружаем»: экран уже показан, и мигать скелетом каждые восемь
@@ -1314,6 +1310,10 @@ final class MessagesStore {
         }
     }
 
+    /// Отправка без ожидания: письмо появляется в переписке сразу, на сервер
+    /// уходит фоном. Раньше между нажатием и появлением текста проходила
+    /// секунда с лишним — её съедала проверка текста через ИИ на сервере.
+    @discardableResult
     func send(_ text: String, to userID: String, senderName: String) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return false }
@@ -1661,7 +1661,7 @@ private struct ConversationPane: View {
                 // Поле очищаем сразу: письмо уже в переписке.
                 let text = draft
                 draft = ""
-                store.send(text, to: thread.otherUserID, senderName: "Вы")
+                _ = store.send(text, to: thread.otherUserID, senderName: "Вы")
             }
             }
         }

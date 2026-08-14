@@ -101,14 +101,8 @@ final class VoiceRecorder {
     }
 
     private func requestPermission() async -> Bool {
-        if #available(iOS 17.0, *) {
-            return await AVAudioApplication.requestRecordPermission()
-        }
-        return await withCheckedContinuation { continuation in
-            AVAudioSession.sharedInstance().requestRecordPermission { granted in
-                continuation.resume(returning: granted)
-            }
-        }
+        // Минимум приложения — iOS 17, поэтому ветки для старых систем нет.
+        await AVAudioApplication.requestRecordPermission()
     }
 
     /// `1:05` — так же, как показывают длину голосового везде.

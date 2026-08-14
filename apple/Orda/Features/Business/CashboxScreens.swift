@@ -906,7 +906,10 @@ private struct PosReturnLineRow: View {
             // на единственной штуке возвращать «часть» нечего.
             if isSelected && line.returnableQuantity > 1 {
                 Stepper(
-                    value: Binding(get: { quantity }, set: onChange),
+                    // Замыкание оборачиваем на месте: передача `onChange`
+                    // напрямую делает его @Sendable-значением и компилятор
+                    // предупреждает о возможной гонке.
+                    value: Binding(get: { quantity }, set: { onChange($0) }),
                     in: 1...line.returnableQuantity,
                     step: 1
                 ) {

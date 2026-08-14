@@ -539,7 +539,7 @@ struct MessageActionsSheet: View {
                         actionRow("Удалить", icon: "trash", tint: Theme.negative) {
                             confirmingDelete = true
                         }
-                    } else if let report {
+                    } else if report != nil {
                         RowDivider()
                         actionRow(
                             reported ? "Жалоба отправлена" : "Пожаловаться",
