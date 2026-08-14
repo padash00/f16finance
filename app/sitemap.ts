@@ -35,6 +35,14 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.8,
     },
     {
+      // Инструкция: её ищут поиском чаще, чем лендинг — «как открыть смену»,
+      // «как привязать кассу».
+      url: `${SITE_URL}/help`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.9,
+    },
+    {
       url: `${SITE_URL}/login`,
       lastModified: new Date(),
       changeFrequency: 'monthly',
