@@ -55,13 +55,13 @@ struct IconFacet: Shape {
 
 /// Полотно иконки.
 ///
-/// Фон — глубокий тёмный с мягким изумрудным свечением от знака: на светлом
-/// и на тёмном домашнем экране иконка одинаково читается. Скруглять углы не
-/// нужно — маску накладывает система.
+/// Знак крупный, фон плотный, свечения нет. Свечение пропадает первым на
+/// маленьком размере — на домашнем экране от иконки оставалось тусклое пятно,
+/// хотя в 1024 она смотрелась хорошо. Скруглять углы не нужно: маску
+/// накладывает система.
 struct IconCanvas: View {
-    /// Доля ширины, которую занимает знак. Apple рекомендует поля ~10–20%,
-    /// иначе знак упирается в маску.
-    private let markScale: CGFloat = 0.52
+    /// Доля ширины под знак. Apple рекомендует поля 10–20 %.
+    private let markScale: CGFloat = 0.68
 
     var body: some View {
         GeometryReader { proxy in
@@ -70,16 +70,13 @@ struct IconCanvas: View {
             let markHeight = markWidth * (108.0 / 96.0)
 
             ZStack {
-                Color(red: 0.027, green: 0.031, blue: 0.035)
-
-                RadialGradient(
+                LinearGradient(
                     colors: [
-                        Color(red: 0.063, green: 0.725, blue: 0.506).opacity(0.30),
-                        .clear,
+                        Color(red: 0.055, green: 0.078, blue: 0.086),
+                        Color(red: 0.016, green: 0.024, blue: 0.028),
                     ],
-                    center: .center,
-                    startRadius: side * 0.05,
-                    endRadius: side * 0.55
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
                 )
 
                 ZStack {
@@ -88,10 +85,10 @@ struct IconCanvas: View {
                             .fill(
                                 LinearGradient(
                                     colors: [
-                                        Color(red: 0.239, green: 0.941, blue: 0.714)
-                                            .opacity(0.98 - Double(index) * 0.16),
-                                        Color(red: 0.063, green: 0.725, blue: 0.506)
-                                            .opacity(0.94 - Double(index) * 0.10),
+                                        Color(red: 0.30, green: 1.0, blue: 0.78)
+                                            .opacity(1.0 - Double(index) * 0.14),
+                                        Color(red: 0.06, green: 0.80, blue: 0.55)
+                                            .opacity(0.98 - Double(index) * 0.10),
                                     ],
                                     startPoint: .top,
                                     endPoint: .bottom
@@ -100,7 +97,6 @@ struct IconCanvas: View {
                     }
                 }
                 .frame(width: markWidth, height: markHeight)
-                .shadow(color: Color(red: 0.063, green: 0.725, blue: 0.506).opacity(0.5), radius: side * 0.06)
             }
         }
     }
