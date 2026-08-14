@@ -273,19 +273,24 @@ function weekday(iso: string): number {
 }
 
 /**
- * Выгрузка эффективности в Excel.
+ * Отчёт по эффективности операторов.
  *
- * Не CSV: русский Excel считает запятую разделителем дробей и сваливает такой
- * файл в один столбец. Здесь готовая книга, числа лежат числами.
+ * Первый лист — «Итог»: он отвечает словами, кто как отработал, без чтения
+ * таблиц. Владельцу нужен вывод, а не массив чисел; цифры лежат дальше для
+ * тех, кто хочет проверить.
  *
- * Шесть листов отвечают на разные вопросы владельца: кто как отработал смену,
- * какой день недели проседает, чем будни отличаются от выходных, какая касса
- * бывает минимальной и максимальной, где просела точка и кто просел из людей.
+ * Ячейки с выполнением нормы залиты цветом: зелёный — сделал больше нормы,
+ * жёлтый — рядом, красный — просел. По такому листу видно за секунду, а не
+ * за пять минут сравнения столбцов.
  */
 const SHIFT_LABEL: Record<string, string> = { day: 'День', night: 'Ночь' }
 const WEEKDAY_LABEL = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']
-/** Порядок с понедельника: воскресенье первым в отчёте читается неверно. */
 const WEEKDAY_ORDER = [1, 2, 3, 4, 5, 6, 0]
+
+const FILL_GOOD = 'FFD9F2E3'
+const FILL_WARN = 'FFFDF0D5'
+const FILL_BAD = 'FFFBE0DE'
+const FILL_HEAD = 'FF10312A'
 
 function isWeekend(iso: string): boolean {
   const day = weekday(iso)
@@ -304,6 +309,23 @@ function average(values: number[]): number {
   return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length)
 }
 
+/** Словесная оценка: цифра 88% ничего не говорит, «просел» — говорит. */
+function verdict(percent: number): string {
+  if (percent >= 110) return 'Отлично'
+  if (percent >= 100) return 'Норма выполнена'
+  if (percent >= 95) return 'Чуть ниже нормы'
+  if (percent >= 85) return 'Просел'
+  return 'Сильно просел'
+}
+
+function fillFor(percent: number): string {
+  if (percent >= 100) return FILL_GOOD
+  if (percent >= 95) return FILL_WARN
+  return FILL_BAD
+}
+
+const EXCEL_MONEY_FMT = '# ##0 " ₸"'
+
 type FlatShift = {
   date: string
   shift: string
@@ -321,7 +343,7 @@ async function exportCsv(
   companyName: (id: string) => string,
   period: { from: string; to: string },
 ) {
-  const XLSX = await import('xlsx')
+  const ExcelJS = (await import('exceljs')).default
 
   const details: FlatShift[] = rows
     .flatMap((operator) =>
@@ -332,202 +354,367 @@ async function exportCsv(
     )
     .sort((left, right) => left.date.localeCompare(right.date) || left.shift.localeCompare(right.shift))
 
-  const book = XLSX.utils.book_new()
-  const addSheet = (name: string, data: Record<string, string | number>[], widths: number[]) => {
-    const sheet = XLSX.utils.json_to_sheet(data)
-    sheet['!cols'] = widths.map((wch) => ({ wch }))
-    sheet['!freeze'] = { xSplit: 0, ySplit: 1 }
-    XLSX.utils.book_append_sheet(book, sheet, name)
+  const book = new ExcelJS.Workbook()
+  book.creator = 'Orda'
+  book.created = new Date()
+
+  /** Шапка таблицы: тёмная плашка, белый текст, закреплённая строка. */
+  const styleHeader = (sheet: any) => {
+    const header = sheet.getRow(1)
+    header.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 }
+    header.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: FILL_HEAD } }
+    header.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
+    header.height = 28
+    sheet.views = [{ state: 'frozen', ySplit: 1 }]
   }
 
-  // ── 1. Каждая смена ─────────────────────────────────────────────────────
-  addSheet(
-    'Смены',
-    details.map((shift) => ({
-      'Дата': shift.date,
-      'День недели': WEEKDAY_LABEL[weekday(shift.date)],
-      'Тип дня': isWeekend(shift.date) ? 'Выходной' : 'Будни',
-      'Точка': companyName(shift.company_id),
-      'Смена': SHIFT_LABEL[shift.shift] || shift.shift,
-      'Оператор': shift.operator,
-      'Ожидалось, ₸': Math.round(shift.expected),
-      'Сделал, ₸': Math.round(shift.actual),
-      'Отклонение, ₸': Math.round(shift.actual - shift.expected),
-      'Выполнение, %': shift.expected > 0 ? Math.round((shift.actual / shift.expected) * 100) : 0,
-      'PI': Number(shift.pi.toFixed(2)),
-      'Источник нормы': shift.source || '',
-    })),
-    [12, 12, 10, 16, 9, 16, 14, 13, 15, 14, 7, 14],
-  )
+  const paintPercent = (sheet: any, columnKey: string) => {
+    sheet.eachRow((row: any, index: number) => {
+      if (index === 1) return
+      const cell = row.getCell(columnKey)
+      const value = Number(cell.value)
+      if (!Number.isFinite(value) || value === 0) return
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillFor(value) } }
+      cell.numFmt = '0"%"'
+      cell.font = { bold: true }
+    })
+  }
 
-  // ── 2. По дням: календарь выручки ───────────────────────────────────────
-  const byDate = new Map<string, { actual: number; expected: number; shifts: number; operators: Set<string> }>()
+  const paintMoney = (sheet: any, keys: string[]) => {
+    sheet.eachRow((row: any, index: number) => {
+      if (index === 1) return
+      for (const key of keys) {
+        const cell = row.getCell(key)
+        if (typeof cell.value === 'number') cell.numFmt = EXCEL_MONEY_FMT
+      }
+    })
+  }
+
+  // ── Общие цифры периода ─────────────────────────────────────────────────
+  const totalActual = details.reduce((sum, shift) => sum + shift.actual, 0)
+  const totalExpected = details.reduce((sum, shift) => sum + shift.expected, 0)
+  const totalPercent = totalExpected > 0 ? Math.round((totalActual / totalExpected) * 100) : 0
+
+  const operatorStats = rows
+    .map((operator) => {
+      const expected = expectedTotal(operator)
+      const actuals = operator.shift_details.map((shift) => shift.actual)
+      const workShifts = operator.shift_details.filter((shift) => !isWeekend(shift.date))
+      const weekendShifts = operator.shift_details.filter((shift) => isWeekend(shift.date))
+      const percent = expected > 0 ? Math.round((operator.total_revenue / expected) * 100) : 0
+      return {
+        name: operator.operator_short_name || operator.operator_name,
+        shifts: operator.shifts,
+        expected: Math.round(expected),
+        actual: Math.round(operator.total_revenue),
+        diff: Math.round(operator.total_revenue - expected),
+        percent,
+        avg: Math.round(operator.avg_revenue_per_shift),
+        min: actuals.length ? Math.round(Math.min(...actuals)) : 0,
+        max: actuals.length ? Math.round(Math.max(...actuals)) : 0,
+        med: median(actuals),
+        workAvg: average(workShifts.map((shift) => shift.actual)),
+        weekendAvg: average(weekendShifts.map((shift) => shift.actual)),
+        points: Array.from(new Set(operator.shift_details.map((shift) => companyName(shift.company_id)))),
+        qualifying: operator.qualifying,
+        pi: operator.pi,
+      }
+    })
+    .sort((left, right) => right.percent - left.percent)
+
+  // Худший день недели по сети: считаем по всем сменам сразу.
+  const weekdayTotals = new Map<number, { actual: number; expected: number; shifts: number }>()
   for (const shift of details) {
-    const entry = byDate.get(shift.date) || { actual: 0, expected: 0, shifts: 0, operators: new Set<string>() }
+    const day = weekday(shift.date)
+    const entry = weekdayTotals.get(day) || { actual: 0, expected: 0, shifts: 0 }
     entry.actual += shift.actual
     entry.expected += shift.expected
     entry.shifts += 1
-    entry.operators.add(shift.operator)
-    byDate.set(shift.date, entry)
+    weekdayTotals.set(day, entry)
+  }
+  const weekdayRanked = Array.from(weekdayTotals.entries())
+    .map(([day, entry]) => ({
+      day,
+      percent: entry.expected > 0 ? Math.round((entry.actual / entry.expected) * 100) : 0,
+      shifts: entry.shifts,
+    }))
+    .sort((left, right) => right.percent - left.percent)
+
+  // ── Лист 1: Итог словами ────────────────────────────────────────────────
+  const summary = book.addWorksheet('Итог')
+  summary.columns = [{ width: 34 }, { width: 20 }, { width: 20 }, { width: 16 }, { width: 46 }]
+
+  const title = summary.addRow([`Эффективность операторов за ${period.from} — ${period.to}`])
+  title.font = { bold: true, size: 14 }
+  summary.mergeCells('A1:E1')
+  summary.addRow([])
+
+  const totalRow = summary.addRow([
+    'Всего по периоду',
+    `Смен: ${details.length}`,
+    `Ожидалось: ${totalExpected.toLocaleString('ru-RU')} ₸`,
+    `Сделано: ${totalActual.toLocaleString('ru-RU')} ₸`,
+    `${verdict(totalPercent)} — ${totalPercent}% нормы (${totalActual >= totalExpected ? '+' : ''}${(totalActual - totalExpected).toLocaleString('ru-RU')} ₸)`,
+  ])
+  totalRow.font = { bold: true }
+  totalRow.getCell(5).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillFor(totalPercent) } }
+  summary.addRow([])
+
+  const bestDay = weekdayRanked[0]
+  const worstDay = weekdayRanked[weekdayRanked.length - 1]
+  if (bestDay && worstDay) {
+    summary.addRow(['Лучший день недели', WEEKDAY_LABEL[bestDay.day], `${bestDay.percent}% нормы`, `смен: ${bestDay.shifts}`])
+    summary.addRow(['Слабый день недели', WEEKDAY_LABEL[worstDay.day], `${worstDay.percent}% нормы`, `смен: ${worstDay.shifts}`])
+    summary.addRow([])
   }
 
-  addSheet(
-    'По дням',
-    Array.from(byDate.entries())
-      .sort((left, right) => left[0].localeCompare(right[0]))
-      .map(([date, entry]) => ({
-        'Дата': date,
-        'День недели': WEEKDAY_LABEL[weekday(date)],
-        'Тип дня': isWeekend(date) ? 'Выходной' : 'Будни',
-        'Смен': entry.shifts,
-        'Кто работал': Array.from(entry.operators).join(' · '),
-        'Ожидалось, ₸': Math.round(entry.expected),
-        'Касса за день, ₸': Math.round(entry.actual),
-        'Отклонение, ₸': Math.round(entry.actual - entry.expected),
-        'Выполнение, %': entry.expected > 0 ? Math.round((entry.actual / entry.expected) * 100) : 0,
-      })),
-    [12, 12, 10, 7, 26, 14, 17, 15, 14],
-  )
+  const peopleTitle = summary.addRow(['Кто как отработал'])
+  peopleTitle.font = { bold: true, size: 12 }
+  const peopleHead = summary.addRow(['Оператор', 'Смен', 'Выполнение', 'Отклонение', 'Что это значит'])
+  peopleHead.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+  peopleHead.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: FILL_HEAD } }
 
-  // ── 3. По дням недели: какой день проседает ─────────────────────────────
-  const byWeekday = new Map<string, { actual: number[]; expected: number; shifts: number }>()
-  for (const shift of details) {
-    const key = `${shift.company_id}|${weekday(shift.date)}`
-    const entry = byWeekday.get(key) || { actual: [], expected: 0, shifts: 0 }
-    entry.actual.push(shift.actual)
-    entry.expected += shift.expected
-    entry.shifts += 1
-    byWeekday.set(key, entry)
+  for (const person of operatorStats) {
+    const weekendHint =
+      person.workAvg > 0 && person.weekendAvg > 0
+        ? person.weekendAvg > person.workAvg * 1.1
+          ? ' Сильнее в выходные.'
+          : person.workAvg > person.weekendAvg * 1.1
+            ? ' Сильнее в будни.'
+            : ''
+        : ''
+    const row = summary.addRow([
+      person.name + (person.qualifying ? '' : ' (мало смен)'),
+      person.shifts,
+      person.percent,
+      person.diff,
+      `${verdict(person.percent)}.${weekendHint} Средняя смена ${person.avg.toLocaleString('ru-RU')} ₸, разброс ${person.min.toLocaleString('ru-RU')}–${person.max.toLocaleString('ru-RU')} ₸.`,
+    ])
+    row.getCell(3).numFmt = '0"%"'
+    row.getCell(3).font = { bold: true }
+    row.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillFor(person.percent) } }
+    row.getCell(4).numFmt = EXCEL_MONEY_FMT
   }
 
-  const weekdayRows: Record<string, string | number>[] = []
-  for (const [key, entry] of byWeekday) {
-    const [companyId, dayRaw] = key.split('|')
-    const day = Number(dayRaw)
-    const total = entry.actual.reduce((sum, value) => sum + value, 0)
-    weekdayRows.push({
-      'Точка': companyName(companyId),
-      'День недели': WEEKDAY_LABEL[day],
-      'Тип дня': day === 0 || day === 6 ? 'Выходной' : 'Будни',
-      'Смен': entry.shifts,
-      'Средняя касса, ₸': average(entry.actual),
-      'Минимум, ₸': Math.round(Math.min(...entry.actual)),
-      'Максимум, ₸': Math.round(Math.max(...entry.actual)),
-      'Медиана, ₸': median(entry.actual),
-      'Ожидалось всего, ₸': Math.round(entry.expected),
-      'Сделано всего, ₸': Math.round(total),
-      'Выполнение, %': entry.expected > 0 ? Math.round((total / entry.expected) * 100) : 0,
-      _order: WEEKDAY_ORDER.indexOf(day),
+  // ── Лист 2: операторы в цифрах ──────────────────────────────────────────
+  const people = book.addWorksheet('Операторы')
+  people.columns = [
+    { header: 'Оператор', key: 'name', width: 20 },
+    { header: 'Смен', key: 'shifts', width: 8 },
+    { header: 'Точки', key: 'points', width: 24 },
+    { header: 'Ожидалось', key: 'expected', width: 15 },
+    { header: 'Сделал', key: 'actual', width: 15 },
+    { header: 'Отклонение', key: 'diff', width: 15 },
+    { header: 'Выполнение', key: 'percent', width: 13 },
+    { header: 'Оценка', key: 'verdict', width: 18 },
+    { header: 'Средняя смена', key: 'avg', width: 15 },
+    { header: 'Мин. смена', key: 'min', width: 14 },
+    { header: 'Макс. смена', key: 'max', width: 14 },
+    { header: 'Медиана', key: 'med', width: 14 },
+    { header: 'Будни, средняя', key: 'workAvg', width: 16 },
+    { header: 'Выходные, средняя', key: 'weekendAvg', width: 18 },
+    ...(bonusPct > 0 ? [{ header: `Бонус ${bonusPct}%`, key: 'bonus', width: 14 }] : []),
+  ]
+  for (const person of operatorStats) {
+    people.addRow({
+      name: person.name,
+      shifts: person.shifts,
+      points: person.points.join(' · '),
+      expected: person.expected,
+      actual: person.actual,
+      diff: person.diff,
+      percent: person.percent,
+      verdict: verdict(person.percent),
+      avg: person.avg,
+      min: person.min,
+      max: person.max,
+      med: person.med,
+      workAvg: person.workAvg,
+      weekendAvg: person.weekendAvg,
+      ...(bonusPct > 0 ? { bonus: Math.round(Math.max(0, person.diff) * bonusPct / 100) } : {}),
     })
   }
-  weekdayRows.sort(
-    (left, right) =>
-      String(left['Точка']).localeCompare(String(right['Точка'])) || Number(left._order) - Number(right._order),
-  )
-  for (const row of weekdayRows) delete row._order
+  styleHeader(people)
+  paintPercent(people, 'percent')
+  paintMoney(people, ['expected', 'actual', 'diff', 'avg', 'min', 'max', 'med', 'workAvg', 'weekendAvg', 'bonus'])
 
-  addSheet('По дням недели', weekdayRows, [16, 12, 10, 7, 17, 13, 14, 13, 18, 17, 14])
-
-  // ── 4. Будни и выходные по операторам ───────────────────────────────────
-  const byOperatorSplit = new Map<string, { work: number[]; weekend: number[] }>()
+  // ── Лист 3: дни недели ──────────────────────────────────────────────────
+  const weekdaySheet = book.addWorksheet('Дни недели')
+  weekdaySheet.columns = [
+    { header: 'Точка', key: 'point', width: 18 },
+    { header: 'День', key: 'day', width: 10 },
+    { header: 'Тип дня', key: 'kind', width: 12 },
+    { header: 'Смен', key: 'shifts', width: 8 },
+    { header: 'Ожидалось', key: 'expected', width: 15 },
+    { header: 'Сделано', key: 'actual', width: 15 },
+    { header: 'Выполнение', key: 'percent', width: 13 },
+    { header: 'Средняя смена', key: 'avg', width: 15 },
+    { header: 'Мин.', key: 'min', width: 13 },
+    { header: 'Макс.', key: 'max', width: 13 },
+  ]
+  const byWeekday = new Map<string, { actual: number[]; expected: number }>()
   for (const shift of details) {
-    const entry = byOperatorSplit.get(shift.operator) || { work: [], weekend: [] }
-    if (isWeekend(shift.date)) entry.weekend.push(shift.actual)
-    else entry.work.push(shift.actual)
-    byOperatorSplit.set(shift.operator, entry)
+    const key = `${shift.company_id}|${weekday(shift.date)}`
+    const entry = byWeekday.get(key) || { actual: [], expected: 0 }
+    entry.actual.push(shift.actual)
+    entry.expected += shift.expected
+    byWeekday.set(key, entry)
   }
-
-  addSheet(
-    'Будни и выходные',
-    Array.from(byOperatorSplit.entries()).map(([operator, entry]) => {
-      const workAvg = average(entry.work)
-      const weekendAvg = average(entry.weekend)
+  const weekdayList = Array.from(byWeekday.entries())
+    .map(([key, entry]) => {
+      const [companyId, dayRaw] = key.split('|')
+      const day = Number(dayRaw)
+      const total = entry.actual.reduce((sum, value) => sum + value, 0)
       return {
-        'Оператор': operator,
-        'Смен в будни': entry.work.length,
-        'Средняя в будни, ₸': workAvg,
-        'Смен в выходные': entry.weekend.length,
-        'Средняя в выходные, ₸': weekendAvg,
-        'Разница, ₸': weekendAvg && workAvg ? weekendAvg - workAvg : 0,
-        'Разница, %': workAvg > 0 && weekendAvg > 0 ? Math.round((weekendAvg / workAvg - 1) * 100) : 0,
+        point: companyName(companyId),
+        day,
+        kind: day === 0 || day === 6 ? 'Выходной' : 'Будни',
+        shifts: entry.actual.length,
+        expected: Math.round(entry.expected),
+        actual: Math.round(total),
+        percent: entry.expected > 0 ? Math.round((total / entry.expected) * 100) : 0,
+        avg: average(entry.actual),
+        min: Math.round(Math.min(...entry.actual)),
+        max: Math.round(Math.max(...entry.actual)),
       }
-    }),
-    [18, 14, 20, 16, 22, 13, 12],
-  )
+    })
+    .sort(
+      (left, right) =>
+        left.point.localeCompare(right.point) || WEEKDAY_ORDER.indexOf(left.day) - WEEKDAY_ORDER.indexOf(right.day),
+    )
+  for (const item of weekdayList) weekdaySheet.addRow({ ...item, day: WEEKDAY_LABEL[item.day] })
+  styleHeader(weekdaySheet)
+  paintPercent(weekdaySheet, 'percent')
+  paintMoney(weekdaySheet, ['expected', 'actual', 'avg', 'min', 'max'])
 
-  // ── 5. По точкам ────────────────────────────────────────────────────────
+  // ── Лист 4: календарь по дням ───────────────────────────────────────────
+  const daySheet = book.addWorksheet('По дням')
+  daySheet.columns = [
+    { header: 'Дата', key: 'date', width: 13 },
+    { header: 'День', key: 'weekday', width: 9 },
+    { header: 'Тип дня', key: 'kind', width: 11 },
+    { header: 'Смен', key: 'shifts', width: 8 },
+    { header: 'Кто работал', key: 'who', width: 28 },
+    { header: 'Ожидалось', key: 'expected', width: 15 },
+    { header: 'Касса за день', key: 'actual', width: 16 },
+    { header: 'Выполнение', key: 'percent', width: 13 },
+  ]
+  const byDate = new Map<string, { actual: number; expected: number; shifts: number; who: Set<string> }>()
+  for (const shift of details) {
+    const entry = byDate.get(shift.date) || { actual: 0, expected: 0, shifts: 0, who: new Set<string>() }
+    entry.actual += shift.actual
+    entry.expected += shift.expected
+    entry.shifts += 1
+    entry.who.add(shift.operator)
+    byDate.set(shift.date, entry)
+  }
+  for (const [date, entry] of Array.from(byDate.entries()).sort((l, r) => l[0].localeCompare(r[0]))) {
+    daySheet.addRow({
+      date,
+      weekday: WEEKDAY_LABEL[weekday(date)],
+      kind: isWeekend(date) ? 'Выходной' : 'Будни',
+      shifts: entry.shifts,
+      who: Array.from(entry.who).join(' · '),
+      expected: Math.round(entry.expected),
+      actual: Math.round(entry.actual),
+      percent: entry.expected > 0 ? Math.round((entry.actual / entry.expected) * 100) : 0,
+    })
+  }
+  styleHeader(daySheet)
+  paintPercent(daySheet, 'percent')
+  paintMoney(daySheet, ['expected', 'actual'])
+
+  // ── Лист 5: смены ───────────────────────────────────────────────────────
+  const shiftSheet = book.addWorksheet('Смены')
+  shiftSheet.columns = [
+    { header: 'Дата', key: 'date', width: 13 },
+    { header: 'День', key: 'weekday', width: 9 },
+    { header: 'Тип дня', key: 'kind', width: 11 },
+    { header: 'Точка', key: 'point', width: 18 },
+    { header: 'Смена', key: 'shift', width: 10 },
+    { header: 'Оператор', key: 'operator', width: 18 },
+    { header: 'Ожидалось', key: 'expected', width: 15 },
+    { header: 'Сделал', key: 'actual', width: 15 },
+    { header: 'Отклонение', key: 'diff', width: 15 },
+    { header: 'Выполнение', key: 'percent', width: 13 },
+    { header: 'Оценка', key: 'verdict', width: 18 },
+  ]
+  for (const shift of details) {
+    const percent = shift.expected > 0 ? Math.round((shift.actual / shift.expected) * 100) : 0
+    shiftSheet.addRow({
+      date: shift.date,
+      weekday: WEEKDAY_LABEL[weekday(shift.date)],
+      kind: isWeekend(shift.date) ? 'Выходной' : 'Будни',
+      point: companyName(shift.company_id),
+      shift: SHIFT_LABEL[shift.shift] || shift.shift,
+      operator: shift.operator,
+      expected: Math.round(shift.expected),
+      actual: Math.round(shift.actual),
+      diff: Math.round(shift.actual - shift.expected),
+      percent,
+      verdict: verdict(percent),
+    })
+  }
+  styleHeader(shiftSheet)
+  paintPercent(shiftSheet, 'percent')
+  paintMoney(shiftSheet, ['expected', 'actual', 'diff'])
+
+  // ── Лист 6: точки ───────────────────────────────────────────────────────
+  const pointSheet = book.addWorksheet('Точки')
+  pointSheet.columns = [
+    { header: 'Точка', key: 'point', width: 18 },
+    { header: 'Смен', key: 'shifts', width: 8 },
+    { header: 'Дневных', key: 'day', width: 10 },
+    { header: 'Ночных', key: 'night', width: 10 },
+    { header: 'Ожидалось', key: 'expected', width: 15 },
+    { header: 'Сделано', key: 'actual', width: 15 },
+    { header: 'Выполнение', key: 'percent', width: 13 },
+    { header: 'Средняя смена', key: 'avg', width: 15 },
+    { header: 'Будни, средняя', key: 'workAvg', width: 16 },
+    { header: 'Выходные, средняя', key: 'weekendAvg', width: 18 },
+  ]
   const byCompany = new Map<
     string,
-    { actual: number[]; expected: number; shifts: number; day: number; night: number; weekend: number[]; work: number[] }
+    { actual: number[]; expected: number; day: number; night: number; work: number[]; weekend: number[] }
   >()
   for (const shift of details) {
     const entry =
-      byCompany.get(shift.company_id) ||
-      { actual: [], expected: 0, shifts: 0, day: 0, night: 0, weekend: [], work: [] }
+      byCompany.get(shift.company_id) || { actual: [], expected: 0, day: 0, night: 0, work: [], weekend: [] }
     entry.actual.push(shift.actual)
     entry.expected += shift.expected
-    entry.shifts += 1
     if (shift.shift === 'night') entry.night += 1
     else entry.day += 1
     if (isWeekend(shift.date)) entry.weekend.push(shift.actual)
     else entry.work.push(shift.actual)
     byCompany.set(shift.company_id, entry)
   }
+  for (const [companyId, entry] of byCompany) {
+    const total = entry.actual.reduce((sum, value) => sum + value, 0)
+    pointSheet.addRow({
+      point: companyName(companyId),
+      shifts: entry.actual.length,
+      day: entry.day,
+      night: entry.night,
+      expected: Math.round(entry.expected),
+      actual: Math.round(total),
+      percent: entry.expected > 0 ? Math.round((total / entry.expected) * 100) : 0,
+      avg: average(entry.actual),
+      workAvg: average(entry.work),
+      weekendAvg: average(entry.weekend),
+    })
+  }
+  styleHeader(pointSheet)
+  paintPercent(pointSheet, 'percent')
+  paintMoney(pointSheet, ['expected', 'actual', 'avg', 'workAvg', 'weekendAvg'])
 
-  addSheet(
-    'По точкам',
-    Array.from(byCompany.entries()).map(([companyId, entry]) => {
-      const total = entry.actual.reduce((sum, value) => sum + value, 0)
-      return {
-        'Точка': companyName(companyId),
-        'Смен': entry.shifts,
-        'Дневных': entry.day,
-        'Ночных': entry.night,
-        'Ожидалось, ₸': Math.round(entry.expected),
-        'Сделали, ₸': Math.round(total),
-        'Отклонение, ₸': Math.round(total - entry.expected),
-        'Выполнение, %': entry.expected > 0 ? Math.round((total / entry.expected) * 100) : 0,
-        'Средняя касса, ₸': average(entry.actual),
-        'Минимум, ₸': Math.round(Math.min(...entry.actual)),
-        'Максимум, ₸': Math.round(Math.max(...entry.actual)),
-        'Медиана, ₸': median(entry.actual),
-        'Средняя в будни, ₸': average(entry.work),
-        'Средняя в выходные, ₸': average(entry.weekend),
-      }
-    }),
-    [16, 7, 9, 9, 14, 14, 15, 14, 17, 13, 14, 13, 19, 21],
-  )
-
-  // ── 6. По операторам ────────────────────────────────────────────────────
-  addSheet(
-    'По операторам',
-    rows.map((operator) => {
-      const expected = Math.round(expectedTotal(operator))
-      const above = Math.round(aboveNorm(operator))
-      const actuals = operator.shift_details.map((shift) => shift.actual)
-      const points = Array.from(new Set(operator.shift_details.map((shift) => companyName(shift.company_id))))
-      const row: Record<string, string | number> = {
-        'Оператор': operator.operator_short_name || operator.operator_name,
-        'Смен': operator.shifts,
-        'Точки': points.join(' · '),
-        'Ожидалось, ₸': expected,
-        'Сделал, ₸': Math.round(operator.total_revenue),
-        'Сверх нормы, ₸': above,
-        'Выполнение, %': expected > 0 ? Math.round((operator.total_revenue / expected) * 100) : 0,
-        'Средняя за смену, ₸': Math.round(operator.avg_revenue_per_shift),
-        'Минимум, ₸': actuals.length ? Math.round(Math.min(...actuals)) : 0,
-        'Максимум, ₸': actuals.length ? Math.round(Math.max(...actuals)) : 0,
-        'Медиана, ₸': median(actuals),
-        'PI': Number(operator.pi.toFixed(2)),
-        'В рейтинге': operator.qualifying ? 'да' : 'нет (мало смен)',
-      }
-      if (bonusPct > 0) row[`Бонус ${bonusPct}%, ₸`] = Math.round(Math.max(0, above) * bonusPct / 100)
-      return row
-    }),
-    [18, 7, 24, 14, 14, 15, 14, 18, 13, 14, 13, 7, 16, 14],
-  )
-
-  XLSX.writeFile(book, `Эффективность ${period.from} — ${period.to}.xlsx`)
+  const buffer = await book.xlsx.writeBuffer()
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `Эффективность ${period.from} — ${period.to}.xlsx`
+  link.click()
+  URL.revokeObjectURL(url)
 }
 
 export default function PerformancePage() {
