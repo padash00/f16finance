@@ -660,6 +660,8 @@ function isMandatoryStaffPath(role: StaffRole, pathname: string): boolean {
  */
 const MOVED_PATHS: Record<string, string> = {
   '/regulations': '/knowledge-admin',
+  // Инструкция по разделу — справка, доступна всем, у кого открыт сам раздел.
+  '/regulations/guide': '/knowledge-admin',
   '/regulations/exams': '/operator-exams',
   '/regulations/setup': '/knowledge-setup',
 }

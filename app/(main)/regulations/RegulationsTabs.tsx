@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { BookOpen, GraduationCap, Sparkles, type LucideIcon } from 'lucide-react'
+import { BookOpen, BookOpenCheck, GraduationCap, Sparkles, type LucideIcon } from 'lucide-react'
 
 type Tab = {
   href: string
@@ -22,6 +22,7 @@ const TABS: Tab[] = [
   { href: '/regulations', label: 'Правила и чек-листы', note: 'Материалы, чек-листы, журнал', icon: BookOpen },
   { href: '/regulations/exams', label: 'Экзамены', note: 'Аттестация операторов', icon: GraduationCap },
   { href: '/regulations/setup', label: 'Настройка', note: 'Ниша, каркас тем, сбор через ИИ', icon: Sparkles },
+  { href: '/regulations/guide', label: 'Инструкция', note: 'Что где заполнять и в каком порядке', icon: BookOpenCheck },
 ]
 
 export default function RegulationsTabs() {
