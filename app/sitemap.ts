@@ -43,6 +43,14 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.9,
     },
     {
+      // Регламент оператора: типовой документ без данных клуба — его ищут
+      // владельцы, которым нужно выдать сотруднику правила смены.
+      url: `${SITE_URL}/help/operator`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.7,
+    },
+    {
       url: `${SITE_URL}/login`,
       lastModified: new Date(),
       changeFrequency: 'monthly',
