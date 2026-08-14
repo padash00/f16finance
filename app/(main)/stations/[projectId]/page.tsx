@@ -1,6 +1,8 @@
 'use client'
 
 import { Suspense, useEffect, useState, useCallback, useRef, useMemo } from 'react'
+
+import { HardwarePicker, type HardwareItem } from '@/components/admin/hardware-picker'
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   Plus, Pencil, Trash2, Save, X, Monitor, Clock, Banknote,
@@ -35,6 +37,10 @@ type Zone = {
   monitor?: string | null
   refresh_hz?: number | null
   peripherals?: string | null
+  mouse?: string | null
+  keyboard?: string | null
+  headset?: string | null
+  chair?: string | null
   grid_x: number | null; grid_y: number | null; grid_w: number | null; grid_h: number | null; color: string | null
 }
 type Station = {
@@ -142,6 +148,10 @@ function arenaRowToZone(row: Record<string, unknown>): Zone {
     monitor: (row.monitor as string) ?? null,
     refresh_hz: row.refresh_hz != null ? Number(row.refresh_hz) : null,
     peripherals: (row.peripherals as string) ?? null,
+    mouse: (row.mouse as string) ?? null,
+    keyboard: (row.keyboard as string) ?? null,
+    headset: (row.headset as string) ?? null,
+    chair: (row.chair as string) ?? null,
     extension_hourly_price: (() => {
       if (extH == null || extH === '') return null
       const n = Number(extH)
@@ -1035,7 +1045,12 @@ function StationsPageContent() {
   const [zoneEditName, setZoneEditName] = useState('')
   const [zoneEditHourly, setZoneEditHourly] = useState('')
   // Характеристики зоны: их спрашивает клиент у стойки и аттестация у оператора.
-  const [zoneSpecs, setZoneSpecs] = useState({ cpu: '', gpu: '', ram: '', monitor: '', refresh_hz: '', peripherals: '' })
+  const [zoneSpecs, setZoneSpecs] = useState({
+    cpu: '', gpu: '', ram: '', monitor: '', refresh_hz: '',
+    mouse: '', keyboard: '', headset: '', chair: '',
+  })
+  // Справочник моделей: грузим один раз, дальше фильтруем на клиенте.
+  const [hardware, setHardware] = useState<HardwareItem[]>([])
 
   const [crudDialog, setCrudDialog] = useState<CrudDialogState>(null)
   const [newStationName, setNewStationName] = useState('')
@@ -1325,6 +1340,22 @@ function StationsPageContent() {
     } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
   }
 
+  useEffect(() => {
+    fetch('/api/admin/hardware-catalog', { cache: 'no-store' })
+      .then((response) => response.json())
+      .then((payload) => setHardware(payload?.data?.items || []))
+      .catch(() => setHardware([]))
+  }, [])
+
+  // Именем Map в этом файле занята иконка из lucide, поэтому обычный объект.
+  const hardwareByKind = useMemo(() => {
+    const grouped: Record<string, HardwareItem[]> = {}
+    for (const item of hardware) {
+      ;(grouped[item.kind] ||= []).push(item)
+    }
+    return grouped
+  }, [hardware])
+
   async function handleSaveZoneEdit(zoneId: string) {
     const name = zoneEditName.trim()
     if (!name) {
@@ -1353,7 +1384,10 @@ function StationsPageContent() {
         ram: zoneSpecs.ram,
         monitor: zoneSpecs.monitor,
         refresh_hz: zoneSpecs.refresh_hz === '' ? null : Number(zoneSpecs.refresh_hz),
-        peripherals: zoneSpecs.peripherals,
+        mouse: zoneSpecs.mouse,
+        keyboard: zoneSpecs.keyboard,
+        headset: zoneSpecs.headset,
+        chair: zoneSpecs.chair,
       })
       if (!out.data || typeof out.data !== 'object') throw new Error('Нет данных зоны')
       const z = arenaRowToZone(out.data as Record<string, unknown>)
@@ -2122,24 +2156,39 @@ function StationsPageContent() {
                             <p className="mb-1.5 mt-0.5 text-[10px] text-muted-foreground leading-snug">
                               Что отвечать клиенту про железо. По этим полям собираются вопросы аттестации.
                             </p>
-                            <div className="grid gap-1.5 sm:grid-cols-2">
+                            <div className="grid gap-2 sm:grid-cols-2">
                               {([
-                                ['gpu', 'Видеокарта', 'напр. RTX 4060'],
-                                ['cpu', 'Процессор', 'напр. i5-12400F'],
-                                ['ram', 'Оперативная память', 'напр. 16 ГБ'],
-                                ['monitor', 'Монитор', 'напр. 24" IPS'],
-                                ['peripherals', 'Периферия и кресло', 'мышь, клавиатура, гарнитура'],
+                                ['gpu', 'Видеокарта', 'RTX 4060'],
+                                ['cpu', 'Процессор', 'Core i5-12400F'],
+                                ['ram', 'Оперативная память', 'DDR5 16 ГБ 6000 МГц'],
+                                ['mouse', 'Мышь', 'Logitech G PRO X SUPERLIGHT 2'],
+                                ['keyboard', 'Клавиатура', 'HyperX Alloy Origins 65'],
+                                ['headset', 'Гарнитура', 'HyperX Cloud III'],
+                                ['chair', 'Кресло', 'DXRacer FORMULA'],
                               ] as const).map(([key, label, placeholder]) => (
-                                <label key={key} className="text-[10px] text-muted-foreground">
-                                  <span className="mb-0.5 block">{label}</span>
-                                  <input
-                                    value={zoneSpecs[key]}
-                                    onChange={e => setZoneSpecs(prev => ({ ...prev, [key]: e.target.value }))}
-                                    placeholder={placeholder}
-                                    className="w-full rounded border border-slate-200 dark:border-white/20 bg-background px-2 py-1 text-xs"
-                                  />
-                                </label>
+                                <HardwarePicker
+                                  key={key}
+                                  label={label}
+                                  placeholder={placeholder}
+                                  value={zoneSpecs[key]}
+                                  items={hardwareByKind[key] || []}
+                                  onChange={value => setZoneSpecs(prev => ({ ...prev, [key]: value }))}
+                                />
                               ))}
+                              <HardwarePicker
+                                label="Монитор"
+                                placeholder="ZOWIE XL2546K"
+                                value={zoneSpecs.monitor}
+                                items={hardwareByKind.monitor || []}
+                                onChange={value => setZoneSpecs(prev => ({ ...prev, monitor: value }))}
+                                onPick={item => {
+                                  // Частота монитора известна из справочника —
+                                  // вбивать её второй раз руками незачем.
+                                  if (item.meta?.hz) {
+                                    setZoneSpecs(prev => ({ ...prev, refresh_hz: String(item.meta?.hz) }))
+                                  }
+                                }}
+                              />
                               <label className="text-[10px] text-muted-foreground">
                                 <span className="mb-0.5 block">Частота монитора, Гц</span>
                                 <input
@@ -2147,7 +2196,7 @@ function StationsPageContent() {
                                   onChange={e => setZoneSpecs(prev => ({ ...prev, refresh_hz: e.target.value }))}
                                   type="number"
                                   min={0}
-                                  placeholder="напр. 165"
+                                  placeholder="165"
                                   className="w-full rounded border border-slate-200 dark:border-white/20 bg-background px-2 py-1 text-xs"
                                 />
                               </label>
@@ -2204,7 +2253,10 @@ function StationsPageContent() {
                                 ram: zone.ram || '',
                                 monitor: zone.monitor || '',
                                 refresh_hz: zone.refresh_hz != null ? String(zone.refresh_hz) : '',
-                                peripherals: zone.peripherals || '',
+                                mouse: zone.mouse || '',
+                                keyboard: zone.keyboard || '',
+                                headset: zone.headset || '',
+                                chair: zone.chair || '',
                               })
                               setZoneEditName(zone.name)
                               setZoneEditHourly(

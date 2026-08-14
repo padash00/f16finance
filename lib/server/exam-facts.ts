@@ -125,7 +125,7 @@ export async function tariffFacts(supabase: SupabaseLike, companyId: string): Pr
 export async function hardwareFacts(supabase: SupabaseLike, companyId: string): Promise<FactQuestion[]> {
   const { data } = await supabase
     .from('arena_zones')
-    .select('id, name, cpu, gpu, ram, monitor, refresh_hz, peripherals, extension_hourly_price, is_active')
+    .select('id, name, cpu, gpu, ram, monitor, refresh_hz, mouse, keyboard, headset, chair, peripherals, extension_hourly_price, is_active')
     .eq('company_id', companyId)
     .eq('is_active', true)
     .limit(20)
@@ -139,6 +139,10 @@ export async function hardwareFacts(supabase: SupabaseLike, companyId: string): 
     { key: 'cpu', label: 'процессор', ask: (zone) => `Какой процессор в зоне «${zone}»?` },
     { key: 'monitor', label: 'монитор', ask: (zone) => `Какой монитор в зоне «${zone}»?` },
     { key: 'ram', label: 'память', ask: (zone) => `Сколько оперативной памяти в зоне «${zone}»?` },
+    { key: 'mouse', label: 'мышь', ask: (zone) => `Какая мышь стоит в зоне «${zone}»?` },
+    { key: 'keyboard', label: 'клавиатура', ask: (zone) => `Какая клавиатура в зоне «${zone}»?` },
+    { key: 'headset', label: 'гарнитура', ask: (zone) => `Какая гарнитура в зоне «${zone}»?` },
+    { key: 'chair', label: 'кресло', ask: (zone) => `Какие кресла в зоне «${zone}»?` },
   ]
 
   for (const zone of zones) {
