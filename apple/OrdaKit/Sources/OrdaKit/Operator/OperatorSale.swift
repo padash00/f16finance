@@ -284,3 +284,61 @@ public struct SaleResult: Decodable, Sendable {
         isIdempotentReplay = try data.decodeIfPresent(Bool.self, forKey: .idempotent) ?? false
     }
 }
+
+// ── Клиент в чеке ────────────────────────────────────────────────────────────
+
+/// Клиент точки: карта лояльности, бонусы, история.
+///
+/// Продажа без клиента — это продажа, за которую не начислены бонусы. Карта
+/// на брелке у человека есть, а привязать её было нечем: приложение о клиентах
+/// не знало вовсе, хотя сервер принимает `customer_id` в чеке с самого начала.
+public struct PointCustomer: Decodable, Sendable, Identifiable, Hashable {
+    public let id: String
+    public let name: String
+    public let phone: String?
+    public let cardNumber: String?
+    public let loyaltyPoints: Double
+    public let totalSpent: Double
+    public let visitsCount: Int
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, phone
+        case cardNumber = "card_number"
+        case loyaltyPoints = "loyalty_points"
+        case totalSpent = "total_spent"
+        case visitsCount = "visits_count"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeFlexibleString(forKey: .id) ?? ""
+        name = try c.decodeFlexibleString(forKey: .name) ?? "Клиент"
+        phone = try c.decodeFlexibleString(forKey: .phone)
+        cardNumber = try c.decodeFlexibleString(forKey: .cardNumber)
+        loyaltyPoints = try c.decodeFlexibleDouble(forKey: .loyaltyPoints) ?? 0
+        totalSpent = try c.decodeFlexibleDouble(forKey: .totalSpent) ?? 0
+        visitsCount = Int(try c.decodeFlexibleDouble(forKey: .visitsCount) ?? 0)
+    }
+
+    /// Чем подписать в списке: карта или телефон — по ним и ищут.
+    public var subtitle: String {
+        [cardNumber, phone].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+}
+
+/// Клиенты точки: поиск для чека.
+public struct CustomerService: Sendable {
+    private let api: APIClient
+
+    public init(api: APIClient) { self.api = api }
+
+    /// Поиск клиента точки. Пустой запрос — самые частые.
+    public func customers(search: String = "") async throws -> [PointCustomer] {
+        var query: [String: String] = [:]
+        if !search.isEmpty { query["search"] = search }
+        let response: DataList<PointCustomer> = try await api.send(
+            APIRequest(path: "/api/operator/customers", query: query)
+        )
+        return response.items
+    }
+}

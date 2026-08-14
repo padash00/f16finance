@@ -12,6 +12,9 @@ struct CheckoutSheet: View {
     @State private var kaspiText = ""
     @State private var error: String?
     @State private var isSubmitting = false
+    /// Клиент чека: карта лояльности. Без него бонусы не начисляются.
+    @State private var customer: PointCustomer?
+    @State private var isPickingCustomer = false
 
     var body: some View {
         NavigationStack {
@@ -30,6 +33,8 @@ struct CheckoutSheet: View {
                                 .foregroundStyle(Theme.text)
                         }
                     }
+
+                    customerCard
 
                     Picker("Оплата", selection: $method) {
                         ForEach(PaymentMethod.allCases, id: \.self) { option in
@@ -169,6 +174,66 @@ struct CheckoutSheet: View {
         Double(text.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: .whitespaces)) ?? 0
     }
 
+    /// Клиент в чеке.
+    ///
+    /// Карта лояльности лежит у человека на брелке, а привязать её было нечем:
+    /// приложение о клиентах не знало вовсе. Бонусы за такую продажу не
+    /// начислялись — и человек про них спрашивал уже у стойки.
+    private var customerCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                if let customer {
+                    HStack(spacing: Spacing.md) {
+                        Image(systemName: "person.text.rectangle")
+                            .font(.system(size: 18))
+                            .foregroundStyle(Theme.brand)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(customer.name)
+                                .font(Typography.callout.weight(.semibold))
+                                .foregroundStyle(Theme.text)
+                            Text(customer.subtitle.isEmpty ? "без карты" : customer.subtitle)
+                                .font(Typography.caption)
+                                .foregroundStyle(Theme.textDim)
+                        }
+                        Spacer(minLength: 0)
+                        VStack(alignment: .trailing, spacing: 1) {
+                            Text("\(Int(customer.loyaltyPoints))")
+                                .font(Typography.callout.weight(.semibold))
+                                .monospacedDigit()
+                                .foregroundStyle(Theme.positive)
+                            Text("бонусов")
+                                .font(Typography.caption)
+                                .foregroundStyle(Theme.textDim)
+                        }
+                        Button {
+                            self.customer = nil
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(Theme.textDim)
+                        }
+                        .buttonStyle(.pressable)
+                    }
+                } else {
+                    Button {
+                        isPickingCustomer = true
+                    } label: {
+                        Label("Клиент по карте", systemImage: "person.badge.plus")
+                            .font(Typography.callout)
+                            .foregroundStyle(Theme.brand)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.pressable)
+                }
+            }
+        }
+        .sheet(isPresented: $isPickingCustomer) {
+            CustomerPickerSheet { picked in
+                customer = picked
+                Haptics.tap()
+            }
+        }
+    }
+
     private func submit() {
         isSubmitting = true
         error = nil
@@ -177,7 +242,8 @@ struct CheckoutSheet: View {
             let failure = await store.checkout(
                 method: method,
                 cash: parse(cashText),
-                kaspi: parse(kaspiText)
+                kaspi: parse(kaspiText),
+                customerID: customer?.id
             )
             isSubmitting = false
             if let failure {

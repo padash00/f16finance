@@ -243,7 +243,12 @@ final class OperatorStore {
 
     // ── Продажа ──────────────────────────────────────────────────────────────
 
-    func checkout(method: PaymentMethod, cash: Double, kaspi: Double) async -> String? {
+    func checkout(
+        method: PaymentMethod,
+        cash: Double,
+        kaspi: Double,
+        customerID: String? = nil
+    ) async -> String? {
         guard !cart.isEmpty else { return "Корзина пуста." }
 
         let kind: ShiftKind = shift?.shiftType == "night" ? .night : .day
@@ -253,7 +258,11 @@ final class OperatorStore {
             lines: cart,
             paymentMethod: method,
             cashAmount: cash,
-            kaspiAmount: kaspi
+            kaspiAmount: kaspi,
+            // Без клиента бонусы не начисляются: карта на брелке есть, а чек
+            // уходит «в никуда». Сервер принимал клиента с самого начала —
+            // приложение просто не умело его выбрать.
+            customerID: customerID
         )
 
         // Для ночной смены Kaspi обязан делиться на «до» и «после» полуночи.
