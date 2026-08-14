@@ -795,6 +795,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
       {
         id: 'knowledge-setup',
         path: '/knowledge-setup',
+        extraPaths: ['/regulations/setup'],
         label: 'Настройка базы знаний',
         capabilities: [
           { id: 'knowledge-setup.view', label: 'Просмотр каркаса и покрытия', severity: 'low' },
@@ -816,6 +817,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
       {
         id: 'operator-exams',
         path: '/operator-exams',
+        extraPaths: ['/regulations/exams'],
         label: 'Экзамены операторов',
         capabilities: [
           { id: 'operator-exams.view', label: 'Просмотр экзаменов и результатов', severity: 'low' },
@@ -961,6 +963,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
       {
         id: 'knowledge-admin',
         path: '/knowledge-admin',
+        extraPaths: ['/regulations'],
         label: 'База знаний (админка)',
         capabilities: [
           ...crud('knowledge-admin'),

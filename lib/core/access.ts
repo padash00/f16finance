@@ -134,6 +134,8 @@ export const ADMIN_PATHS = [
   '/telegram',
   '/access',
   '/knowledge-admin',
+  '/regulations',
+  '/regulations/*',
   '/pass',
   '/categories',
   '/inventory',
@@ -243,6 +245,8 @@ const OWNER_PATHS = [
   '/knowledge-admin',
   '/knowledge-setup',
   '/operator-exams',
+  '/regulations',
+  '/regulations/*',
 ] as const
 
 /**
@@ -495,6 +499,8 @@ export const ACCESS_PAGE_GROUPS: readonly AccessPageGroup[] = [
       { path: '/shifts/reports/*', label: 'Карточка смены точки' },
       { path: '/incidents', label: 'Инциденты' },
       { path: '/incidents/*', label: 'Карточка инцидента' },
+      { path: '/regulations', label: 'Регламенты точки' },
+      { path: '/regulations/*', label: 'Регламенты: экзамены и настройка' },
       { path: '/operators', label: 'Операторы' },
       { path: '/operators/*', label: 'Профиль оператора' },
       { path: '/operator-analytics', label: 'Аналитика операторов' },
@@ -536,7 +542,6 @@ export const ACCESS_PAGE_GROUPS: readonly AccessPageGroup[] = [
     pages: [
       { path: '/settings', label: 'Настройки системы' },
       { path: '/access', label: 'Права и пароли' },
-      { path: '/knowledge-admin', label: 'База знаний и чек-листы' },
       { path: '/telegram', label: 'Telegram Bot' },
       { path: '/point-devices', label: 'Точки и устройства' },
       { path: '/logs', label: 'Логирование' },
@@ -645,6 +650,20 @@ function isMandatoryStaffPath(role: StaffRole, pathname: string): boolean {
   return MANDATORY_MANAGER_OPERATIONAL_FINANCE_PATHS.some((rule) => matchesConfiguredPath(pathname, rule))
 }
 
+/**
+ * Переехавшие страницы: новый путь → старый.
+ *
+ * Права ролей лежат в БД строками путей (`position_paths`). После переезда в
+ * раздел «Регламенты точки» у ролей остались старые записи, поэтому новый
+ * адрес считается разрешённым, если разрешён его прежний. Без этого владелец
+ * молча теряет доступ к собственным чек-листам после деплоя.
+ */
+const MOVED_PATHS: Record<string, string> = {
+  '/regulations': '/knowledge-admin',
+  '/regulations/exams': '/operator-exams',
+  '/regulations/setup': '/knowledge-setup',
+}
+
 export function canStaffRoleAccessPath(
   role: StaffRole,
   pathname: string,
@@ -655,7 +674,17 @@ export function canStaffRoleAccessPath(
   const override = findRolePermissionOverride(pathname, rolePermissionOverrides)
   if (override) return override.enabled
 
-  return getAllowedStaffPaths(role).some((rule) => matchesPath(pathname, rule))
+  const allowed = getAllowedStaffPaths(role)
+  if (allowed.some((rule) => matchesPath(pathname, rule))) return true
+
+  const legacyPath = MOVED_PATHS[pathname]
+  if (legacyPath) {
+    const legacyOverride = findRolePermissionOverride(legacyPath, rolePermissionOverrides)
+    if (legacyOverride) return legacyOverride.enabled
+    return allowed.some((rule) => matchesPath(legacyPath, rule))
+  }
+
+  return false
 }
 
 export function canAccessPath(params: {

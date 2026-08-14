@@ -186,7 +186,8 @@ export const navSections: NavSection[] = [
       { href: '/shifts', label: 'Смены', icon: CalendarClock, note: 'График и сменность' },
       { href: '/shifts/reports', label: 'Отчёты смен', icon: CalendarClock, note: 'Закрытые смены точек', badge: 'new', badgeColor: 'green' },
       { href: '/incidents', label: 'Инциденты', icon: ClipboardCheck, note: 'Штрафы, бонусы, заметки', badge: 'new', badgeColor: 'green' },
-      { href: '/operator-exams', label: 'Экзамены операторов', icon: GraduationCap, note: 'Аттестация по стандартам точки', badge: 'new', badgeColor: 'green', isNew: true },
+      // Правила, чек-листы и экзамены — один цикл, поэтому один пункт с вкладками.
+      { href: '/regulations', label: 'Регламенты точки', icon: BookOpen, note: 'Правила, чек-листы, экзамены', badge: 'new', badgeColor: 'green', isNew: true },
       { href: '/birthdays', label: 'Дни рождения', icon: CalendarDays, note: 'Кто скоро отмечает' },
     ],
   },
@@ -220,8 +221,6 @@ export const navSections: NavSection[] = [
       { href: '/settings', label: 'Настройки системы', icon: Settings2, note: 'Компании и справочники' },
       { href: '/subscription', label: 'Подписка', icon: CreditCard, note: 'Тариф, модули и счета' },
       { href: '/access', label: 'Права и пароли', icon: Shield, note: 'Доступ ролей и аккаунты' },
-      { href: '/knowledge-admin', label: 'База знаний', icon: BookOpen, note: 'FAQ, правила и чек-листы', badge: 'new', badgeColor: 'green' },
-      { href: '/knowledge-setup', label: 'Настройка базы знаний', icon: Sparkles, note: 'Ниша точки, каркас тем, сбор через ИИ', badge: 'new', badgeColor: 'green', isNew: true },
       { href: '/telegram', label: 'Telegram Bot', icon: MessageSquareText, note: 'Уведомления и команды', badge: 'new', badgeColor: 'blue' },
       { href: '/point-devices', label: 'Точки и устройства', icon: Building2, note: 'Токены и программы точек' },
       { href: '/logs', label: 'Логирование', icon: Logs, note: 'Аудит, уведомления и события' },
