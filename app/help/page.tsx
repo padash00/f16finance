@@ -4,61 +4,11 @@ import { ArrowLeft } from 'lucide-react'
 
 import { SITE_NAME } from '@/lib/core/site'
 import { LEGAL_ENTITY, PRODUCT_SITE } from '@/lib/core/legal'
-import { findHelpImageSlot, type HelpImageRecord } from '@/lib/core/help-images'
-import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 export const metadata: Metadata = {
   title: 'Руководство пользователя — Orda',
   description:
     'Полная инструкция по Orda: что это за система, как установить сайт, мобильное приложение, программу точки и киоск, как войти, раздать права, вести смену, кассу, склад, зарплату и аттестацию.',
-}
-
-/** Страница публичная и меняется редко — держим её в кэше пять минут. */
-export const revalidate = 300
-
-type HelpImages = Record<string, HelpImageRecord>
-
-/**
- * Картинки руководства не лежат в репозитории: их загружает владелец на
- * /platform/help-images. Если хранилище недоступно — страница просто выходит
- * без иллюстраций, текст самодостаточен.
- */
-async function loadHelpImages(): Promise<HelpImages> {
-  if (!hasAdminSupabaseCredentials()) return {}
-  try {
-    const supabase = createAdminSupabaseClient()
-    const { data, error } = await supabase.from('help_images').select('slot, url, alt, caption')
-    if (error) return {}
-    const map: HelpImages = {}
-    for (const row of data || []) map[String((row as any).slot)] = row as HelpImageRecord
-    return map
-  } catch {
-    return {}
-  }
-}
-
-/** Иллюстрация в тексте. Пустой слот не оставляет на странице дырки. */
-function HelpFigure({ slot, images }: { slot: string; images: HelpImages }) {
-  const image = images[slot]
-  if (!image?.url) return null
-  const meta = findHelpImageSlot(slot)
-  const caption = image.caption || meta?.caption || ''
-  return (
-    <figure className="mt-4 overflow-hidden rounded-2xl border border-[#e2e8f0] bg-[#f8fafc]">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={image.url}
-        alt={image.alt || meta?.title || caption}
-        loading="lazy"
-        className="w-full"
-      />
-      {caption ? (
-        <figcaption className="border-t border-[#e2e8f0] px-4 py-2.5 text-xs text-[#64748b]">
-          {caption}
-        </figcaption>
-      ) : null}
-    </figure>
-  )
 }
 
 const sections = [
@@ -83,9 +33,7 @@ const sections = [
  * Оформление то же, что у правовых страниц: одна вёрстка на все документы
  * сайта, чтобы они читались как один свод, а не как разные сайты.
  */
-export default async function HelpPage() {
-  const images = await loadHelpImages()
-
+export default function HelpPage() {
   return (
     <main className="min-h-screen bg-white text-[#475569]">
       <header className="border-b border-[#e2e8f0] bg-white/80 backdrop-blur">
@@ -116,7 +64,6 @@ export default async function HelpPage() {
                 ))}
               </ul>
               <div className="mt-4 grid gap-1 text-xs text-[#5b6b82]">
-                <Link href="/help/operator" className="font-medium text-[#16a34a] hover:text-[#15803d]">→ Регламент оператора</Link>
                 <Link href="/privacy" className="hover:text-[#16a34a]">→ Политика конфиденциальности</Link>
                 <Link href="/terms" className="hover:text-[#16a34a]">→ Пользовательское соглашение</Link>
                 <Link href="/offer" className="hover:text-[#16a34a]">→ Публичная оферта</Link>
@@ -221,7 +168,6 @@ export default async function HelpPage() {
                   владение можно на странице управления доступом.
                 </p>
               </div>
-              <HelpFigure slot="web-access" images={images} />
             </section>
 
             {/* ── 3 ─────────────────────────────────────────────────────── */}
@@ -235,7 +181,6 @@ export default async function HelpPage() {
                   Забыли — «Восстановить пароль» на экране входа.
                 </p>
 
-                <HelpFigure slot="web-login" images={images} />
                 <h3 className="pt-2 text-base font-semibold text-[#0f2038]">Что где лежит</h3>
                 <ul className="list-disc space-y-1 pl-6">
                   <li><strong>Обзор</strong> — выручка дня, смены, что требует внимания.</li>
@@ -249,7 +194,6 @@ export default async function HelpPage() {
                   <li><strong>Журнал событий</strong> — кто что сделал.</li>
                 </ul>
 
-                <HelpFigure slot="web-dashboard" images={images} />
                 <h3 className="pt-2 text-base font-semibold text-[#0f2038]">Порядок первого месяца</h3>
                 <ol className="list-decimal space-y-1 pl-6">
                   <li>Точки, сотрудники, операторы.</li>
@@ -281,7 +225,6 @@ export default async function HelpPage() {
                   «Забыть это устройство».
                 </p>
 
-                <HelpFigure slot="mobile-home" images={images} />
                 <h3 className="pt-2 text-base font-semibold text-[#0f2038]">Что видит владелец</h3>
                 <p>
                   Разделы собираются из выданных прав: обзор, доходы и расходы,
@@ -310,7 +253,6 @@ export default async function HelpPage() {
                   он попадает в выручку дня, в ОПиУ и в зарплату.
                 </p>
 
-                <HelpFigure slot="mobile-shift" images={images} />
                 <h3 className="pt-2 text-base font-semibold text-[#0f2038]">Уведомления</h3>
                 <p>
                   Приходят: новости, личные сообщения, упоминания в чате,
@@ -351,7 +293,6 @@ export default async function HelpPage() {
                   закрывают доступ потерянному компьютеру.
                 </p>
 
-                <HelpFigure slot="point-setup" images={images} />
                 <h3 className="pt-2 text-base font-semibold text-[#0f2038]">Вход оператора</h3>
                 <p>
                   На привязанном устройстве оператор входит своим логином и
@@ -366,16 +307,6 @@ export default async function HelpPage() {
                   когда за спиной очередь. Код живёт несколько минут.
                 </p>
 
-                <HelpFigure slot="point-login" images={images} />
-                <p>
-                  Пошаговый порядок смены — от приёма кассы до сменного отчёта —
-                  вынесен в отдельный документ:{' '}
-                  <Link href="/help/operator" className="font-medium text-[#16a34a] hover:underline">
-                    регламент оператора
-                  </Link>
-                  . Его можно распечатать и выдать сотруднику.
-                </p>
-
                 <h3 className="pt-2 text-base font-semibold text-[#0f2038]">Работа за кассой</h3>
                 <ul className="list-disc space-y-1 pl-6">
                   <li><strong>Смена</strong> — открытие с указанием старта кассы, закрытие с пересчётом и сменным отчётом.</li>
@@ -385,9 +316,7 @@ export default async function HelpPage() {
                   <li><strong>Чек-листы</strong> — обязательные не дают закрыть смену, пока не пройдены.</li>
                   <li><strong>Заявки на склад</strong> — запрос товара со склада на витрину.</li>
                 </ul>
-                <HelpFigure slot="point-sale" images={images} />
-                <HelpFigure slot="point-shift-close" images={images} />
-                <HelpFigure slot="point-checklist" images={images} />
+
                 <h3 className="pt-2 text-base font-semibold text-[#0f2038]">Без интернета</h3>
                 <p>
                   Чеки не теряются: они складываются в очередь на устройстве и
@@ -395,7 +324,6 @@ export default async function HelpPage() {
                   пуста, программа предупреждает об этом и не даёт закрыть
                   смену — иначе суммы в отчёте не сойдутся.
                 </p>
-                <HelpFigure slot="point-queue" images={images} />
               </div>
             </section>
 
@@ -414,7 +342,6 @@ export default async function HelpPage() {
                   Настройки хранятся локально; выход из режима киоска — по
                   служебной комбинации, заданной при установке.
                 </p>
-                <HelpFigure slot="kiosk-welcome" images={images} />
               </div>
             </section>
 
