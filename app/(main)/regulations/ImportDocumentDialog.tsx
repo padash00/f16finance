@@ -3,6 +3,9 @@
 import { useRef, useState } from 'react'
 import { FileUp, Loader2, X } from 'lucide-react'
 
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+
 type Company = { id: string; name: string }
 
 type PreviewArticle = {
@@ -183,15 +186,25 @@ export default function ImportDocumentDialog({
         Импорт документа
       </button>
 
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/60 p-4 backdrop-blur-sm">
-          <div className="my-8 w-full max-w-4xl rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950">
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next)
+          if (!next) reset()
+        }}
+      >
+        <DialogContent
+          showCloseButton={false}
+          className="!max-w-[900px] flex max-h-[88vh] flex-col gap-0 overflow-hidden border-slate-200 bg-card p-0 text-slate-900 dark:border-slate-800 dark:text-slate-100"
+        >
             <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-4 dark:border-slate-800">
-              <div>
-                <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">Импорт регламента</h2>
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                  Загрузите готовый документ (.docx, .md или .txt). Система разберёт его на статьи и
-                  чек-листы, а вы отметите, что публиковать.
+              <div className="min-w-0">
+                <DialogTitle className="text-base font-black text-slate-900 dark:text-slate-100">
+                  Импорт регламента
+                </DialogTitle>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  Готовый документ .docx, .md или .txt разбирается на статьи и чек-листы. В базу
+                  попадёт только то, что вы отметите.
                 </p>
               </div>
               <button
@@ -200,14 +213,14 @@ export default function ImportDocumentDialog({
                   setOpen(false)
                   reset()
                 }}
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-slate-200 text-slate-500 transition hover:text-slate-900 dark:border-slate-700 dark:hover:text-slate-100"
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-border text-muted-foreground transition hover:border-slate-400 hover:text-slate-900 dark:hover:border-slate-500 dark:hover:text-slate-100"
                 aria-label="Закрыть"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="max-h-[65vh] overflow-y-auto px-6 py-5">
+            <div className="flex-1 overflow-y-auto px-6 py-5">
               {error && (
                 <div className="mb-4 rounded-2xl border border-rose-500/30 bg-rose-500/[0.07] px-4 py-3 text-sm text-rose-700 dark:text-rose-200">
                   {error}
@@ -215,7 +228,7 @@ export default function ImportDocumentDialog({
               )}
 
               {!preview ? (
-                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center dark:border-slate-700 dark:bg-slate-900/40">
+                <div className="rounded-2xl border border-dashed border-border bg-surface-muted p-7 text-center">
                   <input
                     ref={fileRef}
                     type="file"
@@ -227,18 +240,15 @@ export default function ImportDocumentDialog({
                       event.target.value = ''
                     }}
                   />
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => fileRef.current?.click()}
-                    className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-60 dark:bg-white dark:text-slate-900"
-                  >
+                  <FileUp className="mx-auto h-8 w-8 text-muted-foreground" />
+                  <p className="mt-3 text-sm font-medium text-foreground">Выберите файл регламента</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    .docx, .md, .txt · до 8 МБ. Большой документ разбирается частями — до пары минут.
+                  </p>
+                  <Button type="button" size="sm" disabled={busy} onClick={() => fileRef.current?.click()} className="mt-4">
                     {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
                     {busy ? 'Читаю документ…' : 'Выбрать файл'}
-                  </button>
-                  <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-                    Большой регламент разбирается частями — это занимает до пары минут.
-                  </p>
+                  </Button>
                 </div>
               ) : (
                 <div className="space-y-5">
@@ -386,27 +396,17 @@ export default function ImportDocumentDialog({
 
             {preview && (
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-6 py-4 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={reset}
-                  className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:border-slate-400 dark:border-slate-700 dark:text-slate-300"
-                >
+                <Button type="button" variant="outline" size="sm" onClick={reset}>
                   Другой файл
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void apply()}
-                  disabled={busy || selectedCount === 0}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
-                >
+                </Button>
+                <Button type="button" size="sm" onClick={() => void apply()} disabled={busy || selectedCount === 0}>
                   {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                   Добавить в базу ({selectedCount})
-                </button>
+                </Button>
               </div>
             )}
-          </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </>
   )
 }
