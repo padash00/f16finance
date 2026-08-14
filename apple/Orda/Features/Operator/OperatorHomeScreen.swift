@@ -36,19 +36,19 @@ struct OperatorHomeScreen: View {
             // Две осмысленные колонки вместо потока: слева ход смены,
             // справа то, что требует решения и денег. Поток из карточек
             // разной высоты давал рваный край и пустые колонки.
-            SplitDashboard {
-                // График выручки и разбивка по оплатам — это деньги смены.
-                // На чужой смене их видеть нечего: их видит тот, кто стоит.
-                if store.isMyShift {
+            // Две колонки — только когда левой есть что показать. График
+            // выручки и разбивка по оплатам это деньги смены, и на чужой смене
+            // их видеть нечего. Без них левая колонка оставалась пустой
+            // половиной экрана, а карточки жались к правому краю.
+            if store.isMyShift {
+                SplitDashboard {
                     revenueChart
                     paymentSplit
+                } side: {
+                    sideCards
                 }
-            } side: {
-                if needsAttention { attentionSection }
-                weekCard
-                if let next = cabinet.overview?.nextShift, !store.hasOpenShift {
-                    nextShiftCard(next)
-                }
+            } else {
+                DashboardGrid { sideCards }
             }
 
             // Быстрые действия внизу на большом экране: там есть боковая
@@ -80,6 +80,16 @@ struct OperatorHomeScreen: View {
         .sheet(isPresented: $showCloseSheet) { CloseShiftSheet() }
         .task {
             if store.hasOpenShift && store.recentSales.isEmpty { await store.loadCatalog() }
+        }
+    }
+
+    /// То, что требует внимания, и деньги недели.
+    @ViewBuilder
+    private var sideCards: some View {
+        if needsAttention { attentionSection }
+        weekCard
+        if let next = cabinet.overview?.nextShift, !store.hasOpenShift {
+            nextShiftCard(next)
         }
     }
 

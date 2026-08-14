@@ -135,13 +135,15 @@ public struct DashboardGrid<Content: View>: View {
         if surface.isCompact {
             VStack(spacing: Spacing.lg) { content }
         } else {
-            // Колонки фиксированной минимальной ширины: на сверхшироком окне
-            // растягиваем не карточки, а их количество.
+            // Колонки подбираются по фактической ширине, а не по классу
+            // устройства.
+            //
+            // Раньше число колонок брали у `Surface`, а его определяет ширина
+            // всего окна. Внутри `NavigationSplitView` правая часть уже окна на
+            // ширину боковой панели — и на iPad в портрете две колонки по 280
+            // просто не помещались: карточки уезжали за правый край экрана.
             LazyVGrid(
-                columns: Array(
-                    repeating: GridItem(.flexible(minimum: 280), spacing: Spacing.lg, alignment: .top),
-                    count: surface.dashboardColumns
-                ),
+                columns: [GridItem(.adaptive(minimum: 280), spacing: Spacing.lg, alignment: .top)],
                 alignment: .leading,
                 spacing: Spacing.lg
             ) {
@@ -214,14 +216,22 @@ public struct SplitDashboard<Main: View, Side: View>: View {
             // отчего колонка выше 420 точек обрезалась, а на коротких экранах
             // снизу оставалась пустота. Здесь высота естественная, по
             // содержимому.
-            HStack(alignment: .top, spacing: Spacing.lg) {
-                VStack(spacing: Spacing.lg) { main }
-                    .frame(maxWidth: .infinity, alignment: .top)
+            // Узкой области две колонки не по размеру: на iPad в портрете
+            // правая часть сплита — около пятисот точек, и главная колонка
+            // ужималась до нечитаемой полосы, а боковая уезжала за край.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: Spacing.lg) {
+                    VStack(spacing: Spacing.lg) { main }
+                        .frame(minWidth: 320, maxWidth: .infinity, alignment: .top)
 
-                VStack(spacing: Spacing.lg) { side }
-                    .containerRelativeFrame(.horizontal, alignment: .top) { width, _ in
-                        max(280, min(420, width * (1 - mainRatio)))
-                    }
+                    VStack(spacing: Spacing.lg) { side }
+                        .frame(width: 320, alignment: .top)
+                }
+
+                VStack(spacing: Spacing.lg) {
+                    main
+                    side
+                }
             }
         }
     }
