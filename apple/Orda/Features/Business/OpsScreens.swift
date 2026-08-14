@@ -21,6 +21,12 @@ struct TeamTasksScreen: View {
     private var canCreate: Bool { access?.can("tasks.create") ?? false }
     /// Завершение — своё право, отдельное от правки.
     private var canComplete: Bool { access?.can("tasks.complete") ?? false }
+    /// Правка, обсуждение и удаление — тоже отдельные права: переписать чужую
+    /// задачу, ответить в ней и стереть её — разные полномочия, и в каталоге
+    /// они заведены по отдельности.
+    private var canEdit: Bool { access?.can("tasks.edit") ?? false }
+    private var canComment: Bool { access?.can("tasks.add_comment") ?? false }
+    private var canDelete: Bool { access?.can("tasks.delete") ?? false }
 
     private enum Filter: String, CaseIterable, Identifiable {
         case open, done, all
@@ -69,6 +75,9 @@ struct TeamTasksScreen: View {
                     TeamTaskDetail(
                         task: task,
                         canComplete: canComplete && !task.isDone,
+                        canEdit: canEdit,
+                        canComment: canComment,
+                        canDelete: canDelete,
                         onComplete: {
                             Task { await store.changeTaskStatus(taskID: task.id, to: .done) }
                         }
@@ -173,7 +182,19 @@ struct TeamTaskRowView: View {
 private struct TeamTaskDetail: View {
     let task: TeamTask
     var canComplete = false
+    var canEdit = false
+    var canComment = false
+    var canDelete = false
     var onComplete: () -> Void = {}
+
+    @Environment(BusinessStore.self) private var store
+
+    @State private var isEditing = false
+    @State private var comments: [TaskComment] = []
+    @State private var commentDraft = ""
+    @State private var isSendingComment = false
+    @State private var commentError: String?
+    @State private var confirmingDelete = false
 
     var body: some View {
         ScreenScroll {
@@ -245,6 +266,8 @@ private struct TeamTaskDetail: View {
                         }
                     }
                 }
+
+                if canComment { commentsCard }
             }
         }
         .background(Theme.background)
@@ -252,6 +275,122 @@ private struct TeamTaskDetail: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        .toolbar {
+            if canEdit || canDelete {
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        if canEdit {
+                            Button {
+                                isEditing = true
+                            } label: {
+                                Label("Изменить", systemImage: "pencil")
+                            }
+                        }
+                        if canDelete {
+                            Button(role: .destructive) {
+                                confirmingDelete = true
+                            } label: {
+                                Label("Удалить", systemImage: "trash")
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $isEditing) { EditTaskSheet(task: task) }
+        .confirmationDialog("Удалить задачу?", isPresented: $confirmingDelete, titleVisibility: .visible) {
+            Button("Удалить", role: .destructive) {
+                Task { _ = await store.deleteTask(taskID: task.id) }
+            }
+            Button("Отмена", role: .cancel) {}
+        } message: {
+            Text("Вместе с ней исчезнет и переписка по задаче.")
+        }
+        .task(id: task.id) {
+            guard canComment else { return }
+            comments = await store.taskComments(taskID: task.id)
+        }
+    }
+
+    /// Переписка по задаче.
+    ///
+    /// «Что там по задаче» спрашивают голосом или в чате, и ответ теряется.
+    /// Комментарий остаётся при задаче: через месяц видно, почему сроки
+    /// сдвинулись.
+    private var commentsCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                SectionHeader(
+                    "Обсуждение",
+                    subtitle: comments.isEmpty ? "пока пусто" : "\(comments.count) \(pluralize(comments.count, "запись", "записи", "записей"))"
+                )
+
+                ForEach(Array(comments.enumerated()), id: \.element.id) { index, comment in
+                    if index > 0 { RowDivider() }
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack {
+                            Text(comment.authorLabel)
+                                .font(Typography.caption.weight(.semibold))
+                                .foregroundStyle(Theme.textDim)
+                            Spacer()
+                            if let date = comment.createdAt {
+                                Text(date.formatted(.dateTime.day().month(.abbreviated).hour().minute()))
+                                    .font(Typography.caption)
+                                    .foregroundStyle(Theme.textDim)
+                            }
+                        }
+                        Text(comment.content)
+                            .font(Typography.callout)
+                            .foregroundStyle(Theme.text)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                HStack(spacing: Spacing.sm) {
+                    TextField("Написать по задаче", text: $commentDraft, axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .font(Typography.callout)
+                        .lineLimit(1...4)
+                        .padding(Spacing.md)
+                        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+
+                    Button {
+                        Task { await sendComment() }
+                    } label: {
+                        Image(systemName: isSendingComment ? "hourglass" : "arrow.up.circle.fill")
+                            .font(.system(size: 24))
+                            .foregroundStyle(commentDraft.isEmpty ? Theme.textDim : Theme.brand)
+                    }
+                    .buttonStyle(.pressable)
+                    .disabled(commentDraft.trimmingCharacters(in: .whitespaces).isEmpty || isSendingComment)
+                }
+
+                if let commentError {
+                    Text(commentError)
+                        .font(Typography.caption)
+                        .foregroundStyle(Theme.negative)
+                }
+            }
+        }
+    }
+
+    private func sendComment() async {
+        let text = commentDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, !isSendingComment else { return }
+        isSendingComment = true
+        defer { isSendingComment = false }
+
+        if let failure = await store.addTaskComment(taskID: task.id, content: text) {
+            commentError = failure
+            Haptics.error()
+        } else {
+            commentDraft = ""
+            commentError = nil
+            comments = await store.taskComments(taskID: task.id)
+            Haptics.success()
+        }
     }
 }
 

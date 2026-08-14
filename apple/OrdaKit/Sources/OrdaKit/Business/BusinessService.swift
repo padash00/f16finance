@@ -253,6 +253,31 @@ public struct BusinessService: Sendable {
         _ = try await api.send(APIRequest(path: "/api/admin/tasks", method: .post, body: body))
     }
 
+    /// Правка задачи. Шлём только изменённые поля: пропущенный ключ сервер
+    /// трактует как «не трогать», и правка срока не должна стирать исполнителя.
+    public func updateTask(taskID: String, patch: TaskPatch) async throws {
+        let body = try JSONEncoder().encode(TaskUpdateRequest(taskID: taskID, payload: patch))
+        _ = try await api.send(APIRequest(path: "/api/admin/tasks", method: .post, body: body))
+    }
+
+    public func deleteTask(taskID: String) async throws {
+        let body = try JSONEncoder().encode(TaskDeleteRequest(taskID: taskID))
+        _ = try await api.send(APIRequest(path: "/api/admin/tasks", method: .post, body: body))
+    }
+
+    /// Переписка по задаче: вопросы, уточнения, ответы оператора.
+    public func taskComments(taskID: String) async throws -> [TaskComment] {
+        let response: TaskCommentList = try await api.send(
+            APIRequest(path: "/api/admin/tasks", query: ["comments": "1", "taskId": taskID])
+        )
+        return response.comments
+    }
+
+    public func addTaskComment(taskID: String, content: String) async throws {
+        let body = try JSONEncoder().encode(TaskCommentRequest(taskID: taskID, content: content))
+        _ = try await api.send(APIRequest(path: "/api/admin/tasks", method: .post, body: body))
+    }
+
     /// Перевести задачу в другое состояние. Требует `tasks.complete` для
     /// завершения и `tasks.edit` для остальных переходов — решает сервер.
     public func changeTaskStatus(taskID: String, status: TaskState) async throws {

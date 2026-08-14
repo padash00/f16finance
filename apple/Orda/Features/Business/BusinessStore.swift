@@ -457,6 +457,54 @@ final class BusinessStore {
 
     /// Перевести задачу в другое состояние прямо из списка.
     @discardableResult
+    /// Правка задачи. Возвращает `false` и оставляет текст ошибки в
+    /// `taskSaveError` — экран показывает его рядом с формой.
+    func updateTask(taskID: String, patch: TaskPatch) async -> Bool {
+        do {
+            try await service.updateTask(taskID: taskID, patch: patch)
+            await loadTasks()
+            taskSaveError = nil
+            return true
+        } catch let error as APIError {
+            taskSaveError = error.userMessage
+            return false
+        } catch {
+            taskSaveError = error.localizedDescription
+            return false
+        }
+    }
+
+    func deleteTask(taskID: String) async -> Bool {
+        do {
+            try await service.deleteTask(taskID: taskID)
+            await loadTasks()
+            taskSaveError = nil
+            return true
+        } catch let error as APIError {
+            taskSaveError = error.userMessage
+            return false
+        } catch {
+            taskSaveError = error.localizedDescription
+            return false
+        }
+    }
+
+    func taskComments(taskID: String) async -> [TaskComment] {
+        (try? await service.taskComments(taskID: taskID)) ?? []
+    }
+
+    func addTaskComment(taskID: String, content: String) async -> String? {
+        do {
+            try await service.addTaskComment(taskID: taskID, content: content)
+            await loadTasks()
+            return nil
+        } catch let error as APIError {
+            return error.userMessage
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
     func changeTaskStatus(taskID: String, to status: TaskState) async -> Bool {
         do {
             try await service.changeTaskStatus(taskID: taskID, status: status)

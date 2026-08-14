@@ -142,3 +142,116 @@ struct TaskStatusRequest: Encodable {
         case taskID = "taskId"
     }
 }
+
+// ── Правка, комментарии, удаление ────────────────────────────────────────────
+//
+// С телефона задачу можно было только поставить и закрыть. А живёт она иначе:
+// уточняют срок, переназначают исполнителя, спрашивают «что там». Всё это
+// делалось с ноутбука или не делалось вовсе — и задача повисала.
+
+struct TaskUpdateRequest: Encodable {
+    let action = "updateTask"
+    let taskID: String
+    let payload: TaskPatch
+
+    private enum CodingKeys: String, CodingKey {
+        case action, payload
+        case taskID = "taskId"
+    }
+}
+
+/// Частичная правка: переданы только изменённые поля.
+///
+/// Пропущенный ключ сервер трактует как «не трогать» — поэтому здесь всё
+/// необязательное, и лишнего мы не шлём. Иначе правка одного срока стирала бы
+/// исполнителя.
+public struct TaskPatch: Encodable, Sendable {
+    public var title: String?
+    public var description: String?
+    public var priority: String?
+    public var status: String?
+    public var operatorID: String?
+    public var companyID: String?
+    public var dueDate: String?
+
+    public init(
+        title: String? = nil,
+        description: String? = nil,
+        priority: String? = nil,
+        status: String? = nil,
+        operatorID: String? = nil,
+        companyID: String? = nil,
+        dueDate: String? = nil
+    ) {
+        self.title = title
+        self.description = description
+        self.priority = priority
+        self.status = status
+        self.operatorID = operatorID
+        self.companyID = companyID
+        self.dueDate = dueDate
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case title, description, priority, status
+        case operatorID = "operator_id"
+        case companyID = "company_id"
+        case dueDate = "due_date"
+    }
+}
+
+struct TaskCommentRequest: Encodable {
+    let action = "addComment"
+    let taskID: String
+    let content: String
+
+    private enum CodingKeys: String, CodingKey {
+        case action, content
+        case taskID = "taskId"
+    }
+}
+
+struct TaskDeleteRequest: Encodable {
+    let action = "deleteTask"
+    let taskID: String
+
+    private enum CodingKeys: String, CodingKey {
+        case action
+        case taskID = "taskId"
+    }
+}
+
+/// Комментарий к задаче.
+public struct TaskComment: Decodable, Sendable, Identifiable, Hashable {
+    public let id: String
+    public let content: String
+    public let createdAt: Date?
+    public let operatorID: String?
+    public let staffID: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, content
+        case createdAt = "created_at"
+        case operatorID = "operator_id"
+        case staffID = "staff_id"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeFlexibleString(forKey: .id) ?? UUID().uuidString
+        content = try c.decodeFlexibleString(forKey: .content) ?? ""
+        createdAt = DateParsing.date(from: try c.decodeFlexibleString(forKey: .createdAt))
+        operatorID = try c.decodeFlexibleString(forKey: .operatorID)
+        staffID = try c.decodeFlexibleString(forKey: .staffID)
+    }
+
+    /// Кто написал: оператор или кто-то из офиса. Имён сервер не отдаёт —
+    /// показываем роль, это честнее выдуманного имени.
+    public var authorLabel: String {
+        operatorID != nil ? "Оператор" : "Сотрудник"
+    }
+}
+
+struct TaskCommentList: Decodable, Sendable {
+    let comments: [TaskComment]
+}
