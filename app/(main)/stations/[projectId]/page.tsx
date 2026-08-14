@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState, useCallback, useRef, useMemo } from 'react'
 
 import { HardwarePicker, type HardwareItem } from '@/components/admin/hardware-picker'
+import { toast } from '@/components/ui/use-toast'
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   Plus, Pencil, Trash2, Save, X, Monitor, Clock, Banknote,
@@ -1112,11 +1113,14 @@ function StationsPageContent() {
   const [collapsedZones, setCollapsedZones] = useState<Record<string, boolean>>({})
 
   const [saving, setSaving] = useState(false)
-  const [flash, setFlash] = useState<{ type: 'ok' | 'err'; msg: string } | null>(null)
-
+  // Уведомления — общий тостер портала. Своя плашка в правом верхнем углу
+  // ложилась поверх профиля в шапке и читалась как часть меню.
   const showFlash = useCallback((type: 'ok' | 'err', msg: string) => {
-    setFlash({ type, msg })
-    setTimeout(() => setFlash(null), 3000)
+    toast(
+      type === 'ok'
+        ? { title: 'Готово', description: msg }
+        : { title: 'Не получилось', description: msg, variant: 'destructive' },
+    )
   }, [])
 
   /** silent: обновить данные без полноэкранного лоадера (после CRUD и т.п.) */
@@ -1972,14 +1976,6 @@ function StationsPageContent() {
           </>
         }
       />
-
-      {/* Flash */}
-      {flash && (
-        <div className={`fixed right-4 top-4 z-50 flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm shadow-lg ${flash.type === 'ok' ? 'bg-emerald-500/20 border border-emerald-500/30 text-emerald-400' : 'bg-destructive/20 border border-destructive/30 text-destructive'}`}>
-          {flash.type === 'ok' ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
-          {flash.msg}
-        </div>
-      )}
 
       <div className="space-y-4">
         {activeTab === 'manage' && (

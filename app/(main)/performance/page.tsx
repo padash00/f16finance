@@ -276,14 +276,44 @@ function weekday(iso: string): number {
  * Выгрузка эффективности в Excel.
  *
  * Не CSV: русский Excel считает запятую разделителем дробей и сваливает такой
- * файл в один столбец — выгрузку приходится чинить руками. Здесь готовая книга
- * из трёх листов, числа лежат числами, и сводить их можно сразу.
+ * файл в один столбец. Здесь готовая книга, числа лежат числами.
  *
- * Листы отвечают на разные вопросы: «Смены» — кто как отработал каждую смену,
- * «По точкам» — где просели, «По операторам» — итог по людям.
+ * Шесть листов отвечают на разные вопросы владельца: кто как отработал смену,
+ * какой день недели проседает, чем будни отличаются от выходных, какая касса
+ * бывает минимальной и максимальной, где просела точка и кто просел из людей.
  */
 const SHIFT_LABEL: Record<string, string> = { day: 'День', night: 'Ночь' }
 const WEEKDAY_LABEL = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']
+/** Порядок с понедельника: воскресенье первым в отчёте читается неверно. */
+const WEEKDAY_ORDER = [1, 2, 3, 4, 5, 6, 0]
+
+function isWeekend(iso: string): boolean {
+  const day = weekday(iso)
+  return day === 0 || day === 6
+}
+
+function median(values: number[]): number {
+  if (values.length === 0) return 0
+  const sorted = [...values].sort((left, right) => left - right)
+  const middle = Math.floor(sorted.length / 2)
+  return sorted.length % 2 === 1 ? sorted[middle] : Math.round((sorted[middle - 1] + sorted[middle]) / 2)
+}
+
+function average(values: number[]): number {
+  if (values.length === 0) return 0
+  return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length)
+}
+
+type FlatShift = {
+  date: string
+  shift: string
+  company_id: string
+  actual: number
+  expected: number
+  pi: number
+  source: string
+  operator: string
+}
 
 async function exportCsv(
   rows: RankingItem[],
@@ -293,7 +323,7 @@ async function exportCsv(
 ) {
   const XLSX = await import('xlsx')
 
-  const details = rows
+  const details: FlatShift[] = rows
     .flatMap((operator) =>
       operator.shift_details.map((shift) => ({
         ...shift,
@@ -302,87 +332,200 @@ async function exportCsv(
     )
     .sort((left, right) => left.date.localeCompare(right.date) || left.shift.localeCompare(right.shift))
 
-  // ── Лист 1: каждая смена ────────────────────────────────────────────────
-  const shiftRows = details.map((shift) => ({
-    'Дата': shift.date,
-    'День недели': WEEKDAY_LABEL[weekday(shift.date)],
-    'Точка': companyName(shift.company_id),
-    'Смена': SHIFT_LABEL[shift.shift] || shift.shift,
-    'Оператор': shift.operator,
-    'Ожидалось, ₸': Math.round(shift.expected),
-    'Сделал, ₸': Math.round(shift.actual),
-    'Отклонение, ₸': Math.round(shift.actual - shift.expected),
-    'Выполнение, %': shift.expected > 0 ? Math.round((shift.actual / shift.expected) * 100) : 0,
-    'PI': Number(shift.pi.toFixed(2)),
-    'Источник нормы': shift.source || '',
-  }))
+  const book = XLSX.utils.book_new()
+  const addSheet = (name: string, data: Record<string, string | number>[], widths: number[]) => {
+    const sheet = XLSX.utils.json_to_sheet(data)
+    sheet['!cols'] = widths.map((wch) => ({ wch }))
+    sheet['!freeze'] = { xSplit: 0, ySplit: 1 }
+    XLSX.utils.book_append_sheet(book, sheet, name)
+  }
 
-  // ── Лист 2: свод по точкам ──────────────────────────────────────────────
-  const byCompany = new Map<string, { actual: number; expected: number; shifts: number; day: number; night: number }>()
+  // ── 1. Каждая смена ─────────────────────────────────────────────────────
+  addSheet(
+    'Смены',
+    details.map((shift) => ({
+      'Дата': shift.date,
+      'День недели': WEEKDAY_LABEL[weekday(shift.date)],
+      'Тип дня': isWeekend(shift.date) ? 'Выходной' : 'Будни',
+      'Точка': companyName(shift.company_id),
+      'Смена': SHIFT_LABEL[shift.shift] || shift.shift,
+      'Оператор': shift.operator,
+      'Ожидалось, ₸': Math.round(shift.expected),
+      'Сделал, ₸': Math.round(shift.actual),
+      'Отклонение, ₸': Math.round(shift.actual - shift.expected),
+      'Выполнение, %': shift.expected > 0 ? Math.round((shift.actual / shift.expected) * 100) : 0,
+      'PI': Number(shift.pi.toFixed(2)),
+      'Источник нормы': shift.source || '',
+    })),
+    [12, 12, 10, 16, 9, 16, 14, 13, 15, 14, 7, 14],
+  )
+
+  // ── 2. По дням: календарь выручки ───────────────────────────────────────
+  const byDate = new Map<string, { actual: number; expected: number; shifts: number; operators: Set<string> }>()
   for (const shift of details) {
-    const entry = byCompany.get(shift.company_id) || { actual: 0, expected: 0, shifts: 0, day: 0, night: 0 }
+    const entry = byDate.get(shift.date) || { actual: 0, expected: 0, shifts: 0, operators: new Set<string>() }
     entry.actual += shift.actual
+    entry.expected += shift.expected
+    entry.shifts += 1
+    entry.operators.add(shift.operator)
+    byDate.set(shift.date, entry)
+  }
+
+  addSheet(
+    'По дням',
+    Array.from(byDate.entries())
+      .sort((left, right) => left[0].localeCompare(right[0]))
+      .map(([date, entry]) => ({
+        'Дата': date,
+        'День недели': WEEKDAY_LABEL[weekday(date)],
+        'Тип дня': isWeekend(date) ? 'Выходной' : 'Будни',
+        'Смен': entry.shifts,
+        'Кто работал': Array.from(entry.operators).join(' · '),
+        'Ожидалось, ₸': Math.round(entry.expected),
+        'Касса за день, ₸': Math.round(entry.actual),
+        'Отклонение, ₸': Math.round(entry.actual - entry.expected),
+        'Выполнение, %': entry.expected > 0 ? Math.round((entry.actual / entry.expected) * 100) : 0,
+      })),
+    [12, 12, 10, 7, 26, 14, 17, 15, 14],
+  )
+
+  // ── 3. По дням недели: какой день проседает ─────────────────────────────
+  const byWeekday = new Map<string, { actual: number[]; expected: number; shifts: number }>()
+  for (const shift of details) {
+    const key = `${shift.company_id}|${weekday(shift.date)}`
+    const entry = byWeekday.get(key) || { actual: [], expected: 0, shifts: 0 }
+    entry.actual.push(shift.actual)
+    entry.expected += shift.expected
+    entry.shifts += 1
+    byWeekday.set(key, entry)
+  }
+
+  const weekdayRows: Record<string, string | number>[] = []
+  for (const [key, entry] of byWeekday) {
+    const [companyId, dayRaw] = key.split('|')
+    const day = Number(dayRaw)
+    const total = entry.actual.reduce((sum, value) => sum + value, 0)
+    weekdayRows.push({
+      'Точка': companyName(companyId),
+      'День недели': WEEKDAY_LABEL[day],
+      'Тип дня': day === 0 || day === 6 ? 'Выходной' : 'Будни',
+      'Смен': entry.shifts,
+      'Средняя касса, ₸': average(entry.actual),
+      'Минимум, ₸': Math.round(Math.min(...entry.actual)),
+      'Максимум, ₸': Math.round(Math.max(...entry.actual)),
+      'Медиана, ₸': median(entry.actual),
+      'Ожидалось всего, ₸': Math.round(entry.expected),
+      'Сделано всего, ₸': Math.round(total),
+      'Выполнение, %': entry.expected > 0 ? Math.round((total / entry.expected) * 100) : 0,
+      _order: WEEKDAY_ORDER.indexOf(day),
+    })
+  }
+  weekdayRows.sort(
+    (left, right) =>
+      String(left['Точка']).localeCompare(String(right['Точка'])) || Number(left._order) - Number(right._order),
+  )
+  for (const row of weekdayRows) delete row._order
+
+  addSheet('По дням недели', weekdayRows, [16, 12, 10, 7, 17, 13, 14, 13, 18, 17, 14])
+
+  // ── 4. Будни и выходные по операторам ───────────────────────────────────
+  const byOperatorSplit = new Map<string, { work: number[]; weekend: number[] }>()
+  for (const shift of details) {
+    const entry = byOperatorSplit.get(shift.operator) || { work: [], weekend: [] }
+    if (isWeekend(shift.date)) entry.weekend.push(shift.actual)
+    else entry.work.push(shift.actual)
+    byOperatorSplit.set(shift.operator, entry)
+  }
+
+  addSheet(
+    'Будни и выходные',
+    Array.from(byOperatorSplit.entries()).map(([operator, entry]) => {
+      const workAvg = average(entry.work)
+      const weekendAvg = average(entry.weekend)
+      return {
+        'Оператор': operator,
+        'Смен в будни': entry.work.length,
+        'Средняя в будни, ₸': workAvg,
+        'Смен в выходные': entry.weekend.length,
+        'Средняя в выходные, ₸': weekendAvg,
+        'Разница, ₸': weekendAvg && workAvg ? weekendAvg - workAvg : 0,
+        'Разница, %': workAvg > 0 && weekendAvg > 0 ? Math.round((weekendAvg / workAvg - 1) * 100) : 0,
+      }
+    }),
+    [18, 14, 20, 16, 22, 13, 12],
+  )
+
+  // ── 5. По точкам ────────────────────────────────────────────────────────
+  const byCompany = new Map<
+    string,
+    { actual: number[]; expected: number; shifts: number; day: number; night: number; weekend: number[]; work: number[] }
+  >()
+  for (const shift of details) {
+    const entry =
+      byCompany.get(shift.company_id) ||
+      { actual: [], expected: 0, shifts: 0, day: 0, night: 0, weekend: [], work: [] }
+    entry.actual.push(shift.actual)
     entry.expected += shift.expected
     entry.shifts += 1
     if (shift.shift === 'night') entry.night += 1
     else entry.day += 1
+    if (isWeekend(shift.date)) entry.weekend.push(shift.actual)
+    else entry.work.push(shift.actual)
     byCompany.set(shift.company_id, entry)
   }
 
-  const companyRows = Array.from(byCompany.entries()).map(([companyId, entry]) => ({
-    'Точка': companyName(companyId),
-    'Смен': entry.shifts,
-    'Дневных': entry.day,
-    'Ночных': entry.night,
-    'Ожидалось, ₸': Math.round(entry.expected),
-    'Сделали, ₸': Math.round(entry.actual),
-    'Отклонение, ₸': Math.round(entry.actual - entry.expected),
-    'Выполнение, %': entry.expected > 0 ? Math.round((entry.actual / entry.expected) * 100) : 0,
-  }))
+  addSheet(
+    'По точкам',
+    Array.from(byCompany.entries()).map(([companyId, entry]) => {
+      const total = entry.actual.reduce((sum, value) => sum + value, 0)
+      return {
+        'Точка': companyName(companyId),
+        'Смен': entry.shifts,
+        'Дневных': entry.day,
+        'Ночных': entry.night,
+        'Ожидалось, ₸': Math.round(entry.expected),
+        'Сделали, ₸': Math.round(total),
+        'Отклонение, ₸': Math.round(total - entry.expected),
+        'Выполнение, %': entry.expected > 0 ? Math.round((total / entry.expected) * 100) : 0,
+        'Средняя касса, ₸': average(entry.actual),
+        'Минимум, ₸': Math.round(Math.min(...entry.actual)),
+        'Максимум, ₸': Math.round(Math.max(...entry.actual)),
+        'Медиана, ₸': median(entry.actual),
+        'Средняя в будни, ₸': average(entry.work),
+        'Средняя в выходные, ₸': average(entry.weekend),
+      }
+    }),
+    [16, 7, 9, 9, 14, 14, 15, 14, 17, 13, 14, 13, 19, 21],
+  )
 
-  // ── Лист 3: свод по операторам ──────────────────────────────────────────
-  const operatorRows = rows.map((operator) => {
-    const expected = Math.round(expectedTotal(operator))
-    const above = Math.round(aboveNorm(operator))
-    const points = Array.from(new Set(operator.shift_details.map((shift) => companyName(shift.company_id))))
-    const row: Record<string, string | number> = {
-      'Оператор': operator.operator_short_name || operator.operator_name,
-      'Смен': operator.shifts,
-      'Точки': points.join(' · '),
-      'Ожидалось, ₸': expected,
-      'Сделал, ₸': Math.round(operator.total_revenue),
-      'Сверх нормы, ₸': above,
-      'Выполнение, %': expected > 0 ? Math.round((operator.total_revenue / expected) * 100) : 0,
-      'Средняя за смену, ₸': Math.round(operator.avg_revenue_per_shift),
-      'PI': Number(operator.pi.toFixed(2)),
-      'В рейтинге': operator.qualifying ? 'да' : 'нет (мало смен)',
-    }
-    if (bonusPct > 0) row[`Бонус ${bonusPct}%, ₸`] = Math.round(Math.max(0, above) * bonusPct / 100)
-    return row
-  })
-
-  const book = XLSX.utils.book_new()
-
-  const shiftsSheet = XLSX.utils.json_to_sheet(shiftRows)
-  shiftsSheet['!cols'] = [
-    { wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 9 }, { wch: 16 },
-    { wch: 14 }, { wch: 13 }, { wch: 15 }, { wch: 14 }, { wch: 7 }, { wch: 14 },
-  ]
-  // Шапка прилипает: смен за месяц под сотню, и без этого через экран уже
-  // непонятно, какая колонка «ожидалось», а какая «сделал».
-  shiftsSheet['!freeze'] = { xSplit: 0, ySplit: 1 }
-  XLSX.utils.book_append_sheet(book, shiftsSheet, 'Смены')
-
-  const companySheet = XLSX.utils.json_to_sheet(companyRows)
-  companySheet['!cols'] = [{ wch: 18 }, { wch: 7 }, { wch: 9 }, { wch: 9 }, { wch: 14 }, { wch: 14 }, { wch: 15 }, { wch: 14 }]
-  XLSX.utils.book_append_sheet(book, companySheet, 'По точкам')
-
-  const operatorSheet = XLSX.utils.json_to_sheet(operatorRows)
-  operatorSheet['!cols'] = [
-    { wch: 18 }, { wch: 7 }, { wch: 24 }, { wch: 14 }, { wch: 14 },
-    { wch: 15 }, { wch: 14 }, { wch: 18 }, { wch: 7 }, { wch: 16 }, { wch: 14 },
-  ]
-  XLSX.utils.book_append_sheet(book, operatorSheet, 'По операторам')
+  // ── 6. По операторам ────────────────────────────────────────────────────
+  addSheet(
+    'По операторам',
+    rows.map((operator) => {
+      const expected = Math.round(expectedTotal(operator))
+      const above = Math.round(aboveNorm(operator))
+      const actuals = operator.shift_details.map((shift) => shift.actual)
+      const points = Array.from(new Set(operator.shift_details.map((shift) => companyName(shift.company_id))))
+      const row: Record<string, string | number> = {
+        'Оператор': operator.operator_short_name || operator.operator_name,
+        'Смен': operator.shifts,
+        'Точки': points.join(' · '),
+        'Ожидалось, ₸': expected,
+        'Сделал, ₸': Math.round(operator.total_revenue),
+        'Сверх нормы, ₸': above,
+        'Выполнение, %': expected > 0 ? Math.round((operator.total_revenue / expected) * 100) : 0,
+        'Средняя за смену, ₸': Math.round(operator.avg_revenue_per_shift),
+        'Минимум, ₸': actuals.length ? Math.round(Math.min(...actuals)) : 0,
+        'Максимум, ₸': actuals.length ? Math.round(Math.max(...actuals)) : 0,
+        'Медиана, ₸': median(actuals),
+        'PI': Number(operator.pi.toFixed(2)),
+        'В рейтинге': operator.qualifying ? 'да' : 'нет (мало смен)',
+      }
+      if (bonusPct > 0) row[`Бонус ${bonusPct}%, ₸`] = Math.round(Math.max(0, above) * bonusPct / 100)
+      return row
+    }),
+    [18, 7, 24, 14, 14, 15, 14, 18, 13, 14, 13, 7, 16, 14],
+  )
 
   XLSX.writeFile(book, `Эффективность ${period.from} — ${period.to}.xlsx`)
 }
