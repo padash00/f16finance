@@ -123,6 +123,8 @@ export async function buildPerformanceReport(params: {
   }
 
   const paintPercent = (sheet: any, columnKey: string) => {
+    const hasColumn = (sheet.columns || []).some((column: any) => column?.key === columnKey)
+    if (!hasColumn) return
     sheet.eachRow((row: any, index: number) => {
       if (index === 1) return
       const cell = row.getCell(columnKey)
@@ -135,9 +137,16 @@ export async function buildPerformanceReport(params: {
   }
 
   const paintMoney = (sheet: any, keys: string[]) => {
+    // Колонки бонуса может не быть: при выключенном проценте её не добавляют,
+    // а getCell по несуществующему ключу exceljs принимает за букву столбца и
+    // падает — из-за этого весь отчёт отдавал 500.
+    const existing = new Set(
+      (sheet.columns || []).map((column: any) => column?.key).filter(Boolean),
+    )
     sheet.eachRow((row: any, index: number) => {
       if (index === 1) return
       for (const key of keys) {
+        if (!existing.has(key)) continue
         const cell = row.getCell(key)
         if (typeof cell.value === 'number') cell.numFmt = EXCEL_MONEY_FMT
       }
