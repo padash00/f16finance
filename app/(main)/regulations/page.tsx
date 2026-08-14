@@ -14,6 +14,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  ShieldCheck,
   Sparkles,
   Trash2,
 } from 'lucide-react'
@@ -28,6 +29,7 @@ import {
   type ChecklistItemEditorValue,
   type ChecklistTemplateEditorValue,
 } from '@/components/admin/knowledge-editor-types'
+import ConfirmationsPanel from './ConfirmationsPanel'
 import ImportDocumentDialog from './ImportDocumentDialog'
 import RegulationsTabs from './RegulationsTabs'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
@@ -164,7 +166,7 @@ type KnowledgeResponse = {
   runs: ChecklistRun[]
 }
 
-type Tab = 'articles' | 'checklists' | 'runs' | 'categories'
+type Tab = 'articles' | 'checklists' | 'runs' | 'confirmations' | 'categories'
 
 const KIND_LABELS: Record<CategoryKind, string> = {
   rules: 'Правила',
@@ -512,6 +514,7 @@ export default function KnowledgeAdminPage() {
     payload?: unknown,
     id?: string,
     onSuccess?: (result: any) => void,
+    extra?: Record<string, unknown>,
   ) {
     setSaving(true)
     setError(null)
@@ -520,7 +523,7 @@ export default function KnowledgeAdminPage() {
       const response = await fetch('/api/admin/knowledge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, payload, id }),
+        body: JSON.stringify({ action, payload, id, ...(extra || {}) }),
       })
       const result = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(result.error || 'Действие не выполнено')
@@ -795,6 +798,7 @@ export default function KnowledgeAdminPage() {
     { id: 'articles' as const, label: 'Статьи и FAQ', icon: FileText, count: data.articles.length },
     { id: 'checklists' as const, label: 'Чек-листы', icon: ClipboardList, count: data.templates.length },
     { id: 'runs' as const, label: 'Журнал и дисциплина', icon: History, count: data.runs.length },
+    { id: 'confirmations' as const, label: 'Подтверждения', icon: ShieldCheck, count: null },
     { id: 'categories' as const, label: 'Категории', icon: Layers3, count: data.categories.length },
   ]
 
@@ -873,7 +877,9 @@ export default function KnowledgeAdminPage() {
                 >
                   <Icon className="h-4 w-4" />
                   {item.label}
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs dark:bg-slate-950/80">{item.count}</span>
+                  {item.count !== null && (
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs dark:bg-slate-950/80">{item.count}</span>
+                  )}
                 </button>
               )
             })}
@@ -1101,6 +1107,12 @@ export default function KnowledgeAdminPage() {
                                   items={itemsByTemplate.get(template.id) ?? []}
                                   companyName={template.company_id ? companyById.get(template.company_id)?.name : undefined}
                                   articleById={articleById}
+                                  companies={data.companies}
+                                  onDuplicate={(companyId) => {
+                                    void send('duplicateTemplate', undefined, template.id, undefined, {
+                                      company_id: companyId,
+                                    })
+                                  }}
                                   onEdit={() => editTemplate(template)}
                                   onDelete={() => {
                                     if (!confirmDelete(template.title)) return
@@ -1333,6 +1345,18 @@ export default function KnowledgeAdminPage() {
                       <EmptyState text="Пока нет прохождений чек-листов. Они появятся здесь после того, как оператор начнёт чек-лист в своей программе." />
                     )}
                   </div>
+                </Panel>
+              </div>
+            )}
+
+            {tab === 'confirmations' && (
+              <div className="min-w-0">
+                <Panel title="Кто подтвердил обязательные правила" icon={ShieldCheck}>
+                  <TabHint
+                    title="Зачем это"
+                    text="Подтверждение привязано к редакции статьи: после правки текста версия растёт, и людям нужно ознакомиться заново. Здесь видно, кто ещё не прочитал."
+                  />
+                  <ConfirmationsPanel />
                 </Panel>
               </div>
             )}
@@ -1627,7 +1651,9 @@ function ChecklistTemplateCard({
   template,
   items,
   companyName,
+  companies,
   articleById,
+  onDuplicate,
   onEdit,
   onDelete,
   onAddItem,
@@ -1640,6 +1666,8 @@ function ChecklistTemplateCard({
   companyName?: string
   articleById: Map<string, KnowledgeArticle>
   onEdit: () => void
+  companies: Company[]
+  onDuplicate: (companyId: string | null) => void
   onDelete: () => void
   onAddItem: () => void
   onEditItem: (item: ChecklistItem) => void
@@ -1660,7 +1688,30 @@ function ChecklistTemplateCard({
             {!template.is_active ? <span className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">черновик</span> : null}
           </div>
         </div>
-        <RowActions onEdit={onEdit} onDelete={onDelete} canEdit={canManage} canDelete={canManage} />
+        <div className="flex shrink-0 items-center gap-2">
+          {canManage && companies.length > 0 && (
+            <select
+              value=""
+              onChange={(event) => {
+                const value = event.target.value
+                if (!value) return
+                onDuplicate(value === 'all' ? null : value)
+                event.target.value = ''
+              }}
+              title="Создать такой же чек-лист для другой точки"
+              className="h-9 rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-slate-600 transition hover:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+            >
+              <option value="">Копия для…</option>
+              <option value="all">Все точки</option>
+              {companies.map((company) => (
+                <option key={company.id} value={company.id}>
+                  {company.name}
+                </option>
+              ))}
+            </select>
+          )}
+          <RowActions onEdit={onEdit} onDelete={onDelete} canEdit={canManage} canDelete={canManage} />
+        </div>
       </div>
 
       <div className="mt-5 space-y-2 border-t border-slate-200 pt-4 dark:border-slate-800">

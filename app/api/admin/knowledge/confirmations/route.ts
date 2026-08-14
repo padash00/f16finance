@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { requireCapability } from '@/lib/server/capabilities'
+import { listOrganizationStaffIds } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -69,11 +70,28 @@ export async function GET(request: Request) {
       if (rows.length < PAGE) break
     }
 
+    // Кто ОБЯЗАН подтвердить: без списка сотрудников «не подтвердил» посчитать
+    // нельзя — в таблице подтверждений лежат только те, кто уже нажал.
+    const orgStaffIds = await listOrganizationStaffIds({
+      activeOrganizationId: orgId,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+    let staffQuery = supabase
+      .from('staff')
+      .select('id, full_name, short_name, role, is_active, dismissed_at')
+      .order('full_name', { ascending: true })
+    if (orgStaffIds) staffQuery = staffQuery.in('id', orgStaffIds)
+    const { data: staffRows, error: staffError } = await staffQuery
+    if (staffError) throw staffError
+
+    const staff = (staffRows || []).filter((row: any) => row.is_active !== false && !row.dismissed_at)
+
     return json({
       ok: true,
       data: {
         articles: articles || [],
         confirmations: confirmations || [],
+        staff,
       },
     })
   } catch (error) {

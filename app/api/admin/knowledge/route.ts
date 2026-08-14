@@ -107,6 +107,7 @@ type Body =
   | { action: 'deleteItem'; id: string }
   | { action: 'seedDefaults' }
   | { action: 'applyImport'; payload: ImportPayload }
+  | { action: 'duplicateTemplate'; id: string; company_id?: string | null; title?: string }
 
 const CATEGORY_KINDS = new Set(['rules', 'faq', 'salary', 'problem', 'checklist'])
 const SEVERITIES = new Set(['info', 'normal', 'warning', 'critical'])
@@ -1117,6 +1118,91 @@ export async function POST(req: Request) {
       if (error) throw error
       await writeAuditLog(supabase, { actorUserId: user?.id || null, entityType: 'checklist-item', entityId: data.id, action: 'create', payload: data })
       return json({ ok: true, data })
+    }
+
+    if (body.action === 'duplicateTemplate') {
+      const denied = await requireCapability(access, 'knowledge-admin.manage_checklists')
+      if (denied) return denied as any
+
+      const { data: source, error: sourceError } = await supabase
+        .from('checklist_templates')
+        .select('*')
+        .eq('id', body.id)
+        .maybeSingle()
+      if (sourceError) throw sourceError
+      if (!source) return json({ error: 'Шаблон не найден' }, 404)
+      ensureEditableOrganization((source as any).organization_id, organizationId, access.isSuperAdmin)
+
+      // Точку копии проверяем отдельно: без этого чек-лист можно было бы
+      // подсунуть в чужую компанию, передав её id прямо в запросе.
+      let targetCompanyId: string | null = body.company_id || null
+      if (targetCompanyId) {
+        await resolveCompanyScope({
+          activeOrganizationId: organizationId,
+          isSuperAdmin: access.isSuperAdmin,
+          requestedCompanyId: targetCompanyId,
+        })
+      }
+
+      const { data: copy, error: copyError } = await supabase
+        .from('checklist_templates')
+        .insert([
+          {
+            organization_id: (source as any).organization_id ?? organizationId,
+            company_id: targetCompanyId,
+            title: String(body.title || '').trim() || `${(source as any).title} (копия)`,
+            description: (source as any).description,
+            role_scope: (source as any).role_scope,
+            shift_scope: (source as any).shift_scope,
+            schedule_type: (source as any).schedule_type,
+            recurrence_minutes: (source as any).recurrence_minutes,
+            blocks_shift: (source as any).blocks_shift,
+            sort_order: Number((source as any).sort_order || 100) + 1,
+            is_active: (source as any).is_active !== false,
+          },
+        ])
+        .select('*')
+        .single()
+      if (copyError) throw copyError
+
+      const { data: sourceItems, error: itemsError } = await supabase
+        .from('checklist_items')
+        .select('*')
+        .eq('template_id', body.id)
+        .order('sort_order', { ascending: true })
+      if (itemsError) throw itemsError
+
+      if ((sourceItems || []).length) {
+        const rows = (sourceItems || []).map((item: any) => ({
+          template_id: (copy as any).id,
+          category_id: item.category_id,
+          knowledge_article_id: item.knowledge_article_id,
+          title: item.title,
+          description: item.description,
+          answer_type: item.answer_type,
+          is_required: item.is_required,
+          requires_photo: item.requires_photo,
+          severity: item.severity,
+          fine_amount: item.fine_amount,
+          bonus_amount: item.bonus_amount,
+          sort_order: item.sort_order,
+        }))
+        const { error: insertItemsError } = await supabase.from('checklist_items').insert(rows)
+        if (insertItemsError) throw insertItemsError
+      }
+
+      await writeAuditLog(supabase, {
+        actorUserId: user?.id || null,
+        entityType: 'checklist-template',
+        entityId: (copy as any).id,
+        action: 'duplicate',
+        payload: { from: body.id, company_id: targetCompanyId, items: (sourceItems || []).length },
+      })
+
+      return json({
+        ok: true,
+        data: await loadKnowledgeData({ organizationId, isSuperAdmin: access.isSuperAdmin }),
+      })
     }
 
     const deleteMap = {
