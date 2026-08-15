@@ -71,6 +71,13 @@ export {
   type DataQualityCheck,
 } from './quality'
 export {
+  categoryShares,
+  cashierMixDeviations,
+  type CategorySalesRow,
+  type CategoryShare,
+  type CashierMixDeviation,
+} from './category-mix'
+export {
   monthlyBonus,
   bonusRoi,
   retailDiagnostics,

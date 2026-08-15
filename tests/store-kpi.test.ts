@@ -6,6 +6,8 @@ import {
   analyzeStoreKpi,
   attachFromReceipts,
   bonusRoi,
+  cashierMixDeviations,
+  categoryShares,
   dataQualityScore,
   detectAnomalies,
   monthlyBonus,
@@ -506,4 +508,53 @@ test('качество данных показывает самое слабое
 
   assert.ok(quality.score < 0.8, `общий балл: ${quality.score}`)
   assert.ok(['items', 'attach'].includes(quality.worst?.key || ''), `слабое место: ${quality.worst?.key}`)
+})
+
+// ─── Структура продаж по категориям ────────────────────────────────────────
+
+const MIX_ROWS = [
+  { category_id: 'hot', category_name: 'Горячее', cashier_id: 'A', revenue: 30_000, quantity: 20, lines: 20 },
+  { category_id: 'drink', category_name: 'Напитки', cashier_id: 'A', revenue: 70_000, quantity: 90, lines: 90 },
+  { category_id: 'hot', category_name: 'Горячее', cashier_id: 'B', revenue: 80_000, quantity: 50, lines: 50 },
+  { category_id: 'drink', category_name: 'Напитки', cashier_id: 'B', revenue: 20_000, quantity: 30, lines: 30 },
+]
+
+test('доли категорий считаются от общей выручки', () => {
+  const shares = categoryShares(MIX_ROWS)
+  const hot = shares.find((c) => c.category_id === 'hot')
+  const drink = shares.find((c) => c.category_id === 'drink')
+
+  assert.equal(hot?.revenue, 110_000)
+  assert.equal(drink?.revenue, 90_000)
+  assert.equal(hot?.share, 0.55)
+  assert.equal(drink?.share, 0.45)
+})
+
+test('видно, чем продавец отличается от точки', () => {
+  const deviations = cashierMixDeviations(MIX_ROWS, { minRevenue: 50_000 })
+  const a = deviations.find((d) => d.cashier_id === 'A')!
+  const drink = a.notable.find((n) => n.category_id === 'drink')!
+
+  // У A напитки 70% против 45% по точке — плюс 25 процентных пунктов.
+  assert.equal(drink.delta_pp, 25)
+  assert.equal(drink.share, 0.7)
+  assert.equal(drink.point_share, 0.45)
+})
+
+test('продавец с малой выручкой в сравнение не попадает', () => {
+  // На паре чеков любая структура выглядит перекошенной — говорить об этом
+  // человеку бессмысленно.
+  const deviations = cashierMixDeviations(MIX_ROWS, { minRevenue: 150_000 })
+  assert.equal(deviations.length, 0)
+})
+
+test('отклонения меньше трёх процентных пунктов считаются шумом', () => {
+  const even = [
+    { category_id: 'hot', category_name: 'Горячее', cashier_id: 'A', revenue: 50_000, quantity: 10, lines: 10 },
+    { category_id: 'drink', category_name: 'Напитки', cashier_id: 'A', revenue: 50_000, quantity: 10, lines: 10 },
+    { category_id: 'hot', category_name: 'Горячее', cashier_id: 'B', revenue: 51_000, quantity: 10, lines: 10 },
+    { category_id: 'drink', category_name: 'Напитки', cashier_id: 'B', revenue: 49_000, quantity: 10, lines: 10 },
+  ]
+  const deviations = cashierMixDeviations(even, { minRevenue: 10_000 })
+  assert.ok(deviations.every((d) => d.notable.length === 0))
 })

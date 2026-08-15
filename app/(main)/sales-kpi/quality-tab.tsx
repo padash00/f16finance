@@ -49,8 +49,29 @@ type MonthlyRow = {
   level: string
 }
 
+type CategoryShare = {
+  category_id: string | null
+  category_name: string
+  revenue: number
+  share: number
+}
+
+type CashierMix = {
+  cashier_id: string
+  revenue: number
+  notable: {
+    category_id: string | null
+    category_name: string
+    share: number
+    point_share: number
+    delta_pp: number
+  }[]
+}
+
 type QualityData = {
   period: { from: string; to: string }
+  category_mix: CategoryShare[]
+  cashier_mix: CashierMix[]
   quality: { score: number; checks: QualityCheck[]; worst: QualityCheck | null }
   anomalies: Anomaly[]
   flags: { shift_date: string; shift: string; reason: string; exclude_from_baseline: boolean }[]
@@ -489,6 +510,79 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
             </div>
           ))}
         </div>
+      </Card>
+
+      {/* Структура продаж */}
+      <Card className="p-4">
+        <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Что продаётся</h2>
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          В балл не входит, но часто его объясняет: «средний чек просел» и «продавали в основном напитки
+          вместо горячего» — одно и то же наблюдение с разных сторон.
+        </p>
+
+        {(payload?.category_mix || []).length === 0 ? (
+          <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
+            Нет данных: в чеках нет позиций или у товаров не проставлены категории.
+          </p>
+        ) : (
+          <div className="mt-3 space-y-1.5">
+            {(payload?.category_mix || []).slice(0, 8).map((c) => (
+              <div key={c.category_id ?? 'none'} className="flex items-center gap-3">
+                <span className="w-40 shrink-0 truncate text-sm text-slate-700 dark:text-slate-200">
+                  {c.category_name}
+                </span>
+                <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10">
+                  <div className="h-full bg-sky-500" style={{ width: `${Math.round(c.share * 100)}%` }} />
+                </div>
+                <span className="w-12 shrink-0 text-right text-xs tabular-nums text-slate-500 dark:text-slate-400">
+                  {pct(c.share)}
+                </span>
+                <span className="w-24 shrink-0 text-right text-xs tabular-nums text-slate-500 dark:text-slate-400">
+                  {formatMoney(c.revenue)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {(payload?.cashier_mix || []).some((m) => m.notable.length > 0) ? (
+          <div className="mt-4">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              Чем продавцы отличаются от точки
+            </div>
+            <div className="space-y-2">
+              {(payload?.cashier_mix || [])
+                .filter((m) => m.notable.length > 0)
+                .map((m) => (
+                  <div key={m.cashier_id} className="rounded-lg border border-slate-200 p-2.5 dark:border-white/10">
+                    <div className="text-sm font-medium text-slate-900 dark:text-white">
+                      {props.cashierNames.get(m.cashier_id) || 'Без имени'}
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-2 text-xs">
+                      {m.notable.map((n) => (
+                        <span
+                          key={`${m.cashier_id}-${n.category_id ?? 'none'}`}
+                          className={
+                            n.delta_pp > 0
+                              ? 'rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300'
+                              : 'rounded bg-amber-50 px-1.5 py-0.5 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300'
+                          }
+                          title={`${pct(n.share)} против ${pct(n.point_share)} по точке`}
+                        >
+                          {n.category_name} {n.delta_pp > 0 ? '+' : ''}
+                          {n.delta_pp} п.п.
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+            </div>
+            <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+              Отклонение — это факт, а не вывод. Оно может объясняться сменой (ночью берут другое),
+              отсутствием товара или тем, что человек работал в другие дни.
+            </p>
+          </div>
+        ) : null}
       </Card>
 
       {problem ? <p className="text-sm text-rose-600 dark:text-rose-400">{problem}</p> : null}

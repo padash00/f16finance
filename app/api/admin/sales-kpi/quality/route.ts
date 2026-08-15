@@ -22,10 +22,13 @@ import {
 } from '@/lib/server/store-kpi'
 import {
   analyzeStoreKpi,
+  cashierMixDeviations,
+  categoryShares,
   dataQualityScore,
   detectAnomalies,
   monthlyBonus,
   retailDiagnostics,
+  type CategorySalesRow,
 } from '@/lib/domain/store-kpi'
 
 export const dynamic = 'force-dynamic'
@@ -65,6 +68,24 @@ export async function GET(request: Request) {
       settings,
     })
     const diagnostics = retailDiagnostics(analysis.shifts)
+
+    // Структура продаж по категориям: в балл не входит, но часто объясняет
+    // его. Считается за выбранный период, а не за всю историю.
+    const { data: mixRows } = await supabase.rpc('store_kpi_category_mix', {
+      p_company_id: companyId,
+      p_from: from,
+      p_to: today,
+    })
+    const mix = ((mixRows || []) as any[]).map(
+      (r): CategorySalesRow => ({
+        category_id: r.category_id ?? null,
+        category_name: String(r.category_name || 'Без категории'),
+        cashier_id: r.cashier_id ?? null,
+        revenue: Number(r.revenue) || 0,
+        quantity: Number(r.quantity) || 0,
+        lines: Number(r.lines) || 0,
+      }),
+    )
 
     const { data: flags } = await supabase
       .from('store_kpi_shift_flags')
@@ -110,6 +131,8 @@ export async function GET(request: Request) {
         flags: flags || [],
         events: events || [],
         diagnostics,
+        category_mix: categoryShares(mix),
+        cashier_mix: cashierMixDeviations(mix),
         monthly,
         awards: awards || [],
         settings: {
