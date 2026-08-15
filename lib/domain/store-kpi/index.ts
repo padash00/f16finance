@@ -104,8 +104,12 @@ export {
 export {
   weatherBucket,
   estimateWeatherEffects,
+  observationForWindow,
+  shiftWindow,
+  weatherForShift,
   weatherFactor,
   WEATHER_BUCKET_LABELS,
+  type HourlySeries,
   type WeatherObservation,
   type WeatherBucket,
   type WeatherEffect,

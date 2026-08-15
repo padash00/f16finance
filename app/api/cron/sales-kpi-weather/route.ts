@@ -72,6 +72,7 @@ export async function GET(request: Request) {
           wind_speed: d.wind_speed,
           weather_code: d.weather_code,
           payload: d.payload,
+          hourly: d.hourly,
         }))
 
         const { error: upsertErr } = await supabase

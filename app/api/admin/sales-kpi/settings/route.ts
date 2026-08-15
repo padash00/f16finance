@@ -20,6 +20,8 @@ import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { normalizeStoreKpiSettings } from '@/lib/domain/store-kpi'
+import { earliestSaleDate, todayISO } from '@/lib/server/store-kpi'
+import { fetchOpenMeteoArchive } from '@/lib/server/weather-open-meteo'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -214,6 +216,77 @@ export async function POST(request: Request) {
       })
 
       return json({ ok: true })
+    }
+
+    // ── Догрузка погоды за прошлое ────────────────────────────────────────
+    if (action === 'backfill_weather') {
+      const { data: settingsRow } = await supabase
+        .from('store_kpi_settings')
+        .select('latitude, longitude')
+        .eq('company_id', companyId)
+        .maybeSingle()
+
+      const latitude = Number(settingsRow?.latitude)
+      const longitude = Number(settingsRow?.longitude)
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        return json({ error: 'coordinates-required' }, 400)
+      }
+
+      // Грузим ровно тот отрезок, где есть продажи: погода без продаж модулю
+      // не нужна, а лишние годы архива — это лишние строки в базе.
+      const firstSale = await earliestSaleDate(supabase, companyId)
+      if (!firstSale) return json({ error: 'no-sales' }, 400)
+
+      const from = String(body.from || firstSale).slice(0, 10)
+      const to = String(body.to || todayISO()).slice(0, 10)
+      if (to < from) return json({ error: 'range-invalid' }, 400)
+
+      const days = await fetchOpenMeteoArchive({ latitude, longitude, from, to })
+      if (days.length === 0) return json({ ok: true, loaded: 0, from, to })
+
+      const rows = days.map((d) => ({
+        organization_id: company.organization_id,
+        company_id: companyId,
+        day: d.day,
+        // Только факт. Архив — это то, что случилось, а не то, что знали заранее.
+        kind: 'actual' as const,
+        captured_on: d.day,
+        temperature_max: d.temperature_max,
+        temperature_min: d.temperature_min,
+        temperature_mean: d.temperature_mean,
+        apparent_temperature_max: d.apparent_temperature_max,
+        precipitation_mm: d.precipitation_mm,
+        precipitation_probability: d.precipitation_probability,
+        rain: d.rain,
+        snow: d.snow,
+        wind_speed: d.wind_speed,
+        weather_code: d.weather_code,
+        payload: d.payload,
+        hourly: d.hourly,
+      }))
+
+      // Пишем частями: 227 дней в одном запросе PostgREST переживёт, а три
+      // года — уже нет.
+      const CHUNK = 200
+      let loaded = 0
+      for (let i = 0; i < rows.length; i += CHUNK) {
+        const { error } = await supabase
+          .from('store_kpi_weather')
+          .upsert(rows.slice(i, i + CHUNK), { onConflict: 'company_id,day,kind,captured_on' })
+        if (error) throw error
+        loaded += Math.min(CHUNK, rows.length - i)
+      }
+
+      await writeAuditLog(supabase, {
+        actorUserId: access.user?.id || null,
+        entityType: 'store_kpi_weather',
+        entityId: companyId,
+        action: 'create',
+        organizationId: company.organization_id,
+        payload: { company_id: companyId, from, to, loaded, source: 'open-meteo-archive' },
+      })
+
+      return json({ ok: true, loaded, from, to })
     }
 
     // ── Правило допродажи ─────────────────────────────────────────────────

@@ -40,6 +40,13 @@ export type ShiftFact = {
    * спроса. null — смена не закрыта или без объекта.
    */
   duration_minutes?: number | null
+  /**
+   * Когда смену открыли и закрыли, локальное время. Нужно, чтобы взять погоду
+   * её окна: ночная смена не видела дневной жары. null — смена без объекта
+   * или ещё не закрыта, тогда окно берётся типовое.
+   */
+  opened_at?: string | null
+  closed_at?: string | null
   /** Локальная дата смены, YYYY-MM-DD. */
   date: string
   shift: ShiftType

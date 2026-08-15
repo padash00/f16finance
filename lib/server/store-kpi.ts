@@ -242,6 +242,8 @@ export async function loadShiftFacts(
       company_id: companyId,
       shift_id: row.shift_id,
       duration_minutes: row.duration_minutes == null ? null : num(row.duration_minutes),
+      opened_at: row.opened_at,
+      closed_at: row.closed_at,
       date: row.sale_date,
       shift,
       cashier_id: row.cashier_id,

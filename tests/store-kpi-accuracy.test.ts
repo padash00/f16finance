@@ -197,10 +197,13 @@ test('корзина погоды определяется по осадкам �
 test('без наблюдений погода не поправляет прогноз', () => {
   // Три дождливых дня — этого мало, чтобы утверждать «в дождь продают хуже».
   const dates = daily('2026-02-02', 3)
-  const observations = dates.map((d) => ({ date: d, actual: 50_000, expected: 100_000 }))
-  const map = new Map(dates.map((d) => [d, weather(d, { rain: true })]))
+  const observations = dates.map((d) => ({
+    actual: 50_000,
+    expected: 100_000,
+    weather: weather(d, { rain: true }),
+  }))
 
-  const effects = estimateWeatherEffects(observations, map, DEFAULT_STORE_KPI_SETTINGS)
+  const effects = estimateWeatherEffects(observations, DEFAULT_STORE_KPI_SETTINGS)
   const factor = weatherFactor(weather('2026-03-01', { rain: true }), effects)
 
   assert.equal(factor.usable, false)
@@ -209,10 +212,13 @@ test('без наблюдений погода не поправляет про�
 
 test('накопив историю, погода поправляет прогноз в найденную сторону', () => {
   const dates = daily('2026-02-02', 12)
-  const observations = dates.map((d) => ({ date: d, actual: 80_000, expected: 100_000 }))
-  const map = new Map(dates.map((d) => [d, weather(d, { rain: true })]))
+  const observations = dates.map((d) => ({
+    actual: 80_000,
+    expected: 100_000,
+    weather: weather(d, { rain: true }),
+  }))
 
-  const effects = estimateWeatherEffects(observations, map, DEFAULT_STORE_KPI_SETTINGS)
+  const effects = estimateWeatherEffects(observations, DEFAULT_STORE_KPI_SETTINGS)
   const factor = weatherFactor(weather('2026-03-01', { rain: true }), effects)
 
   assert.equal(factor.usable, true)

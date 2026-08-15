@@ -17,6 +17,7 @@ import {
   CloudSun,
   GraduationCap,
   ShoppingBag,
+  Download,
   Gauge,
   Info,
   Loader2,
@@ -361,6 +362,11 @@ function SettingsModal(props: {
   const [busy, setBusy] = useState(false)
   const [saved, setSaved] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
+  // Догрузка погоды за прошлое: без неё влияние погоды набиралось бы месяцами.
+  const [backfill, setBackfill] = useState<{ loading: boolean; result: string | null }>({
+    loading: false,
+    result: null,
+  })
 
   useEffect(() => {
     if (!payload) return
@@ -407,6 +413,42 @@ function SettingsModal(props: {
       // оставалось открытым, и было непонятно, сохранилось ли вообще.
       setSaved(true)
       setTimeout(() => props.onClose(), 900)
+    }
+  }
+
+  /**
+   * Догружает факт погоды за всю историю продаж точки.
+   *
+   * Крон смотрит назад на неделю, поэтому без этой кнопки коэффициенты погоды
+   * стали бы рабочими только через несколько месяцев наблюдений. Архив
+   * закрывает историю сразу.
+   */
+  async function backfillWeather() {
+    setBackfill({ loading: true, result: null })
+    setProblem(null)
+    try {
+      const res = await fetch('/api/admin/sales-kpi/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company_id: props.companyId, action: 'backfill_weather' }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        const reason =
+          json?.error === 'coordinates-required'
+            ? 'Сначала сохраните координаты.'
+            : json?.error === 'no-sales'
+              ? 'У точки ещё нет продаж — грузить погоду не к чему.'
+              : json?.error || `HTTP ${res.status}`
+        throw new Error(reason)
+      }
+      setBackfill({
+        loading: false,
+        result: `Загружено дней: ${json.loaded}, с ${json.from} по ${json.to}.`,
+      })
+    } catch (e) {
+      setBackfill({ loading: false, result: null })
+      setProblem(e instanceof Error ? e.message : 'Не удалось загрузить погоду')
     }
   }
 
@@ -556,6 +598,39 @@ function SettingsModal(props: {
                     Как узнать: откройте Google Карты, нажмите правой кнопкой на здание магазина — первая
                     строка меню и есть эти два числа.
                   </p>
+
+                  {hasCoords ? (
+                    <div className="mt-3 rounded-lg bg-slate-50 p-3 dark:bg-white/5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-xs font-medium text-slate-700 dark:text-slate-200">
+                          Погода за прошлое
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={backfill.loading || busy}
+                          onClick={() => void backfillWeather()}
+                        >
+                          {backfill.loading ? (
+                            <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Download className="mr-1 h-3.5 w-3.5" />
+                          )}
+                          Догрузить
+                        </Button>
+                      </div>
+                      <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                        Каждую ночь погода собирается на неделю назад, поэтому влияние снега и жары
+                        набиралось бы месяцами. Кнопка забирает архив за всю историю продаж сразу — один
+                        раз, дальше справляется крон.
+                      </p>
+                      {backfill.result ? (
+                        <p className="mt-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                          {backfill.result}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </section>

@@ -30,12 +30,14 @@ import {
   computeShiftPlan,
   priceIndexFor,
   estimateWeatherEffects,
+  weatherForShift,
   lookupBaseline,
   weatherFactor,
   WEATHER_BUCKET_LABELS,
   type ShiftFact,
   type ShiftPlan,
   type ShiftType,
+  type HourlySeries,
   type WeatherObservation,
 } from '@/lib/domain/store-kpi'
 
@@ -88,6 +90,7 @@ type WeatherRow = {
   precipitation_mm: number | null
   rain: boolean | null
   snow: boolean | null
+  hourly: HourlySeries | null
 }
 
 /**
@@ -103,11 +106,12 @@ async function loadWeather(
   companyId: string,
   from: string,
   to: string,
-): Promise<Map<string, WeatherObservation>> {
+): Promise<{ daily: Map<string, WeatherObservation>; hourly: Map<string, HourlySeries> }> {
   const out = new Map<string, WeatherObservation>()
+  const hourly = new Map<string, HourlySeries>()
   const { data, error } = await supabase
     .from('store_kpi_weather')
-    .select('day, kind, captured_on, temperature_max, temperature_min, precipitation_mm, rain, snow')
+    .select('day, kind, captured_on, temperature_max, temperature_min, precipitation_mm, rain, snow, hourly')
     .eq('company_id', companyId)
     .gte('day', from)
     .lte('day', to)
@@ -134,8 +138,9 @@ async function loadWeather(
       rain: row.rain,
       snow: row.snow,
     })
+    if (row.hourly) hourly.set(day, row.hourly as HourlySeries)
   }
-  return out
+  return { daily: out, hourly }
 }
 
 async function loadCompanyOrg(supabase: any, companyId: string): Promise<string | null> {
@@ -224,9 +229,13 @@ export async function GET(request: Request) {
     // Влияет ТОЛЬКО на ожидаемую выручку. Бонусные пороги считаются без неё:
     // продавец не отвечает за дождь и не должен терять из-за него деньги.
     const historyWeather =
-      facts.length > 0 ? await loadWeather(supabase, companyId, facts[0].date, historyTo) : new Map()
+      facts.length > 0
+        ? await loadWeather(supabase, companyId, facts[0].date, historyTo)
+        : { daily: new Map<string, WeatherObservation>(), hourly: new Map<string, HourlySeries>() }
     const upcomingWeather = await loadWeather(supabase, companyId, from, to)
 
+    // Погода берётся в окне каждой смены: ночная смена не видела дневной жары,
+    // и приписывать ей «жарко» значит объяснять её кассу тем, чего не было.
     const weatherObservations = facts
       .filter((f) => f.receipts > 0)
       .map((f) => {
@@ -234,11 +243,13 @@ export async function GET(request: Request) {
           minSample: settings.min_sample_size,
           summerMonths: settings.summer_months,
         })
-        return expected ? { date: f.date, actual: f.revenue, expected: expected.value } : null
+        if (!expected) return null
+        const { observation } = weatherForShift(f, historyWeather.hourly, historyWeather.daily)
+        return { actual: f.revenue, expected: expected.value, weather: observation }
       })
-      .filter(Boolean) as { date: string; actual: number; expected: number }[]
+      .filter(Boolean) as { actual: number; expected: number; weather: WeatherObservation | null }[]
 
-    const weatherEffects = estimateWeatherEffects(weatherObservations, historyWeather, settings)
+    const weatherEffects = estimateWeatherEffects(weatherObservations, settings)
 
     const { data: savedRows, error: savedErr } = await supabase
       .from('store_kpi_shift_plans')
@@ -259,7 +270,13 @@ export async function GET(request: Request) {
         const key = `${date}|${shift}`
         const savedRow = saved.get(key)
         const index = effectiveIndex(indices, monthKey(date))
-        const dayWeather = upcomingWeather.get(date) ?? null
+        // Плана ещё нет — фактического времени открытия тоже, поэтому окно
+        // берётся типовое для дневной или ночной смены.
+        const { observation: dayWeather, windowed } = weatherForShift(
+          { date, shift },
+          upcomingWeather.hourly,
+          upcomingWeather.daily,
+        )
         const weather = weatherFactor(dayWeather, weatherEffects)
         const weatherInfo = {
           bucket: weather.bucket,
@@ -270,6 +287,9 @@ export async function GET(request: Request) {
           temperature_max: dayWeather?.temperature_max ?? null,
           precipitation_mm: dayWeather?.precipitation_mm ?? null,
           known: Boolean(dayWeather),
+          // false — погода взята за сутки целиком, потому что почасового ряда
+          // на этот день нет.
+          windowed,
         }
 
         if (savedRow) {
