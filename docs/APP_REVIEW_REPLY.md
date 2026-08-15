@@ -32,9 +32,9 @@ There are no purchases, subscriptions or paid content inside the app. The
 organization's subscription is managed on the website; the app contains no
 purchase or payment flows and no links to them.
 
-TEST ACCOUNTS
+TEST ACCOUNT
 
-Owner / management account (sees money, stock, payroll, tasks, team):
+Owner account (sees money, stock, payroll, tasks, team, chat):
   login: <e-mail владельца>
   password: <пароль>
 
@@ -42,8 +42,14 @@ Operator account (shift, point of sale, stocktaking, tasks, own salary):
   login: <логин оператора>
   password: <пароль>
 
-Note: an operator signs in with a login name, not an e-mail address. Both
-accounts belong to a real organization filled with sample data.
+An operator signs in with a login name, not an e-mail address. The operator
+role is also shown end to end in the attached screen recording.
+
+IMPORTANT: this is a live account of a working business, provided so that you
+can see real data instead of an empty demo. Please do not tap "Удалить
+аккаунт" (Delete account) — the deletion screen and its confirmation are shown
+in the attached screen recording. We are happy to provide a disposable account
+on request.
 
 HOW TO REACH THE MAIN FEATURES
 
@@ -189,7 +195,19 @@ User guide: https://www.ordaops.kz/help
 
 ## Что заполнить перед отправкой
 
-- логины и пароли двух демо-учёток в тексте выше и в полях App Review
+- логин и пароль владельческой учётки в тексте выше и в полях App Review
   Information;
+- логин и пароль оператора (операторский вход отдельный, по логину);
 - модели устройств и версии iOS, на которых проверяли;
 - ссылку на видео (вложением или ссылкой на облако с открытым доступом).
+
+## После проверки
+
+Учётка отдана боевая, поэтому по завершении ревью:
+
+1. смените пароль владельца;
+2. загляните в «Журнал событий» за дни проверки и уберите записи, которые
+   завёл рецензент, — смену, продажу, расход. Иначе они осядут в выручке дня,
+   в ОПиУ и в зарплатной ведомости;
+3. проверьте командный чат: сообщение рецензента уходит пушем всем
+   сотрудникам.
