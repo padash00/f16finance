@@ -28,10 +28,10 @@ import {
   TrendingDown,
   TrendingUp,
   Users,
-  X,
 } from 'lucide-react'
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { useCapabilities } from '@/lib/client/use-capabilities'
@@ -413,51 +413,48 @@ function SettingsModal(props: {
   const hasCoords = latValue != null && lonValue != null && !coordsBroken
   const rules = payload?.rules || []
 
+  // Окно рисует общий AppModal: Esc, клик по фону, замок прокрутки, ловушка
+  // фокуса и высота — всё это уже решено там один раз на весь проект.
   return (
-    <div
-      className="fixed inset-0 z-[200] flex items-start justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm"
-      onClick={props.onClose}
-    >
-      {/* Колонка на всю доступную высоту: шапка и подвал фиксированы, прокрутка
-          только у содержимого — иначе последняя секция уезжала под кнопки. */}
-      <div
-        className="my-6 flex max-h-[calc(100vh-3rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-white/10 dark:bg-slate-900"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Шапка */}
-        <div className="relative shrink-0 overflow-hidden border-b border-slate-200 bg-gradient-to-r from-sky-50 via-white to-white px-6 py-5 dark:border-white/10 dark:from-sky-950/40 dark:via-slate-900 dark:to-slate-900">
-          <div className="pointer-events-none absolute -right-12 -top-12 h-40 w-40 rounded-full bg-sky-500/10 blur-3xl" />
-          <div className="relative flex items-start justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-sky-400/30 to-indigo-400/20 text-sky-700 dark:text-sky-200">
-                <Settings className="h-5 w-5" />
-              </span>
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Настройки</h2>
-                <div className="mt-0.5 flex flex-wrap items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-                  <span className="rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-white/10 dark:text-slate-200">
-                    {props.companyName}
-                  </span>
-                  <span>настройки относятся к этой точке</span>
-                </div>
-              </div>
-            </div>
-            <button
-              onClick={props.onClose}
-              className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-white"
-              aria-label="Закрыть"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
+    <AppModal
+      open
+      onClose={props.onClose}
+      maxWidth="max-w-3xl"
+      title={
+        <div className="flex flex-wrap items-center gap-2">
+          <span>Настройки</span>
+          <span className="rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-white/10 dark:text-slate-200">
+            {props.companyName}
+          </span>
+          <span className="text-sm font-normal text-slate-500 dark:text-slate-400">
+            настройки относятся к этой точке
+          </span>
         </div>
-
+      }
+      footer={
+        <div className="flex items-center justify-end gap-2">
+          {saved ? (
+            <span className="mr-auto flex items-center gap-1.5 text-sm text-emerald-600 dark:text-emerald-400">
+              <Check className="h-4 w-4" /> Сохранено
+            </span>
+          ) : null}
+          <Button variant="outline" size="sm" onClick={props.onClose}>
+            Закрыть
+          </Button>
+          <Button size="sm" disabled={busy} onClick={() => void saveSettings()}>
+            {busy ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
+            Сохранить
+          </Button>
+        </div>
+      }
+    >
+      <>
         {loading ? (
           <div className="flex items-center justify-center gap-2 p-12 text-sm text-slate-500 dark:text-slate-400">
             <Loader2 className="h-5 w-5 animate-spin" /> Загружаем настройки…
           </div>
         ) : (
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
+          <div className="space-y-4">
             {/* Погода */}
             <section className="rounded-xl border border-slate-200 p-4 dark:border-white/10">
               <div className="flex items-start gap-3">
@@ -673,24 +670,8 @@ function SettingsModal(props: {
             ) : null}
           </div>
         )}
-
-        {/* Подвал */}
-        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-slate-200 bg-slate-50/60 px-5 py-3.5 dark:border-white/10 dark:bg-white/[0.02]">
-          {saved ? (
-            <span className="mr-auto flex items-center gap-1.5 text-sm text-emerald-600 dark:text-emerald-400">
-              <Check className="h-4 w-4" /> Сохранено
-            </span>
-          ) : null}
-          <Button variant="outline" size="sm" onClick={props.onClose}>
-            Закрыть
-          </Button>
-          <Button size="sm" disabled={busy} onClick={() => void saveSettings()}>
-            {busy ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
-            Сохранить
-          </Button>
-        </div>
-      </div>
-    </div>
+      </>
+    </AppModal>
   )
 }
 

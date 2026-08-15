@@ -322,12 +322,15 @@ export async function POST(request: Request) {
 
     return json({ error: 'unknown-action' }, 400)
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
     await writeSystemErrorLogSafe({
       scope: 'server',
       area: 'api/admin/sales-kpi/calendar POST',
-      message: error instanceof Error ? error.message : String(error),
+      message,
     })
     console.error('[sales-kpi/calendar]', error)
-    return json({ error: 'internal-error' }, 500)
+    // Причину показываем: действие доступно только управляющему, а глухое
+    // «internal-error» не помогает ни ему, ни разбору потом.
+    return json({ error: 'internal-error', detail: message }, 500)
   }
 }

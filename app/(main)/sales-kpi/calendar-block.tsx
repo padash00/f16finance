@@ -108,7 +108,7 @@ export function CalendarBlock(props: { companyId: string; canManage: boolean }) 
         body: JSON.stringify({ company_id: props.companyId, ...body }),
       })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json?.error || `HTTP ${res.status}`)
+      if (!res.ok) throw new Error(json?.detail || json?.error || `HTTP ${res.status}`)
       await refresh()
       return true
     } catch (e) {
