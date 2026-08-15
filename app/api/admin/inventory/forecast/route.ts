@@ -113,7 +113,7 @@ export async function GET(request: Request) {
         .select('item_id, quantity, location_id')
       if (locationId) balanceQuery = balanceQuery.eq('location_id', locationId)
       else if (scopedLocationIds.size > 0) balanceQuery = balanceQuery.in('location_id', Array.from(scopedLocationIds))
-      else balanceQuery = balanceQuery.eq('location_id', '__none__')
+      else balanceQuery = balanceQuery.eq('location_id', '00000000-0000-0000-0000-000000000000')
       return balanceQuery
         .order('location_id', { ascending: true })
         .order('item_id', { ascending: true })

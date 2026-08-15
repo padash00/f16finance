@@ -63,7 +63,7 @@ export async function GET(request: Request) {
     const { data: assignments, error: assignmentsError } = await supabase
       .from('operator_company_assignments')
       .select('operator_id')
-      .in('company_id', assignmentCompanyIds.length > 0 ? assignmentCompanyIds : ['__none__'])
+      .in('company_id', assignmentCompanyIds.length > 0 ? assignmentCompanyIds : ['00000000-0000-0000-0000-000000000000'])
       .eq('is_active', true)
 
     if (assignmentsError) throw assignmentsError
@@ -223,7 +223,7 @@ export async function GET(request: Request) {
       .from('operators')
       .select('id, name, short_name, is_active, operator_profiles(full_name)')
       .eq('is_active', true)
-      .in('id', allowedOperatorIds.length > 0 ? allowedOperatorIds : ['__none__'])
+      .in('id', allowedOperatorIds.length > 0 ? allowedOperatorIds : ['00000000-0000-0000-0000-000000000000'])
 
     if (error) throw error
 

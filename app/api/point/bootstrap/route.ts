@@ -40,7 +40,7 @@ export async function GET(request: Request) {
       .select(
         'id, operator_id, company_id, role_in_company, is_primary, is_active, operator:operator_id(id, name, short_name, telegram_chat_id, is_active, operator_profiles(*))',
       )
-      .in('company_id', device.company_ids.length > 0 ? device.company_ids : ['__none__'])
+      .in('company_id', device.company_ids.length > 0 ? device.company_ids : ['00000000-0000-0000-0000-000000000000'])
       .eq('is_active', true)
       .order('is_primary', { ascending: false })
       .order('created_at', { ascending: true })
@@ -74,7 +74,7 @@ export async function GET(request: Request) {
     const { data: companiesData } = await supabase
       .from('companies')
       .select('id, name, code')
-      .in('id', device.company_ids.length > 0 ? device.company_ids : ['__none__'])
+      .in('id', device.company_ids.length > 0 ? device.company_ids : ['00000000-0000-0000-0000-000000000000'])
 
     const companies = (companiesData || []).map((c) => ({
       id: c.id,

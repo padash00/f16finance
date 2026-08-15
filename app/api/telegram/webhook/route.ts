@@ -2117,7 +2117,7 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
       // Изоляция: оператора ищем только среди своих (иначе по имени находился
       // и получал задачу/смену оператор чужой организации).
       if (scopeOrgId) query = query.eq('organization_id', scopeOrgId)
-      if (allowedIds) query = query.in('id', allowedIds.length > 0 ? allowedIds : ['__none__'])
+      if (allowedIds) query = query.in('id', allowedIds.length > 0 ? allowedIds : ['00000000-0000-0000-0000-000000000000'])
       const { data: ops } = await query
       const all = (ops || []) as any[]
       const displayName = (op: any) => {

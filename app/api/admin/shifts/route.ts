@@ -138,7 +138,7 @@ async function findOperatorForShiftName(
       .eq('company_id', companyId)
       .eq('is_active', true)
     const ids = (assignments || []).map((a: any) => String(a.operator_id)).filter(Boolean)
-    query = query.in('id', ids.length > 0 ? ids : ['__none__'])
+    query = query.in('id', ids.length > 0 ? ids : ['00000000-0000-0000-0000-000000000000'])
   }
 
   const { data, error } = await query
@@ -1096,7 +1096,7 @@ export async function GET(req: Request) {
 
     if (allowedOperatorIds) {
       if (allowedOperatorIds.length === 0) {
-        operatorsQuery = operatorsQuery.in('id', ['__none__'])
+        operatorsQuery = operatorsQuery.in('id', ['00000000-0000-0000-0000-000000000000'])
       } else {
         operatorsQuery = operatorsQuery.in('id', allowedOperatorIds)
       }
