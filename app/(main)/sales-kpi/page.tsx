@@ -225,6 +225,19 @@ function ratioOf(actual: number | null, expected: number | null): number | null 
   return actual / expected
 }
 
+/**
+ * Балл словами.
+ *
+ * 1.13 читается как «лучше обычного на 13%» и больше ни в чём не нуждается.
+ * Само число остаётся в подсказке — для тех, кто захочет сверить.
+ */
+function scoreText(score: number | null): string {
+  if (score == null) return '—'
+  const delta = Math.round((score - 1) * 100)
+  if (Math.abs(delta) < 3) return 'как обычно'
+  return delta > 0 ? `лучше на ${delta}%` : `слабее на ${Math.abs(delta)}%`
+}
+
 function toneFor(ratio: number | null): string {
   if (ratio == null) return 'text-slate-400 dark:text-slate-500'
   if (ratio >= 1.05) return 'text-emerald-600 dark:text-emerald-400'
@@ -262,15 +275,43 @@ function VerdictBadge({ verdict }: { verdict: string }) {
   )
 }
 
+/**
+ * Насколько можно верить оценке — словами.
+ *
+ * Раньше здесь стоял процент. Процент не помогает принять решение: «67%» не
+ * говорит, идти разговаривать с человеком или подождать ещё смену. Слова
+ * говорят.
+ */
 function Confidence({ value }: { value: number }) {
   const pct = Math.round(value * 100)
-  const tone = pct >= 75 ? 'bg-emerald-500' : pct >= 45 ? 'bg-amber-500' : 'bg-slate-400'
+  const v =
+    pct >= 75
+      ? {
+          label: 'можно доверять',
+          tone: 'bg-emerald-500',
+          text: 'text-emerald-700 dark:text-emerald-400',
+          hint: 'Смен достаточно, сравнивать есть с чем, помех не было. По такой оценке можно разговаривать с человеком.',
+        }
+      : pct >= 45
+        ? {
+            label: 'есть сомнения',
+            tone: 'bg-amber-500',
+            text: 'text-amber-700 dark:text-amber-400',
+            hint: 'Что-то мешало: короткая смена, погода, событие в городе или мало похожих смен для сравнения. Вывод скорее верный, но опираться на него одного не стоит.',
+          }
+        : {
+            label: 'рано судить',
+            tone: 'bg-slate-400',
+            text: 'text-slate-500 dark:text-slate-400',
+            hint: 'Данных слишком мало. Это не про человека — это про то, что модулю пока не с чем сравнивать.',
+          }
+
   return (
-    <div className="flex items-center gap-2" title="Насколько можно доверять выводу">
-      <div className="h-1.5 w-14 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
-        <div className={`h-full ${tone}`} style={{ width: `${pct}%` }} />
+    <div className="flex items-center gap-2" title={v.hint}>
+      <div className="h-1.5 w-10 shrink-0 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
+        <div className={`h-full ${v.tone}`} style={{ width: `${pct}%` }} />
       </div>
-      <span className="text-xs tabular-nums text-slate-500 dark:text-slate-400">{pct}%</span>
+      <span className={`text-xs ${v.text}`}>{v.label}</span>
     </div>
   )
 }
@@ -935,9 +976,9 @@ export default function SalesKpiPage() {
                     <th className="px-4 py-2 text-left font-medium">Продавец</th>
                     <th className="px-4 py-2 text-right font-medium">Смен</th>
                     <th className="px-4 py-2 text-right font-medium">Выручка</th>
-                    <th className="px-4 py-2 text-right font-medium">Балл</th>
+                    <th className="px-4 py-2 text-right font-medium">Как отработал</th>
                     <th className="px-4 py-2 text-left font-medium">Статус</th>
-                    <th className="px-4 py-2 text-left font-medium">Уверенность</th>
+                    <th className="px-4 py-2 text-left font-medium">Можно ли доверять</th>
                     <th className="px-4 py-2 text-left font-medium">Сильное / слабое</th>
                   </tr>
                 </thead>
@@ -956,8 +997,11 @@ export default function SalesKpiPage() {
                           <td className="px-4 py-2 font-medium text-slate-900 dark:text-white">{c.name}</td>
                           <td className="px-4 py-2 text-right tabular-nums">{c.shifts}</td>
                           <td className="px-4 py-2 text-right tabular-nums">{formatMoney(c.revenue)}</td>
-                          <td className={`px-4 py-2 text-right tabular-nums font-semibold ${toneFor(c.score)}`}>
-                            {c.score == null ? '—' : c.score.toFixed(2)}
+                          <td
+                            className={`px-4 py-2 text-right font-medium ${toneFor(c.score)}`}
+                            title={c.score == null ? '' : `Балл ${c.score.toFixed(2)} — отношение к обычному для таких смен`}
+                          >
+                            {scoreText(c.score)}
                           </td>
                           <td className="px-4 py-2">
                             <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${status.className}`}>
@@ -1023,9 +1067,9 @@ export default function SalesKpiPage() {
                     <th className="px-4 py-2 text-left font-medium">Продавец</th>
                     <th className="px-4 py-2 text-right font-medium">Касса</th>
                     <th className="px-4 py-2 text-right font-medium">Покупателей</th>
-                    <th className="px-4 py-2 text-right font-medium">Балл</th>
+                    <th className="px-4 py-2 text-right font-medium">Как отработал</th>
                     <th className="px-4 py-2 text-left font-medium">Вывод</th>
-                    <th className="px-4 py-2 text-left font-medium">Уверенность</th>
+                    <th className="px-4 py-2 text-left font-medium">Можно ли доверять</th>
                     <th className="w-8" />
                   </tr>
                 </thead>
@@ -1083,8 +1127,11 @@ export default function SalesKpiPage() {
                                   : `${deltaPct(demandRatio)} к ожиданию`}
                               </div>
                             </td>
-                            <td className={`px-4 py-2 text-right tabular-nums font-semibold ${toneFor(s.score)}`}>
-                              {s.score == null ? '—' : s.score.toFixed(2)}
+                            <td
+                              className={`px-4 py-2 text-right font-medium ${toneFor(s.score)}`}
+                              title={s.score == null ? '' : `Балл ${s.score.toFixed(2)} — отношение к обычному для таких смен`}
+                            >
+                              {scoreText(s.score)}
                             </td>
                             <td className="px-4 py-2">
                               <VerdictBadge verdict={s.verdict} />
@@ -1119,11 +1166,12 @@ export default function SalesKpiPage() {
           </Card>
 
           <p className="px-1 text-xs text-slate-400 dark:text-slate-500">
-            Модель {payload?.model_version || '—'}. Балл — это отношение метрик продавца к норме для
-            сопоставимых условий (сезон, день недели, смена), а не доля от плана. Спрос меряется числом
-            чеков: счётчика посетителей у магазина нет, но чек оставляет каждый купивший, а привести людей
-            в помещение продавец не может. Ожидания считаются по истории до начала периода и без учёта
-            собственных смен продавца.
+            Модель {payload?.model_version || '—'}. «Лучше на 13%» значит: продавец сработал на 13% выше
+            того, что обычно бывает в таких же сменах — тот же сезон, тот же день недели, та же смена. Это
+            не доля от плана. Спрос меряется числом чеков: счётчика посетителей у магазина нет, но чек
+            оставляет каждый купивший, а привести людей в помещение продавец не может. «Обычно» считается
+            по истории до начала периода и без собственных смен продавца — иначе человек сравнивался бы
+            сам с собой.
           </p>
         </>
           )}

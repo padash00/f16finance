@@ -144,7 +144,7 @@ export function ShiftDetail(props: {
         {/* Метрики с прочтением */}
         <div className="space-y-2">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            Метрики продавца
+            Что видно по работе с покупателем
           </div>
           {explanation.metrics.map((m) => (
             <div
@@ -158,8 +158,9 @@ export function ShiftDetail(props: {
                 </span>
               </div>
               <div className="mt-0.5 text-xs tabular-nums text-slate-500 dark:text-slate-400">
-                факт {formatMetric(m.metric, m.actual)} · норма {formatMetric(m.metric, m.expected)}
-                {m.sample > 0 ? ` · по ${m.sample} сменам` : ''}
+                было {formatMetric(m.metric, m.actual)} · обычно бывает{' '}
+                {formatMetric(m.metric, m.expected)}
+                {m.sample > 0 ? ` · по ${m.sample} похожим сменам` : ''}
               </div>
               <p className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-300">{m.reading}</p>
             </div>

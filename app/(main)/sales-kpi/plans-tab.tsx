@@ -94,6 +94,18 @@ function weekdayLabel(iso: string): string {
   return WEEKDAYS[new Date(y, (m || 1) - 1, d || 1).getDay()]
 }
 
+/**
+ * Поправка на месяц словами.
+ *
+ * «1.08» ничего не сообщает тому, кто не держит в голове, что 1.00 — это норма.
+ * «Цели выше на 8%» сообщает сразу. Точное число остаётся в подсказке.
+ */
+function monthText(value: number): string {
+  const delta = Math.round((Number(value) - 1) * 100)
+  if (Math.abs(delta) < 2) return 'как обычно'
+  return delta > 0 ? `цели выше на ${delta}%` : `цели ниже на ${Math.abs(delta)}%`
+}
+
 export function PlansTab(props: { companyId: string; canManage: boolean }) {
   const from = isoToday()
   const to = isoPlus(13)
@@ -151,7 +163,7 @@ export function PlansTab(props: { companyId: string; canManage: boolean }) {
           '«Пересчитать планы» — если менялись цены или ассортимент',
           '«Зафиксировать» — чтобы цель на смену больше не менялась',
           'Карандашом можно поправить уровень вручную, но нужно указать причину',
-          'Заполнить праздники и учебные периоды — без них месячный индекс работает вхолостую',
+          'Заполнить праздники и учебные периоды — без них поправка на месяц работает вхолостую',
         ]}
         how="Уровни берутся из выручки похожих смен за прошлое: тот же сезон, тот же день недели, дневная или ночная. B1 — то, что берут чаще половины раз, B3 — то, что даётся редко. Суммы округляются вверх, чтобы цель запоминалась."
       />
@@ -161,11 +173,14 @@ export function PlansTab(props: { companyId: string; canManage: boolean }) {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              Месячный индекс спроса
+              Поправка на месяц
             </div>
             <div className="mt-1 flex items-baseline gap-2">
-              <span className="text-2xl font-semibold text-slate-900 dark:text-white">
-                {currentMonth?.effective?.toFixed(2) ?? '1.00'}
+              <span
+                className="text-2xl font-semibold text-slate-900 dark:text-white"
+                title={`Коэффициент ${currentMonth?.effective?.toFixed(2) ?? '1.00'}`}
+              >
+                {monthText(currentMonth?.effective ?? 1)}
               </span>
               <span className="text-xs text-slate-500 dark:text-slate-400">
                 {currentMonth?.month || ''}
@@ -173,9 +188,10 @@ export function PlansTab(props: { companyId: string; canManage: boolean }) {
               </span>
             </div>
             <p className="mt-1 max-w-xl text-xs text-slate-500 dark:text-slate-400">
-              Поправка на то, что месяц месяцу рознь: сезонность, свежий тренд, учебный период и состав
-              календаря. Двигает всю лестницу порогов целиком, границы{' '}
-              {payload?.settings.monthly_index_min ?? 0.85}–{payload?.settings.monthly_index_max ?? 1.2}.
+              Месяц месяцу рознь: сезон, свежий тренд, учебный период и праздники в календаре. Поправка
+              двигает все три цели разом — вверх в сильный месяц, вниз в слабый. Дальше чем на{' '}
+              {Math.round((1 - (payload?.settings.monthly_index_min ?? 0.85)) * 100)}% вниз и{' '}
+              {Math.round(((payload?.settings.monthly_index_max ?? 1.2) - 1) * 100)}% вверх не уходит.
             </p>
           </div>
 
@@ -187,7 +203,7 @@ export function PlansTab(props: { companyId: string; canManage: boolean }) {
                 disabled={busy}
                 onClick={() => void post({ action: 'recompute_monthly_index', month: currentMonth?.month })}
               >
-                <RefreshCw className="mr-1 h-3.5 w-3.5" /> Пересчитать индекс
+                <RefreshCw className="mr-1 h-3.5 w-3.5" /> Пересчитать поправку
               </Button>
               {currentMonth?.status === 'pending_approval' ? (
                 <Button
@@ -195,7 +211,7 @@ export function PlansTab(props: { companyId: string; canManage: boolean }) {
                   disabled={busy}
                   onClick={() => void post({ action: 'approve_monthly_index', month: currentMonth.month })}
                 >
-                  <Check className="mr-1 h-3.5 w-3.5" /> Подтвердить {currentMonth.value?.toFixed(2)}
+                  <Check className="mr-1 h-3.5 w-3.5" /> Подтвердить: {monthText(currentMonth.value ?? 1)}
                 </Button>
               ) : null}
             </div>
@@ -206,8 +222,8 @@ export function PlansTab(props: { companyId: string; canManage: boolean }) {
           <div className="mt-3 flex gap-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>
-              Модель предлагает {currentMonth.value?.toFixed(2)}, но изменение слишком большое, чтобы
-              применяться само. Пока не подтвердите — планы считаются по 1.00.
+              Модуль предлагает {monthText(currentMonth.value ?? 1)}, но сдвиг слишком большой, чтобы
+              применяться сам. Пока не подтвердите — цели считаются без поправки.
             </span>
           </div>
         ) : null}
@@ -259,9 +275,9 @@ export function PlansTab(props: { companyId: string; canManage: boolean }) {
 
         {withPlan.length === 0 ? (
           <div className="p-6 text-sm text-slate-600 dark:text-slate-300">
-            Планы построить не из чего: в сегментах меньше{' '}
-            {payload?.settings.min_sample_size ?? 8} сопоставимых смен. План по двум сменам был бы случайным
-            числом, за которое платят деньги, — поэтому он не назначается.
+            Планы построить не из чего: похожих смен набралось меньше{' '}
+            {payload?.settings.min_sample_size ?? 8}. План по двум сменам был бы случайным числом, за
+            которое платят деньги, — поэтому он не назначается.
           </div>
         ) : (
           <div className="overflow-x-auto">

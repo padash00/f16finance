@@ -69,7 +69,7 @@ const VERDICT_TEXT: Record<Calibration['verdict'], { label: string; className: s
   too_easy: {
     label: 'слишком легко',
     className: 'text-amber-600 dark:text-amber-400',
-    hint: 'Уровень берут слишком часто — как надбавка за выход на работу, а не за результат. Поднимите перцентиль.',
+    hint: 'Уровень берут слишком часто — как надбавка за выход на работу, а не за результат. Поднимите планку в настройках.',
   },
   ok: {
     label: 'в норме',
@@ -79,13 +79,33 @@ const VERDICT_TEXT: Record<Calibration['verdict'], { label: string; className: s
   too_hard: {
     label: 'слишком трудно',
     className: 'text-rose-600 dark:text-rose-400',
-    hint: 'Уровень почти недостижим — такой бонус демотивирует. Опустите перцентиль.',
+    hint: 'Уровень почти недостижим — такой бонус демотивирует. Опустите планку в настройках.',
   },
 }
 
 function pct(value: number | null | undefined): string {
   if (value == null) return '—'
   return `${Math.round(value * 100)}%`
+}
+
+/** Ошибка прогноза долей от кассы — на экране это просто проценты. */
+function errText(value: number | null | undefined): string {
+  if (value == null) return '—'
+  return `${Math.round(value * 100)}%`
+}
+
+/**
+ * Перекос прогноза словами.
+ *
+ * Число со знаком («−0.04») читателю ничего не говорит, а вот «немного
+ * занижает» говорит сразу и в какую сторону, и насколько это важно.
+ */
+function biasText(value: number | null | undefined): string {
+  if (value == null) return 'перекоса не видно'
+  const p = Math.round(value * 100)
+  if (Math.abs(p) < 3) return 'без перекоса'
+  const size = Math.abs(p) >= 10 ? 'заметно' : 'немного'
+  return p > 0 ? `${size} завышает ожидание` : `${size} занижает ожидание`
 }
 
 export function AccuracyTab(props: { companyId: string }) {
@@ -114,7 +134,7 @@ export function AccuracyTab(props: { companyId: string }) {
         what="Экран, чтобы убедиться, что цели поставлены разумно. Если цель берут почти все — она ничего не двигает; если почти никто — она злит, а не мотивирует."
         todo={[
           'Посмотреть, какая доля смен берёт каждый уровень',
-          'Если написано «слишком легко» или «слишком трудно» — поменять перцентили в настройках',
+          'Если написано «слишком легко» или «слишком трудно» — подвинуть планку в настройках',
           'Сверить, насколько ожидание вообще попадает в факт',
         ]}
         how="Вся история точки прогоняется через модель день за днём: цель на каждый день считается только по тем данным, которые были известны к его началу. Заглянуть вперёд модель не может — иначе она выглядела бы точнее, чем есть."
@@ -170,7 +190,7 @@ export function AccuracyTab(props: { companyId: string }) {
 
             <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
               <div>
-                <div className="text-xs text-slate-500 dark:text-slate-400">Смен в бэктесте</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">Смен проверено</div>
                 <div className="text-lg font-semibold text-slate-900 dark:text-white">{bt.evaluated}</div>
                 <div className="text-xs text-slate-400">без плана: {bt.skipped_no_history}</div>
               </div>
@@ -217,23 +237,21 @@ export function AccuracyTab(props: { companyId: string }) {
           <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Точность ожидания</h2>
         </div>
         <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-          WAPE — суммарная ошибка относительно суммарного факта: 0.20 означает, что в среднем ожидание
-          промахивается на пятую часть кассы. Смещение показывает системную ошибку: больше нуля — модель
-          стабильно ждёт больше, чем бывает.
+          Насколько ожидание расходится с тем, что было на самом деле. «Промахивается на 20%» значит: в
+          среднем модуль ошибается на пятую часть кассы. Перекос показывает, в какую сторону ошибка
+          постоянная — ждёт больше, чем бывает, или меньше.
         </p>
 
         <div className="mt-3 grid gap-4 lg:grid-cols-2">
           <div className="rounded-lg border border-slate-200 p-3 dark:border-white/10">
             <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              По всей истории (бэктест)
+              По всей истории точки
             </div>
             <div className="mt-2 flex flex-wrap gap-4 text-sm">
               <span>
-                WAPE <b className="tabular-nums">{bt?.accuracy.wape ?? '—'}</b>
+                промахивается на <b className="tabular-nums">{errText(bt?.accuracy.wape)}</b>
               </span>
-              <span>
-                смещение <b className="tabular-nums">{bt?.accuracy.bias ?? '—'}</b>
-              </span>
+              <span className="text-slate-600 dark:text-slate-300">{biasText(bt?.accuracy.bias)}</span>
               <span className="text-slate-500 dark:text-slate-400">
                 смен {bt?.accuracy.n ?? 0}
               </span>
@@ -247,11 +265,9 @@ export function AccuracyTab(props: { companyId: string }) {
             {live && live.shifts > 0 ? (
               <div className="mt-2 flex flex-wrap gap-4 text-sm">
                 <span>
-                  WAPE <b className="tabular-nums">{live.accuracy.wape ?? '—'}</b>
+                  промахивается на <b className="tabular-nums">{errText(live.accuracy.wape)}</b>
                 </span>
-                <span>
-                  смещение <b className="tabular-nums">{live.accuracy.bias ?? '—'}</b>
-                </span>
+                <span className="text-slate-600 dark:text-slate-300">{biasText(live.accuracy.bias)}</span>
                 <span className="text-slate-500 dark:text-slate-400">смен {live.shifts}</span>
               </div>
             ) : (

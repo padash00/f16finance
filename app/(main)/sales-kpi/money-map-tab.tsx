@@ -224,9 +224,9 @@ export function MoneyMapTab(props: { companyId: string }) {
               }
             />
             <Row
-              label="Перцентили уровней"
+              label="Насколько высоко стоят планки"
               value={`${Math.round((kpi?.percentiles.control ?? 0) * 100)} / ${Math.round((kpi?.percentiles.b1 ?? 0) * 100)} / ${Math.round((kpi?.percentiles.b2 ?? 0) * 100)} / ${Math.round((kpi?.percentiles.b3 ?? 0) * 100)}`}
-              hint="контроль / B1 / B2 / B3 по распределению выручки сегмента"
+              hint="контроль / B1 / B2 / B3. Цифра — место в ряду похожих смен: 60 значит, что уровень выше, чем в 60 сменах из ста."
             />
             <Row
               label="Тест на знание товара"
