@@ -35,6 +35,7 @@ import { formatMoney } from '@/lib/core/format'
 import { mutateApi, useApi } from '@/lib/hooks/use-api'
 
 import { AccuracyTab } from './accuracy-tab'
+import { MoneyMapTab } from './money-map-tab'
 import { PlansTab } from './plans-tab'
 import { QualityTab } from './quality-tab'
 import { ShiftDetail, type ShiftExplanation } from './shift-detail'
@@ -578,7 +579,7 @@ export default function SalesKpiPage() {
   const [companyId, setCompanyId] = useState<string>('')
   const [openShift, setOpenShift] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
-  const [tab, setTab] = useState<'review' | 'plans' | 'accuracy' | 'quality'>('review')
+  const [tab, setTab] = useState<'review' | 'plans' | 'accuracy' | 'quality' | 'money'>('review')
   const { can } = useCapabilities()
 
   const query = new URLSearchParams({ from, to })
@@ -723,6 +724,7 @@ export default function SalesKpiPage() {
               ['plans', 'Планы смен'],
               ['accuracy', 'Точность и калибровка'],
               ['quality', 'Данные и деньги'],
+              ['money', 'Карта денег'],
             ] as const).map(([id, label]) => (
               <button
                 key={id}
@@ -742,6 +744,8 @@ export default function SalesKpiPage() {
             <PlansTab companyId={payload.company.id} canManage={can('sales-kpi.manage')} />
           ) : tab === 'accuracy' && payload?.company ? (
             <AccuracyTab companyId={payload.company.id} />
+          ) : tab === 'money' && payload?.company ? (
+            <MoneyMapTab companyId={payload.company.id} />
           ) : tab === 'quality' && payload?.company ? (
             <QualityTab
               companyId={payload.company.id}
