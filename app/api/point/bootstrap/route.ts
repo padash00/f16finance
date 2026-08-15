@@ -87,6 +87,11 @@ export async function GET(request: Request) {
       entityId: device.id,
       action: 'bootstrap',
       payload: {
+        // Организация выводится из company_id в payload. Массива company_ids
+        // резолвер не понимает, поэтому кладём и одиночную точку — иначе
+        // каждое подключение устройства пишется в журнал без организации и
+        // не видно владельцу.
+        company_id: device.company_id || device.company_ids[0] || null,
         company_ids: device.company_ids,
         operator_count: operators.length,
         point_mode: device.point_mode,

@@ -221,6 +221,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     entityType: 'checklist_run',
     entityId: id,
     payload: {
+      // Без company_id организация у записи не определяется — прогон
+      // чек-листа пропадает из журнала владельца.
+      company_id: (shift as any).company_id || null,
       shift_id: (shift as any).id,
       template_id: (run as any).template_id,
       status: targetStatus,

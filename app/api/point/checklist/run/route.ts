@@ -98,6 +98,9 @@ export async function POST(request: Request) {
     entityType: 'checklist_run',
     entityId: inserted.id,
     payload: {
+      // Без company_id организация у записи не определяется, и прогон
+      // чек-листа пропадает из журнала владельца.
+      company_id: device.company_id || null,
       shift_id: shift.id,
       template_id: body.template_id,
       run_by: runBy || null,

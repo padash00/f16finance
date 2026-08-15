@@ -394,9 +394,6 @@ function SettingsModal(props: { companyId: string; onClose: () => void; onSaved:
                       </option>
                     ))}
                 </select>
-                <Button size="sm" disabled={busy} onClick={() => void saveSettings()}>
-                  Сохранить
-                </Button>
               </div>
             </section>
 
@@ -431,9 +428,6 @@ function SettingsModal(props: { companyId: string; onClose: () => void; onSaved:
                     className="w-36 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm dark:border-white/10 dark:bg-slate-900 dark:text-white"
                   />
                 </label>
-                <Button size="sm" variant="outline" disabled={busy} onClick={() => void saveSettings()}>
-                  Сохранить
-                </Button>
               </div>
             </section>
 
@@ -453,9 +447,6 @@ function SettingsModal(props: { companyId: string; onClose: () => void; onSaved:
                   className="h-4 w-4 rounded border-slate-300 dark:border-white/20"
                 />
                 Требовать сданный тест для B3 и рекорда
-                <Button size="sm" variant="outline" disabled={busy} onClick={() => void saveSettings()}>
-                  Сохранить
-                </Button>
               </label>
             </section>
 
@@ -545,6 +536,22 @@ function SettingsModal(props: { companyId: string; onClose: () => void; onSaved:
             </section>
 
             {problem ? <p className="text-sm text-rose-600 dark:text-rose-400">{problem}</p> : null}
+
+            {/* Одна кнопка на всю форму: точка-клуб, координаты и ворота
+                сохраняются вместе. Правила допродаж — отдельные действия,
+                они применяются сразу при добавлении и удалении. */}
+            <div className="flex items-center justify-end gap-2 border-t border-slate-200 pt-4 dark:border-white/10">
+              <span className="mr-auto text-xs text-slate-400">
+                Правила допродаж сохраняются сразу
+              </span>
+              <Button variant="outline" size="sm" onClick={props.onClose}>
+                Закрыть
+              </Button>
+              <Button size="sm" disabled={busy} onClick={() => void saveSettings()}>
+                {busy ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
+                Сохранить настройки
+              </Button>
+            </div>
           </div>
         )}
       </div>
@@ -651,7 +658,9 @@ export default function SalesKpiPage() {
   )
 
   return (
-    <div className="space-y-5">
+    // app-page-wide — общий контейнер портала: без него страница растягивается
+    // на всю ширину экрана и теряет поля, в отличие от остальных разделов.
+    <div className="app-page-wide space-y-5">
       <AdminPageHeader
         title="Эффективность продавцов"
         description="Поток или продавец: сколько клиентов дошло до магазина и что продавец с ними сделал"
