@@ -215,7 +215,7 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
 
         <div className="mt-3 grid gap-2 lg:grid-cols-2">
           {(q?.checks || []).map((c) => (
-            <div key={c.key} className="rounded-lg border border-border p-3 dark:border-white/10">
+            <div key={c.key} className="rounded-lg border border-border p-3">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm font-medium text-foreground">{c.label}</span>
                 <span
@@ -234,7 +234,7 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
 
       {/* Подозрительные смены */}
       <Card className="overflow-hidden">
-        <div className="flex items-center gap-2 border-b border-border px-4 py-3 dark:border-white/10">
+        <div className="flex items-center gap-2 border-b border-border px-4 py-3">
           <AlertTriangle className="h-4 w-4 text-muted-foreground" />
           <h2 className="text-sm font-semibold text-foreground">Подозрительные смены</h2>
           <span className="text-xs text-muted-foreground">
@@ -299,7 +299,7 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
         )}
 
         {(payload?.flags || []).length > 0 ? (
-          <div className="border-t border-border px-4 py-3 dark:border-white/10">
+          <div className="border-t border-border px-4 py-3">
             <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Уже помечено
             </div>
@@ -316,16 +316,16 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
                     </span>
                   ) : null}
                   {props.canManage ? (
-                    <button
+                    <Button
                       onClick={() =>
                         void post({ action: 'unflag_shift', shift_date: f.shift_date, shift: f.shift })
                       }
                       disabled={busy}
-                      className="ml-auto rounded p-1 text-muted-foreground hover:bg-surface-hover"
+                      variant="ghost" size="icon" className="ml-auto h-7 w-7 text-muted-foreground"
                       aria-label="Снять пометку"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    </Button>
                   ) : null}
                 </div>
               ))}
@@ -345,14 +345,14 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
 
         <div className="mt-3 space-y-1">
           {(payload?.events || []).length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground dark:border-white/10 dark:text-muted-foreground">
+            <div className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
               Событий не отмечено.
             </div>
           ) : (
             (payload?.events || []).map((e) => (
               <div
                 key={e.id}
-                className="flex flex-wrap items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm dark:border-white/10"
+                className="flex flex-wrap items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm"
               >
                 <span className="tabular-nums text-muted-foreground">
                   {e.starts_on}
@@ -365,14 +365,14 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
                   {e.shift ? ` · ${e.shift === 'night' ? 'ночь' : 'день'}` : ''}
                 </span>
                 {props.canManage ? (
-                  <button
+                  <Button
                     onClick={() => void post({ action: 'delete_event', event_id: e.id })}
                     disabled={busy}
-                    className="ml-auto rounded p-1 text-muted-foreground hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10"
+                    variant="ghost" size="icon" className="ml-auto h-7 w-7 text-muted-foreground hover:text-rose-600"
                     aria-label="Удалить событие"
                   >
                     <Trash2 className="h-4 w-4" />
-                  </button>
+                  </Button>
                 ) : null}
               </div>
             ))
@@ -387,7 +387,8 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
                 type="date"
                 value={eventForm.starts_on}
                 onChange={(e) => setEventForm({ ...eventForm, starts_on: e.target.value })}
-                              />
+                className="w-36"
+              />
             </label>
             <label className="flex flex-col gap-1 text-xs text-muted-foreground">
               По
@@ -395,12 +396,14 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
                 type="date"
                 value={eventForm.ends_on}
                 onChange={(e) => setEventForm({ ...eventForm, ends_on: e.target.value })}
-                              />
+                className="w-36"
+              />
             </label>
             <NativeSelect
               value={eventForm.event_type}
               onChange={(e) => setEventForm({ ...eventForm, event_type: e.target.value })}
-                          >
+              className="w-44"
+            >
               {EVENT_TYPES.map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
@@ -412,7 +415,8 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
               onChange={(e) =>
                 setEventForm({ ...eventForm, severity: e.target.value as 'low' | 'medium' | 'high' })
               }
-                          >
+              className="w-36"
+            >
               {Object.entries(SEVERITY_LABEL).map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
@@ -447,7 +451,7 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
 
       {/* Месячный бонус */}
       <Card className="overflow-hidden">
-        <div className="flex items-center gap-2 border-b border-border px-4 py-3 dark:border-white/10">
+        <div className="flex items-center gap-2 border-b border-border px-4 py-3">
           <Wallet className="h-4 w-4 text-muted-foreground" />
           <h2 className="text-sm font-semibold text-foreground">Месячный бонус</h2>
           <span className="text-xs text-muted-foreground">
@@ -526,7 +530,7 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
             })
           )}
         </div>
-        <p className="border-t border-border px-4 py-2 text-xs text-muted-foreground dark:border-white/10 dark:text-muted-foreground">
+        <p className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
           Бонус считается, но не начисляется сам. По кнопке он попадает в зарплату отдельной
           корректировкой с пометкой источника — повторное нажатие деньги не удвоит. При статусе «мало
           смен» бонус не платится вовсе: платить за статус, который мы не смогли определить, нельзя ни в
@@ -610,7 +614,7 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
               {(payload?.cashier_mix || [])
                 .filter((m) => m.notable.length > 0)
                 .map((m) => (
-                  <div key={m.cashier_id} className="rounded-lg border border-border p-2.5 dark:border-white/10">
+                  <div key={m.cashier_id} className="rounded-lg border border-border p-2.5">
                     <div className="text-sm font-medium text-foreground">
                       {props.cashierNames.get(m.cashier_id) || 'Без имени'}
                     </div>

@@ -229,11 +229,7 @@ export function PlansTab(props: { companyId: string; canManage: boolean }) {
               >
                 <RefreshCw className="mr-1 h-3.5 w-3.5" /> Пересчитать поправку
               </Button>
-              {/* Из чего сложилась поправка. Без этого «цели выше на 9%» — число
-            с потолка: владелец не может ни проверить его, ни возразить. */}
-        <MonthlyBreakdown row={currentMonth} />
-
-        {currentMonth?.status === 'pending_approval' ? (
+              {currentMonth?.status === 'pending_approval' ? (
                 <Button
                   size="sm"
                   disabled={busy}
@@ -295,7 +291,7 @@ export function PlansTab(props: { companyId: string; canManage: boolean }) {
 
       {/* Таблица планов */}
       <Card className="overflow-hidden">
-        <div className="flex items-center gap-2 border-b border-border px-4 py-3 dark:border-white/10">
+        <div className="flex items-center gap-2 border-b border-border px-4 py-3">
           <CalendarClock className="h-4 w-4 text-muted-foreground" />
           <h2 className="text-sm font-semibold text-foreground">Ближайшие смены</h2>
           <span className="text-xs text-muted-foreground">
@@ -394,24 +390,24 @@ export function PlansTab(props: { companyId: string; canManage: boolean }) {
                       <td className="px-2 py-2">
                         <div className="flex gap-1">
                           {p.b1 != null && !p.locked && p.source === 'saved' ? (
-                            <button
+                            <Button
                               title="Зафиксировать"
                               disabled={busy}
                               onClick={() => void post({ action: 'lock', plan_date: p.date, shift: p.shift })}
-                              className="rounded p-1 text-muted-foreground hover:bg-surface-hover hover:text-body"
+                              variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground"
                             >
                               <Lock className="h-4 w-4" />
-                            </button>
+                            </Button>
                           ) : null}
                           {p.b1 != null && p.source === 'saved' ? (
-                            <button
+                            <Button
                               title="Изменить вручную"
                               disabled={busy}
                               onClick={() => setEditing(p)}
-                              className="rounded p-1 text-muted-foreground hover:bg-surface-hover hover:text-body"
+                              variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground"
                             >
                               <Pencil className="h-4 w-4" />
-                            </button>
+                            </Button>
                           ) : null}
                         </div>
                       </td>

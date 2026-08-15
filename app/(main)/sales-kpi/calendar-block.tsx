@@ -139,9 +139,9 @@ export function CalendarBlock(props: { companyId: string; canManage: boolean }) 
         <span className="text-xs text-muted-foreground">{year} год</span>
       </div>
       <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-        Из этого складывается месячный индекс: в месяце с длинными выходными или каникулами спрос другой,
-        и цели должны это учитывать. Пока здесь пусто, обе части индекса считаются нейтральными — то есть
-        не работают.
+        Из этого складываются две части поправки на месяц: в месяце с длинными выходными или каникулами
+        спрос другой, и цели должны это учитывать. Разбор поправки — выше, в блоке «Из чего сложилась
+        поправка»: там видно, работает ли каждая часть.
       </p>
 
       {loading ? (
@@ -178,7 +178,7 @@ export function CalendarBlock(props: { companyId: string; canManage: boolean }) 
 
             <div className="max-h-52 space-y-1 overflow-y-auto pr-1">
               {(payload?.days || []).length === 0 ? (
-                <div className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground dark:border-white/10 dark:text-muted-foreground">
+                <div className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
                   Дней нет. Начните с праздников РК: официальные даты и переносы выходных уже в системе.
                 </div>
               ) : (
@@ -196,14 +196,16 @@ export function CalendarBlock(props: { companyId: string; canManage: boolean }) 
                     <span className="shrink-0 text-xs text-muted-foreground">{impactText(d.impact_index)}</span>
                     {!d.verified ? (
                       props.canManage ? (
-                        <button
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={() => void post({ action: 'verify_day', day_id: d.id })}
                           disabled={busy}
                           title="Дату проверил, всё верно"
-                          className="shrink-0 rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-700 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-300"
+                          className="h-6 shrink-0 bg-amber-50 px-1.5 text-xs text-amber-700 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-300"
                         >
                           проверить
-                        </button>
+                        </Button>
                       ) : (
                         <span className="shrink-0 rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
                           не проверено
@@ -213,14 +215,14 @@ export function CalendarBlock(props: { companyId: string; canManage: boolean }) 
                       <Check className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
                     )}
                     {props.canManage ? (
-                      <button
+                      <Button
                         onClick={() => void post({ action: 'delete_day', day_id: d.id })}
                         disabled={busy}
-                        className="rounded p-1 text-muted-foreground hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10"
+                        variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-rose-600"
                         aria-label="Удалить день"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      </Button>
                     ) : null}
                   </div>
                 ))
@@ -233,10 +235,12 @@ export function CalendarBlock(props: { companyId: string; canManage: boolean }) 
                   type="date"
                   value={dayForm.day}
                   onChange={(e) => setDayForm({ ...dayForm, day: e.target.value })}
+                  className="w-36"
                 />
                 <NativeSelect
                   value={dayForm.day_type}
                   onChange={(e) => setDayForm({ ...dayForm, day_type: e.target.value })}
+                  className="w-44"
                 >
                   {DAY_TYPES.map(([v, l]) => (
                     <option key={v} value={v}>
@@ -288,7 +292,7 @@ export function CalendarBlock(props: { companyId: string; canManage: boolean }) 
 
             <div className="max-h-52 space-y-1 overflow-y-auto pr-1">
               {(payload?.periods || []).length === 0 ? (
-                <div className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground dark:border-white/10 dark:text-muted-foreground">
+                <div className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
                   Периодов нет. Добавьте семестр и каникулы — модель узнает, когда студенты в городе.
                 </div>
               ) : (
@@ -302,14 +306,14 @@ export function CalendarBlock(props: { companyId: string; canManage: boolean }) 
                         {impactText(p.manual_index)}
                       </span>
                       {props.canManage ? (
-                        <button
+                        <Button
                           onClick={() => void post({ action: 'delete_period', period_id: p.id })}
                           disabled={busy}
-                          className="rounded p-1 text-muted-foreground hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10"
+                          variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-rose-600"
                           aria-label="Удалить период"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        </Button>
                       ) : null}
                     </div>
                     <div className="text-xs tabular-nums text-muted-foreground">
@@ -320,13 +324,15 @@ export function CalendarBlock(props: { companyId: string; canManage: boolean }) 
                       <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
                         <span>не подтверждён — в расчёт не идёт</span>
                         {props.canManage ? (
-                          <button
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => void post({ action: 'confirm_period', period_id: p.id })}
                             disabled={busy}
-                            className="rounded bg-amber-50 px-1.5 py-0.5 hover:bg-amber-100 dark:bg-amber-500/10"
+                            className="h-6 bg-amber-50 px-1.5 text-xs hover:bg-amber-100 dark:bg-amber-500/10"
                           >
                             подтвердить
-                          </button>
+                          </Button>
                         ) : null}
                       </div>
                     ) : null}
@@ -358,18 +364,21 @@ export function CalendarBlock(props: { companyId: string; canManage: boolean }) 
                     type="date"
                     value={periodForm.start_date}
                     onChange={(e) => setPeriodForm({ ...periodForm, start_date: e.target.value })}
+                    className="w-36"
                   />
                   <span className="text-muted-foreground">—</span>
                   <Input
                     type="date"
                     value={periodForm.end_date}
                     onChange={(e) => setPeriodForm({ ...periodForm, end_date: e.target.value })}
+                    className="w-36"
                   />
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <NativeSelect
                     value={periodForm.period_type}
                     onChange={(e) => setPeriodForm({ ...periodForm, period_type: e.target.value })}
+                    className="w-44"
                   >
                     {PERIOD_TYPES.map(([v, l]) => (
                       <option key={v} value={v}>

@@ -163,7 +163,7 @@ export function AccuracyTab(props: { companyId: string }) {
                 return (
                   <div
                     key={c.level}
-                    className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border p-3 dark:border-white/10"
+                    className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border p-3"
                   >
                     <span className="w-8 text-sm font-semibold text-foreground">
                       {LEVEL_LABELS[c.level] || c.level}
@@ -243,7 +243,7 @@ export function AccuracyTab(props: { companyId: string }) {
         </p>
 
         <div className="mt-3 grid gap-4 lg:grid-cols-2">
-          <div className="rounded-lg border border-border p-3 dark:border-white/10">
+          <div className="rounded-lg border border-border p-3">
             <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               По всей истории точки
             </div>
@@ -258,7 +258,7 @@ export function AccuracyTab(props: { companyId: string }) {
             </div>
           </div>
 
-          <div className="rounded-lg border border-border p-3 dark:border-white/10">
+          <div className="rounded-lg border border-border p-3">
             <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               По объявленным планам
             </div>

@@ -38,6 +38,14 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
+import { ScrollToEdge } from '@/components/ui/scroll-to-edge'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { formatMoney } from '@/lib/core/format'
 import { mutateApi, useApi } from '@/lib/hooks/use-api'
@@ -335,7 +343,7 @@ function Confidence({ value }: { value: number }) {
           }
 
   return (
-    <div className="flex items-center gap-2" title={v.hint}>
+    <div className="flex items-center gap-2 whitespace-nowrap" title={v.hint}>
       <div className="h-1.5 w-10 shrink-0 overflow-hidden rounded-full bg-surface-hover">
         <div className={`h-full ${v.tone}`} style={{ width: `${pct}%` }} />
       </div>
@@ -635,7 +643,7 @@ function SettingsModal(props: {
         ) : (
           <div className="space-y-4">
             {/* Погода */}
-            <section className="rounded-xl border border-border p-4 dark:border-white/10">
+            <section className="rounded-xl border border-border p-4">
               <div className="flex items-start gap-3">
                 <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-300">
                   <CloudSun className="h-4.5 w-4.5" />
@@ -732,7 +740,7 @@ function SettingsModal(props: {
             </section>
 
             {/* Ворота */}
-            <section className="rounded-xl border border-border p-4 dark:border-white/10">
+            <section className="rounded-xl border border-border p-4">
               <div className="flex items-start gap-3">
                 <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-300">
                   <GraduationCap className="h-4.5 w-4.5" />
@@ -761,7 +769,7 @@ function SettingsModal(props: {
             </section>
 
             {/* Допродажи */}
-            <section className="rounded-xl border border-border p-4 dark:border-white/10">
+            <section className="rounded-xl border border-border p-4">
               <div className="flex items-start gap-3">
                 <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300">
                   <ShoppingBag className="h-4.5 w-4.5" />
@@ -780,7 +788,7 @@ function SettingsModal(props: {
 
                   <div className="mt-3 space-y-1.5">
                     {rules.length === 0 ? (
-                      <div className="rounded-lg border border-dashed border-border px-3 py-5 text-center dark:border-white/10">
+                      <div className="rounded-lg border border-dashed border-border px-3 py-5 text-center">
                         <p className="text-sm text-muted-foreground">Правил пока нет</p>
                         <p className="mt-0.5 text-xs text-muted-foreground">
                           Пока их нет, допродажи не считаются и в оценке не участвуют
@@ -799,14 +807,16 @@ function SettingsModal(props: {
                           <span className="text-body">
                             {refName(r.target_kind, r.target_ref)}
                           </span>
-                          <button
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             onClick={() => void removeRule(r.id)}
                             disabled={busy}
-                            className="ml-auto rounded p-1 text-muted-foreground transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10"
+                            className="ml-auto h-7 w-7 text-muted-foreground hover:text-rose-600"
                             aria-label="Удалить правило"
                           >
                             <Trash2 className="h-4 w-4" />
-                          </button>
+                          </Button>
                         </div>
                       ))
                     )}
@@ -959,40 +969,43 @@ export default function SalesKpiPage() {
       ) : (
         <label className="flex flex-col gap-1 text-xs text-muted-foreground">
           Месяц
-          <NativeSelect
+          <Select
             value={month}
-            onChange={(e) => {
-              const next = e.target.value
+            onValueChange={(next) => {
               const bounds = monthBounds(next)
               setMonth(next)
               setFrom(bounds.from)
               setTo(bounds.to)
             }}
-            className="w-44"
           >
-            {recentMonths(18).map((m) => (
-              <option key={m.key} value={m.key}>
-                {m.label}
-              </option>
-            ))}
-          </NativeSelect>
+            <SelectTrigger className="w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {recentMonths(18).map((m) => (
+                <SelectItem key={m.key} value={m.key}>
+                  {m.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </label>
       )}
       {(payload?.stores?.length || 0) > 1 ? (
         <label className="flex flex-col gap-1 text-xs text-muted-foreground">
           Точка
-          <NativeSelect
-            value={companyId}
-            onChange={(e) => setCompanyId(e.target.value)}
-            className="w-48"
-          >
-            <option value="">Выберите точку</option>
-            {(payload?.stores || []).map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </NativeSelect>
+          <Select value={companyId} onValueChange={setCompanyId}>
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="Выберите точку" />
+            </SelectTrigger>
+            <SelectContent>
+              {(payload?.stores || []).map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  {s.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </label>
       ) : null}
       <div className="flex gap-1">
@@ -1025,6 +1038,10 @@ export default function SalesKpiPage() {
     // app-page-wide — общий контейнер портала: без него страница растягивается
     // на всю ширину экрана и теряет поля, в отличие от остальных разделов.
     <div className="app-page-wide space-y-5">
+      {/* Таблица смен за месяц — это сотни строк, возвращаться к фильтрам
+          колесом мыши слишком долго. */}
+      <ScrollToEdge />
+
       <AdminPageHeader
         title="Эффективность продавцов"
         description="Спрос или продавец: сколько людей купило и что продавец сделал с каждым из них"
@@ -1102,7 +1119,11 @@ export default function SalesKpiPage() {
           </div>
 
           {tab === 'payout' && payload?.company ? (
-            <PayoutTab companyId={payload.company.id} canManage={can('sales-kpi.manage')} />
+            <PayoutTab
+              companyId={payload.company.id}
+              month={month}
+              canManage={can('sales-kpi.manage')}
+            />
           ) : tab === 'plans' && payload?.company ? (
             <PlansTab companyId={payload.company.id} canManage={can('sales-kpi.manage')} />
           ) : tab === 'accuracy' && payload?.company ? (
@@ -1172,7 +1193,7 @@ export default function SalesKpiPage() {
 
           {/* Продавцы */}
           <Card className="overflow-hidden">
-            <div className="flex items-center gap-2 border-b border-border px-4 py-3 dark:border-white/10">
+            <div className="flex items-center gap-2 border-b border-border px-4 py-3">
               <Users className="h-4 w-4 text-muted-foreground" />
               <h2 className="text-sm font-semibold text-foreground">Продавцы</h2>
               <span className="text-xs text-muted-foreground">
@@ -1262,25 +1283,25 @@ export default function SalesKpiPage() {
 
           {/* Смены */}
           <Card className="overflow-hidden">
-            <div className="border-b border-border px-4 py-3 dark:border-white/10">
+            <div className="border-b border-border px-4 py-3">
               <h2 className="text-sm font-semibold text-foreground">Смены</h2>
               <p className="text-xs text-muted-foreground">
                 Нажмите на смену, чтобы увидеть, из чего сложился вывод
               </p>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[960px] text-sm">
+              <table className="w-full min-w-[1240px] text-sm">
                 <thead className="bg-surface-muted text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
-                    <th className="px-4 py-2 text-left font-medium">Дата</th>
-                    <th className="px-4 py-2 text-left font-medium">Смена</th>
-                    <th className="px-4 py-2 text-left font-medium">Продавец</th>
-                    <th className="px-4 py-2 text-right font-medium">Касса</th>
-                    <th className="px-4 py-2 text-right font-medium">Покупателей</th>
-                    <th className="px-4 py-2 text-right font-medium">Как отработал</th>
-                    <th className="px-4 py-2 text-left font-medium">Вывод</th>
-                    <th className="px-4 py-2 text-left font-medium">Обстановка</th>
-                    <th className="px-4 py-2 text-left font-medium">Можно ли доверять</th>
+                    <th className="whitespace-nowrap px-4 py-2 text-left font-medium">Дата</th>
+                    <th className="whitespace-nowrap px-4 py-2 text-left font-medium">Смена</th>
+                    <th className="whitespace-nowrap px-4 py-2 text-left font-medium">Продавец</th>
+                    <th className="whitespace-nowrap px-4 py-2 text-right font-medium">Касса</th>
+                    <th className="whitespace-nowrap px-4 py-2 text-right font-medium">Покупателей</th>
+                    <th className="whitespace-nowrap px-4 py-2 text-right font-medium">Как отработал</th>
+                    <th className="whitespace-nowrap px-4 py-2 text-left font-medium">Вывод</th>
+                    <th className="whitespace-nowrap px-4 py-2 text-left font-medium">Обстановка</th>
+                    <th className="whitespace-nowrap px-4 py-2 text-left font-medium">Можно ли доверять</th>
                     <th className="w-8" />
                   </tr>
                 </thead>
@@ -1303,7 +1324,7 @@ export default function SalesKpiPage() {
                             onClick={() => setOpenShift(isOpen ? null : key)}
                             className="cursor-pointer hover:bg-surface-hover"
                           >
-                            <td className="px-4 py-2 tabular-nums">
+                            <td className="whitespace-nowrap px-4 py-2 tabular-nums">
                               {s.date}
                               {s.duration_minutes ? (
                                 <div className="text-xs text-muted-foreground">
@@ -1311,7 +1332,7 @@ export default function SalesKpiPage() {
                                 </div>
                               ) : null}
                             </td>
-                            <td className="px-4 py-2">
+                            <td className="whitespace-nowrap px-4 py-2">
                               {s.shift === 'night' ? 'Ночь' : 'День'}
                               {s.shift_id ? (
                                 <a
@@ -1319,27 +1340,27 @@ export default function SalesKpiPage() {
                                   onClick={(e) => e.stopPropagation()}
                                   className="mt-0.5 block text-xs text-sky-600 hover:underline dark:text-sky-400"
                                 >
-                                  чеки и позиции
+                                  чеки
                                 </a>
                               ) : null}
                             </td>
                             <td className="px-4 py-2">{s.cashier_name || '—'}</td>
                             <td className="px-4 py-2 text-right tabular-nums">
                               <div>{formatMoney(s.revenue)}</div>
-                              <div className={`text-xs ${toneFor(revenueRatio)}`}>
+                              <div className={`whitespace-nowrap text-xs ${toneFor(revenueRatio)}`}>
                                 {s.expected_revenue == null ? 'нет ожидания' : `${deltaPct(revenueRatio)} к ожиданию`}
                               </div>
                             </td>
                             <td className="px-4 py-2 text-right tabular-nums">
                               <div>{s.receipts}</div>
-                              <div className={`text-xs ${toneFor(demandRatio)}`}>
+                              <div className={`whitespace-nowrap text-xs ${toneFor(demandRatio)}`}>
                                 {demandRatio == null
                                   ? 'нет ожидания'
                                   : `${deltaPct(demandRatio)} к ожиданию`}
                               </div>
                             </td>
                             <td
-                              className={`px-4 py-2 text-right font-medium ${toneFor(s.score)}`}
+                              className={`whitespace-nowrap px-4 py-2 text-right font-medium ${toneFor(s.score)}`}
                               title={s.score == null ? '' : `Балл ${s.score.toFixed(2)} — отношение к обычному для таких смен`}
                             >
                               {scoreText(s.score)}

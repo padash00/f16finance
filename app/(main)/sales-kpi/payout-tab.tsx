@@ -10,12 +10,13 @@
 
 import { useState } from 'react'
 import { AlertCircle, Check, Coins, Loader2, Sparkles, Wallet } from 'lucide-react'
-import Link from 'next/link'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { formatMoney } from '@/lib/core/format'
 import { useApi } from '@/lib/hooks/use-api'
+
+import { SectionIntro } from './section-intro'
 
 type PayoutRow = {
   cashier_id: string
@@ -78,24 +79,15 @@ const STATUS_STYLE: Record<string, string> = {
   INSUFFICIENT_DATA: 'bg-surface-hover text-muted-foreground',
 }
 
-function currentMonth(): string {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-}
-
 function monthLabel(month: string): string {
   const [y, m] = month.split('-').map(Number)
   return new Date(y, (m || 1) - 1, 1).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
 }
 
-function shiftMonth(month: string, delta: number): string {
-  const [y, m] = month.split('-').map(Number)
-  const d = new Date(y, (m || 1) - 1 + delta, 1)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-}
-
-export function PayoutTab(props: { companyId: string; canManage: boolean }) {
-  const [month, setMonth] = useState(currentMonth())
+export function PayoutTab(props: { companyId: string; month: string; canManage: boolean }) {
+  // Месяц задаётся один раз в шапке страницы. Своя пара стрелок здесь спорила
+  // с ним: сверху стоял июнь, а начисляли за август.
+  const month = props.month
   const [busy, setBusy] = useState<string | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
   const [report, setReport] = useState<MonthlyReport | null>(null)
@@ -183,56 +175,24 @@ export function PayoutTab(props: { companyId: string; canManage: boolean }) {
 
   return (
     <div className="space-y-4">
-      {/* Что это вообще такое */}
-      <Card className="p-4">
-        <div className="flex items-center gap-2">
-          <Wallet className="h-4 w-4 text-muted-foreground" />
-          <h2 className="text-sm font-semibold text-foreground">
-            Доплата за качество работы
-          </h2>
-        </div>
-        <div className="mt-2 space-y-2 text-sm leading-relaxed text-body">
-          <p>
-            Это единственная выплата, которую добавляет модуль. Ставка за смену и бонусы за оборот
-            считаются как раньше — на странице{' '}
-            <Link href="/salary" className="text-sky-600 hover:underline dark:text-sky-400">
-              «Зарплата»
-            </Link>
-            , их тут нет.
-          </p>
-          <p>
-            Доплата идёт не за выручку, а за то, как человек работает с каждым покупателем: средний чек,
-            допродажи, сколько товаров в чеке. Продавец может отработать смену с маленькой кассой просто
-            потому, что мало кто зашёл, — за это здесь не наказывают.
-          </p>
-          <p className="text-muted-foreground">
-            Сильный — {formatMoney(payload?.settings.monthly_bonus_strong ?? 0)}, топ —{' '}
-            {formatMoney(payload?.settings.monthly_bonus_top ?? 0)}. Статус ставится от{' '}
-            {payload?.settings.min_qualifying_shifts ?? 6} отработанных смен: по паре смен человека
-            оценивать нельзя.
-          </p>
-        </div>
-      </Card>
+      {/* Что это вообще такое — тем же блоком, что и на остальных вкладках */}
+      <SectionIntro
+        icon={<Wallet className="h-5 w-5" />}
+        tone="emerald"
+        title="Доплата за качество работы"
+        what="Единственная выплата, которую добавляет модуль. Она идёт не за выручку, а за то, как человек работает с каждым покупателем: средний чек, допродажи, сколько товаров в чеке."
+        todo={[
+          'Выбрать месяц и посмотреть, кому что причитается',
+          'Нажать «Начислить» — сумма уйдёт в зарплату',
+          'Тем, у кого ноль, сказать, чего не хватило: это тут написано',
+        ]}
+        how={`Ставка за смену и бонусы за оборот считаются как раньше, на странице «Зарплата», и сюда не входят. Сильный — ${formatMoney(payload?.settings.monthly_bonus_strong ?? 0)}, топ — ${formatMoney(payload?.settings.monthly_bonus_top ?? 0)}. Статус ставится от ${payload?.settings.min_qualifying_shifts ?? 6} отработанных смен: по паре смен человека оценивать нельзя. Продавец может отработать смену с маленькой кассой просто потому, что мало кто зашёл, — за это здесь не наказывают.`}
+      />
 
       {/* Месяц и итог */}
       <Card className="p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setMonth(shiftMonth(month, -1))}>
-              ←
-            </Button>
-            <span className="min-w-[150px] text-center text-sm font-medium text-foreground">
-              {monthLabel(month)}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={month >= currentMonth()}
-              onClick={() => setMonth(shiftMonth(month, 1))}
-            >
-              →
-            </Button>
-          </div>
+          <div className="text-sm font-medium text-foreground">{monthLabel(month)}</div>
 
           <div className="flex flex-wrap gap-6">
             <div>

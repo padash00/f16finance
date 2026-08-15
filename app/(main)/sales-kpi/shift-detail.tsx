@@ -261,7 +261,7 @@ export function ShiftDetail(props: {
           {explanation.metrics.map((m) => (
             <div
               key={m.metric}
-              className="rounded-lg border border-border p-2.5 dark:border-white/10"
+              className="rounded-lg border border-border p-2.5"
             >
               <div className="flex items-baseline justify-between gap-2">
                 <span className="text-xs font-medium text-foreground">{m.label}</span>
@@ -281,7 +281,7 @@ export function ShiftDetail(props: {
       </div>
 
       {/* ИИ поверх готового разбора */}
-      <div className="rounded-lg border border-border p-3 dark:border-white/10">
+      <div className="rounded-lg border border-border p-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             <Bot className="h-4 w-4" /> Разбор от ИИ

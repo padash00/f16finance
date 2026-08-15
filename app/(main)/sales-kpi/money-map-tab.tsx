@@ -70,9 +70,9 @@ function dt(iso: string | null): string {
 
 function Row(props: { label: string; value: string; hint?: string }) {
   return (
-    <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border py-1.5 last:border-0 dark:border-white/5">
+    <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border py-1.5 last:border-0">
       <span className="text-sm text-body">{props.label}</span>
-      <span className="text-sm font-medium text-foreground tabular-nums dark:text-white">{props.value}</span>
+      <span className="text-sm font-medium text-foreground tabular-nums">{props.value}</span>
       {props.hint ? <span className="w-full text-xs text-muted-foreground">{props.hint}</span> : null}
     </div>
   )
@@ -243,7 +243,7 @@ export function MoneyMapTab(props: { companyId: string }) {
 
       {/* История изменений */}
       <Card className="overflow-hidden">
-        <div className="flex items-center gap-2 border-b border-border px-4 py-3 dark:border-white/10">
+        <div className="flex items-center gap-2 border-b border-border px-4 py-3">
           <History className="h-4 w-4 text-muted-foreground" />
           <h2 className="text-sm font-semibold text-foreground">Кто что менял</h2>
           <span className="text-xs text-muted-foreground">
