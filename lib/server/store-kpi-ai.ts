@@ -62,6 +62,24 @@ const POST_SHIFT_SCHEMA = `{
   "uncertainties": ["чего не хватило в данных и где вывод слабый"]
 }`
 
+export type MonthlyAiResult = {
+  summary: string
+  demand: string
+  team: string
+  money: string
+  recommendation: string
+  watch_out: string[]
+}
+
+const MONTHLY_SCHEMA = `{
+  "summary": "4-6 предложений: чем закончился месяц в целом",
+  "demand": "2-4 предложения: что было со спросом — покупателей больше или меньше обычного и почему",
+  "team": "4-6 предложений: кто из продавцов вырос, кто просел, по каким именно метрикам",
+  "money": "2-4 предложения: сколько доплат начислено и оправдались ли они ростом",
+  "recommendation": "2-4 предложения: что делать в следующем месяце",
+  "watch_out": ["чего не хватило в данных и где выводы слабые"]
+}`
+
 function hashInput(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0, 32)
 }
@@ -191,6 +209,110 @@ ${POST_SHIFT_SCHEMA}
       task_type: 'POST_SHIFT_CASHIER_REVIEW',
       subject_date: args.subject.date,
       subject_shift: args.subject.shift,
+      model_version: args.modelVersion,
+      input_hash: inputHash,
+      input_json: input,
+      success: false,
+      error: message,
+      created_by: args.actorUserId,
+    })
+
+    return { result: null, error: message }
+  }
+}
+
+
+/**
+ * Управленческий разбор месяца.
+ *
+ * В отличие от разбора смены здесь оценивается не событие, а период: что
+ * происходило со спросом, как менялась команда, окупились ли доплаты. Все
+ * числа приходят посчитанными — модель их излагает, а не выводит.
+ */
+export async function runMonthlyReview(args: {
+  supabase: any
+  organizationId: string
+  companyId: string
+  actorUserId: string | null
+  modelVersion: string
+  month: string
+  facts: Record<string, unknown>
+}): Promise<{ result: MonthlyAiResult | null; error: string | null }> {
+  const input = {
+    task: 'MONTHLY_MANAGEMENT_REVIEW',
+    point: 'Магазин',
+    month: args.month,
+    facts: args.facts,
+    notes: [
+      'Спрос измеряется числом чеков: счётчика посетителей у магазина нет.',
+      'Метрики продавца сравниваются с нормой для сопоставимых условий.',
+      'Доплата начисляется за качество работы, а не за оборот: за оборот платят правила зарплаты.',
+      'Денежные величины уже приведены к сопоставимым ценам.',
+    ],
+  }
+
+  const inputHash = hashInput(input)
+
+  try {
+    const response = await generateAiText({
+      maxTokens: 2500,
+      messages: [
+        { role: 'system', content: STORE_KPI_SYSTEM_PROMPT },
+        {
+          role: 'user',
+          content: `Составь управленческий разбор месяца для владельца.
+
+ДАННЫЕ:
+${JSON.stringify(input, null, 2)}
+
+Верни JSON строго такой структуры:
+${MONTHLY_SCHEMA}
+
+Пиши так, чтобы владелец мог принять решение: не пересказывай цифры, а
+объясняй, что за ними стоит. Если данных мало — скажи прямо в watch_out и не
+делай уверенных выводов. Кадровых решений не предлагай: только обучение,
+разбор, отметить, собрать данные.`,
+        },
+      ],
+    })
+
+    const parsed = parseJsonLoose(response.text)
+    const result: MonthlyAiResult = {
+      summary: asString(parsed.summary),
+      demand: asString(parsed.demand),
+      team: asString(parsed.team),
+      money: asString(parsed.money),
+      recommendation: asString(parsed.recommendation),
+      watch_out: Array.isArray(parsed.watch_out)
+        ? parsed.watch_out.map((u: unknown) => asString(u)).filter(Boolean)
+        : [],
+    }
+
+    await args.supabase.from('store_kpi_ai_runs').insert({
+      organization_id: args.organizationId,
+      company_id: args.companyId,
+      task_type: 'MONTHLY_DEMAND_REVIEW',
+      subject_date: `${args.month}-01`,
+      provider: response.provider,
+      model: response.model,
+      model_version: args.modelVersion,
+      input_hash: inputHash,
+      input_json: input,
+      output_json: result,
+      success: true,
+      tokens: response.usage?.total_tokens ?? null,
+      created_by: args.actorUserId,
+    })
+
+    return { result, error: null }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+
+    await args.supabase.from('store_kpi_ai_runs').insert({
+      organization_id: args.organizationId,
+      company_id: args.companyId,
+      task_type: 'MONTHLY_DEMAND_REVIEW',
+      subject_date: `${args.month}-01`,
       model_version: args.modelVersion,
       input_hash: inputHash,
       input_json: input,

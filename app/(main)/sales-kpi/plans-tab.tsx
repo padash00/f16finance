@@ -17,6 +17,7 @@ import { Card } from '@/components/ui/card'
 import { formatMoney } from '@/lib/core/format'
 import { useApi } from '@/lib/hooks/use-api'
 
+import { CalendarBlock } from './calendar-block'
 import { SectionIntro } from './section-intro'
 
 type PlanRow = {
@@ -150,6 +151,7 @@ export function PlansTab(props: { companyId: string; canManage: boolean }) {
           '«Пересчитать планы» — если менялись цены или ассортимент',
           '«Зафиксировать» — чтобы цель на смену больше не менялась',
           'Карандашом можно поправить уровень вручную, но нужно указать причину',
+          'Заполнить праздники и учебные периоды — без них месячный индекс работает вхолостую',
         ]}
         how="Уровни берутся из выручки похожих смен за прошлое: тот же сезон, тот же день недели, дневная или ночная. B1 — то, что берут чаще половины раз, B3 — то, что даётся редко. Суммы округляются вверх, чтобы цель запоминалась."
       />
@@ -210,6 +212,8 @@ export function PlansTab(props: { companyId: string; canManage: boolean }) {
           </div>
         ) : null}
       </Card>
+
+      <CalendarBlock companyId={props.companyId} canManage={props.canManage} />
 
       {/* Действия */}
       {props.canManage ? (

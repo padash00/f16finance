@@ -20,8 +20,14 @@ import {
   loadStoreKpiSettings,
   resolveStoreKpiContext,
 } from '@/lib/server/store-kpi'
-import { runPostShiftReview } from '@/lib/server/store-kpi-ai'
-import { analyzeStoreKpi, explainShift } from '@/lib/domain/store-kpi'
+import { runMonthlyReview, runPostShiftReview } from '@/lib/server/store-kpi-ai'
+import {
+  analyzeStoreKpi,
+  bonusRoi,
+  explainShift,
+  monthlyBonus,
+  retailDiagnostics,
+} from '@/lib/domain/store-kpi'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -38,6 +44,92 @@ export async function POST(request: Request) {
 
     const body = (await request.json().catch(() => ({}))) as Record<string, any>
     const companyId = String(body.company_id || '')
+
+    // ── Разбор месяца ─────────────────────────────────────────────────────
+    if (String(body.action || '') === 'monthly') {
+      const month = String(body.month || '')
+      if (!companyId || !/^\d{4}-\d{2}$/.test(month)) return json({ error: 'month-required' }, 400)
+      if (!inScope(scope, companyId)) return json({ error: 'forbidden', code: 'company-out-of-scope' }, 403)
+
+      const { data: co } = await supabase
+        .from('companies')
+        .select('id, organization_id')
+        .eq('id', companyId)
+        .maybeSingle()
+      if (!co?.organization_id) return json({ error: 'company-without-organization' }, 400)
+
+      const { settings } = await loadStoreKpiSettings(supabase, companyId)
+      const [y, m] = month.split('-').map(Number)
+      const monthFrom = `${month}-01`
+      const monthTo = `${month}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`
+
+      const historyFrom = (await earliestSaleDate(supabase, companyId)) ?? monthFrom
+      const monthFacts = await loadShiftFacts(supabase, {
+        companyId,
+        from: historyFrom,
+        to: monthTo,
+      })
+
+      const analysis = analyzeStoreKpi({
+        baselineFacts: monthFacts.filter((f) => f.date < monthFrom),
+        targetFacts: monthFacts.filter((f) => f.date >= monthFrom && f.date <= monthTo),
+        settings,
+      })
+
+      const names = new Map<string, string>()
+      if (analysis.cashiers.length) {
+        const { data: ops } = await supabase
+          .from('operators')
+          .select('id, name, short_name')
+          .in('id', analysis.cashiers.map((c) => c.cashier_id))
+        for (const op of ops || []) names.set(String(op.id), String(op.short_name || op.name || ''))
+      }
+
+      const { data: awardRows } = await supabase
+        .from('store_kpi_bonus_awards')
+        .select('amount, voided_at')
+        .eq('company_id', companyId)
+        .eq('kind', 'monthly')
+        .eq('period_start', monthFrom)
+      const paid = (awardRows || [])
+        .filter((a: any) => !a.voided_at)
+        .reduce((sum: number, a: any) => sum + Number(a.amount || 0), 0)
+
+      const { result, error } = await runMonthlyReview({
+        supabase,
+        organizationId: String(co.organization_id),
+        companyId,
+        actorUserId: access.user?.id || null,
+        modelVersion: settings.model_version,
+        month,
+        facts: {
+          shifts: analysis.shifts.length,
+          verdicts: analysis.shifts.reduce(
+            (acc: Record<string, number>, s) => {
+              acc[s.verdict] = (acc[s.verdict] || 0) + 1
+              return acc
+            },
+            {},
+          ),
+          diagnostics: retailDiagnostics(analysis.shifts),
+          coverage: analysis.coverage,
+          cashiers: analysis.cashiers.map((c) => ({
+            name: names.get(c.cashier_id) || 'Без имени',
+            shifts: c.shifts,
+            score: c.score,
+            status: c.status,
+            strengths: c.strengths,
+            weaknesses: c.weaknesses,
+            bonus: monthlyBonus(c.status, settings).amount,
+          })),
+          bonus_paid: paid,
+          roi: bonusRoi(analysis.shifts, paid, settings),
+        },
+      })
+
+      return json({ data: { month, ai: result, ai_error: error } })
+    }
+
     const date = String(body.date || '')
     const shift = body.shift === 'night' ? 'night' : 'day'
     if (!companyId || !date) return json({ error: 'company-and-date-required' }, 400)

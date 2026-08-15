@@ -9,7 +9,7 @@
  */
 
 import { useState } from 'react'
-import { AlertCircle, Check, Coins, Loader2, Wallet } from 'lucide-react'
+import { AlertCircle, Check, Coins, Loader2, Sparkles, Wallet } from 'lucide-react'
 import Link from 'next/link'
 
 import { Button } from '@/components/ui/button'
@@ -32,6 +32,15 @@ type PayoutRow = {
   zero_reason: string | null
   strengths: string[]
   weaknesses: string[]
+}
+
+type MonthlyReport = {
+  summary: string
+  demand: string
+  team: string
+  money: string
+  recommendation: string
+  watch_out: string[]
 }
 
 type PayoutData = {
@@ -89,6 +98,28 @@ export function PayoutTab(props: { companyId: string; canManage: boolean }) {
   const [month, setMonth] = useState(currentMonth())
   const [busy, setBusy] = useState<string | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
+  const [report, setReport] = useState<MonthlyReport | null>(null)
+  const [reportBusy, setReportBusy] = useState(false)
+
+  async function buildReport() {
+    setReportBusy(true)
+    setProblem(null)
+    try {
+      const res = await fetch('/api/admin/sales-kpi/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company_id: props.companyId, action: 'monthly', month }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json?.error || `HTTP ${res.status}`)
+      if (json?.data?.ai) setReport(json.data.ai as MonthlyReport)
+      if (json?.data?.ai_error) setProblem(`ИИ не ответил: ${json.data.ai_error}`)
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : 'Не удалось собрать отчёт')
+    } finally {
+      setReportBusy(false)
+    }
+  }
 
   const key = `/api/admin/sales-kpi/payout?company_id=${props.companyId}&month=${month}`
   const { data, loading, refresh } = useApi<{ data: PayoutData }>(key)
@@ -328,6 +359,62 @@ export function PayoutTab(props: { companyId: string; canManage: boolean }) {
           ))}
         </div>
       )}
+
+      {/* Отчёт месяца словами */}
+      <Card className="p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Что было в этом месяце</h3>
+            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+              Связный разбор: спрос, команда, деньги и что делать дальше. Считают цифры код и модель, ИИ
+              только излагает.
+            </p>
+          </div>
+          {!report ? (
+            <Button variant="outline" size="sm" disabled={reportBusy} onClick={() => void buildReport()}>
+              {reportBusy ? (
+                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="mr-1 h-3.5 w-3.5" />
+              )}
+              Собрать отчёт
+            </Button>
+          ) : null}
+        </div>
+
+        {report ? (
+          <div className="mt-3 space-y-3 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+            {[
+              ['Коротко', report.summary],
+              ['Спрос', report.demand],
+              ['Команда', report.team],
+              ['Деньги', report.money],
+              ['Что делать', report.recommendation],
+            ]
+              .filter(([, text]) => Boolean(text))
+              .map(([title, text]) => (
+                <div key={title as string}>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    {title as string}
+                  </div>
+                  <p className="mt-0.5">{text as string}</p>
+                </div>
+              ))}
+            {report.watch_out.length > 0 ? (
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Оговорки
+                </div>
+                <ul className="mt-0.5 space-y-1 text-xs text-slate-500 dark:text-slate-400">
+                  {report.watch_out.map((w) => (
+                    <li key={w}>• {w}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </Card>
 
       <Card className="p-4 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
         <div className="mb-2 text-sm font-semibold text-slate-900 dark:text-white">Как это работает</div>
