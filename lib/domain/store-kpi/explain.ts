@@ -47,19 +47,23 @@ export type ShiftExplanation = {
 }
 
 const VERDICT_HEADLINE: Record<ShiftVerdict, string> = {
-  TRAFFIC_DRIVEN: 'Касса просела из-за потока, а не из-за продавца.',
-  POSSIBLE_CASHIER_ISSUE: 'Поток был на месте, но работа с ним просела — есть о чём поговорить с продавцом.',
-  CASHIER_DRIVEN: 'Из того же потока выжали больше обычного.',
+  LOW_DEMAND: 'Покупателей пришло мало — касса просела из-за спроса, а не из-за продавца.',
+  POSSIBLE_CASHIER_ISSUE:
+    'Покупатели были, но работа с ними просела — есть о чём поговорить с продавцом.',
+  HIGH_DEMAND: 'Касса выросла в основном за счёт количества покупателей.',
+  STRONG_CASHIER: 'Из того же числа покупателей выжали заметно больше обычного.',
   NORMAL: 'Смена прошла в пределах обычного разброса.',
   INSUFFICIENT_DATA: 'Данных не хватило, чтобы делать выводы об этой смене.',
 }
 
 const VERDICT_ACTION: Record<ShiftVerdict, string> = {
-  TRAFFIC_DRIVEN:
-    'Отмечать продавцу нечего. Если такие смены повторяются, вопрос не к нему, а к тому, почему падает поток клуба.',
+  LOW_DEMAND:
+    'Претензий к продавцу нет. Если такие смены повторяются, вопрос не к нему, а к тому, почему приходит меньше людей: сезон, день недели, ассортимент, соседи.',
   POSSIBLE_CASHIER_ISSUE:
     'Стоит разобрать смену с продавцом: посмотреть, что мешало предлагать сопутствующее и добирать чек. Это повод для обучения, а не для наказания.',
-  CASHIER_DRIVEN: 'Есть что отметить и есть чему поучиться остальным — разберите, что сработало.',
+  HIGH_DEMAND:
+    'Записывать смену продавцу в заслугу автоматически не стоит: выручку сделал поток покупателей. Посмотрите, можно ли было выжать из него больше.',
+  STRONG_CASHIER: 'Есть что отметить и есть чему поучиться остальным — разберите, что сработало.',
   NORMAL: 'Отдельных действий не требуется.',
   INSUFFICIENT_DATA:
     'Сначала стоит закрыть дыры в данных — иначе любые выводы по этой смене будут гаданием.',
@@ -85,16 +89,16 @@ function readMetric(m: MetricRatio): string {
   const direction = m.raw_ratio == null ? 'на уровне нормы' : pct(m.raw_ratio)
 
   switch (m.metric) {
-    case 'revenue_per_club':
-      return `Отдача с потока ${direction}. Это главная метрика магазина при клубе: сколько денег снято с той же массы людей.`
-    case 'receipts_per_club':
-      return `Доля клиентов, дошедших до чека, ${direction}. Показывает, скольких вообще удалось довести до покупки.`
     case 'avg_ticket':
       return `Средний чек ${direction}. Это то, на что продавец влияет напрямую: что предложил и до чего добрал.`
     case 'items_per_receipt':
       return `Товаров на чек ${direction}. Прямой признак того, предлагалось ли что-то сверх заказанного.`
     case 'attach_rate':
-      return `Допродажи ${direction}. Считается по вашим правилам «категория → категория».`
+      return `Допродажи ${direction}. Считается по вашим правилам «взяли одно — предложи другое».`
+    case 'revenue_efficiency':
+      return `Отдача с покупателя ${direction}. По формуле это выручка, делённая на число чеков и ожидаемый средний чек, — то есть ровно то же измерение, что и строка «средний чек» выше. Обе метрики оставлены в баллах намеренно, чтобы средний чек весил больше остальных.`
+    case 'plan_attainment':
+      return `Касса смены ${direction} к норме для таких условий. Зависит и от продавца, и от числа покупателей, поэтому вес у неё самый маленький.`
     case 'product_knowledge':
       return 'Тест на знание товара за смену не учитывался.'
   }
@@ -104,23 +108,21 @@ export function explainShift(analysis: ShiftAnalysis, settings: StoreKpiSettings
   const { fact } = analysis
   const revenueRatio =
     analysis.expected_revenue && analysis.expected_revenue > 0 ? fact.revenue / analysis.expected_revenue : null
-  const trafficRatio =
-    analysis.expected_club_revenue && analysis.expected_club_revenue > 0 && fact.club_revenue != null
-      ? fact.club_revenue / analysis.expected_club_revenue
+  const demandRatio =
+    analysis.expected_receipts && analysis.expected_receipts > 0
+      ? fact.receipts / analysis.expected_receipts
       : null
 
   const paragraphs: string[] = []
 
-  // 1. Поток.
-  if (trafficRatio != null) {
+  // 1. Спрос.
+  if (demandRatio != null) {
     paragraphs.push(
-      `Поток. Выручка клуба за эту смену — ${money(fact.club_revenue)} при обычных ${money(
-        analysis.expected_club_revenue,
-      )}, то есть ${pct(trafficRatio)}. Числа посетителей у нас нет — клуб работает на стороннем SENET, — поэтому потоком считается его выручка за ту же смену.`,
+      `Спрос. Покупателей за смену — ${fact.receipts} чеков при обычных ${analysis.expected_receipts} для таких условий, то есть ${pct(demandRatio)}. Отдельного счётчика посетителей у магазина нет, но чек оставляет каждый купивший, а привести людей в помещение продавец не может — поэтому число чеков мы считаем мерой спроса, а не качества работы.`,
     )
   } else {
     paragraphs.push(
-      'Поток. Измерить нечем: выручки клуба за эту смену нет. Значит, отличить «пришло мало людей» от «людей было достаточно» по этой смене невозможно, и вывод опирается только на то, что происходило внутри чеков.',
+      `Спрос. За смену пробито ${fact.receipts} чеков, но сравнить не с чем: сопоставимых смен в истории меньше ${settings.min_sample_size}. Значит, отличить «пришло мало людей» от «людей было достаточно» по этой смене нельзя, и вывод опирается только на то, что происходило внутри чеков.`,
     )
   }
 
@@ -196,8 +198,8 @@ export function explainShift(analysis: ShiftAnalysis, settings: StoreKpiSettings
   const conclusion =
     analysis.verdict === 'INSUFFICIENT_DATA'
       ? 'Вывод по смене не делается: слишком многого не хватает в данных.'
-      : trafficRatio == null
-        ? `${VERDICT_HEADLINE[analysis.verdict]} Оговорка: поток измерить было нечем, поэтому вывод построен только на метриках внутри чеков.`
+      : demandRatio == null
+        ? `${VERDICT_HEADLINE[analysis.verdict]} Оговорка: сравнить спрос было не с чем, поэтому вывод построен только на метриках внутри чеков.`
         : VERDICT_HEADLINE[analysis.verdict]
 
   return {

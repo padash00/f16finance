@@ -17,12 +17,11 @@ import {
 // «историческим» продавцом. На их фоне и проверяется разбор смен продавца A.
 //
 // Ожидания, которые из неё следуют:
-//   выручка магазина        100 000 ₸
-//   выручка клуба (поток)   300 000 ₸
+//   покупателей (чеков)          50
+//   выручка смены           100 000 ₸
 //   средний чек               2 000 ₸
 //   товаров на чек                  2
 //   допродажи                    0.60
-//   выручка на 1000 ₸ клуба    333.33 ₸
 
 function weekly(start: string, count: number): string[] {
   const [y, m, d] = start.split('-').map(Number)
@@ -52,7 +51,6 @@ function fact(date: string, patch: Partial<ShiftFact> = {}): ShiftFact {
     receipts_2plus: 25,
     attach_opportunities: 20,
     attach_success: 12,
-    club_revenue: 300_000,
     ...patch,
   }
 }
@@ -90,38 +88,35 @@ test('один рекордный день не задирает медиану 
   assert.equal(percentile(withRecord, 0.5), 100)
 })
 
-// ─── Кейс 1 из ТЗ: слабый поток при хорошей работе продавца ─────────────────
+// ─── Кейс 1 из ТЗ: мало покупателей при хорошей работе ──────────────────────
 
-test('низкий поток и низкая касса при здоровых метриках — вина потока, не продавца', () => {
+test('мало чеков, но с каждым отработали хорошо — виноват спрос, а не продавец', () => {
   const shift = analyzeOne(
     fact('2026-03-16', {
       cashier_id: 'A',
-      revenue: 75_000, // 0.75 от ожидания
-      club_revenue: 200_000, // поток 0.67 от ожидания
-      receipts: 35,
-      items: 78, // 2.23 товара на чек — выше нормы
-      attach_opportunities: 14,
-      attach_success: 10, // 0.71 против 0.60
+      receipts: 30, // покупателей вдвое меньше обычного
+      revenue: 66_600, // средний чек 2220 — выше нормы
+      items: 72, // 2.4 товара на чек
+      attach_opportunities: 12,
+      attach_success: 9, // 0.75 против 0.60
     }),
   )
 
-  assert.equal(shift.verdict, 'TRAFFIC_DRIVEN')
+  assert.equal(shift.verdict, 'LOW_DEMAND')
   assert.ok(shift.score !== null && shift.score >= 1, `балл продавца не должен просесть: ${shift.score}`)
-  assert.ok(shift.confidence > 0.5, `уверенность должна быть высокой: ${shift.confidence}`)
 })
 
-// ─── Кейс 2 из ТЗ: поток был, работа слабая ────────────────────────────────
+// ─── Кейс 2 из ТЗ: покупатели были, работа слабая ──────────────────────────
 
-test('поток на месте, а средний чек и допродажи просели — повод разбираться с продавцом', () => {
+test('покупателей больше обычного, а чек и допродажи просели — вопрос к продавцу', () => {
   const shift = analyzeOne(
     fact('2026-03-16', {
       cashier_id: 'A',
-      revenue: 70_000,
-      club_revenue: 300_000, // поток ровно как обычно
-      receipts: 40,
-      items: 44, // 1.1 товара на чек против 2
-      attach_opportunities: 20,
-      attach_success: 6, // 0.30 против 0.60
+      receipts: 60,
+      revenue: 78_000, // средний чек 1300 против 2000
+      items: 66, // 1.1 товара на чек против 2
+      attach_opportunities: 24,
+      attach_success: 6, // 0.25 против 0.60
     }),
   )
 
@@ -129,85 +124,90 @@ test('поток на месте, а средний чек и допродажи
   assert.ok(shift.score !== null && shift.score < 0.95, `балл должен быть ниже нормы: ${shift.score}`)
 })
 
-// ─── Кейс 3 из ТЗ: касса большая, но вытянул её поток ──────────────────────
+// ─── Кейс 3 из ТЗ: кассу вытянул поток покупателей ─────────────────────────
 
-test('огромный поток и большая касса при низкой отдаче с потока — это не «топ»', () => {
+test('много покупателей и большая касса при обычном качестве продаж — не заслуга продавца', () => {
   const shift = analyzeOne(
     fact('2026-03-16', {
       cashier_id: 'A',
-      revenue: 150_000, // касса в полтора раза выше обычной
-      club_revenue: 600_000, // но поток вдвое выше обычного
-      receipts: 70,
-      items: 140,
-      attach_opportunities: 20,
-      attach_success: 12,
+      receipts: 75, // в полтора раза больше покупателей
+      revenue: 142_500, // касса выросла ровно за счёт их числа
+      items: 150, // качество продаж осталось обычным
+      attach_opportunities: 30,
+      attach_success: 18,
     }),
   )
 
-  assert.notEqual(shift.verdict, 'CASHIER_DRIVEN')
-  const rpv = ratioOf(shift, 'revenue_per_club')
-  assert.ok(rpv?.ratio != null && rpv.ratio < 1, 'отдача с потока должна быть ниже нормы')
+  assert.equal(shift.verdict, 'HIGH_DEMAND')
+  assert.notEqual(shift.verdict, 'STRONG_CASHIER')
 })
 
-// ─── Кейс 4 из ТЗ: маленький поток, маленькая касса, хорошая работа ────────
+// ─── Кейс 4 из ТЗ: сильная работа ──────────────────────────────────────────
 
-test('слабая смена по деньгам не мешает признать работу продавца хорошей', () => {
+test('при обычном числе покупателей выжали больше — сильная смена', () => {
   const shift = analyzeOne(
     fact('2026-03-16', {
       cashier_id: 'A',
-      revenue: 40_000,
-      club_revenue: 100_000,
-      receipts: 18,
-      items: 42,
-      attach_opportunities: 10,
-      attach_success: 7,
-    }),
-  )
-
-  assert.equal(shift.verdict, 'TRAFFIC_DRIVEN')
-  // Мало чеков — это удар по уверенности, а не по баллу.
-  assert.ok(shift.score !== null && shift.score >= 1, `балл: ${shift.score}`)
-  assert.ok(shift.confidence < 0.86, `уверенность должна просесть: ${shift.confidence}`)
-})
-
-// ─── Кейс 5 из ТЗ: нет данных о потоке ─────────────────────────────────────
-
-test('без выручки клуба метрики потока не выдумываются, а отключаются', () => {
-  const shift = analyzeOne(
-    fact('2026-03-16', {
-      cashier_id: 'A',
-      revenue: 90_000,
-      club_revenue: null,
-      receipts: 45,
-    }),
-  )
-
-  assert.equal(ratioOf(shift, 'revenue_per_club')?.actual, null)
-  assert.equal(ratioOf(shift, 'receipts_per_club')?.actual, null)
-  assert.ok(shift.missing.some((m) => m.includes('Выручка на 1000')))
-  // Метрики внутри чека остались — балл считается, но доверия к нему меньше.
-  assert.ok(shift.score !== null)
-  assert.ok(shift.confidence < 0.7, `уверенность обязана просесть: ${shift.confidence}`)
-})
-
-// ─── Главная ловушка учёта ─────────────────────────────────────────────────
-
-test('чеки без позиций дают «нет данных», а не ноль товаров на чек', () => {
-  const shift = analyzeOne(
-    fact('2026-03-16', {
-      cashier_id: 'A',
-      revenue: 100_000,
       receipts: 50,
+      revenue: 120_000, // средний чек 2400
+      items: 130, // 2.6 товара на чек
+      attach_opportunities: 20,
+      attach_success: 15, // 0.75
+    }),
+  )
+
+  assert.equal(shift.verdict, 'STRONG_CASHIER')
+  assert.ok(shift.score !== null && shift.score >= 1.05, `балл: ${shift.score}`)
+})
+
+// ─── Кейс 5 из ТЗ: нет позиций в чеках ─────────────────────────────────────
+
+test('чеки без позиций дают «нет данных», а не ноль товаров и ноль допродаж', () => {
+  const shift = analyzeOne(
+    fact('2026-03-16', {
+      cashier_id: 'A',
+      receipts: 50,
+      revenue: 100_000,
       items: 0, // магазин пробил сумму, не расписывая товары
       lines: 0,
       receipts_2plus: 0,
+      attach_opportunities: 0,
+      attach_success: 0,
     }),
   )
 
-  const items = ratioOf(shift, 'items_per_receipt')
-  assert.equal(items?.actual, null)
-  assert.equal(items?.ratio, null)
+  assert.equal(ratioOf(shift, 'items_per_receipt')?.actual, null)
+  assert.equal(ratioOf(shift, 'attach_rate')?.actual, null)
   assert.ok(shift.missing.some((m) => m.includes('Товаров на чек')))
+  assert.ok(shift.missing.some((m) => m.includes('Допродажи')))
+  // Метрики чека остались — балл считается, но доверия к нему меньше.
+  assert.ok(shift.score !== null)
+  assert.ok(shift.confidence < 0.75, `уверенность обязана просесть: ${shift.confidence}`)
+})
+
+test('мало чеков бьёт по уверенности, а не по баллу', () => {
+  const shift = analyzeOne(
+    fact('2026-03-16', {
+      cashier_id: 'A',
+      receipts: 8,
+      revenue: 20_000, // средний чек 2500 — выше нормы
+      items: 24,
+      attach_opportunities: 4,
+      attach_success: 3,
+    }),
+  )
+
+  assert.ok(shift.score !== null && shift.score > 1, `балл: ${shift.score}`)
+  assert.ok(shift.confidence < 0.8, `уверенность: ${shift.confidence}`)
+})
+
+// ─── Отдача с покупателя дублирует средний чек ─────────────────────────────
+
+test('отдача с покупателя — то же измерение, что и средний чек', () => {
+  // Так решено в ТЗ осознанно: средний чек получает суммарный вес 40%.
+  // Тест держит это явным, чтобы расхождение сразу бросалось в глаза.
+  const shift = analyzeOne(fact('2026-03-16', { cashier_id: 'A', receipts: 40, revenue: 96_000 }))
+  assert.equal(ratioOf(shift, 'revenue_efficiency')?.raw_ratio, ratioOf(shift, 'avg_ticket')?.raw_ratio)
 })
 
 // ─── Защита базы сравнения ─────────────────────────────────────────────────
@@ -242,13 +242,7 @@ test('на выборке меньше минимальной ожидание �
 
 test('разовая аномалия ограничивается клипом и не переворачивает балл', () => {
   const shift = analyzeOne(
-    fact('2026-03-16', {
-      cashier_id: 'A',
-      revenue: 300_000,
-      club_revenue: 300_000,
-      receipts: 50,
-      items: 100,
-    }),
+    fact('2026-03-16', { cashier_id: 'A', receipts: 50, revenue: 300_000, items: 100 }),
   )
 
   const ticket = ratioOf(shift, 'avg_ticket')
@@ -272,8 +266,8 @@ test('набрав достаточно смен, сильный продаве�
   const targets = weekly('2026-03-02', 8).map((d) =>
     fact(d, {
       cashier_id: 'A',
-      revenue: 120_000,
       receipts: 50,
+      revenue: 120_000,
       items: 120,
       attach_opportunities: 20,
       attach_success: 16,
@@ -309,24 +303,45 @@ test('смена с тремя чеками не весит как смена с
 
 // ─── Допродажи ─────────────────────────────────────────────────────────────
 
-test('возможность допродажи считается по исходной категории, успех — по целевой', () => {
-  const rules = [
-    { id: 'r1', source_category_id: 'ramen', target_category_id: 'drink', weight: 1, active: true },
-  ]
+const RULE = {
+  id: 'r1',
+  source_kind: 'category' as const,
+  source_ref: 'ramen',
+  target_kind: 'category' as const,
+  target_ref: 'drink',
+  weight: 1,
+  active: true,
+}
+
+test('возможность допродажи считается по исходной позиции, успех — по целевой', () => {
   const receipts = [
     { categories: ['ramen', 'drink'] },
     { categories: ['ramen'] },
     { categories: ['drink'] }, // без рамена возможности не было
   ]
 
-  assert.deepEqual(attachFromReceipts(receipts, rules), { opportunities: 2, success: 1 })
+  assert.deepEqual(attachFromReceipts(receipts, [RULE]), { opportunities: 2, success: 1 })
+})
+
+test('правило может ссылаться на конкретный товар, а не только на категорию', () => {
+  const rule = {
+    ...RULE,
+    id: 'r2',
+    source_kind: 'item' as const,
+    source_ref: 'item-ramen-spicy',
+    target_kind: 'category' as const,
+    target_ref: 'drink',
+  }
+  const receipts = [
+    { categories: ['ramen', 'drink'], items: ['item-ramen-spicy'] },
+    { categories: ['ramen'], items: ['item-ramen-mild'] }, // другой товар — не считается
+  ]
+
+  assert.deepEqual(attachFromReceipts(receipts, [rule]), { opportunities: 1, success: 1 })
 })
 
 test('выключенное правило не создаёт возможностей', () => {
-  const rules = [
-    { id: 'r1', source_category_id: 'ramen', target_category_id: 'drink', weight: 1, active: false },
-  ]
-  assert.deepEqual(attachFromReceipts([{ categories: ['ramen'] }], rules), {
+  assert.deepEqual(attachFromReceipts([{ categories: ['ramen'] }], [{ ...RULE, active: false }]), {
     opportunities: 0,
     success: 0,
   })

@@ -2,16 +2,16 @@
  * Эффективность продавцов магазина — точка входа доменного слоя.
  *
  * Вся арифметика модуля собрана здесь и в соседних файлах, без обращений к БД
- * и без участия языковой модели. Это принципиально: пороги, баллы и (в
- * следующей фазе) суммы бонусов должны быть воспроизводимыми и проверяемыми,
- * а ИИ — только объяснять уже посчитанное.
+ * и без участия языковой модели. Это принципиально: пороги, баллы и суммы
+ * бонусов должны быть воспроизводимыми и проверяемыми, а ИИ — только
+ * объяснять уже посчитанное.
  */
 
-import { buildBaselineIndex } from './baseline'
+import { buildBaselineIndex, lookupBaseline } from './baseline'
 import { METRIC_KEYS, metricValue } from './metrics'
-import { analyzeShift, summarizeCashier, type BaselineBundle } from './score'
+import { analyzeShift, summarizeCashier, trainingFlag, type BaselineBundle } from './score'
 import type { StoreKpiSettings } from './settings'
-import type { CashierSummary, MetricKey, ShiftAnalysis, ShiftFact } from './types'
+import type { CashierSummary, MetricKey, ShiftAnalysis, ShiftFact, ShiftType } from './types'
 
 export * from './types'
 export * from './settings'
@@ -36,8 +36,9 @@ export {
   METRIC_KEYS,
   METRIC_LABELS,
   METRIC_MISSING_REASON,
-  CLUB_REVENUE_UNIT,
+  METRIC_DUPLICATE_OF,
   metricValue,
+  demandValue,
   attachFromReceipts,
   multiLineRate,
   refundRate,
@@ -52,6 +53,14 @@ export {
   type BonusOutcome,
   type BonusGate,
 } from './plan'
+export {
+  computeMonthlyIndex,
+  type MonthlyIndexResult,
+  type IndexComponent,
+  type AcademicPeriod,
+  type CalendarDay,
+  type TrendObservation,
+} from './monthly-index'
 export { explainShift, type ShiftExplanation, type MetricReading } from './explain'
 export {
   forecastAccuracy,
@@ -71,18 +80,12 @@ export {
   type WeatherEffect,
 } from './weather'
 export {
-  computeMonthlyIndex,
-  type MonthlyIndexResult,
-  type IndexComponent,
-  type AcademicPeriod,
-  type CalendarDay,
-  type TrendObservation,
-} from './monthly-index'
-export {
   analyzeShift,
   summarizeCashier,
+  trainingFlag,
   NORMAL_BAND_LOW,
   NORMAL_BAND_HIGH,
+  HIGH_DEMAND_FROM,
   MIN_CONFIDENCE_FOR_VERDICT,
   type BaselineBundle,
 } from './score'
@@ -94,10 +97,10 @@ export type StoreKpiCoverage = {
   baseline_to: string | null
   /** Доля смен истории, где чеки пробиты построчно. */
   items_coverage: number
-  /** Доля смен истории, где известна выручка клуба (поток). */
-  club_coverage: number
   /** Доля смен истории, где известен кассир. */
   cashier_coverage: number
+  /** Доля смен истории, где сработало хотя бы одно правило допродаж. */
+  attach_coverage: number
 }
 
 export type StoreKpiResult = {
@@ -124,9 +127,17 @@ export function buildRevenueBaseline(facts: ShiftFact[], settings: StoreKpiSetti
   })
 }
 
-function buildBundle(facts: ShiftFact[], settings: StoreKpiSettings): BaselineBundle {
+/** База спроса — число чеков сопоставимых смен. */
+export function buildReceiptsBaseline(facts: ShiftFact[], settings: StoreKpiSettings) {
+  return buildBaselineIndex(facts, (f) => (f.receipts > 0 ? f.receipts : null), {
+    summerMonths: settings.summer_months,
+  })
+}
+
+export function buildBundle(facts: ShiftFact[], settings: StoreKpiSettings): BaselineBundle {
   const metrics: Partial<Record<MetricKey, ReturnType<typeof buildBaselineIndex>>> = {}
   for (const metric of METRIC_KEYS) {
+    if (metric === 'plan_attainment') continue // сравнивается с базой выручки
     metrics[metric] = buildBaselineIndex(facts, (f) => metricValue(f, metric), {
       summerMonths: settings.summer_months,
     })
@@ -135,10 +146,82 @@ function buildBundle(facts: ShiftFact[], settings: StoreKpiSettings): BaselineBu
   return {
     metrics,
     revenue: buildRevenueBaseline(facts, settings),
-    club: buildBaselineIndex(facts, (f) => f.club_revenue, {
-      summerMonths: settings.summer_months,
-    }),
+    receipts: buildReceiptsBaseline(facts, settings),
   }
+}
+
+/** Прогноз спроса на смену: чеки, средний чек и выручка с диапазонами. */
+export type DemandForecast = {
+  expected_receipts: number | null
+  receipts_range: [number, number] | null
+  expected_avg_ticket: number | null
+  expected_revenue: number | null
+  revenue_range: [number, number] | null
+  confidence: number
+  /** По какому уровню сегментации и скольким сменам построен прогноз. */
+  level: string | null
+  sample: number
+}
+
+/**
+ * Прогноз на будущую смену.
+ *
+ * Выручка получается перемножением ожидаемых чеков и среднего чека — так
+ * видно, из чего она складывается. А вот диапазон берётся из распределения
+ * самой выручки, а не перемножением границ: произведение крайних значений
+ * дало бы неправдоподобно широкую вилку.
+ */
+export function forecastShift(
+  bundle: BaselineBundle,
+  target: { company_id: string; date: string; shift: ShiftType },
+  settings: StoreKpiSettings,
+): DemandForecast {
+  const fact = target as ShiftFact
+  const opts = { minSample: settings.min_sample_size, summerMonths: settings.summer_months }
+
+  const receipts = lookupBaseline(bundle.receipts, fact, opts)
+  const ticket = bundle.metrics.avg_ticket
+    ? lookupBaseline(bundle.metrics.avg_ticket, fact, opts)
+    : null
+
+  const receiptsLow = lookupBaseline(bundle.receipts, fact, { ...opts, percentile: 0.25 })
+  const receiptsHigh = lookupBaseline(bundle.receipts, fact, { ...opts, percentile: 0.75 })
+  const revenueLow = lookupBaseline(bundle.revenue, fact, { ...opts, percentile: 0.25 })
+  const revenueHigh = lookupBaseline(bundle.revenue, fact, { ...opts, percentile: 0.75 })
+
+  const expectedReceipts = receipts ? Math.round(receipts.value) : null
+  const expectedTicket = ticket ? Math.round(ticket.value) : null
+
+  // Чем грубее сегмент и меньше выборка, тем меньше веры прогнозу.
+  const levelWeight = receipts ? LEVEL_CONFIDENCE_MAP[receipts.level] ?? 0.6 : 0.4
+  const sampleWeight = receipts
+    ? Math.max(0.3, Math.min(1, receipts.sample / (2 * settings.min_sample_size)))
+    : 0.3
+  const completeness = expectedReceipts != null && expectedTicket != null ? 1 : 0.5
+
+  return {
+    expected_receipts: expectedReceipts,
+    receipts_range:
+      receiptsLow && receiptsHigh
+        ? [Math.round(receiptsLow.value), Math.round(receiptsHigh.value)]
+        : null,
+    expected_avg_ticket: expectedTicket,
+    expected_revenue:
+      expectedReceipts != null && expectedTicket != null ? expectedReceipts * expectedTicket : null,
+    revenue_range:
+      revenueLow && revenueHigh ? [Math.round(revenueLow.value), Math.round(revenueHigh.value)] : null,
+    confidence: Math.round(Math.min(0.98, 0.45 * levelWeight + 0.35 * sampleWeight + 0.2 * completeness) * 100) / 100,
+    level: receipts?.level ?? null,
+    sample: receipts?.sample ?? 0,
+  }
+}
+
+const LEVEL_CONFIDENCE_MAP: Record<string, number> = {
+  season_month_weekday_shift: 1,
+  season_weekday_shift: 0.95,
+  season_weekday_group_shift: 0.85,
+  season_shift: 0.75,
+  all: 0.6,
 }
 
 /**
@@ -173,12 +256,14 @@ export function analyzeStoreKpi(args: {
       baseline_from: dates[0] ?? null,
       baseline_to: dates[dates.length - 1] ?? null,
       items_coverage: share(baselineFacts.filter((f) => f.items > 0).length, baselineFacts.length),
-      club_coverage: share(
-        baselineFacts.filter((f) => f.club_revenue != null && f.club_revenue > 0).length,
+      cashier_coverage: share(baselineFacts.filter((f) => f.cashier_id).length, baselineFacts.length),
+      attach_coverage: share(
+        baselineFacts.filter((f) => f.attach_opportunities > 0).length,
         baselineFacts.length,
       ),
-      cashier_coverage: share(baselineFacts.filter((f) => f.cashier_id).length, baselineFacts.length),
     },
     model_version: settings.model_version,
   }
 }
+
+export { trainingFlag as computeTrainingFlag }

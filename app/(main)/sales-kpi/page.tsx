@@ -4,15 +4,14 @@
  * Эффективность продавцов магазина.
  *
  * Страница отвечает на один вопрос и старается не отвечать на другие: касса
- * просела из-за потока клиентов или из-за продавца. Поэтому рядом с каждой
- * сменой всегда стоят обе величины — был ли поток и что продавец сделал с
- * каждым пришедшим, — а вывод сопровождается уверенностью и списком того,
- * чего в данных не хватило.
+ * просела из-за спроса или из-за продавца. Поэтому рядом с каждой сменой
+ * всегда стоят обе величины — сколько людей купило и что продавец сделал с
+ * каждым из них, — а вывод сопровождается уверенностью и списком того, чего
+ * в данных не хватило.
  */
 
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import {
-  AlertTriangle,
   ChevronDown,
   Gauge,
   Info,
@@ -59,8 +58,9 @@ type ShiftRow = {
   cashier_name: string | null
   revenue: number
   expected_revenue: number | null
-  club_revenue: number | null
-  expected_club_revenue: number | null
+  expected_receipts: number | null
+  expected_avg_ticket: number | null
+  items: number
   receipts: number
   score: number | null
   confidence: number
@@ -91,7 +91,6 @@ type ApiData = {
   stores?: { id: string; name: string }[]
   period?: { from: string; to: string }
   company?: { id: string; name: string }
-  club?: { id: string; name: string | null } | null
   settings?: {
     min_sample_size: number
     min_qualifying_shifts: number
@@ -103,15 +102,17 @@ type ApiData = {
     baseline_from: string | null
     baseline_to: string | null
     items_coverage: number
-    club_coverage: number
+    attach_coverage: number
     cashier_coverage: number
   }
   totals?: {
     revenue: number
     receipts: number
     shifts: number
-    traffic_driven: number
+    low_demand: number
     cashier_issue: number
+    high_demand: number
+    strong: number
     insufficient: number
   }
   shifts?: ShiftRow[]
@@ -122,29 +123,35 @@ type ApiData = {
 // ─── Словарь ────────────────────────────────────────────────────────────────
 
 const METRIC_LABELS: Record<string, string> = {
-  revenue_per_club: 'Выручка на 1000 ₸ клуба',
-  receipts_per_club: 'Чеков на 1000 ₸ клуба',
   avg_ticket: 'Средний чек',
   items_per_receipt: 'Товаров на чек',
   attach_rate: 'Допродажи',
+  revenue_efficiency: 'Отдача с покупателя',
+  plan_attainment: 'Выполнение плана',
   product_knowledge: 'Знание товара',
 }
 
 const VERDICTS: Record<string, { label: string; hint: string; className: string }> = {
-  TRAFFIC_DRIVEN: {
-    label: 'Виноват поток',
-    hint: 'Клиентов пришло меньше обычного, а продавец отработал не хуже своей нормы.',
+  LOW_DEMAND: {
+    label: 'Мало покупателей',
+    hint: 'Людей пришло меньше обычного, а с каждым пришедшим продавец отработал не хуже своей нормы.',
     className: 'bg-sky-50 text-sky-700 ring-sky-600/20 dark:bg-sky-500/10 dark:text-sky-300 dark:ring-sky-400/20',
   },
   POSSIBLE_CASHIER_ISSUE: {
     label: 'Вопрос к продавцу',
-    hint: 'Поток был на месте, но управляемые продавцом метрики просели.',
+    hint: 'Покупатели были, но управляемые продавцом метрики просели.',
     className:
       'bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-400/20',
   },
-  CASHIER_DRIVEN: {
-    label: 'Заслуга продавца',
-    hint: 'Из того же потока выжали больше обычного.',
+  HIGH_DEMAND: {
+    label: 'Вытянул поток',
+    hint: 'Касса выросла в основном за счёт числа покупателей, а не качества продаж.',
+    className:
+      'bg-indigo-50 text-indigo-700 ring-indigo-600/20 dark:bg-indigo-500/10 dark:text-indigo-300 dark:ring-indigo-400/20',
+  },
+  STRONG_CASHIER: {
+    label: 'Сильная смена',
+    hint: 'Из того же числа покупателей выжали заметно больше обычного.',
     className:
       'bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-400/20',
   },
@@ -261,7 +268,6 @@ function Confidence({ value }: { value: number }) {
 type SettingsData = {
   configured: boolean
   settings: {
-    club_company_id: string | null
     latitude: number | null
     longitude: number | null
     weather_adjusts_bonus_threshold: boolean
@@ -269,10 +275,13 @@ type SettingsData = {
   }
   companies: { id: string; name: string; store_enabled: boolean }[]
   categories: { id: string; name: string }[]
+  items: { id: string; name: string }[]
   rules: {
     id: string
-    source_category_id: string
-    target_category_id: string
+    source_kind: 'category' | 'item'
+    source_ref: string
+    target_kind: 'category' | 'item'
+    target_ref: string
     weight: number
     active: boolean
   }[]
@@ -283,10 +292,12 @@ function SettingsModal(props: { companyId: string; onClose: () => void; onSaved:
   const { data, loading, refresh } = useApi<{ data: SettingsData }>(key)
   const payload = data?.data
 
-  const [clubId, setClubId] = useState<string>('')
   const [lat, setLat] = useState('')
   const [lon, setLon] = useState('')
   const [testGate, setTestGate] = useState(false)
+  // Каждая сторона правила — «категория:id» или «товар:id». Один select
+  // вместо двух: администратору не нужно сначала выбирать вид, а потом
+  // позицию, он просто ищет нужное в списке.
   const [source, setSource] = useState('')
   const [target, setTarget] = useState('')
   const [busy, setBusy] = useState(false)
@@ -294,7 +305,6 @@ function SettingsModal(props: { companyId: string; onClose: () => void; onSaved:
 
   useEffect(() => {
     if (!payload) return
-    setClubId(payload.settings.club_company_id || '')
     setLat(payload.settings.latitude == null ? '' : String(payload.settings.latitude))
     setLon(payload.settings.longitude == null ? '' : String(payload.settings.longitude))
     setTestGate(Boolean(payload.settings.require_product_test_for_top_bonus))
@@ -303,14 +313,24 @@ function SettingsModal(props: { companyId: string; onClose: () => void; onSaved:
   function saveSettings() {
     return post({
       action: 'save_settings',
-      club_company_id: clubId || null,
       latitude: lat === '' ? null : Number(lat),
       longitude: lon === '' ? null : Number(lon),
       require_product_test_for_top_bonus: testGate,
     })
   }
 
-  const categoryName = (id: string) => payload?.categories.find((c) => c.id === id)?.name || '—'
+  const refName = (kind: 'category' | 'item', id: string) => {
+    const list = kind === 'category' ? payload?.categories : payload?.items
+    const found = list?.find((x) => x.id === id)
+    if (!found) return '—'
+    return kind === 'item' ? `товар «${found.name}»` : found.name
+  }
+
+  const parseRef = (value: string): { kind: 'category' | 'item'; ref: string } | null => {
+    const [kind, ref] = value.split(':')
+    if (!ref) return null
+    return { kind: kind === 'item' ? 'item' : 'category', ref }
+  }
 
   async function post(body: Record<string, unknown>) {
     setBusy(true)
@@ -372,31 +392,6 @@ function SettingsModal(props: { companyId: string; onClose: () => void; onSaved:
           </div>
         ) : (
           <div className="space-y-6">
-            {/* Точка-клуб */}
-            <section>
-              <h3 className="text-sm font-medium text-slate-900 dark:text-white">Точка-клуб (прокси потока)</h3>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                Клуб на SENET не отдаёт число посетителей, поэтому потоком считается его выручка за ту же
-                смену. Без этой связки метрики «на 1000 ₸ клуба» не считаются.
-              </p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <select
-                  value={clubId}
-                  onChange={(e) => setClubId(e.target.value)}
-                  className="min-w-[220px] rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm dark:border-white/10 dark:bg-slate-900 dark:text-white"
-                >
-                  <option value="">Не выбрана — считать без потока</option>
-                  {(payload?.companies || [])
-                    .filter((c) => c.id !== props.companyId)
-                    .map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                </select>
-              </div>
-            </section>
-
             {/* Погода */}
             <section>
               <h3 className="text-sm font-medium text-slate-900 dark:text-white">Координаты точки</h3>
@@ -470,7 +465,7 @@ function SettingsModal(props: { companyId: string; onClose: () => void; onSaved:
                       className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-white/10"
                     >
                       <span className="text-slate-700 dark:text-slate-200">
-                        {categoryName(r.source_category_id)} → {categoryName(r.target_category_id)}
+                        {refName(r.source_kind, r.source_ref)} → {refName(r.target_kind, r.target_ref)}
                       </span>
                       <button
                         onClick={() => void removeRule(r.id)}
@@ -485,49 +480,60 @@ function SettingsModal(props: { companyId: string; onClose: () => void; onSaved:
                 )}
               </div>
 
-              {(payload?.categories || []).length === 0 ? (
+              {(payload?.categories || []).length === 0 && (payload?.items || []).length === 0 ? (
                 <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
-                  У товаров точки нет категорий — сначала заведите их в каталоге магазина.
+                  В каталоге точки нет ни категорий, ни товаров — сначала заполните каталог магазина.
                 </p>
               ) : (
                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <select
-                    value={source}
-                    onChange={(e) => setSource(e.target.value)}
-                    className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm dark:border-white/10 dark:bg-slate-900 dark:text-white"
-                  >
-                    <option value="">Что купили</option>
-                    {(payload?.categories || []).map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="text-slate-400">→</span>
-                  <select
-                    value={target}
-                    onChange={(e) => setTarget(e.target.value)}
-                    className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm dark:border-white/10 dark:bg-slate-900 dark:text-white"
-                  >
-                    <option value="">Что предложить</option>
-                    {(payload?.categories || []).map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
+                  {([
+                    ['Что купили', source, setSource],
+                    ['Что предложить', target, setTarget],
+                  ] as const).map(([placeholder, value, setValue], i) => (
+                    <Fragment key={placeholder}>
+                      {i === 1 ? <span className="text-slate-400">→</span> : null}
+                      <select
+                        value={value}
+                        onChange={(e) => setValue(e.target.value)}
+                        className="max-w-[220px] rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm dark:border-white/10 dark:bg-slate-900 dark:text-white"
+                      >
+                        <option value="">{placeholder}</option>
+                        <optgroup label="Категории">
+                          {(payload?.categories || []).map((c) => (
+                            <option key={`c-${c.id}`} value={`category:${c.id}`}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="Товары">
+                          {(payload?.items || []).map((it) => (
+                            <option key={`i-${it.id}`} value={`item:${it.id}`}>
+                              {it.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      </select>
+                    </Fragment>
+                  ))}
                   <Button
                     size="sm"
                     variant="outline"
                     disabled={busy || !source || !target || source === target}
-                    onClick={() =>
-                      void post({ action: 'add_rule', source_category_id: source, target_category_id: target }).then(
-                        () => {
-                          setSource('')
-                          setTarget('')
-                        },
-                      )
-                    }
+                    onClick={() => {
+                      const a = parseRef(source)
+                      const b = parseRef(target)
+                      if (!a || !b) return
+                      void post({
+                        action: 'add_rule',
+                        source_kind: a.kind,
+                        source_ref: a.ref,
+                        target_kind: b.kind,
+                        target_ref: b.ref,
+                      }).then(() => {
+                        setSource('')
+                        setTarget('')
+                      })
+                    }}
                   >
                     <Plus className="mr-1 h-3.5 w-3.5" /> Добавить
                   </Button>
@@ -590,9 +596,9 @@ export default function SalesKpiPage() {
         `История короткая: ${coverage.baseline_shifts} смен до начала периода. Ожидания будут грубыми, а часть выводов — «мало данных».`,
       )
     }
-    if (coverage.club_coverage < 0.5) {
+    if (coverage.attach_coverage < 0.3) {
       list.push(
-        'Выручка клуба известна меньше чем по половине смен — поток измерить нечем, и главный вопрос модуля (поток или продавец) остаётся без ответа. Проверьте, выбрана ли точка-клуб в настройках.',
+        'Правила допродаж срабатывают меньше чем в трети смен — метрика допродаж почти не участвует в оценке. Проверьте, заведены ли правила и проставлены ли категории у товаров.',
       )
     }
     if (coverage.items_coverage < 0.5) {
@@ -663,7 +669,7 @@ export default function SalesKpiPage() {
     <div className="app-page-wide space-y-5">
       <AdminPageHeader
         title="Эффективность продавцов"
-        description="Поток или продавец: сколько клиентов дошло до магазина и что продавец с ними сделал"
+        description="Спрос или продавец: сколько людей купило и что продавец сделал с каждым из них"
         icon={<Gauge className="h-5 w-5" />}
         accent="blue"
         toolbar={toolbar}
@@ -732,20 +738,6 @@ export default function SalesKpiPage() {
             <AccuracyTab companyId={payload.company.id} />
           ) : (
         <>
-          {/* Что важно знать до того, как смотреть цифры */}
-          {!payload?.club ? (
-            <Card className="flex gap-3 border-amber-200 bg-amber-50/60 p-4 text-sm text-amber-800 dark:border-amber-400/20 dark:bg-amber-500/10 dark:text-amber-200">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <div>
-                <div className="font-medium">Точка-клуб не выбрана — поток не измеряется</div>
-                <p className="mt-1 opacity-90">
-                  Клуб работает на стороннем SENET и числа посетителей не отдаёт, поэтому поток мы измеряем
-                  выручкой клуба за ту же смену. Пока точка-клуб не указана, метрики «на 1000 ₸ клуба»
-                  отключены, а выводы строятся только по метрикам внутри чека — с пониженной уверенностью.
-                </p>
-              </div>
-            </Card>
-          ) : null}
 
           {warnings.length > 0 ? (
             <Card className="flex gap-3 p-4 text-sm text-slate-600 dark:text-slate-300">
@@ -767,15 +759,15 @@ export default function SalesKpiPage() {
             />
             <StatCard label="Выручка периода" value={formatMoney(totals?.revenue ?? 0)} />
             <StatCard
-              label="Виноват поток"
-              value={String(totals?.traffic_driven ?? 0)}
+              label="Мало покупателей"
+              value={String(totals?.low_demand ?? 0)}
               hint="продавец отработал нормально"
               tone="text-sky-600 dark:text-sky-400"
             />
             <StatCard
               label="Вопрос к продавцу"
               value={String(totals?.cashier_issue ?? 0)}
-              hint="поток был, метрики просели"
+              hint="люди были, метрики просели"
               tone="text-amber-600 dark:text-amber-400"
             />
             <StatCard
@@ -880,7 +872,7 @@ export default function SalesKpiPage() {
                     <th className="px-4 py-2 text-left font-medium">Смена</th>
                     <th className="px-4 py-2 text-left font-medium">Продавец</th>
                     <th className="px-4 py-2 text-right font-medium">Касса</th>
-                    <th className="px-4 py-2 text-right font-medium">Поток</th>
+                    <th className="px-4 py-2 text-right font-medium">Покупателей</th>
                     <th className="px-4 py-2 text-right font-medium">Балл</th>
                     <th className="px-4 py-2 text-left font-medium">Вывод</th>
                     <th className="px-4 py-2 text-left font-medium">Уверенность</th>
@@ -898,7 +890,7 @@ export default function SalesKpiPage() {
                     shifts.map((s) => {
                       const key = `${s.date}|${s.shift}|${s.cashier_id ?? 'none'}`
                       const revenueRatio = ratioOf(s.revenue, s.expected_revenue)
-                      const trafficRatio = ratioOf(s.club_revenue, s.expected_club_revenue)
+                      const demandRatio = ratioOf(s.receipts, s.expected_receipts)
                       const isOpen = openShift === key
                       return (
                         <Fragment key={key}>
@@ -916,9 +908,11 @@ export default function SalesKpiPage() {
                               </div>
                             </td>
                             <td className="px-4 py-2 text-right tabular-nums">
-                              <div>{s.club_revenue == null ? '—' : formatMoney(s.club_revenue)}</div>
-                              <div className={`text-xs ${toneFor(trafficRatio)}`}>
-                                {trafficRatio == null ? 'нет данных' : `${deltaPct(trafficRatio)} к ожиданию`}
+                              <div>{s.receipts}</div>
+                              <div className={`text-xs ${toneFor(demandRatio)}`}>
+                                {demandRatio == null
+                                  ? 'нет ожидания'
+                                  : `${deltaPct(demandRatio)} к ожиданию`}
                               </div>
                             </td>
                             <td className={`px-4 py-2 text-right tabular-nums font-semibold ${toneFor(s.score)}`}>
@@ -958,8 +952,10 @@ export default function SalesKpiPage() {
 
           <p className="px-1 text-xs text-slate-400 dark:text-slate-500">
             Модель {payload?.model_version || '—'}. Балл — это отношение метрик продавца к норме для
-            сопоставимых условий (сезон, день недели, смена), а не доля от плана. Ожидания считаются по
-            истории до начала периода и без учёта собственных смен продавца.
+            сопоставимых условий (сезон, день недели, смена), а не доля от плана. Спрос меряется числом
+            чеков: счётчика посетителей у магазина нет, но чек оставляет каждый купивший, а привести людей
+            в помещение продавец не может. Ожидания считаются по истории до начала периода и без учёта
+            собственных смен продавца.
           </p>
         </>
           )}

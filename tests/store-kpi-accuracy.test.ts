@@ -42,7 +42,6 @@ function fact(date: string, revenue: number, patch: Partial<ShiftFact> = {}): Sh
     receipts_2plus: 20,
     attach_opportunities: 16,
     attach_success: 10,
-    club_revenue: 300_000,
     ...patch,
   }
 }

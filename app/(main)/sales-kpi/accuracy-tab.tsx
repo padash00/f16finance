@@ -22,6 +22,7 @@ type Calibration = {
   rate: number
   target: [number, number]
   verdict: 'too_easy' | 'ok' | 'too_hard'
+  alarm: 'threshold_too_easy' | 'threshold_demotivating' | null
 }
 
 type AccuracyData = {
@@ -127,6 +128,13 @@ export function AccuracyTab(props: { companyId: string }) {
                     </span>
                     <span className={`text-xs font-medium ${v.className}`}>{v.label}</span>
                     <span className="w-full text-xs text-slate-500 dark:text-slate-400">{v.hint}</span>
+                    {c.alarm ? (
+                      <span className="w-full text-xs font-medium text-rose-600 dark:text-rose-400">
+                        {c.alarm === 'threshold_too_easy'
+                          ? 'Порог берут больше 70% смен — как бонус он не работает.'
+                          : 'Порог берут меньше 15% смен — такой уровень скорее демотивирует.'}
+                      </span>
+                    ) : null}
                   </div>
                 )
               })}

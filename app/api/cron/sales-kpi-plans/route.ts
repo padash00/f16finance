@@ -31,6 +31,7 @@ import {
   todayISO,
 } from '@/lib/server/store-kpi'
 import {
+  buildReceiptsBaseline,
   buildRevenueBaseline,
   computeMonthlyIndex,
   computeShiftPlan,
@@ -101,21 +102,6 @@ export async function GET(request: Request) {
       const settings = normalizeStoreKpiSettings(row)
 
       try {
-        // Точка-клуб проверяется по организации даже здесь, где нет
-        // пользователя: строка настроек могла быть записана напрямую в БД, а
-        // чужую выручку крон читать не должен.
-        let clubId: string | null = null
-        if (settings.club_company_id) {
-          const { data: clubRow } = await supabase
-            .from('companies')
-            .select('id, organization_id')
-            .eq('id', settings.club_company_id)
-            .maybeSingle()
-          if (clubRow && String(clubRow.organization_id) === organizationId) {
-            clubId = String(clubRow.id)
-          }
-        }
-
         const planTo = addDaysISO(today, settings.plan_lock_days_ahead)
 
         const historyFrom = (await earliestSaleDate(supabase, companyId)) ?? today
@@ -123,14 +109,10 @@ export async function GET(request: Request) {
           companyId,
           from: historyFrom,
           to: addDaysISO(tomorrow, -1),
-          clubId,
         })
 
         const revenueBase = buildRevenueBaseline(facts, settings)
-        const clubBase = buildRevenueBaseline(
-          facts.map((f) => ({ ...f, revenue: f.club_revenue ?? 0, receipts: f.club_revenue ? 1 : 0 })),
-          settings,
-        )
+        const receiptsBase = buildReceiptsBaseline(facts, settings)
         const shifts = activeShifts(facts, addDaysISO(today, -60))
 
         // Индексы месяцев, попадающих в горизонт планирования.
@@ -177,7 +159,7 @@ export async function GET(request: Request) {
               minSample: settings.min_sample_size,
               summerMonths: settings.summer_months,
             })
-            const expectedClub = lookupBaseline(clubBase, target, {
+            const expectedReceipts = lookupBaseline(receiptsBase, target, {
               minSample: settings.min_sample_size,
               summerMonths: settings.summer_months,
             })
@@ -199,7 +181,7 @@ export async function GET(request: Request) {
               b3_amount: plan.b3,
               record_threshold: plan.record_threshold,
               expected_revenue: expected ? Math.round(expected.value) : null,
-              expected_club_revenue: expectedClub ? Math.round(expectedClub.value) : null,
+              expected_receipts: expectedReceipts ? Math.round(expectedReceipts.value) : null,
               monthly_index: plan.monthly_index,
               baseline_level: plan.level,
               baseline_sample: plan.sample,

@@ -50,7 +50,8 @@ type AiResult = {
 function formatMetric(metric: string, value: number | null): string {
   if (value == null) return '—'
   if (metric === 'attach_rate') return `${Math.round(value * 100)}%`
-  if (metric === 'avg_ticket' || metric === 'revenue_per_club') return formatMoney(value)
+  if (metric === 'avg_ticket' || metric === 'revenue_efficiency' || metric === 'plan_attainment')
+    return formatMoney(value)
   return value.toFixed(2)
 }
 

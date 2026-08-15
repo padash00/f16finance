@@ -2,14 +2,19 @@
  * Балл продавца и вывод по смене.
  *
  * Здесь живёт единственное, ради чего затевался модуль: ответ на вопрос
- * «касса просела из-за потока или из-за продавца». Ответ строится из
- * сопоставления двух независимых величин — был ли поток и что продавец сделал
- * с каждым пришедшим клиентом.
+ * «касса просела из-за спроса или из-за продавца». Ответ строится из
+ * сопоставления двух независимых величин — сколько людей купило и что
+ * продавец сделал с каждым из них.
+ *
+ * Спрос меряется числом чеков. Отдельного счётчика посетителей у магазина
+ * нет, но чек оставляет каждый купивший, а привести людей в помещение
+ * продавец не может — значит число чеков это спрос, а не качество работы.
  *
  * Ограничения, заложенные намеренно:
  *   * низкая выручка сама по себе не даёт вывод «плохой продавец»;
  *   * высокая выручка сама по себе не даёт вывод «хороший продавец»;
- *   * слабый поток бьёт по уверенности в оценке, а не по баллу продавца;
+ *   * много чеков при слабом среднем чеке — не повод считать смену успешной;
+ *   * мало чеков бьёт по уверенности в оценке, а не по баллу продавца;
  *   * недостающие данные превращаются в «недостаточно данных», а не в ноль.
  */
 
@@ -38,14 +43,17 @@ import type {
 export const NORMAL_BAND_LOW = 0.95
 export const NORMAL_BAND_HIGH = 1.05
 
+/** Спрос выше этого — касса выросла в основном из-за количества покупателей. */
+export const HIGH_DEMAND_FROM = 1.1
+
 /** Ниже этой уверенности выводы не делаются вовсе. */
 export const MIN_CONFIDENCE_FOR_VERDICT = 0.35
 
-/** Базы ожиданий: по каждой метрике, по выручке магазина и по потоку. */
+/** Базы ожиданий: по каждой метрике, по выручке смены и по числу чеков. */
 export type BaselineBundle = {
   metrics: Partial<Record<MetricKey, BaselineIndex>>
   revenue: BaselineIndex
-  club: BaselineIndex
+  receipts: BaselineIndex
 }
 
 function clamp(x: number, lo: number, hi: number): number {
@@ -62,7 +70,7 @@ function pct(ratio: number): string {
   return delta >= 0 ? `+${delta}%` : `${delta}%`
 }
 
-/** Разбор одной метрики: факт, ожидание и их отношение с клипом. */
+/** Разбор одной метрики: факт против ожидания для сопоставимых условий. */
 function analyzeMetric(
   fact: ShiftFact,
   metric: MetricKey,
@@ -70,7 +78,9 @@ function analyzeMetric(
   settings: StoreKpiSettings,
 ): MetricRatio {
   const actual = metricValue(fact, metric)
-  const index = bundle.metrics[metric]
+  // Выполнение плана сравнивается с нормой выручки смены, остальные метрики —
+  // со своей собственной базой.
+  const index = metric === 'plan_attainment' ? bundle.revenue : bundle.metrics[metric]
 
   const hit =
     index && actual != null
@@ -109,8 +119,8 @@ function analyzeMetric(
 /**
  * Взвешенный балл по доступным метрикам.
  *
- * Недоступные метрики не обнуляются, а исключаются с перевзвешиванием
- * остальных: магазин, где не настроены правила допродаж, не должен получать
+ * Недоступная метрика не обнуляется, а исключается с перевзвешиванием
+ * остальных. Магазин без настроенных правил допродаж не должен получать
  * балл ниже магазина, где они настроены.
  */
 function weightedScore(
@@ -139,8 +149,8 @@ function weightedScore(
 /**
  * Уверенность в оценке: 0..1.
  *
- * Считается отдельно от балла именно для того, чтобы слабый поток и дырявые
- * данные снижали доверие к выводу, а не сам балл продавца.
+ * Считается отдельно от балла именно для того, чтобы малое число чеков и
+ * дырявые данные снижали доверие к выводу, а не сам балл продавца.
  */
 function computeConfidence(
   fact: ShiftFact,
@@ -162,17 +172,14 @@ function computeConfidence(
       withRatio.length
     : 0.6
 
+  // Мало чеков — метрики скачут сами по себе, на такой выборке любой вывод
+  // слабее. Бьём по уверенности, но не по баллу.
   const receiptsFactor = clamp(fact.receipts / settings.min_receipts_for_full_score, 0.3, 1)
 
   const completeness = used.totalWeight > 0 ? used.usedWeight / used.totalWeight : 0
 
-  let raw = 0.3 * sampleFactor + 0.2 * levelFactor + 0.2 * receiptsFactor + 0.3 * completeness
-
-  // Без прокси потока модуль не может ответить на свой главный вопрос — поток
-  // просел или продавец. Метрики внутри чека остаются, вывод по ним сделать
-  // можно, но это вывод с одним закрытым глазом, и цена ошибки тут высокая:
-  // человека можно записать в слабые за чужой пустой вечер.
-  if (fact.club_revenue == null || fact.club_revenue <= 0) raw *= 0.8
+  const raw =
+    0.3 * sampleFactor + 0.2 * levelFactor + 0.2 * receiptsFactor + 0.3 * completeness
 
   return round(clamp(raw, 0.05, 0.98), 2)
 }
@@ -182,17 +189,17 @@ function decideVerdict(args: {
   score: number | null
   confidence: number
   revenueRatio: number | null
-  trafficRatio: number | null
+  demandRatio: number | null
   metrics: MetricRatio[]
 }): { verdict: ShiftVerdict; evidence: string[] } {
-  const { score, confidence, revenueRatio, trafficRatio, metrics } = args
+  const { score, confidence, revenueRatio, demandRatio, metrics } = args
   const evidence: string[] = []
 
-  if (trafficRatio != null) {
-    evidence.push(`Поток (выручка клуба) к ожиданию: ${pct(trafficRatio)}`)
+  if (demandRatio != null) {
+    evidence.push(`Покупателей (чеков) к ожиданию: ${pct(demandRatio)}`)
   }
   if (revenueRatio != null) {
-    evidence.push(`Касса магазина к ожиданию: ${pct(revenueRatio)}`)
+    evidence.push(`Касса к ожиданию: ${pct(revenueRatio)}`)
   }
   for (const m of metrics) {
     if (m.raw_ratio == null) continue
@@ -204,24 +211,29 @@ function decideVerdict(args: {
     return { verdict: 'INSUFFICIENT_DATA', evidence }
   }
 
-  const trafficWeak = trafficRatio != null && trafficRatio < NORMAL_BAND_LOW
-  const trafficOk = trafficRatio == null || trafficRatio >= NORMAL_BAND_LOW
-  const revenueWeak = revenueRatio != null && revenueRatio < NORMAL_BAND_LOW
+  const demandWeak = demandRatio != null && demandRatio < NORMAL_BAND_LOW
+  const demandOk = demandRatio == null || demandRatio >= NORMAL_BAND_LOW
 
-  // Поток просел, касса просела, но работа продавца не хуже обычной —
-  // это провал потока, а не человека.
-  if (trafficWeak && revenueWeak && score >= NORMAL_BAND_LOW) {
-    return { verdict: 'TRAFFIC_DRIVEN', evidence }
+  // Людей пришло меньше обычного, но с каждым пришедшим отработали не хуже —
+  // это провал спроса, а не человека.
+  if (demandWeak && score >= NORMAL_BAND_LOW) {
+    return { verdict: 'LOW_DEMAND', evidence }
   }
 
-  // Поток был (или неизвестен), а управляемые продавцом метрики просели —
-  // вот это уже повод разбираться с человеком.
-  if (trafficOk && score < NORMAL_BAND_LOW) {
+  // Покупатели были (или их число неизвестно), а управляемые продавцом
+  // метрики просели — вот это уже повод разбираться с человеком.
+  if (demandOk && score < NORMAL_BAND_LOW) {
     return { verdict: 'POSSIBLE_CASHIER_ISSUE', evidence }
   }
 
   if (score >= NORMAL_BAND_HIGH) {
-    return { verdict: 'CASHIER_DRIVEN', evidence }
+    return { verdict: 'STRONG_CASHIER', evidence }
+  }
+
+  // Касса выросла, но за счёт количества покупателей, а не качества продаж —
+  // такую смену нельзя записывать продавцу в заслугу автоматически.
+  if (demandRatio != null && demandRatio >= HIGH_DEMAND_FROM) {
+    return { verdict: 'HIGH_DEMAND', evidence }
   }
 
   return { verdict: 'NORMAL', evidence }
@@ -242,24 +254,27 @@ export function analyzeShift(
     summerMonths: settings.summer_months,
     excludeCashierId: fact.cashier_id,
   })
-  // Выручку клуба продавец магазина не делает, поэтому исключать его смены
-  // из базы потока незачем — наоборот, это сузило бы выборку без причины.
-  const clubHit = lookupBaseline(bundle.club, fact, {
+  // Число покупателей продавец не делает, поэтому исключать его смены из
+  // базы спроса незачем — это лишь сузило бы выборку.
+  const receiptsHit = lookupBaseline(bundle.receipts, fact, {
     minSample: settings.min_sample_size,
     summerMonths: settings.summer_months,
   })
+  const ticketHit = lookupBaseline(bundle.metrics.avg_ticket as BaselineIndex, fact, {
+    minSample: settings.min_sample_size,
+    summerMonths: settings.summer_months,
+    excludeCashierId: fact.cashier_id,
+  })
 
   const revenueRatio = revenueHit && revenueHit.value > 0 ? round(fact.revenue / revenueHit.value) : null
-  const trafficRatio =
-    clubHit && clubHit.value > 0 && fact.club_revenue != null
-      ? round(fact.club_revenue / clubHit.value)
-      : null
+  const demandRatio =
+    receiptsHit && receiptsHit.value > 0 ? round(fact.receipts / receiptsHit.value) : null
 
   const { verdict, evidence } = decideVerdict({
     score,
     confidence,
     revenueRatio,
-    trafficRatio,
+    demandRatio,
     metrics,
   })
 
@@ -269,7 +284,7 @@ export function analyzeShift(
     const reason = m.actual == null ? METRIC_MISSING_REASON[m.metric] : 'истории для сравнения не хватило'
     missing.push(`${METRIC_LABELS[m.metric]}: ${reason}`)
   }
-  if (trafficRatio == null) missing.push('Поток: нет сопоставимой истории выручки клуба')
+  if (demandRatio == null) missing.push('Спрос: нет сопоставимой истории по числу чеков')
 
   return {
     fact,
@@ -281,7 +296,8 @@ export function analyzeShift(
     evidence,
     missing,
     expected_revenue: revenueHit ? Math.round(revenueHit.value) : null,
-    expected_club_revenue: clubHit ? Math.round(clubHit.value) : null,
+    expected_receipts: receiptsHit ? Math.round(receiptsHit.value) : null,
+    expected_avg_ticket: ticketHit ? Math.round(ticketHit.value) : null,
   }
 }
 
@@ -341,9 +357,10 @@ export function summarizeCashier(
     .map((r) => r.metric)
 
   const verdicts = {
-    TRAFFIC_DRIVEN: 0,
+    LOW_DEMAND: 0,
     POSSIBLE_CASHIER_ISSUE: 0,
-    CASHIER_DRIVEN: 0,
+    HIGH_DEMAND: 0,
+    STRONG_CASHIER: 0,
     NORMAL: 0,
     INSUFFICIENT_DATA: 0,
   } as Record<ShiftVerdict, number>
@@ -370,5 +387,42 @@ export function summarizeCashier(
     strengths,
     weaknesses,
     verdicts,
+  }
+}
+
+/**
+ * Флаг «нужно обучение» по нескольким сменам.
+ *
+ * Одна слабая смена ничего не значит. Флаг ставится, только если картина
+ * повторяется и просели именно управляемые продавцом метрики. Это
+ * рекомендация управляющему, а не наказание и не автоматическое решение.
+ */
+export function trainingFlag(
+  summary: CashierSummary,
+  shifts: ShiftAnalysis[],
+  settings: StoreKpiSettings,
+): { flagged: boolean; reason: string | null } {
+  const mine = shifts
+    .filter((s) => s.fact.cashier_id === summary.cashier_id && s.score != null)
+    .slice(-settings.min_qualifying_shifts)
+
+  if (mine.length < settings.min_qualifying_shifts) {
+    return { flagged: false, reason: null }
+  }
+
+  const weakShifts = mine.filter((s) => (s.score ?? 1) < settings.status_needs_training_below).length
+  const controllable: MetricKey[] = ['avg_ticket', 'items_per_receipt', 'attach_rate', 'revenue_efficiency']
+  const weakMetrics = controllable.filter((m) => (summary.metric_ratios[m] ?? 1) < NORMAL_BAND_LOW)
+
+  // Большинство смен слабые И минимум две управляемые метрики ниже нормы.
+  const flagged = weakShifts >= Math.ceil(mine.length * 0.6) && weakMetrics.length >= 2
+
+  return {
+    flagged,
+    reason: flagged
+      ? `${weakShifts} из ${mine.length} последних смен ниже нормы, просели: ${weakMetrics
+          .map((m) => METRIC_LABELS[m].toLowerCase())
+          .join(', ')}`
+      : null,
   }
 }

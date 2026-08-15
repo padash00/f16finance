@@ -83,9 +83,21 @@ export async function GET(request: Request) {
       .order('name')
     if (catErr) throw catErr
 
+    // Товары нужны для правил уровня «конкретная позиция». Берём активные:
+    // предлагать допродажу снятого с продажи товара смысла нет.
+    const { data: items, error: itemsErr } = await supabase
+      .from('inventory_items')
+      .select('id, name')
+      .eq('company_id', companyId)
+      .eq('is_active', true)
+      .order('name')
+      .limit(500)
+    if (itemsErr) throw itemsErr
+
+    // Правила допродаж могут ссылаться и на категорию, и на конкретный товар.
     const { data: rules, error: rulesErr } = await supabase
       .from('store_kpi_cross_sell_rules')
-      .select('id, source_category_id, target_category_id, weight, active')
+      .select('id, source_kind, source_ref, target_kind, target_ref, weight, active')
       .eq('company_id', companyId)
       .order('created_at')
     if (rulesErr) throw rulesErr
@@ -96,7 +108,6 @@ export async function GET(request: Request) {
       data: {
         configured: Boolean(settingsRow),
         settings: {
-          club_company_id: settings.club_company_id,
           min_sample_size: settings.min_sample_size,
           min_qualifying_shifts: settings.min_qualifying_shifts,
           min_receipts_for_full_score: settings.min_receipts_for_full_score,
@@ -107,6 +118,7 @@ export async function GET(request: Request) {
         },
         companies: companies || [],
         categories: categories || [],
+        items: items || [],
         rules: rules || [],
       },
     })
@@ -141,20 +153,11 @@ export async function POST(request: Request) {
 
     const action = String(body.action || 'save_settings')
 
-    // ── Точка-клуб и пороги ───────────────────────────────────────────────
+    // ── Координаты и ворота ───────────────────────────────────────────────
     if (action === 'save_settings') {
-      const clubRaw = body.club_company_id
-      const clubId = typeof clubRaw === 'string' && clubRaw ? clubRaw : null
-      // Прокси потока обязан быть своей точкой: иначе через настройку можно
-      // было бы подтянуть выручку чужой организации.
-      if (clubId && !inScope(scope, clubId)) {
-        return json({ error: 'forbidden', code: 'club-out-of-scope' }, 403)
-      }
-      if (clubId && clubId === companyId) return json({ error: 'club-cannot-be-self' }, 400)
-
       const { data: before } = await supabase
         .from('store_kpi_settings')
-        .select('club_company_id')
+        .select('latitude, longitude, require_product_test_for_top_bonus')
         .eq('company_id', companyId)
         .maybeSingle()
 
@@ -170,7 +173,6 @@ export async function POST(request: Request) {
         {
           organization_id: company.organization_id,
           company_id: companyId,
-          club_company_id: clubId,
           latitude,
           longitude,
           weather_adjusts_bonus_threshold: body.weather_adjusts_bonus_threshold === true,
@@ -190,8 +192,12 @@ export async function POST(request: Request) {
         organizationId: company.organization_id,
         payload: {
           company_id: companyId,
-          club_company_id_before: before?.club_company_id ?? null,
-          club_company_id_after: clubId,
+          before: before ?? null,
+          after: {
+            latitude,
+            longitude,
+            require_product_test_for_top_bonus: body.require_product_test_for_top_bonus === true,
+          },
         },
       })
 
@@ -200,32 +206,45 @@ export async function POST(request: Request) {
 
     // ── Правило допродажи ─────────────────────────────────────────────────
     if (action === 'add_rule') {
-      const source = String(body.source_category_id || '')
-      const target = String(body.target_category_id || '')
-      if (!source || !target) return json({ error: 'categories-required' }, 400)
-      if (source === target) return json({ error: 'categories-must-differ' }, 400)
+      const sourceKind = body.source_kind === 'item' ? 'item' : 'category'
+      const targetKind = body.target_kind === 'item' ? 'item' : 'category'
+      const source = String(body.source_ref || '')
+      const target = String(body.target_ref || '')
+      if (!source || !target) return json({ error: 'refs-required' }, 400)
+      // Правило «сам на себя» выполнялось бы автоматически и завышало бы
+      // допродажи всем подряд.
+      if (sourceKind === targetKind && source === target) return json({ error: 'refs-must-differ' }, 400)
 
-      // Категории обязаны принадлежать этой же точке: иначе правило считало бы
-      // допродажи по чужому каталогу.
-      const { data: cats, error: catErr } = await supabase
-        .from('inventory_categories')
-        .select('id')
-        .eq('company_id', companyId)
-        .in('id', [source, target])
-      if (catErr) throw catErr
-      if ((cats || []).length !== 2) return json({ error: 'category-out-of-scope' }, 400)
+      // Обе стороны обязаны принадлежать каталогу ЭТОЙ точки: иначе правило
+      // считало бы допродажи по чужому ассортименту.
+      const belongs = async (kind: 'category' | 'item', id: string) => {
+        const table = kind === 'category' ? 'inventory_categories' : 'inventory_items'
+        const { data, error } = await supabase
+          .from(table)
+          .select('id')
+          .eq('company_id', companyId)
+          .eq('id', id)
+          .maybeSingle()
+        if (error) throw error
+        return Boolean(data)
+      }
+      if (!(await belongs(sourceKind, source)) || !(await belongs(targetKind, target))) {
+        return json({ error: 'ref-out-of-scope' }, 400)
+      }
 
       const { error } = await supabase.from('store_kpi_cross_sell_rules').upsert(
         {
           organization_id: company.organization_id,
           company_id: companyId,
-          source_category_id: source,
-          target_category_id: target,
+          source_kind: sourceKind,
+          source_ref: source,
+          target_kind: targetKind,
+          target_ref: target,
           weight: Number(body.weight) > 0 ? Number(body.weight) : 1,
           active: true,
           created_by: access.user?.id || null,
         },
-        { onConflict: 'company_id,source_category_id,target_category_id' },
+        { onConflict: 'company_id,source_kind,source_ref,target_kind,target_ref' },
       )
       if (error) throw error
 
@@ -235,7 +254,7 @@ export async function POST(request: Request) {
         entityId: companyId,
         action: 'create',
         organizationId: company.organization_id,
-        payload: { company_id: companyId, source, target },
+        payload: { company_id: companyId, sourceKind, source, targetKind, target },
       })
 
       return json({ ok: true })

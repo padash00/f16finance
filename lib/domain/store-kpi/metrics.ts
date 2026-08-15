@@ -1,29 +1,39 @@
 /**
  * Метрики продавца: что именно он контролирует.
  *
- * Выручка смены в этот список не входит намеренно. Выручку делает поток и
- * продавец вместе, а мерить нужно вклад продавца. Поэтому все метрики здесь
- * либо нормированы на поток (на 1000 ₸ выручки клуба), либо считаются внутри
- * чека (средний чек, товаров на чек, допродажи) и от размера потока не зависят.
+ * Число чеков в этот список не входит намеренно. Чек оставляет каждый
+ * купивший, но привести людей в помещение продавец не может — количество
+ * покупателей это спрос, а не качество работы. Поэтому все метрики здесь
+ * считаются ВНУТРИ чека и от числа покупателей не зависят.
+ *
+ * Отдельная оговорка про `revenue_efficiency`. По формуле из ТЗ это
+ *
+ *     Выручка / (Чеки × ОжидаемыйСреднийЧек)
+ *
+ * а «Выручка / Чеки» и есть фактический средний чек. То есть метрика
+ * тождественно равна отношению среднего чека к ожидаемому — тому же числу,
+ * что и `avg_ticket`. Владелец решил оставить обе в баллах (25% + 15%),
+ * зная об этом: так средний чек получает суммарный вес 40%. В интерфейсе
+ * обе строки честно помечены как одно и то же измерение.
  */
 
 import type { CrossSellRule, MetricKey, ShiftFact } from './types'
 
 export const METRIC_KEYS: MetricKey[] = [
-  'revenue_per_club',
-  'receipts_per_club',
   'avg_ticket',
   'items_per_receipt',
   'attach_rate',
+  'revenue_efficiency',
+  'plan_attainment',
   'product_knowledge',
 ]
 
 export const METRIC_LABELS: Record<MetricKey, string> = {
-  revenue_per_club: 'Выручка на 1000 ₸ клуба',
-  receipts_per_club: 'Чеков на 1000 ₸ клуба',
   avg_ticket: 'Средний чек',
   items_per_receipt: 'Товаров на чек',
   attach_rate: 'Допродажи',
+  revenue_efficiency: 'Отдача с покупателя',
+  plan_attainment: 'Выполнение плана',
   product_knowledge: 'Знание товара',
 }
 
@@ -32,34 +42,32 @@ export const METRIC_LABELS: Record<MetricKey, string> = {
  * чтобы никто не принял «нет данных» за «плохо сработал».
  */
 export const METRIC_MISSING_REASON: Record<MetricKey, string> = {
-  revenue_per_club: 'нет выручки клуба за эту смену — поток измерить нечем',
-  receipts_per_club: 'нет выручки клуба за эту смену — поток измерить нечем',
   avg_ticket: 'в смене нет валидных чеков',
   items_per_receipt: 'чеки без позиций — товары в них не пробиты построчно',
   attach_rate: 'не настроены правила допродаж или у товаров нет категорий',
+  revenue_efficiency: 'в смене нет валидных чеков',
+  plan_attainment: 'нет сопоставимой истории, чтобы понять норму выручки',
   product_knowledge: 'тест на знание товара не сдавался',
 }
 
-/** Масштаб нормировки на поток: «на 1000 ₸ выручки клуба». */
-export const CLUB_REVENUE_UNIT = 1000
+/** Метрики, которые считаются от одного и того же измерения. */
+export const METRIC_DUPLICATE_OF: Partial<Record<MetricKey, MetricKey>> = {
+  revenue_efficiency: 'avg_ticket',
+}
 
 /**
  * Значение метрики для смены. null — посчитать не из чего.
  *
  * Ноль вместо null здесь был бы ошибкой: смена без пробитых позиций дала бы
  * «0 товаров на чек» и утащила продавца вниз за проблему учёта.
+ *
+ * `plan_attainment` и `product_knowledge` считаются не отсюда: первому нужна
+ * норма выручки из базы, второму — результат теста.
  */
 export function metricValue(fact: ShiftFact, metric: MetricKey): number | null {
   switch (metric) {
-    case 'revenue_per_club':
-      if (!fact.club_revenue || fact.club_revenue <= 0) return null
-      return (fact.revenue / fact.club_revenue) * CLUB_REVENUE_UNIT
-
-    case 'receipts_per_club':
-      if (!fact.club_revenue || fact.club_revenue <= 0) return null
-      return (fact.receipts / fact.club_revenue) * CLUB_REVENUE_UNIT
-
     case 'avg_ticket':
+    case 'revenue_efficiency':
       if (fact.receipts <= 0) return null
       return fact.revenue / fact.receipts
 
@@ -73,46 +81,60 @@ export function metricValue(fact: ShiftFact, metric: MetricKey): number | null {
       if (fact.attach_opportunities <= 0) return null
       return fact.attach_success / fact.attach_opportunities
 
+    case 'plan_attainment':
+      if (fact.receipts <= 0) return null
+      return fact.revenue
+
     case 'product_knowledge':
-      // Появится вместе с воротами по тесту знания товара (следующая фаза).
+      // Появится вместе с воротами по тесту знания товара.
       return null
   }
 }
 
-/** Чек в виде, нужном для допродаж: какие категории в нём оказались. */
-export type ReceiptCategories = { categories: string[] }
+/** Число чеков — мера спроса. Считается отдельно от качества работы. */
+export function demandValue(fact: ShiftFact): number | null {
+  return fact.receipts > 0 ? fact.receipts : null
+}
+
+/** Чек в виде, нужном для допродаж: какие категории и товары в нём оказались. */
+export type ReceiptContents = { categories: string[]; items?: string[] }
 
 /**
  * Attach rate по правилам вида «рамен → напиток».
  *
- * Возможность засчитывается, когда в чеке есть исходная категория; успех —
- * когда рядом оказалась целевая. Категории правил задаёт администратор:
- * зашивать «рамен» и «напиток» в код нельзя, у каждой точки свой ассортимент.
+ * Возможность засчитывается, когда в чеке есть исходная позиция правила;
+ * успех — когда рядом оказалась целевая. Правило может ссылаться и на
+ * категорию, и на конкретный товар: у ассортимента бывает и то и другое —
+ * «любой напиток» это категория, а «фирменный соус» товар.
  */
 export function attachFromReceipts(
-  receipts: ReceiptCategories[],
+  receipts: ReceiptContents[],
   rules: CrossSellRule[],
 ): { opportunities: number; success: number } {
-  const active = rules.filter((r) => r.active && r.source_category_id && r.target_category_id)
+  const active = rules.filter((r) => r.active && r.source_ref && r.target_ref)
   if (active.length === 0) return { opportunities: 0, success: 0 }
 
   let opportunities = 0
   let success = 0
 
   for (const receipt of receipts) {
-    const inReceipt = new Set(receipt.categories)
+    const categories = new Set(receipt.categories)
+    const items = new Set(receipt.items || [])
+    const has = (kind: 'category' | 'item', ref: string) =>
+      kind === 'category' ? categories.has(ref) : items.has(ref)
+
     for (const rule of active) {
-      if (!inReceipt.has(rule.source_category_id)) continue
+      if (!has(rule.source_kind, rule.source_ref)) continue
       const weight = rule.weight > 0 ? rule.weight : 1
       opportunities += weight
-      if (inReceipt.has(rule.target_category_id)) success += weight
+      if (has(rule.target_kind, rule.target_ref)) success += weight
     }
   }
 
   return { opportunities, success }
 }
 
-/** Доля чеков с двумя и более строками — диагностическая метрика допродаж. */
+/** Доля чеков с двумя и более позициями — независимый признак допродаж. */
 export function multiLineRate(fact: ShiftFact): number | null {
   if (fact.receipts <= 0) return null
   if (fact.lines <= 0) return null

@@ -30,7 +30,7 @@ type PlanRow = {
   b3: number | null
   record_threshold: number | null
   expected_revenue: number | null
-  expected_club_revenue: number | null
+  expected_receipts: number | null
   monthly_index: number
   baseline_level: string | null
   baseline_sample: number
@@ -254,7 +254,8 @@ export function PlansTab(props: { companyId: string; canManage: boolean }) {
                   <th className="px-4 py-2 text-right font-medium">B1</th>
                   <th className="px-4 py-2 text-right font-medium">B2</th>
                   <th className="px-4 py-2 text-right font-medium">B3</th>
-                  <th className="px-4 py-2 text-right font-medium">Прогноз</th>
+                  <th className="px-4 py-2 text-right font-medium">Покупателей</th>
+                  <th className="px-4 py-2 text-right font-medium">Прогноз кассы</th>
                   <th className="px-4 py-2 text-left font-medium">Погода</th>
                   <th className="px-4 py-2 text-left font-medium">Статус</th>
                   {props.canManage ? <th className="w-20" /> : null}
@@ -275,6 +276,9 @@ export function PlansTab(props: { companyId: string; canManage: boolean }) {
                     <td className="px-4 py-2 text-right tabular-nums">{p.b2 == null ? '—' : formatMoney(p.b2)}</td>
                     <td className="px-4 py-2 text-right tabular-nums font-medium">
                       {p.b3 == null ? '—' : formatMoney(p.b3)}
+                    </td>
+                    <td className="px-4 py-2 text-right tabular-nums text-slate-500 dark:text-slate-400">
+                      {p.expected_receipts == null ? '—' : p.expected_receipts}
                     </td>
                     <td className="px-4 py-2 text-right tabular-nums text-slate-500 dark:text-slate-400">
                       {p.expected_revenue == null ? '—' : formatMoney(p.expected_revenue)}

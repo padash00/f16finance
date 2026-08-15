@@ -23,6 +23,7 @@ import {
   todayISO,
 } from '@/lib/server/store-kpi'
 import {
+  buildReceiptsBaseline,
   buildRevenueBaseline,
   computeMonthlyIndex,
   computeShiftPlan,
@@ -196,7 +197,7 @@ export async function GET(request: Request) {
     const from = url.searchParams.get('from') || today
     const to = url.searchParams.get('to') || addDaysISO(today, 13)
 
-    const { settings, clubId } = await loadStoreKpiSettings(supabase, companyId, scope)
+    const { settings } = await loadStoreKpiSettings(supabase, companyId)
 
     // История для распределения выручки — строго ДО начала планируемого
     // периода: план не должен опираться на смены, которые ещё не случились.
@@ -204,14 +205,11 @@ export async function GET(request: Request) {
     const historyTo = addDaysISO(from, -1)
     const facts =
       historyTo >= historyFrom
-        ? await loadShiftFacts(supabase, { companyId, from: historyFrom, to: historyTo, clubId })
+        ? await loadShiftFacts(supabase, { companyId, from: historyFrom, to: historyTo })
         : []
 
     const revenueBase = buildRevenueBaseline(facts, settings)
-    const clubBase = buildRevenueBaseline(
-      facts.map((f) => ({ ...f, revenue: f.club_revenue ?? 0, receipts: f.club_revenue ? 1 : 0 })),
-      settings,
-    )
+    const receiptsBase = buildReceiptsBaseline(facts, settings)
 
     const dates = datesBetween(from, to)
     const months = [...new Set(dates.map(monthKey))]
@@ -283,7 +281,7 @@ export async function GET(request: Request) {
             b3: savedRow.b3_amount,
             record_threshold: savedRow.record_threshold,
             expected_revenue: savedRow.expected_revenue,
-            expected_club_revenue: savedRow.expected_club_revenue,
+            expected_receipts: savedRow.expected_receipts,
             monthly_index: Number(savedRow.monthly_index) || 1,
             baseline_level: savedRow.baseline_level,
             baseline_sample: savedRow.baseline_sample,
@@ -297,7 +295,7 @@ export async function GET(request: Request) {
           minSample: settings.min_sample_size,
           summerMonths: settings.summer_months,
         })
-        const expectedClub = lookupBaseline(clubBase, target, {
+        const expectedReceipts = lookupBaseline(receiptsBase, target, {
           minSample: settings.min_sample_size,
           summerMonths: settings.summer_months,
         })
@@ -317,7 +315,7 @@ export async function GET(request: Request) {
           // Прогноз показывается рядом с планом, но планом не является — и
           // только он поправляется погодой. Уровни выше остались нетронутыми.
           expected_revenue: expected ? Math.round(expected.value * weatherInfo.factor) : null,
-          expected_club_revenue: expectedClub ? Math.round(expectedClub.value * weatherInfo.factor) : null,
+          expected_receipts: expectedReceipts ? Math.round(expectedReceipts.value * weatherInfo.factor) : null,
           monthly_index: index,
           baseline_level: plan?.level ?? null,
           baseline_sample: plan?.sample ?? 0,
@@ -380,7 +378,7 @@ export async function POST(request: Request) {
     if (!organizationId) return json({ error: 'company-without-organization' }, 400)
 
     const action = String(body.action || '')
-    const { settings, clubId } = await loadStoreKpiSettings(supabase, companyId, scope)
+    const { settings } = await loadStoreKpiSettings(supabase, companyId)
     const actor = access.user?.id || null
     const today = todayISO()
 
@@ -394,14 +392,11 @@ export async function POST(request: Request) {
       const historyTo = addDaysISO(from, -1)
       const facts =
         historyTo >= historyFrom
-          ? await loadShiftFacts(supabase, { companyId, from: historyFrom, to: historyTo, clubId })
+          ? await loadShiftFacts(supabase, { companyId, from: historyFrom, to: historyTo })
           : []
 
       const revenueBase = buildRevenueBaseline(facts, settings)
-      const clubBase = buildRevenueBaseline(
-        facts.map((f) => ({ ...f, revenue: f.club_revenue ?? 0, receipts: f.club_revenue ? 1 : 0 })),
-        settings,
-      )
+      const receiptsBase = buildReceiptsBaseline(facts, settings)
       const dates = datesBetween(from, to)
       const indices = await loadMonthlyIndices(supabase, companyId, [...new Set(dates.map(monthKey))])
       const shifts = activeShifts(facts, addDaysISO(today, -60))
@@ -441,7 +436,7 @@ export async function POST(request: Request) {
             minSample: settings.min_sample_size,
             summerMonths: settings.summer_months,
           })
-          const expectedClub = lookupBaseline(clubBase, target, {
+          const expectedReceipts = lookupBaseline(receiptsBase, target, {
             minSample: settings.min_sample_size,
             summerMonths: settings.summer_months,
           })
@@ -457,7 +452,7 @@ export async function POST(request: Request) {
             b3_amount: plan.b3,
             record_threshold: plan.record_threshold,
             expected_revenue: expected ? Math.round(expected.value) : null,
-            expected_club_revenue: expectedClub ? Math.round(expectedClub.value) : null,
+            expected_receipts: expectedReceipts ? Math.round(expectedReceipts.value) : null,
             monthly_index: plan.monthly_index,
             baseline_level: plan.level,
             baseline_sample: plan.sample,
@@ -647,7 +642,6 @@ export async function POST(request: Request) {
         companyId,
         from: historyFrom,
         to: addDaysISO(asOf, -1),
-        clubId,
       })
 
       // Тренд: факт против ожидания по сопоставимым сменам. Ожидание берём из

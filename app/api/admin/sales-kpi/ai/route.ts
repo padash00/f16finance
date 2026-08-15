@@ -51,10 +51,10 @@ export async function POST(request: Request) {
     if (companyErr) throw companyErr
     if (!company?.organization_id) return json({ error: 'company-without-organization' }, 400)
 
-    const { settings, clubId } = await loadStoreKpiSettings(supabase, companyId, scope)
+    const { settings } = await loadStoreKpiSettings(supabase, companyId)
 
     const historyFrom = (await earliestSaleDate(supabase, companyId)) ?? date
-    const facts = await loadShiftFacts(supabase, { companyId, from: historyFrom, to: date, clubId })
+    const facts = await loadShiftFacts(supabase, { companyId, from: historyFrom, to: date })
 
     const baselineFacts = facts.filter((f) => f.date <= addDaysISO(date, -1))
     const targetFacts = facts.filter((f) => f.date === date && f.shift === shift)
@@ -84,8 +84,8 @@ export async function POST(request: Request) {
       facts: {
         revenue: Math.round(shiftAnalysis.fact.revenue),
         expected_revenue: shiftAnalysis.expected_revenue,
-        club_revenue: shiftAnalysis.fact.club_revenue,
-        expected_club_revenue: shiftAnalysis.expected_club_revenue,
+        expected_receipts: shiftAnalysis.expected_receipts,
+        expected_avg_ticket: shiftAnalysis.expected_avg_ticket,
         receipts: shiftAnalysis.fact.receipts,
         items: shiftAnalysis.fact.items,
         refunds: Math.round(shiftAnalysis.fact.refunds),

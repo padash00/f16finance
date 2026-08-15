@@ -45,10 +45,10 @@ export async function GET(request: Request) {
     if (!inScope(scope, companyId)) return json({ error: 'forbidden', code: 'company-out-of-scope' }, 403)
 
     const today = todayISO()
-    const { settings, clubId } = await loadStoreKpiSettings(supabase, companyId, scope)
+    const { settings } = await loadStoreKpiSettings(supabase, companyId)
 
     const historyFrom = (await earliestSaleDate(supabase, companyId)) ?? today
-    const facts = await loadShiftFacts(supabase, { companyId, from: historyFrom, to: today, clubId })
+    const facts = await loadShiftFacts(supabase, { companyId, from: historyFrom, to: today })
 
     const backtest = backtestPlans(facts, settings)
 

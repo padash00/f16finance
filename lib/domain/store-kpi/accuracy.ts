@@ -97,6 +97,8 @@ export type BacktestResult = {
     rate: number
     target: [number, number]
     verdict: 'too_easy' | 'ok' | 'too_hard'
+    /** Жёсткие границы из ТЗ: порог, который берут почти все или почти никто. */
+    alarm: 'threshold_too_easy' | 'threshold_demotivating' | null
   }[]
 }
 
@@ -106,6 +108,15 @@ const TARGET_HIT_RATES: { level: BonusLevel; target: [number, number] }[] = [
   { level: 'b2', target: [0.15, 0.25] },
   { level: 'b3', target: [0.05, 0.1] },
 ]
+
+/**
+ * Границы, за которыми порог перестаёт работать как мотивация.
+ *
+ * Выше первой — бонус превращается в надбавку за выход на смену. Ниже второй —
+ * в недостижимую морковку, которая скорее злит, чем мотивирует.
+ */
+const TOO_EASY_FROM = 0.7
+const DEMOTIVATING_BELOW = 0.15
 
 /**
  * Бэктест: прогоняет историю так, как её проживала бы модель.
@@ -219,6 +230,12 @@ export function backtestPlans(
         rate: value,
         target,
         verdict: value > target[1] ? 'too_easy' : value < target[0] ? 'too_hard' : 'ok',
+        alarm:
+          value > TOO_EASY_FROM
+            ? ('threshold_too_easy' as const)
+            : value < DEMOTIVATING_BELOW
+              ? ('threshold_demotivating' as const)
+              : null,
       }
     }),
   }

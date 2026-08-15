@@ -21,7 +21,7 @@ import {
   resolveStoreKpiContext,
   inScope,
 } from '@/lib/server/store-kpi'
-import { analyzeStoreKpi, explainShift } from '@/lib/domain/store-kpi'
+import { analyzeStoreKpi, explainShift, trainingFlag } from '@/lib/domain/store-kpi'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -61,7 +61,7 @@ export async function GET(request: Request) {
     // нельзя — у точек разный ассортимент, поток и ожидания.
     if (!company) return json({ data: { stores, needs_company: true } })
 
-    const { row: settingsRow, settings, clubId } = await loadStoreKpiSettings(supabase, company.id, scope)
+    const { row: settingsRow, settings } = await loadStoreKpiSettings(supabase, company.id)
 
     const baselineFrom = (await earliestSaleDate(supabase, company.id)) ?? from
     const baselineTo = addDaysISO(from, -1)
@@ -70,7 +70,6 @@ export async function GET(request: Request) {
       companyId: company.id,
       from: baselineFrom,
       to,
-      clubId,
     })
 
     const baselineFacts = facts.filter((f) => f.date <= baselineTo)
@@ -92,18 +91,14 @@ export async function GET(request: Request) {
       }
     }
 
-    let clubName: string | null = null
-    if (clubId) {
-      const { data: clubRow } = await supabase.from('companies').select('name').eq('id', clubId).maybeSingle()
-      clubName = clubRow?.name ? String(clubRow.name) : null
-    }
-
     const totals = {
       revenue: Math.round(targetFacts.reduce((sum, f) => sum + f.revenue, 0)),
       receipts: targetFacts.reduce((sum, f) => sum + f.receipts, 0),
       shifts: targetFacts.length,
-      traffic_driven: result.shifts.filter((s) => s.verdict === 'TRAFFIC_DRIVEN').length,
+      low_demand: result.shifts.filter((s) => s.verdict === 'LOW_DEMAND').length,
       cashier_issue: result.shifts.filter((s) => s.verdict === 'POSSIBLE_CASHIER_ISSUE').length,
+      high_demand: result.shifts.filter((s) => s.verdict === 'HIGH_DEMAND').length,
+      strong: result.shifts.filter((s) => s.verdict === 'STRONG_CASHIER').length,
       insufficient: result.shifts.filter((s) => s.verdict === 'INSUFFICIENT_DATA').length,
     }
 
@@ -111,7 +106,6 @@ export async function GET(request: Request) {
       data: {
         period: { from, to },
         company: { id: company.id, name: company.name },
-        club: clubId ? { id: clubId, name: clubName } : null,
         stores,
         settings: {
           min_sample_size: settings.min_sample_size,
@@ -132,9 +126,10 @@ export async function GET(request: Request) {
           cashier_name: s.fact.cashier_id ? names.get(s.fact.cashier_id) ?? 'Без имени' : null,
           revenue: Math.round(s.fact.revenue),
           expected_revenue: s.expected_revenue,
-          club_revenue: s.fact.club_revenue == null ? null : Math.round(s.fact.club_revenue),
-          expected_club_revenue: s.expected_club_revenue,
           receipts: s.fact.receipts,
+          expected_receipts: s.expected_receipts,
+          expected_avg_ticket: s.expected_avg_ticket,
+          items: Math.round(s.fact.items),
           score: s.score,
           confidence: s.confidence,
           verdict: s.verdict,
@@ -145,10 +140,17 @@ export async function GET(request: Request) {
           // должен быть виден без отдельного запроса и без участия ИИ.
           explanation: explainShift(s, settings),
         })),
-        cashiers: result.cashiers.map((c) => ({
-          ...c,
-          name: names.get(c.cashier_id) ?? 'Без имени',
-        })),
+        cashiers: result.cashiers.map((c) => {
+          // Флаг обучения — рекомендация управляющему, а не наказание: он
+          // ставится, только если картина повторяется несколько смен подряд.
+          const flag = trainingFlag(c, result.shifts, settings)
+          return {
+            ...c,
+            name: names.get(c.cashier_id) ?? 'Без имени',
+            training_flag: flag.flagged,
+            training_reason: flag.reason,
+          }
+        }),
         model_version: result.model_version,
       },
     })

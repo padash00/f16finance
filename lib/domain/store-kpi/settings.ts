@@ -13,13 +13,6 @@
 import type { MetricKey } from './types'
 
 export type StoreKpiSettings = {
-  /**
-   * Точка-клуб, чья выручка служит прокси потока. У магазина и клуба разные
-   * company_id, автоматически связать их нельзя. null — считаем без потока:
-   * метрики «на 1000 ₸ клуба» отключаются, уверенность падает.
-   */
-  club_company_id: string | null
-
   /** Месяцы летнего сезона. Остальное — учебный сезон. */
   summer_months: number[]
 
@@ -94,18 +87,24 @@ export type StoreKpiSettings = {
   model_version: string
 }
 
-/** Веса из ТЗ: сумма 100%. */
+/**
+ * Веса из ТЗ: сумма 100%.
+ *
+ * `revenue_efficiency` тождественно равна отношению среднего чека к
+ * ожидаемому (см. metrics.ts) — то есть средний чек фактически весит 40%.
+ * Так решено осознанно: владелец считает средний чек главным показателем
+ * работы продавца.
+ */
 export const DEFAULT_WEIGHTS: Record<MetricKey, number> = {
-  revenue_per_club: 0.25,
-  receipts_per_club: 0.2,
-  avg_ticket: 0.2,
-  items_per_receipt: 0.15,
-  attach_rate: 0.15,
-  product_knowledge: 0.05,
+  avg_ticket: 0.25,
+  items_per_receipt: 0.2,
+  attach_rate: 0.25,
+  revenue_efficiency: 0.15,
+  plan_attainment: 0.05,
+  product_knowledge: 0.1,
 }
 
 export const DEFAULT_STORE_KPI_SETTINGS: StoreKpiSettings = {
-  club_company_id: null,
   summer_months: [6, 7, 8],
   min_sample_size: 8,
   min_qualifying_shifts: 6,
@@ -208,7 +207,6 @@ export function normalizeStoreKpiSettings(row: Record<string, unknown> | null | 
   const monthlyMax = monthlyOk ? rawMonthlyMax : d.monthly_index_max
 
   return {
-    club_company_id: typeof row.club_company_id === 'string' && row.club_company_id ? row.club_company_id : null,
     summer_months: summer.length ? summer : d.summer_months,
     min_sample_size: positiveInt(row.min_sample_size, d.min_sample_size),
     min_qualifying_shifts: positiveInt(row.min_qualifying_shifts, d.min_qualifying_shifts),
