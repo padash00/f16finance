@@ -198,6 +198,14 @@ export default function StoreShiftsPage() {
   const [err, setErr] = useState<string | null>(null)
   const [detailId, setDetailId] = useState<string | null>(null)
 
+  // Открытие конкретной смены по ссылке из разбора эффективности:
+  // /store/shifts?shift=<id>. Так из оценки смены можно сразу попасть в её
+  // чеки и позиции, а не искать смену в списке глазами.
+  useEffect(() => {
+    const shiftParam = new URLSearchParams(window.location.search).get('shift')
+    if (shiftParam) setDetailId(shiftParam)
+  }, [])
+
   useEffect(() => {
     fetch('/api/admin/store/config', { cache: 'no-store' })
       .then((r) => r.json())
@@ -391,6 +399,16 @@ function ShiftDetail({ id, onClose, onChanged }: { id: string; onClose: () => vo
                 <span className={`rounded-md border px-2 py-0.5 text-[11px] font-medium ${open ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-border bg-surface-muted text-muted-foreground'}`}>{open ? 'Открыта' : 'Закрыта'}</span>
               </div>
               <div className="text-xs text-slate-500">{dt(shift?.opened_at)} → {dt(shift?.closed_at)}</div>
+              {/* Ссылка в разбор эффективности: здесь видно, что продали,
+                  а там — спрос это был или работа продавца. */}
+              {shift?.opened_at ? (
+                <Link
+                  href={`/sales-kpi?from=${String(shift.opened_at).slice(0, 10)}&to=${String(shift.opened_at).slice(0, 10)}`}
+                  className="mt-0.5 inline-flex items-center gap-1 text-xs text-sky-600 hover:underline dark:text-sky-400"
+                >
+                  <TrendingUp className="h-3 w-3" /> Разбор эффективности
+                </Link>
+              ) : null}
             </div>
           </div>
           <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"><X className="h-4 w-4" /></button>

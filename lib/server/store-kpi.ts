@@ -114,6 +114,10 @@ export async function earliestSaleDate(supabase: AnyClient, companyId: string): 
 }
 
 type FactRow = {
+  shift_id: string | null
+  duration_minutes: number | null
+  opened_at: string | null
+  closed_at: string | null
   sale_date: string
   shift: string
   cashier_id: string | null
@@ -199,6 +203,8 @@ export async function loadShiftFacts(
     const refunds = num(row.refunds)
     return {
       company_id: companyId,
+      shift_id: row.shift_id,
+      duration_minutes: row.duration_minutes == null ? null : num(row.duration_minutes),
       date: row.sale_date,
       shift,
       cashier_id: row.cashier_id,

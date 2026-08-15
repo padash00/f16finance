@@ -122,6 +122,8 @@ export async function GET(request: Request) {
           date: s.fact.date,
           shift: s.fact.shift,
           season: s.season,
+          shift_id: s.fact.shift_id ?? null,
+          duration_minutes: s.fact.duration_minutes ?? null,
           cashier_id: s.fact.cashier_id,
           cashier_name: s.fact.cashier_id ? names.get(s.fact.cashier_id) ?? 'Без имени' : null,
           revenue: Math.round(s.fact.revenue),

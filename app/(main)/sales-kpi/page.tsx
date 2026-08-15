@@ -54,6 +54,8 @@ type MetricRow = {
 type ShiftRow = {
   date: string
   shift: 'day' | 'night'
+  shift_id: string | null
+  duration_minutes: number | null
   season: 'academic' | 'summer'
   cashier_id: string | null
   cashier_name: string | null
@@ -916,8 +918,26 @@ export default function SalesKpiPage() {
                             onClick={() => setOpenShift(isOpen ? null : key)}
                             className="cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5"
                           >
-                            <td className="px-4 py-2 tabular-nums">{s.date}</td>
-                            <td className="px-4 py-2">{s.shift === 'night' ? 'Ночь' : 'День'}</td>
+                            <td className="px-4 py-2 tabular-nums">
+                              {s.date}
+                              {s.duration_minutes ? (
+                                <div className="text-xs text-slate-400">
+                                  {Math.round((s.duration_minutes / 60) * 10) / 10} ч
+                                </div>
+                              ) : null}
+                            </td>
+                            <td className="px-4 py-2">
+                              {s.shift === 'night' ? 'Ночь' : 'День'}
+                              {s.shift_id ? (
+                                <a
+                                  href={`/store/shifts?shift=${s.shift_id}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="mt-0.5 block text-xs text-sky-600 hover:underline dark:text-sky-400"
+                                >
+                                  чеки и позиции
+                                </a>
+                              ) : null}
+                            </td>
                             <td className="px-4 py-2">{s.cashier_name || '—'}</td>
                             <td className="px-4 py-2 text-right tabular-nums">
                               <div>{formatMoney(s.revenue)}</div>

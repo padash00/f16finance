@@ -183,6 +183,18 @@ export function explainShift(analysis: ShiftAnalysis, settings: StoreKpiSettings
     sample: m.sample,
   }))
 
+  // 4.5. Длительность смены.
+  if (fact.duration_minutes != null && fact.duration_minutes > 0) {
+    const hours = Math.round((fact.duration_minutes / 60) * 10) / 10
+    paragraphs.push(
+      `Длительность. Смена шла ${hours} ч.${
+        fact.duration_minutes < 300
+          ? ' Это заметно короче обычной смены, поэтому и покупателей закономерно меньше — сравнивать число чеков с полной сменой напрямую нельзя.'
+          : ''
+      }`,
+    )
+  }
+
   // 5. Что мешало работать.
   const events = fact.events || []
   if (events.length > 0) {
@@ -205,6 +217,11 @@ export function explainShift(analysis: ShiftAnalysis, settings: StoreKpiSettings
   if (analysis.confidence < 0.5) {
     caveats.push(
       `Общая уверенность в разборе — ${Math.round(analysis.confidence * 100)}%. На таком уровне вывод стоит считать поводом присмотреться, а не основанием для решений.`,
+    )
+  }
+  if (fact.duration_minutes != null && fact.duration_minutes > 0 && fact.duration_minutes < 300) {
+    caveats.push(
+      'Смена была короткой — низкое число чеков объясняется этим, а не спросом или работой продавца.',
     )
   }
   if (fact.receipts < settings.min_receipts_for_full_score) {

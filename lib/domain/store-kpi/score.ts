@@ -194,6 +194,12 @@ function computeConfidence(
     raw *= worst
   }
 
+  // Короткая смена. Точка отработала меньше — покупателей закономерно меньше,
+  // и сравнивать такую смену с полной по числу чеков честно нельзя.
+  if (fact.duration_minutes != null && fact.duration_minutes > 0 && fact.duration_minutes < 300) {
+    raw *= 0.8
+  }
+
   // Смена помечена как аномальная — доверия к ней немного по определению.
   if (fact.is_anomaly) raw *= 0.7
 
