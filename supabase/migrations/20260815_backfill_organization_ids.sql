@@ -65,7 +65,9 @@ begin
   update public.audit_log a
      set organization_id = m.organization_id
     from (
-      select user_id, min(organization_id) as organization_id
+      -- min()/max() для uuid в Postgres нет, поэтому берём первый элемент
+      -- массива: строк тут ровно одна, это гарантирует having ниже.
+      select user_id, (array_agg(distinct organization_id))[1] as organization_id
         from public.organization_members
        where user_id is not null
        group by user_id
