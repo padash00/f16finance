@@ -52,13 +52,23 @@ function nextCalendarDateIso(isoDate: string): string {
   return d.toISOString().slice(0, 10)
 }
 
+/**
+ * Допустимые зоны — ровно те, что знает enum `zone_type` в базе.
+ *
+ * Незнакомое значение Postgres не принимает и отклоняет вставку дохода целиком,
+ * то есть смена не закрывается. Так уже случилось с точкой Extra (144 отказа):
+ * код вернул зону, которой в перечислении не было. Поэтому всё непонятное
+ * сводим к `other` — отчёт уходит, а разбираться с названием зоны можно потом.
+ */
+const KNOWN_ZONES = new Set(['pc', 'ps5', 'vr', 'ramen', 'cafe', 'other', 'extra'])
+
 function resolveIncomeZone(params: {
   requestedZone?: string | null
   companyCode?: string | null
   pointMode?: string | null
 }) {
   const requested = params.requestedZone?.trim().toLowerCase()
-  if (requested) return requested
+  if (requested) return KNOWN_ZONES.has(requested) ? requested : 'other'
 
   const companyCode = (params.companyCode || '').trim().toLowerCase()
   if (companyCode === 'arena') return 'pc'
