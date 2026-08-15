@@ -784,6 +784,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
       {
         id: 'sales-kpi',
         path: '/sales-kpi',
+        extraPaths: ['/sales-kpi/payout'],
         label: 'Эффективность продавцов',
         capabilities: [
           { id: 'sales-kpi.view', label: 'Просмотр', severity: 'low' },

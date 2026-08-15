@@ -36,6 +36,7 @@ import { mutateApi, useApi } from '@/lib/hooks/use-api'
 
 import { AccuracyTab } from './accuracy-tab'
 import { MoneyMapTab } from './money-map-tab'
+import { PayoutTab } from './payout-tab'
 import { PlansTab } from './plans-tab'
 import { QualityTab } from './quality-tab'
 import { ShiftDetail, type ShiftExplanation } from './shift-detail'
@@ -579,7 +580,11 @@ export default function SalesKpiPage() {
   const [companyId, setCompanyId] = useState<string>('')
   const [openShift, setOpenShift] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
-  const [tab, setTab] = useState<'review' | 'plans' | 'accuracy' | 'quality' | 'money'>('review')
+  // «Кому доплатить» первой и по умолчанию: это единственная вкладка, ради
+  // которой на страницу заходят регулярно.
+  const [tab, setTab] = useState<'payout' | 'review' | 'plans' | 'accuracy' | 'quality' | 'money'>(
+    'payout',
+  )
   const { can } = useCapabilities()
 
   const query = new URLSearchParams({ from, to })
@@ -720,6 +725,7 @@ export default function SalesKpiPage() {
         <>
           <div className="flex gap-1 rounded-xl border border-slate-200 bg-white p-1 dark:border-white/10 dark:bg-slate-900/60">
             {([
+              ['payout', 'Кому доплатить'],
               ['review', 'Разбор смен'],
               ['plans', 'Планы смен'],
               ['accuracy', 'Точность и калибровка'],
@@ -740,7 +746,9 @@ export default function SalesKpiPage() {
             ))}
           </div>
 
-          {tab === 'plans' && payload?.company ? (
+          {tab === 'payout' && payload?.company ? (
+            <PayoutTab companyId={payload.company.id} canManage={can('sales-kpi.manage')} />
+          ) : tab === 'plans' && payload?.company ? (
             <PlansTab companyId={payload.company.id} canManage={can('sales-kpi.manage')} />
           ) : tab === 'accuracy' && payload?.company ? (
             <AccuracyTab companyId={payload.company.id} />
