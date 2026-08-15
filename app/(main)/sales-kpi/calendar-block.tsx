@@ -38,6 +38,10 @@ type AcademicPeriod = {
   manual_index: number
   is_confirmed: boolean
   company_id: string | null
+  audience: string | null
+  source: string | null
+  source_url: string | null
+  confidence: number | null
 }
 
 type CalendarData = {
@@ -45,6 +49,9 @@ type CalendarData = {
   days: CalendarDay[]
   periods: AcademicPeriod[]
   holidays_to_import: { date: string; name: string }[]
+  /** Праздники с плавающей датой — их дату задаёт не закон, а лунный календарь. */
+  holidays_need_dates: string[]
+  education_available: number
 }
 
 const DAY_TYPES: [string, string][] = [
@@ -162,10 +169,17 @@ export function CalendarBlock(props: { companyId: string; canManage: boolean }) 
               ) : null}
             </div>
 
+            {(payload?.holidays_need_dates.length ?? 0) > 0 ? (
+              <p className="mb-2 text-[11px] leading-4 text-slate-500 dark:text-slate-400">
+                Даты задаются вручную: {payload?.holidays_need_dates.join(', ')} — они привязаны к лунному
+                календарю и заранее в законе не закреплены.
+              </p>
+            ) : null}
+
             <div className="max-h-52 space-y-1 overflow-y-auto pr-1">
               {(payload?.days || []).length === 0 ? (
                 <div className="rounded-lg border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">
-                  Дней нет. Начните с праздников РК — они уже есть в системе.
+                  Дней нет. Начните с праздников РК: официальные даты и переносы выходных уже в системе.
                 </div>
               ) : (
                 (payload?.days || []).map((d) => (
@@ -256,11 +270,22 @@ export function CalendarBlock(props: { companyId: string; canManage: boolean }) 
 
           {/* Учебные периоды */}
           <div>
-            <div className="mb-2 flex items-center gap-2">
-              <GraduationCap className="h-3.5 w-3.5 text-slate-400" />
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                <GraduationCap className="h-3.5 w-3.5" />
                 Учебные периоды · {payload?.periods.length ?? 0}
               </span>
+              {props.canManage ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => void post({ action: 'import_education_calendar' })}
+                >
+                  <Download className="mr-1 h-3.5 w-3.5" />
+                  Учебный календарь РК
+                </Button>
+              ) : null}
             </div>
 
             <div className="max-h-52 space-y-1 overflow-y-auto pr-1">
@@ -291,8 +316,38 @@ export function CalendarBlock(props: { companyId: string; canManage: boolean }) 
                     </div>
                     <div className="text-xs tabular-nums text-slate-500 dark:text-slate-400">
                       {p.start_date} — {p.end_date} · {label(PERIOD_TYPES, p.period_type)}
-                      {p.is_confirmed ? '' : ' · не подтверждён, в расчёт не идёт'}
+                      {p.audience ? ` · ${p.audience}` : ''}
                     </div>
+                    {!p.is_confirmed ? (
+                      <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
+                        <span>не подтверждён — в расчёт не идёт</span>
+                        {props.canManage ? (
+                          <button
+                            onClick={() => void post({ action: 'confirm_period', period_id: p.id })}
+                            disabled={busy}
+                            className="rounded bg-amber-50 px-1.5 py-0.5 hover:bg-amber-100 dark:bg-amber-500/10"
+                          >
+                            подтвердить
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    {p.source ? (
+                      <div className="mt-0.5 text-[11px] text-slate-400 dark:text-slate-500">
+                        Источник: {p.source_url ? (
+                          <a
+                            href={p.source_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="underline hover:text-sky-500"
+                          >
+                            {p.source}
+                          </a>
+                        ) : (
+                          p.source
+                        )}
+                      </div>
+                    ) : null}
                   </div>
                 ))
               )}
@@ -364,6 +419,10 @@ export function CalendarBlock(props: { companyId: string; canManage: boolean }) 
           Чего в справочнике точно нет: <b>Курбан айт</b> — его дата плавает по лунному календарю, и{' '}
           <b>переносы выходных</b> — их утверждают отдельно каждый год. Добавьте их вручную: тип
           «Религиозный праздник» и «Перенос выходного».
+          <br />
+          <b>Учебный календарь</b> загружается отдельной кнопкой. Его даты берутся из официальных
+          источников, но влияние на спрос там — оценка составителя, а не измерение на ваших продажах.
+          Периоды со статусом «не подтверждён» в расчёт не идут, пока вы их не проверите.
         </div>
       </div>
 

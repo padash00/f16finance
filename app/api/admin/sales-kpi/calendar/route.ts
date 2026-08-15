@@ -6,8 +6,9 @@
  * существовали, расчёт их читал, но интерфейса не было, и обе части всегда
  * оставались нейтральными. То есть механизм работал вхолостую.
  *
- * Праздники Казахстана в системе уже есть (`kz_holidays`), поэтому их можно
- * не вбивать руками, а импортировать одним действием.
+ * Праздники Казахстана и учебный календарь лежат в справочнике
+ * `lib/data/kz-calendar.ts` с датами, переносами выходных и ссылками на
+ * источники, поэтому их не вбивают руками, а импортируют одним действием.
  *
  * Важное ограничение: учебный период, добавленный автоматически или «на
  * глаз», в расчёт не идёт до подтверждения. Сдвигать планку людям по догадке
@@ -16,6 +17,16 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import {
+  confidenceOf,
+  expandHolidays,
+  holidaysNeedingDates,
+  loadEducationCalendar,
+  loadPublicHolidays,
+  periodTypeOf,
+  splitEducationCalendar,
+  strengthToIndex,
+} from '@/lib/server/kz-education-calendar'
 import { inScope, resolveStoreKpiContext, todayISO } from '@/lib/server/store-kpi'
 
 export const dynamic = 'force-dynamic'
@@ -29,7 +40,7 @@ export async function GET(request: Request) {
   try {
     const ctx = await resolveStoreKpiContext(request, 'sales-kpi.view', json)
     if ('response' in ctx) return ctx.response
-    const { supabase, scope, access } = ctx
+    const { supabase, scope } = ctx
 
     const url = new URL(request.url)
     const companyId = url.searchParams.get('company_id')
@@ -40,30 +51,46 @@ export async function GET(request: Request) {
     const from = `${year}-01-01`
     const to = `${year}-12-31`
 
-    const organizationId = access.activeOrganization?.id || null
+    // Организацию берём у точки, а не из активной сессии: у суперадмина
+    // активной организации может не быть, и тогда запрос без фильтра вернул бы
+    // общие дни чужих организаций.
+    const { data: company, error: companyErr } = await supabase
+      .from('companies')
+      .select('id, organization_id')
+      .eq('id', companyId)
+      .maybeSingle()
+    if (companyErr) throw companyErr
+    if (!company?.organization_id) return json({ error: 'company-without-organization' }, 400)
+    const organizationId = String(company.organization_id)
 
-    const [{ data: days }, { data: periods }, { data: holidays }] = await Promise.all([
+    const [{ data: days }, { data: periods }] = await Promise.all([
       supabase
         .from('store_kpi_calendar_days')
         .select('id, day, day_type, name, impact_index, company_id, source, verified')
+        .eq('organization_id', organizationId)
         .gte('day', from)
         .lte('day', to)
         .order('day'),
       supabase
         .from('store_kpi_academic_periods')
-        .select('id, start_date, end_date, period_type, name, manual_index, is_confirmed, company_id')
+        .select(
+          'id, start_date, end_date, period_type, name, manual_index, is_confirmed, company_id, audience, source, source_url, confidence',
+        )
+        .eq('organization_id', organizationId)
         .lte('start_date', to)
         .gte('end_date', from)
         .order('start_date'),
-      supabase.from('kz_holidays').select('date, name').gte('date', from).lte('date', to).order('date'),
     ])
 
     // Точка видит и общие для организации дни (company_id пуст), и свои.
     const visibleDays = (days || []).filter((d: any) => !d.company_id || d.company_id === companyId)
     const visiblePeriods = (periods || []).filter((p: any) => !p.company_id || p.company_id === companyId)
 
-    const known = new Set(visibleDays.map((d: any) => String(d.day)))
-    const missingHolidays = (holidays || []).filter((h: any) => !known.has(String(h.date)))
+    // Сколько дней из справочника праздников ещё не заведено.
+    const known = new Set(visibleDays.map((d: any) => `${d.day}|${d.day_type}`))
+    const missingHolidays = expandHolidays(loadPublicHolidays()).filter(
+      (h) => h.day >= from && h.day <= to && !known.has(`${h.day}|${h.day_type}`),
+    )
 
     return json({
       data: {
@@ -72,7 +99,9 @@ export async function GET(request: Request) {
         days: visibleDays,
         periods: visiblePeriods,
         // Праздники РК, которых ещё нет в календаре модуля.
-        holidays_to_import: missingHolidays.map((h: any) => ({ date: h.date, name: h.name })),
+        holidays_to_import: missingHolidays.map((h) => ({ date: h.day, name: h.name })),
+        holidays_need_dates: holidaysNeedingDates(loadPublicHolidays()).map((e) => e.name),
+        education_available: loadEducationCalendar().length,
       },
     })
   } catch (error) {
@@ -117,35 +146,30 @@ export async function POST(request: Request) {
 
     // ── Импорт праздников РК ──────────────────────────────────────────────
     if (action === 'import_holidays') {
-      const year = Number(body.year) || Number(todayISO().slice(0, 4))
-      const { data: holidays, error: holErr } = await supabase
-        .from('kz_holidays')
-        .select('date, name')
-        .gte('date', `${year}-01-01`)
-        .lte('date', `${year}-12-31`)
-      if (holErr) throw holErr
-
-      const rows = (holidays || []).map((h: any) => ({
+      // Источник — справочник нерабочих дней с официальными датами и
+      // переносами. Старая таблица kz_holidays для этого не годится: там нет
+      // переносов, а День Конституции стоит на 30 августа, хотя с 01.07.2026
+      // он перенесён на 15 марта.
+      const rows = expandHolidays(loadPublicHolidays()).map((h) => ({
         organization_id: organizationId,
+        // Праздники страны одни на все точки организации.
         company_id: null,
-        day: h.date,
-        day_type: 'PUBLIC_HOLIDAY',
-        name: String(h.name || 'Праздник'),
-        // Влияние ровно 1.00: пока по конкретному празднику нет своей
-        // истории, придумывать коэффициент нельзя.
+        day: h.day,
+        day_type: h.day_type,
+        name: h.name,
+        // Влияние нейтральное: по конкретному празднику своей истории пока
+        // нет, а придумывать коэффициент нельзя.
         impact_index: 1,
-        source: 'kz_holidays',
-        // Не проверено: это ручной справочник из миграции, а не выгрузка из
-        // официального источника. Даты и переносы выходных утверждаются
-        // постановлением каждый год, поэтому сверить их должен человек.
-        verified: false,
+        source: h.source_name,
+        source_url: h.source_url,
+        verified: h.verified,
         created_by: actor,
       }))
 
       if (rows.length > 0) {
         const { error } = await supabase
           .from('store_kpi_calendar_days')
-          .upsert(rows, { onConflict: 'organization_id,company_id,day,day_type', ignoreDuplicates: true })
+          .upsert(rows, { onConflict: 'organization_id,company_id,day,day_type' })
         if (error) throw error
       }
 
@@ -155,10 +179,67 @@ export async function POST(request: Request) {
         entityId: companyId,
         action: 'create',
         organizationId,
-        payload: { company_id: companyId, imported: rows.length, year },
+        payload: { company_id: companyId, imported: rows.length, source: 'kz-public-holidays-2026-2027' },
       })
 
-      return json({ ok: true, imported: rows.length })
+      return json({
+        ok: true,
+        imported: rows.length,
+        // Курбан айт и подобные — даты плавают, их добавляют руками.
+        needs_dates: holidaysNeedingDates(loadPublicHolidays()).map((e) => e.name),
+      })
+    }
+
+    // ── Импорт учебного календаря Казахстана ──────────────────────────────
+    if (action === 'import_education_calendar') {
+      // Длинные выходные из учебного справочника пропускаем: они приходят из
+      // справочника праздников, где есть официальные даты и переносы.
+      const { periods, holidayWeekends } = splitEducationCalendar(loadEducationCalendar())
+
+      // Учебные периоды: семестры, каникулы, приёмные кампании.
+      const periodRows = periods.map((e) => ({
+        organization_id: organizationId,
+        // Общие для организации: учебный календарь страны один на все точки.
+        company_id: null,
+        start_date: e.start_date,
+        end_date: e.end_date,
+        period_type: periodTypeOf(e),
+        name: e.name,
+        manual_index: strengthToIndex(e.demand_strength),
+        source: e.source_name,
+        source_url: e.source_url,
+        audience: e.audience,
+        notes: e.description,
+        confidence: confidenceOf(e.verification_status),
+        // Подтверждёнными считаем только те, чьи даты взяты из официального
+        // источника. Остальные лежат рядом, но в расчёт не идут, пока их не
+        // проверит человек.
+        is_confirmed: e.verification_status === 'confirmed',
+        created_by: actor,
+      }))
+
+      if (periodRows.length > 0) {
+        const { error } = await supabase
+          .from('store_kpi_academic_periods')
+          .upsert(periodRows, { onConflict: 'organization_id,company_id,name,start_date' })
+        if (error) throw error
+      }
+
+      await writeAuditLog(supabase, {
+        actorUserId: actor,
+        entityType: 'store_kpi_academic_periods',
+        entityId: companyId,
+        action: 'create',
+        organizationId,
+        payload: {
+          company_id: companyId,
+          periods: periodRows.length,
+          skipped_holidays: holidayWeekends.length,
+          source: 'kz-education-calendar-2026-2027',
+        },
+      })
+
+      return json({ ok: true, periods: periodRows.length, skipped: holidayWeekends.length })
     }
 
     // ── Подтвердить день ──────────────────────────────────────────────────
@@ -287,6 +368,37 @@ export async function POST(request: Request) {
         action: 'create',
         organizationId,
         payload: { company_id: companyId, start, end, name, index: impact(body.manual_index) },
+      })
+
+      return json({ ok: true })
+    }
+
+    if (action === 'confirm_period') {
+      const id = String(body.period_id || '')
+      if (!id) return json({ error: 'period-required' }, 400)
+
+      const { data: row } = await supabase
+        .from('store_kpi_academic_periods')
+        .select('id, organization_id, name')
+        .eq('id', id)
+        .maybeSingle()
+      if (!row || String(row.organization_id) !== organizationId) {
+        return json({ error: 'not-found' }, 404)
+      }
+
+      const { error } = await supabase
+        .from('store_kpi_academic_periods')
+        .update({ is_confirmed: true, updated_at: new Date().toISOString() })
+        .eq('id', id)
+      if (error) throw error
+
+      await writeAuditLog(supabase, {
+        actorUserId: actor,
+        entityType: 'store_kpi_academic_periods',
+        entityId: companyId,
+        action: 'approve',
+        organizationId,
+        payload: { company_id: companyId, name: row.name },
       })
 
       return json({ ok: true })
