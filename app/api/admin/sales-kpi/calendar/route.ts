@@ -135,7 +135,10 @@ export async function POST(request: Request) {
         // истории, придумывать коэффициент нельзя.
         impact_index: 1,
         source: 'kz_holidays',
-        verified: true,
+        // Не проверено: это ручной справочник из миграции, а не выгрузка из
+        // официального источника. Даты и переносы выходных утверждаются
+        // постановлением каждый год, поэтому сверить их должен человек.
+        verified: false,
         created_by: actor,
       }))
 
@@ -156,6 +159,38 @@ export async function POST(request: Request) {
       })
 
       return json({ ok: true, imported: rows.length })
+    }
+
+    // ── Подтвердить день ──────────────────────────────────────────────────
+    if (action === 'verify_day') {
+      const id = String(body.day_id || '')
+      if (!id) return json({ error: 'day-required' }, 400)
+
+      const { data: row } = await supabase
+        .from('store_kpi_calendar_days')
+        .select('id, organization_id, day, name')
+        .eq('id', id)
+        .maybeSingle()
+      if (!row || String(row.organization_id) !== organizationId) {
+        return json({ error: 'not-found' }, 404)
+      }
+
+      const { error } = await supabase
+        .from('store_kpi_calendar_days')
+        .update({ verified: true, updated_at: new Date().toISOString() })
+        .eq('id', id)
+      if (error) throw error
+
+      await writeAuditLog(supabase, {
+        actorUserId: actor,
+        entityType: 'store_kpi_calendar_days',
+        entityId: companyId,
+        action: 'approve',
+        organizationId,
+        payload: { company_id: companyId, day: row.day, name: row.name },
+      })
+
+      return json({ ok: true })
     }
 
     // ── Особый день ───────────────────────────────────────────────────────

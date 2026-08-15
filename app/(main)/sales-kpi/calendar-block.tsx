@@ -12,7 +12,7 @@
  */
 
 import { useState } from 'react'
-import { CalendarDays, Download, GraduationCap, Loader2, Plus, Trash2 } from 'lucide-react'
+import { AlertTriangle, CalendarDays, Check, Download, GraduationCap, Loader2, Plus, Trash2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -26,6 +26,7 @@ type CalendarDay = {
   impact_index: number
   company_id: string | null
   source: string | null
+  verified: boolean
 }
 
 type AcademicPeriod = {
@@ -179,6 +180,24 @@ export function CalendarBlock(props: { companyId: string; canManage: boolean }) 
                       {d.name}
                     </span>
                     <span className="shrink-0 text-xs text-slate-400">{impactText(d.impact_index)}</span>
+                    {!d.verified ? (
+                      props.canManage ? (
+                        <button
+                          onClick={() => void post({ action: 'verify_day', day_id: d.id })}
+                          disabled={busy}
+                          title="Дату проверил, всё верно"
+                          className="shrink-0 rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-700 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-300"
+                        >
+                          проверить
+                        </button>
+                      ) : (
+                        <span className="shrink-0 rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+                          не проверено
+                        </span>
+                      )
+                    ) : (
+                      <Check className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                    )}
                     {props.canManage ? (
                       <button
                         onClick={() => void post({ action: 'delete_day', day_id: d.id })}
@@ -334,6 +353,19 @@ export function CalendarBlock(props: { companyId: string; canManage: boolean }) 
           </div>
         </div>
       )}
+
+      <div className="mt-4 flex gap-2 rounded-lg bg-amber-50 p-3 text-xs leading-relaxed text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+        <div>
+          <b>Праздники нужно сверить.</b> Список в системе — ручной справочник, а не выгрузка из
+          официального источника, поэтому импортированные дни помечаются как непроверенные. Сверьте их с
+          постановлением правительства и нажмите «проверить».
+          <br />
+          Чего в справочнике точно нет: <b>Курбан айт</b> — его дата плавает по лунному календарю, и{' '}
+          <b>переносы выходных</b> — их утверждают отдельно каждый год. Добавьте их вручную: тип
+          «Религиозный праздник» и «Перенос выходного».
+        </div>
+      </div>
 
       {problem ? <p className="mt-3 text-sm text-rose-600 dark:text-rose-400">{problem}</p> : null}
     </Card>
