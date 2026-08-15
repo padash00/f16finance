@@ -81,6 +81,12 @@ export function computeShiftPlan(
   fact: Pick<ShiftFact, 'company_id' | 'date' | 'shift'>,
   monthlyIndex: number,
   settings: StoreKpiSettings,
+  /**
+   * Множитель цен целевого месяца. База выручки хранится в ценах базового
+   * месяца, а план объявляется в сегодняшних деньгах: человек зарабатывает
+   * тенге по нынешним ценникам, а не по прошлогодним.
+   */
+  priceIndex = 1,
 ): ShiftPlan | null {
   const hit = revenueThresholds(
     revenueIndex,
@@ -102,8 +108,9 @@ export function computeShiftPlan(
   const [control, b1, b2, b3, max] = hit.values
   const step = settings.rounding_step
   const index = monthlyIndex > 0 ? monthlyIndex : 1
+  const prices = priceIndex > 0 ? priceIndex : 1
 
-  const levels = [control, b1, b2, b3].map((v) => roundUpTo(v * index, step))
+  const levels = [control, b1, b2, b3].map((v) => roundUpTo(v * index * prices, step))
 
   // После округления уровни могут слипнуться (например, при шаге 5000 и
   // близких перцентилях). Слипшиеся уровни означали бы, что B2 достигается
@@ -117,7 +124,9 @@ export function computeShiftPlan(
     b1: levels[1],
     b2: levels[2],
     b3: levels[3],
-    record_threshold: max > 0 ? roundUpTo(max, step) : null,
+    // Рекорд месячным индексом не двигаем, но в сегодняшние цены переводим:
+    // иначе после подорожания рекорд брался бы сам собой.
+    record_threshold: max > 0 ? roundUpTo(max * prices, step) : null,
     monthly_index: index,
     level: hit.level,
     sample: hit.sample,

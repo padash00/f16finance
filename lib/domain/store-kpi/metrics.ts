@@ -65,11 +65,16 @@ export const METRIC_DUPLICATE_OF: Partial<Record<MetricKey, MetricKey>> = {
  * норма выручки из базы, второму — результат теста.
  */
 export function metricValue(fact: ShiftFact, metric: MetricKey): number | null {
+  // Денежные метрики считаются в ценах базового месяца: иначе повышение цен
+  // само по себе поднимало бы средний чек и выглядело работой продавца.
+  const priceFactor = fact.price_index && fact.price_index > 0 ? fact.price_index : 1
+  const realRevenue = fact.revenue / priceFactor
+
   switch (metric) {
     case 'avg_ticket':
     case 'revenue_efficiency':
       if (fact.receipts <= 0) return null
-      return fact.revenue / fact.receipts
+      return realRevenue / fact.receipts
 
     case 'items_per_receipt':
       // items === 0 означает «позиции не пробивались», а не «продали ноль штук»:
@@ -83,7 +88,7 @@ export function metricValue(fact: ShiftFact, metric: MetricKey): number | null {
 
     case 'plan_attainment':
       if (fact.receipts <= 0) return null
-      return fact.revenue
+      return realRevenue
 
     case 'product_knowledge':
       // Появится вместе с воротами по тесту знания товара.

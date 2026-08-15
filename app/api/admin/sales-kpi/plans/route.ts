@@ -17,6 +17,7 @@ import {
   addDaysISO,
   earliestSaleDate,
   inScope,
+  loadPriceIndex,
   loadShiftFacts,
   loadStoreKpiSettings,
   resolveStoreKpiContext,
@@ -27,6 +28,7 @@ import {
   buildRevenueBaseline,
   computeMonthlyIndex,
   computeShiftPlan,
+  priceIndexFor,
   estimateWeatherEffects,
   lookupBaseline,
   weatherFactor,
@@ -210,6 +212,9 @@ export async function GET(request: Request) {
 
     const revenueBase = buildRevenueBaseline(facts, settings)
     const receiptsBase = buildReceiptsBaseline(facts, settings)
+    // Пороги и ожидания объявляются в сегодняшних деньгах, хотя база хранится
+    // в ценах базового месяца.
+    const priceIndex = await loadPriceIndex(supabase, companyId, historyFrom, to)
 
     const dates = datesBetween(from, to)
     const months = [...new Set(dates.map(monthKey))]
@@ -290,7 +295,8 @@ export async function GET(request: Request) {
         }
 
         const target = { company_id: companyId, date, shift } as ShiftFact
-        const plan = computeShiftPlan(revenueBase, target, index, settings)
+        const prices = priceIndexFor(priceIndex, date)
+        const plan = computeShiftPlan(revenueBase, target, index, settings, prices)
         const expected = lookupBaseline(revenueBase, target, {
           minSample: settings.min_sample_size,
           summerMonths: settings.summer_months,
@@ -314,7 +320,7 @@ export async function GET(request: Request) {
           record_threshold: plan?.record_threshold ?? null,
           // Прогноз показывается рядом с планом, но планом не является — и
           // только он поправляется погодой. Уровни выше остались нетронутыми.
-          expected_revenue: expected ? Math.round(expected.value * weatherInfo.factor) : null,
+          expected_revenue: expected ? Math.round(expected.value * prices * weatherInfo.factor) : null,
           expected_receipts: expectedReceipts ? Math.round(expectedReceipts.value * weatherInfo.factor) : null,
           monthly_index: index,
           baseline_level: plan?.level ?? null,
@@ -397,6 +403,7 @@ export async function POST(request: Request) {
 
       const revenueBase = buildRevenueBaseline(facts, settings)
       const receiptsBase = buildReceiptsBaseline(facts, settings)
+      const priceIndex = await loadPriceIndex(supabase, companyId, historyFrom, to)
       const dates = datesBetween(from, to)
       const indices = await loadMonthlyIndices(supabase, companyId, [...new Set(dates.map(monthKey))])
       const shifts = activeShifts(facts, addDaysISO(today, -60))
@@ -426,7 +433,8 @@ export async function POST(request: Request) {
 
           const target = { company_id: companyId, date, shift } as ShiftFact
           const index = effectiveIndex(indices, monthKey(date))
-          const plan: ShiftPlan | null = computeShiftPlan(revenueBase, target, index, settings)
+          const prices = priceIndexFor(priceIndex, date)
+          const plan: ShiftPlan | null = computeShiftPlan(revenueBase, target, index, settings, prices)
           if (!plan) {
             skippedThin += 1
             continue
@@ -451,7 +459,7 @@ export async function POST(request: Request) {
             b2_amount: plan.b2,
             b3_amount: plan.b3,
             record_threshold: plan.record_threshold,
-            expected_revenue: expected ? Math.round(expected.value) : null,
+            expected_revenue: expected ? Math.round(expected.value * prices) : null,
             expected_receipts: expectedReceipts ? Math.round(expectedReceipts.value) : null,
             monthly_index: plan.monthly_index,
             baseline_level: plan.level,

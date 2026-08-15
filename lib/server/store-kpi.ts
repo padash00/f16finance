@@ -13,7 +13,11 @@ import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import {
+  buildPriceIndex,
   normalizeStoreKpiSettings,
+  priceIndexFor,
+  type PriceHistoryRow,
+  type PriceIndex,
   type ShiftFact,
   type ShiftType,
   type StoreKpiSettings,
@@ -137,6 +141,37 @@ type FactRow = {
 }
 
 /**
+ * Индекс цен точки.
+ *
+ * В `point_sale_items.unit_price` записана цена на момент продажи, то есть
+ * настоящая история по каждой позиции. Отсюда и считается индекс — без него
+ * повышение цен выглядело бы улучшением работы продавцов.
+ */
+export async function loadPriceIndex(
+  supabase: AnyClient,
+  companyId: string,
+  from: string,
+  to: string,
+): Promise<PriceIndex> {
+  const { data } = await supabase.rpc('store_kpi_price_history', {
+    p_company_id: companyId,
+    p_from: from,
+    p_to: to,
+  })
+  return buildPriceIndex(
+    ((data || []) as any[]).map(
+      (r): PriceHistoryRow => ({
+        month: String(r.month),
+        item_id: String(r.item_id),
+        avg_price: Number(r.avg_price) || 0,
+        quantity: Number(r.quantity) || 0,
+        revenue: Number(r.revenue) || 0,
+      }),
+    ),
+  )
+}
+
+/**
  * Свёртка смен за период.
  *
  * Свёртку считает БД (`store_kpi_shift_facts`): год работы точки — это десятки
@@ -158,6 +193,8 @@ export async function loadShiftFacts(
     factRows.push(...rows)
     if (rows.length < PAGE) break
   }
+
+  const priceIndex = await loadPriceIndex(supabase, companyId, from, to)
 
   // Пометки смен и деловые события: они не меняют цифры, но меняют то, как
   // эти цифры читать. Оба списка небольшие — грузим целиком за период.
@@ -226,6 +263,7 @@ export async function loadShiftFacts(
       exclude_from_baseline: flags.get(`${row.sale_date}|${shift}`)?.exclude_from_baseline ?? false,
       anomaly_reason: flags.get(`${row.sale_date}|${shift}`)?.reason ?? null,
       events: eventsFor(row.sale_date, shift),
+      price_index: priceIndexFor(priceIndex, row.sale_date),
     }
   })
 }

@@ -288,7 +288,13 @@ export function analyzeShift(
     excludeCashierId: fact.cashier_id,
   })
 
-  const revenueRatio = revenueHit && revenueHit.value > 0 ? round(fact.revenue / revenueHit.value) : null
+  // База хранится в ценах базового месяца — возвращаем ожидания в деньги той
+  // смены, о которой идёт речь, иначе владелец увидит цифры прошлого года.
+  const prices = fact.price_index && fact.price_index > 0 ? fact.price_index : 1
+  const expectedRevenue = revenueHit ? revenueHit.value * prices : null
+  const expectedTicket = ticketHit ? ticketHit.value * prices : null
+
+  const revenueRatio = expectedRevenue && expectedRevenue > 0 ? round(fact.revenue / expectedRevenue) : null
   const demandRatio =
     receiptsHit && receiptsHit.value > 0 ? round(fact.receipts / receiptsHit.value) : null
 
@@ -317,9 +323,9 @@ export function analyzeShift(
     verdict,
     evidence,
     missing,
-    expected_revenue: revenueHit ? Math.round(revenueHit.value) : null,
+    expected_revenue: expectedRevenue == null ? null : Math.round(expectedRevenue),
     expected_receipts: receiptsHit ? Math.round(receiptsHit.value) : null,
-    expected_avg_ticket: ticketHit ? Math.round(ticketHit.value) : null,
+    expected_avg_ticket: expectedTicket == null ? null : Math.round(expectedTicket),
   }
 }
 

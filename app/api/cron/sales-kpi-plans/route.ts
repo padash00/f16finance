@@ -27,6 +27,7 @@ import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/se
 import {
   addDaysISO,
   earliestSaleDate,
+  loadPriceIndex,
   loadShiftFacts,
   todayISO,
 } from '@/lib/server/store-kpi'
@@ -35,6 +36,7 @@ import {
   buildRevenueBaseline,
   computeMonthlyIndex,
   computeShiftPlan,
+  priceIndexFor,
   lookupBaseline,
   normalizeStoreKpiSettings,
   type ShiftFact,
@@ -113,6 +115,7 @@ export async function GET(request: Request) {
 
         const revenueBase = buildRevenueBaseline(facts, settings)
         const receiptsBase = buildReceiptsBaseline(facts, settings)
+        const priceIndex = await loadPriceIndex(supabase, companyId, historyFrom, planTo)
         const shifts = activeShifts(facts, addDaysISO(today, -60))
 
         // Индексы месяцев, попадающих в горизонт планирования.
@@ -149,7 +152,8 @@ export async function GET(request: Request) {
 
             const target = { company_id: companyId, date, shift } as ShiftFact
             const index = indexByMonth.get(monthKeyOf(date)) ?? 1
-            const plan = computeShiftPlan(revenueBase, target, index, settings)
+            const prices = priceIndexFor(priceIndex, date)
+            const plan = computeShiftPlan(revenueBase, target, index, settings, prices)
             if (!plan) {
               skippedThin += 1
               continue
@@ -180,7 +184,7 @@ export async function GET(request: Request) {
               b2_amount: plan.b2,
               b3_amount: plan.b3,
               record_threshold: plan.record_threshold,
-              expected_revenue: expected ? Math.round(expected.value) : null,
+              expected_revenue: expected ? Math.round(expected.value * prices) : null,
               expected_receipts: expectedReceipts ? Math.round(expectedReceipts.value) : null,
               monthly_index: plan.monthly_index,
               baseline_level: plan.level,

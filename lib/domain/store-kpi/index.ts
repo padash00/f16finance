@@ -71,6 +71,15 @@ export {
   type DataQualityCheck,
 } from './quality'
 export {
+  buildPriceIndex,
+  priceIndexFor,
+  deflate,
+  NEUTRAL_PRICE_INDEX,
+  type PriceHistoryRow,
+  type PriceIndex,
+  type PriceIndexPoint,
+} from './price-index'
+export {
   categoryShares,
   cashierMixDeviations,
   type CategorySalesRow,
@@ -155,9 +164,13 @@ function baselineSource(facts: ShiftFact[]): ShiftFact[] {
  * занизили бы планку всем остальным.
  */
 export function buildRevenueBaseline(facts: ShiftFact[], settings: StoreKpiSettings) {
-  return buildBaselineIndex(baselineSource(facts), (f) => (f.receipts > 0 ? f.revenue : null), {
-    summerMonths: settings.summer_months,
-  })
+  // Выручка складывается в базу в ценах базового месяца — иначе после
+  // подорожания норма и пороги поехали бы вверх сами собой.
+  return buildBaselineIndex(
+    baselineSource(facts),
+    (f) => (f.receipts > 0 ? f.revenue / (f.price_index && f.price_index > 0 ? f.price_index : 1) : null),
+    { summerMonths: settings.summer_months },
+  )
 }
 
 /** База спроса — число чеков сопоставимых смен. */

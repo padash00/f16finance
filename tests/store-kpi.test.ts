@@ -6,7 +6,11 @@ import {
   analyzeStoreKpi,
   attachFromReceipts,
   bonusRoi,
+  buildPriceIndex,
+  buildRevenueBaseline,
   cashierMixDeviations,
+  computeShiftPlan,
+  priceIndexFor,
   categoryShares,
   dataQualityScore,
   detectAnomalies,
@@ -557,4 +561,93 @@ test('отклонения меньше трёх процентных пункт
   ]
   const deviations = cashierMixDeviations(even, { minRevenue: 10_000 })
   assert.ok(deviations.every((d) => d.notable.length === 0))
+})
+
+// ─── Индекс цен ────────────────────────────────────────────────────────────
+
+function priceRows(month: string, price: number, qty = 100) {
+  // Пять позиций — минимальная корзина, иначе индекс не считается.
+  return ['a', 'b', 'c', 'd', 'e'].map((id) => ({
+    month,
+    item_id: id,
+    avg_price: price,
+    quantity: qty,
+    revenue: price * qty,
+  }))
+}
+
+test('подорожание на 10% даёт индекс 1.10', () => {
+  const index = buildPriceIndex([...priceRows('2026-01', 1000), ...priceRows('2026-02', 1100)])
+  assert.equal(index.base_month, '2026-01')
+  assert.equal(index.points.get('2026-01')?.index, 1)
+  assert.equal(index.points.get('2026-02')?.index, 1.1)
+})
+
+test('на узкой корзине индекс не применяется', () => {
+  // Две позиции — этого мало, чтобы говорить об уровне цен точки.
+  const rows = [
+    { month: '2026-01', item_id: 'a', avg_price: 1000, quantity: 10, revenue: 10_000 },
+    { month: '2026-02', item_id: 'a', avg_price: 2000, quantity: 10, revenue: 20_000 },
+  ]
+  const index = buildPriceIndex(rows)
+  assert.equal(priceIndexFor(index, '2026-02-15'), 1)
+})
+
+test('неправдоподобный скачок цен отбрасывается', () => {
+  // Втрое за месяц — это смена ассортимента или ошибка, а не инфляция.
+  const index = buildPriceIndex([...priceRows('2026-01', 1000), ...priceRows('2026-02', 3000)])
+  assert.equal(index.points.get('2026-02')?.usable, false)
+  assert.equal(priceIndexFor(index, '2026-02-10'), 1)
+})
+
+test('после подорожания средний чек не считается заслугой продавца', () => {
+  // История в старых ценах, целевая смена — в новых, при том же поведении:
+  // те же 50 чеков, те же 100 товаров, выручка выше ровно на 10%.
+  const history = weekly('2026-01-05', 10).map((d) => fact(d, { price_index: 1 }))
+  const target = fact('2026-03-16', {
+    cashier_id: 'A',
+    revenue: 110_000,
+    receipts: 50,
+    items: 100,
+    price_index: 1.1,
+  })
+
+  const shift = analyzeStoreKpi({
+    baselineFacts: history,
+    targetFacts: [target],
+    settings: DEFAULT_STORE_KPI_SETTINGS,
+  }).shifts[0]
+
+  const ticket = shift.metrics.find((m) => m.metric === 'avg_ticket')!
+  // Ровно норма: продавец работал так же, просто ценник другой.
+  assert.equal(ticket.raw_ratio, 1)
+  assert.equal(shift.verdict, 'NORMAL')
+})
+
+test('ожидание показывается в деньгах своей смены, а не базового месяца', () => {
+  const history = weekly('2026-01-05', 10).map((d) => fact(d, { price_index: 1 }))
+  const shift = analyzeStoreKpi({
+    baselineFacts: history,
+    targetFacts: [fact('2026-03-16', { cashier_id: 'A', revenue: 110_000, price_index: 1.1 })],
+    settings: DEFAULT_STORE_KPI_SETTINGS,
+  }).shifts[0]
+
+  // Норма 100 000 в ценах базы — это 110 000 в ценах смены.
+  assert.equal(shift.expected_revenue, 110_000)
+})
+
+test('бонусные пороги объявляются в сегодняшних деньгах', () => {
+  const history = weekly('2026-01-05', 10).map((d, i) =>
+    fact(d, { revenue: 60_000 + i * 5_000, price_index: 1 }),
+  )
+  const base = buildRevenueBaseline(history, DEFAULT_STORE_KPI_SETTINGS)
+  const target = { company_id: 'shop', date: '2026-03-16', shift: 'day' as const }
+
+  const oldPrices = computeShiftPlan(base, target, 1, DEFAULT_STORE_KPI_SETTINGS, 1)!
+  const newPrices = computeShiftPlan(base, target, 1, DEFAULT_STORE_KPI_SETTINGS, 1.2)!
+
+  // Иначе после подорожания планка бралась бы сама собой.
+  assert.ok(newPrices.b1 > oldPrices.b1, `${newPrices.b1} должен быть выше ${oldPrices.b1}`)
+  assert.ok(newPrices.b3 > oldPrices.b3)
+  assert.ok(newPrices.record_threshold! > oldPrices.record_threshold!)
 })
