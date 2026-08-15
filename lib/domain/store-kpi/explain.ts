@@ -1,0 +1,211 @@
+/**
+ * Развёрнутое объяснение смены.
+ *
+ * Вывод «виноват поток» или «вопрос к продавцу» сам по себе бесполезен: с ним
+ * нельзя ни согласиться, ни поспорить. Поэтому здесь собирается полный разбор —
+ * что произошло с потоком, что с кассой, что именно сделал продавец, из чего
+ * следует вывод и чего в данных не хватило.
+ *
+ * Объяснение детерминированное: оно строится из тех же чисел, что и балл, и
+ * не требует языковой модели. ИИ потом добавляет связный текст поверх, но
+ * если ИИ недоступен или отключён, объяснение всё равно есть и оно полное.
+ *
+ * Формулировки намеренно осторожные. Модуль видит корреляции, а не причины:
+ * он знает, что средний чек был выше нормы, но не знает, почему — продавец
+ * добирал крупные чеки или просто пришли другие люди. Поэтому «это то, на что
+ * продавец влияет напрямую», а не «продавец молодец».
+ */
+
+import { METRIC_LABELS } from './metrics'
+import type { StoreKpiSettings } from './settings'
+import type { MetricKey, MetricRatio, ShiftAnalysis, ShiftVerdict } from './types'
+
+export type MetricReading = {
+  metric: MetricKey
+  label: string
+  actual: number | null
+  expected: number | null
+  delta_pct: number | null
+  /** Как это читать человеку. */
+  reading: string
+  /** Насколько это надёжно: сколько смен было в сегменте сравнения. */
+  sample: number
+}
+
+export type ShiftExplanation = {
+  /** Одно предложение — главный вывод смены. */
+  headline: string
+  /** Что произошло: поток, касса, работа продавца. */
+  paragraphs: string[]
+  metrics: MetricReading[]
+  /** Что из этого следует. */
+  conclusion: string
+  /** Что делать. Рекомендация управляющему, не решение за него. */
+  action: string
+  /** Где выводу нельзя доверять и почему. */
+  caveats: string[]
+}
+
+const VERDICT_HEADLINE: Record<ShiftVerdict, string> = {
+  TRAFFIC_DRIVEN: 'Касса просела из-за потока, а не из-за продавца.',
+  POSSIBLE_CASHIER_ISSUE: 'Поток был на месте, но работа с ним просела — есть о чём поговорить с продавцом.',
+  CASHIER_DRIVEN: 'Из того же потока выжали больше обычного.',
+  NORMAL: 'Смена прошла в пределах обычного разброса.',
+  INSUFFICIENT_DATA: 'Данных не хватило, чтобы делать выводы об этой смене.',
+}
+
+const VERDICT_ACTION: Record<ShiftVerdict, string> = {
+  TRAFFIC_DRIVEN:
+    'Отмечать продавцу нечего. Если такие смены повторяются, вопрос не к нему, а к тому, почему падает поток клуба.',
+  POSSIBLE_CASHIER_ISSUE:
+    'Стоит разобрать смену с продавцом: посмотреть, что мешало предлагать сопутствующее и добирать чек. Это повод для обучения, а не для наказания.',
+  CASHIER_DRIVEN: 'Есть что отметить и есть чему поучиться остальным — разберите, что сработало.',
+  NORMAL: 'Отдельных действий не требуется.',
+  INSUFFICIENT_DATA:
+    'Сначала стоит закрыть дыры в данных — иначе любые выводы по этой смене будут гаданием.',
+}
+
+function pct(ratio: number | null): string {
+  if (ratio == null) return '—'
+  const delta = Math.round((ratio - 1) * 100)
+  if (delta === 0) return 'на уровне нормы'
+  return delta > 0 ? `выше нормы на ${delta}%` : `ниже нормы на ${Math.abs(delta)}%`
+}
+
+function money(value: number | null): string {
+  if (value == null) return '—'
+  return `${Math.round(value).toLocaleString('ru-RU')} ₸`
+}
+
+/** Как читать конкретную метрику: что она означает и на что указывает. */
+function readMetric(m: MetricRatio): string {
+  if (m.actual == null) return 'Посчитать не из чего.'
+  if (m.expected == null) return 'Не с чем сравнить: в сегменте не набралось истории.'
+
+  const direction = m.raw_ratio == null ? 'на уровне нормы' : pct(m.raw_ratio)
+
+  switch (m.metric) {
+    case 'revenue_per_club':
+      return `Отдача с потока ${direction}. Это главная метрика магазина при клубе: сколько денег снято с той же массы людей.`
+    case 'receipts_per_club':
+      return `Доля клиентов, дошедших до чека, ${direction}. Показывает, скольких вообще удалось довести до покупки.`
+    case 'avg_ticket':
+      return `Средний чек ${direction}. Это то, на что продавец влияет напрямую: что предложил и до чего добрал.`
+    case 'items_per_receipt':
+      return `Товаров на чек ${direction}. Прямой признак того, предлагалось ли что-то сверх заказанного.`
+    case 'attach_rate':
+      return `Допродажи ${direction}. Считается по вашим правилам «категория → категория».`
+    case 'product_knowledge':
+      return 'Тест на знание товара за смену не учитывался.'
+  }
+}
+
+export function explainShift(analysis: ShiftAnalysis, settings: StoreKpiSettings): ShiftExplanation {
+  const { fact } = analysis
+  const revenueRatio =
+    analysis.expected_revenue && analysis.expected_revenue > 0 ? fact.revenue / analysis.expected_revenue : null
+  const trafficRatio =
+    analysis.expected_club_revenue && analysis.expected_club_revenue > 0 && fact.club_revenue != null
+      ? fact.club_revenue / analysis.expected_club_revenue
+      : null
+
+  const paragraphs: string[] = []
+
+  // 1. Поток.
+  if (trafficRatio != null) {
+    paragraphs.push(
+      `Поток. Выручка клуба за эту смену — ${money(fact.club_revenue)} при обычных ${money(
+        analysis.expected_club_revenue,
+      )}, то есть ${pct(trafficRatio)}. Числа посетителей у нас нет — клуб работает на стороннем SENET, — поэтому потоком считается его выручка за ту же смену.`,
+    )
+  } else {
+    paragraphs.push(
+      'Поток. Измерить нечем: выручки клуба за эту смену нет. Значит, отличить «пришло мало людей» от «людей было достаточно» по этой смене невозможно, и вывод опирается только на то, что происходило внутри чеков.',
+    )
+  }
+
+  // 2. Касса.
+  if (revenueRatio != null) {
+    paragraphs.push(
+      `Касса. Магазин сделал ${money(fact.revenue)} при ожидаемых ${money(
+        analysis.expected_revenue,
+      )} для такой смены — ${pct(revenueRatio)}. Ожидание берётся по сопоставимым сменам: тот же сезон, тот же день недели, та же дневная или ночная смена.`,
+    )
+  } else {
+    paragraphs.push(
+      `Касса. Магазин сделал ${money(fact.revenue)}, но сравнить не с чем: сопоставимых смен в истории меньше ${settings.min_sample_size}.`,
+    )
+  }
+
+  // 3. Работа продавца.
+  const usable = analysis.metrics.filter((m) => m.ratio != null)
+  if (usable.length > 0) {
+    const strong = usable.filter((m) => (m.raw_ratio ?? 1) >= 1.05)
+    const weak = usable.filter((m) => (m.raw_ratio ?? 1) <= 0.95)
+    const parts: string[] = [
+      `Работа продавца. Считается по ${usable.length} из ${analysis.metrics.length} метрик — остальные посчитать не из чего.`,
+    ]
+    if (strong.length) {
+      parts.push(`Выше нормы: ${strong.map((m) => METRIC_LABELS[m.metric].toLowerCase()).join(', ')}.`)
+    }
+    if (weak.length) {
+      parts.push(`Ниже нормы: ${weak.map((m) => METRIC_LABELS[m.metric].toLowerCase()).join(', ')}.`)
+    }
+    if (!strong.length && !weak.length) {
+      parts.push('Все метрики держатся около нормы.')
+    }
+    parts.push(
+      `Итоговый балл ${analysis.score?.toFixed(2) ?? '—'}: это отношение к норме, а не доля от плана. 1.00 означает «как обычно в таких условиях».`,
+    )
+    paragraphs.push(parts.join(' '))
+  } else {
+    paragraphs.push(
+      'Работа продавца. Ни одну метрику посчитать не удалось, поэтому балл не выставляется. Это не «плохо отработал», это «не из чего считать».',
+    )
+  }
+
+  // 4. Чеки и объём.
+  paragraphs.push(
+    `Объём. За смену пробито ${fact.receipts} чеков${
+      fact.items > 0 ? ` и ${Math.round(fact.items)} товаров` : ' (позиции в чеках не расписаны)'
+    }${fact.refunds > 0 ? `, возвраты — ${money(fact.refunds)}` : ''}. Порог, ниже которого выводы делаются осторожнее, — ${settings.min_receipts_for_full_score} чеков за смену.`,
+  )
+
+  const metrics: MetricReading[] = analysis.metrics.map((m) => ({
+    metric: m.metric,
+    label: METRIC_LABELS[m.metric],
+    actual: m.actual,
+    expected: m.expected,
+    delta_pct: m.raw_ratio == null ? null : Math.round((m.raw_ratio - 1) * 100),
+    reading: readMetric(m),
+    sample: m.sample,
+  }))
+
+  const caveats = [...analysis.missing]
+  if (analysis.confidence < 0.5) {
+    caveats.push(
+      `Общая уверенность в разборе — ${Math.round(analysis.confidence * 100)}%. На таком уровне вывод стоит считать поводом присмотреться, а не основанием для решений.`,
+    )
+  }
+  if (fact.receipts < settings.min_receipts_for_full_score) {
+    caveats.push(
+      `Чеков в смене меньше ${settings.min_receipts_for_full_score} — на маленькой выборке метрики скачут сами по себе. Это снижает уверенность, но не балл продавца.`,
+    )
+  }
+
+  const conclusion =
+    analysis.verdict === 'INSUFFICIENT_DATA'
+      ? 'Вывод по смене не делается: слишком многого не хватает в данных.'
+      : trafficRatio == null
+        ? `${VERDICT_HEADLINE[analysis.verdict]} Оговорка: поток измерить было нечем, поэтому вывод построен только на метриках внутри чеков.`
+        : VERDICT_HEADLINE[analysis.verdict]
+
+  return {
+    headline: VERDICT_HEADLINE[analysis.verdict],
+    paragraphs,
+    metrics,
+    conclusion,
+    action: VERDICT_ACTION[analysis.verdict],
+    caveats,
+  }
+}

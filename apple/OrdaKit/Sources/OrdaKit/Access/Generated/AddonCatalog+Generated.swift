@@ -74,6 +74,15 @@ extension AddonCatalog {
             billing: .flat
         ),
         Addon(
+            code: "addon.sales_kpi",
+            name: "Эффективность продавцов",
+            description: "Разделяет провал потока и провал продавца: ожидание по сезону и смене, метрики допродаж, балл кассира.",
+            pages: ["/sales-kpi"],
+            grants: ["addon.sales_kpi"],
+            priceKzt: 0,
+            billing: .flat
+        ),
+        Addon(
             code: "addon.branding",
             name: "White-label / брендинг",
             description: "Свой логотип, бренд и поддомен клиента.",

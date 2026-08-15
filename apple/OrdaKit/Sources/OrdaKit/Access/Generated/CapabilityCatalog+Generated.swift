@@ -805,6 +805,17 @@ extension CapabilityCatalog {
                     ]
                 ),
                 CapabilityPage(
+                    id: "sales-kpi",
+                    path: "/sales-kpi",
+                    extraPaths: [],
+                    label: "Эффективность продавцов",
+                    capabilities: [
+                        Capability(id: "sales-kpi.view", label: "Просмотр", description: nil, severity: .low, deps: []),
+                        Capability(id: "sales-kpi.manage", label: "Настройка модели и правил допродаж", description: nil, severity: .high, deps: []),
+                        Capability(id: "sales-kpi.export", label: "Выгрузка", description: nil, severity: .low, deps: []),
+                    ]
+                ),
+                CapabilityPage(
                     id: "incidents",
                     path: "/incidents",
                     extraPaths: [],
@@ -814,6 +825,31 @@ extension CapabilityCatalog {
                         Capability(id: "incidents.create", label: "Зарегистрировать инцидент", description: nil, severity: .medium, deps: []),
                         Capability(id: "incidents.update", label: "Обновить инцидент", description: nil, severity: .medium, deps: []),
                         Capability(id: "incidents.close", label: "Закрыть инцидент", description: nil, severity: .medium, deps: []),
+                    ]
+                ),
+                CapabilityPage(
+                    id: "knowledge-setup",
+                    path: "/knowledge-setup",
+                    extraPaths: ["/regulations/setup"],
+                    label: "Настройка базы знаний",
+                    capabilities: [
+                        Capability(id: "knowledge-setup.view", label: "Просмотр каркаса и покрытия", description: nil, severity: .low, deps: []),
+                        Capability(id: "knowledge-setup.set_industry", label: "Выбрать нишу точки", description: nil, severity: .medium, deps: []),
+                        Capability(id: "knowledge-setup.generate", label: "Собрать черновики регламентов через ИИ", description: "Из данных системы или из ответов интервью. Публикует всегда человек", severity: .medium, deps: []),
+                        Capability(id: "knowledge-setup.reset", label: "Удалить регламенты и собрать заново", description: "Удаление черновиков, регламентов точки или всей базы организации", severity: .high, deps: []),
+                    ]
+                ),
+                CapabilityPage(
+                    id: "operator-exams",
+                    path: "/operator-exams",
+                    extraPaths: ["/regulations/exams"],
+                    label: "Экзамены операторов",
+                    capabilities: [
+                        Capability(id: "operator-exams.view", label: "Просмотр экзаменов и результатов", description: nil, severity: .low, deps: []),
+                        Capability(id: "operator-exams.create", label: "Назначить экзамен и разослать", description: "Генерирует вопросы через ИИ и отправляет операторам в Telegram", severity: .medium, deps: ["operators.view"]),
+                        Capability(id: "operator-exams.remind", label: "Напомнить о незавершённом экзамене", description: nil, severity: .low, deps: []),
+                        Capability(id: "operator-exams.grade", label: "Переставить балл за развёрнутый ответ", description: "Оценка ИИ — предложение; последнее слово за человеком", severity: .medium, deps: []),
+                        Capability(id: "operator-exams.cancel", label: "Завершить или отменить экзамен", description: nil, severity: .medium, deps: []),
                     ]
                 ),
                 CapabilityPage(
@@ -955,7 +991,7 @@ extension CapabilityCatalog {
                 CapabilityPage(
                     id: "knowledge-admin",
                     path: "/knowledge-admin",
-                    extraPaths: [],
+                    extraPaths: ["/regulations"],
                     label: "База знаний (админка)",
                     capabilities: [
                         Capability(id: "knowledge-admin.view", label: "Просмотр", description: nil, severity: .low, deps: []),

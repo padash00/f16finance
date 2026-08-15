@@ -98,6 +98,16 @@ export const ADDON_CATALOG: AddonDef[] = [
   // и отдельной страницы верхнего уровня не имеет → входит в addon shop.catalog.
   // Если понадобится продавать отдельно — вынесем страницу и заведём код.
   {
+    code: 'addon.sales_kpi',
+    name: 'Эффективность продавцов',
+    description:
+      'Разделяет провал потока и провал продавца: ожидание по сезону и смене, метрики допродаж, балл кассира.',
+    pages: ['/sales-kpi'],
+    grants: ['addon.sales_kpi'],
+    price_kzt: 0,
+    billing: 'flat',
+  },
+  {
     code: 'addon.branding',
     name: 'White-label / брендинг',
     description: 'Свой логотип, бренд и поддомен клиента.',

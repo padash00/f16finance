@@ -782,6 +782,18 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         ],
       },
       {
+        id: 'sales-kpi',
+        path: '/sales-kpi',
+        label: 'Эффективность продавцов',
+        capabilities: [
+          { id: 'sales-kpi.view', label: 'Просмотр', severity: 'low' },
+          // Настройки задают связку с точкой-клубом, веса и пороги — то есть
+          // напрямую влияют на оценку людей и (со следующей фазы) на бонусы.
+          { id: 'sales-kpi.manage', label: 'Настройка модели и правил допродаж', severity: 'high' },
+          { id: 'sales-kpi.export', label: 'Выгрузка', severity: 'low' },
+        ],
+      },
+      {
         id: 'incidents',
         path: '/incidents',
         label: 'Инциденты',

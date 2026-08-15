@@ -1,0 +1,961 @@
+﻿'use client'
+
+/**
+ * Эффективность продавцов магазина.
+ *
+ * Страница отвечает на один вопрос и старается не отвечать на другие: касса
+ * просела из-за потока клиентов или из-за продавца. Поэтому рядом с каждой
+ * сменой всегда стоят обе величины — был ли поток и что продавец сделал с
+ * каждым пришедшим, — а вывод сопровождается уверенностью и списком того,
+ * чего в данных не хватило.
+ */
+
+import { Fragment, useEffect, useMemo, useState } from 'react'
+import {
+  AlertTriangle,
+  ChevronDown,
+  Gauge,
+  Info,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Settings,
+  Store,
+  Trash2,
+  TrendingDown,
+  TrendingUp,
+  Users,
+  X,
+} from 'lucide-react'
+
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { useCapabilities } from '@/lib/client/use-capabilities'
+import { formatMoney } from '@/lib/core/format'
+import { mutateApi, useApi } from '@/lib/hooks/use-api'
+
+import { AccuracyTab } from './accuracy-tab'
+import { PlansTab } from './plans-tab'
+import { ShiftDetail, type ShiftExplanation } from './shift-detail'
+
+// ─── Типы ответа API ────────────────────────────────────────────────────────
+
+type MetricRow = {
+  metric: string
+  actual: number | null
+  expected: number | null
+  raw_ratio: number | null
+  ratio: number | null
+  level: string | null
+  sample: number
+}
+
+type ShiftRow = {
+  date: string
+  shift: 'day' | 'night'
+  season: 'academic' | 'summer'
+  cashier_id: string | null
+  cashier_name: string | null
+  revenue: number
+  expected_revenue: number | null
+  club_revenue: number | null
+  expected_club_revenue: number | null
+  receipts: number
+  score: number | null
+  confidence: number
+  verdict: string
+  evidence: string[]
+  missing: string[]
+  metrics: MetricRow[]
+  explanation: ShiftExplanation | null
+}
+
+type CashierRow = {
+  cashier_id: string
+  name: string
+  shifts: number
+  revenue: number
+  receipts: number
+  score: number | null
+  status: string
+  confidence: number
+  metric_ratios: Record<string, number>
+  strengths: string[]
+  weaknesses: string[]
+}
+
+type ApiData = {
+  no_store?: boolean
+  needs_company?: boolean
+  stores?: { id: string; name: string }[]
+  period?: { from: string; to: string }
+  company?: { id: string; name: string }
+  club?: { id: string; name: string | null } | null
+  settings?: {
+    min_sample_size: number
+    min_qualifying_shifts: number
+    min_receipts_for_full_score: number
+    configured: boolean
+  }
+  coverage?: {
+    baseline_shifts: number
+    baseline_from: string | null
+    baseline_to: string | null
+    items_coverage: number
+    club_coverage: number
+    cashier_coverage: number
+  }
+  totals?: {
+    revenue: number
+    receipts: number
+    shifts: number
+    traffic_driven: number
+    cashier_issue: number
+    insufficient: number
+  }
+  shifts?: ShiftRow[]
+  cashiers?: CashierRow[]
+  model_version?: string
+}
+
+// ─── Словарь ────────────────────────────────────────────────────────────────
+
+const METRIC_LABELS: Record<string, string> = {
+  revenue_per_club: 'Выручка на 1000 ₸ клуба',
+  receipts_per_club: 'Чеков на 1000 ₸ клуба',
+  avg_ticket: 'Средний чек',
+  items_per_receipt: 'Товаров на чек',
+  attach_rate: 'Допродажи',
+  product_knowledge: 'Знание товара',
+}
+
+const VERDICTS: Record<string, { label: string; hint: string; className: string }> = {
+  TRAFFIC_DRIVEN: {
+    label: 'Виноват поток',
+    hint: 'Клиентов пришло меньше обычного, а продавец отработал не хуже своей нормы.',
+    className: 'bg-sky-50 text-sky-700 ring-sky-600/20 dark:bg-sky-500/10 dark:text-sky-300 dark:ring-sky-400/20',
+  },
+  POSSIBLE_CASHIER_ISSUE: {
+    label: 'Вопрос к продавцу',
+    hint: 'Поток был на месте, но управляемые продавцом метрики просели.',
+    className:
+      'bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-400/20',
+  },
+  CASHIER_DRIVEN: {
+    label: 'Заслуга продавца',
+    hint: 'Из того же потока выжали больше обычного.',
+    className:
+      'bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-400/20',
+  },
+  NORMAL: {
+    label: 'Норма',
+    hint: 'Отклонения в пределах обычного разброса.',
+    className:
+      'bg-slate-100 text-slate-600 ring-slate-500/20 dark:bg-white/5 dark:text-slate-300 dark:ring-white/10',
+  },
+  INSUFFICIENT_DATA: {
+    label: 'Мало данных',
+    hint: 'Истории или показателей не хватило, чтобы делать выводы.',
+    className:
+      'bg-slate-100 text-slate-500 ring-slate-500/20 dark:bg-white/5 dark:text-slate-400 dark:ring-white/10',
+  },
+}
+
+const STATUSES: Record<string, { label: string; className: string }> = {
+  TOP: {
+    label: 'Топ',
+    className: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300',
+  },
+  STRONG: {
+    label: 'Сильный',
+    className: 'bg-teal-50 text-teal-700 dark:bg-teal-500/10 dark:text-teal-300',
+  },
+  NORMAL: { label: 'Норма', className: 'bg-slate-100 text-slate-600 dark:bg-white/5 dark:text-slate-300' },
+  NEEDS_TRAINING: {
+    label: 'Нужно обучение',
+    className: 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300',
+  },
+  INSUFFICIENT_DATA: {
+    label: 'Мало смен',
+    className: 'bg-slate-100 text-slate-500 dark:bg-white/5 dark:text-slate-400',
+  },
+}
+
+// ─── Форматирование ─────────────────────────────────────────────────────────
+
+function isoToday(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function isoDaysAgo(days: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() - days)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function deltaPct(ratio: number | null): string {
+  if (ratio == null) return '—'
+  const delta = Math.round((ratio - 1) * 100)
+  return delta >= 0 ? `+${delta}%` : `${delta}%`
+}
+
+function ratioOf(actual: number | null, expected: number | null): number | null {
+  if (actual == null || expected == null || expected <= 0) return null
+  return actual / expected
+}
+
+function toneFor(ratio: number | null): string {
+  if (ratio == null) return 'text-slate-400 dark:text-slate-500'
+  if (ratio >= 1.05) return 'text-emerald-600 dark:text-emerald-400'
+  if (ratio <= 0.95) return 'text-amber-600 dark:text-amber-400'
+  return 'text-slate-600 dark:text-slate-300'
+}
+
+// ─── Мелкие блоки ───────────────────────────────────────────────────────────
+
+function StatCard(props: { label: string; value: string; hint?: string; tone?: string }) {
+  return (
+    <Card className="p-4">
+      <div className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+        {props.label}
+      </div>
+      <div className={`mt-1 text-2xl font-semibold ${props.tone || 'text-slate-900 dark:text-white'}`}>
+        {props.value}
+      </div>
+      {props.hint ? (
+        <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{props.hint}</div>
+      ) : null}
+    </Card>
+  )
+}
+
+function VerdictBadge({ verdict }: { verdict: string }) {
+  const v = VERDICTS[verdict] || VERDICTS.NORMAL
+  return (
+    <span
+      title={v.hint}
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${v.className}`}
+    >
+      {v.label}
+    </span>
+  )
+}
+
+function Confidence({ value }: { value: number }) {
+  const pct = Math.round(value * 100)
+  const tone = pct >= 75 ? 'bg-emerald-500' : pct >= 45 ? 'bg-amber-500' : 'bg-slate-400'
+  return (
+    <div className="flex items-center gap-2" title="Насколько можно доверять выводу">
+      <div className="h-1.5 w-14 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
+        <div className={`h-full ${tone}`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="text-xs tabular-nums text-slate-500 dark:text-slate-400">{pct}%</span>
+    </div>
+  )
+}
+
+// ─── Настройки ──────────────────────────────────────────────────────────────
+
+type SettingsData = {
+  configured: boolean
+  settings: {
+    club_company_id: string | null
+    latitude: number | null
+    longitude: number | null
+    weather_adjusts_bonus_threshold: boolean
+    require_product_test_for_top_bonus: boolean
+  }
+  companies: { id: string; name: string; store_enabled: boolean }[]
+  categories: { id: string; name: string }[]
+  rules: {
+    id: string
+    source_category_id: string
+    target_category_id: string
+    weight: number
+    active: boolean
+  }[]
+}
+
+function SettingsModal(props: { companyId: string; onClose: () => void; onSaved: () => void }) {
+  const key = `/api/admin/sales-kpi/settings?company_id=${props.companyId}`
+  const { data, loading, refresh } = useApi<{ data: SettingsData }>(key)
+  const payload = data?.data
+
+  const [clubId, setClubId] = useState<string>('')
+  const [lat, setLat] = useState('')
+  const [lon, setLon] = useState('')
+  const [testGate, setTestGate] = useState(false)
+  const [source, setSource] = useState('')
+  const [target, setTarget] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [problem, setProblem] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!payload) return
+    setClubId(payload.settings.club_company_id || '')
+    setLat(payload.settings.latitude == null ? '' : String(payload.settings.latitude))
+    setLon(payload.settings.longitude == null ? '' : String(payload.settings.longitude))
+    setTestGate(Boolean(payload.settings.require_product_test_for_top_bonus))
+  }, [payload])
+
+  function saveSettings() {
+    return post({
+      action: 'save_settings',
+      club_company_id: clubId || null,
+      latitude: lat === '' ? null : Number(lat),
+      longitude: lon === '' ? null : Number(lon),
+      require_product_test_for_top_bonus: testGate,
+    })
+  }
+
+  const categoryName = (id: string) => payload?.categories.find((c) => c.id === id)?.name || '—'
+
+  async function post(body: Record<string, unknown>) {
+    setBusy(true)
+    setProblem(null)
+    try {
+      const res = await fetch('/api/admin/sales-kpi/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company_id: props.companyId, ...body }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json?.error || `HTTP ${res.status}`)
+      await refresh()
+      props.onSaved()
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : 'Не удалось сохранить')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function removeRule(id: string) {
+    setBusy(true)
+    setProblem(null)
+    try {
+      const res = await fetch(`/api/admin/sales-kpi/settings?rule_id=${id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      await refresh()
+      props.onSaved()
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : 'Не удалось удалить')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4 backdrop-blur-sm">
+      <div className="mt-10 w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-xl dark:border-white/10 dark:bg-slate-900">
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900 dark:text-white">Настройка модели</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Влияет на оценку людей — каждое изменение попадает в журнал действий
+            </p>
+          </div>
+          <button
+            onClick={props.onClose}
+            className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10"
+            aria-label="Закрыть"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center gap-2 py-8 text-sm text-slate-500">
+            <Loader2 className="h-4 w-4 animate-spin" /> Загружаем настройки…
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* Точка-клуб */}
+            <section>
+              <h3 className="text-sm font-medium text-slate-900 dark:text-white">Точка-клуб (прокси потока)</h3>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                Клуб на SENET не отдаёт число посетителей, поэтому потоком считается его выручка за ту же
+                смену. Без этой связки метрики «на 1000 ₸ клуба» не считаются.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <select
+                  value={clubId}
+                  onChange={(e) => setClubId(e.target.value)}
+                  className="min-w-[220px] rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm dark:border-white/10 dark:bg-slate-900 dark:text-white"
+                >
+                  <option value="">Не выбрана — считать без потока</option>
+                  {(payload?.companies || [])
+                    .filter((c) => c.id !== props.companyId)
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                </select>
+                <Button size="sm" disabled={busy} onClick={() => void saveSettings()}>
+                  Сохранить
+                </Button>
+              </div>
+            </section>
+
+            {/* Погода */}
+            <section>
+              <h3 className="text-sm font-medium text-slate-900 dark:text-white">Координаты точки</h3>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                Нужны, чтобы собирать погоду. Погода влияет на ожидаемый поток и на объяснение смены, но не
+                на бонусные пороги: продавец не отвечает за дождь. Без координат погода просто не
+                собирается.
+              </p>
+              <div className="mt-2 flex flex-wrap items-end gap-2">
+                <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
+                  Широта
+                  <input
+                    type="number"
+                    step="0.000001"
+                    value={lat}
+                    onChange={(e) => setLat(e.target.value)}
+                    placeholder="43.238949"
+                    className="w-36 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm dark:border-white/10 dark:bg-slate-900 dark:text-white"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
+                  Долгота
+                  <input
+                    type="number"
+                    step="0.000001"
+                    value={lon}
+                    onChange={(e) => setLon(e.target.value)}
+                    placeholder="76.889709"
+                    className="w-36 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm dark:border-white/10 dark:bg-slate-900 dark:text-white"
+                  />
+                </label>
+                <Button size="sm" variant="outline" disabled={busy} onClick={() => void saveSettings()}>
+                  Сохранить
+                </Button>
+              </div>
+            </section>
+
+            {/* Ворота по знанию товара */}
+            <section>
+              <h3 className="text-sm font-medium text-slate-900 dark:text-white">Ворота по знанию товара</h3>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                Если включить, верхние уровни (B3 и рекорд) будут доступны только продавцам, сдавшим тест.
+                B1 и B2 остаются доступны всегда. Включайте, только если тесты действительно проводятся:
+                иначе уровень срежется всем за отсутствие данных, а не за незнание.
+              </p>
+              <label className="mt-2 flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={testGate}
+                  onChange={(e) => setTestGate(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 dark:border-white/20"
+                />
+                Требовать сданный тест для B3 и рекорда
+                <Button size="sm" variant="outline" disabled={busy} onClick={() => void saveSettings()}>
+                  Сохранить
+                </Button>
+              </label>
+            </section>
+
+            {/* Правила допродаж */}
+            <section>
+              <h3 className="text-sm font-medium text-slate-900 dark:text-white">Правила допродаж</h3>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                «Взяли из первой категории — предложи из второй». Возможность засчитывается по первой,
+                успех — когда в чеке оказалась вторая.
+              </p>
+
+              <div className="mt-2 space-y-1">
+                {(payload?.rules || []).length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">
+                    Правил нет — метрика допродаж не считается.
+                  </div>
+                ) : (
+                  (payload?.rules || []).map((r) => (
+                    <div
+                      key={r.id}
+                      className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-white/10"
+                    >
+                      <span className="text-slate-700 dark:text-slate-200">
+                        {categoryName(r.source_category_id)} → {categoryName(r.target_category_id)}
+                      </span>
+                      <button
+                        onClick={() => void removeRule(r.id)}
+                        disabled={busy}
+                        className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10"
+                        aria-label="Удалить правило"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {(payload?.categories || []).length === 0 ? (
+                <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+                  У товаров точки нет категорий — сначала заведите их в каталоге магазина.
+                </p>
+              ) : (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <select
+                    value={source}
+                    onChange={(e) => setSource(e.target.value)}
+                    className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm dark:border-white/10 dark:bg-slate-900 dark:text-white"
+                  >
+                    <option value="">Что купили</option>
+                    {(payload?.categories || []).map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-slate-400">→</span>
+                  <select
+                    value={target}
+                    onChange={(e) => setTarget(e.target.value)}
+                    className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm dark:border-white/10 dark:bg-slate-900 dark:text-white"
+                  >
+                    <option value="">Что предложить</option>
+                    {(payload?.categories || []).map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busy || !source || !target || source === target}
+                    onClick={() =>
+                      void post({ action: 'add_rule', source_category_id: source, target_category_id: target }).then(
+                        () => {
+                          setSource('')
+                          setTarget('')
+                        },
+                      )
+                    }
+                  >
+                    <Plus className="mr-1 h-3.5 w-3.5" /> Добавить
+                  </Button>
+                </div>
+              )}
+            </section>
+
+            {problem ? <p className="text-sm text-rose-600 dark:text-rose-400">{problem}</p> : null}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Страница ───────────────────────────────────────────────────────────────
+
+export default function SalesKpiPage() {
+  const [from, setFrom] = useState(isoDaysAgo(30))
+  const [to, setTo] = useState(isoToday())
+  const [companyId, setCompanyId] = useState<string>('')
+  const [openShift, setOpenShift] = useState<string | null>(null)
+  const [showSettings, setShowSettings] = useState(false)
+  const [tab, setTab] = useState<'review' | 'plans' | 'accuracy'>('review')
+  const { can } = useCapabilities()
+
+  const query = new URLSearchParams({ from, to })
+  if (companyId) query.set('company_id', companyId)
+
+  const apiKey = `/api/admin/sales-kpi?${query.toString()}`
+  const { data, error, loading, refreshing, refresh } = useApi<{ data: ApiData }>(apiKey)
+
+  const payload = data?.data
+  const shifts = payload?.shifts || []
+  const cashiers = payload?.cashiers || []
+  const coverage = payload?.coverage
+  const totals = payload?.totals
+
+  const warnings = useMemo(() => {
+    const list: string[] = []
+    if (!coverage) return list
+    if (coverage.baseline_shifts < 20) {
+      list.push(
+        `История короткая: ${coverage.baseline_shifts} смен до начала периода. Ожидания будут грубыми, а часть выводов — «мало данных».`,
+      )
+    }
+    if (coverage.club_coverage < 0.5) {
+      list.push(
+        'Выручка клуба известна меньше чем по половине смен — поток измерить нечем, и главный вопрос модуля (поток или продавец) остаётся без ответа. Проверьте, выбрана ли точка-клуб в настройках.',
+      )
+    }
+    if (coverage.items_coverage < 0.5) {
+      list.push(
+        'Больше половины смен без построчных чеков: средний чек, товары на чек и допродажи по ним не считаются.',
+      )
+    }
+    if (coverage.cashier_coverage < 0.9) {
+      list.push('Часть чеков без кассира — такие смены в оценку людей не попадают.')
+    }
+    return list
+  }, [coverage])
+
+  const toolbar = (
+    <div className="flex flex-wrap items-end gap-2">
+      <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
+        С
+        <input
+          type="date"
+          value={from}
+          onChange={(e) => setFrom(e.target.value)}
+          className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900 dark:border-white/10 dark:bg-slate-900 dark:text-white"
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
+        По
+        <input
+          type="date"
+          value={to}
+          onChange={(e) => setTo(e.target.value)}
+          className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900 dark:border-white/10 dark:bg-slate-900 dark:text-white"
+        />
+      </label>
+      {(payload?.stores?.length || 0) > 1 ? (
+        <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
+          Точка
+          <select
+            value={companyId}
+            onChange={(e) => setCompanyId(e.target.value)}
+            className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900 dark:border-white/10 dark:bg-slate-900 dark:text-white"
+          >
+            <option value="">Выберите точку</option>
+            {(payload?.stores || []).map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+      <div className="flex gap-1">
+        <Button variant="outline" size="sm" onClick={() => { setFrom(isoDaysAgo(7)); setTo(isoToday()) }}>
+          7 дней
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => { setFrom(isoDaysAgo(30)); setTo(isoToday()) }}>
+          30 дней
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={refreshing}>
+          {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+        </Button>
+      </div>
+    </div>
+  )
+
+  return (
+    <div className="space-y-5">
+      <AdminPageHeader
+        title="Эффективность продавцов"
+        description="Поток или продавец: сколько клиентов дошло до магазина и что продавец с ними сделал"
+        icon={<Gauge className="h-5 w-5" />}
+        accent="blue"
+        toolbar={toolbar}
+        actions={
+          can('sales-kpi.manage') && payload?.company ? (
+            <Button variant="outline" size="sm" onClick={() => setShowSettings(true)}>
+              <Settings className="mr-1 h-4 w-4" /> Настройки
+            </Button>
+          ) : null
+        }
+      />
+
+      {showSettings && payload?.company ? (
+        <SettingsModal
+          companyId={payload.company.id}
+          onClose={() => setShowSettings(false)}
+          onSaved={() => mutateApi(apiKey)}
+        />
+      ) : null}
+
+      {loading ? (
+        <Card className="flex items-center justify-center gap-2 p-10 text-slate-500 dark:text-slate-400">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          Считаем ожидания по истории…
+        </Card>
+      ) : error ? (
+        <Card className="p-6 text-sm text-rose-600 dark:text-rose-400">
+          Не удалось загрузить данные: {error}
+        </Card>
+      ) : payload?.no_store ? (
+        <Card className="p-6 text-sm text-slate-600 dark:text-slate-300">
+          <Store className="mb-2 h-5 w-5 text-slate-400" />
+          Ни на одной точке не включён магазин. Модуль считает продажи магазина — включите магазин на точке
+          в настройках, и страница оживёт.
+        </Card>
+      ) : payload?.needs_company ? (
+        <Card className="p-6 text-sm text-slate-600 dark:text-slate-300">
+          Выберите точку в фильтре выше. Смешивать точки в один рейтинг нельзя: у них разный ассортимент,
+          поток и ожидания, и общий балл не значил бы ничего.
+        </Card>
+      ) : (
+        <>
+          <div className="flex gap-1 rounded-xl border border-slate-200 bg-white p-1 dark:border-white/10 dark:bg-slate-900/60">
+            {([
+              ['review', 'Разбор смен'],
+              ['plans', 'Планы смен'],
+              ['accuracy', 'Точность и калибровка'],
+            ] as const).map(([id, label]) => (
+              <button
+                key={id}
+                onClick={() => setTab(id)}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                  tab === id
+                    ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
+                    : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {tab === 'plans' && payload?.company ? (
+            <PlansTab companyId={payload.company.id} canManage={can('sales-kpi.manage')} />
+          ) : tab === 'accuracy' && payload?.company ? (
+            <AccuracyTab companyId={payload.company.id} />
+          ) : (
+        <>
+          {/* Что важно знать до того, как смотреть цифры */}
+          {!payload?.club ? (
+            <Card className="flex gap-3 border-amber-200 bg-amber-50/60 p-4 text-sm text-amber-800 dark:border-amber-400/20 dark:bg-amber-500/10 dark:text-amber-200">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                <div className="font-medium">Точка-клуб не выбрана — поток не измеряется</div>
+                <p className="mt-1 opacity-90">
+                  Клуб работает на стороннем SENET и числа посетителей не отдаёт, поэтому поток мы измеряем
+                  выручкой клуба за ту же смену. Пока точка-клуб не указана, метрики «на 1000 ₸ клуба»
+                  отключены, а выводы строятся только по метрикам внутри чека — с пониженной уверенностью.
+                </p>
+              </div>
+            </Card>
+          ) : null}
+
+          {warnings.length > 0 ? (
+            <Card className="flex gap-3 p-4 text-sm text-slate-600 dark:text-slate-300">
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+              <ul className="space-y-1">
+                {warnings.map((w) => (
+                  <li key={w}>{w}</li>
+                ))}
+              </ul>
+            </Card>
+          ) : null}
+
+          {/* Сводка */}
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+            <StatCard
+              label="Смен разобрано"
+              value={String(totals?.shifts ?? 0)}
+              hint={coverage ? `история: ${coverage.baseline_shifts} смен` : undefined}
+            />
+            <StatCard label="Выручка периода" value={formatMoney(totals?.revenue ?? 0)} />
+            <StatCard
+              label="Виноват поток"
+              value={String(totals?.traffic_driven ?? 0)}
+              hint="продавец отработал нормально"
+              tone="text-sky-600 dark:text-sky-400"
+            />
+            <StatCard
+              label="Вопрос к продавцу"
+              value={String(totals?.cashier_issue ?? 0)}
+              hint="поток был, метрики просели"
+              tone="text-amber-600 dark:text-amber-400"
+            />
+            <StatCard
+              label="Мало данных"
+              value={String(totals?.insufficient ?? 0)}
+              hint="вывод не делается"
+            />
+          </div>
+
+          {/* Продавцы */}
+          <Card className="overflow-hidden">
+            <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3 dark:border-white/10">
+              <Users className="h-4 w-4 text-slate-400" />
+              <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Продавцы</h2>
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                статус присваивается от {payload?.settings?.min_qualifying_shifts ?? 6} смен
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[720px] text-sm">
+                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-white/5 dark:text-slate-400">
+                  <tr>
+                    <th className="px-4 py-2 text-left font-medium">Продавец</th>
+                    <th className="px-4 py-2 text-right font-medium">Смен</th>
+                    <th className="px-4 py-2 text-right font-medium">Выручка</th>
+                    <th className="px-4 py-2 text-right font-medium">Балл</th>
+                    <th className="px-4 py-2 text-left font-medium">Статус</th>
+                    <th className="px-4 py-2 text-left font-medium">Уверенность</th>
+                    <th className="px-4 py-2 text-left font-medium">Сильное / слабое</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                  {cashiers.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-6 text-center text-slate-500 dark:text-slate-400">
+                        За период нет смен с указанным продавцом.
+                      </td>
+                    </tr>
+                  ) : (
+                    cashiers.map((c) => {
+                      const status = STATUSES[c.status] || STATUSES.NORMAL
+                      return (
+                        <tr key={c.cashier_id} className="hover:bg-slate-50 dark:hover:bg-white/5">
+                          <td className="px-4 py-2 font-medium text-slate-900 dark:text-white">{c.name}</td>
+                          <td className="px-4 py-2 text-right tabular-nums">{c.shifts}</td>
+                          <td className="px-4 py-2 text-right tabular-nums">{formatMoney(c.revenue)}</td>
+                          <td className={`px-4 py-2 text-right tabular-nums font-semibold ${toneFor(c.score)}`}>
+                            {c.score == null ? '—' : c.score.toFixed(2)}
+                          </td>
+                          <td className="px-4 py-2">
+                            <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${status.className}`}>
+                              {status.label}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2">
+                            <Confidence value={c.confidence} />
+                          </td>
+                          <td className="px-4 py-2 text-xs">
+                            <div className="flex flex-wrap gap-1">
+                              {c.strengths.slice(0, 2).map((m) => (
+                                <span
+                                  key={`s-${m}`}
+                                  className="inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
+                                >
+                                  <TrendingUp className="h-3 w-3" />
+                                  {METRIC_LABELS[m] || m}
+                                </span>
+                              ))}
+                              {c.weaknesses.slice(0, 2).map((m) => (
+                                <span
+                                  key={`w-${m}`}
+                                  className="inline-flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"
+                                >
+                                  <TrendingDown className="h-3 w-3" />
+                                  {METRIC_LABELS[m] || m}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
+          {/* Смены */}
+          <Card className="overflow-hidden">
+            <div className="border-b border-slate-200 px-4 py-3 dark:border-white/10">
+              <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Смены</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Нажмите на смену, чтобы увидеть, из чего сложился вывод
+              </p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[820px] text-sm">
+                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-white/5 dark:text-slate-400">
+                  <tr>
+                    <th className="px-4 py-2 text-left font-medium">Дата</th>
+                    <th className="px-4 py-2 text-left font-medium">Смена</th>
+                    <th className="px-4 py-2 text-left font-medium">Продавец</th>
+                    <th className="px-4 py-2 text-right font-medium">Касса</th>
+                    <th className="px-4 py-2 text-right font-medium">Поток</th>
+                    <th className="px-4 py-2 text-right font-medium">Балл</th>
+                    <th className="px-4 py-2 text-left font-medium">Вывод</th>
+                    <th className="px-4 py-2 text-left font-medium">Уверенность</th>
+                    <th className="w-8" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                  {shifts.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="px-4 py-6 text-center text-slate-500 dark:text-slate-400">
+                        За выбранный период смен магазина нет.
+                      </td>
+                    </tr>
+                  ) : (
+                    shifts.map((s) => {
+                      const key = `${s.date}|${s.shift}|${s.cashier_id ?? 'none'}`
+                      const revenueRatio = ratioOf(s.revenue, s.expected_revenue)
+                      const trafficRatio = ratioOf(s.club_revenue, s.expected_club_revenue)
+                      const isOpen = openShift === key
+                      return (
+                        <Fragment key={key}>
+                          <tr
+                            onClick={() => setOpenShift(isOpen ? null : key)}
+                            className="cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5"
+                          >
+                            <td className="px-4 py-2 tabular-nums">{s.date}</td>
+                            <td className="px-4 py-2">{s.shift === 'night' ? 'Ночь' : 'День'}</td>
+                            <td className="px-4 py-2">{s.cashier_name || '—'}</td>
+                            <td className="px-4 py-2 text-right tabular-nums">
+                              <div>{formatMoney(s.revenue)}</div>
+                              <div className={`text-xs ${toneFor(revenueRatio)}`}>
+                                {s.expected_revenue == null ? 'нет ожидания' : `${deltaPct(revenueRatio)} к ожиданию`}
+                              </div>
+                            </td>
+                            <td className="px-4 py-2 text-right tabular-nums">
+                              <div>{s.club_revenue == null ? '—' : formatMoney(s.club_revenue)}</div>
+                              <div className={`text-xs ${toneFor(trafficRatio)}`}>
+                                {trafficRatio == null ? 'нет данных' : `${deltaPct(trafficRatio)} к ожиданию`}
+                              </div>
+                            </td>
+                            <td className={`px-4 py-2 text-right tabular-nums font-semibold ${toneFor(s.score)}`}>
+                              {s.score == null ? '—' : s.score.toFixed(2)}
+                            </td>
+                            <td className="px-4 py-2">
+                              <VerdictBadge verdict={s.verdict} />
+                            </td>
+                            <td className="px-4 py-2">
+                              <Confidence value={s.confidence} />
+                            </td>
+                            <td className="px-2 py-2 text-slate-400">
+                              <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                            </td>
+                          </tr>
+                          {isOpen ? (
+                            <tr className="bg-slate-50/60 dark:bg-white/[0.02]">
+                              <td colSpan={9} className="px-4 py-4">
+                                <ShiftDetail
+                                  companyId={payload?.company?.id || ''}
+                                  date={s.date}
+                                  shift={s.shift}
+                                  explanation={s.explanation}
+                                  canAskAi
+                                />
+                              </td>
+                            </tr>
+                          ) : null}
+                        </Fragment>
+                      )
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
+          <p className="px-1 text-xs text-slate-400 dark:text-slate-500">
+            Модель {payload?.model_version || '—'}. Балл — это отношение метрик продавца к норме для
+            сопоставимых условий (сезон, день недели, смена), а не доля от плана. Ожидания считаются по
+            истории до начала периода и без учёта собственных смен продавца.
+          </p>
+        </>
+          )}
+        </>
+      )}
+    </div>
+  )
+}

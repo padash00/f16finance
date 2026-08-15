@@ -185,6 +185,7 @@ export const navSections: NavSection[] = [
       { href: '/tasks', label: 'Задачи', icon: FolderKanban, note: 'Текущая работа', badge: '12', badgeColor: 'red' },
       { href: '/shifts', label: 'Смены', icon: CalendarClock, note: 'График и сменность' },
       { href: '/shifts/reports', label: 'Отчёты смен', icon: CalendarClock, note: 'Закрытые смены точек', badge: 'new', badgeColor: 'green' },
+      { href: '/sales-kpi', label: 'Эффективность продавцов', icon: Gauge, note: 'Поток или продавец: честный разбор смены', badge: 'new', badgeColor: 'green', isNew: true, feature: 'addon.sales_kpi' },
       { href: '/incidents', label: 'Инциденты', icon: ClipboardCheck, note: 'Штрафы, бонусы, заметки', badge: 'new', badgeColor: 'green' },
       // Правила, чек-листы и экзамены — один цикл, поэтому один пункт с вкладками.
       { href: '/regulations', label: 'Регламенты точки', icon: BookOpen, note: 'Правила, чек-листы, экзамены', badge: 'new', badgeColor: 'green', isNew: true },
