@@ -157,7 +157,7 @@ export async function POST(request: Request) {
     if (action === 'save_settings') {
       const { data: before } = await supabase
         .from('store_kpi_settings')
-        .select('latitude, longitude, require_product_test_for_top_bonus')
+        .select('latitude, longitude, require_product_test_for_top_bonus, weather_adjusts_bonus_threshold')
         .eq('company_id', companyId)
         .maybeSingle()
 
@@ -169,19 +169,27 @@ export async function POST(request: Request) {
       const latitude = Number.isFinite(lat) && Math.abs(lat) <= 90 ? lat : null
       const longitude = Number.isFinite(lon) && Math.abs(lon) <= 180 ? lon : null
 
-      const { error } = await supabase.from('store_kpi_settings').upsert(
-        {
-          organization_id: company.organization_id,
-          company_id: companyId,
-          latitude,
-          longitude,
-          weather_adjusts_bonus_threshold: body.weather_adjusts_bonus_threshold === true,
-          require_product_test_for_top_bonus: body.require_product_test_for_top_bonus === true,
-          updated_by: access.user?.id || null,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'company_id' },
-      )
+      // Пишем только то, что реально пришло в запросе. Раньше форма без поля
+      // «погода двигает пороги» молча выключала его при каждом сохранении
+      // координат — настройка сбрасывалась, а причину найти было негде.
+      const patch: Record<string, unknown> = {
+        organization_id: company.organization_id,
+        company_id: companyId,
+        latitude,
+        longitude,
+        updated_by: access.user?.id || null,
+        updated_at: new Date().toISOString(),
+      }
+      if ('require_product_test_for_top_bonus' in body) {
+        patch.require_product_test_for_top_bonus = body.require_product_test_for_top_bonus === true
+      }
+      if ('weather_adjusts_bonus_threshold' in body) {
+        patch.weather_adjusts_bonus_threshold = body.weather_adjusts_bonus_threshold === true
+      }
+
+      const { error } = await supabase
+        .from('store_kpi_settings')
+        .upsert(patch, { onConflict: 'company_id' })
       if (error) throw error
 
       await writeAuditLog(supabase, {

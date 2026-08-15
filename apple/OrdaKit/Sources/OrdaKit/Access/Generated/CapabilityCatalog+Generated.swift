@@ -807,7 +807,7 @@ extension CapabilityCatalog {
                 CapabilityPage(
                     id: "sales-kpi",
                     path: "/sales-kpi",
-                    extraPaths: ["/sales-kpi/payout"],
+                    extraPaths: [],
                     label: "Эффективность продавцов",
                     capabilities: [
                         Capability(id: "sales-kpi.view", label: "Просмотр", description: nil, severity: .low, deps: []),

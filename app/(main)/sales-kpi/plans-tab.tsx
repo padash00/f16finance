@@ -10,12 +10,14 @@
  */
 
 import { useMemo, useState } from 'react'
-import { AlertTriangle, CalendarClock, Check, Loader2, Lock, Pencil, RefreshCw } from 'lucide-react'
+import { AlertTriangle, CalendarClock, Check, Loader2, Lock, Pencil, RefreshCw, Target } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { formatMoney } from '@/lib/core/format'
 import { useApi } from '@/lib/hooks/use-api'
+
+import { SectionIntro } from './section-intro'
 
 type PlanRow = {
   date: string
@@ -138,6 +140,20 @@ export function PlansTab(props: { companyId: string; canManage: boolean }) {
 
   return (
     <div className="space-y-4">
+      <SectionIntro
+        icon={<Target className="h-5 w-5" />}
+        tone="sky"
+        title="Цели на смену"
+        what="Три уровня выручки, к которым продавцу идти в смену. Это цель и ориентир, а не обещание денег: за оборот платят правила зарплаты, как и раньше."
+        todo={[
+          'Посмотреть, какие цели стоят на ближайшие дни',
+          '«Пересчитать планы» — если менялись цены или ассортимент',
+          '«Зафиксировать» — чтобы цель на смену больше не менялась',
+          'Карандашом можно поправить уровень вручную, но нужно указать причину',
+        ]}
+        how="Уровни берутся из выручки похожих смен за прошлое: тот же сезон, тот же день недели, дневная или ночная. B1 — то, что берут чаще половины раз, B3 — то, что даётся редко. Суммы округляются вверх, чтобы цель запоминалась."
+      />
+
       {/* Месячный индекс */}
       <Card className="p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">

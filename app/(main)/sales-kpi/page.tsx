@@ -12,7 +12,11 @@
 
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import {
+  Check,
   ChevronDown,
+  CloudSun,
+  GraduationCap,
+  ShoppingBag,
   Gauge,
   Info,
   Loader2,
@@ -35,6 +39,7 @@ import { formatMoney } from '@/lib/core/format'
 import { mutateApi, useApi } from '@/lib/hooks/use-api'
 
 import { AccuracyTab } from './accuracy-tab'
+import { SectionIntro } from './section-intro'
 import { MoneyMapTab } from './money-map-tab'
 import { PayoutTab } from './payout-tab'
 import { PlansTab } from './plans-tab'
@@ -294,7 +299,12 @@ type SettingsData = {
   }[]
 }
 
-function SettingsModal(props: { companyId: string; onClose: () => void; onSaved: () => void }) {
+function SettingsModal(props: {
+  companyId: string
+  companyName: string
+  onClose: () => void
+  onSaved: () => void
+}) {
   const key = `/api/admin/sales-kpi/settings?company_id=${props.companyId}`
   const { data, loading, refresh } = useApi<{ data: SettingsData }>(key)
   const payload = data?.data
@@ -308,6 +318,7 @@ function SettingsModal(props: { companyId: string; onClose: () => void; onSaved:
   const [source, setSource] = useState('')
   const [target, setTarget] = useState('')
   const [busy, setBusy] = useState(false)
+  const [saved, setSaved] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
 
   useEffect(() => {
@@ -316,28 +327,6 @@ function SettingsModal(props: { companyId: string; onClose: () => void; onSaved:
     setLon(payload.settings.longitude == null ? '' : String(payload.settings.longitude))
     setTestGate(Boolean(payload.settings.require_product_test_for_top_bonus))
   }, [payload])
-
-  function saveSettings() {
-    return post({
-      action: 'save_settings',
-      latitude: lat === '' ? null : Number(lat),
-      longitude: lon === '' ? null : Number(lon),
-      require_product_test_for_top_bonus: testGate,
-    })
-  }
-
-  const refName = (kind: 'category' | 'item', id: string) => {
-    const list = kind === 'category' ? payload?.categories : payload?.items
-    const found = list?.find((x) => x.id === id)
-    if (!found) return '—'
-    return kind === 'item' ? `товар «${found.name}»` : found.name
-  }
-
-  const parseRef = (value: string): { kind: 'category' | 'item'; ref: string } | null => {
-    const [kind, ref] = value.split(':')
-    if (!ref) return null
-    return { kind: kind === 'item' ? 'item' : 'category', ref }
-  }
 
   async function post(body: Record<string, unknown>) {
     setBusy(true)
@@ -352,10 +341,27 @@ function SettingsModal(props: { companyId: string; onClose: () => void; onSaved:
       if (!res.ok) throw new Error(json?.error || `HTTP ${res.status}`)
       await refresh()
       props.onSaved()
+      return true
     } catch (e) {
       setProblem(e instanceof Error ? e.message : 'Не удалось сохранить')
+      return false
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function saveSettings() {
+    const ok = await post({
+      action: 'save_settings',
+      latitude: lat === '' ? null : Number(lat),
+      longitude: lon === '' ? null : Number(lon),
+      require_product_test_for_top_bonus: testGate,
+    })
+    if (ok) {
+      // Подтверждение вместо молчания, а затем закрытие: раньше окно просто
+      // оставалось открытым, и было непонятно, сохранилось ли вообще.
+      setSaved(true)
+      setTimeout(() => props.onClose(), 900)
     }
   }
 
@@ -374,199 +380,290 @@ function SettingsModal(props: { companyId: string; onClose: () => void; onSaved:
     }
   }
 
+  const refName = (kind: 'category' | 'item', id: string) => {
+    const list = kind === 'category' ? payload?.categories : payload?.items
+    const found = list?.find((x) => x.id === id)
+    if (!found) return '—'
+    return kind === 'item' ? `товар «${found.name}»` : found.name
+  }
+
+  const parseRef = (value: string): { kind: 'category' | 'item'; ref: string } | null => {
+    const [kind, ref] = value.split(':')
+    if (!ref) return null
+    return { kind: kind === 'item' ? 'item' : 'category', ref }
+  }
+
+  const hasCoords = lat !== '' && lon !== ''
+  const rules = payload?.rules || []
+
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4 backdrop-blur-sm">
-      <div className="mt-10 w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-xl dark:border-white/10 dark:bg-slate-900">
-        <div className="mb-4 flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-base font-semibold text-slate-900 dark:text-white">Настройка модели</h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Влияет на оценку людей — каждое изменение попадает в журнал действий
-            </p>
+    <div
+      className="fixed inset-0 z-[200] flex items-start justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm"
+      onClick={props.onClose}
+    >
+      <div
+        className="my-8 w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-white/10 dark:bg-slate-900"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Шапка */}
+        <div className="relative overflow-hidden border-b border-slate-200 bg-gradient-to-r from-sky-50 via-white to-white px-6 py-5 dark:border-white/10 dark:from-sky-950/40 dark:via-slate-900 dark:to-slate-900">
+          <div className="pointer-events-none absolute -right-12 -top-12 h-40 w-40 rounded-full bg-sky-500/10 blur-3xl" />
+          <div className="relative flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-sky-400/30 to-indigo-400/20 text-sky-700 dark:text-sky-200">
+                <Settings className="h-5 w-5" />
+              </span>
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Настройки</h2>
+                <div className="mt-0.5 flex flex-wrap items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                  <span className="rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-white/10 dark:text-slate-200">
+                    {props.companyName}
+                  </span>
+                  <span>настройки относятся к этой точке</span>
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={props.onClose}
+              className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-white"
+              aria-label="Закрыть"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
-          <button
-            onClick={props.onClose}
-            className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10"
-            aria-label="Закрыть"
-          >
-            <X className="h-4 w-4" />
-          </button>
         </div>
 
         {loading ? (
-          <div className="flex items-center gap-2 py-8 text-sm text-slate-500">
-            <Loader2 className="h-4 w-4 animate-spin" /> Загружаем настройки…
+          <div className="flex items-center justify-center gap-2 p-12 text-sm text-slate-500 dark:text-slate-400">
+            <Loader2 className="h-5 w-5 animate-spin" /> Загружаем настройки…
           </div>
         ) : (
-          <div className="space-y-6">
+          <div className="max-h-[70vh] space-y-5 overflow-y-auto p-6">
             {/* Погода */}
-            <section>
-              <h3 className="text-sm font-medium text-slate-900 dark:text-white">Координаты точки</h3>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                Нужны, чтобы собирать погоду. Погода влияет на ожидаемый поток и на объяснение смены, но не
-                на бонусные пороги: продавец не отвечает за дождь. Без координат погода просто не
-                собирается.
-              </p>
-              <div className="mt-2 flex flex-wrap items-end gap-2">
-                <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
-                  Широта
-                  <input
-                    type="number"
-                    step="0.000001"
-                    value={lat}
-                    onChange={(e) => setLat(e.target.value)}
-                    placeholder="43.238949"
-                    className="w-36 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm dark:border-white/10 dark:bg-slate-900 dark:text-white"
-                  />
-                </label>
-                <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
-                  Долгота
-                  <input
-                    type="number"
-                    step="0.000001"
-                    value={lon}
-                    onChange={(e) => setLon(e.target.value)}
-                    placeholder="76.889709"
-                    className="w-36 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm dark:border-white/10 dark:bg-slate-900 dark:text-white"
-                  />
-                </label>
-              </div>
-            </section>
+            <section className="rounded-xl border border-slate-200 p-4 dark:border-white/10">
+              <div className="flex items-start gap-3">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-300">
+                  <CloudSun className="h-4.5 w-4.5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
+                    Где находится магазин
+                  </h3>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                    Координаты нужны только для погоды: по ним берётся прогноз вашего города. Погода
+                    объясняет, почему покупателей было больше или меньше, но на бонусы не влияет —
+                    продавец за дождь не отвечает.
+                  </p>
 
-            {/* Ворота по знанию товара */}
-            <section>
-              <h3 className="text-sm font-medium text-slate-900 dark:text-white">Ворота по знанию товара</h3>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                Если включить, верхние уровни (B3 и рекорд) будут доступны только продавцам, сдавшим тест.
-                B1 и B2 остаются доступны всегда. Включайте, только если тесты действительно проводятся:
-                иначе уровень срежется всем за отсутствие данных, а не за незнание.
-              </p>
-              <label className="mt-2 flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
-                <input
-                  type="checkbox"
-                  checked={testGate}
-                  onChange={(e) => setTestGate(e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-300 dark:border-white/20"
-                />
-                Требовать сданный тест для B3 и рекорда
-              </label>
-            </section>
-
-            {/* Правила допродаж */}
-            <section>
-              <h3 className="text-sm font-medium text-slate-900 dark:text-white">Правила допродаж</h3>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                «Взяли из первой категории — предложи из второй». Возможность засчитывается по первой,
-                успех — когда в чеке оказалась вторая.
-              </p>
-
-              <div className="mt-2 space-y-1">
-                {(payload?.rules || []).length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">
-                    Правил нет — метрика допродаж не считается.
-                  </div>
-                ) : (
-                  (payload?.rules || []).map((r) => (
-                    <div
-                      key={r.id}
-                      className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-white/10"
+                  <div className="mt-3 flex flex-wrap items-end gap-3">
+                    <label className="flex flex-col gap-1">
+                      <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Широта</span>
+                      <input
+                        type="number"
+                        step="0.000001"
+                        value={lat}
+                        onChange={(e) => setLat(e.target.value)}
+                        placeholder="43.238949"
+                        className="w-40 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100 dark:border-white/10 dark:bg-slate-950 dark:text-white dark:focus:ring-sky-500/20"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Долгота</span>
+                      <input
+                        type="number"
+                        step="0.000001"
+                        value={lon}
+                        onChange={(e) => setLon(e.target.value)}
+                        placeholder="76.889709"
+                        className="w-40 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100 dark:border-white/10 dark:bg-slate-950 dark:text-white dark:focus:ring-sky-500/20"
+                      />
+                    </label>
+                    <span
+                      className={`mb-2 text-xs ${
+                        hasCoords
+                          ? 'text-emerald-600 dark:text-emerald-400'
+                          : 'text-slate-400 dark:text-slate-500'
+                      }`}
                     >
-                      <span className="text-slate-700 dark:text-slate-200">
-                        {refName(r.source_kind, r.source_ref)} → {refName(r.target_kind, r.target_ref)}
-                      </span>
-                      <button
-                        onClick={() => void removeRule(r.id)}
-                        disabled={busy}
-                        className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10"
-                        aria-label="Удалить правило"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
+                      {hasCoords ? 'погода собирается' : 'без координат погода не собирается'}
+                    </span>
+                  </div>
 
-              {(payload?.categories || []).length === 0 && (payload?.items || []).length === 0 ? (
-                <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
-                  В каталоге точки нет ни категорий, ни товаров — сначала заполните каталог магазина.
-                </p>
-              ) : (
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  {([
-                    ['Что купили', source, setSource],
-                    ['Что предложить', target, setTarget],
-                  ] as const).map(([placeholder, value, setValue], i) => (
-                    <Fragment key={placeholder}>
-                      {i === 1 ? <span className="text-slate-400">→</span> : null}
-                      <select
-                        value={value}
-                        onChange={(e) => setValue(e.target.value)}
-                        className="max-w-[220px] rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm dark:border-white/10 dark:bg-slate-900 dark:text-white"
-                      >
-                        <option value="">{placeholder}</option>
-                        <optgroup label="Категории">
-                          {(payload?.categories || []).map((c) => (
-                            <option key={`c-${c.id}`} value={`category:${c.id}`}>
-                              {c.name}
-                            </option>
-                          ))}
-                        </optgroup>
-                        <optgroup label="Товары">
-                          {(payload?.items || []).map((it) => (
-                            <option key={`i-${it.id}`} value={`item:${it.id}`}>
-                              {it.name}
-                            </option>
-                          ))}
-                        </optgroup>
-                      </select>
-                    </Fragment>
-                  ))}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={busy || !source || !target || source === target}
-                    onClick={() => {
-                      const a = parseRef(source)
-                      const b = parseRef(target)
-                      if (!a || !b) return
-                      void post({
-                        action: 'add_rule',
-                        source_kind: a.kind,
-                        source_ref: a.ref,
-                        target_kind: b.kind,
-                        target_ref: b.ref,
-                      }).then(() => {
-                        setSource('')
-                        setTarget('')
-                      })
-                    }}
-                  >
-                    <Plus className="mr-1 h-3.5 w-3.5" /> Добавить
-                  </Button>
+                  <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+                    Как узнать: откройте Google Карты, нажмите правой кнопкой на здание магазина — первая
+                    строка меню и есть эти два числа.
+                  </p>
                 </div>
-              )}
+              </div>
             </section>
 
-            {problem ? <p className="text-sm text-rose-600 dark:text-rose-400">{problem}</p> : null}
+            {/* Ворота */}
+            <section className="rounded-xl border border-slate-200 p-4 dark:border-white/10">
+              <div className="flex items-start gap-3">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-300">
+                  <GraduationCap className="h-4.5 w-4.5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Знание товара</h3>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                    Верхние уровни (B3 и рекорд) можно закрыть для тех, кто не сдал тест. Включайте,
+                    только если тесты действительно проводятся: иначе уровень срежется всем за
+                    отсутствие данных, а не за незнание.
+                  </p>
 
-            {/* Одна кнопка на всю форму: точка-клуб, координаты и ворота
-                сохраняются вместе. Правила допродаж — отдельные действия,
-                они применяются сразу при добавлении и удалении. */}
-            <div className="flex items-center justify-end gap-2 border-t border-slate-200 pt-4 dark:border-white/10">
-              <span className="mr-auto text-xs text-slate-400">
-                Правила допродаж сохраняются сразу
-              </span>
-              <Button variant="outline" size="sm" onClick={props.onClose}>
-                Закрыть
-              </Button>
-              <Button size="sm" disabled={busy} onClick={() => void saveSettings()}>
-                {busy ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
-                Сохранить настройки
-              </Button>
-            </div>
+                  <label className="mt-3 flex cursor-pointer items-center gap-2.5 rounded-lg border border-slate-200 px-3 py-2.5 transition hover:bg-slate-50 dark:border-white/10 dark:hover:bg-white/5">
+                    <input
+                      type="checkbox"
+                      checked={testGate}
+                      onChange={(e) => setTestGate(e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300 text-sky-600 dark:border-white/20"
+                    />
+                    <span className="text-sm text-slate-700 dark:text-slate-200">
+                      Требовать сданный тест для B3 и рекорда
+                    </span>
+                  </label>
+                </div>
+              </div>
+            </section>
+
+            {/* Допродажи */}
+            <section className="rounded-xl border border-slate-200 p-4 dark:border-white/10">
+              <div className="flex items-start gap-3">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300">
+                  <ShoppingBag className="h-4.5 w-4.5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-baseline gap-2">
+                    <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Допродажи</h3>
+                    <span className="text-xs text-slate-400">
+                      {rules.length > 0 ? `${rules.length} прав.` : 'сохраняются сразу'}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                    «Взяли одно — предложи другое». Модуль считает, как часто продавец добавлял второе к
+                    первому. Можно указать и категорию, и конкретный товар.
+                  </p>
+
+                  <div className="mt-3 space-y-1.5">
+                    {rules.length === 0 ? (
+                      <div className="rounded-lg border border-dashed border-slate-200 px-3 py-5 text-center dark:border-white/10">
+                        <p className="text-sm text-slate-500 dark:text-slate-400">Правил пока нет</p>
+                        <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
+                          Пока их нет, допродажи не считаются и в оценке не участвуют
+                        </p>
+                      </div>
+                    ) : (
+                      rules.map((r) => (
+                        <div
+                          key={r.id}
+                          className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm dark:bg-white/5"
+                        >
+                          <span className="text-slate-700 dark:text-slate-200">
+                            {refName(r.source_kind, r.source_ref)}
+                          </span>
+                          <span className="text-slate-400">→</span>
+                          <span className="text-slate-700 dark:text-slate-200">
+                            {refName(r.target_kind, r.target_ref)}
+                          </span>
+                          <button
+                            onClick={() => void removeRule(r.id)}
+                            disabled={busy}
+                            className="ml-auto rounded p-1 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10"
+                            aria-label="Удалить правило"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {(payload?.categories || []).length === 0 && (payload?.items || []).length === 0 ? (
+                    <p className="mt-3 text-xs text-amber-600 dark:text-amber-400">
+                      В каталоге точки нет ни категорий, ни товаров — сначала заполните каталог магазина.
+                    </p>
+                  ) : (
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      {([
+                        ['Что купили', source, setSource],
+                        ['Что предложить', target, setTarget],
+                      ] as const).map(([placeholder, value, setValue], i) => (
+                        <Fragment key={placeholder}>
+                          {i === 1 ? <span className="text-slate-400">→</span> : null}
+                          <select
+                            value={value}
+                            onChange={(e) => setValue(e.target.value)}
+                            className="max-w-[200px] flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 dark:border-white/10 dark:bg-slate-950 dark:text-white dark:focus:ring-emerald-500/20"
+                          >
+                            <option value="">{placeholder}</option>
+                            <optgroup label="Категории">
+                              {(payload?.categories || []).map((c) => (
+                                <option key={`c-${c.id}`} value={`category:${c.id}`}>
+                                  {c.name}
+                                </option>
+                              ))}
+                            </optgroup>
+                            <optgroup label="Товары">
+                              {(payload?.items || []).map((it) => (
+                                <option key={`i-${it.id}`} value={`item:${it.id}`}>
+                                  {it.name}
+                                </option>
+                              ))}
+                            </optgroup>
+                          </select>
+                        </Fragment>
+                      ))}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy || !source || !target || source === target}
+                        onClick={() => {
+                          const a = parseRef(source)
+                          const b = parseRef(target)
+                          if (!a || !b) return
+                          void post({
+                            action: 'add_rule',
+                            source_kind: a.kind,
+                            source_ref: a.ref,
+                            target_kind: b.kind,
+                            target_ref: b.ref,
+                          }).then(() => {
+                            setSource('')
+                            setTarget('')
+                          })
+                        }}
+                      >
+                        <Plus className="mr-1 h-3.5 w-3.5" /> Добавить
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </section>
+
+            {problem ? (
+              <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
+                {problem}
+              </p>
+            ) : null}
           </div>
         )}
+
+        {/* Подвал */}
+        <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-slate-50/60 px-6 py-4 dark:border-white/10 dark:bg-white/[0.02]">
+          {saved ? (
+            <span className="mr-auto flex items-center gap-1.5 text-sm text-emerald-600 dark:text-emerald-400">
+              <Check className="h-4 w-4" /> Сохранено
+            </span>
+          ) : null}
+          <Button variant="outline" size="sm" onClick={props.onClose}>
+            Закрыть
+          </Button>
+          <Button size="sm" disabled={busy} onClick={() => void saveSettings()}>
+            {busy ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
+            Сохранить
+          </Button>
+        </div>
       </div>
     </div>
   )
@@ -696,6 +793,7 @@ export default function SalesKpiPage() {
       {showSettings && payload?.company ? (
         <SettingsModal
           companyId={payload.company.id}
+          companyName={payload.company.name}
           onClose={() => setShowSettings(false)}
           onSaved={() => mutateApi(apiKey)}
         />
@@ -723,19 +821,19 @@ export default function SalesKpiPage() {
         </Card>
       ) : (
         <>
-          <div className="flex gap-1 rounded-xl border border-slate-200 bg-white p-1 dark:border-white/10 dark:bg-slate-900/60">
+          <div className="flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-1 dark:border-white/10 dark:bg-slate-900/60">
             {([
               ['payout', 'Кому доплатить'],
-              ['review', 'Разбор смен'],
-              ['plans', 'Планы смен'],
-              ['accuracy', 'Точность и калибровка'],
-              ['quality', 'Данные и деньги'],
-              ['money', 'Карта денег'],
+              ['review', 'Почему такая касса'],
+              ['plans', 'Цели на смену'],
+              ['quality', 'Качество данных'],
+              ['accuracy', 'Проверка модели'],
+              ['money', 'Где что настроено'],
             ] as const).map(([id, label]) => (
               <button
                 key={id}
                 onClick={() => setTab(id)}
-                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                className={`rounded-lg px-3.5 py-2 text-sm font-medium transition-colors ${
                   tab === id
                     ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
                     : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10'
@@ -773,6 +871,20 @@ export default function SalesKpiPage() {
               </ul>
             </Card>
           ) : null}
+
+          <SectionIntro
+            icon={<Gauge className="h-5 w-5" />}
+            tone="emerald"
+            title="Почему такая касса"
+            what="Разбор каждой смены: касса получилась такой из-за того, что мало людей зашло, или из-за того, как продавец с ними работал. Это два разных ответа, и путать их нельзя — за пустой вечер человек не отвечает."
+            todo={[
+              'Посмотреть, где виноват спрос, а где есть вопрос к продавцу',
+              'Нажать на смену — раскроется полный разбор словами',
+              'В разборе есть ссылка на чеки и позиции этой смены',
+              'Кнопка «Объяснить словами» добавит связный текст от ИИ',
+            ]}
+            how="Каждая смена сравнивается не со средним по году, а с похожими сменами: тот же сезон, тот же день недели, дневная или ночная. Число чеков считается мерой спроса — привести людей в магазин продавец не может, а вот средний чек и допродажи зависят от него."
+          />
 
           {/* Сводка */}
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">

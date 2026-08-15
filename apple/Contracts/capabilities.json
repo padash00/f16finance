@@ -2665,9 +2665,7 @@
         {
           "id": "sales-kpi",
           "path": "/sales-kpi",
-          "extraPaths": [
-            "/sales-kpi/payout"
-          ],
+          "extraPaths": [],
           "label": "Эффективность продавцов",
           "capabilities": [
             {

@@ -20,6 +20,8 @@ import { Card } from '@/components/ui/card'
 import { formatMoney } from '@/lib/core/format'
 import { useApi } from '@/lib/hooks/use-api'
 
+import { SectionIntro } from './section-intro'
+
 type QualityCheck = { key: string; label: string; value: number; ok: boolean; hint: string }
 
 type Anomaly = {
@@ -181,6 +183,20 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
 
   return (
     <div className="space-y-4">
+      <SectionIntro
+        icon={<ShieldCheck className="h-5 w-5" />}
+        tone="amber"
+        title="Качество данных"
+        what="Показывает, можно ли вообще доверять оценкам людей. Если в чеках нет позиций или у половины смен не указан кассир, оценка будет говорить больше о дырах в учёте, чем о работе продавцов."
+        todo={[
+          'Посмотреть, где данные дырявые — и починить учёт, а не оценку',
+          'Пометить странные смены: дубли, сбои кассы, тестовые продажи',
+          'Отметить, что мешало работать: не было товара, акция, простой',
+          'Начислить месячный бонус, если ещё не начислили',
+        ]}
+        how="Проверяются шесть участков учёта. Детектор аномалий сравнивает каждую смену с остальными и предлагает то, что выбивается, — но помечает человек, а не система."
+      />
+
       {/* Качество данных */}
       <Card className="p-4">
         <div className="flex items-center gap-2">

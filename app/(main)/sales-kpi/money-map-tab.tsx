@@ -19,6 +19,8 @@ import { Card } from '@/components/ui/card'
 import { formatMoney } from '@/lib/core/format'
 import { useApi } from '@/lib/hooks/use-api'
 
+import { SectionIntro } from './section-intro'
+
 type SalaryRule = {
   id: number
   shift_type: string
@@ -94,6 +96,19 @@ export function MoneyMapTab(props: { companyId: string }) {
 
   return (
     <div className="space-y-4">
+      <SectionIntro
+        icon={<Coins className="h-5 w-5" />}
+        tone="slate"
+        title="Где что настроено"
+        what="Деньги продавца складываются из двух мест: ставка и бонусы за оборот — в правилах зарплаты, доплата за качество — здесь. По отдельности каждое выглядит правильным, а вместе может противоречить."
+        todo={[
+          'Проверить, не платится ли за одну смену дважды',
+          'Посмотреть, кто и когда менял денежные настройки',
+          'Открыть правила зарплаты, если пороги нужно поправить',
+        ]}
+        how="Слева — настоящие правила зарплаты этой точки, справа — настройки этого модуля. Внизу история изменений: кто, когда и с какой причиной."
+      />
+
       {/* Противоречия */}
       {(payload?.conflicts || []).length > 0 ? (
         <Card className="border-amber-200 bg-amber-50/60 p-4 dark:border-amber-400/20 dark:bg-amber-500/10">

@@ -17,6 +17,8 @@ import { Card } from '@/components/ui/card'
 import { formatMoney } from '@/lib/core/format'
 import { useApi } from '@/lib/hooks/use-api'
 
+import { SectionIntro } from './section-intro'
+
 type Calibration = {
   level: string
   rate: number
@@ -105,6 +107,19 @@ export function AccuracyTab(props: { companyId: string }) {
 
   return (
     <div className="space-y-4">
+      <SectionIntro
+        icon={<Target className="h-5 w-5" />}
+        tone="violet"
+        title="Проверка модели"
+        what="Экран, чтобы убедиться, что цели поставлены разумно. Если цель берут почти все — она ничего не двигает; если почти никто — она злит, а не мотивирует."
+        todo={[
+          'Посмотреть, какая доля смен берёт каждый уровень',
+          'Если написано «слишком легко» или «слишком трудно» — поменять перцентили в настройках',
+          'Сверить, насколько ожидание вообще попадает в факт',
+        ]}
+        how="Вся история точки прогоняется через модель день за днём: цель на каждый день считается только по тем данным, которые были известны к его началу. Заглянуть вперёд модель не может — иначе она выглядела бы точнее, чем есть."
+      />
+
       <Card className="p-4">
         <div className="flex items-center gap-2">
           <Target className="h-4 w-4 text-slate-400" />
