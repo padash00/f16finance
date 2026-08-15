@@ -351,10 +351,14 @@ function SettingsModal(props: {
   }
 
   async function saveSettings() {
+    if (coordsBroken) {
+      setProblem('Координаты записаны неверно. Нужны числа, например 49.96103 и 82.593714.')
+      return
+    }
     const ok = await post({
       action: 'save_settings',
-      latitude: lat === '' ? null : Number(lat),
-      longitude: lon === '' ? null : Number(lon),
+      latitude: latValue,
+      longitude: lonValue,
       require_product_test_for_top_bonus: testGate,
     })
     if (ok) {
@@ -393,7 +397,20 @@ function SettingsModal(props: {
     return { kind: kind === 'item' ? 'item' : 'category', ref }
   }
 
-  const hasCoords = lat !== '' && lon !== ''
+  // В русской раскладке дробные вводят через запятую, а Number('49,96') даёт
+  // NaN — координаты молча не сохранялись, хотя экран писал «погода
+  // собирается». Приводим к точке и проверяем перед отправкой.
+  const parseCoord = (raw: string): number | null => {
+    const value = raw.trim().replace(',', '.')
+    if (value === '') return null
+    const n = Number(value)
+    return Number.isFinite(n) ? n : NaN
+  }
+
+  const latValue = parseCoord(lat)
+  const lonValue = parseCoord(lon)
+  const coordsBroken = Number.isNaN(latValue) || Number.isNaN(lonValue)
+  const hasCoords = latValue != null && lonValue != null && !coordsBroken
   const rules = payload?.rules || []
 
   return (
@@ -401,12 +418,14 @@ function SettingsModal(props: {
       className="fixed inset-0 z-[200] flex items-start justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm"
       onClick={props.onClose}
     >
+      {/* Колонка на всю доступную высоту: шапка и подвал фиксированы, прокрутка
+          только у содержимого — иначе последняя секция уезжала под кнопки. */}
       <div
-        className="my-8 w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-white/10 dark:bg-slate-900"
+        className="my-6 flex max-h-[calc(100vh-3rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-white/10 dark:bg-slate-900"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Шапка */}
-        <div className="relative overflow-hidden border-b border-slate-200 bg-gradient-to-r from-sky-50 via-white to-white px-6 py-5 dark:border-white/10 dark:from-sky-950/40 dark:via-slate-900 dark:to-slate-900">
+        <div className="relative shrink-0 overflow-hidden border-b border-slate-200 bg-gradient-to-r from-sky-50 via-white to-white px-6 py-5 dark:border-white/10 dark:from-sky-950/40 dark:via-slate-900 dark:to-slate-900">
           <div className="pointer-events-none absolute -right-12 -top-12 h-40 w-40 rounded-full bg-sky-500/10 blur-3xl" />
           <div className="relative flex items-start justify-between gap-4">
             <div className="flex items-start gap-3">
@@ -438,7 +457,7 @@ function SettingsModal(props: {
             <Loader2 className="h-5 w-5 animate-spin" /> Загружаем настройки…
           </div>
         ) : (
-          <div className="max-h-[70vh] space-y-5 overflow-y-auto p-6">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
             {/* Погода */}
             <section className="rounded-xl border border-slate-200 p-4 dark:border-white/10">
               <div className="flex items-start gap-3">
@@ -459,8 +478,8 @@ function SettingsModal(props: {
                     <label className="flex flex-col gap-1">
                       <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Широта</span>
                       <input
-                        type="number"
-                        step="0.000001"
+                        type="text"
+                        inputMode="decimal"
                         value={lat}
                         onChange={(e) => setLat(e.target.value)}
                         placeholder="43.238949"
@@ -470,8 +489,8 @@ function SettingsModal(props: {
                     <label className="flex flex-col gap-1">
                       <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Долгота</span>
                       <input
-                        type="number"
-                        step="0.000001"
+                        type="text"
+                        inputMode="decimal"
                         value={lon}
                         onChange={(e) => setLon(e.target.value)}
                         placeholder="76.889709"
@@ -480,12 +499,18 @@ function SettingsModal(props: {
                     </label>
                     <span
                       className={`mb-2 text-xs ${
-                        hasCoords
-                          ? 'text-emerald-600 dark:text-emerald-400'
-                          : 'text-slate-400 dark:text-slate-500'
+                        coordsBroken
+                          ? 'text-rose-600 dark:text-rose-400'
+                          : hasCoords
+                            ? 'text-emerald-600 dark:text-emerald-400'
+                            : 'text-slate-400 dark:text-slate-500'
                       }`}
                     >
-                      {hasCoords ? 'погода собирается' : 'без координат погода не собирается'}
+                      {coordsBroken
+                        ? 'это не похоже на координаты'
+                        : hasCoords
+                          ? 'погода собирается'
+                          : 'без координат погода не собирается'}
                     </span>
                   </div>
 
@@ -511,7 +536,7 @@ function SettingsModal(props: {
                     отсутствие данных, а не за незнание.
                   </p>
 
-                  <label className="mt-3 flex cursor-pointer items-center gap-2.5 rounded-lg border border-slate-200 px-3 py-2.5 transition hover:bg-slate-50 dark:border-white/10 dark:hover:bg-white/5">
+                  <label className="mt-3 flex cursor-pointer items-center gap-2.5 rounded-lg bg-slate-50 px-3 py-2.5 transition hover:bg-slate-100 dark:bg-white/5 dark:hover:bg-white/10">
                     <input
                       type="checkbox"
                       checked={testGate}
@@ -650,7 +675,7 @@ function SettingsModal(props: {
         )}
 
         {/* Подвал */}
-        <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-slate-50/60 px-6 py-4 dark:border-white/10 dark:bg-white/[0.02]">
+        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-slate-200 bg-slate-50/60 px-5 py-3.5 dark:border-white/10 dark:bg-white/[0.02]">
           {saved ? (
             <span className="mr-auto flex items-center gap-1.5 text-sm text-emerald-600 dark:text-emerald-400">
               <Check className="h-4 w-4" /> Сохранено

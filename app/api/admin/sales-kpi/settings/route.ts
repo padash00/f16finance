@@ -164,8 +164,12 @@ export async function POST(request: Request) {
       // Координаты нужны только для погоды. Мусор в них не пишем: без
       // координат погода просто не собирается, а неверные дали бы погоду
       // чужого города и молча испортили бы прогноз.
-      const lat = Number(body.latitude)
-      const lon = Number(body.longitude)
+      // Запятую как десятичный разделитель принимаем и на сервере: форму
+      // могут звать не только из нашего интерфейса.
+      const coord = (raw: unknown): number =>
+        typeof raw === 'string' ? Number(raw.replace(',', '.')) : Number(raw)
+      const lat = coord(body.latitude)
+      const lon = coord(body.longitude)
       const latitude = Number.isFinite(lat) && Math.abs(lat) <= 90 ? lat : null
       const longitude = Number.isFinite(lon) && Math.abs(lon) <= 180 ? lon : null
 
