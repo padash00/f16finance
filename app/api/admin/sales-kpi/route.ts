@@ -12,17 +12,8 @@
 import { NextResponse } from 'next/server'
 
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
-import {
-  addDaysISO,
-  earliestSaleDate,
-  listStorePoints,
-  loadShiftFacts,
-  loadStoreKpiSettings,
-  resolveStoreKpiContext,
-  inScope,
-} from '@/lib/server/store-kpi'
-import { analyzeStoreKpi, explainShift, trainingFlag } from '@/lib/domain/store-kpi'
-import { contextForShift, loadContextSources } from '@/lib/server/store-kpi-context'
+import { listStorePoints, resolveStoreKpiContext, inScope } from '@/lib/server/store-kpi'
+import { buildStoreKpiReport } from '@/lib/server/store-kpi-report'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -62,50 +53,14 @@ export async function GET(request: Request) {
     // нельзя — у точек разный ассортимент, поток и ожидания.
     if (!company) return json({ data: { stores, needs_company: true } })
 
-    const { row: settingsRow, settings } = await loadStoreKpiSettings(supabase, company.id)
-
-    const baselineFrom = (await earliestSaleDate(supabase, company.id)) ?? from
-    const baselineTo = addDaysISO(from, -1)
-
-    const facts = await loadShiftFacts(supabase, {
+    const report = await buildStoreKpiReport(supabase, {
       companyId: company.id,
-      from: baselineFrom,
+      organizationId: company.organization_id ?? null,
+      from,
       to,
     })
 
-    const baselineFacts = facts.filter((f) => f.date <= baselineTo)
-    const targetFacts = facts.filter((f) => f.date >= from && f.date <= to)
-
-    const result = analyzeStoreKpi({ baselineFacts, targetFacts, settings })
-
-    // Погода, праздники и учебные периоды за показываемый отрезок. Они не
-    // участвуют в баллах — только объясняют, каким был спрос.
-    const context = await loadContextSources(supabase, company.id, company.organization_id ?? null, from, to)
-
-    // ── Имена продавцов ───────────────────────────────────────────────────
-    const cashierIds = [...new Set(targetFacts.map((f) => f.cashier_id).filter(Boolean))] as string[]
-    const names = new Map<string, string>()
-    if (cashierIds.length) {
-      const { data: opsRows, error: opsErr } = await supabase
-        .from('operators')
-        .select('id, name, short_name')
-        .in('id', cashierIds)
-      if (opsErr) throw opsErr
-      for (const op of opsRows || []) {
-        names.set(String(op.id), String(op.short_name || op.name || 'Без имени'))
-      }
-    }
-
-    const totals = {
-      revenue: Math.round(targetFacts.reduce((sum, f) => sum + f.revenue, 0)),
-      receipts: targetFacts.reduce((sum, f) => sum + f.receipts, 0),
-      shifts: targetFacts.length,
-      low_demand: result.shifts.filter((s) => s.verdict === 'LOW_DEMAND').length,
-      cashier_issue: result.shifts.filter((s) => s.verdict === 'POSSIBLE_CASHIER_ISSUE').length,
-      high_demand: result.shifts.filter((s) => s.verdict === 'HIGH_DEMAND').length,
-      strong: result.shifts.filter((s) => s.verdict === 'STRONG_CASHIER').length,
-      insufficient: result.shifts.filter((s) => s.verdict === 'INSUFFICIENT_DATA').length,
-    }
+    const { settings } = report
 
     return json({
       data: {
@@ -119,47 +74,13 @@ export async function GET(request: Request) {
           ratio_clip: [settings.ratio_clip_min, settings.ratio_clip_max],
           weights: settings.weights,
           summer_months: settings.summer_months,
-          configured: Boolean(settingsRow),
+          configured: report.settingsConfigured,
         },
-        coverage: result.coverage,
-        totals,
-        shifts: result.shifts.map((s) => ({
-          date: s.fact.date,
-          shift: s.fact.shift,
-          season: s.season,
-          shift_id: s.fact.shift_id ?? null,
-          duration_minutes: s.fact.duration_minutes ?? null,
-          cashier_id: s.fact.cashier_id,
-          cashier_name: s.fact.cashier_id ? names.get(s.fact.cashier_id) ?? 'Без имени' : null,
-          revenue: Math.round(s.fact.revenue),
-          expected_revenue: s.expected_revenue,
-          receipts: s.fact.receipts,
-          expected_receipts: s.expected_receipts,
-          expected_avg_ticket: s.expected_avg_ticket,
-          items: Math.round(s.fact.items),
-          score: s.score,
-          confidence: s.confidence,
-          verdict: s.verdict,
-          evidence: s.evidence,
-          missing: s.missing,
-          metrics: s.metrics,
-          // Развёрнутый разбор считается здесь же: он детерминированный и
-          // должен быть виден без отдельного запроса и без участия ИИ.
-          explanation: explainShift(s, settings),
-          context: contextForShift(s.fact, context),
-        })),
-        cashiers: result.cashiers.map((c) => {
-          // Флаг обучения — рекомендация управляющему, а не наказание: он
-          // ставится, только если картина повторяется несколько смен подряд.
-          const flag = trainingFlag(c, result.shifts, settings)
-          return {
-            ...c,
-            name: names.get(c.cashier_id) ?? 'Без имени',
-            training_flag: flag.flagged,
-            training_reason: flag.reason,
-          }
-        }),
-        model_version: result.model_version,
+        coverage: report.coverage,
+        totals: report.totals,
+        shifts: report.shifts,
+        cashiers: report.cashiers,
+        model_version: report.model_version,
       },
     })
   } catch (error) {

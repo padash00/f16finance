@@ -20,6 +20,8 @@ import {
   ChevronDown,
   CloudSun,
   Download,
+  FileSpreadsheet,
+  FileText,
   Gauge,
   GraduationCap,
   Info,
@@ -54,6 +56,7 @@ import { formatMoney } from '@/lib/core/format'
 import { mutateApi, useApi } from '@/lib/hooks/use-api'
 
 import { AccuracyTab } from './accuracy-tab'
+import { CashiersTab } from './cashiers-tab'
 import { SectionIntro } from './section-intro'
 import { MoneyMapTab } from './money-map-tab'
 import { PayoutTab } from './payout-tab'
@@ -1010,6 +1013,8 @@ export default function SalesKpiPage() {
   const [to, setTo] = useState(monthBounds(currentMonthKey()).to)
   const [companyId, setCompanyId] = useState<string>('')
   const [openShift, setOpenShift] = useState<string | null>(null)
+  const [exporting, setExporting] = useState<'pdf' | 'xlsx' | null>(null)
+  const [exportError, setExportError] = useState<string | null>(null)
   // По умолчанию смены идут по дате: так их и читают, день за днём.
   const [shiftSort, setShiftSort] = useState<SortState<ShiftSortKey> | null>({
     key: 'date',
@@ -1019,7 +1024,9 @@ export default function SalesKpiPage() {
   const [showSettings, setShowSettings] = useState(false)
   // «Кому доплатить» первой и по умолчанию: это единственная вкладка, ради
   // которой на страницу заходят регулярно.
-  const [tab, setTab] = useState<'payout' | 'review' | 'plans' | 'accuracy' | 'quality' | 'money'>(
+  const [tab, setTab] = useState<
+    'payout' | 'review' | 'people' | 'plans' | 'accuracy' | 'quality' | 'money'
+  >(
     'payout',
   )
   const { can } = useCapabilities()
@@ -1110,6 +1117,44 @@ export default function SalesKpiPage() {
     }
     return list
   }, [coverage])
+
+  /**
+   * Выгрузка разбора.
+   *
+   * Считает сервер и по тому же коду, что рисует страницу: отчёт, который
+   * расходится с экраном, хуже отсутствия отчёта.
+   */
+  async function exportReport(format: 'pdf' | 'xlsx') {
+    if (!payload?.company) return
+    setExporting(format)
+    setExportError(null)
+    try {
+      const res = await fetch('/api/admin/sales-kpi/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company_id: payload.company.id, from, to, format }),
+      })
+      if (!res.ok) {
+        const problem = await res.json().catch(() => ({}))
+        throw new Error(problem?.detail || problem?.error || `HTTP ${res.status}`)
+      }
+
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `Разбор смен ${from} — ${to}.${format}`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      // Ссылку освобождаем не сразу: Safari успевает отменить скачивание.
+      setTimeout(() => URL.revokeObjectURL(url), 4000)
+    } catch (e) {
+      setExportError(e instanceof Error ? e.message : 'Не удалось собрать отчёт')
+    } finally {
+      setExporting(null)
+    }
+  }
 
   const toolbar = (
     <div className="flex flex-wrap items-end gap-2">
@@ -1207,13 +1252,51 @@ export default function SalesKpiPage() {
         accent="blue"
         toolbar={toolbar}
         actions={
-          can('sales-kpi.manage') && payload?.company ? (
-            <Button variant="outline" size="sm" onClick={() => setShowSettings(true)}>
-              <Settings className="mr-1 h-4 w-4" /> Настройки
-            </Button>
+          payload?.company ? (
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={exporting !== null}
+                onClick={() => void exportReport('pdf')}
+                title="Разбор каждой смены словами, книжная вёрстка"
+              >
+                {exporting === 'pdf' ? (
+                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                ) : (
+                  <FileText className="mr-1 h-4 w-4" />
+                )}
+                PDF
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={exporting !== null}
+                onClick={() => void exportReport('xlsx')}
+                title="Таблицы с фильтрами, диаграммы и графики"
+              >
+                {exporting === 'xlsx' ? (
+                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                ) : (
+                  <FileSpreadsheet className="mr-1 h-4 w-4" />
+                )}
+                Excel
+              </Button>
+              {can('sales-kpi.manage') ? (
+                <Button variant="outline" size="sm" onClick={() => setShowSettings(true)}>
+                  <Settings className="mr-1 h-4 w-4" /> Настройки
+                </Button>
+              ) : null}
+            </div>
           ) : null
         }
       />
+
+      {exportError ? (
+        <Card className="p-3 text-sm text-rose-600 dark:text-rose-400">
+          Отчёт собрать не удалось: {exportError}
+        </Card>
+      ) : null}
 
       {showSettings && payload?.company ? (
         <SettingsModal
@@ -1254,6 +1337,7 @@ export default function SalesKpiPage() {
             {([
               ['payout', 'Кому доплатить'],
               ['review', 'Почему такая касса'],
+              ['people', 'По продавцам'],
               ['plans', 'Цели на смену'],
               ['quality', 'Качество данных'],
               ['accuracy', 'Проверка модели'],
@@ -1276,7 +1360,13 @@ export default function SalesKpiPage() {
             ))}
           </div>
 
-          {tab === 'payout' && payload?.company ? (
+          {tab === 'people' && payload?.company ? (
+            <CashiersTab
+              cashiers={cashiers as any}
+              shifts={shifts as any}
+              minQualifyingShifts={payload?.settings?.min_qualifying_shifts ?? 6}
+            />
+          ) : tab === 'payout' && payload?.company ? (
             <PayoutTab
               companyId={payload.company.id}
               month={month}
