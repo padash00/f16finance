@@ -183,7 +183,25 @@ export function explainShift(analysis: ShiftAnalysis, settings: StoreKpiSettings
     sample: m.sample,
   }))
 
+  // 5. Что мешало работать.
+  const events = fact.events || []
+  if (events.length > 0) {
+    paragraphs.push(
+      `Обстоятельства. В смене отмечено: ${events
+        .map((e) => e.title)
+        .join('; ')}. Это не вина продавца, поэтому балл от этого не меняется — но доверия к выводу меньше.`,
+    )
+  }
+
   const caveats = [...analysis.missing]
+  for (const e of events) {
+    caveats.push(`Смена шла в особых условиях: ${e.title}.`)
+  }
+  if (fact.is_anomaly) {
+    caveats.push(
+      `Смена помечена как аномальная${fact.anomaly_reason ? ` (${fact.anomaly_reason})` : ''} — выводы по ней делать не стоит.`,
+    )
+  }
   if (analysis.confidence < 0.5) {
     caveats.push(
       `Общая уверенность в разборе — ${Math.round(analysis.confidence * 100)}%. На таком уровне вывод стоит считать поводом присмотреться, а не основанием для решений.`,

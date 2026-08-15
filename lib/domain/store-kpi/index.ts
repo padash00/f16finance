@@ -63,6 +63,21 @@ export {
 } from './monthly-index'
 export { explainShift, type ShiftExplanation, type MetricReading } from './explain'
 export {
+  detectAnomalies,
+  dataQualityScore,
+  type Anomaly,
+  type AnomalyKind,
+  type DataQuality,
+  type DataQualityCheck,
+} from './quality'
+export {
+  monthlyBonus,
+  bonusRoi,
+  retailDiagnostics,
+  type BonusRoi,
+  type RetailDiagnostics,
+} from './money'
+export {
   forecastAccuracy,
   backtestPlans,
   type AccuracySummary,
@@ -116,20 +131,31 @@ function share(count: number, total: number): number {
 }
 
 /**
+ * Смены, из которых строится норма.
+ *
+ * Помеченные как «не учитывать» выбрасываются: дубль, сбой кассы или тестовые
+ * чеки не должны формировать планку, по которой оценивают живых людей. Из
+ * отчётов такие смены при этом не исчезают.
+ */
+function baselineSource(facts: ShiftFact[]): ShiftFact[] {
+  return facts.filter((f) => !f.exclude_from_baseline)
+}
+
+/**
  * База выручки — из неё берутся и ожидание смены, и бонусные пороги.
  *
  * Смены без чеков в базу не попадают: закрытая точка или день без продаж
  * занизили бы планку всем остальным.
  */
 export function buildRevenueBaseline(facts: ShiftFact[], settings: StoreKpiSettings) {
-  return buildBaselineIndex(facts, (f) => (f.receipts > 0 ? f.revenue : null), {
+  return buildBaselineIndex(baselineSource(facts), (f) => (f.receipts > 0 ? f.revenue : null), {
     summerMonths: settings.summer_months,
   })
 }
 
 /** База спроса — число чеков сопоставимых смен. */
 export function buildReceiptsBaseline(facts: ShiftFact[], settings: StoreKpiSettings) {
-  return buildBaselineIndex(facts, (f) => (f.receipts > 0 ? f.receipts : null), {
+  return buildBaselineIndex(baselineSource(facts), (f) => (f.receipts > 0 ? f.receipts : null), {
     summerMonths: settings.summer_months,
   })
 }
@@ -138,7 +164,7 @@ export function buildBundle(facts: ShiftFact[], settings: StoreKpiSettings): Bas
   const metrics: Partial<Record<MetricKey, ReturnType<typeof buildBaselineIndex>>> = {}
   for (const metric of METRIC_KEYS) {
     if (metric === 'plan_attainment') continue // сравнивается с базой выручки
-    metrics[metric] = buildBaselineIndex(facts, (f) => metricValue(f, metric), {
+    metrics[metric] = buildBaselineIndex(baselineSource(facts), (f) => metricValue(f, metric), {
       summerMonths: settings.summer_months,
     })
   }

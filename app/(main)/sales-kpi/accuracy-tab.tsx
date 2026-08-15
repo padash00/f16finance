@@ -25,7 +25,19 @@ type Calibration = {
   alarm: 'threshold_too_easy' | 'threshold_demotivating' | null
 }
 
+type Roi = {
+  shifts: number
+  bonus_cost: number
+  incremental_revenue: number
+  gross_margin: number | null
+  incremental_gross_profit: number | null
+  net_effect: number | null
+  roi: number | null
+  caveats: string[]
+}
+
 type AccuracyData = {
+  roi?: Roi
   history: { from: string | null; to: string | null; shifts: number }
   backtest: {
     evaluated: number
@@ -243,6 +255,55 @@ export function AccuracyTab(props: { companyId: string }) {
           </div>
         ) : null}
       </Card>
+
+      {payload?.roi ? (
+        <Card className="p-4">
+          <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Окупаемость бонусов</h2>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            Смысл программы не в том, чтобы меньше платить, а в том, чтобы прирост прибыли был больше
+            выплат.
+          </p>
+          <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">Выплачено</div>
+              <div className="text-lg font-semibold text-slate-900 dark:text-white">
+                {formatMoney(payload.roi.bonus_cost)}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">Прирост выручки над нормой</div>
+              <div className="text-lg font-semibold text-slate-900 dark:text-white">
+                {formatMoney(payload.roi.incremental_revenue)}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">Прирост валовой прибыли</div>
+              <div className="text-lg font-semibold text-slate-900 dark:text-white">
+                {payload.roi.incremental_gross_profit == null
+                  ? 'нет себестоимости'
+                  : formatMoney(payload.roi.incremental_gross_profit)}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">Итог</div>
+              <div
+                className={`text-lg font-semibold ${
+                  (payload.roi.net_effect ?? 0) >= 0
+                    ? 'text-emerald-600 dark:text-emerald-400'
+                    : 'text-rose-600 dark:text-rose-400'
+                }`}
+              >
+                {payload.roi.net_effect == null ? '—' : formatMoney(payload.roi.net_effect)}
+              </div>
+            </div>
+          </div>
+          <ul className="mt-3 space-y-1 text-xs text-slate-500 dark:text-slate-400">
+            {payload.roi.caveats.map((c) => (
+              <li key={c}>• {c}</li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
 
       <p className="px-1 text-xs text-slate-400 dark:text-slate-500">
         История: {payload?.history.from || '—'} — {payload?.history.to || '—'}, всего{' '}

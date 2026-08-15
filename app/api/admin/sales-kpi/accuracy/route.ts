@@ -24,7 +24,14 @@ import {
   resolveStoreKpiContext,
   todayISO,
 } from '@/lib/server/store-kpi'
-import { backtestPlans, forecastAccuracy, resolveBonus, type ShiftPlan } from '@/lib/domain/store-kpi'
+import {
+  analyzeStoreKpi,
+  backtestPlans,
+  bonusRoi,
+  forecastAccuracy,
+  resolveBonus,
+  type ShiftPlan,
+} from '@/lib/domain/store-kpi'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -98,9 +105,23 @@ export async function GET(request: Request) {
       liveBonusCost += outcome.amount
     }
 
+    // Окупаемость программы: прирост над нормой против выплат. Считается по
+    // тем сменам, где план был объявлен заранее — сравнивать «что было бы»
+    // на всей истории значило бы приписывать бонусам чужой рост.
+    const livePeriodFrom = (planRows || []).length
+      ? String(planRows[planRows.length - 1].plan_date)
+      : today
+    const liveAnalysis = analyzeStoreKpi({
+      baselineFacts: facts.filter((f) => f.date < livePeriodFrom),
+      targetFacts: facts.filter((f) => f.date >= livePeriodFrom),
+      settings,
+    })
+    const roi = bonusRoi(liveAnalysis.shifts, liveBonusCost, settings)
+
     return json({
       data: {
         company_id: companyId,
+        roi,
         history: {
           from: facts[0]?.date ?? null,
           to: facts[facts.length - 1]?.date ?? null,

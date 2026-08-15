@@ -5,6 +5,10 @@ import {
   DEFAULT_STORE_KPI_SETTINGS,
   analyzeStoreKpi,
   attachFromReceipts,
+  bonusRoi,
+  dataQualityScore,
+  detectAnomalies,
+  monthlyBonus,
   normalizeStoreKpiSettings,
   percentile,
   summarizeCashier,
@@ -49,8 +53,13 @@ function fact(date: string, patch: Partial<ShiftFact> = {}): ShiftFact {
     items: 100,
     lines: 100,
     receipts_2plus: 25,
+    receipts_3plus: 10,
     attach_opportunities: 20,
     attach_success: 12,
+    cogs: 40_000,
+    discount_amount: 0,
+    discounted_receipts: 0,
+    unique_skus: 20,
     ...patch,
   }
 }
@@ -375,4 +384,126 @@ test('сводка по продавцу считает только его см
   const a = summarizeCashier('A', shifts, DEFAULT_STORE_KPI_SETTINGS)
   assert.equal(a.shifts, 1)
   assert.equal(a.revenue, 120_000)
+})
+
+// ─── Качество данных, аномалии и деньги ────────────────────────────────────
+
+test('аномальные смены не формируют норму, но из отчёта не исчезают', () => {
+  // Девять обычных смен и одна с выручкой в пять раз выше — например, дубль.
+  const history = weekly('2026-01-05', 10).map((d, i) =>
+    fact(d, i === 9 ? { revenue: 500_000, exclude_from_baseline: true, is_anomaly: true } : {}),
+  )
+  const clean = weekly('2026-01-05', 10).map((d, i) => fact(d, i === 9 ? { revenue: 500_000 } : {}))
+
+  const withFlag = analyzeStoreKpi({
+    baselineFacts: history,
+    targetFacts: [fact('2026-03-16', { cashier_id: 'A', revenue: 100_000, receipts: 50 })],
+    settings: DEFAULT_STORE_KPI_SETTINGS,
+  }).shifts[0]
+
+  const withoutFlag = analyzeStoreKpi({
+    baselineFacts: clean,
+    targetFacts: [fact('2026-03-16', { cashier_id: 'A', revenue: 100_000, receipts: 50 })],
+    settings: DEFAULT_STORE_KPI_SETTINGS,
+  }).shifts[0]
+
+  // Помеченная смена выброшена из базы, поэтому ожидание выручки ниже.
+  assert.ok(
+    (withFlag.expected_revenue ?? 0) <= (withoutFlag.expected_revenue ?? 0),
+    'исключённая смена не должна поднимать норму',
+  )
+})
+
+test('детектор ловит выручку без чеков и дубль смены', () => {
+  const facts = [
+    fact('2026-04-01', { receipts: 0, revenue: 50_000 }),
+    fact('2026-04-02'),
+    fact('2026-04-02'),
+  ]
+  const found = detectAnomalies(facts, DEFAULT_STORE_KPI_SETTINGS)
+
+  assert.ok(found.some((a) => a.kind === 'revenue_without_receipts'))
+  assert.ok(found.some((a) => a.kind === 'duplicate_shift'))
+  // Оба случая — повод исключить смену из нормы.
+  assert.ok(found.filter((a) => a.suggest_exclude).length >= 2)
+})
+
+test('высокая доля возвратов замечается, но исключать смену не предлагает', () => {
+  const found = detectAnomalies(
+    [fact('2026-04-01', { revenue: 70_000, gross_revenue: 100_000, refunds: 30_000 })],
+    DEFAULT_STORE_KPI_SETTINGS,
+  )
+  const refund = found.find((a) => a.kind === 'high_refunds')
+  assert.ok(refund)
+  assert.equal(refund!.suggest_exclude, false)
+})
+
+test('отсутствие товара роняет уверенность, но не балл продавца', () => {
+  const base = fact('2026-03-16', { cashier_id: 'A', receipts: 50, revenue: 120_000, items: 130 })
+  const withEvent = {
+    ...base,
+    events: [{ event_type: 'STOCKOUT' as const, title: 'Не было напитков', severity: 'high' as const }],
+  }
+
+  const plain = analyzeOne(base)
+  const affected = analyzeOne(withEvent)
+
+  assert.equal(plain.score, affected.score)
+  assert.ok(affected.confidence < plain.confidence, 'уверенность обязана просесть')
+})
+
+test('месячный бонус не платится, пока статус не определён', () => {
+  assert.equal(monthlyBonus('INSUFFICIENT_DATA', DEFAULT_STORE_KPI_SETTINGS).amount, 0)
+  assert.equal(monthlyBonus('NORMAL', DEFAULT_STORE_KPI_SETTINGS).amount, 0)
+  assert.equal(
+    monthlyBonus('STRONG', DEFAULT_STORE_KPI_SETTINGS).amount,
+    DEFAULT_STORE_KPI_SETTINGS.monthly_bonus_strong,
+  )
+  assert.equal(
+    monthlyBonus('TOP', DEFAULT_STORE_KPI_SETTINGS).amount,
+    DEFAULT_STORE_KPI_SETTINGS.monthly_bonus_top,
+  )
+})
+
+test('окупаемость считает прирост над нормой и всегда предупреждает о методе', () => {
+  const shifts = analyzeStoreKpi({
+    baselineFacts: HISTORY,
+    targetFacts: weekly('2026-03-02', 4).map((d) =>
+      fact(d, { cashier_id: 'A', revenue: 120_000, receipts: 50, cogs: 48_000 }),
+    ),
+    settings: DEFAULT_STORE_KPI_SETTINGS,
+  }).shifts
+
+  const roi = bonusRoi(shifts, 8_000, DEFAULT_STORE_KPI_SETTINGS)
+
+  // Норма 100 000, факт 120 000 на четырёх сменах — прирост 80 000.
+  assert.equal(roi.incremental_revenue, 80_000)
+  assert.ok(roi.gross_margin !== null && roi.gross_margin > 0)
+  assert.ok(roi.incremental_gross_profit !== null && roi.incremental_gross_profit > 0)
+  assert.ok(roi.net_effect !== null)
+  // Метод не выдаёт себя за эксперимент.
+  assert.ok(roi.caveats.some((c) => c.includes('не контрольный эксперимент')))
+})
+
+test('без себестоимости прибыль не выдумывается', () => {
+  const shifts = analyzeStoreKpi({
+    baselineFacts: HISTORY,
+    targetFacts: [fact('2026-03-16', { cashier_id: 'A', revenue: 120_000, cogs: 0 })],
+    settings: DEFAULT_STORE_KPI_SETTINGS,
+  }).shifts
+
+  const roi = bonusRoi(shifts, 2_000, DEFAULT_STORE_KPI_SETTINGS)
+  assert.equal(roi.incremental_gross_profit, null)
+  assert.equal(roi.roi, null)
+  assert.ok(roi.caveats.some((c) => c.includes('Себестоимость неизвестна')))
+})
+
+test('качество данных показывает самое слабое место', () => {
+  const facts = weekly('2026-01-05', 10).map((d) =>
+    fact(d, { items: 0, attach_opportunities: 0, attach_success: 0 }),
+  )
+  const quality = dataQualityScore(facts, DEFAULT_STORE_KPI_SETTINGS)
+
+  assert.ok(quality.score < 0.8, `общий балл: ${quality.score}`)
+  assert.ok(['items', 'attach'].includes(quality.worst?.key || ''), `слабое место: ${quality.worst?.key}`)
 })

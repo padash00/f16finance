@@ -83,6 +83,10 @@ export type StoreKpiSettings = {
   product_test_min_score: number
   product_test_valid_days: number
 
+  /** Месячный бонус за статус продавца, ₸. Не платится при «мало данных». */
+  monthly_bonus_strong: number
+  monthly_bonus_top: number
+
   /** Версия модели: расчёты прошлых периодов должны помнить свою формулу. */
   model_version: string
 }
@@ -140,6 +144,9 @@ export const DEFAULT_STORE_KPI_SETTINGS: StoreKpiSettings = {
   require_product_test_for_top_bonus: false,
   product_test_min_score: 80,
   product_test_valid_days: 90,
+
+  monthly_bonus_strong: 10000,
+  monthly_bonus_top: 20000,
 
   model_version: 'STORE_KPI_V1',
 }
@@ -242,6 +249,8 @@ export function normalizeStoreKpiSettings(row: Record<string, unknown> | null | 
     require_product_test_for_top_bonus: row.require_product_test_for_top_bonus === true,
     product_test_min_score: positiveInt(row.product_test_min_score, d.product_test_min_score),
     product_test_valid_days: positiveInt(row.product_test_valid_days, d.product_test_valid_days),
+    monthly_bonus_strong: moneyOr(row.monthly_bonus_strong, d.monthly_bonus_strong),
+    monthly_bonus_top: moneyOr(row.monthly_bonus_top, d.monthly_bonus_top),
 
     model_version: typeof row.model_version === 'string' && row.model_version ? row.model_version : d.model_version,
   }

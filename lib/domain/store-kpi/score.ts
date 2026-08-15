@@ -178,8 +178,24 @@ function computeConfidence(
 
   const completeness = used.totalWeight > 0 ? used.usedWeight / used.totalWeight : 0
 
-  const raw =
-    0.3 * sampleFactor + 0.2 * levelFactor + 0.2 * receiptsFactor + 0.3 * completeness
+  let raw = 0.3 * sampleFactor + 0.2 * levelFactor + 0.2 * receiptsFactor + 0.3 * completeness
+
+  // Деловые события смены — отсутствие товара, акция, простой кассы. Продавец
+  // не мог продать напиток, которого не было на витрине, поэтому такие смены
+  // судим осторожнее. Балл при этом не трогаем: снижать оценку человеку за
+  // чужую проблему нельзя.
+  const events = fact.events || []
+  if (events.length > 0) {
+    const worst = events.some((e) => e.severity === 'high')
+      ? 0.7
+      : events.some((e) => e.severity === 'medium')
+        ? 0.85
+        : 0.95
+    raw *= worst
+  }
+
+  // Смена помечена как аномальная — доверия к ней немного по определению.
+  if (fact.is_anomaly) raw *= 0.7
 
   return round(clamp(raw, 0.05, 0.98), 2)
 }

@@ -40,8 +40,13 @@ function fact(date: string, revenue: number, patch: Partial<ShiftFact> = {}): Sh
     items: 80,
     lines: 80,
     receipts_2plus: 20,
+    receipts_3plus: 8,
     attach_opportunities: 16,
     attach_success: 10,
+    cogs: 30_000,
+    discount_amount: 0,
+    discounted_receipts: 0,
+    unique_skus: 18,
     ...patch,
   }
 }

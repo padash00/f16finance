@@ -36,6 +36,7 @@ import { mutateApi, useApi } from '@/lib/hooks/use-api'
 
 import { AccuracyTab } from './accuracy-tab'
 import { PlansTab } from './plans-tab'
+import { QualityTab } from './quality-tab'
 import { ShiftDetail, type ShiftExplanation } from './shift-detail'
 
 // ─── Типы ответа API ────────────────────────────────────────────────────────
@@ -83,6 +84,8 @@ type CashierRow = {
   metric_ratios: Record<string, number>
   strengths: string[]
   weaknesses: string[]
+  training_flag?: boolean
+  training_reason?: string | null
 }
 
 type ApiData = {
@@ -573,7 +576,7 @@ export default function SalesKpiPage() {
   const [companyId, setCompanyId] = useState<string>('')
   const [openShift, setOpenShift] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
-  const [tab, setTab] = useState<'review' | 'plans' | 'accuracy'>('review')
+  const [tab, setTab] = useState<'review' | 'plans' | 'accuracy' | 'quality'>('review')
   const { can } = useCapabilities()
 
   const query = new URLSearchParams({ from, to })
@@ -717,6 +720,7 @@ export default function SalesKpiPage() {
               ['review', 'Разбор смен'],
               ['plans', 'Планы смен'],
               ['accuracy', 'Точность и калибровка'],
+              ['quality', 'Данные и деньги'],
             ] as const).map(([id, label]) => (
               <button
                 key={id}
@@ -736,6 +740,12 @@ export default function SalesKpiPage() {
             <PlansTab companyId={payload.company.id} canManage={can('sales-kpi.manage')} />
           ) : tab === 'accuracy' && payload?.company ? (
             <AccuracyTab companyId={payload.company.id} />
+          ) : tab === 'quality' && payload?.company ? (
+            <QualityTab
+              companyId={payload.company.id}
+              canManage={can('sales-kpi.manage')}
+              cashierNames={new Map(cashiers.map((c) => [c.cashier_id, c.name]))}
+            />
           ) : (
         <>
 
@@ -821,6 +831,14 @@ export default function SalesKpiPage() {
                             <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${status.className}`}>
                               {status.label}
                             </span>
+                            {c.training_flag ? (
+                              <div
+                                className="mt-0.5 text-xs text-amber-600 dark:text-amber-400"
+                                title={c.training_reason || ''}
+                              >
+                                рекомендуется обучение
+                              </div>
+                            ) : null}
                           </td>
                           <td className="px-4 py-2">
                             <Confidence value={c.confidence} />

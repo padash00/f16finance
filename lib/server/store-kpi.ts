@@ -123,8 +123,13 @@ type FactRow = {
   items: number | string
   lines: number | string
   receipts_2plus: number | string
+  receipts_3plus: number | string
   attach_opportunities: number | string
   attach_success: number | string
+  cogs: number | string
+  discount_amount: number | string
+  discounted_receipts: number | string
+  unique_skus: number | string
 }
 
 /**
@@ -150,6 +155,44 @@ export async function loadShiftFacts(
     if (rows.length < PAGE) break
   }
 
+  // Пометки смен и деловые события: они не меняют цифры, но меняют то, как
+  // эти цифры читать. Оба списка небольшие — грузим целиком за период.
+  const [{ data: flagRows }, { data: eventRows }] = await Promise.all([
+    supabase
+      .from('store_kpi_shift_flags')
+      .select('shift_date, shift, is_anomaly, exclude_from_baseline, reason')
+      .eq('company_id', companyId)
+      .gte('shift_date', from)
+      .lte('shift_date', to),
+    supabase
+      .from('store_kpi_business_events')
+      .select('starts_on, ends_on, shift, event_type, title, severity')
+      .eq('company_id', companyId)
+      .lte('starts_on', to)
+      .gte('ends_on', from),
+  ])
+
+  const flags = new Map<string, { is_anomaly: boolean; exclude_from_baseline: boolean; reason: string }>()
+  for (const f of flagRows || []) {
+    flags.set(`${f.shift_date}|${normalizeShift(f.shift)}`, {
+      is_anomaly: Boolean(f.is_anomaly),
+      exclude_from_baseline: Boolean(f.exclude_from_baseline),
+      reason: String(f.reason || ''),
+    })
+  }
+
+  const eventsFor = (date: string, shift: ShiftType) =>
+    (eventRows || [])
+      .filter(
+        (e: any) =>
+          String(e.starts_on) <= date && date <= String(e.ends_on) && (!e.shift || e.shift === shift),
+      )
+      .map((e: any) => ({
+        event_type: e.event_type,
+        title: String(e.title || ''),
+        severity: (e.severity || 'medium') as 'low' | 'medium' | 'high',
+      }))
+
   return factRows.map((row) => {
     const shift = normalizeShift(row.shift)
     const gross = num(row.gross_revenue)
@@ -166,8 +209,17 @@ export async function loadShiftFacts(
       items: num(row.items),
       lines: num(row.lines),
       receipts_2plus: num(row.receipts_2plus),
+      receipts_3plus: num(row.receipts_3plus),
       attach_opportunities: num(row.attach_opportunities),
       attach_success: num(row.attach_success),
+      cogs: num(row.cogs),
+      discount_amount: num(row.discount_amount),
+      discounted_receipts: num(row.discounted_receipts),
+      unique_skus: num(row.unique_skus),
+      is_anomaly: flags.get(`${row.sale_date}|${shift}`)?.is_anomaly ?? false,
+      exclude_from_baseline: flags.get(`${row.sale_date}|${shift}`)?.exclude_from_baseline ?? false,
+      anomaly_reason: flags.get(`${row.sale_date}|${shift}`)?.reason ?? null,
+      events: eventsFor(row.sale_date, shift),
     }
   })
 }
