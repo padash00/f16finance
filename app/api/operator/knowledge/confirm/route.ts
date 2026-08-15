@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { requireOperator } from '@/lib/server/operator-context'
+import { resolveCompanyOrganizationId } from '@/lib/server/point-devices'
 
 type Body = {
   article_id?: string | null
@@ -32,10 +33,16 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as Body
   if (!body.article_id) return json({ error: 'article-id-required' }, 400)
 
+  // Изоляция: проверка ниже по company_id пропускала чужую статью с
+  // company_id = null (общие регламенты другой орг) — писалось подтверждение
+  // на чужой article_id. Скоупим по организации оператора.
+  const orgId = await resolveCompanyOrganizationId(supabase as any, companyId)
+
   const { data: article, error: articleError } = await supabase
     .from('knowledge_articles')
     .select('id, version, requires_confirmation, is_published, company_id')
     .eq('id', body.article_id)
+    .eq('organization_id', orgId)
     .maybeSingle()
 
   if (articleError) return json({ error: 'article-load-failed', detail: articleError.message }, 400)

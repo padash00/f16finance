@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server'
 
 import { findPairedRecord } from '@/lib/server/hr-paired'
-import { ensureOrganizationOperatorAccess, ensureOrganizationStaffAccess } from '@/lib/server/organizations'
+import {
+  ensureOrganizationOperatorAccess,
+  ensureOrganizationStaffAccess,
+  listOrganizationOperatorIds,
+  listOrganizationStaffIds,
+} from '@/lib/server/organizations'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
@@ -86,9 +91,27 @@ async function dismissStaff(ctx: DismissContext, id: string): Promise<string> {
     .from('operator_staff_links')
     .select('operator_id')
     .eq('staff_id', id)
-  const linkedOperatorIds = (linkedOperatorRows || [])
+  const linkedOperatorIdsRaw: string[] = (linkedOperatorRows || [])
     .map((row: any) => String(row?.operator_id || ''))
     .filter(Boolean)
+
+  // operator_staff_links НЕ орг-скоупная таблица: по кривой/подложенной связи
+  // сюда мог попасть оператор чужой организации, и мы бы записали ему
+  // is_admin_staff=false. Пишем только по пересечению со своими операторами.
+  let linkedOperatorIds = linkedOperatorIdsRaw
+  if (linkedOperatorIdsRaw.length > 0) {
+    const ownOperatorIds = await listOrganizationOperatorIds({
+      activeOrganizationId: ctx.activeOrganizationId,
+      isSuperAdmin: ctx.isSuperAdmin,
+      includeInactive: true,
+    })
+    // null тут не бывает, но на всякий случай: пустой список = ничего не трогаем.
+    const ownSet = new Set((ownOperatorIds || []).map((v) => String(v)))
+    linkedOperatorIds =
+      ctx.isSuperAdmin && !ctx.activeOrganizationId
+        ? linkedOperatorIdsRaw
+        : linkedOperatorIdsRaw.filter((opId) => ownSet.has(opId))
+  }
 
   await supabase.from('operator_staff_links').delete().eq('staff_id', id)
 
@@ -228,8 +251,29 @@ export async function POST(req: Request) {
     let pairedTarget: { kind: 'staff' | 'operator'; id: string; name: string } | null = null
     if (cascadePaired) {
       const paired = await findPairedRecord(supabase, { kind, id })
+      // findPairedRecord ищет по telegram_chat_id и ФИО по ВСЕЙ базе: парой мог
+      // оказаться однофамилец из другой организации. Раньше это вскрывалось уже
+      // внутри dismiss* (403 ПОСЛЕ увольнения основной записи, то есть операция
+      // применялась наполовину). Проверяем принадлежность заранее.
       if (paired && paired.is_active) {
-        pairedTarget = { kind: paired.kind, id: paired.id, name: paired.name }
+        let pairedInScope = true
+        if (!access.isSuperAdmin) {
+          const allowedPairedIds =
+            paired.kind === 'staff'
+              ? await listOrganizationStaffIds({
+                  activeOrganizationId: ctx.activeOrganizationId,
+                  isSuperAdmin: access.isSuperAdmin,
+                })
+              : await listOrganizationOperatorIds({
+                  activeOrganizationId: ctx.activeOrganizationId,
+                  isSuperAdmin: access.isSuperAdmin,
+                  includeInactive: true,
+                })
+          pairedInScope = !allowedPairedIds || allowedPairedIds.includes(String(paired.id))
+        }
+        if (pairedInScope) {
+          pairedTarget = { kind: paired.kind, id: paired.id, name: paired.name }
+        }
       }
     }
 

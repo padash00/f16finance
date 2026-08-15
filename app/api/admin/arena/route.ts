@@ -670,6 +670,13 @@ export async function POST(request: Request) {
 
       if (!stationsInZone?.length) return json({ ok: true, count: 0 })
 
+      // Изоляция: zoneId проверялся, а gameId — нет. Можно было привязать запись
+      // каталога игр ЧУЖОЙ организации к своим станциям (утечка чужого каталога).
+      const uniqueGameIds = [...new Set(games.map((g: any) => String(g?.gameId || '')).filter(Boolean))]
+      for (const gameId of uniqueGameIds) {
+        await ensureArenaEntityAccess(supabase, 'arena_games_catalog', gameId, companyScope.allowedCompanyIds)
+      }
+
       // Для каждой станции upsert каждой игры
       const rows = stationsInZone.flatMap((st: any) =>
         games.map((g: any) => ({
@@ -743,6 +750,14 @@ export async function POST(request: Request) {
       }
       if (!stationId || !tariffId || !bProjectId) return json({ error: 'stationId, tariffId and projectId required' }, 400)
 
+      // Изоляция: раньше это была единственная ветка POST без проверок принадлежности.
+      // Зная UUID станции, чужой staff стартовал платную сессию на чужой арене,
+      // вычитывал чужой тариф (name/price/duration) и слал start_session на чужой
+      // киоск. company_id из body проверен выше (bodyCompanyId → resolveCompanyScope).
+      await ensureArenaEntityAccess(supabase, 'arena_stations', stationId, companyScope.allowedCompanyIds)
+      await ensureArenaEntityAccess(supabase, 'arena_tariffs', tariffId, companyScope.allowedCompanyIds)
+      await ensureProjectAccess(supabase, String(bProjectId), companyScope.allowedCompanyIds)
+
       const { data: tariff } = await supabase
         .from('arena_tariffs')
         .select('id, name, duration_minutes, price')
@@ -796,6 +811,11 @@ export async function POST(request: Request) {
     if (body.action === 'adminEndSession') {
       const { stationId } = body as { stationId: string }
       if (!stationId) return json({ error: 'stationId required' }, 400)
+
+      // Изоляция: сессия искалась по station_id без проверки чья это станция —
+      // можно было погасить активную сессию чужого тенанта и отправить
+      // end_session на его киоск.
+      await ensureArenaEntityAccess(supabase, 'arena_stations', stationId, companyScope.allowedCompanyIds)
 
       const now = new Date().toISOString()
       const { data: sess } = await supabase

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { writeAuditLog } from '@/lib/server/audit'
 import { requireOperator } from '@/lib/server/operator-context'
+import { resolveCompanyOrganizationId } from '@/lib/server/point-devices'
 
 type Body = {
   closing_cash?: number | null
@@ -44,6 +45,19 @@ export async function POST(request: Request) {
 
   // iOS Phase 1 шлёт to_operator_id — маппим на next_operator_id
   const nextOperatorId = body.next_operator_id || body.to_operator_id || null
+  // Изоляция: id следующего сотрудника приходит из тела. Без проверки новая
+  // смена открывалась на сотрудника другого арендатора (его id уезжал в наши
+  // смены и зарплатные расчёты). RPC этот аргумент не валидирует.
+  if (nextOperatorId) {
+    const orgId = await resolveCompanyOrganizationId(supabase as any, companyId)
+    const { data: nextStaff } = await supabase
+      .from('staff')
+      .select('id')
+      .eq('id', nextOperatorId)
+      .or(`organization_id.eq.${orgId},organization_id.is.null`)
+      .maybeSingle()
+    if (!nextStaff) return json({ error: 'staff-not-in-organization' }, 403)
+  }
   // iOS Phase 1 шлёт notes — используем как closing_notes
   const closingNotes = body.closing_notes || body.notes || null
 

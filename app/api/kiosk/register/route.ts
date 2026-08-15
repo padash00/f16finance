@@ -54,31 +54,63 @@ export async function POST(request: Request) {
     if (!deviceToken) return json({ error: 'deviceToken-required' }, 400)
 
     const admin = createAdminSupabaseClient()
-    const { data: station, error: findError } = await admin
+    // Изоляция: код/имя станции НЕ уникальны между арендаторами («PC-01» есть у
+    // многих). Раньше брали .limit(1) по всей таблице и проверяли ключ уже у
+    // выбранной строки — киоск мог перепривязать к себе станцию чужой орг
+    // (в ответ уходит новый clientSecret = полный захват киоска).
+    // Теперь берём ВСЕХ кандидатов и оставляем ту станцию, чей ключ реально сошёлся.
+    const { data: candidates, error: findError } = await admin
       .from('arena_stations')
       .select('id, name, station_code, provisioning_key_hash, point_project_id')
       .or(`station_code.eq.${sanitizeOrFilterValue(stationCode)},name.eq.${sanitizeOrFilterValue(stationCode)}`)
-      .limit(1)
-      .maybeSingle()
+      .limit(50)
     if (findError) throw findError
-    if (!station?.id) return json({ error: 'station-not-found' }, 404)
 
-    // Look up project-level provisioning key
-    const { data: project } = await admin
-      .from('point_projects')
-      .select('arena_provisioning_key')
-      .eq('id', station.point_project_id)
-      .maybeSingle()
+    const candidateRows = (candidates || []) as Array<{
+      id: string
+      name: string | null
+      station_code: string | null
+      provisioning_key_hash: string | null
+      point_project_id: string | null
+    }>
+    if (candidateRows.length === 0) return json({ error: 'station-not-found' }, 404)
 
-    const projectKey = String(project?.arena_provisioning_key || '').trim()
+    // Ключи проектов всех кандидатов одним запросом.
+    const projectIds = Array.from(new Set(candidateRows.map((r) => r.point_project_id).filter(Boolean) as string[]))
+    const projectKeyById = new Map<string, string>()
+    if (projectIds.length > 0) {
+      const { data: projects } = await admin
+        .from('point_projects')
+        .select('id, arena_provisioning_key')
+        .in('id', projectIds)
+      for (const p of (projects || []) as any[]) {
+        projectKeyById.set(String(p.id), String(p.arena_provisioning_key || '').trim())
+      }
+    }
+
+    const providedHash = sha256(provisioningKey)
     const globalEnvKey = String(process.env.KIOSK_PROVISIONING_KEY || '').trim()
-    const perStationHash = String(station.provisioning_key_hash || '')
 
-    const validByProject = Boolean(projectKey && provisioningKey === projectKey)
-    const validByEnv = Boolean(globalEnvKey && provisioningKey === globalEnvKey)
-    const validByStation = Boolean(perStationHash && sha256(provisioningKey) === perStationHash)
+    // Точное совпадение station_code важнее совпадения по имени.
+    const ordered = [...candidateRows].sort((a, b) => {
+      const aExact = a.station_code === stationCode ? 0 : 1
+      const bExact = b.station_code === stationCode ? 0 : 1
+      return aExact - bExact
+    })
 
-    if (!validByProject && !validByEnv && !validByStation) {
+    const station =
+      ordered.find((row) => {
+        const projectKey = projectKeyById.get(String(row.point_project_id || '')) || ''
+        const perStationHash = String(row.provisioning_key_hash || '')
+        return (
+          (projectKey && provisioningKey === projectKey) || (perStationHash && providedHash === perStationHash)
+        )
+      }) ||
+      // Глобальный ENV-ключ — только когда кандидат ровно один: иначе им можно
+      // было бы «увести» одноимённую станцию другого арендатора.
+      (globalEnvKey && provisioningKey === globalEnvKey && ordered.length === 1 ? ordered[0] : null)
+
+    if (!station) {
       return json({ error: 'provisioning-key-invalid' }, 401)
     }
 

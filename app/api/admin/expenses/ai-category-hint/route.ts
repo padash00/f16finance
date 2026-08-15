@@ -7,6 +7,29 @@ import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/serv
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
+/**
+ * Fail-closed проверка принадлежности точки организации вызывающего.
+ * ПОЧЕМУ отдельно: resolveCompanyScope({ requestedCompanyId }) бросает
+ * 'company-out-of-scope' только когда организация ЕСТЬ. У пользователя без
+ * активной орг он молча возвращает { allowedCompanyIds: [] } — и «проверка одним
+ * await» пропускала чужой company_id. Здесь сверяем результат явно:
+ * null (суперадмин без орг) = можно всё, [] = нельзя ничего.
+ */
+async function assertCompanyInScope(
+  access: { activeOrganization?: { id?: string | null } | null; isSuperAdmin: boolean },
+  companyId: string | null | undefined,
+) {
+  const scope = await resolveCompanyScope({
+    activeOrganizationId: access.activeOrganization?.id || null,
+    isSuperAdmin: access.isSuperAdmin,
+  })
+  if (scope.allowedCompanyIds === null) return
+  if (!companyId || !scope.allowedCompanyIds.includes(String(companyId))) {
+    throw new Error('company-out-of-scope')
+  }
+}
+
+
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
@@ -81,20 +104,23 @@ export async function POST(req: Request) {
       return json({ error: 'Напишите в "Краткое название" (>=3) или в "Комментарий" (>=10).' }, 400)
     }
 
-    await resolveCompanyScope({
-      activeOrganizationId: access.activeOrganization?.id || null,
-      requestedCompanyId: companyId,
-      isSuperAdmin: access.isSuperAdmin,
-    })
+    await assertCompanyInScope(access, companyId)
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : createRequestSupabaseClient(req)
+    // Изоляция: справочник категорий тенантный — без фильтра названия категорий
+    // чужих организаций уходили в промпт AI и возвращались клиенту как подсказка.
+    // NEVER-pattern: не-супер без орг → нулевой uuid → пустой список (400 ниже).
+    const categoryScopeOrg =
+      access.activeOrganization?.id || (access.isSuperAdmin ? null : '00000000-0000-0000-0000-000000000000')
+    let categoriesQuery: any = supabase.from('expense_categories').select('name, accounting_group').order('name')
+    if (categoryScopeOrg) categoriesQuery = categoriesQuery.eq('organization_id', categoryScopeOrg)
     const [categoriesRes, companyRes] = await Promise.all([
-      supabase.from('expense_categories').select('name, accounting_group').order('name'),
+      categoriesQuery,
       supabase.from('companies').select('name').eq('id', companyId).maybeSingle(),
     ])
     if (categoriesRes.error) throw categoriesRes.error
 
-    const categories = (categoriesRes.data || []).map((c: any) => ({
+    const categories = ((categoriesRes.data || []) as any[]).map((c: any) => ({
       name: String(c.name || '').trim(),
       group: String(c.accounting_group || 'operating').trim(),
     })).filter((c) => c.name)

@@ -4,7 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { companyOptions, resolveOperatorNames } from '../../query-helpers'
+import { companyOptions, isCompanyAllowed, resolveOperatorNames } from '../../query-helpers'
 
 export const getShiftReportTool: CopilotTool = {
   name: 'get_shift_report',
@@ -33,6 +33,10 @@ export const getShiftReportTool: CopilotTool = {
     const date = String(input.date || '')
     const companyId = String(input.company_id || '')
     if (!date || !companyId) return { ok: false, message: 'Нужны дата и точка.' }
+
+    // Фильтр по company_id сам по себе не изолирует: подставленный чужой id
+    // отдал бы смены и выручку другой организации.
+    if (!(await isCompanyAllowed(ctx, companyId))) return { ok: false, message: 'Точка не найдена.' }
 
     const { data: shifts } = await ctx.supabase
       .from('shifts')

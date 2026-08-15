@@ -4,7 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { companyOptions, fetchAllPages } from '../../query-helpers'
+import { companyOptions, fetchAllPages, isCompanyAllowed } from '../../query-helpers'
 
 export const getKpiProgressTool: CopilotTool = {
   name: 'get_kpi_progress',
@@ -25,6 +25,10 @@ export const getKpiProgressTool: CopilotTool = {
   handler: async (input, ctx) => {
     const companyId = String(input.company_id || '')
     if (!companyId) return { ok: false, message: 'Не выбрана точка.' }
+
+    // Без проверки принадлежности чужой company_id вернул бы план и выручку
+    // точки другой организации.
+    if (!(await isCompanyAllowed(ctx, companyId))) return { ok: false, message: 'Точка не найдена.' }
 
     const today = new Date()
     const periodStart = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`

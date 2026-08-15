@@ -6,6 +6,29 @@ import { requireCapability } from '@/lib/server/capabilities'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
+/**
+ * Fail-closed проверка принадлежности точки организации вызывающего.
+ * ПОЧЕМУ отдельно: resolveCompanyScope({ requestedCompanyId }) бросает
+ * 'company-out-of-scope' только когда организация ЕСТЬ. У пользователя без
+ * активной орг он молча возвращает { allowedCompanyIds: [] } — и «проверка одним
+ * await» пропускала чужой company_id. Здесь сверяем результат явно:
+ * null (суперадмин без орг) = можно всё, [] = нельзя ничего.
+ */
+async function assertCompanyInScope(
+  access: { activeOrganization?: { id?: string | null } | null; isSuperAdmin: boolean },
+  companyId: string | null | undefined,
+) {
+  const scope = await resolveCompanyScope({
+    activeOrganizationId: access.activeOrganization?.id || null,
+    isSuperAdmin: access.isSuperAdmin,
+  })
+  if (scope.allowedCompanyIds === null) return
+  if (!companyId || !scope.allowedCompanyIds.includes(String(companyId))) {
+    throw new Error('company-out-of-scope')
+  }
+}
+
+
 type Body =
   | {
       action: 'createIncome'
@@ -183,11 +206,7 @@ export async function POST(req: Request) {
       if (!body.payload.date?.trim()) return json({ error: 'Дата обязательна' }, 400)
       if (!body.payload.company_id?.trim()) return json({ error: 'Компания обязательна' }, 400)
       if (!body.payload.operator_id?.trim()) return json({ error: 'Оператор обязателен' }, 400)
-      await resolveCompanyScope({
-        activeOrganizationId: access.activeOrganization?.id || null,
-        requestedCompanyId: body.payload.company_id,
-        isSuperAdmin: access.isSuperAdmin,
-      })
+      await assertCompanyInScope(access, body.payload.company_id)
 
       const insertPayload = normalizeIncomePayload(body.payload)
       const totalAmount =
@@ -265,11 +284,7 @@ export async function POST(req: Request) {
         if (totalAmount <= 0) return json({ error: 'Сумма дохода обязательна' }, 400)
       }
       for (const row of normalizedRows) {
-        await resolveCompanyScope({
-          activeOrganizationId: access.activeOrganization?.id || null,
-          requestedCompanyId: row.company_id,
-          isSuperAdmin: access.isSuperAdmin,
-        })
+        await assertCompanyInScope(access, row.company_id)
       }
 
       const { data, error } = await supabase.from('incomes').insert(normalizedRows).select('id, date, company_id, operator_id, shift, zone')
@@ -314,11 +329,7 @@ export async function POST(req: Request) {
         .single()
 
       if (existingError) throw existingError
-      await resolveCompanyScope({
-        activeOrganizationId: access.activeOrganization?.id || null,
-        requestedCompanyId: existing.company_id,
-        isSuperAdmin: access.isSuperAdmin,
-      })
+      await assertCompanyInScope(access, existing.company_id)
 
       const { error } = await supabase
         .from('incomes')
@@ -352,11 +363,7 @@ export async function POST(req: Request) {
 
       const { data: existing, error: existingError } = await supabase.from('incomes').select('*').eq('id', body.incomeId).single()
       if (existingError) throw existingError
-      await resolveCompanyScope({
-        activeOrganizationId: access.activeOrganization?.id || null,
-        requestedCompanyId: existing.company_id,
-        isSuperAdmin: access.isSuperAdmin,
-      })
+      await assertCompanyInScope(access, existing.company_id)
 
       const updatePayload = {
         date: body.payload.date,
@@ -402,11 +409,7 @@ export async function POST(req: Request) {
 
       const { data: existing, error: existingError } = await supabase.from('incomes').select('*').eq('id', body.incomeId).single()
       if (existingError) throw existingError
-      await resolveCompanyScope({
-        activeOrganizationId: access.activeOrganization?.id || null,
-        requestedCompanyId: existing.company_id,
-        isSuperAdmin: access.isSuperAdmin,
-      })
+      await assertCompanyInScope(access, existing.company_id)
 
       const { error } = await supabase.from('incomes').delete().eq('id', body.incomeId)
       if (error) throw error

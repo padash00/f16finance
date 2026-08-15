@@ -112,9 +112,10 @@ export async function GET(req: Request) {
       .gte('period_start', yearStart)
       .lte('period_end', yearEnd)
     if (companyScope.allowedCompanyIds !== null) {
-      // company_id IS NULL (общий) OR в списке доступных
-      const allowed = companyScope.allowedCompanyIds.join(',')
-      pq = pq.or(`company_id.is.null,company_id.in.(${allowed})`)
+      // Только точки своей организации. Ветку `company_id.is.null` убрали:
+      // общий план ни к какой организации не привязан (у kpi_plans нет
+      // organization_id), поэтому org A видела цели org B.
+      pq = pq.in('company_id', companyScope.allowedCompanyIds)
     }
     const { data: plans, error: pErr } = await pq
     if (pErr) throw pErr
@@ -364,7 +365,28 @@ export async function POST(req: Request) {
     if (!VALID_METRICS.includes(metric)) return json({ error: 'invalid metric' }, 400)
     if (!Number.isFinite(target) || target < 0) return json({ error: 'invalid target_amount' }, 400)
 
-    if (companyId) {
+    // Изоляция (та же логика, что в DELETE ниже): у kpi_plans нет organization_id,
+    // поэтому план атрибутируется организации ТОЛЬКО через company_id. Раньше
+    // проверка стояла под `if (companyId)`, и при company_id = null дальше шёл
+    // ГЛОБАЛЬНЫЙ поиск по (period_start, kind) с последующим update — то есть
+    // сотрудник одной организации перезаписывал план другой.
+    if (!access.isSuperAdmin) {
+      if (!companyId) {
+        return json(
+          { error: 'Общий план (без точки) может задать только суперадмин — выберите конкретную точку' },
+          403,
+        )
+      }
+      try {
+        await resolveCompanyScope({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+          requestedCompanyId: companyId,
+        })
+      } catch {
+        return json({ error: 'forbidden' }, 403)
+      }
+    } else if (companyId) {
       await resolveCompanyScope({
         activeOrganizationId: access.activeOrganization?.id || null,
         isSuperAdmin: access.isSuperAdmin,
@@ -415,7 +437,11 @@ export async function POST(req: Request) {
     // Fallback: некоторые БД унаследовали legacy-колонки NOT NULL, которых
     // нет в актуальной схеме. Заполняем их детерминированно, чтобы INSERT
     // не падал. Если колонки в БД нет — retry без неё.
-    const planKey = [companyId || 'org', kind, start].join('|')
+    // В plan_key добавлена организация: у глобальных планов ключ 'org|kind|start'
+    // был ОДИНАКОВ у всех организаций, и legacy-unique по plan_key заставлял
+    // update чужой строки в ветке uniqueRetry ниже.
+    const orgKeyPart = access.activeOrganization?.id || 'global'
+    const planKey = [orgKeyPart, companyId || 'org', kind, start].join('|')
 
     const insertPayload: Record<string, unknown> = {
       company_id: companyId,
@@ -504,7 +530,9 @@ export async function POST(req: Request) {
           if (!byKey.error && byKey.data) foundId = (byKey.data as any).id
         } catch {}
 
-        // Попытка #2: company_id + period_start + kind.
+        // Попытка #2: company_id + period_start + kind. Безопасно: выше не-супер
+        // без company_id из своего скоупа сюда уже не доходит, а ветка
+        // `.is('company_id', null)` остаётся только для суперадмина.
         if (!foundId) {
           let q = supabase
             .from('kpi_plans')

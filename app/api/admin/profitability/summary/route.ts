@@ -105,6 +105,16 @@ export async function GET(req: Request) {
     const dateTo = monthEnd(to)
     const orgId = access.activeOrganization?.id || null
 
+    // NEVER-pattern: ниже фильтры по организации навешивались условно (`if (orgId)`),
+    // и у пользователя без активной организации они исчезали — маршрут читал бы
+    // ручные вводы и справочники всех тенантов.
+    if (!access.isSuperAdmin && !orgId) {
+      return json({ ok: true, data: { months: [] } })
+    }
+    // Для .eq() у не-супер-админа подставляем нулевой uuid, чтобы фильтр
+    // существовал всегда (fail-closed), даже если орг внезапно пуста.
+    const orgFilterId = orgId || '00000000-0000-0000-0000-000000000000'
+
     // Сутки до начала периода: ночная смена начинается вечером и часть выручки
     // проводит уже после полуночи. Без предыдущего дня первый день периода
     // считался бы по обрубленной смене.
@@ -153,7 +163,21 @@ export async function GET(req: Request) {
       .select('*')
       .gte('month', `${from}-01`)
       .lte('month', `${to}-01`)
-    if (orgId) inputsQuery = inputsQuery.eq('organization_id', orgId)
+    if (!access.isSuperAdmin) inputsQuery = inputsQuery.eq('organization_id', orgFilterId)
+    else if (orgId) inputsQuery = inputsQuery.eq('organization_id', orgId)
+
+    // Справочник категорий — только своей орг: чужая категория с таким же именем
+    // перетирала accounting_group и искажала EBITDA / чистую прибыль.
+    let categoriesQuery = supabase.from('expense_categories').select('name, accounting_group')
+    if (!access.isSuperAdmin) categoriesQuery = categoriesQuery.eq('organization_id', orgFilterId)
+    else if (orgId) categoriesQuery = categoriesQuery.eq('organization_id', orgId)
+
+    // Устройства и проекты точек читались по всем тенантам, а их company_id
+    // попадали в splitCompanyIds и влияли на расчёт дневного Kaspi.
+    let devicesQuery = supabase.from('point_devices').select('company_id, feature_flags').eq('is_active', true)
+    if (companyScope.allowedCompanyIds !== null) {
+      devicesQuery = devicesQuery.in('company_id', companyScope.allowedCompanyIds)
+    }
 
     const [incomeRows, expenseRows, inputsRes, categoriesRes, devicesRes, projectsRes] = await Promise.all([
       fetchAllPages(
@@ -162,8 +186,8 @@ export async function GET(req: Request) {
       ),
       fetchAllPages('expenses', 'date, company_id, category, cash_amount, kaspi_amount'),
       inputsQuery,
-      supabase.from('expense_categories').select('name, accounting_group'),
-      supabase.from('point_devices').select('company_id, feature_flags').eq('is_active', true),
+      categoriesQuery,
+      devicesQuery,
       supabase
         .from('point_projects')
         .select('point_project_companies(company_id, feature_flags)')
@@ -205,6 +229,15 @@ export async function GET(req: Request) {
           flags && typeof flags === 'object' && !Array.isArray(flags) &&
           (flags as Record<string, unknown>).kaspi_daily_split === true
         if (on && link?.company_id) splitCompanyIds.add(String(link.company_id))
+      }
+    }
+
+    // point_projects нельзя отфильтровать запросом (у проекта нет company_id),
+    // поэтому отсекаем чужие точки постфильтром по скоупу.
+    if (companyScope.allowedCompanyIds !== null) {
+      const allowed = new Set(companyScope.allowedCompanyIds.map((id) => String(id)))
+      for (const id of Array.from(splitCompanyIds)) {
+        if (!allowed.has(id)) splitCompanyIds.delete(id)
       }
     }
 

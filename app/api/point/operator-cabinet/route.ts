@@ -47,10 +47,26 @@ async function requirePointOperator(request: Request) {
     return { response: NextResponse.json({ error: 'operator-inactive' }, { status: 403 }) }
   }
 
+  // Изоляция: оператор из заголовков обязан быть закреплён за компанией этой
+  // точки. Без проверки любой девайс-токен + чужой operator_id/auth_id отдавал
+  // кабинет (выручку по сменам и долги) оператора другого арендатора.
+  const { data: assignments } = await supabase
+    .from('operator_company_assignments')
+    .select('company_id')
+    .eq('operator_id', operatorId)
+    .eq('is_active', true)
+
+  const operatorCompanyIds = ((assignments || []) as any[]).map((a) => String(a.company_id)).filter(Boolean)
+  const deviceCompanyIds = point.device.company_ids.map((id) => String(id))
+  if (!operatorCompanyIds.some((id) => deviceCompanyIds.includes(id))) {
+    return { response: NextResponse.json({ error: 'operator-not-assigned-to-point' }, { status: 403 }) }
+  }
+
   return {
     ...point,
     operator,
     operatorAuth,
+    operatorCompanyIds,
   }
 }
 
@@ -59,20 +75,26 @@ export async function GET(request: Request) {
     const context = await requirePointOperator(request)
     if ('response' in context) return context.response
 
-    const { supabase, operator } = context
+    const { supabase, operator, operatorCompanyIds } = context
     const operatorId = String(operator.id)
+    // Только компании, где оператор реально закреплён: строки, «приписанные» его
+    // id в чужой компании (operator_id принимается из тела в ряде маршрутов),
+    // в кабинет не попадают. NEVER-паттерн на пустом списке.
+    const scopeCompanyIds = operatorCompanyIds.length > 0 ? operatorCompanyIds : ['00000000-0000-0000-0000-000000000000']
 
     const [shiftsRes, debtsRes] = await Promise.all([
       supabase
         .from('incomes')
         .select('id, date, shift, company_id, cash_amount, kaspi_amount, online_amount')
         .eq('operator_id', operatorId)
+        .in('company_id', scopeCompanyIds)
         .order('date', { ascending: false })
         .limit(400),
       supabase
         .from('point_debt_items')
         .select('id, company_id, operator_id, item_name, barcode, quantity, unit_price, total_amount, comment, week_start, created_at, status')
         .eq('operator_id', operatorId)
+        .in('company_id', scopeCompanyIds)
         .order('created_at', { ascending: false })
         .limit(400),
     ])

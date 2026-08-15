@@ -21,10 +21,14 @@ export const refundSaleTool: CopilotTool = {
       required: true,
       description: 'ID продажи',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase
+        // Без скоупа в кнопках были видны чеки и точки других организаций.
+        const scope = await scopedCompanyIds(ctx)
+        let optQ = ctx.supabase
           .from('point_sales')
           .select('id, total_amount, created_at, company:company_id(name)')
           .is('refunded_at', null)
+        if (scope) optQ = optQ.in('company_id', scope)
+        const { data } = await optQ
           .order('created_at', { ascending: false })
           .limit(50)
         return (data || []).map((s: any) => {
@@ -66,6 +70,9 @@ export const refundSaleTool: CopilotTool = {
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
+        // Тегируем событие организацией: иначе запись уходит в «общий» пул
+        // audit_log и её читают копилоты других клиентов.
+        organizationId: ctx.organizationId || null,
         entityType: 'pos-sale',
         entityId: saleId,
         action: 'refund',

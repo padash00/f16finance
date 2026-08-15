@@ -96,13 +96,21 @@ async function collectSalaryFacts(supabase: SupabaseLike, companyId: string): Pr
     .join('\n')
 }
 
-async function collectChecklistFacts(supabase: SupabaseLike, companyId: string): Promise<string | null> {
+async function collectChecklistFacts(
+  supabase: SupabaseLike,
+  companyId: string,
+  organizationId: string | null,
+): Promise<string | null> {
   try {
-    const { data } = await supabase
+    // company_id.is.null тянул общесетевые чек-листы ВСЕХ организаций — их текст
+    // уходил в промпт и оседал в статьях чужой базы знаний. Режем по орг.
+    let query = supabase
       .from('checklist_templates')
       .select('*')
       .or(`company_id.is.null,company_id.eq.${companyId}`)
       .limit(10)
+    if (organizationId) query = query.or(`organization_id.is.null,organization_id.eq.${organizationId}`)
+    const { data } = await query
 
     const rows = (data || []) as Array<Record<string, unknown>>
     if (rows.length === 0) return null
@@ -122,11 +130,11 @@ async function collectChecklistFacts(supabase: SupabaseLike, companyId: string):
   }
 }
 
-async function collectFacts(supabase: SupabaseLike, companyId: string) {
+async function collectFacts(supabase: SupabaseLike, companyId: string, organizationId: string | null) {
   const [catalog, salary, checklists] = await Promise.all([
     collectCatalogFacts(supabase, companyId),
     collectSalaryFacts(supabase, companyId),
-    collectChecklistFacts(supabase, companyId),
+    collectChecklistFacts(supabase, companyId, organizationId),
   ])
   return { catalog, salary_rules: salary, checklists }
 }
@@ -249,7 +257,7 @@ export async function GET(request: Request) {
       byTopic.set(article.topic_key, list)
     }
 
-    const facts = await collectFacts(supabase, companyId)
+    const facts = await collectFacts(supabase, companyId, orgId)
 
     const topics = getTopicsForIndustry(company.industry).map((topic) => {
       const matched = byTopic.get(topic.key) || []
@@ -465,7 +473,7 @@ export async function POST(request: Request) {
     let jobs: Array<{ topic: KnowledgeTopic; facts: string }> = []
 
     if (body.action === 'generate_facts') {
-      const facts = await collectFacts(supabase, companyId)
+      const facts = await collectFacts(supabase, companyId, orgId)
       jobs = allTopics
         .filter((topic) => topic.factSource && facts[topic.factSource])
         .map((topic) => ({ topic, facts: facts[topic.factSource!] as string }))

@@ -27,11 +27,18 @@ function json(data: unknown, status = 200) {
 // Как в close/open: desktop может прислать operator_id, а смена привязывается по
 // staff_id. staff_id проходит насквозь, operator_id резолвится через линк.
 // Без этого хендовер писал неверную привязку смены → ломался расчёт зарплаты.
-async function resolveStaffIdForOperator(supabase: any, operatorId: string | null | undefined) {
+// orgId — организация точки: closed_by / next_operator_id приходят из тела, и
+// без скоупа смену можно было передать сотруднику другого арендатора.
+async function resolveStaffIdForOperator(supabase: any, operatorId: string | null | undefined, orgId: string) {
   const id = String(operatorId || '').trim()
   if (!id) return null
 
-  const { data: staff } = await supabase.from('staff').select('id').eq('id', id).maybeSingle()
+  const { data: staff } = await supabase
+    .from('staff')
+    .select('id')
+    .eq('id', id)
+    .or(`organization_id.eq.${orgId},organization_id.is.null`)
+    .maybeSingle()
   if (staff?.id) return staff.id
 
   const { data: link } = await supabase
@@ -59,8 +66,9 @@ export async function POST(request: Request) {
   if (!open) return json({ error: 'point-shift-no-open' }, 409)
   const prevId = (open as any).id as string
 
-  const closedByStaffId = await resolveStaffIdForOperator(supabase, body.closed_by)
-  const nextOperatorStaffId = await resolveStaffIdForOperator(supabase, body.next_operator_id)
+  const orgId = device.company?.organization_id || '00000000-0000-0000-0000-000000000000'
+  const closedByStaffId = await resolveStaffIdForOperator(supabase, body.closed_by, orgId)
+  const nextOperatorStaffId = await resolveStaffIdForOperator(supabase, body.next_operator_id, orgId)
 
   const { data: handoverResult, error: handoverErr } = await supabase.rpc('point_shift_handover', {
     p_prev_shift_id: prevId,

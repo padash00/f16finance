@@ -33,7 +33,12 @@ export const getForecastTool: CopilotTool = {
 
     try {
       // PostgREST режет ЛЮБОЙ запрос до 1000 строк — только страницы по 1000.
-      const scopeIds = companyId ? null : await scopedCompanyIds(ctx)
+      // Скоуп организации считаем всегда: указанная точка не должна его отменять,
+      // иначе чужой company_id даёт прогноз по данным другого клиента.
+      const scopeIds = await scopedCompanyIds(ctx)
+      if (companyId && scopeIds && !scopeIds.includes(companyId)) {
+        return { ok: false, message: 'Точка не найдена.' }
+      }
       const fetchAll = (table: 'incomes' | 'expenses', select: string) =>
         fetchAllPages((rFrom, rTo) => {
           let q = ctx.supabase.from(table).select(select).gte('date', from).lte('date', to)

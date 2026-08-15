@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
-import { requireCapability } from '@/lib/server/capabilities'
+import { requireCapability, requireSuperAdmin } from '@/lib/server/capabilities'
 import { requireAddon } from '@/lib/server/entitlements'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
@@ -13,6 +13,13 @@ export async function GET(request: Request) {
   // это доверил, и каталог такое право предусматривает.
   const denied = await requireCapability(access, 'telegram.view')
   if (denied) return denied
+
+  // telegram_allowed_users — платформенная таблица без организации, и запись в ней
+  // даёт боту роль super_admin (данные ВСЕХ арендаторов). Поэтому не-супер видит
+  // пустой список: чужие telegram id и подписи админов не наши, чтобы их показывать.
+  if (!access.isSuperAdmin) {
+    return NextResponse.json({ data: [], tableExists: true })
+  }
 
   try {
     const supabase = createAdminSupabaseClient()
@@ -41,6 +48,10 @@ export async function POST(request: Request) {
   if (addonDenied) return addonDenied
   const denied = await requireCapability(access, 'telegram.add_user')
   if (denied) return denied
+  // Запись здесь = выдача роли super_admin в боте (доступ ко всем организациям),
+  // поэтому только супер-админ платформы, а не владелец арендатора.
+  const superOnly = requireSuperAdmin(access)
+  if (superOnly) return superOnly
 
   const body = await request.json().catch(() => ({}))
   const telegramUserId = String(body.telegram_user_id || '').trim()
@@ -75,6 +86,9 @@ export async function DELETE(request: Request) {
   if (addonDenied) return addonDenied
   const denied = await requireCapability(access, 'telegram.delete_user')
   if (denied) return denied
+  // Таблица платформенная (без organization_id) — чужие записи не наши, чтобы их удалять.
+  const superOnly = requireSuperAdmin(access)
+  if (superOnly) return superOnly
 
   const { searchParams } = new URL(request.url)
   const id = searchParams.get('id')
@@ -97,6 +111,9 @@ export async function PATCH(request: Request) {
   if (addonDenied) return addonDenied
   const denied = await requireCapability(access, 'telegram.toggle_finance')
   if (denied) return denied
+  // can_finance = права супер-админа в боте; переключать может только супер-админ платформы.
+  const superOnly = requireSuperAdmin(access)
+  if (superOnly) return superOnly
 
   const body = await request.json().catch(() => ({}))
   const { id, label, can_finance } = body

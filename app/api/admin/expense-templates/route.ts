@@ -21,6 +21,9 @@ export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    // Гейта не было вовсе: шаблоны расходов (суммы, статьи) читал любой
+    // аутентифицированный субъект, включая клиента гостевого контура.
+    if (!access.isSuperAdmin && !access.staffMember) return json({ error: 'forbidden' }, 403)
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const companyScope = await resolveCompanyScope({
       activeOrganizationId: access.activeOrganization?.id || null,

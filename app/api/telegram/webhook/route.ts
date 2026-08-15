@@ -144,25 +144,29 @@ async function identifyBotUser(telegramUserId: string): Promise<BotUser> {
   try {
     const { data } = await supabase
       .from('operators')
-      .select('id, name, short_name, operator_profiles(full_name)')
+      .select('id, name, short_name, organization_id, operator_profiles(full_name)')
       .eq('telegram_chat_id', telegramUserId)
       .eq('is_active', true)
       .maybeSingle()
     if (data) {
       const profiles = data.operator_profiles as Array<{ full_name: string | null }> | null
       const displayName = profiles?.[0]?.full_name || data.name || 'Оператор'
-      // Организация оператора — через его привязку к компании (для изоляции копилота).
-      let orgId: string | null = null
+      // Организация оператора: сначала своя колонка (проставляется при создании),
+      // назначение на точку — запасной путь для старых записей без неё. Без орг
+      // весь скоуп ниже становится fail-closed, поэтому важно её найти.
+      let orgId: string | null = (data as any).organization_id || null
       try {
-        const { data: asg } = await supabase
-          .from('operator_company_assignments')
-          .select('company_id')
-          .eq('operator_id', data.id)
-          .limit(1)
-          .maybeSingle()
-        if (asg?.company_id) {
-          const { data: comp } = await supabase.from('companies').select('organization_id').eq('id', asg.company_id).maybeSingle()
-          orgId = comp?.organization_id || null
+        if (!orgId) {
+          const { data: asg } = await supabase
+            .from('operator_company_assignments')
+            .select('company_id')
+            .eq('operator_id', data.id)
+            .limit(1)
+            .maybeSingle()
+          if (asg?.company_id) {
+            const { data: comp } = await supabase.from('companies').select('organization_id').eq('id', asg.company_id).maybeSingle()
+            orgId = comp?.organization_id || null
+          }
         }
       } catch {}
       return { role: 'operator', name: displayName, entityId: data.id, operatorId: data.id, organizationId: orgId }
@@ -242,13 +246,19 @@ async function resolveTelegramAuthUser(supabase: ReturnType<typeof createAdminSu
 async function resolveRecipientByName(
   supabase: ReturnType<typeof createAdminSupabaseClient>,
   name: string,
+  scopeOrgId: string | null,
 ): Promise<{ found: 'one' | 'none' | 'many' | 'no_account'; user?: PlannerUser; label?: string; options?: string[] }> {
   const q = name.trim().toLowerCase().replace(/^@/, '')
   if (!q) return { found: 'none' }
-  const [{ data: ops }, { data: sts }] = await Promise.all([
-    supabase.from('operators').select('id, name, short_name, telegram_chat_id').eq('is_active', true).limit(300),
-    supabase.from('staff').select('id, full_name, short_name, email, telegram_chat_id').eq('is_active', true).limit(300),
-  ])
+  // Изоляция: искать получателя задачи можно только среди своих людей —
+  // иначе по имени находился сотрудник чужого клуба (и получал задачу).
+  let opsQuery = supabase.from('operators').select('id, name, short_name, telegram_chat_id').eq('is_active', true).limit(300)
+  let stsQuery = supabase.from('staff').select('id, full_name, short_name, email, telegram_chat_id').eq('is_active', true).limit(300)
+  if (scopeOrgId) {
+    opsQuery = opsQuery.eq('organization_id', scopeOrgId)
+    stsQuery = stsQuery.eq('organization_id', scopeOrgId)
+  }
+  const [{ data: ops }, { data: sts }] = await Promise.all([opsQuery, stsQuery])
   const matches: Array<{ kind: 'operator' | 'staff'; row: any; label: string }> = []
   for (const o of (ops || []) as any[]) {
     if (`${o.short_name || ''} ${o.name || ''}`.toLowerCase().includes(q)) matches.push({ kind: 'operator', row: o, label: o.short_name || o.name || 'Оператор' })
@@ -287,14 +297,37 @@ function canUseTop(role: BotUserRole) {
 
 // ─── Finance data helpers ─────────────────────────────────────────────────────
 
-// Изоляция: companyIds организации бот-юзера. super_admin / неизвестная орг → null (все).
-async function botCompanyScope(botUser: BotUser): Promise<string[] | null> {
+// NEVER-паттерн: один бот обслуживает все организации, а createAdminSupabaseClient
+// обходит RLS. Если организацию определить не удалось — подставляем нулевой uuid,
+// чтобы запрос вернул 0 строк, а не данные всех клиентов SaaS.
+const NEVER_UUID = '00000000-0000-0000-0000-000000000000'
+
+// Супер-админ ПЛАТФОРМЫ — только тот, у кого нет своей организации
+// (запись в telegram_allowed_users). Роль super_admin в staff арендатора
+// правом на чужие данные не является, иначе копилот открыл бы всю базу.
+function isPlatformSuperAdmin(botUser: BotUser): boolean {
+  return botUser.role === 'super_admin' && !botUser.organizationId
+}
+
+// Организация бот-юзера для фильтров по organization_id.
+// null → супер-админ платформы (намеренно видит всё), NEVER_UUID → орг неизвестна.
+function botOrgScope(botUser: BotUser): string | null {
+  // Орг проверяем ПЕРВОЙ: роль super_admin может стоять и в staff конкретного
+  // арендатора — такой «супер» обязан оставаться внутри своей организации.
+  if (botUser.organizationId) return botUser.organizationId
   if (botUser.role === 'super_admin') return null
-  const orgId = botUser.organizationId
+  return NEVER_UUID
+}
+
+// Изоляция: companyIds организации бот-юзера. null → только супер-админ (все точки).
+async function botCompanyScope(botUser: BotUser): Promise<string[] | null> {
+  const orgId = botOrgScope(botUser)
   if (!orgId) return null
   const supabase = createAdminSupabaseClient()
   const { data } = await supabase.from('companies').select('id').eq('organization_id', orgId)
-  return (data || []).map((c: any) => String(c.id))
+  const ids = (data || []).map((c: any) => String(c.id))
+  // Пустой список тоже должен фильтровать (fail-closed), поэтому не отдаём [].
+  return ids.length > 0 ? ids : [NEVER_UUID]
 }
 
 async function getFinanceSummary(dateFrom: string, dateTo: string, companyIds: string[] | null = null) {
@@ -420,7 +453,7 @@ function buildHelpText(user: BotUser): string {
   return lines.join('\n')
 }
 
-async function handleTopOperators(chatId: number, companyIds: string[] | null = null) {
+async function handleTopOperators(chatId: number, companyIds: string[] | null = null, scopeOrgId: string | null = null) {
   const supabase = createAdminSupabaseClient()
   const today = todayISO()
   const dateFrom = addDaysISO(today, -6)
@@ -437,6 +470,7 @@ async function handleTopOperators(chatId: number, companyIds: string[] | null = 
     .select('id, name, short_name, organization_id, operator_profiles(full_name)')
     .eq('is_active', true)
   // operators скоупим по орг (через company → org недоступен, но operators.organization_id есть)
+  if (scopeOrgId) opsQ = opsQ.eq('organization_id', scopeOrgId)
   const [incomesRes, operatorsRes] = await Promise.all([incQ, opsQ])
 
   const operatorMap = new Map<string, string>()
@@ -449,6 +483,9 @@ async function handleTopOperators(chatId: number, companyIds: string[] | null = 
   const stats = new Map<string, { revenue: number; shifts: number }>()
   for (const row of incomesRes.data ?? []) {
     if (!row.operator_id) continue
+    // В рейтинг попадают только свои операторы: строка дохода могла остаться
+    // от оператора, переведённого в другую орг, — чужое имя показывать нельзя.
+    if (scopeOrgId && !operatorMap.has(row.operator_id)) continue
     const total = safeNum(row.cash_amount) + safeNum(row.kaspi_amount) + safeNum(row.online_amount) + safeNum(row.card_amount)
     if (!total) continue
     const s = stats.get(row.operator_id) ?? { revenue: 0, shifts: 0 }
@@ -587,7 +624,7 @@ async function handleCompare(chatId: number, companyIds: string[] | null = null)
   await sendTelegramMessage(chatId, lines.join('\n'))
 }
 
-async function handleMyStats(chatId: number, operatorId: string, operatorName: string) {
+async function handleMyStats(chatId: number, operatorId: string, operatorName: string, companyIds: string[] | null = null) {
   const supabase = createAdminSupabaseClient()
   const today = todayISO()
   const dateFrom = addDaysISO(today, -29)
@@ -615,18 +652,22 @@ async function handleMyStats(chatId: number, operatorId: string, operatorName: s
 
   const avgCheck = shifts > 0 ? totalRevenue / shifts : 0
 
-  // Get rank (30 дней по всем операторам может быть >1000 строк — постранично)
-  const allIncomes = await fetchAllPages((from, to) =>
-    supabase
+  // Get rank (30 дней по всем операторам может быть >1000 строк — постранично).
+  // Рейтинг строим ТОЛЬКО по точкам своей организации: без этого оператор клуба A
+  // соревновался с операторами чужих клиентов SaaS, а «мест всего» выдавало их число.
+  const allIncomes = await fetchAllPages((from, to) => {
+    let q = supabase
       .from('incomes')
-      .select('operator_id, cash_amount, kaspi_amount, online_amount, card_amount')
+      .select('operator_id, cash_amount, kaspi_amount, online_amount, card_amount, company_id')
       .gte('date', dateFrom)
       .lte('date', today)
       .not('operator_id', 'is', null)
       .order('date')
       .order('id')
-      .range(from, to),
-  ).catch(() => [] as any[])
+      .range(from, to)
+    if (companyIds) q = q.in('company_id', companyIds)
+    return q
+  }).catch(() => [] as any[])
 
   const revenueMap = new Map<string, number>()
   for (const row of allIncomes ?? []) {
@@ -970,10 +1011,18 @@ async function clearCallbackButtons(chatId: string | number, messageId: number) 
   await callTelegram('editMessageReplyMarkup', { chat_id: String(chatId), message_id: messageId, reply_markup: { inline_keyboard: [] } })
 }
 
-async function loadTaskById(supabase: ReturnType<typeof createAdminSupabaseClient>, taskId: string) {
+async function loadTaskById(
+  supabase: ReturnType<typeof createAdminSupabaseClient>,
+  taskId: string,
+  companyIds: string[] | null = null,
+) {
   // select('*') — staff_id появляется миграцией, не падаем на старых базах
   const { data, error } = await supabase.from('tasks').select('*').eq('id', taskId).maybeSingle()
   if (error) throw error
+  // Изоляция: id задачи приходит из callback_data, то есть управляем клиентом.
+  // Чужую точку не отдаём. Задачи без точки оставляем — их принадлежность
+  // проверяет вызывающий по telegram_chat_id исполнителя.
+  if (data && companyIds && data.company_id && !companyIds.includes(String(data.company_id))) return null
   return data
 }
 
@@ -1003,8 +1052,9 @@ async function processTaskResponse(params: {
   response: TaskResponse
   telegramUserId: string
   note?: string | null
+  companyIds?: string[] | null
 }) {
-  const task = await loadTaskById(params.supabase, params.taskId)
+  const task = await loadTaskById(params.supabase, params.taskId, params.companyIds ?? null)
   if (!task) throw new Error('Задача не найдена')
 
   // Исполнитель — оператор или админ-сотрудник; отвечать может только он.
@@ -1116,7 +1166,7 @@ function parseTextResponse(text: string): { taskNumber: number; response: TaskRe
 
 // ─── Invoice photo handler ────────────────────────────────────────────────────
 
-async function handleInvoicePhoto(chatId: number, messageId: number, telegramUserId: string, fileId: string) {
+async function handleInvoicePhoto(chatId: number, messageId: number, telegramUserId: string, fileId: string, scopeOrgId: string | null = null) {
   const supabase = createAdminSupabaseClient()
   const token = requiredEnv('TELEGRAM_BOT_TOKEN')
 
@@ -1132,8 +1182,24 @@ async function handleInvoicePhoto(chatId: number, messageId: number, telegramUse
   // 3. Download and encode photo
   const imageDataUrl = await downloadTelegramFileAsBase64(filePath)
 
-  // 4. First fetch warehouse to know the organization scope.
-  const warehouse = await fetchFirstWarehouseLocation(supabase)
+  // 4. Склад берём строго свой: общий «первый склад в системе» приходовал бы
+  //    товар на склад другого клиента SaaS. Без орг — не приходуем вообще.
+  let warehouse: { id: string; name: string; organization_id: string | null } | null = null
+  if (scopeOrgId) {
+    const { data } = await supabase
+      .from('inventory_locations')
+      .select('id, name, organization_id')
+      .eq('location_type', 'warehouse')
+      .eq('is_active', true)
+      .eq('organization_id', scopeOrgId)
+      .order('name', { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    warehouse = (data as any) || null
+  } else {
+    // Супер-админ платформы (орг не задана) — прежнее поведение.
+    warehouse = await fetchFirstWarehouseLocation(supabase)
+  }
   if (!warehouse) {
     await sendTelegramText(chatId, '⚠️ Нет активных складов в системе. Создайте склад в разделе «Магазин».')
     return
@@ -1466,7 +1532,9 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
   // Изоляция арендатора: данные ограничиваем компаниями/орг вызывающего.
   // companyIds === null → super_admin / без орг (весь снапшот, как раньше).
   const companyIds = botUser ? await botCompanyScope(botUser) : null
-  const scopeOrgId = botUser?.organizationId || null
+  // Через botOrgScope, а не botUser.organizationId напрямую: без орг тут нужен
+  // нулевой uuid (0 строк), иначе фильтр просто отключался бы.
+  const scopeOrgId = botUser ? botOrgScope(botUser) : null
 
   // Загружаем максимум данных для глубокого анализа (с кэшем 3 мин).
   // Ключ кэша включает орг, чтобы срезы разных арендаторов не смешивались.
@@ -2012,7 +2080,12 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
     const resolveCompanyByName = async (rawName: string) => {
       const q = normalize(rawName)
       if (!q) return { kind: 'empty' as const }
-      const { data: companies } = await supabase.from('companies').select('id, name, code').eq('is_active', true)
+      // Изоляция: список точек — только своей орг. Иначе подсказка «доступные точки»
+      // выдавала бы названия клубов других клиентов SaaS, а по имени можно было
+      // завести задачу/смену в чужой точке.
+      let companyQuery = supabase.from('companies').select('id, name, code').eq('is_active', true)
+      if (companyIds) companyQuery = companyQuery.in('id', companyIds)
+      const { data: companies } = await companyQuery
       const all = (companies || []) as any[]
       const exact = all.find((c) => normalize(c.name) === q || (!!c.code && normalize(c.code) === q))
       if (exact) return { kind: 'ok' as const, company: exact }
@@ -2041,6 +2114,9 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
         .from('operators')
         .select('id, name, short_name, telegram_chat_id, operator_profiles(full_name)')
         .eq('is_active', true)
+      // Изоляция: оператора ищем только среди своих (иначе по имени находился
+      // и получал задачу/смену оператор чужой организации).
+      if (scopeOrgId) query = query.eq('organization_id', scopeOrgId)
       if (allowedIds) query = query.in('id', allowedIds.length > 0 ? allowedIds : ['__none__'])
       const { data: ops } = await query
       const all = (ops || []) as any[]
@@ -2067,7 +2143,11 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
 
     if (name === 'send_message_to_operator') {
       if (!canManageOps) return '⛔ У вас нет прав на это действие.'
-      const { data: ops } = await supabase.from('operators').select('id, name, short_name, telegram_chat_id, operator_profiles(full_name)').eq('is_active', true)
+      // Изоляция: писать можно только своим операторам, и список «доступные»
+      // в ответе не должен раскрывать сотрудников других клиентов.
+      let opsQuery = supabase.from('operators').select('id, name, short_name, telegram_chat_id, operator_profiles(full_name)').eq('is_active', true)
+      if (scopeOrgId) opsQuery = opsQuery.eq('organization_id', scopeOrgId)
+      const { data: ops } = await opsQuery
       if (!ops?.length) return 'Операторы не найдены в системе.'
       const query = (args.operator_name as string).toLowerCase()
       const found = ops.find((op: any) => {
@@ -2242,12 +2322,16 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
       const found = opRes.operator
       const profiles = found.operator_profiles as Array<{ full_name: string | null }> | null
       const operatorLabel = (profiles?.[0]?.full_name || found.short_name || found.name || '').trim()
-      const { data: conflict } = await supabase
+      // Проверка «уже назначен» — только по своим точкам: иначе тёзка из чужого
+      // клуба блокировал бы назначение и подтверждал существование чужой смены.
+      let conflictQuery = supabase
         .from('shifts')
         .select('id')
         .eq('date', date)
         .ilike('operator_name', operatorLabel)
         .limit(1)
+      if (companyIds) conflictQuery = conflictQuery.in('company_id', companyIds)
+      const { data: conflict } = await conflictQuery
       if (conflict && conflict.length > 0) {
         const { data: sameSlot } = await supabase
           .from('shifts')
@@ -2292,7 +2376,10 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
     }
 
     if (name === 'get_operator_info') {
-      const { data: ops } = await supabase.from('operators').select('id, name, short_name, operator_profiles(full_name)').eq('is_active', true)
+      // Изоляция: карточка оператора доступна только внутри своей организации.
+      let opsQuery = supabase.from('operators').select('id, name, short_name, operator_profiles(full_name)').eq('is_active', true)
+      if (scopeOrgId) opsQuery = opsQuery.eq('organization_id', scopeOrgId)
+      const { data: ops } = await opsQuery
       if (!ops?.length) return 'Операторы не найдены.'
       const query = (args.operator_name as string).toLowerCase()
       const found = ops.find((op: any) => {
@@ -2317,7 +2404,11 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
 
     if (name === 'send_message_to_all_operators') {
       if (!canManageOps) return '⛔ У вас нет прав на это действие.'
-      const { data: ops } = await supabase.from('operators').select('name, telegram_chat_id, operator_profiles(full_name)').eq('is_active', true).not('telegram_chat_id', 'is', null)
+      // Изоляция: рассылка «всем операторам» уходила операторам ВСЕХ организаций —
+      // клиенты SaaS получали сообщения от чужого руководства.
+      let allOpsQuery = supabase.from('operators').select('name, telegram_chat_id, operator_profiles(full_name)').eq('is_active', true).not('telegram_chat_id', 'is', null)
+      if (scopeOrgId) allOpsQuery = allOpsQuery.eq('organization_id', scopeOrgId)
+      const { data: ops } = await allOpsQuery
       if (!ops?.length) return 'Нет операторов с Telegram.'
       const msgText = `📨 <b>Сообщение от руководства:</b>\n\n${args.message}`
       let sent = 0
@@ -2330,10 +2421,13 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
     if (name === 'query_financials') {
       const { date_from, date_to, company_name } = args as { date_from: string; date_to: string; company_name?: string }
 
-      // Find company if specified
+      // Find company if specified. Список точек — только своей орг: иначе
+      // подсказка «Доступные:» перечисляла клубы всех клиентов SaaS.
       let companyFilter: { id: string; name: string } | null = null
       if (company_name) {
-        const { data: allCompanies } = await supabase.from('companies').select('id, name')
+        let companiesQuery = supabase.from('companies').select('id, name')
+        if (companyIds) companiesQuery = companiesQuery.in('id', companyIds)
+        const { data: allCompanies } = await companiesQuery
         const q = company_name.toLowerCase()
         const found = (allCompanies || []).find((c: any) =>
           c.name.toLowerCase().includes(q) || q.includes(c.name.toLowerCase())
@@ -2344,6 +2438,8 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
 
       // Query incomes / expenses — период выбирает AI и он может быть любым,
       // поэтому постранично (PostgREST режет до 1000 строк — суммы врали бы).
+      // Без companyFilter раньше суммировалась выручка ВСЕХ организаций —
+      // поэтому фильтр по точкам своей орг обязателен в обеих ветках.
       const incomesP = fetchAllPages((from, to) => {
         let incomeQuery = supabase
           .from('incomes')
@@ -2354,6 +2450,7 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
           .order('id')
           .range(from, to)
         if (companyFilter) incomeQuery = incomeQuery.eq('company_id', companyFilter.id)
+        else if (companyIds) incomeQuery = incomeQuery.in('company_id', companyIds)
         return incomeQuery
       })
       const expensesP = fetchAllPages((from, to) => {
@@ -2366,6 +2463,7 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
           .order('id')
           .range(from, to)
         if (companyFilter) expenseQuery = expenseQuery.eq('company_id', companyFilter.id)
+        else if (companyIds) expenseQuery = expenseQuery.in('company_id', companyIds)
         return expenseQuery
       })
       const [incomes, expenses] = await Promise.all([incomesP, expensesP])
@@ -2439,8 +2537,11 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
       }
 
       if (!operatorId && args.operator_name) {
-        // Search by name
-        const { data: ops } = await supabase.from('operators').select('id, name, short_name, operator_profiles(full_name)').eq('is_active', true)
+        // Search by name. Изоляция: зарплату можно узнать только по своему
+        // оператору — поиск по всей базе выдавал расчёт чужого сотрудника.
+        let salaryOpsQuery = supabase.from('operators').select('id, name, short_name, operator_profiles(full_name)').eq('is_active', true)
+        if (scopeOrgId) salaryOpsQuery = salaryOpsQuery.eq('organization_id', scopeOrgId)
+        const { data: ops } = await salaryOpsQuery
         const query = (args.operator_name as string).toLowerCase()
         const found = (ops || []).find((op: any) => {
           const profiles = op.operator_profiles as Array<{ full_name: string | null }> | null
@@ -2458,6 +2559,18 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
       }
 
       if (!operatorId) return 'Укажи имя оператора или operator_id.'
+
+      // operator_id мог прийти прямо от модели (в т.ч. из чужой орг) — проверяем
+      // принадлежность до расчёта, иначе утечёт зарплата чужого сотрудника.
+      if (scopeOrgId) {
+        const { data: ownOp } = await supabase
+          .from('operators')
+          .select('id')
+          .eq('id', operatorId)
+          .eq('organization_id', scopeOrgId)
+          .maybeSingle()
+        if (!ownOp?.id) return 'Оператор не найден.'
+      }
 
       try {
         const snapshot = await getOperatorSalarySnapshot(supabase, {
@@ -2499,7 +2612,10 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
       const fromIso = `${dateFrom}T00:00:00.000Z`
       const toIso = `${dateTo}T23:59:59.999Z`
 
-      const { data: rawRows, error } = await supabase
+      // Изоляция: журнал общий на всех арендаторов. Фильтруем по organization_id
+      // (income/expense размечены), а строки входов/просмотров орг не имеют —
+      // их отсекает второй слой ниже: актор ищется только среди своего staff.
+      let auditQuery = supabase
         .from('audit_log')
         .select('actor_user_id, entity_type, entity_id, action, payload, created_at')
         .gte('created_at', fromIso)
@@ -2507,6 +2623,8 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
         .in('entity_type', ['auth-session', 'page-view', 'income', 'expense'])
         .order('created_at', { ascending: true })
         .limit(500)
+      if (scopeOrgId) auditQuery = auditQuery.or(`organization_id.is.null,organization_id.eq.${scopeOrgId}`)
+      const { data: rawRows, error } = await auditQuery
 
       if (error) return `Не удалось загрузить активность: ${error.message}`
       const rows = (rawRows || []) as any[]
@@ -2523,11 +2641,14 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
           let staffRole: string | null = null
           let staffName = ''
           if (email) {
-            const { data: staff } = await supabase
+            // Актора ищем только среди своего staff: чужой руководитель не
+            // получит роль owner/manager и выпадет из отчёта (фильтр ниже).
+            let staffQuery = supabase
               .from('staff')
               .select('full_name, short_name, role')
               .ilike('email', email)
-              .maybeSingle()
+            if (scopeOrgId) staffQuery = staffQuery.eq('organization_id', scopeOrgId)
+            const { data: staff } = await staffQuery.maybeSingle()
             staffRole = String(staff?.role || '').trim().toLowerCase() || null
             staffName = String(staff?.full_name || staff?.short_name || '').trim()
           }
@@ -2672,7 +2793,10 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
 
       const fromIso = `${dateFrom}T00:00:00.000Z`
       const toIso = `${dateTo}T23:59:59.999Z`
-      const { data: rawRows, error } = await supabase
+      // Изоляция: журнал входов общий. У auth-session нет organization_id,
+      // поэтому арендатора отсекаем по актору — ниже оставляем только тех,
+      // кто резолвится в оператора своей организации.
+      let loginsQuery = supabase
         .from('audit_log')
         .select('actor_user_id, action, created_at, payload')
         .eq('entity_type', 'auth-session')
@@ -2681,6 +2805,8 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
         .lte('created_at', toIso)
         .order('created_at', { ascending: false })
         .limit(500)
+      if (scopeOrgId) loginsQuery = loginsQuery.or(`organization_id.is.null,organization_id.eq.${scopeOrgId}`)
+      const { data: rawRows, error } = await loginsQuery
 
       if (error) return `Не удалось загрузить входы операторов: ${error.message}`
       const rows = (rawRows || []) as any[]
@@ -2689,14 +2815,22 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
       const actorIds = Array.from(new Set(rows.map((r) => String(r.actor_user_id || '')).filter(Boolean)))
       const actorToName = new Map<string, string>()
       if (actorIds.length > 0) {
-        const { data: authLinks } = await supabase
+        // !inner + фильтр по орг: связку user→оператор берём только для своих.
+        let linksQuery = supabase
           .from('operator_auth')
-          .select('user_id, operators(name, short_name, operator_profiles(full_name))')
+          .select(
+            scopeOrgId
+              ? 'user_id, operators!inner(name, short_name, organization_id, operator_profiles(full_name))'
+              : 'user_id, operators(name, short_name, operator_profiles(full_name))',
+          )
           .in('user_id', actorIds)
+        if (scopeOrgId) linksQuery = linksQuery.eq('operators.organization_id', scopeOrgId)
+        const { data: authLinks } = await linksQuery
 
         for (const link of (authLinks || []) as any[]) {
           const userId = String(link.user_id || '')
-          const op = link.operators || {}
+          const opRaw = link.operators
+          const op = (Array.isArray(opRaw) ? opRaw[0] : opRaw) || {}
           const profiles = op.operator_profiles as Array<{ full_name: string | null }> | null
           const name = String(profiles?.[0]?.full_name || op.short_name || op.name || '').trim()
           if (userId && name) actorToName.set(userId, name)
@@ -2705,6 +2839,9 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
 
       const filtered = rows.filter((row) => {
         const userId = String(row.actor_user_id || '')
+        // Нерезолвнутый актор = оператор чужой организации (или удалённый):
+        // раньше он попадал в отчёт по email из payload — это была утечка.
+        if (scopeOrgId && !actorToName.has(userId)) return false
         const name = actorToName.get(userId) || String((row.payload || {}).email || '').trim() || `user:${userId.slice(0, 8)}`
         if (!operatorNameFilter) return true
         return name.toLowerCase().includes(operatorNameFilter)
@@ -3028,7 +3165,7 @@ export async function POST(req: Request) {
           const result = await runCopilotForTelegram({
             userId: botUser.entityId || telegramUserId,
             role: botUser.role === 'unknown' ? null : botUser.role,
-            isSuperAdmin: botUser.role === 'super_admin',
+            isSuperAdmin: isPlatformSuperAdmin(botUser),
             organizationId: botUser.organizationId,
             chatId: Number(chatId),
             callbackData: callbackData.slice(3), // отрезаем cp:
@@ -3082,9 +3219,18 @@ export async function POST(req: Request) {
         const sessionChatId = pdfCompanyMatch[1]
         const companyId = pdfCompanyMatch[2]
         await answerCallbackQuery(callbackQueryId, '').catch(() => null)
+        // callback_data приходит от клиента: чужой чат в ключе сессии позволил бы
+        // читать и подменять распознанный чек другого пользователя.
+        if (sessionChatId !== String(chatId)) return json({ ok: true })
         const { data: sessionRow } = await supabase.from('telegram_chat_history').select('history').eq('chat_id', `pdf_expense_${sessionChatId}`).maybeSingle()
         if (sessionRow?.history?.[0]?.content) {
           const session = JSON.parse(sessionRow.history[0].content)
+          // Точка — только из списка, который бот сам предложил (он уже скоуплен
+          // по орг); произвольный uuid в callback_data увёл бы расход в чужую точку.
+          if (!(session.companies || []).some((c: any) => String(c.id) === companyId)) {
+            await answerCallbackQuery(callbackQueryId, 'Точка недоступна', true).catch(() => null)
+            return json({ ok: true })
+          }
           session.selectedCompanyId = companyId
           await supabase.from('telegram_chat_history').upsert({ chat_id: `pdf_expense_${sessionChatId}`, history: [{ content: JSON.stringify(session) }], updated_at: new Date().toISOString() })
           const { parsed, companies } = session
@@ -3102,10 +3248,17 @@ export async function POST(req: Request) {
       if (pdfConfirmMatch && chatId) {
         const sessionChatId = pdfConfirmMatch[1]
         await answerCallbackQuery(callbackQueryId, 'Добавляю...').catch(() => null)
+        // Подтверждать можно только свою сессию (ключ берётся из callback_data).
+        if (sessionChatId !== String(chatId)) return json({ ok: true })
         const { data: sessionRow } = await supabase.from('telegram_chat_history').select('history').eq('chat_id', `pdf_expense_${sessionChatId}`).maybeSingle()
         if (!sessionRow?.history?.[0]?.content) { await sendTelegramText(chatId, '❌ Сессия истекла.'); return json({ ok: true }) }
-        const { parsed, selectedCompanyId } = JSON.parse(sessionRow.history[0].content)
+        const { parsed, selectedCompanyId, companies: sessionCompanies } = JSON.parse(sessionRow.history[0].content)
         if (!selectedCompanyId) { await sendTelegramText(chatId, '❌ Выбери точку.'); return json({ ok: true }) }
+        // Страховка перед записью: точка обязана быть из предложенного (скоупленного) списка.
+        if (!(sessionCompanies || []).some((c: any) => String(c.id) === String(selectedCompanyId))) {
+          await sendTelegramText(chatId, '❌ Точка недоступна.')
+          return json({ ok: true })
+        }
         const isKaspi = parsed.payment_method === 'kaspi' || parsed.payment_method === 'card'
         const { error } = await supabase.from('expenses').insert({
           date: parsed.date,
@@ -3125,6 +3278,8 @@ export async function POST(req: Request) {
       // ── PDF expense: cancel ──
       const pdfCancelMatch = callbackData.match(/^pdf_cancel_(\d+)$/)
       if (pdfCancelMatch && chatId) {
+        // Ключ сессии из callback_data — чужую сессию отменять нельзя.
+        if (pdfCancelMatch[1] !== String(chatId)) return json({ ok: true })
         await answerCallbackQuery(callbackQueryId, 'Отменено').catch(() => null)
         await callTelegram('editMessageText', { chat_id: String(chatId), message_id: messageId, text: '❌ Добавление отменено.', parse_mode: 'HTML', reply_markup: { inline_keyboard: [] } }).catch(() => null)
         await supabase.from('telegram_chat_history').delete().eq('chat_id', `pdf_expense_${pdfCancelMatch[1]}`)
@@ -3162,6 +3317,22 @@ export async function POST(req: Request) {
           if (!canUseFinance(botUser.role)) {
             await answerCallbackQuery(callbackQueryId, '⛔ Нет доступа', true)
             return json({ ok: true })
+          }
+
+          // Изоляция: id заявки приходит из callback_data. Без проверки владельца
+          // руководитель одного клуба одобрял бы перемещение товара в чужом.
+          const ireqCompanyIds = await botCompanyScope(botUser)
+          if (ireqCompanyIds) {
+            const { data: ownRequest } = await supabase
+              .from('inventory_requests')
+              .select('id')
+              .eq('id', requestId)
+              .in('requesting_company_id', ireqCompanyIds)
+              .maybeSingle()
+            if (!ownRequest?.id) {
+              await answerCallbackQuery(callbackQueryId, 'Заявка не найдена', true)
+              return json({ ok: true })
+            }
           }
 
           if (action === 'edit') {
@@ -3261,11 +3432,15 @@ export async function POST(req: Request) {
             return json({ ok: true })
           }
 
-          const { data: expenseRow, error: expenseError } = await supabase
+          // Изоляция: id расхода приходит из callback_data — читаем и решаем
+          // только по своим точкам, иначе владелец одобрял бы чужой расход.
+          const expenseCompanyIds = await botCompanyScope(botUser)
+          let expenseQuery = supabase
             .from('expenses')
             .select('id, status, one_off_payee, one_off_reason, category, cash_amount, kaspi_amount')
             .eq('id', expenseId)
-            .maybeSingle()
+          if (expenseCompanyIds) expenseQuery = expenseQuery.in('company_id', expenseCompanyIds)
+          const { data: expenseRow, error: expenseError } = await expenseQuery.maybeSingle()
           if (expenseError) throw expenseError
           if (!expenseRow?.id) {
             await answerCallbackQuery(callbackQueryId, 'Расход не найден', true)
@@ -3278,7 +3453,7 @@ export async function POST(req: Request) {
           }
 
           if (action === 'approve') {
-            const { error: updError } = await supabase
+            let approveQuery = supabase
               .from('expenses')
               .update({
                 status: 'approved',
@@ -3287,6 +3462,9 @@ export async function POST(req: Request) {
               })
               .eq('id', expenseId)
               .eq('status', 'pending_approval')
+            // Тот же скоуп и на UPDATE: чтение и запись должны бить по одному набору.
+            if (expenseCompanyIds) approveQuery = approveQuery.in('company_id', expenseCompanyIds)
+            const { error: updError } = await approveQuery
             if (updError) throw updError
             await writeAuditLog(supabase, {
               actorUserId: null,
@@ -3327,7 +3505,14 @@ export async function POST(req: Request) {
       }
       await answerCallbackQuery(callbackQueryId, 'Обрабатываю ответ...').catch(() => null)
       try {
-        const result = await processTaskResponse({ supabase, taskId: taskMatch[1], response: taskMatch[2] as TaskResponse, telegramUserId })
+        const taskBotUser = await identifyBotUser(telegramUserId)
+        const result = await processTaskResponse({
+          supabase,
+          taskId: taskMatch[1],
+          response: taskMatch[2] as TaskResponse,
+          telegramUserId,
+          companyIds: await botCompanyScope(taskBotUser),
+        })
         if (chatId && messageId) await clearCallbackButtons(chatId, messageId).catch(() => null)
         if (chatId) await sendTelegramText(chatId, `<b>Ответ по задаче #${result.taskNumber} принят</b>\n\n<b>${result.responseLabel}</b>\nНовый статус: <b>${result.statusLabel}</b>`)
       } catch (error: any) {
@@ -3388,8 +3573,14 @@ export async function POST(req: Request) {
             payload: { chatId: String(chatId), amount: parsed.amount, category: parsed.category },
           })
 
-          const { data: companiesData } = await supabase.from('companies').select('id, name')
+          // Изоляция: кнопки выбора точки строятся из companies. Без фильтра по орг
+          // бот показывал список всех клиентов SaaS и позволял записать расход в чужую точку.
+          const photoCompanyIds = await botCompanyScope(botUser)
+          let photoCompaniesQuery = supabase.from('companies').select('id, name')
+          if (photoCompanyIds) photoCompaniesQuery = photoCompaniesQuery.in('id', photoCompanyIds)
+          const { data: companiesData } = await photoCompaniesQuery
           const companiesList = (companiesData || []) as Array<{ id: string; name: string }>
+          if (companiesList.length === 0) { await editMsg('⚠️ У вашей организации нет точек — некуда записать расход.'); return json({ ok: true }) }
           const session = { parsed, companies: companiesList, selectedCompanyId: companiesList[0]?.id || null }
           await supabase.from('telegram_chat_history').upsert({ chat_id: `pdf_expense_${chatId}`, history: [{ content: JSON.stringify(session) }], updated_at: new Date().toISOString() })
 
@@ -3405,7 +3596,7 @@ export async function POST(req: Request) {
 
       // Default: invoice scanning
       try {
-        await handleInvoicePhoto(Number(chatId), messageId, telegramUserId, bestPhoto.file_id)
+        await handleInvoicePhoto(Number(chatId), messageId, telegramUserId, bestPhoto.file_id, botOrgScope(botUser))
       } catch (error: any) {
         await sendTelegramText(chatId, `❌ Ошибка при обработке накладной: ${error?.message || 'Неизвестная ошибка'}`).catch(() => null)
       }
@@ -3478,8 +3669,13 @@ export async function POST(req: Request) {
             payload: { chatId: String(chatId), amount: parsedExpense.amount, category: parsedExpense.category },
           })
 
-          const { data: companiesData } = await supabase.from('companies').select('id, name')
+          // Изоляция: тот же список точек, что и для фото-чека, — только своя орг.
+          const pdfCompanyIds = await botCompanyScope(botUser)
+          let pdfCompaniesQuery = supabase.from('companies').select('id, name')
+          if (pdfCompanyIds) pdfCompaniesQuery = pdfCompaniesQuery.in('id', pdfCompanyIds)
+          const { data: companiesData } = await pdfCompaniesQuery
           const companiesList = (companiesData || []) as Array<{ id: string; name: string }>
+          if (companiesList.length === 0) { await editMsg('⚠️ У вашей организации нет точек — некуда записать расход.'); return json({ ok: true }) }
           const session = { parsed: parsedExpense, companies: companiesList, selectedCompanyId: companiesList[0]?.id || null }
           await supabase.from('telegram_chat_history').upsert({ chat_id: `pdf_expense_${chatId}`, history: [{ content: JSON.stringify(session) }], updated_at: new Date().toISOString() })
 
@@ -3545,7 +3741,7 @@ export async function POST(req: Request) {
           const result = await runCopilotForTelegram({
             userId: botUser.entityId || telegramUserId,
             role: botUser.role === 'unknown' ? null : botUser.role,
-            isSuperAdmin: botUser.role === 'super_admin',
+            isSuperAdmin: isPlatformSuperAdmin(botUser),
             organizationId: botUser.organizationId,
             chatId: Number(chatId),
             text: transcript,
@@ -3641,7 +3837,7 @@ export async function POST(req: Request) {
           const result = await runCopilotForTelegram({
             userId: botUser.entityId || telegramUserId,
             role: botUser.role === 'unknown' ? null : botUser.role,
-            isSuperAdmin: botUser.role === 'super_admin',
+            isSuperAdmin: isPlatformSuperAdmin(botUser),
             organizationId: botUser.organizationId,
             chatId: Number(chatId),
             text: userText,
@@ -3688,7 +3884,7 @@ export async function POST(req: Request) {
 
         let recipient: PlannerUser = sender
         if (recipientName) {
-          const r = await resolveRecipientByName(supabaseT, recipientName)
+          const r = await resolveRecipientByName(supabaseT, recipientName, botOrgScope(botUser))
           if (r.found === 'none') { await sendTelegramText(chatId, `🤷 Не нашёл сотрудника «${escTaskHtml(recipientName)}».`); return json({ ok: true }) }
           if (r.found === 'many') { await sendTelegramText(chatId, `Уточни, кому именно:\n${(r.options || []).map((o) => '• ' + escTaskHtml(o)).join('\n')}`); return json({ ok: true }) }
           if (r.found === 'no_account' || !r.user) { await sendTelegramText(chatId, `У «${escTaskHtml(r.label || recipientName)}» нет привязанного аккаунта — задача в Распорядок не ляжет.`); return json({ ok: true }) }
@@ -3752,7 +3948,7 @@ export async function POST(req: Request) {
           await sendTelegramText(chatId, '⛔ Нет доступа к рейтингу операторов.')
           return json({ ok: true })
         }
-        await handleTopOperators(Number(chatId), await botCompanyScope(botUser))
+        await handleTopOperators(Number(chatId), await botCompanyScope(botUser), botOrgScope(botUser))
         return json({ ok: true })
       }
 
@@ -3797,7 +3993,7 @@ export async function POST(req: Request) {
           await sendTelegramText(chatId, '⛔ Эта команда доступна только операторам.')
           return json({ ok: true })
         }
-        await handleMyStats(Number(chatId), botUser.operatorId, botUser.name)
+        await handleMyStats(Number(chatId), botUser.operatorId, botUser.name, await botCompanyScope(botUser))
         return json({ ok: true })
       }
 
@@ -3869,6 +4065,23 @@ export async function POST(req: Request) {
           approved_qty: updates.has(idx) ? Number(updates.get(idx)) : Number(it.requested_qty || 0),
         }))
 
+        // Повторная проверка владельца перед записью: сессия живёт в БД и
+        // права/организация могли смениться между нажатием кнопки и ответом.
+        const editReqCompanyIds = await botCompanyScope(botUser)
+        if (editReqCompanyIds) {
+          const { data: ownRequest } = await supabase
+            .from('inventory_requests')
+            .select('id')
+            .eq('id', String(ireqSession.requestId))
+            .in('requesting_company_id', editReqCompanyIds)
+            .maybeSingle()
+          if (!ownRequest?.id) {
+            await supabase.from('telegram_chat_history').delete().eq('chat_id', editSessionKey)
+            await sendTelegramText(chatId, '⛔ Заявка недоступна.')
+            return json({ ok: true })
+          }
+        }
+
         try {
           await decideInventoryRequest(supabase, {
             request_id: String(ireqSession.requestId),
@@ -3920,11 +4133,11 @@ export async function POST(req: Request) {
         }
 
         const expenseId = String(expenseDeclineSession.expenseId || '')
-        const { data: expenseRow, error: expenseError } = await supabase
-          .from('expenses')
-          .select('id, status')
-          .eq('id', expenseId)
-          .maybeSingle()
+        // Изоляция: отклоняем только расход своей орг (тот же скоуп, что и при одобрении).
+        const declineCompanyIds = await botCompanyScope(botUser)
+        let declineReadQuery = supabase.from('expenses').select('id, status').eq('id', expenseId)
+        if (declineCompanyIds) declineReadQuery = declineReadQuery.in('company_id', declineCompanyIds)
+        const { data: expenseRow, error: expenseError } = await declineReadQuery.maybeSingle()
         if (expenseError) {
           await sendTelegramText(chatId, `❌ Ошибка: ${expenseError.message}`)
           return json({ ok: true })
@@ -3935,7 +4148,7 @@ export async function POST(req: Request) {
           return json({ ok: true })
         }
 
-        const { error: declineError } = await supabase
+        let declineUpdateQuery = supabase
           .from('expenses')
           .update({
             status: 'declined',
@@ -3945,6 +4158,8 @@ export async function POST(req: Request) {
           })
           .eq('id', expenseId)
           .eq('status', 'pending_approval')
+        if (declineCompanyIds) declineUpdateQuery = declineUpdateQuery.in('company_id', declineCompanyIds)
+        const { error: declineError } = await declineUpdateQuery
         if (declineError) {
           await sendTelegramText(chatId, `❌ Ошибка: ${declineError.message}`)
           return json({ ok: true })
@@ -3986,7 +4201,13 @@ export async function POST(req: Request) {
           return json({ ok: true })
         }
         try {
-          const result = await processTaskResponse({ supabase, taskId: String(task.id), response: parsed.response, telegramUserId })
+          const result = await processTaskResponse({
+            supabase,
+            taskId: String(task.id),
+            response: parsed.response,
+            telegramUserId,
+            companyIds: await botCompanyScope(botUser),
+          })
           await sendTelegramText(chatId, `<b>Ответ по задаче #${result.taskNumber} принят</b>\n\n<b>${result.responseLabel}</b>\nНовый статус: <b>${result.statusLabel}</b>`)
         } catch (error: any) {
           await sendTelegramText(chatId, error?.message || 'Не удалось обработать ответ по задаче.')
@@ -4023,7 +4244,7 @@ export async function POST(req: Request) {
           const result = await runCopilotForTelegram({
             userId: botUser.entityId || telegramUserId,
             role: botUser.role === 'unknown' ? null : botUser.role,
-            isSuperAdmin: botUser.role === 'super_admin',
+            isSuperAdmin: isPlatformSuperAdmin(botUser),
             organizationId: botUser.organizationId,
             chatId: Number(chatId),
             text,

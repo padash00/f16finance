@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { requireOperator } from '@/lib/server/operator-context'
+import { resolveCompanyOrganizationId } from '@/lib/server/point-devices'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -48,6 +49,10 @@ export async function GET(request: Request) {
   }
 
   const shiftId = (shift as any).id as string
+  // Изоляция: чек-листы и статьи фильтровались только по company_id, поэтому
+  // строки чужих организаций с company_id = null попадали в смену (и блокирующий
+  // чек-лист чужого арендатора мешал закрыть смену).
+  const orgId = await resolveCompanyOrganizationId(supabase as any, companyId)
 
   const [salesRows, returnsRows, templatesRes, runsRes] = await Promise.all([
     fetchAllPages((from, to) =>
@@ -72,6 +77,7 @@ export async function GET(request: Request) {
         'id, title, description, role_scope, shift_scope, schedule_type, recurrence_minutes, blocks_shift, is_active, sort_order',
       )
       .eq('is_active', true)
+      .eq('organization_id', orgId)
       .or(`company_id.is.null,company_id.eq.${companyId}`)
       .order('sort_order'),
     supabase
@@ -99,6 +105,7 @@ export async function GET(request: Request) {
       .select('id, title, slug, severity, version, summary, company_id')
       .eq('is_published', true)
       .eq('requires_confirmation', true)
+      .eq('organization_id', orgId)
       .or(`company_id.is.null,company_id.eq.${companyId}`)
 
     const critArr = (critArticles || []) as any[]

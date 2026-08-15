@@ -149,13 +149,26 @@ export async function GET(request: Request) {
 
     const country = countryByPrefix(code)
     const orgId = access.activeOrganization?.id || null
+    // NEVER-pattern: не-супер без активной орг → нулевой uuid → ничего не найдёт.
+    // Раньше фильтр по орг просто не навешивался и штрихкод искался по всей базе.
+    const scopeOrg = orgId || (access.isSuperAdmin ? null : '00000000-0000-0000-0000-000000000000')
 
-    // 1) Уже в каталоге? Каталог по точке: скан скоупится по выбранной точке
-    //    (StoreScope инъектит ?company_id), иначе по орг. Убрана утечка null-org.
+    // Точка из query (StoreScope инъектит ?company_id) обязана принадлежать
+    // организации вызывающего: иначе по чужому company_id утекали название и
+    // категория товара соседнего арендатора — достаточно знать штрихкод.
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: orgId,
+      isSuperAdmin: access.isSuperAdmin,
+    })
     const companyFilter = String(url.searchParams.get('company_id') || '').trim() || null
+    if (companyFilter && companyScope.allowedCompanyIds && !companyScope.allowedCompanyIds.includes(companyFilter)) {
+      return json({ error: 'forbidden' }, 403)
+    }
+
+    // 1) Уже в каталоге? Скоуп по орг ВСЕГДА, точка — дополнительное сужение.
     let localQ = supabase.from('inventory_items').select('id, name, category_id, category:category_id(id, name)').eq('barcode', code).limit(1)
+    if (scopeOrg) localQ = localQ.eq('organization_id', scopeOrg)
     if (companyFilter) localQ = localQ.eq('company_id', companyFilter)
-    else if (!access.isSuperAdmin && orgId) localQ = localQ.eq('organization_id', orgId)
     const { data: local } = await localQ.maybeSingle()
     if (local) {
       const cat = Array.isArray((local as any).category) ? (local as any).category[0] : (local as any).category
@@ -208,7 +221,8 @@ export async function GET(request: Request) {
         .eq('is_active', true)
         .order('name')
       // Изоляция: категории только своей орг (была кросс-тенант утечка) и точки.
-      if (orgId) catsQ = catsQ.eq('organization_id', orgId)
+      // NEVER-pattern: без орг (и не супер) — нулевой uuid, а не «все категории».
+      if (scopeOrg) catsQ = catsQ.eq('organization_id', scopeOrg)
       if (companyFilter) catsQ = catsQ.eq('company_id', companyFilter)
       const { data: cats } = await catsQ
       const catList = ((cats as any[]) || []).map((c) => ({ id: String(c.id), name: String(c.name) }))

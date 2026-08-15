@@ -4,7 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { fetchAllPages } from '../../query-helpers'
+import { fetchAllPages, scopedCompanyIds } from '../../query-helpers'
 import { writeAuditLog } from '@/lib/server/audit'
 
 const TELEGRAM_API = 'https://api.telegram.org'
@@ -69,28 +69,39 @@ export const sendTelegramReportTool: CopilotTool = {
       title = 'Неделя'
     }
 
+    // Изоляция: без фильтра по своим точкам в отчёт попадали доходы и расходы
+    // ВСЕХ организаций базы — клиент SaaS видел бы выручку других клиентов.
+    const companyIds = await scopedCompanyIds(ctx)
+    if (companyIds && companyIds.length === 0) {
+      return { ok: false, message: 'Нет доступных точек для отчёта.' }
+    }
+
     // Получаем доходы и расходы
     const [incRows, expRows] = await Promise.all([
-      fetchAllPages((rFrom, rTo) =>
-        ctx.supabase
+      fetchAllPages((rFrom, rTo) => {
+        let q = ctx.supabase
           .from('incomes')
           .select('cash_amount, kaspi_amount, card_amount, online_amount')
           .gte('date', from)
           .lte('date', to)
+        if (companyIds) q = q.in('company_id', companyIds)
+        return q
           .order('date', { ascending: true })
           .order('id', { ascending: true })
-          .range(rFrom, rTo),
-      ).catch(() => [] as any[]),
-      fetchAllPages((rFrom, rTo) =>
-        ctx.supabase
+          .range(rFrom, rTo)
+      }).catch(() => [] as any[]),
+      fetchAllPages((rFrom, rTo) => {
+        let q = ctx.supabase
           .from('expenses')
           .select('cash_amount, kaspi_amount')
           .gte('date', from)
           .lte('date', to)
+        if (companyIds) q = q.in('company_id', companyIds)
+        return q
           .order('date', { ascending: true })
           .order('id', { ascending: true })
-          .range(rFrom, rTo),
-      ).catch(() => [] as any[]),
+          .range(rFrom, rTo)
+      }).catch(() => [] as any[]),
     ])
 
     let income = 0
@@ -145,6 +156,9 @@ export const sendTelegramReportTool: CopilotTool = {
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
+        // Тегируем событие организацией: иначе запись уходит в «общий» пул
+        // audit_log и её читают копилоты других клиентов.
+        organizationId: ctx.organizationId || null,
         entityType: 'telegram-report',
         entityId: chatId,
         action: 'send',

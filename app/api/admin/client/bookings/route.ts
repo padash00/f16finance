@@ -87,11 +87,39 @@ export async function POST(request: Request) {
     if (existingError) throw existingError
     if (!existing) return json({ error: 'booking-not-found' }, 404)
 
+    // Изоляция: resolveCompanyScope с requestedCompanyId=null НЕ бросает, поэтому
+    // бронь с company_id IS NULL проходила проверку молча — чужую бронь можно было
+    // обновить и создать уведомление чужому клиенту. Нет точки → нет права.
+    if (!existing.company_id) return json({ error: 'forbidden' }, 403)
+
     await resolveCompanyScope({
       activeOrganizationId: access.activeOrganization?.id || null,
       requestedCompanyId: existing.company_id,
       isSuperAdmin: access.isSuperAdmin,
     })
+
+    // Полный набор точек организации — клиент может быть заведён на соседней точке.
+    const orgScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+
+    // Изоляция: клиент брони тоже обязан быть своим — в outbox ниже пишется
+    // customer_id, а из customers читается email.
+    if (!existing.customer_id) return json({ error: 'booking-customer-missing' }, 400)
+    const { data: customerScopeRow, error: customerScopeError } = await supabase
+      .from('customers')
+      .select('id, company_id')
+      .eq('id', existing.customer_id)
+      .maybeSingle()
+    if (customerScopeError) throw customerScopeError
+    if (!customerScopeRow) return json({ error: 'booking-customer-missing' }, 404)
+    if (
+      orgScope.allowedCompanyIds &&
+      !orgScope.allowedCompanyIds.includes(String((customerScopeRow as any).company_id || ''))
+    ) {
+      return json({ error: 'forbidden' }, 403)
+    }
 
     const { data, error } = await supabase
       .from('client_bookings')

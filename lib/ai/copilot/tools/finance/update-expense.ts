@@ -21,9 +21,13 @@ export const updateExpenseTool: CopilotTool = {
       required: true,
       description: 'ID расхода из последних',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase
+        // Без скоупа в кнопках были видны расходы других организаций.
+        const scope = await scopedCompanyIds(ctx)
+        let optQ = ctx.supabase
           .from('expenses')
           .select('id, date, category, cash_amount, kaspi_amount, comment, company_id')
+        if (scope) optQ = optQ.in('company_id', scope)
+        const { data } = await optQ
           .order('created_at', { ascending: false })
           .limit(100)
         const rows = data || []
@@ -53,7 +57,10 @@ export const updateExpenseTool: CopilotTool = {
       required: false,
       description: 'Если меняем категорию',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase.from('expense_categories').select('name').order('name')
+        // Категории per-org: без фильтра в списке были бы статьи чужих организаций.
+        let catQ = ctx.supabase.from('expense_categories').select('name').order('name')
+        if (ctx.organizationId) catQ = catQ.eq('organization_id', ctx.organizationId)
+        const { data } = await catQ
         return (data || []).map((c: any) => ({ value: c.name, label: c.name }))
       },
     },
@@ -109,6 +116,9 @@ export const updateExpenseTool: CopilotTool = {
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
+        // Тегируем событие организацией: иначе запись уходит в «общий» пул
+        // audit_log и её читают копилоты других клиентов.
+        organizationId: ctx.organizationId || null,
         entityType: 'expense',
         entityId: expenseId,
         action: 'update',

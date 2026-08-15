@@ -41,6 +41,43 @@ export async function resolveStation(req: NextRequest) {
   return { station }
 }
 
+export const NO_ORGANIZATION_ID = '00000000-0000-0000-0000-000000000000'
+
+/**
+ * organization_id арендатора, которому принадлежит станция киоска.
+ * NEVER-паттерн: если организацию определить не удалось — нулевой uuid, чтобы
+ * фильтр гарантированно вернул пусто. Раньше при `station.company_id = null`
+ * фильтр по организации просто не применялся, и поиск клиента шёл по ВСЕМ
+ * арендаторам (клиент чужой орг мог войти на этом киоске).
+ */
+export async function resolveStationOrganizationId(
+  admin: ReturnType<typeof createAdminSupabaseClient>,
+  station: { company_id?: string | null; point_project_id?: string | null },
+): Promise<string> {
+  const companyId = String(station?.company_id || '').trim()
+  if (companyId) {
+    const { data } = await admin.from('companies').select('organization_id').eq('id', companyId).maybeSingle()
+    return String((data as any)?.organization_id || '') || NO_ORGANIZATION_ID
+  }
+
+  // Легаси-станции без company_id: организацию берём у компаний точки-проекта.
+  const projectId = String(station?.point_project_id || '').trim()
+  if (!projectId) return NO_ORGANIZATION_ID
+
+  const { data: links } = await admin
+    .from('point_project_companies')
+    .select('company:company_id(organization_id)')
+    .eq('point_project_id', projectId)
+    .limit(10)
+
+  for (const row of (links || []) as any[]) {
+    const co = Array.isArray(row?.company) ? row.company[0] : row?.company
+    const orgId = String(co?.organization_id || '').trim()
+    if (orgId) return orgId
+  }
+  return NO_ORGANIZATION_ID
+}
+
 /** Проверяет clientToken в заголовке, возвращает customer или ошибку */
 export async function resolveClient(req: NextRequest, stationId: string) {
   const admin = createAdminSupabaseClient()

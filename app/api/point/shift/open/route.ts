@@ -15,7 +15,10 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
-async function resolveStaffIdForOperator(supabase: any, operatorId: string | null | undefined) {
+// orgId — организация точки. Скоуп обязателен: operator_id приходит из тела,
+// без фильтра смена могла быть открыта на сотрудника другого арендатора
+// (и его id попадал в зарплатные/сменные отчёты).
+async function resolveStaffIdForOperator(supabase: any, operatorId: string | null | undefined, orgId: string) {
   const id = String(operatorId || '').trim()
   if (!id) return null
 
@@ -23,6 +26,7 @@ async function resolveStaffIdForOperator(supabase: any, operatorId: string | nul
     .from('staff')
     .select('id')
     .eq('id', id)
+    .or(`organization_id.eq.${orgId},organization_id.is.null`)
     .maybeSingle()
   if (staff?.id) return staff.id
 
@@ -60,7 +64,21 @@ export async function POST(request: Request) {
     )
   }
 
-  const staffId = await resolveStaffIdForOperator(supabase, body.operator_id)
+  const orgId = device.company?.organization_id || '00000000-0000-0000-0000-000000000000'
+  const staffId = await resolveStaffIdForOperator(supabase, body.operator_id, orgId)
+
+  // handover_from_shift_id из тела — только своя смена, иначе к смене чужой
+  // компании привязывалась передача кассы.
+  const handoverFrom = String(body.handover_from_shift_id || '').trim() || null
+  if (handoverFrom) {
+    const { data: prevShift } = await supabase
+      .from('point_shifts')
+      .select('id')
+      .eq('id', handoverFrom)
+      .eq('company_id', device.company_id)
+      .maybeSingle()
+    if (!prevShift) return json({ error: 'point-shift-handover-not-found' }, 404)
+  }
 
   const { data, error } = await supabase.rpc('point_shift_open', {
     p_company_id: device.company_id,
@@ -69,7 +87,7 @@ export async function POST(request: Request) {
     p_shift_type: body.shift_type || 'day',
     p_opening_cash: openingCash,
     p_opening_notes: body.opening_notes || null,
-    p_handover_from: body.handover_from_shift_id || null,
+    p_handover_from: handoverFrom,
   })
 
   if (error) {

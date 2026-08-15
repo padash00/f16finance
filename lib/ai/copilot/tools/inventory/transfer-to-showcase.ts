@@ -5,7 +5,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { companyOptions, scopedCompanyIds } from '../../query-helpers'
+import { companyOptions, scopedCompanyIds, isOrgRowAllowed } from '../../query-helpers'
 import { writeAuditLog } from '@/lib/server/audit'
 
 export const transferToShowcaseTool: CopilotTool = {
@@ -54,6 +54,11 @@ export const transferToShowcaseTool: CopilotTool = {
     const ids = await scopedCompanyIds(ctx)
     if (ids && !ids.includes(companyId)) return { ok: false, message: 'Точка не найдена.' }
 
+    // Товар тоже per-org: иначе на свою витрину переносится чужая позиция.
+    if (!(await isOrgRowAllowed(ctx, 'inventory_items', itemId))) {
+      return { ok: false, message: 'Товар не найден.' }
+    }
+
     // Используем RPC если есть, иначе через INSERT в movements
     const { error } = await ctx.supabase.rpc('inventory_transfer_warehouse_to_showcase', {
       p_company_id: companyId,
@@ -66,6 +71,9 @@ export const transferToShowcaseTool: CopilotTool = {
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
+        // Тегируем событие организацией: иначе запись уходит в «общий» пул
+        // audit_log и её читают копилоты других клиентов.
+        organizationId: ctx.organizationId || null,
         entityType: 'inventory-transfer',
         entityId: `${companyId}:${itemId}`,
         action: 'warehouse-to-showcase',

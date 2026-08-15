@@ -67,7 +67,12 @@ export const queryExpensesTool: CopilotTool = {
     else if (period === 'month') from = addDaysISO(today, -29)
     else if (period === 'today' || !period) { /* today */ }
 
-    const ids = companyId ? null : await scopedCompanyIds(ctx)
+    // Скоуп организации считаем всегда: указанная точка не должна его отменять,
+    // иначе чужой company_id отдаёт расходы другого клиента.
+    const ids = await scopedCompanyIds(ctx)
+    if (companyId && ids && !ids.includes(companyId)) {
+      return { ok: false, message: 'Точка не найдена.' }
+    }
     let rows: any[]
     try {
       rows = await fetchAllPages((rFrom, rTo) => {

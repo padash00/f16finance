@@ -77,7 +77,13 @@ export const comparePeriodsTool: CopilotTool = {
     const prevTo = addDaysISO(currentFrom, -1)
     const prevFrom = addDaysISO(prevTo, -days)
 
-    const scopeIds = companyId ? null : await scopedCompanyIds(ctx)
+    // Раньше указанная точка ОТКЛЮЧАЛА скоуп организации — подставленный чужой
+    // company_id отдавал выручку другого клиента. Теперь скоуп считаем всегда
+    // и сверяем с ним переданную точку.
+    const scopeIds = await scopedCompanyIds(ctx)
+    if (companyId && scopeIds && !scopeIds.includes(companyId)) {
+      return { ok: false, message: 'Точка не найдена.' }
+    }
     const [current, previous] = await Promise.all([
       sumRevenue(ctx.supabase, currentFrom, currentTo, companyId, scopeIds),
       sumRevenue(ctx.supabase, prevFrom, prevTo, companyId, scopeIds),

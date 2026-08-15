@@ -22,10 +22,14 @@ export const cancelShiftTool: CopilotTool = {
       description: 'ID смены из ближайших',
       getOptions: async (ctx) => {
         const today = new Date().toISOString().slice(0, 10)
-        const { data } = await ctx.supabase
+        // Без скоупа в кнопках были видны смены и операторы чужих организаций.
+        const scope = await scopedCompanyIds(ctx)
+        let optQ = ctx.supabase
           .from('shifts')
           .select('id, date, shift_type, operator_name, operator_id, company_id')
           .gte('date', today)
+        if (scope) optQ = optQ.in('company_id', scope)
+        const { data } = await optQ
           .order('date')
           .limit(100)
         const rows = data || []
@@ -77,6 +81,9 @@ export const cancelShiftTool: CopilotTool = {
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
+        // Тегируем событие организацией: иначе запись уходит в «общий» пул
+        // audit_log и её читают копилоты других клиентов.
+        organizationId: ctx.organizationId || null,
         entityType: 'shift',
         entityId: shiftId,
         action: 'cancel',

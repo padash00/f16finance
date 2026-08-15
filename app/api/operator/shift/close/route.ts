@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { writeAuditLog } from '@/lib/server/audit'
 import { requireOperator } from '@/lib/server/operator-context'
+import { resolveCompanyOrganizationId } from '@/lib/server/point-devices'
 
 type Body = {
   closing_cash?: number | null
@@ -20,12 +21,15 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
-async function getMissingBlockingChecklists(supabase: any, companyId: string, shiftId: string) {
+// Изоляция: только чек-листы своей орг. Без organization_id блокирующий шаблон
+// другого арендатора (company_id = null) не давал закрыть смену этой точке.
+async function getMissingBlockingChecklists(supabase: any, companyId: string, orgId: string, shiftId: string) {
   const { data: templates, error: templatesError } = await supabase
     .from('checklist_templates')
     .select('id, title, schedule_type, recurrence_minutes, blocks_shift, is_active')
     .eq('is_active', true)
     .eq('blocks_shift', true)
+    .eq('organization_id', orgId)
     .or(`company_id.is.null,company_id.eq.${companyId}`)
 
   if (templatesError) {
@@ -103,7 +107,8 @@ export async function POST(request: Request) {
   }
   const shiftId = (open as any).id as string
 
-  const checklistGuard = await getMissingBlockingChecklists(supabase as any, companyId, shiftId)
+  const orgId = await resolveCompanyOrganizationId(supabase as any, companyId)
+  const checklistGuard = await getMissingBlockingChecklists(supabase as any, companyId, orgId, shiftId)
   if (checklistGuard.error) {
     return json({ error: 'point-shift-checklist-guard-failed', detail: checklistGuard.error }, 400)
   }

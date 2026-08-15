@@ -8,7 +8,7 @@
 
 import type { CopilotTool } from '../../types'
 import { writeAuditLog } from '@/lib/server/audit'
-import { scopedCompanyIds } from '../../query-helpers'
+import { scopedCompanyIds, isOrgRowAllowed } from '../../query-helpers'
 
 function todayISO(): string {
   const d = new Date()
@@ -109,6 +109,11 @@ export const writeoffItemTool: CopilotTool = {
       }
     }
 
+    // Товар тоже per-org: списывать можно только позицию своего каталога.
+    if (!(await isOrgRowAllowed(ctx, 'inventory_items', itemId))) {
+      return { ok: false, message: 'Товар не найден.' }
+    }
+
     // Тянем последнюю unit_cost для этого товара (чтобы сумма списания была реальной)
     let unitCost = 0
     const { data: lastReceipt } = await ctx.supabase
@@ -140,6 +145,9 @@ export const writeoffItemTool: CopilotTool = {
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
+        // Тегируем событие организацией: иначе запись уходит в «общий» пул
+        // audit_log и её читают копилоты других клиентов.
+        organizationId: ctx.organizationId || null,
         entityType: 'inventory-writeoff',
         entityId: writeoffId,
         action: 'create',

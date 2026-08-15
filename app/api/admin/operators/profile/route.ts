@@ -92,11 +92,16 @@ export async function GET(req: Request) {
     const shiftIdSet = new Set<string>()
 
     // 1) прямое совпадение operator_id (operators.id или staff.id)
-    const { data: directShifts } = await supabase
+    // Скоуп по точкам вешаем на КАЖДЫЙ источник, а не только на финальную
+    // выборку смен: иначе admin-клиент (в обход RLS) читал смены и продажи
+    // оператора, работавшего когда-то в другой организации.
+    let directShiftsQuery = supabase
       .from('point_shifts')
       .select('id')
       .in('operator_id', opMatchIds)
       .limit(500)
+    if (scope.allowedCompanyIds) directShiftsQuery = directShiftsQuery.in('company_id', scope.allowedCompanyIds)
+    const { data: directShifts } = await directShiftsQuery
     for (const s of directShifts || []) {
       const id = String((s as any).id || '')
       if (id) shiftIdSet.add(id)
@@ -115,12 +120,14 @@ export async function GET(req: Request) {
     }
 
     // 3) продажи этого оператора → их смены (самый надёжный сигнал по кассиру)
-    const { data: saleShifts } = await supabase
+    let saleShiftsQuery = supabase
       .from('point_sales')
       .select('shift_id')
       .eq('operator_id', operatorId)
       .not('shift_id', 'is', null)
       .limit(2000)
+    if (scope.allowedCompanyIds) saleShiftsQuery = saleShiftsQuery.in('company_id', scope.allowedCompanyIds)
+    const { data: saleShifts } = await saleShiftsQuery
     for (const r of saleShifts || []) {
       const id = String((r as any).shift_id || '')
       if (id) shiftIdSet.add(id)
@@ -147,11 +154,16 @@ export async function GET(req: Request) {
     let workHistoryRows = (workHistory || []) as any[]
     const hireDate = (profile as any)?.hire_date
     if (workHistoryRows.length === 0 && hireDate) {
-      const { data: primaryAssign } = await supabase
+      // Точку для записи истории берём только из своих: без фильтра в
+      // operator_work_history попадала (и отдавалась клиентом вместе с именем)
+      // компания другой организации.
+      let primaryAssignQuery = supabase
         .from('operator_company_assignments')
         .select('company_id')
         .eq('operator_id', operatorId)
         .eq('is_active', true)
+      if (scope.allowedCompanyIds) primaryAssignQuery = primaryAssignQuery.in('company_id', scope.allowedCompanyIds)
+      const { data: primaryAssign } = await primaryAssignQuery
         .order('is_primary', { ascending: false })
         .limit(1)
         .maybeSingle()
@@ -199,7 +211,9 @@ export async function PATCH(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
-    const denied = await requireStaffCapability(access, 'operators.view')
+    // PATCH — операция ЗАПИСИ (telegram_chat_id + профиль), а право спрашивалось
+    // на чтение: сотрудник «только смотреть» правил чужие карточки.
+    const denied = await requireStaffCapability(access, 'operators.edit')
     if (denied) return denied
 
     const body = await req.json().catch(() => null)

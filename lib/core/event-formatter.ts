@@ -695,7 +695,8 @@ export function formatAuditEvent(input: Input): FormattedEvent {
   // ─── Fallback ─────────────────────────────────────────────────────────────
   return {
     icon: '📋',
-    title: `${who} — ${humanEntityLabel(et)}${act ? ` (${humanActionLabel(act)})` : ''}`,
+    // «Падаш Олжас — экзамен оператора: отправка» вместо сырых кодов таблицы.
+    title: `${who} — ${humanEntityLabel(et)}${act ? `: ${humanActionLabel(act)}` : ''}`,
     details: [pointInfo].filter(Boolean) as string[],
     severity: 'info',
     category: 'other',
@@ -742,10 +743,45 @@ const ENTITY_FALLBACK: Record<string, string> = {
   'profitability-input': 'ОПиУ',
   'system-error': 'ошибка системы',
   'page-view': 'просмотр страницы',
+  operator_exam: 'экзамен оператора',
+  operator_exam_attempt: 'ответы на экзамен',
+  'knowledge-article': 'статья регламента',
+  'knowledge-category': 'раздел регламента',
+  'checklist-template': 'шаблон чек-листа',
+  checklist_run: 'чек-лист смены',
+  'point-rule': 'правило точки',
+  'point-product': 'товар точки',
+  'point-project': 'зал точки',
+  'point-debt-item': 'долг точки',
+  'point-inventory-request': 'заявка точки',
+  point_shift: 'смена на точке',
+  'role-capability': 'права должности',
+  'user-capability-override': 'личные права',
+  'staff-account': 'учётка сотрудника',
+  'staff-adjustment': 'правка по зарплате',
+  'operator-salary-rule': 'правило зарплаты',
+  'operator-salary-adjustment': 'правка зарплаты оператора',
+  'operator-salary-week-payment': 'недельная выплата',
+  'shift-change-request': 'просьба о подмене',
+  'kpi-plan': 'план KPI',
+  'inventory-category': 'категория товаров',
+  'inventory-audit-act': 'акт ревизии',
+  'inventory-warehouse-stock': 'остаток на складе',
+  'inventory-receipt-draft': 'черновик приёмки',
+  expense_category: 'категория расходов',
+  expense_vendor_whitelist: 'проверенный поставщик',
+  expense_wizard: 'мастер расходов',
+  'branch-plan-draft': 'черновик плана точки',
+  'task-template': 'шаблон задачи',
+  organization: 'организация',
+  incident: 'инцидент',
+  reminder: 'напоминание',
+  debt: 'долг',
 }
 
 function humanEntityLabel(et: string): string {
-  return ENTITY_FALLBACK[et] || et
+  // Незнакомый тип хотя бы читается словами, а не «operator_exam».
+  return ENTITY_FALLBACK[et] || et.replace(/[_-]+/g, ' ')
 }
 
 const ACTION_FALLBACK: Record<string, string> = {
@@ -770,8 +806,25 @@ const ACTION_FALLBACK: Record<string, string> = {
   submit: 'отправка',
   import: 'импорт',
   export: 'экспорт',
+  send: 'отправка',
+  draft: 'черновик',
+  publish: 'публикация',
+  assign: 'назначение',
+  remind: 'напоминание',
+  confirm: 'подтверждение',
+  restore: 'восстановление',
+  archive: 'в архив',
+  grant: 'выдача прав',
+  revoke: 'снятие прав',
+  block: 'блокировка',
+  dismiss: 'увольнение',
+  hire: 'приём на работу',
+  'rotate-token': 'смена токена',
+  'reset-password': 'сброс пароля',
 }
 
 function humanActionLabel(act: string): string {
-  return ACTION_FALLBACK[act] || act
+  // Действия часто приходят с префиксом сущности: «operator_exam.send» → «send».
+  const short = act.includes('.') ? act.slice(act.lastIndexOf('.') + 1) : act
+  return ACTION_FALLBACK[short] || ACTION_FALLBACK[act] || short.replace(/[_-]+/g, ' ')
 }

@@ -20,7 +20,11 @@ export const cancelReminderTool: CopilotTool = {
       required: true,
       description: 'Что отменить',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase.from('reminders').select('id, text, remind_at').eq('status', 'pending').order('remind_at').limit(50)
+        // Выпадашка тоже утечка: без фильтра в кнопках показывались тексты
+        // напоминаний других организаций.
+        let optQ = ctx.supabase.from('reminders').select('id, text, remind_at').eq('status', 'pending').order('remind_at').limit(50)
+        if (ctx.organizationId) optQ = optQ.eq('organization_id', ctx.organizationId)
+        const { data } = await optQ
         return (data || []).map((r: any) => {
           const when = r.remind_at ? new Date(r.remind_at).toLocaleString('ru-RU') : ''
           return { value: r.id, label: `${when} — ${String(r.text).slice(0, 40)}` }
@@ -43,6 +47,9 @@ export const cancelReminderTool: CopilotTool = {
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
+        // Тегируем событие организацией: иначе запись уходит в «общий» пул
+        // audit_log и её читают копилоты других клиентов.
+        organizationId: ctx.organizationId || null,
         entityType: 'reminder',
         entityId: reminderId,
         action: 'cancel',

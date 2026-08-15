@@ -94,6 +94,12 @@ export async function POST(req: Request) {
         .single()
       if (!pos) return json({ error: 'Роль не найдена' }, 404)
       if ((pos as any).is_builtin) return json({ error: 'Встроенную роль нельзя изменить или удалить' }, 403)
+      // Глобальные роли (organization_id = null) — общие для всех тенантов.
+      // Раньше при orgId=null проверка `organization_id !== orgId` совпадала,
+      // и любой владелец без активной орг мог переименовать/удалить общую роль.
+      if (!access.isSuperAdmin && !(pos as any).organization_id) {
+        return json({ error: 'forbidden', reason: 'global-role' }, 403)
+      }
       if (!access.isSuperAdmin && (pos as any).organization_id !== orgId) {
         return json({ error: 'forbidden', reason: 'cross-org' }, 403)
       }
@@ -105,6 +111,14 @@ export async function POST(req: Request) {
       const description = String(body?.description || '').trim() || null
       if (!name || name.length < 2) return json({ error: 'name обязателен (мин. 2 символа)' }, 400)
 
+      // Fail-closed: без активной орг роль легла бы с organization_id = null,
+      // то есть стала бы ГЛОБАЛЬНОЙ и видимой всем тенантам (фильтр в GET
+      // пропускает organization_id is null). Глобальные роли заводит только
+      // супер-админ.
+      if (!access.isSuperAdmin && !orgId) {
+        return json({ error: 'Нет активной организации — некуда создать должность' }, 400)
+      }
+
       // По умолчанию что включаем для новой роли:
       // 'open'  — все 265 capabilities включены (как у владельца)
       // 'closed' — НИЧЕГО не доступно (наименьшие права). ВАЖНО: из-за fail-open
@@ -115,6 +129,23 @@ export async function POST(req: Request) {
       // 'copy_from' — копировать набор от другой роли (поле copy_from_role)
       const seedMode = String(body?.seed || 'closed') as 'open' | 'closed' | 'copy_from'
       const copyFromRole = String(body?.copy_from_role || '').trim()
+
+      // Источник копирования обязан быть доступен ЭТОЙ организации: встроенная
+      // роль (organization_id is null) или собственная кастомная. Без проверки
+      // можно было склонировать матрицу прав кастомной роли ЧУЖОЙ организации,
+      // просто передав её имя в copy_from_role.
+      if (seedMode === 'copy_from' && copyFromRole) {
+        let sourceQuery = supabase.from('positions').select('name').eq('name', copyFromRole)
+        if (orgId) {
+          sourceQuery = sourceQuery.or(`organization_id.is.null,organization_id.eq.${orgId}`)
+        } else if (!access.isSuperAdmin) {
+          sourceQuery = sourceQuery.is('organization_id', null)
+        }
+        const { data: sourcePos } = await sourceQuery.maybeSingle()
+        if (!sourcePos) {
+          return json({ error: 'forbidden', reason: 'copy-source-cross-org' }, 403)
+        }
+      }
 
       const { data, error } = await supabase
         .from('positions')
@@ -217,11 +248,15 @@ export async function POST(req: Request) {
 
       // Безопасность: нельзя удалить роль у которой активные носители.
       // Сначала надо переназначить их на другую роль через /access → Аккаунты.
-      const { count: staffCount } = await supabase
+      // Считаем ТОЛЬКО своих сотрудников: без орг-фильтра в ответ уходил count
+      // чужих (утечка), а удаление своей роли блокировалось чужими носителями.
+      let staffCountQuery = supabase
         .from('staff')
         .select('id', { count: 'exact', head: true })
         .eq('role', (pos as any).name)
         .eq('is_active', true)
+      if (orgId) staffCountQuery = staffCountQuery.eq('organization_id', orgId)
+      const { count: staffCount } = await staffCountQuery
 
       if (staffCount && staffCount > 0) {
         return json(

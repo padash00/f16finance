@@ -40,13 +40,24 @@ export const addCategoryTool: CopilotTool = {
     const kind = String(input.kind || 'operational')
     if (!name) return { ok: false, message: 'Название обязательно.' }
 
-    // Проверим что нет такой категории
-    const { data: existing } = await ctx.supabase.from('expense_categories').select('id').eq('name', name).maybeSingle()
+    // Категория без organization_id общая для всей базы: чужая организация
+    // увидит её в своих списках расходов.
+    if (!ctx.organizationId && !ctx.isSuperAdmin) {
+      return { ok: false, message: 'Нет активной организации — категорию создать нельзя.' }
+    }
+
+    // Проверка дубля тоже в рамках своей организации: глобальная проверка
+    // раскрывала бы названия категорий других клиентов (и мешала создать своё).
+    let existingQ = ctx.supabase.from('expense_categories').select('id').eq('name', name)
+    existingQ = ctx.organizationId
+      ? existingQ.eq('organization_id', ctx.organizationId)
+      : existingQ.is('organization_id', null)
+    const { data: existing } = await existingQ.maybeSingle()
     if (existing) return { ok: false, message: `Категория "${name}" уже существует.` }
 
     const { data, error } = await ctx.supabase
       .from('expense_categories')
-      .insert([{ name, kind }])
+      .insert([{ name, kind, organization_id: ctx.organizationId || null }])
       .select('id')
       .single()
     if (error) return { ok: false, message: `Не удалось создать: ${error.message}` }
@@ -54,6 +65,9 @@ export const addCategoryTool: CopilotTool = {
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
+        // Тегируем событие организацией: иначе запись уходит в «общий» пул
+        // audit_log и её читают копилоты других клиентов.
+        organizationId: ctx.organizationId || null,
         entityType: 'expense-category',
         entityId: data?.id || 'unknown',
         action: 'create',

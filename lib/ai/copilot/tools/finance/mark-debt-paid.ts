@@ -25,10 +25,14 @@ export const markDebtPaidTool: CopilotTool = {
       required: true,
       description: 'ID долга из списка активных',
       getOptions: async (ctx) => {
-        const { data, error } = await ctx.supabase
+        // Без скоупа в кнопках были видны долги и ИМЕНА КЛИЕНТОВ других организаций.
+        const scope = await scopedCompanyIds(ctx)
+        let optQ = ctx.supabase
           .from('point_debt_items')
           .select('id, total_amount, client_name, item_name, quantity, created_at, company_id')
           .eq('status', 'active')
+        if (scope) optQ = optQ.in('company_id', scope)
+        const { data, error } = await optQ
           .order('created_at', { ascending: false })
           .limit(100)
         if (error) {
@@ -77,6 +81,9 @@ export const markDebtPaidTool: CopilotTool = {
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
+        // Тегируем событие организацией: иначе запись уходит в «общий» пул
+        // audit_log и её читают копилоты других клиентов.
+        organizationId: ctx.organizationId || null,
         entityType: 'point-debt',
         entityId: debtId,
         action: 'mark-paid',

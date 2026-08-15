@@ -21,7 +21,11 @@ export const updateOperatorPhoneTool: CopilotTool = {
       required: true,
       description: 'Кому меняем',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase.from('operators').select('id, name, short_name, phone').eq('is_active', true).order('name')
+        // Без скоупа в кнопках были видны имена и телефоны операторов чужих организаций.
+        let optQ = ctx.supabase.from('operators').select('id, name, short_name, phone').eq('is_active', true).order('name')
+        const ids = await scopedOperatorIds(ctx)
+        if (ids) optQ = optQ.in('id', ids)
+        const { data } = await optQ
         return (data || []).map((op: any) => ({ value: op.id, label: `${op.short_name || op.name}${op.phone ? ` · ${op.phone}` : ''}` }))
       },
     },
@@ -43,6 +47,9 @@ export const updateOperatorPhoneTool: CopilotTool = {
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
+        // Тегируем событие организацией: иначе запись уходит в «общий» пул
+        // audit_log и её читают копилоты других клиентов.
+        organizationId: ctx.organizationId || null,
         entityType: 'operator',
         entityId: operatorId,
         action: 'update-phone',

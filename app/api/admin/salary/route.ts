@@ -1941,12 +1941,23 @@ export async function POST(req: Request) {
         operatorId: body.operatorId,
       })
 
-      const { data: activeDebts, error: fetchError } = await supabase
+      // Оператор может работать на точках двух организаций (ensureOrganization-
+      // OperatorAccess считает «своим» и его). Без фильтра по точкам одна
+      // организация гасила долги, записанные на точке другой.
+      const debtScope = await resolveCompanyScope({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+      })
+      let activeDebtsQuery = supabase
         .from('debts')
         .select('id, amount')
         .eq('operator_id', body.operatorId)
         .eq('week_start', weekStart2)
         .eq('status', 'active')
+      if (debtScope.allowedCompanyIds) {
+        activeDebtsQuery = activeDebtsQuery.in('company_id', debtScope.allowedCompanyIds)
+      }
+      const { data: activeDebts, error: fetchError } = await activeDebtsQuery
 
       if (fetchError) throw fetchError
       if (!activeDebts || activeDebts.length === 0) {
@@ -1955,15 +1966,20 @@ export async function POST(req: Request) {
 
       const ids = activeDebts.map((d: any) => d.id)
       const paidAt = new Date().toISOString()
+      // Убираем из сканера — инвентарь НЕ возвращаем (оператор оплатил деньгами).
+      // Тот же фильтр по точкам, что и для долгов.
+      let scannerQuery = supabase
+        .from('point_debt_items')
+        .update({ status: 'deleted', deleted_at: paidAt })
+        .eq('operator_id', body.operatorId)
+        .eq('week_start', weekStart2)
+        .eq('status', 'active')
+      if (debtScope.allowedCompanyIds) {
+        scannerQuery = scannerQuery.in('company_id', debtScope.allowedCompanyIds)
+      }
       const [{ error: updateError }] = await Promise.all([
         supabase.from('debts').update({ status: 'paid' }).in('id', ids),
-        // Убираем из сканера — инвентарь НЕ возвращаем (оператор оплатил деньгами)
-        supabase
-          .from('point_debt_items')
-          .update({ status: 'deleted', deleted_at: paidAt })
-          .eq('operator_id', body.operatorId)
-          .eq('week_start', weekStart2)
-          .eq('status', 'active'),
+        scannerQuery,
       ])
 
       if (updateError) throw updateError

@@ -30,6 +30,11 @@ export async function GET(request: Request) {
 
     // Изоляция по организации (null = legacy-строки видны своей орг).
     const orgId = access.activeOrganization?.id || null
+    // NEVER-паттерн: без организации фильтр ниже не навешивался, и запрос
+    // отдавал регламенты и подтверждения (с ФИО сотрудников) ВСЕХ клиентов.
+    if (!orgId && !access.isSuperAdmin) {
+      return json({ ok: true, data: { articles: [], confirmations: [], staff: [] } })
+    }
     const orgScope = orgId ? `organization_id.is.null,organization_id.eq.${orgId}` : null
 
     let articleQuery = supabase

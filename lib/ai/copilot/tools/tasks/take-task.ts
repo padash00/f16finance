@@ -21,10 +21,14 @@ export const takeTaskTool: CopilotTool = {
       required: true,
       description: 'ID открытой задачи',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase
+        // Без скоупа в кнопках были видны задачи других организаций.
+        const scope = await scopedCompanyIds(ctx)
+        let optQ = ctx.supabase
           .from('tasks')
           .select('id, title, due_date')
           .eq('status', 'open')
+        if (scope) optQ = optQ.in('company_id', scope)
+        const { data } = await optQ
           .order('created_at', { ascending: false })
         return (data || []).map((t: any) => ({
           value: t.id,
@@ -55,6 +59,9 @@ export const takeTaskTool: CopilotTool = {
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
+        // Тегируем событие организацией: иначе запись уходит в «общий» пул
+        // audit_log и её читают копилоты других клиентов.
+        organizationId: ctx.organizationId || null,
         entityType: 'task',
         entityId: taskId,
         action: 'take',

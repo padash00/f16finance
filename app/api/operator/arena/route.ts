@@ -130,13 +130,15 @@ export async function GET(request: Request) {
               .gte('started_at', `${todayDate}T00:00:00.000Z`)
               .lt('started_at', todayEndExclusive),
           )
-        : withCo(
-            supabase
-              .from('incomes')
-              .select('cash_amount,kaspi_amount,comment,created_at')
-              .eq('source', 'arena-session')
-              .eq('date', todayDate),
-          ),
+        : // Изоляция: у incomes нет point_project_id, а withCo пускает
+          // `company_id.is.null` — так в итог дня попадала касса других
+          // арендаторов. Фильтруем строго по компании оператора.
+          supabase
+            .from('incomes')
+            .select('cash_amount,kaspi_amount,comment,created_at')
+            .eq('company_id', companyId)
+            .eq('source', 'arena-session')
+            .eq('date', todayDate),
       withCo(supabase.from('arena_tech_logs').select('id,station_name,reason,amount,created_at').eq('point_project_id', projectId))
         .gte('created_at', todayDate + 'T00:00:00.000Z')
         .order('created_at'),
@@ -240,10 +242,14 @@ export async function POST(request: Request) {
       const { stationId, tariffId, payment_method = 'cash', cash_amount: rawCashAmt, kaspi_amount: rawKaspiAmt, discount_percent = 0 } = body
       if (!stationId || !tariffId) return json({ error: 'stationId and tariffId required' }, 400)
 
+      // Все три проверки — в пределах своего проекта: stationId/tariffId
+      // приходят из тела запроса, без скоупа они читали станции и тарифы
+      // (цены!) другого арендатора.
       const { data: existing } = await supabase
         .from('arena_sessions')
         .select('id')
         .eq('station_id', stationId)
+        .eq('point_project_id', projectId)
         .eq('status', 'active')
         .maybeSingle()
       if (existing) return json({ error: 'station-already-occupied' }, 409)
@@ -252,6 +258,7 @@ export async function POST(request: Request) {
         .from('arena_tariffs')
         .select('*')
         .eq('id', tariffId)
+        .eq('point_project_id', projectId)
         .single()
       if (tariffError || !tariff) return json({ error: 'tariff-not-found' }, 404)
 
@@ -286,7 +293,15 @@ export async function POST(request: Request) {
       else if (payment_method === 'kaspi') { finalCash = 0; finalKaspi = discountedPrice }
       else { finalCash = Number(rawCashAmt) || 0; finalKaspi = Number(rawKaspiAmt) || 0 }
 
-      const { data: stationRow } = await supabase.from('arena_stations').select('name').eq('id', stationId).maybeSingle()
+      const { data: stationRow } = await supabase
+        .from('arena_stations')
+        .select('name')
+        .eq('id', stationId)
+        .eq('point_project_id', projectId)
+        .maybeSingle()
+      // Чужая станция → отказ: иначе broadcastKioskCommand ниже отправлял
+      // команду в канал kiosk:{stationId} киоска другого арендатора.
+      if (!stationRow) return json({ error: 'station-not-found' }, 404)
       const stationName = (stationRow as any)?.name || stationId
 
       const { data: arenaSession, error: insertError } = await supabase
@@ -465,7 +480,14 @@ export async function POST(request: Request) {
         extraMinutes = computed.minutes
       } else {
         if (!tariffId) return json({ error: 'tariffId required (или amount_extension: true)' }, 400)
-        const { data: tariff, error: tariffError } = await supabase.from('arena_tariffs').select('*').eq('id', tariffId).single()
+        // tariffId из тела — только тариф своего проекта (иначе продление по
+        // чужому прайсу + чтение чужого тарифа).
+        const { data: tariff, error: tariffError } = await supabase
+          .from('arena_tariffs')
+          .select('*')
+          .eq('id', tariffId)
+          .eq('point_project_id', projectId)
+          .single()
         if (tariffError || !tariff) return json({ error: 'tariff-not-found' }, 404)
 
         extraMinutes = Number(tariff.duration_minutes) || 0
@@ -486,6 +508,7 @@ export async function POST(request: Request) {
           kaspi_amount: (Number((current as any).kaspi_amount) || 0) + extKaspi,
         })
         .eq('id', sessionId)
+        .eq('point_project_id', projectId) // страховка: правим только свою сессию
         .select()
         .single()
       if (updateError) throw updateError
@@ -560,6 +583,17 @@ export async function POST(request: Request) {
     if (body.action === 'techLog') {
       const { stationId, stationName, reason, amount } = body
       if (!reason) return json({ error: 'reason required' }, 400)
+
+      // stationId из тела — не привязываем свой техлог к чужой станции.
+      if (stationId) {
+        const { data: techStation } = await supabase
+          .from('arena_stations')
+          .select('id')
+          .eq('id', stationId)
+          .eq('point_project_id', projectId)
+          .maybeSingle()
+        if (!techStation) return json({ error: 'station-not-found' }, 404)
+      }
 
       const { data: log, error: logError } = await supabase
         .from('arena_tech_logs')

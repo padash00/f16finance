@@ -74,6 +74,9 @@ export const adjustLoyaltyTool: CopilotTool = {
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
+        // Тегируем событие организацией: иначе запись уходит в «общий» пул
+        // audit_log и её читают копилоты других клиентов.
+        organizationId: ctx.organizationId || null,
         entityType: 'customer-loyalty',
         entityId: customerId,
         action: delta > 0 ? 'add-points' : 'subtract-points',

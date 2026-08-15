@@ -115,7 +115,9 @@ export async function GET(request: Request) {
         // Изоляция: категории только своей орг (была кросс-тенант утечка) и точки.
         (() => {
           let cq = supabase.from('inventory_categories').select('id, name').eq('is_active', true).order('name')
-          const oid = access.activeOrganization?.id || null
+          // NEVER-pattern: не-супер без орг → нулевой uuid, а не «все категории».
+          const oid =
+            access.activeOrganization?.id || (access.isSuperAdmin ? null : '00000000-0000-0000-0000-000000000000')
           if (oid) cq = cq.eq('organization_id', oid)
           if (companyId) cq = cq.eq('company_id', companyId)
           return cq

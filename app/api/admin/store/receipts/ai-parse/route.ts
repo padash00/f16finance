@@ -233,7 +233,10 @@ export async function POST(req: Request) {
       ? createAdminSupabaseClient()
       : createRequestSupabaseClient(req)
 
-    const orgId = access.activeOrganization?.id || null
+    // NEVER-pattern: не-супер без активной орг → нулевой uuid. Иначе весь каталог
+    // и справочники ВСЕХ арендаторов уходили в подбор позиций и в промпт AI.
+    const orgId =
+      access.activeOrganization?.id || (access.isSuperAdmin ? null : '00000000-0000-0000-0000-000000000000')
     const matchScope = { organizationId: orgId, supplierId }
 
     // Изоляция: поставщик читается только в своей орг (раньше — по присланному id без орг).
@@ -270,11 +273,15 @@ export async function POST(req: Request) {
       ? await parseInvoiceFromPdfText(fileData.bytes)
       : await parseInvoiceWithGPT(fileData.dataUrl, inventoryItems, { supplierAliases, supplierName })
     const matched = matchInvoiceItems(parsed.items || [], inventoryItems, nameMappings, { supplierId })
-    const cogsRes = await supabase
+    // Изоляция: справочник COGS-категорий тенантный — без фильтра названия
+    // категорий чужих организаций уходили в промпт AI и в ответ (cogs_suggestion).
+    let cogsQuery: any = supabase
       .from('expense_categories')
       .select('id,name,accounting_group')
       .order('name', { ascending: true })
-    const cogsCategories = (cogsRes.data || [])
+    if (orgId) cogsQuery = cogsQuery.eq('organization_id', orgId)
+    const cogsRes = await cogsQuery
+    const cogsCategories = ((cogsRes.data || []) as any[])
       .filter((row: any) => String(row?.accounting_group || '').trim().toLowerCase() === 'cogs')
       .map((row: any) => ({ id: String(row.id), name: String(row.name || '').trim() }))
       .filter((row) => row.id && row.name)

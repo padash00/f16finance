@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { resolveCompanyScope } from '@/lib/server/organizations'
+import { ensureOrganizationStaffAccess, resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
@@ -85,11 +85,29 @@ export async function POST(request: Request) {
     if (existingError) throw existingError
     if (!existing) return json({ error: 'ticket-not-found' }, 404)
 
+    // Изоляция: resolveCompanyScope с requestedCompanyId=null НЕ бросает, поэтому
+    // тикет с company_id IS NULL обновлялся вообще без проверки принадлежности.
+    if (!existing.company_id) return json({ error: 'forbidden' }, 403)
+
     await resolveCompanyScope({
       activeOrganizationId: access.activeOrganization?.id || null,
       requestedCompanyId: existing.company_id,
       isSuperAdmin: access.isSuperAdmin,
     })
+
+    // Изоляция: assignedStaffId приходил из body без проверки — на свой тикет
+    // можно было назначить сотрудника ЧУЖОЙ организации.
+    if (body.assignedStaffId) {
+      try {
+        await ensureOrganizationStaffAccess({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+          staffId: body.assignedStaffId,
+        })
+      } catch {
+        return json({ error: 'assigned-staff-forbidden' }, 403)
+      }
+    }
 
     const isResolved = body.status === 'resolved' || body.status === 'closed'
     const { data, error } = await supabase

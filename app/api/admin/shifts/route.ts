@@ -306,6 +306,27 @@ async function getOperatorById(
   return (data || null) as OperatorMatch | null
 }
 
+/**
+ * Точки той же организации, что и переданная. Нужна там, где поиск идёт не по
+ * одной точке, а «по компании в целом», и без ограничения уходил бы в чужие
+ * организации. Пустой результат означает «только сама точка» — fail-closed.
+ */
+async function listSameOrganizationCompanyIds(
+  supabase: ReturnType<typeof createAdminSupabaseClient> | ReturnType<typeof createRequestSupabaseClient>,
+  companyId: string | null | undefined,
+) {
+  const id = String(companyId || '')
+  if (!id) return ['00000000-0000-0000-0000-000000000000']
+
+  const { data: company } = await supabase.from('companies').select('organization_id').eq('id', id).maybeSingle()
+  const organizationId = String((company as any)?.organization_id || '')
+  if (!organizationId) return [id]
+
+  const { data: siblings } = await supabase.from('companies').select('id').eq('organization_id', organizationId)
+  const ids = ((siblings || []) as any[]).map((row) => String(row.id)).filter(Boolean)
+  return ids.length ? ids : [id]
+}
+
 async function ensureNoOperatorConflict(
   supabase: ReturnType<typeof createAdminSupabaseClient> | ReturnType<typeof createRequestSupabaseClient>,
   payload: ShiftWritePayload,
@@ -314,11 +335,17 @@ async function ensureNoOperatorConflict(
   const trimmedName = payload.operatorName.trim()
   if (!trimmedName) return
 
+  // Конфликт ищем ТОЛЬКО по точкам той же организации. Без этого запрос шёл по
+  // всей базе: смена однофамильца из чужой организации блокировала сохранение
+  // своей (409) и заодно работала оракулом «есть ли такой сотрудник у соседа».
+  const conflictCompanyIds = await listSameOrganizationCompanyIds(supabase, payload.companyId)
+
   let query = supabase
     .from('shifts')
     .select('id, company_id, shift_type')
     .eq('date', payload.date)
     .ilike('operator_name', trimmedName)
+    .in('company_id', conflictCompanyIds)
 
   for (const ignoredShiftId of ignoredShiftIds.filter(Boolean)) {
     query = query.neq('id', ignoredShiftId)
@@ -346,11 +373,27 @@ async function upsertShift(
   }
 
   const trimmedName = operatorName.trim()
+
+  // shiftId приходит из тела запроса, а проверялся только companyId. Значит по
+  // чужому UUID можно было удалить или переписать смену любой организации.
+  // Требуем, чтобы смена принадлежала уже проверенной точке.
+  if (shiftId) {
+    const { data: ownShift, error: ownShiftError } = await supabase
+      .from('shifts')
+      .select('id, company_id')
+      .eq('id', shiftId)
+      .maybeSingle()
+    if (ownShiftError) throw ownShiftError
+    if (!ownShift || String((ownShift as any).company_id) !== String(companyId)) {
+      throw new RouteError('Смена не найдена', 404)
+    }
+  }
+
   const existingForSlot = await getExistingShiftForSlot(supabase, companyId, date, shiftType)
   const ignoredShiftIds = [shiftId || '', existingForSlot?.id || '']
 
   if (shiftId && !trimmedName) {
-    const { error } = await supabase.from('shifts').delete().eq('id', shiftId)
+    const { error } = await supabase.from('shifts').delete().eq('id', shiftId).eq('company_id', companyId)
     if (error) throw error
     return { ok: true, mode: 'deleted' as const }
   }
@@ -371,6 +414,8 @@ async function upsertShift(
         comment: comment?.trim() || null,
       })
       .eq('id', shiftId)
+      // Второй слой к проверке выше: id смены пришёл из запроса.
+      .eq('company_id', companyId)
 
     if (error) throw error
     return { ok: true, mode: 'updated' as const }
@@ -1073,11 +1118,17 @@ export async function GET(req: Request) {
     const operatorIds = operatorRows.map((row) => String(row.id))
     const assignmentsByOperator = new Map<string, string[]>()
     if (operatorIds.length > 0) {
-      const { data: assignmentRows, error: assignmentsError } = await supabase
+      // Ограничиваем и по точкам: у оператора, работающего в двух организациях,
+      // в ответ (company_ids) утекали UUID точек чужой организации.
+      let assignmentsQuery = supabase
         .from('operator_company_assignments')
         .select('operator_id, company_id')
         .eq('is_active', true)
         .in('operator_id', operatorIds)
+      if (companyScope.allowedCompanyIds !== null) {
+        assignmentsQuery = assignmentsQuery.in('company_id', companyScope.allowedCompanyIds)
+      }
+      const { data: assignmentRows, error: assignmentsError } = await assignmentsQuery
       if (assignmentsError) throw assignmentsError
       for (const row of (assignmentRows || []) as any[]) {
         const opId = String(row.operator_id)

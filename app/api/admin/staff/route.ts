@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { assertOrganizationLimitAvailable, ensureOrganizationStaffAccess, listOrganizationStaffIds } from '@/lib/server/organizations'
+import { assertOrganizationLimitAvailable, ensureOrganizationStaffAccess, listOrganizationOperatorIds, listOrganizationStaffIds } from '@/lib/server/organizations'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability, canAssignStaffRole, isOwnerActor } from '@/lib/server/capabilities'
 import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
@@ -56,6 +56,29 @@ type Body =
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
+}
+
+/**
+ * operator_staff_links НЕ орг-скоупная таблица: по связи оттуда сюда мог
+ * прийти оператор ЧУЖОЙ организации, а дальше мы гасили/оживляли ему
+ * operator_auth и банили/разбанивали его auth-пользователя. Оставляем только
+ * пересечение со своими операторами.
+ */
+async function scopeOperatorIdsToOrganization(params: {
+  operatorIds: string[]
+  activeOrganizationId: string | null
+  isSuperAdmin: boolean
+}) {
+  const { operatorIds, activeOrganizationId, isSuperAdmin } = params
+  if (operatorIds.length === 0) return []
+  if (isSuperAdmin && !activeOrganizationId) return operatorIds
+  const ownIds = await listOrganizationOperatorIds({
+    activeOrganizationId,
+    isSuperAdmin,
+    includeInactive: true,
+  })
+  const ownSet = new Set((ownIds || []).map((v) => String(v)))
+  return operatorIds.filter((id) => ownSet.has(id))
 }
 
 export async function GET(req: Request) {
@@ -354,7 +377,11 @@ export async function POST(req: Request) {
             .from('operator_staff_links')
             .select('operator_id')
             .eq('staff_id', body.staffId)
-          const opIds = (links || []).map((r: any) => String(r.operator_id)).filter(Boolean)
+          const opIds = await scopeOperatorIdsToOrganization({
+            operatorIds: (links || []).map((r: any) => String(r.operator_id)).filter(Boolean),
+            activeOrganizationId,
+            isSuperAdmin: access.isSuperAdmin,
+          })
           if (opIds.length) {
             const { data: opAuthRows } = await supabase
               .from('operator_auth')
@@ -394,7 +421,11 @@ export async function POST(req: Request) {
             .from('operator_staff_links')
             .select('operator_id')
             .eq('staff_id', body.staffId)
-          const opIds = (links || []).map((r: any) => String(r.operator_id)).filter(Boolean)
+          const opIds = await scopeOperatorIdsToOrganization({
+            operatorIds: (links || []).map((r: any) => String(r.operator_id)).filter(Boolean),
+            activeOrganizationId,
+            isSuperAdmin: access.isSuperAdmin,
+          })
           if (opIds.length) {
             const { data: opAuthRows } = await supabase
               .from('operator_auth')

@@ -161,7 +161,11 @@ function scopedOr(organizationId: string | null | undefined) {
 
 function ensureEditableOrganization(rowOrganizationId: string | null | undefined, activeOrganizationId: string | null, isSuperAdmin: boolean) {
   if (isSuperAdmin && !activeOrganizationId) return
-  if (!activeOrganizationId) return
+  // NEVER-паттерн: без организации обычный пользователь не редактирует ничего.
+  // Раньше здесь был return — пустая организация открывала правку любых записей.
+  if (!activeOrganizationId) {
+    throw new Error('Организация не выбрана')
+  }
   if (rowOrganizationId && rowOrganizationId !== activeOrganizationId) {
     throw new Error('Запись принадлежит другой организации')
   }
@@ -762,7 +766,9 @@ async function applyImport(
       }
       // Триггер в БД поднимает version при смене текста и обнуляет силу старых
       // подтверждений — сотрудникам придётся ознакомиться с новой редакцией.
-      const { error: updateError } = await supabase
+      // Обновление ограничено своей организацией: slug не уникален глобально,
+      // без фильтра импорт переписывал бы одноимённые статьи чужих клиентов.
+      let updateQuery = supabase
         .from('knowledge_articles')
         .update({
           category_id: categoryId,
@@ -776,6 +782,10 @@ async function applyImport(
           is_published: true,
         })
         .eq('slug', slug)
+      const updateScope = scopedOr(organizationId)
+      if (updateScope) updateQuery = updateQuery.or(updateScope)
+      else if (!isSuperAdmin) updateQuery = updateQuery.eq('organization_id', '00000000-0000-0000-0000-000000000000')
+      const { error: updateError } = await updateQuery
       if (updateError) throw updateError
       updatedArticles += 1
       continue
@@ -940,6 +950,12 @@ export async function POST(req: Request) {
 
     const supabase = createAdminSupabaseClient()
     const organizationId = access.activeOrganization?.id || null
+
+    // NEVER-паттерн: без организации запись создавалась бы с organization_id=null,
+    // то есть попадала бы в базу знаний ВСЕХ клиентов сразу. Супер-админ — исключение.
+    if (!organizationId && !access.isSuperAdmin) {
+      return json({ error: 'Организация не выбрана' }, 400)
+    }
 
     if (body.action === 'seedDefaults') {
       await seedDefaults(organizationId, user?.id || null)
@@ -1134,6 +1150,24 @@ export async function POST(req: Request) {
       ensureEditableOrganization(template.organization_id, organizationId, access.isSuperAdmin)
 
       if (body.payload.id) {
+        // Проверяем и САМ пункт, а не только целевой шаблон: иначе подстановкой
+        // чужого id можно было утащить пункт другой организации в свой чек-лист.
+        const { data: currentItem, error: currentItemError } = await supabase
+          .from('checklist_items')
+          .select('id, template_id')
+          .eq('id', body.payload.id)
+          .maybeSingle()
+        if (currentItemError) throw currentItemError
+        if (!currentItem) return json({ error: 'Пункт не найден' }, 404)
+        if (String((currentItem as any).template_id) !== String(payload.template_id)) {
+          const { data: ownerTemplate, error: ownerError } = await supabase
+            .from('checklist_templates')
+            .select('organization_id')
+            .eq('id', (currentItem as any).template_id)
+            .maybeSingle()
+          if (ownerError) throw ownerError
+          ensureEditableOrganization((ownerTemplate as any)?.organization_id, organizationId, access.isSuperAdmin)
+        }
         const { data, error } = await supabase.from('checklist_items').update(payload).eq('id', body.payload.id).select('*').single()
         if (error) throw error
         return json({ ok: true, data })

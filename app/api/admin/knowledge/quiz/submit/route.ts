@@ -40,10 +40,13 @@ export async function POST(request: Request) {
     if (!attempt) return json({ error: 'attempt-not-found' }, 404)
     // Изоляция: попытка обязана принадлежать орг — иначе по присланному attempt_id
     // можно прочитать правильные ответы и перезаписать чужую попытку.
+    // Сравниваем строго: раньше попытка с organization_id = null (legacy)
+    // проходила проверку у любого клиента, а вместе с ней утекали правильные
+    // ответы и возможность перезаписать чужой результат.
     if (
       !access.isSuperAdmin &&
-      (attempt as any).organization_id &&
-      (attempt as any).organization_id !== (access.activeOrganization?.id || null)
+      (!access.activeOrganization?.id ||
+        String((attempt as any).organization_id || '') !== String(access.activeOrganization.id))
     ) {
       return json({ error: 'attempt-not-found' }, 404)
     }

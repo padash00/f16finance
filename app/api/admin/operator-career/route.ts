@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { normalizeStaffRole } from '@/lib/core/access'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireStaffCapability } from '@/lib/server/capabilities'
-import { ensureOrganizationOperatorAccess } from '@/lib/server/organizations'
+import { ensureOrganizationOperatorAccess, ensureOrganizationStaffAccess } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -78,6 +78,11 @@ export async function POST(req: Request) {
     const operatorId = body.payload.operatorId?.trim()
     if (!operatorId) return json({ error: 'operatorId обязателен' }, 400)
     if (role === 'other') return json({ error: 'Выберите роль повышения' }, 400)
+    // Без организации staff создавался бы с organization_id = null — «ничей»
+    // сотрудник, не попадающий ни в один орг-скоуп.
+    if (!access.activeOrganization?.id && !access.isSuperAdmin) {
+      return json({ error: 'Требуется активная организация' }, 400)
+    }
 
     // Мультитенантная изоляция: повышать можно только оператора своей организации.
     // В legacy single-tenant режиме helper возвращает всех операторов → no-op.
@@ -124,6 +129,19 @@ export async function POST(req: Request) {
     let staffRow: any = null
 
     if (existingLink?.staff_id) {
+      // operator_staff_links не скоуплен по организации: линк мог указывать на
+      // сотрудника ДРУГОЙ организации, и повышение переписывало его строку,
+      // заодно перетаскивая её к себе (organization_id в staffPayload).
+      try {
+        await ensureOrganizationStaffAccess({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+          staffId: String(existingLink.staff_id),
+        })
+      } catch {
+        return json({ error: 'forbidden-staff' }, 403)
+      }
+
       const { data, error } = await supabase
         .from('staff')
         .update(staffPayload)

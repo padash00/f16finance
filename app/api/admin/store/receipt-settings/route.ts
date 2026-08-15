@@ -7,6 +7,29 @@ import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
+/**
+ * Fail-closed проверка принадлежности точки организации вызывающего.
+ * ПОЧЕМУ отдельно: resolveCompanyScope({ requestedCompanyId }) бросает
+ * 'company-out-of-scope' только когда организация ЕСТЬ. У пользователя без
+ * активной орг он молча возвращает { allowedCompanyIds: [] } — и «проверка одним
+ * await» пропускала чужой company_id. Здесь сверяем результат явно:
+ * null (суперадмин без орг) = можно всё, [] = нельзя ничего.
+ */
+async function assertCompanyInScope(
+  access: { activeOrganization?: { id?: string | null } | null; isSuperAdmin: boolean },
+  companyId: string | null | undefined,
+) {
+  const scope = await resolveCompanyScope({
+    activeOrganizationId: access.activeOrganization?.id || null,
+    isSuperAdmin: access.isSuperAdmin,
+  })
+  if (scope.allowedCompanyIds === null) return
+  if (!companyId || !scope.allowedCompanyIds.includes(String(companyId))) {
+    throw new Error('company-out-of-scope')
+  }
+}
+
+
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
@@ -193,11 +216,7 @@ export async function PUT(request: Request) {
     const companyId = String(body?.company_id || '').trim()
     if (!companyId) return json({ error: 'company_id обязателен' }, 400)
 
-    await resolveCompanyScope({
-      activeOrganizationId: access.activeOrganization?.id || null,
-      isSuperAdmin: access.isSuperAdmin,
-      requestedCompanyId: companyId,
-    })
+    await assertCompanyInScope(access, companyId)
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
 

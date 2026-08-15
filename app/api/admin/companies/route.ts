@@ -14,12 +14,16 @@ export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    // Роут был открыт любому аутентифицированному — включая клиента гостевого
+    // контура, которому справочник точек организации знать незачем.
+    if (!access.isSuperAdmin && !access.staffMember) return json({ error: 'forbidden' }, 403)
 
     const supabase = hasAdminSupabaseCredentials()
       ? createAdminSupabaseClient()
       : createRequestSupabaseClient(req)
 
-    // Скоуп по организации. Пока LEGACY_SINGLE_TENANT_MODE=true → allowedCompanyIds=null → фильтр не применяется (no-op).
+    // Скоуп по организации: allowedCompanyIds === null только у супер-админа
+    // без выбранной организации, [] → .in('id', []) вернёт 0 строк.
     const scope = await resolveCompanyScope({
       activeOrganizationId: access.activeOrganization?.id || null,
       isSuperAdmin: access.isSuperAdmin,
@@ -74,6 +78,11 @@ export async function POST(req: Request) {
     // Привязываем точку к активной организации — иначе она «ничья» и не попадёт
     // в скоуп организации (новый клиент не увидит свою же точку).
     const organizationId = access.activeOrganization?.id || null
+    // Без организации точка создавалась «ничьей»: её не видит ни один орг-скоуп,
+    // а при откате LEGACY_SINGLE_TENANT_MODE она стала бы видна всем тенантам.
+    if (!organizationId && !access.isSuperAdmin) {
+      return json({ error: 'Требуется активная организация' }, 400)
+    }
 
     const { data, error } = await supabase
       .from('companies')

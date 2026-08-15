@@ -79,13 +79,16 @@ export async function POST(request: Request) {
     let fallbackCategoryName: string | null = null
     const needsFallback = open.some((d) => !String(d.category?.name || '').trim())
     if (needsFallback) {
-      const { data: fallback } = await supabase
+      // Изоляция: fallback-категория — из справочника своей орг, иначе в расход
+      // подставлялось название COGS-категории соседнего арендатора.
+      let fallbackQuery: any = supabase
         .from('expense_categories')
         .select('name')
         .ilike('accounting_group', 'cogs')
         .order('name', { ascending: true })
         .limit(1)
-        .maybeSingle()
+      if (scopeOrg) fallbackQuery = fallbackQuery.eq('organization_id', scopeOrg)
+      const { data: fallback } = await fallbackQuery.maybeSingle()
       fallbackCategoryName = (fallback as any)?.name || null
       if (!fallbackCategoryName) {
         return json({ error: 'У части долгов нет COGS-категории, и в справочнике не найдено fallback. Создайте COGS-категорию.' }, 400)

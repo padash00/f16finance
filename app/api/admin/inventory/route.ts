@@ -206,12 +206,24 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
-async function notifyManagersAboutRequest(requestId: string, companyName: string, itemCount: number, comment: string | null) {
+async function notifyManagersAboutRequest(
+  requestId: string,
+  companyName: string,
+  itemCount: number,
+  comment: string | null,
+  organizationId: string | null,
+) {
   try {
     const supabase = createAdminSupabaseClient()
+    // Изоляция: уведомление уходит владельцам/управляющим ТОЛЬКО той организации,
+    // чья это заявка. Без фильтра название точки и состав заявки рассылались в
+    // Telegram владельцам всех арендаторов сразу.
+    // NEVER-pattern: орг не определилась → никого не уведомляем (лучше молча, чем чужим).
+    if (!organizationId) return
     const { data: staff } = await supabase
       .from('staff')
       .select('telegram_chat_id, full_name')
+      .eq('organization_id', organizationId)
       .in('role', ['owner', 'manager'])
       .not('telegram_chat_id', 'is', null)
 
@@ -550,7 +562,7 @@ export async function POST(request: Request) {
       if (requestId) {
         const { data: companyRow } = await (supabase as any)
           .from('companies')
-          .select('name')
+          .select('name, organization_id')
           .eq('id', requestingCompanyId)
           .maybeSingle()
         const companyName = companyRow?.name || requestingCompanyId
@@ -559,6 +571,8 @@ export async function POST(request: Request) {
           companyName,
           normalizedItems.length,
           body.payload?.comment || null,
+          // Орг берём у самой точки-заявителя (она уже проверена ensureInventoryCompanyAccess).
+          companyRow?.organization_id ? String(companyRow.organization_id) : access.activeOrganization?.id || null,
         ).catch(() => null)
       }
 

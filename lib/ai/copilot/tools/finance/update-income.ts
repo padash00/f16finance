@@ -24,9 +24,13 @@ export const updateIncomeTool: CopilotTool = {
       required: true,
       description: 'Запись дохода из последних',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase
+        // Без скоупа в кнопках была видна выручка других организаций.
+        const scope = await scopedCompanyIds(ctx)
+        let optQ = ctx.supabase
           .from('incomes')
           .select('id, date, shift, cash_amount, kaspi_amount, card_amount, online_amount, company_id')
+        if (scope) optQ = optQ.in('company_id', scope)
+        const { data } = await optQ
           .order('date', { ascending: false })
           .order('created_at', { ascending: false })
           .limit(100)
@@ -82,6 +86,9 @@ export const updateIncomeTool: CopilotTool = {
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
+        // Тегируем событие организацией: иначе запись уходит в «общий» пул
+        // audit_log и её читают копилоты других клиентов.
+        organizationId: ctx.organizationId || null,
         entityType: 'income',
         entityId: incomeId,
         action: 'update',

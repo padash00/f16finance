@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { getPublicAppUrl } from '@/lib/core/app-url'
 import { writeAuditLog, writeNotificationLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
-import { listOrganizationStaffIds } from '@/lib/server/organizations'
+import { ensureOrganizationStaffAccess, listOrganizationStaffIds } from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -235,6 +235,9 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   let requestBody: PostBody | null = null
+  // Держим уже ПРОВЕРЕННЫЙ на принадлежность орг объект, чтобы catch-ветка не
+  // резолвила сотрудника заново (тот резолв шёл без tenant-проверки).
+  let resolvedTarget: ResolvedStaffAccount | null = null
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
@@ -261,24 +264,28 @@ export async function POST(req: Request) {
       data: { user },
     } = await requestClient.auth.getUser()
 
+    // Tenant scoping ДО резолва: resolveStaffAccountTarget не только читает
+    // чужую строку (email/телефон/ФИО), но и ПЕРЕЗАПИСЫВАЕТ staff.update(...)
+    // при рассинхроне с профилем оператора. Раньше проверка стояла после него —
+    // то есть чужой сотрудник успевал быть прочитан и изменён.
+    try {
+      await ensureOrganizationStaffAccess({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+        staffId: body.staffId,
+      })
+    } catch (scopeError: any) {
+      if (String(scopeError?.message || '') === 'forbidden-staff') {
+        return json({ error: 'forbidden' }, 403)
+      }
+      throw scopeError
+    }
+
     const resolved = await resolveStaffAccountTarget(supabase, body.staffId)
     if (!resolved) {
       return json({ error: 'Сотрудник не найден', code: 'staff_not_found' }, 404)
     }
-
-    // Tenant scoping: reject mutations on staff outside the active organization.
-    // In LEGACY_SINGLE_TENANT_MODE listOrganizationStaffIds returns all staff (no-op).
-    if (!access.isSuperAdmin) {
-      // Не-супер без активной орг → отказ (fail-closed)
-      if (!access.activeOrganization?.id) return json({ error: 'forbidden' }, 403)
-      const allowedStaffIds = await listOrganizationStaffIds({
-        activeOrganizationId: access.activeOrganization.id,
-        isSuperAdmin: access.isSuperAdmin,
-      })
-      if (allowedStaffIds && !allowedStaffIds.includes(String(resolved.staff.id))) {
-        return json({ error: 'forbidden' }, 403)
-      }
-    }
+    resolvedTarget = resolved
 
     if (!resolved.staff.is_active) {
       return json({ error: 'Нельзя приглашать архивного сотрудника', code: 'staff_inactive' }, 400)
@@ -452,16 +459,15 @@ export async function POST(req: Request) {
     })
     const staffId = requestBody && 'staffId' in requestBody ? requestBody.staffId : null
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : null
-    if (supabase && staffId) {
-      const resolved = await resolveStaffAccountTarget(supabase, staffId).catch(() => null)
-      if (resolved?.email) {
-        await writeNotificationLog(supabase, {
-          channel: 'email',
-          recipient: resolved.email,
-          status: 'failed',
-          payload: { kind: requestBody?.action || 'staff-account-action', staff_id: staffId, error: error?.message || 'unknown-error' },
-        })
-      }
+    // Только уже проверенный объект: повторный resolveStaffAccountTarget здесь
+    // обходил tenant-проверку (читал и перезаписывал чужого сотрудника).
+    if (supabase && staffId && resolvedTarget?.email) {
+      await writeNotificationLog(supabase, {
+        channel: 'email',
+        recipient: resolvedTarget.email,
+        status: 'failed',
+        payload: { kind: requestBody?.action || 'staff-account-action', staff_id: staffId, error: error?.message || 'unknown-error' },
+      })
     }
     if (isEmailRateLimitError(error)) {
       return json(

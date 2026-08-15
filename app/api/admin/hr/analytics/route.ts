@@ -121,6 +121,29 @@ export async function GET(req: Request) {
     let authQuery = supabase.from('operator_auth').select('operator_id, is_active')
     if (scopeOperators) authQuery = authQuery.in('operator_id', scopeOperators)
 
+    // audit_log читался БЕЗ скоупа — найм/увольнения ВСЕХ организаций падали
+    // в метрику turnover как свои. Теперь строго по своей орг; не-супер без
+    // орг вообще не выполняет запрос (fail-closed).
+    const orgId = access.activeOrganization?.id || null
+    let auditQuery: any = null
+    if (orgId || access.isSuperAdmin) {
+      auditQuery = supabase
+        .from('audit_log')
+        .select('action, entity_type, created_at')
+        .in('entity_type', ['staff', 'operator'])
+        .in('action', ['create', 'dismiss'])
+        .gte('created_at', sinceIso)
+      if (orgId) auditQuery = auditQuery.eq('organization_id', orgId)
+    }
+
+    // positions без фильтра отдавал названия кастомных должностей чужих орг.
+    let positionsQuery = supabase.from('positions').select('name, label')
+    if (orgId) {
+      positionsQuery = positionsQuery.or(`organization_id.is.null,organization_id.eq.${orgId}`)
+    } else if (!access.isSuperAdmin) {
+      positionsQuery = positionsQuery.is('organization_id', null)
+    }
+
     const [opRes, staffRes, profilesRes, assignRes, companiesRes, authRes, auditRes, positionsRes] = await Promise.all([
       operatorsQuery,
       staffQuery,
@@ -128,13 +151,8 @@ export async function GET(req: Request) {
       assignQuery,
       companiesQuery,
       authQuery,
-      supabase
-        .from('audit_log')
-        .select('action, entity_type, created_at')
-        .in('entity_type', ['staff', 'operator'])
-        .in('action', ['create', 'dismiss'])
-        .gte('created_at', sinceIso),
-      supabase.from('positions').select('name, label'),
+      auditQuery || Promise.resolve({ data: [], error: null }),
+      positionsQuery,
     ])
 
     if (opRes.error) throw opRes.error

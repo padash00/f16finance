@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog } from '@/lib/server/audit'
-import { resolveCompanyScope } from '@/lib/server/organizations'
+import { listOrganizationStaffIds, resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { requireCapability } from '@/lib/server/capabilities'
@@ -126,6 +126,40 @@ export async function POST(request: Request) {
     })
     if (companyScope.allowedCompanyIds && !companyScope.allowedCompanyIds.includes(body.company_id)) {
       return json({ error: 'company-forbidden' }, 403)
+    }
+
+    // Изоляция: company_id проверялся, а сотрудники и смена приходили из body без
+    // проверки. Это позволяло создать инцидент со ШТРАФОМ на сотрудника ЧУЖОЙ
+    // организации — штраф попадал в его расчёт зарплаты.
+    if (body.subject_staff_id || body.reported_by) {
+      const allowedStaffIds = await listOrganizationStaffIds({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+      })
+      // null-скоуп бывает только у супер-админа без организации — ему можно.
+      const staffScoped = !(access.isSuperAdmin && !access.activeOrganization?.id)
+      if (staffScoped) {
+        if (body.subject_staff_id && !allowedStaffIds.includes(body.subject_staff_id)) {
+          return json({ error: 'subject-staff-forbidden' }, 403)
+        }
+        if (body.reported_by && !allowedStaffIds.includes(body.reported_by)) {
+          return json({ error: 'reporter-staff-forbidden' }, 403)
+        }
+      }
+    }
+
+    if (body.shift_id) {
+      const { data: shiftRow, error: shiftError } = await supabase
+        .from('shifts')
+        .select('id, company_id')
+        .eq('id', body.shift_id)
+        .maybeSingle()
+      if (shiftError) throw shiftError
+      const shiftCompanyId = String((shiftRow as any)?.company_id || '')
+      if (!shiftRow) return json({ error: 'shift-not-found' }, 404)
+      if (companyScope.allowedCompanyIds && !companyScope.allowedCompanyIds.includes(shiftCompanyId)) {
+        return json({ error: 'shift-forbidden' }, 403)
+      }
     }
 
     const { data: incidentId, error: rpcError } = await supabase.rpc('incidents_create', {

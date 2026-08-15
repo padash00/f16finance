@@ -8,7 +8,7 @@
 
 import type { CopilotTool } from '../../types'
 import { writeAuditLog } from '@/lib/server/audit'
-import { scopedCompanyIds } from '../../query-helpers'
+import { scopedCompanyIds, isOrgRowAllowed } from '../../query-helpers'
 
 function todayISO(): string {
   const d = new Date()
@@ -95,6 +95,12 @@ export const addStockTool: CopilotTool = {
       }
     }
 
+    // Товар тоже per-org: без проверки чужой item_id можно было привязать к
+    // своей локации и потом прочитать его название и цену через остатки.
+    if (!(await isOrgRowAllowed(ctx, 'inventory_items', itemId))) {
+      return { ok: false, message: 'Товар не найден.' }
+    }
+
     // unit_cost = 0 для оприходования без накладной (это не закупка)
     const itemsJson = [{ item_id: itemId, quantity: qty, unit_cost: 0, total_cost: 0 }]
 
@@ -116,6 +122,9 @@ export const addStockTool: CopilotTool = {
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
+        // Тегируем событие организацией: иначе запись уходит в «общий» пул
+        // audit_log и её читают копилоты других клиентов.
+        organizationId: ctx.organizationId || null,
         entityType: 'inventory-receipt',
         entityId: receiptId,
         action: 'add-stock',

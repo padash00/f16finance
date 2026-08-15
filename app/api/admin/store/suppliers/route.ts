@@ -166,6 +166,19 @@ export async function POST(request: Request) {
     const supplierCompanyId = String(body?.company_id || '').trim()
     if (!supplierCompanyId) return json({ error: 'point-required', message: 'Выберите точку — поставщик привязывается к точке-магазину' }, 400)
 
+    // Изоляция: точка обязана быть в организации вызывающего — иначе поставщик
+    // создавался с чужим company_id (запись в чужой контур + невидим в своём списке).
+    if (organizationId) {
+      const { data: scopedCompany, error: scopedCompanyError } = await supabase
+        .from('companies')
+        .select('id')
+        .eq('id', supplierCompanyId)
+        .eq('organization_id', organizationId)
+        .maybeSingle()
+      if (scopedCompanyError) throw scopedCompanyError
+      if (!scopedCompany?.id) return json({ error: 'company-out-of-scope' }, 403)
+    }
+
     // Дедуп в пределах своей орг (по БИН или названию) — не плодим дубли.
     if (binIin) {
       let dupQ: any = supabase.from('inventory_suppliers').select('id, name').eq('bin_iin', binIin).limit(1)

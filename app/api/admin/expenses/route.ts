@@ -7,6 +7,29 @@ import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
+/**
+ * Fail-closed проверка принадлежности точки организации вызывающего.
+ * ПОЧЕМУ отдельно: resolveCompanyScope({ requestedCompanyId }) бросает
+ * 'company-out-of-scope' только когда организация ЕСТЬ. У пользователя без
+ * активной орг он молча возвращает { allowedCompanyIds: [] } — и «проверка одним
+ * await» пропускала чужой company_id. Здесь сверяем результат явно:
+ * null (суперадмин без орг) = можно всё, [] = нельзя ничего.
+ */
+async function assertCompanyInScope(
+  access: { activeOrganization?: { id?: string | null } | null; isSuperAdmin: boolean },
+  companyId: string | null | undefined,
+) {
+  const scope = await resolveCompanyScope({
+    activeOrganizationId: access.activeOrganization?.id || null,
+    isSuperAdmin: access.isSuperAdmin,
+  })
+  if (scope.allowedCompanyIds === null) return
+  if (!companyId || !scope.allowedCompanyIds.includes(String(companyId))) {
+    throw new Error('company-out-of-scope')
+  }
+}
+
+
 type ExpensePayload = {
   date: string
   company_id: string
@@ -260,11 +283,7 @@ export async function POST(req: Request) {
 
       const { data: existing, error: existingError } = await supabase.from('expenses').select('*').eq('id', body.expenseId).single()
       if (existingError) throw existingError
-      await resolveCompanyScope({
-        activeOrganizationId: access.activeOrganization?.id || null,
-        requestedCompanyId: existing.company_id,
-        isSuperAdmin: access.isSuperAdmin,
-      })
+      await assertCompanyInScope(access, existing.company_id)
 
       const updatePayload = normalizePayload(body.payload)
       const { data, error } = await supabase.from('expenses').update(updatePayload).eq('id', body.expenseId).select('*').single()
@@ -301,11 +320,7 @@ export async function POST(req: Request) {
         .eq('id', body.expenseId)
         .single()
       if (existingError) throw existingError
-      await resolveCompanyScope({
-        activeOrganizationId: access.activeOrganization?.id || null,
-        requestedCompanyId: existing.company_id,
-        isSuperAdmin: access.isSuperAdmin,
-      })
+      await assertCompanyInScope(access, existing.company_id)
       const { error } = await supabase.from('expenses').update({ attachment_url: null }).eq('id', body.expenseId)
       if (error) throw error
 
@@ -334,11 +349,7 @@ export async function POST(req: Request) {
       // Изоляция: удалить серию можно только если ВСЕ её точки доступны текущему пользователю.
       const companyIds = Array.from(new Set(seriesRows.map((row: any) => String(row.company_id || ''))))
       for (const companyId of companyIds) {
-        await resolveCompanyScope({
-          activeOrganizationId: access.activeOrganization?.id || null,
-          requestedCompanyId: companyId || null,
-          isSuperAdmin: access.isSuperAdmin,
-        })
+        await assertCompanyInScope(access, companyId || null)
       }
 
       const { error: seriesDeleteError } = await supabase.from('expenses').delete().eq('series_id', body.seriesId)
@@ -371,11 +382,7 @@ export async function POST(req: Request) {
 
     const { data: existing, error: existingError } = await supabase.from('expenses').select('*').eq('id', body.expenseId).single()
     if (existingError) throw existingError
-    await resolveCompanyScope({
-      activeOrganizationId: access.activeOrganization?.id || null,
-      requestedCompanyId: existing.company_id,
-      isSuperAdmin: access.isSuperAdmin,
-    })
+    await assertCompanyInScope(access, existing.company_id)
 
     const { error } = await supabase.from('expenses').delete().eq('id', body.expenseId)
     if (error) throw error

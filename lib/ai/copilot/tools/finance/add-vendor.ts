@@ -4,7 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { companyOptions } from '../../query-helpers'
+import { companyOptions, isCompanyAllowed } from '../../query-helpers'
 import { writeAuditLog } from '@/lib/server/audit'
 
 export const addVendorTool: CopilotTool = {
@@ -43,9 +43,19 @@ export const addVendorTool: CopilotTool = {
     const notes = String(input.notes || '').trim() || null
     if (!vendorName) return { ok: false, message: 'Название обязательно.' }
 
+    // Whitelist без organization_id действует на всю базу — доверенный поставщик
+    // одного клиента открывал бы расходы без чека у других.
+    if (!ctx.organizationId && !ctx.isSuperAdmin) {
+      return { ok: false, message: 'Нет активной организации — поставщика добавить нельзя.' }
+    }
+    // Привязка «только к одной точке» — точка обязана быть своей.
+    if (companyId && !(await isCompanyAllowed(ctx, companyId))) {
+      return { ok: false, message: 'Точка не найдена.' }
+    }
+
     const { data, error } = await ctx.supabase
       .from('expense_vendor_whitelist')
-      .insert([{ vendor_name: vendorName, company_id: companyId, notes }])
+      .insert([{ vendor_name: vendorName, company_id: companyId, notes, organization_id: ctx.organizationId || null }])
       .select('id')
       .single()
     if (error) return { ok: false, message: `Не удалось добавить: ${error.message}` }
@@ -53,6 +63,9 @@ export const addVendorTool: CopilotTool = {
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
+        // Тегируем событие организацией: иначе запись уходит в «общий» пул
+        // audit_log и её читают копилоты других клиентов.
+        organizationId: ctx.organizationId || null,
         entityType: 'expense-vendor-whitelist',
         entityId: data?.id || 'unknown',
         action: 'create',

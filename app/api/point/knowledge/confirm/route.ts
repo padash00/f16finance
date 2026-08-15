@@ -37,11 +37,26 @@ export async function POST(request: Request) {
     ))
   if (!staffId) return json({ error: 'staff-id-required' }, 400)
 
-  // Текущая версия статьи
+  // staff_id может прийти прямо из тела: сотрудник обязан быть из организации
+  // точки, иначе подтверждение записывалось на сотрудника чужого арендатора.
+  const orgIdForStaff = device.company?.organization_id || '00000000-0000-0000-0000-000000000000'
+  const { data: staffRow } = await supabase
+    .from('staff')
+    .select('id')
+    .eq('id', staffId)
+    .or(`organization_id.eq.${orgIdForStaff},organization_id.is.null`)
+    .maybeSingle()
+  if (!staffRow) return json({ error: 'staff-not-in-organization' }, 403)
+
+  // Текущая версия статьи. Скоуп по организации обязателен: проверка ниже по
+  // company_id пропускала любую чужую статью с company_id = null (а это как раз
+  // общие статьи организации) — утекали метаданные и писалось подтверждение.
+  const orgId = device.company?.organization_id || '00000000-0000-0000-0000-000000000000'
   const { data: article, error: articleError } = await supabase
     .from('knowledge_articles')
     .select('id, version, requires_confirmation, is_published, company_id')
     .eq('id', body.article_id)
+    .eq('organization_id', orgId)
     .maybeSingle()
 
   if (articleError) return json({ error: 'article-load-failed', detail: articleError.message }, 400)

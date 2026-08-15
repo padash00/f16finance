@@ -34,11 +34,16 @@ export async function GET(request: Request) {
       activeOrganizationId: access.activeOrganization?.id || null,
       isSuperAdmin: access.isSuperAdmin,
     })
-    const { data: customer, error: customerError } = await supabase
+    // Изоляция: запрос шёл без орг-фильтра, а при company_id IS NULL проверка
+    // ниже вообще пропускалась — оставался оракул существования customer_id.
+    // Приводим к паттерну /api/admin/customers: сверяем organization_id.
+    const scopeOrgId = access.activeOrganization?.id || (access.isSuperAdmin ? null : '00000000-0000-0000-0000-000000000000')
+    let customerQuery = supabase
       .from('customers')
-      .select('id, company_id')
+      .select('id, company_id, organization_id')
       .eq('id', customerId)
-      .maybeSingle()
+    if (scopeOrgId) customerQuery = customerQuery.eq('organization_id', scopeOrgId)
+    const { data: customer, error: customerError } = await customerQuery.maybeSingle()
     if (customerError) throw customerError
     if (!customer) return json({ error: 'customer-not-found' }, 404)
     if (customer.company_id) {

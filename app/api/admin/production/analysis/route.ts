@@ -67,7 +67,14 @@ export async function GET(request: Request) {
     const ingredientNameById = new Map<string, string>()
     const ingredientUnitById = new Map<string, string>()
     if (ingIds.length) {
-      const { data: ings } = await supabase.from('ingredients').select('id, name, purchase_price, unit').in('id', ingIds)
+      // Изоляция: без organization_id сюда попадали name и purchase_price ЧУЖИХ
+      // ингредиентов (закупочные цены конкурента) — они уходили в ответ в
+      // массиве ingredients, если в состав техкарты подсунут чужой ingredient_id.
+      const { data: ings } = await supabase
+        .from('ingredients')
+        .select('id, name, purchase_price, unit')
+        .eq('organization_id', scopeOrg)
+        .in('id', ingIds)
       for (const it of ings || []) {
         ingredientCostById.set(String(it.id), Number((it as any).purchase_price || 0))
         ingredientNameById.set(String(it.id), String((it as any).name || ''))

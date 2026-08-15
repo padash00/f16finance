@@ -79,14 +79,29 @@ export async function POST(request: Request) {
     // Один отчёт на смену. Повторная отправка — почти всегда второе нажатие на
     // медленной сети, а не второй отчёт: два дохода за смену раздувают выручку
     // вдвое, и разбираться с этим приходится через неделю по журналу.
+    // shift_id приходит из тела: он обязан быть сменой своей компании. Иначе
+    // (а) по чужому id можно было узнать, есть ли у него доход, и получить его
+    // id, (б) доход этой точки прикреплялся к смене другого арендатора и портил
+    // его отчёты.
+    let shiftId: string | null = null
     if (body?.shift_id) {
+      const { data: shiftRow } = await supabase
+        .from('point_shifts')
+        .select('id')
+        .eq('id', body.shift_id)
+        .eq('company_id', companyId)
+        .maybeSingle()
+      if (!shiftRow) return json({ error: 'point-shift-not-allowed' }, 403)
+      shiftId = String((shiftRow as any).id)
+
       const { data: existing } = await supabase
         .from('incomes')
         .select('id')
-        .eq('shift_id', body.shift_id)
-        .maybeSingle()
-      if (existing) {
-        return json({ ok: true, income_id: String((existing as any).id), duplicate: true })
+        .eq('shift_id', shiftId)
+        .eq('company_id', companyId)
+        .limit(1)
+      if (existing && existing.length > 0) {
+        return json({ ok: true, income_id: String((existing as any)[0].id), duplicate: true })
       }
     }
 
@@ -103,7 +118,7 @@ export async function POST(request: Request) {
           company_id: companyId,
           operator_id: operatorId,
           shift: body.shift,
-          shift_id: body.shift_id || null,
+          shift_id: shiftId,
           // В доход идут купюры и безнал. Мелочь остаётся в кассе на размен, а
           // долги — это ещё не деньги: они попадут в доход, когда их вернут.
           cash_amount: cash,

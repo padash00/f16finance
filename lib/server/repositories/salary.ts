@@ -77,14 +77,19 @@ export async function listSalaryReferenceData(
     companyIds?: string[] | null
   },
 ) {
-  const companyIds = (options?.companyIds || []).filter(Boolean)
+  // Различаем null («фильтра нет», супер-админ) и [] («ничего»). Раньше обе
+  // ситуации сводились к `length > 0`, поэтому пустой скоуп (пользователь без
+  // организации) означал «все компании и все назначения всех тенантов».
+  const scopedCompanyIds = options?.companyIds === undefined || options?.companyIds === null
+    ? null
+    : options.companyIds.filter(Boolean)
   const assignmentsQuery = supabase
     .from('operator_company_assignments')
     .select('operator_id,company_id,role_in_company,is_active')
     .eq('is_active', true)
 
-  if (companyIds.length > 0) {
-    assignmentsQuery.in('company_id', companyIds)
+  if (scopedCompanyIds) {
+    assignmentsQuery.in('company_id', scopedCompanyIds)
   }
 
   const [
@@ -92,8 +97,8 @@ export async function listSalaryReferenceData(
     rules,
     { data: assignments, error: assignmentsError },
   ] = await Promise.all([
-    companyIds.length > 0
-      ? supabase.from('companies').select('id,code,name').in('id', companyIds)
+    scopedCompanyIds
+      ? supabase.from('companies').select('id,code,name').in('id', scopedCompanyIds)
       : supabase.from('companies').select('id,code,name'),
     listActiveSalaryRules(supabase),
     assignmentsQuery,
@@ -199,7 +204,11 @@ export async function listOperatorSalaryData(
   },
 ) {
   const { operatorId, dateFrom, dateTo, weekStart, companyCode } = params
-  const companyIds = (params.companyIds || []).filter(Boolean)
+  // null/undefined = «без фильтра» (супер-админ), [] = «ничего». Раньше пустой
+  // скоуп проходил как «фильтра нет», и в расчёт попадали доходы/долги чужих точек.
+  const companyIds = params.companyIds === undefined || params.companyIds === null
+    ? null
+    : params.companyIds.filter(Boolean)
 
   const incomesQuery = supabase
     .from('incomes')
@@ -236,7 +245,7 @@ export async function listOperatorSalaryData(
   let filteredAdjustments = (adjustments || []) as SalaryAdjustmentRow[]
   let filteredDebts = (debts || []) as SalaryDebtRow[]
 
-  if (companyIds.length > 0) {
+  if (companyIds) {
     filteredIncomes = filteredIncomes.filter((row) => companyIds.includes(String(row.company_id || '')))
     filteredAdjustments = filteredAdjustments.filter((row) => !row.company_id || companyIds.includes(String(row.company_id)))
     filteredDebts = filteredDebts.filter((row) => !row.company_id || companyIds.includes(String(row.company_id)))

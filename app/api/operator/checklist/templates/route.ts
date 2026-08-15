@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { requireOperator } from '@/lib/server/operator-context'
+import { resolveCompanyOrganizationId } from '@/lib/server/point-devices'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -11,6 +12,10 @@ export async function GET(request: Request) {
   if ('response' in ctx) return ctx.response
 
   const { supabase, companyId } = ctx
+
+  // Изоляция: без organization_id шаблоны чужих орг с company_id = null
+  // отдавались как «общие» (вместе с пунктами, штрафами и бонусами).
+  const orgId = await resolveCompanyOrganizationId(supabase as any, companyId)
 
   const { data: templates, error } = await supabase
     .from('checklist_templates')
@@ -24,6 +29,7 @@ export async function GET(request: Request) {
        )`,
     )
     .eq('is_active', true)
+    .eq('organization_id', orgId)
     .or(`company_id.is.null,company_id.eq.${companyId}`)
     .order('sort_order')
 

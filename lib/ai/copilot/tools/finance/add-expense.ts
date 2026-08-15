@@ -42,7 +42,11 @@ export const addExpenseTool: CopilotTool = {
       required: true,
       description: 'Категория расхода',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase.from('expense_categories').select('id, name').order('name')
+        // Категории тоже per-org: без фильтра клиент видел бы статьи расходов
+        // других организаций (и мог записать расход в чужую категорию).
+        let catQ = ctx.supabase.from('expense_categories').select('id, name').order('name')
+        if (ctx.organizationId) catQ = catQ.eq('organization_id', ctx.organizationId)
+        const { data } = await catQ
         return (data || []).map((c: any) => ({ value: c.name, label: c.name }))
       },
     },
@@ -105,6 +109,9 @@ export const addExpenseTool: CopilotTool = {
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
+        // Тегируем событие организацией: иначе запись уходит в «общий» пул
+        // audit_log и её читают копилоты других клиентов.
+        organizationId: ctx.organizationId || null,
         entityType: 'expense',
         entityId: data?.id || 'unknown',
         action: 'create',

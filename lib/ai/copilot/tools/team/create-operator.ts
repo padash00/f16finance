@@ -43,9 +43,15 @@ export const createOperatorTool: CopilotTool = {
 
     if (!name) return { ok: false, message: 'Имя обязательно.' }
 
+    // Оператор без organization_id виден в глобальных выборках и невидим в
+    // скоупе своей организации — штампуем владельца при создании.
+    if (!ctx.organizationId && !ctx.isSuperAdmin) {
+      return { ok: false, message: 'Нет активной организации — оператора создать нельзя.' }
+    }
+
     const { data, error } = await ctx.supabase
       .from('operators')
-      .insert([{ name, short_name: shortName, is_active: true }])
+      .insert([{ name, short_name: shortName, is_active: true, organization_id: ctx.organizationId || null }])
       .select('id, name')
       .single()
     if (error) return { ok: false, message: `Не удалось создать: ${error.message}` }
@@ -57,6 +63,9 @@ export const createOperatorTool: CopilotTool = {
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
+        // Тегируем событие организацией: иначе запись уходит в «общий» пул
+        // audit_log и её читают копилоты других клиентов.
+        organizationId: ctx.organizationId || null,
         entityType: 'operator',
         entityId: data?.id || 'unknown',
         action: 'create',

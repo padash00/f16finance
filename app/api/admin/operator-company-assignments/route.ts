@@ -164,10 +164,26 @@ export async function POST(req: Request) {
       })
     }
 
-    const { data: existingRows, error: existingError } = await supabase
+    // Принадлежность оператора проверяем БЕЗУСЛОВНО и до любых записей.
+    // Раньше проверка стояла под «если у оператора уже есть назначения»:
+    // оператора чужой организации, ещё не назначенного ни на одну точку,
+    // можно было забрать себе, просто прислав его id.
+    await ensureOrganizationOperatorAccess({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+      operatorId,
+    })
+
+    // Существующие назначения читаем только по своим точкам: иначе в deleteIds
+    // и в массовый сброс is_primary попадали строки чужих компаний.
+    let existingQuery = supabase
       .from('operator_company_assignments')
       .select('id, company_id, role_in_company, is_primary, is_active, notes, company:company_id(organization_id)')
       .eq('operator_id', operatorId)
+    if (companyScope.allowedCompanyIds) {
+      existingQuery = existingQuery.in('company_id', companyScope.allowedCompanyIds)
+    }
+    const { data: existingRows, error: existingError } = await existingQuery
 
     if (existingError) throw existingError
 
@@ -181,14 +197,6 @@ export async function POST(req: Request) {
       : null
     if (foreignRow) {
       return json({ error: 'forbidden-operator' }, 403)
-    }
-
-    if (existingCompanyRows.length > 0) {
-      await ensureOrganizationOperatorAccess({
-        activeOrganizationId: access.activeOrganization?.id || null,
-        isSuperAdmin: access.isSuperAdmin,
-        operatorId,
-      })
     }
 
     const nextHasActiveAssignments = normalized.some((item) => item.is_active)
@@ -215,10 +223,16 @@ export async function POST(req: Request) {
       .filter((row) => !keepIds.has(String(row.id)))
       .map((row) => String(row.id))
 
-    const { error: resetPrimaryError } = await supabase
+    // Сброс «основной точки» — только по своим компаниям: без фильтра он гасил
+    // основную точку оператора и в другой организации.
+    let resetPrimaryQuery = supabase
       .from('operator_company_assignments')
       .update({ is_primary: false })
       .eq('operator_id', operatorId)
+    if (companyScope.allowedCompanyIds) {
+      resetPrimaryQuery = resetPrimaryQuery.in('company_id', companyScope.allowedCompanyIds)
+    }
+    const { error: resetPrimaryError } = await resetPrimaryQuery
 
     if (resetPrimaryError) throw resetPrimaryError
 
@@ -234,7 +248,12 @@ export async function POST(req: Request) {
       }
 
       if (item.id && existingById.has(item.id)) {
-        const { error } = await supabase.from('operator_company_assignments').update(payload).eq('id', item.id)
+        // .eq('operator_id') вторым слоем: id строки приходит из запроса.
+        const { error } = await supabase
+          .from('operator_company_assignments')
+          .update(payload)
+          .eq('id', item.id)
+          .eq('operator_id', operatorId)
         if (error) throw error
       } else {
         const { error } = await supabase.from('operator_company_assignments').insert([payload])
@@ -243,16 +262,26 @@ export async function POST(req: Request) {
     }
 
     if (deleteIds.length > 0) {
-      const { error } = await supabase.from('operator_company_assignments').delete().in('id', deleteIds)
+      let deleteQuery = supabase.from('operator_company_assignments').delete().in('id', deleteIds)
+      if (companyScope.allowedCompanyIds) {
+        deleteQuery = deleteQuery.in('company_id', companyScope.allowedCompanyIds)
+      }
+      const { error } = await deleteQuery
       if (error) throw error
     }
 
-    const { data: freshRows, error: freshError } = await supabase
+    // Ответ и аудит-лог тоже режем по своим точкам: без этого в них попадали
+    // названия компаний другой организации.
+    let freshQuery = supabase
       .from('operator_company_assignments')
       .select('id, operator_id, company_id, role_in_company, is_primary, is_active, notes, created_at, updated_at, company:company_id(id, name, code)')
       .eq('operator_id', operatorId)
       .order('is_primary', { ascending: false })
       .order('created_at', { ascending: true })
+    if (companyScope.allowedCompanyIds) {
+      freshQuery = freshQuery.in('company_id', companyScope.allowedCompanyIds)
+    }
+    const { data: freshRows, error: freshError } = await freshQuery
 
     if (freshError) throw freshError
 

@@ -19,7 +19,9 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
-async function resolveStaffIdForOperator(supabase: any, operatorId: string | null | undefined) {
+// orgId — организация точки: closed_by приходит из тела, без скоупа смену
+// можно было «закрыть» от имени сотрудника другого арендатора.
+async function resolveStaffIdForOperator(supabase: any, operatorId: string | null | undefined, orgId: string) {
   const id = String(operatorId || '').trim()
   if (!id) return null
 
@@ -27,6 +29,7 @@ async function resolveStaffIdForOperator(supabase: any, operatorId: string | nul
     .from('staff')
     .select('id')
     .eq('id', id)
+    .or(`organization_id.eq.${orgId},organization_id.is.null`)
     .maybeSingle()
   if (staff?.id) return staff.id
 
@@ -150,7 +153,7 @@ export async function POST(request: Request) {
     )
   }
 
-  const closedByStaffId = await resolveStaffIdForOperator(supabase, body.closed_by)
+  const closedByStaffId = await resolveStaffIdForOperator(supabase, body.closed_by, orgId)
 
   const { data, error } = await supabase.rpc('point_shift_close', {
     p_shift_id: shiftId,

@@ -28,6 +28,11 @@ export async function GET(request: Request) {
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const orgId = access.activeOrganization?.id || null
+    // NEVER-паттерн: без организации фильтр ниже не навешивался — выдача
+    // возвращала вопросы операторов всех клиентов сразу.
+    if (!orgId && !access.isSuperAdmin) {
+      return json({ ok: true, data: { available: true, groups: [] } })
+    }
 
     let query = supabase
       .from('knowledge_questions')

@@ -39,12 +39,17 @@ export const sendMessageToOperatorTool: CopilotTool = {
       required: true,
       description: 'ID оператора. Только тех у кого есть telegram_chat_id',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase
+        // Без скоупа в списке адресатов были операторы чужих организаций —
+        // и им реально можно было отправить сообщение в Telegram.
+        let optQ = ctx.supabase
           .from('operators')
           .select('id, name, short_name, telegram_chat_id')
           .eq('is_active', true)
           .not('telegram_chat_id', 'is', null)
           .order('name')
+        const ids = await scopedOperatorIds(ctx)
+        if (ids) optQ = optQ.in('id', ids)
+        const { data } = await optQ
         return (data || []).map((op: any) => ({ value: op.id, label: op.short_name || op.name }))
       },
     },
@@ -79,6 +84,9 @@ export const sendMessageToOperatorTool: CopilotTool = {
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
+        // Тегируем событие организацией: иначе запись уходит в «общий» пул
+        // audit_log и её читают копилоты других клиентов.
+        organizationId: ctx.organizationId || null,
         entityType: 'operator',
         entityId: operatorId,
         action: 'send-message',
@@ -155,6 +163,9 @@ export const broadcastToOperatorsTool: CopilotTool = {
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
+        // Тегируем событие организацией: иначе запись уходит в «общий» пул
+        // audit_log и её читают копилоты других клиентов.
+        organizationId: ctx.organizationId || null,
         entityType: 'operator-broadcast',
         entityId: companyId || 'all',
         action: 'broadcast',

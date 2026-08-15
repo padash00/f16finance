@@ -124,6 +124,21 @@ export async function POST(request: Request) {
     if (supplierError) throw supplierError
     if (!supplier?.id) return json({ error: 'Поставщик не найден' }, 404)
 
+    // Изоляция: позиции заявки — только товары своей орг. Без проверки можно было
+    // положить в заявку чужой item_id, а потом прочитать его имя/штрихкод через
+    // GET /purchase-orders/[id] (там строки джойнятся с inventory_items).
+    {
+      const requestedItemIds = [...new Set(items.map((i) => i.item_id))]
+      let ownItemsQuery: any = supabase.from('inventory_items').select('id').in('id', requestedItemIds)
+      if (scopeOrgSup) ownItemsQuery = ownItemsQuery.eq('organization_id', scopeOrgSup)
+      const { data: ownItems, error: ownItemsError } = await ownItemsQuery
+      if (ownItemsError) throw ownItemsError
+      const ownItemIds = new Set(((ownItems || []) as any[]).map((r) => String(r.id)))
+      if (requestedItemIds.some((id) => !ownItemIds.has(id))) {
+        return json({ error: 'Часть позиций не из вашего каталога', code: 'item-out-of-scope' }, 403)
+      }
+    }
+
     const { data: order, error: orderError } = await supabase
       .from('inventory_purchase_orders')
       .insert([

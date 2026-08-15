@@ -426,6 +426,20 @@ export async function POST(request: Request) {
       const importCompanyId = String(body.company_id || '').trim()
       if (!importCompanyId) return json({ error: 'point-required', message: 'Выберите точку-магазин — импорт грузит в конкретную точку.' }, 400)
 
+      // Изоляция: точка обязана принадлежать этой организации. Без проверки
+      // импорт создавал товары и категории с чужим company_id — прямая запись
+      // в каталог соседнего арендатора.
+      {
+        const { data: targetCompany, error: targetErr } = await supabase
+          .from('companies')
+          .select('id')
+          .eq('id', importCompanyId)
+          .eq('organization_id', orgId)
+          .maybeSingle()
+        if (targetErr) throw targetErr
+        if (!targetCompany?.id) return json({ error: 'company-out-of-scope' }, 403)
+      }
+
       // Ensure all categories exist (в точке)
       const { data: existingCategories, error: catFetchError } = await supabase
         .from('inventory_categories')
@@ -978,11 +992,14 @@ export async function POST(request: Request) {
       if (!itemId) return json({ error: 'item-id-required' }, 400)
 
       // Изоляция: товар обязан принадлежать орг вызывающего.
+      // Не-супер без активной орг — отказ: раньше условие `callerOrgId &&` при
+      // пустой орг пропускало проверку и позволяло удалить чужой товар.
       {
         const callerOrgId = access.activeOrganization?.id || null
+        if (!access.isSuperAdmin && !callerOrgId) return json({ error: 'forbidden' }, 403)
         const { data: itemRow } = await supabase.from('inventory_items').select('organization_id').eq('id', itemId).maybeSingle()
         if (!itemRow) return json({ error: 'item-not-found' }, 404)
-        if (!access.isSuperAdmin && callerOrgId && String((itemRow as any).organization_id) !== String(callerOrgId)) {
+        if (!access.isSuperAdmin && String((itemRow as any).organization_id) !== String(callerOrgId)) {
           return json({ error: 'forbidden' }, 403)
         }
       }
@@ -1037,11 +1054,14 @@ export async function POST(request: Request) {
       if (Object.keys(fields).length === 0) return json({ error: 'fields-required' }, 400)
 
       // Изоляция: редактировать можно только товар своей орг.
+      // Не-супер без активной орг — отказ (иначе проверка отключалась и чужой
+      // товар можно было переименовать/переоценить).
       {
         const callerOrgId = access.activeOrganization?.id || null
+        if (!access.isSuperAdmin && !callerOrgId) return json({ error: 'forbidden' }, 403)
         const { data: itemRow } = await supabase.from('inventory_items').select('organization_id').eq('id', itemId).maybeSingle()
         if (!itemRow) return json({ error: 'item-not-found' }, 404)
-        if (!access.isSuperAdmin && callerOrgId && String((itemRow as any).organization_id) !== String(callerOrgId)) {
+        if (!access.isSuperAdmin && String((itemRow as any).organization_id) !== String(callerOrgId)) {
           return json({ error: 'forbidden' }, 403)
         }
       }

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { writeAuditLog } from '@/lib/server/audit'
 import { requireOperator } from '@/lib/server/operator-context'
+import { resolveCompanyOrganizationId } from '@/lib/server/point-devices'
 
 type Body = {
   status?: 'completed' | 'failed' | 'skipped'
@@ -64,6 +65,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
   if ((run as any).status !== 'in_progress') {
     return json({ error: 'checklist-run-not-in-progress' }, 409)
+  }
+
+  // Шаблон run-а обязан быть своим: по его пунктам ниже считаются штрафы/бонусы
+  // и создаются инциденты, а у легаси-run-ов template_id мог быть чужим.
+  {
+    const orgId = await resolveCompanyOrganizationId(supabase as any, companyId)
+    const { data: templateRow } = await supabase
+      .from('checklist_templates')
+      .select('id')
+      .eq('id', (run as any).template_id)
+      .eq('organization_id', orgId)
+      .maybeSingle()
+    if (!templateRow) return json({ error: 'checklist-run-forbidden' }, 403)
   }
 
   const mergedResponses = {

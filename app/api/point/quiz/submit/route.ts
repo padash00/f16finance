@@ -37,7 +37,10 @@ export async function POST(request: Request) {
   if (!attempt) return json({ error: 'attempt-not-found' }, 404)
   // Изоляция: завершать можно только попытку оператора компании устройства.
   const attemptOpId = (attempt as any).operator_id
-  if (attemptOpId) {
+  // Попытка без operator_id раньше проходила проверку насквозь (fail-open) —
+  // по чужому attempt_id её можно было завершить/перезаписать. Теперь строго.
+  if (!attemptOpId) return json({ error: 'attempt-not-found' }, 404)
+  {
     const { data: assignment } = await supabase
       .from('operator_company_assignments')
       .select('id')

@@ -31,11 +31,14 @@ export const queryLowStockTool: CopilotTool = {
       .select('id, company_id, location_type')
       .eq('location_type', 'point_display')
       .eq('is_active', true)
+    // Скоуп нужен и когда точка указана: иначе чужой company_id открывает
+    // витрины и остатки другой организации.
+    const ids = await scopedCompanyIds(ctx)
     if (companyId) {
+      if (ids && !ids.includes(companyId)) return { ok: false, message: 'Точка не найдена.' }
       locQuery = locQuery.eq('company_id', companyId)
-    } else {
-      const ids = await scopedCompanyIds(ctx)
-      if (ids) locQuery = locQuery.in('company_id', ids)
+    } else if (ids) {
+      locQuery = locQuery.in('company_id', ids)
     }
 
     const { data: locations, error: locErr } = await locQuery

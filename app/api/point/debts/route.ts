@@ -554,9 +554,13 @@ export async function POST(request: Request) {
       if (!operator?.id && staffChatId) {
         try {
           const safeName = (staffName || clientName || 'Сотрудник').trim()
+          // client_name — глобальный «естественный ключ» (ФИО): без company_id
+          // сумма долга за неделю собиралась по всем арендаторам с таким же
+          // именем должника и уходила в Telegram.
           const { data: staffDebtRows } = await supabase
             .from('debts')
             .select('amount')
+            .eq('company_id', device.company_id)
             .is('operator_id', null)
             .eq('client_name', safeName)
             .eq('week_start', weekStart)

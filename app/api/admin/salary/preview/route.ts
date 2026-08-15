@@ -85,6 +85,10 @@ export async function GET(req: Request) {
     if (scopedCompanyIds) {
       if (scopedCompanyIds.length > 0) {
         shiftRulesQuery = shiftRulesQuery.or(`company_id.is.null,company_id.in.(${scopedCompanyIds.map((id) => `"${id}"`).join(',')})`)
+      } else {
+        // Пустой скоуп = «ничего». Раньше фильтр просто не навешивался, и в
+        // расчёт зарплаты подтягивались правила всех организаций.
+        shiftRulesQuery = shiftRulesQuery.eq('id', '00000000-0000-0000-0000-000000000000')
       }
     }
 

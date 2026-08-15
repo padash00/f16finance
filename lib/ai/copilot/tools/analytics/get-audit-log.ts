@@ -41,7 +41,10 @@ export const getAuditLogTool: CopilotTool = {
       .order('created_at', { ascending: false })
       .limit(50)
     if (entityType) query = query.eq('entity_type', entityType)
-    if (ctx.organizationId) query = query.or(`organization_id.is.null,organization_id.eq.${ctx.organizationId}`)
+    // Строгий скоуп без null-share: записи с organization_id IS NULL пишут все
+    // организации, и через `or(is.null, ...)` журнал одного клиента был виден
+    // другому. Свои события копилот теперь тегирует организацией явно.
+    if (ctx.organizationId) query = query.eq('organization_id', ctx.organizationId)
 
     const { data, error } = await query
     if (error) return { ok: false, message: `Ошибка: ${error.message}` }

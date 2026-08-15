@@ -3,6 +3,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { broadcastQrAuth } from '@/lib/server/kiosk-broadcast'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
+import { resolveStationOrganizationId } from '../_lib/auth'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -16,26 +17,32 @@ function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
 }
 
-async function findCustomerByLogin(admin: any, username: string, companyId: string | null) {
+// Изоляция: клиент ищется ТОЛЬКО внутри организации станции. Фильтр по орг
+// применяется всегда (раньше — лишь при заполненном company_id станции, а
+// колонка nullable: тогда телефон/карта искались по всем арендаторам).
+async function findCustomerByLogin(admin: any, username: string, orgId: string) {
   const select = 'id, name, phone, kiosk_balance, auth_user_id, card_number'
 
-  // Изоляция: клиент только организации станции (null-company = сетевой своей орг)
-  let orgFilter: string | null = null
-  if (companyId) {
-    const { data: co } = await admin.from('companies').select('organization_id').eq('id', companyId).maybeSingle()
-    orgFilter = (co as any)?.organization_id || '00000000-0000-0000-0000-000000000000'
-  }
-
-  let byPhoneQ = admin.from('customers').select(select).eq('phone', username).eq('is_active', true).limit(1)
-  if (orgFilter) byPhoneQ = byPhoneQ.eq('organization_id', orgFilter)
-  const { data: byPhone, error: phoneErr } = await byPhoneQ.maybeSingle()
+  const { data: byPhone, error: phoneErr } = await admin
+    .from('customers')
+    .select(select)
+    .eq('phone', username)
+    .eq('is_active', true)
+    .eq('organization_id', orgId)
+    .limit(1)
+    .maybeSingle()
 
   if (phoneErr) throw phoneErr
   if (byPhone) return byPhone
 
-  let byCardQ = admin.from('customers').select(select).eq('card_number', username).eq('is_active', true).limit(1)
-  if (orgFilter) byCardQ = byCardQ.eq('organization_id', orgFilter)
-  const { data: byCard, error: cardErr } = await byCardQ.maybeSingle()
+  const { data: byCard, error: cardErr } = await admin
+    .from('customers')
+    .select(select)
+    .eq('card_number', username)
+    .eq('is_active', true)
+    .eq('organization_id', orgId)
+    .limit(1)
+    .maybeSingle()
 
   if (cardErr) throw cardErr
   return byCard
@@ -73,14 +80,15 @@ export async function POST(request: Request) {
 
     const { data: station, error: stationErr } = await admin
       .from('arena_stations')
-      .select('id, company_id')
+      .select('id, company_id, point_project_id')
       .eq('id', stationId)
       .maybeSingle()
 
     if (stationErr) throw stationErr
     if (!station) return json({ error: 'station-not-found' }, 404)
 
-    const customer = await findCustomerByLogin(admin, username, (station as any).company_id || null)
+    const stationOrgId = await resolveStationOrganizationId(admin, station as any)
+    const customer = await findCustomerByLogin(admin, username, stationOrgId)
     if (!customer?.auth_user_id) return json({ error: 'Клиент не найден' }, 404)
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL

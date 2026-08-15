@@ -98,9 +98,37 @@ export async function POST(req: Request) {
       activeOrganizationId: access.activeOrganization?.id || null,
     }).catch(() => null)
 
+    // Изоляция: company_id брался из тела запроса и НЕ сверялся со скоупом —
+    // можно было создать строку плана закупа на точке чужой организации.
+    // Плюс без организации строка получалась бесхозной (organization_id = null).
+    const requestedCompanyId = String(body?.company_id || '').trim() || null
+    if (!access.isSuperAdmin) {
+      if (!organizationId) return json({ error: 'Нет активной организации' }, 403)
+      if (!requestedCompanyId) return json({ error: 'company_id обязателен' }, 400)
+      try {
+        await resolveCompanyScope({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+          requestedCompanyId,
+        })
+      } catch {
+        return json({ error: 'forbidden' }, 403)
+      }
+    } else if (requestedCompanyId && access.activeOrganization?.id) {
+      try {
+        await resolveCompanyScope({
+          activeOrganizationId: access.activeOrganization.id,
+          isSuperAdmin: access.isSuperAdmin,
+          requestedCompanyId,
+        })
+      } catch {
+        return json({ error: 'forbidden' }, 403)
+      }
+    }
+
     const insertRow = {
       organization_id: organizationId,
-      company_id: String(body?.company_id || '').trim() || null,
+      company_id: requestedCompanyId,
       week_start: weekStart,
       day_of_week: dayOfWeek,
       category: String(body?.category || '').trim() || null,

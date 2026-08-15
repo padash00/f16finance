@@ -92,15 +92,29 @@ export async function GET(req: Request) {
       .order('created_at', { ascending: true })
     if (allowedCompanyIds) assignmentsQuery = assignmentsQuery.in('company_id', allowedCompanyIds)
 
+    // Изоляция истории. Раньше стояло `organization_id.is.null OR eq(org)` —
+    // ветка is.null пропускала ВСЕ легаси-строки без организации, то есть
+    // историю других тенантов (события operator-career проходили пост-фильтр
+    // по company_id целиком, у них его в payload нет).
+    const histOrgId = access.activeOrganization?.id || null
+    const ZERO_UUID = '00000000-0000-0000-0000-000000000000'
     let historyQuery = supabase
       .from('audit_log')
       .select('id, actor_user_id, entity_type, entity_id, action, payload, created_at')
       .in('entity_type', ['operator-company-assignment', 'operator-career'])
       .order('created_at', { ascending: false })
       .limit(100)
-    // Изоляция: история — только своей орг (старые строки без org видны своей орг).
-    const histOrgId = access.activeOrganization?.id || null
-    if (histOrgId) historyQuery = historyQuery.or(`organization_id.is.null,organization_id.eq.${histOrgId}`)
+    if (histOrgId) {
+      historyQuery = historyQuery.eq('organization_id', histOrgId)
+      // Второй контур: событие должно быть про своего оператора/сотрудника.
+      const histEntityIds = Array.from(
+        new Set([...(allowedOperatorIds || []), ...(allowedStaffIds || [])].map((v) => String(v))),
+      )
+      historyQuery = historyQuery.in('entity_id', histEntityIds.length > 0 ? histEntityIds : [ZERO_UUID])
+    } else if (!access.isSuperAdmin) {
+      // Fail-closed: нет орг и не супер-админ → истории нет вообще.
+      historyQuery = historyQuery.eq('organization_id', ZERO_UUID)
+    }
 
     let careerLinksQuery = supabase
       .from('operator_staff_links')

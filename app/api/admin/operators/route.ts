@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server'
 
-import { ensureOrganizationOperatorAccess, listOrganizationOperatorIds } from '@/lib/server/organizations'
+import {
+  ensureOrganizationOperatorAccess,
+  listOrganizationOperatorIds,
+  resolveCompanyScope,
+} from '@/lib/server/organizations'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
 import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
@@ -90,21 +94,35 @@ export async function GET(req: Request) {
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
     const dateStr = thirtyDaysAgo.toISOString().split('T')[0]
 
+    // Оборот и долги режем ещё и по точкам: оператор может числиться в двух
+    // организациях (ensureOrganizationOperatorAccess признаёт его «своим» по
+    // назначению), и тогда в карточку попадали суммы чужой точки.
+    const operatorCompanyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+    let incomesQuery = supabase
+      .from('incomes')
+      .select('operator_id, cash_amount, kaspi_amount, online_amount, card_amount')
+      .in('operator_id', operatorIds)
+      .gte('date', dateStr)
+    let debtsQuery = supabase
+      .from('debts')
+      .select('operator_id, amount')
+      .in('operator_id', operatorIds)
+      .eq('status', 'active')
+    if (operatorCompanyScope.allowedCompanyIds) {
+      incomesQuery = incomesQuery.in('company_id', operatorCompanyScope.allowedCompanyIds)
+      debtsQuery = debtsQuery.in('company_id', operatorCompanyScope.allowedCompanyIds)
+    }
+
     const [authResult, incomesResult, debtsResult, bonusesResult] = await Promise.all([
       supabase
         .from('operator_auth')
         .select('operator_id, user_id, username, role, is_active, last_login')
         .in('operator_id', operatorIds),
-      supabase
-        .from('incomes')
-        .select('operator_id, cash_amount, kaspi_amount, online_amount, card_amount')
-        .in('operator_id', operatorIds)
-        .gte('date', dateStr),
-      supabase
-        .from('debts')
-        .select('operator_id, amount')
-        .in('operator_id', operatorIds)
-        .eq('status', 'active'),
+      incomesQuery,
+      debtsQuery,
       supabase
         .from('operator_salary_adjustments')
         .select('operator_id, amount')
@@ -221,6 +239,12 @@ export async function POST(req: Request) {
       const denied = await requireCapability(access, 'operators.create')
       if (denied) return denied as any
       if (!body.payload.name?.trim()) return json({ error: 'Имя оператора обязательно' }, 400)
+      // Без организации оператор создавался «ничьим» (organization_id = null).
+      // Такую запись потом может подобрать любая организация, назначив её на
+      // свою точку (fallback по назначениям в ensureOrganizationOperatorAccess).
+      if (!access.activeOrganization?.id && !access.isSuperAdmin) {
+        return json({ error: 'Требуется активная организация' }, 400)
+      }
 
       const { data: createdOperator, error: operatorError } = await supabase
         .from('operators')

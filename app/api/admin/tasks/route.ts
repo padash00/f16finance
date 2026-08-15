@@ -4,7 +4,11 @@ import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { resolveStaffByUser } from '@/lib/server/admin'
 import { writeAuditLog, writeNotificationLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
-import { resolveCompanyScope } from '@/lib/server/organizations'
+import {
+  ensureOrganizationOperatorAccess,
+  ensureOrganizationStaffAccess,
+  resolveCompanyScope,
+} from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { spawnTaskFromTemplate } from '@/lib/server/task-templates'
@@ -310,6 +314,33 @@ async function ensureTaskCompanyAccess(
   })
 }
 
+/**
+ * Исполнитель задачи должен быть «свой».
+ *
+ * Точку задачи мы проверяли, а исполнителя — нет: подстановкой чужого
+ * operator_id/staff_id задача с описанием и Telegram-рассылкой уходила
+ * сотруднику другой организации.
+ */
+async function ensureTaskAssigneeAccess(
+  params: { activeOrganizationId?: string | null; isSuperAdmin: boolean },
+  assignee: { operatorId?: string | null; staffId?: string | null },
+) {
+  if (assignee.operatorId) {
+    await ensureOrganizationOperatorAccess({
+      activeOrganizationId: params.activeOrganizationId || null,
+      isSuperAdmin: params.isSuperAdmin,
+      operatorId: String(assignee.operatorId),
+    })
+  }
+  if (assignee.staffId) {
+    await ensureOrganizationStaffAccess({
+      activeOrganizationId: params.activeOrganizationId || null,
+      isSuperAdmin: params.isSuperAdmin,
+      staffId: String(assignee.staffId),
+    })
+  }
+}
+
 const PRIORITY_EMOJI: Record<TaskPriority, string> = {
   critical: '🔥',
   high: '⚡',
@@ -514,6 +545,22 @@ export async function GET(req: Request) {
     if (url.searchParams.get('comments') === '1') {
       const taskId = url.searchParams.get('taskId')
       if (!taskId) return json({ error: 'taskId обязателен' }, 400)
+      // taskId приходит из URL: без проверки точки задачи любой админ читал
+      // переписку по задаче чужой организации, просто подставив её id.
+      const { data: commentedTask, error: commentedTaskError } = await supabase
+        .from('tasks')
+        .select('id, company_id')
+        .eq('id', taskId)
+        .maybeSingle()
+      if (commentedTaskError) throw commentedTaskError
+      if (!commentedTask) return json({ error: 'Задача не найдена' }, 404)
+      await ensureTaskCompanyAccess(
+        {
+          activeOrganizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+        },
+        (commentedTask as any).company_id,
+      )
       const { data: comments, error } = await supabase
         .from('task_comments')
         .select('id, task_id, operator_id, staff_id, content, created_at')
@@ -713,6 +760,10 @@ export async function POST(req: Request) {
       // Исполнитель — либо оператор, либо сотрудник: одно из полей всегда null.
       const assigneeOperatorId = body.payload.operator_id || null
       const assigneeStaffId = assigneeOperatorId ? null : body.payload.staff_id || null
+      await ensureTaskAssigneeAccess(
+        { activeOrganizationId: access.activeOrganization?.id || null, isSuperAdmin: access.isSuperAdmin },
+        { operatorId: assigneeOperatorId, staffId: assigneeStaffId },
+      )
 
       const payloadBase = {
         title: body.payload.title.trim(),
@@ -833,6 +884,10 @@ export async function POST(req: Request) {
           body.payload.company_id,
         )
       }
+      await ensureTaskAssigneeAccess(
+        { activeOrganizationId: access.activeOrganization?.id || null, isSuperAdmin: access.isSuperAdmin },
+        { operatorId: body.payload.operator_id, staffId: body.payload.staff_id },
+      )
 
       // Частичный апдейт: непереданные поля (undefined) не трогаем — иначе
       // обновление одного чек-листа стирало бы дедлайн/оператора/точку.
@@ -1104,6 +1159,22 @@ export async function POST(req: Request) {
         { activeOrganizationId: access.activeOrganization?.id || null, isSuperAdmin: access.isSuperAdmin },
         t.company_id,
       )
+      // Правка существующего шаблона: проверяем точку ТЕКУЩЕЙ строки, а не только
+      // новую. Иначе с чужим id шаблон другой организации перезаписывался и
+      // «переезжал» в свою точку.
+      if (t.id) {
+        const { data: currentTemplate, error: currentTemplateError } = await supabase
+          .from('task_templates')
+          .select('id, company_id')
+          .eq('id', t.id)
+          .maybeSingle()
+        if (currentTemplateError) throw currentTemplateError
+        if (!currentTemplate) return json({ error: 'Шаблон не найден' }, 404)
+        await ensureTaskCompanyAccess(
+          { activeOrganizationId: access.activeOrganization?.id || null, isSuperAdmin: access.isSuperAdmin },
+          (currentTemplate as any).company_id,
+        )
+      }
 
       const operatorId = t.operator_id || null
       const recurrence = Array.isArray(t.recurrence_days)
@@ -1127,6 +1198,10 @@ export async function POST(req: Request) {
         recurrence_days: recurrence && recurrence.length ? recurrence : null,
         is_active: t.is_active !== false,
       }
+      await ensureTaskAssigneeAccess(
+        { activeOrganizationId: access.activeOrganization?.id || null, isSuperAdmin: access.isSuperAdmin },
+        { operatorId: row.operator_id, staffId: row.staff_id },
+      )
 
       const result = t.id
         ? await supabase.from('task_templates').update(row).eq('id', t.id).select('*').single()

@@ -200,6 +200,9 @@ export const giveAdvanceTool: CopilotTool = {
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
+        // Тегируем событие организацией: иначе запись уходит в «общий» пул
+        // audit_log и её читают копилоты других клиентов.
+        organizationId: ctx.organizationId || null,
         entityType: 'salary-advance',
         entityId: expense?.id || 'unknown',
         action: 'create',

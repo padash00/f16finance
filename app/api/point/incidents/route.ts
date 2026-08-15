@@ -74,6 +74,34 @@ export async function POST(request: Request) {
 
   if (!body.title || !body.title.trim()) return json({ error: 'title-required' }, 400)
 
+  // Изоляция: staff/article приходят из тела запроса. Без проверки инцидент
+  // своей компании ссылался на сотрудника и статью другого арендатора
+  // (штрафы/бонусы и база знаний чужой орг).
+  const orgId = device.company?.organization_id || '00000000-0000-0000-0000-000000000000'
+  const staffIdsFromBody = [body.subject_staff_id, body.reported_by]
+    .map((v) => String(v || '').trim())
+    .filter(Boolean)
+  if (staffIdsFromBody.length > 0) {
+    const { data: staffRows } = await supabase
+      .from('staff')
+      .select('id')
+      .in('id', staffIdsFromBody)
+      .or(`organization_id.eq.${orgId},organization_id.is.null`)
+    const allowedStaffIds = new Set(((staffRows || []) as any[]).map((r) => String(r.id)))
+    if (staffIdsFromBody.some((id) => !allowedStaffIds.has(id))) {
+      return json({ error: 'staff-not-in-organization' }, 403)
+    }
+  }
+  if (body.article_id) {
+    const { data: articleRow } = await supabase
+      .from('knowledge_articles')
+      .select('id')
+      .eq('id', body.article_id)
+      .eq('organization_id', orgId)
+      .maybeSingle()
+    if (!articleRow) return json({ error: 'article-not-found' }, 404)
+  }
+
   const { data: incidentId, error: rpcError } = await supabase.rpc('incidents_create', {
     p_company_id: device.company_id,
     p_kind: kind,

@@ -108,8 +108,12 @@ export async function GET(request: Request) {
           .order('sold_at', { ascending: false })
           .limit(10),
       ),
-      // Low stock items (balance <= threshold)
-      access.isSuperAdmin || allowedCompanyIds === null
+      // Low stock items (balance <= threshold).
+      // Условие было `isSuperAdmin || allowedCompanyIds === null`: оно срабатывало
+      // и когда суперадмин ВЫБРАЛ конкретную организацию, и товары (вместе с
+      // вложенными остатками) читались по всем тенантам. Теперь без фильтра —
+      // только настоящий «все организации», иначе жёсткий eq по своей орг.
+      allowedCompanyIds === null
         ? fetchAllPages((from, to) =>
             supabase
               .from('inventory_items')
@@ -119,7 +123,16 @@ export async function GET(request: Request) {
               .order('id')
               .range(from, to),
           )
-        : Promise.resolve({ data: [], error: null } as const),
+        : fetchAllPages((from, to) =>
+            supabase
+              .from('inventory_items')
+              .select('id, name, low_stock_threshold, total_balance:inventory_balances(quantity)')
+              .eq('is_active', true)
+              .not('low_stock_threshold', 'is', null)
+              .eq('organization_id', access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+              .order('id')
+              .range(from, to),
+          ),
       // Top items this week
       fetchAllPages((from, to) =>
         applyPointSaleCompanyScope(

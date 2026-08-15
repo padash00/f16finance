@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { writeAuditLog } from '@/lib/server/audit'
 import { requireOperator } from '@/lib/server/operator-context'
+import { resolveCompanyOrganizationId } from '@/lib/server/point-devices'
 import { getCurrentOpenShift } from '@/lib/server/point-shifts'
 
 type Body = {
@@ -21,6 +22,19 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as Body
 
   if (!body.template_id) return json({ error: 'template-id-required' }, 400)
+
+  // Изоляция: template_id приходит из тела и раньше не проверялся. Run с чужим
+  // шаблоном создавался в СВОЕЙ смене, а GET /checklist/run/[id] отдавал по нему
+  // шаблон и пункты другого арендатора (штрафы/бонусы) — проверка смены это не ловила.
+  const orgId = await resolveCompanyOrganizationId(supabase as any, companyId)
+  const { data: templateRow } = await supabase
+    .from('checklist_templates')
+    .select('id')
+    .eq('id', body.template_id)
+    .eq('organization_id', orgId)
+    .or(`company_id.is.null,company_id.eq.${companyId}`)
+    .maybeSingle()
+  if (!templateRow) return json({ error: 'checklist-template-not-found' }, 404)
 
   const shift = await getCurrentOpenShift(supabase as any, companyId)
   if (!shift) return json({ error: 'point-shift-no-open' }, 409)

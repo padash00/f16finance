@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server'
 
-import { ensureOrganizationOperatorAccess, ensureOrganizationStaffAccess } from '@/lib/server/organizations'
+import {
+  ensureOrganizationOperatorAccess,
+  ensureOrganizationStaffAccess,
+  resolveCompanyScope,
+} from '@/lib/server/organizations'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
@@ -120,11 +124,26 @@ export async function POST(req: Request) {
         }
       }
 
-      // Возвращаем назначения активными при восстановлении
-      await supabase
+      // Возвращаем назначения активными при восстановлении — но ТОЛЬКО на
+      // точки своей организации. Без фильтра оживали и исторические назначения
+      // на точки другой орг (оператор получал доступ к чужой кассе).
+      const scope = await resolveCompanyScope({
+        activeOrganizationId,
+        isSuperAdmin: access.isSuperAdmin,
+      })
+      let restoreAssignments = supabase
         .from('operator_company_assignments')
         .update({ is_active: true })
         .eq('operator_id', id)
+      if (scope.allowedCompanyIds) {
+        restoreAssignments = restoreAssignments.in(
+          'company_id',
+          scope.allowedCompanyIds.length > 0
+            ? scope.allowedCompanyIds
+            : ['00000000-0000-0000-0000-000000000000'],
+        )
+      }
+      await restoreAssignments
     }
 
     await writeAuditLog(supabase, {

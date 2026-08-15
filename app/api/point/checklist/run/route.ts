@@ -36,6 +36,22 @@ export async function POST(request: Request) {
 
   if (!body.template_id) return json({ error: 'template-id-required' }, 400)
 
+  // Изоляция: template_id приходит из тела запроса. Без проверки в СВОЮ смену
+  // создавался run с шаблоном чужого арендатора, а GET/complete по такому run
+  // отдавали его пункты (заголовки, штрафы, бонусы) наружу.
+  const orgId = device.company?.organization_id || '00000000-0000-0000-0000-000000000000'
+  const companyFilter = device.company_id
+    ? `company_id.is.null,company_id.eq.${device.company_id}`
+    : 'company_id.is.null'
+  const { data: templateRow } = await supabase
+    .from('checklist_templates')
+    .select('id')
+    .eq('id', body.template_id)
+    .eq('organization_id', orgId)
+    .or(companyFilter)
+    .maybeSingle()
+  if (!templateRow) return json({ error: 'checklist-template-not-found' }, 404)
+
   const shift = await getCurrentOpenShift(supabase, device.company_id)
   if (!shift) return json({ error: 'point-shift-no-open' }, 409)
 

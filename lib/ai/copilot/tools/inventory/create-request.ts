@@ -4,7 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { companyOptions, scopedCompanyIds } from '../../query-helpers'
+import { companyOptions, scopedCompanyIds, isOrgRowAllowed } from '../../query-helpers'
 import { writeAuditLog } from '@/lib/server/audit'
 
 export const createInventoryRequestTool: CopilotTool = {
@@ -67,6 +67,11 @@ export const createInventoryRequestTool: CopilotTool = {
     const ids = await scopedCompanyIds(ctx)
     if (ids && !ids.includes(companyId)) return { ok: false, message: 'Точка не найдена.' }
 
+    // Товар тоже per-org: заявка не должна ссылаться на чужой каталог.
+    if (!(await isOrgRowAllowed(ctx, 'inventory_items', itemId))) {
+      return { ok: false, message: 'Товар не найден.' }
+    }
+
     // Создаём заявку (status='new')
     const { data: req, error: reqErr } = await ctx.supabase
       .from('inventory_requests')
@@ -100,6 +105,9 @@ export const createInventoryRequestTool: CopilotTool = {
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
+        // Тегируем событие организацией: иначе запись уходит в «общий» пул
+        // audit_log и её читают копилоты других клиентов.
+        organizationId: ctx.organizationId || null,
         entityType: 'inventory-request',
         entityId: req?.id || 'unknown',
         action: 'create',

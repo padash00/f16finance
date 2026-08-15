@@ -6,6 +6,29 @@ import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/se
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
 
+/**
+ * Fail-closed проверка принадлежности точки организации вызывающего.
+ * ПОЧЕМУ отдельно: resolveCompanyScope({ requestedCompanyId }) бросает
+ * 'company-out-of-scope' только когда организация ЕСТЬ. У пользователя без
+ * активной орг он молча возвращает { allowedCompanyIds: [] } — и «проверка одним
+ * await» пропускала чужой company_id. Здесь сверяем результат явно:
+ * null (суперадмин без орг) = можно всё, [] = нельзя ничего.
+ */
+async function assertCompanyInScope(
+  access: { activeOrganization?: { id?: string | null } | null; isSuperAdmin: boolean },
+  companyId: string | null | undefined,
+) {
+  const scope = await resolveCompanyScope({
+    activeOrganizationId: access.activeOrganization?.id || null,
+    isSuperAdmin: access.isSuperAdmin,
+  })
+  if (scope.allowedCompanyIds === null) return
+  if (!companyId || !scope.allowedCompanyIds.includes(String(companyId))) {
+    throw new Error('company-out-of-scope')
+  }
+}
+
+
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
@@ -92,11 +115,7 @@ export async function POST(req: Request) {
     const supabase = getSupabase(req)
 
     if (body?.company_id) {
-      await resolveCompanyScope({
-        activeOrganizationId: access.activeOrganization?.id || null,
-        requestedCompanyId: body.company_id,
-        isSuperAdmin: access.isSuperAdmin,
-      })
+      await assertCompanyInScope(access, body.company_id)
     }
 
     const { data, error } = await supabase
@@ -163,11 +182,7 @@ export async function PATCH(req: Request) {
     if (typeof body?.vendor_name === 'string') update.vendor_name = body.vendor_name.trim()
     if (body?.company_id !== undefined) {
       if (body.company_id) {
-        await resolveCompanyScope({
-          activeOrganizationId: access.activeOrganization?.id || null,
-          requestedCompanyId: body.company_id,
-          isSuperAdmin: access.isSuperAdmin,
-        })
+        await assertCompanyInScope(access, body.company_id)
       }
       update.company_id = body.company_id || null
     }

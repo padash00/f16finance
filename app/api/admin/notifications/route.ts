@@ -236,16 +236,19 @@ export async function GET(request: Request) {
 
       // Showcase activated only for points that have an active point_display location.
       lowStockStage = 'enabled-point-display-locations'
-      const enabledPoints = await fetchAllPages((from, to) =>
-        supabase
+      // Изоляция: фильтр по своим точкам опущен в САМ запрос. Раньше читались
+      // локации всех тенантов и отсеивались уже в JS — при лимите PostgREST в
+      // 1000 строк чужие записи вытесняли свои, и «низкие остатки» пропадали.
+      const enabledPoints = await fetchAllPages((from, to) => {
+        let q = supabase
           .from('inventory_locations')
           .select('id, company_id')
           .eq('location_type', 'point_display')
           .eq('is_active', true)
           .not('company_id', 'is', null)
-          .order('id')
-          .range(from, to),
-      )
+        if (allowedCompanyIds) q = q.in('company_id', allowedCompanyIds)
+        return q.order('id').range(from, to)
+      })
       const enabledCompanyIds = Array.from(
         new Set(
           (enabledPoints || [])
@@ -258,11 +261,14 @@ export async function GET(request: Request) {
         const enabledCompanySet = new Set(enabledCompanyIds)
 
         lowStockStage = 'catalog-and-warehouse-locations'
+        // Изоляция: тот же приём — фильтр по своим точкам в самом запросе,
+        // а не постфактум в JS (иначе чужие локации съедали лимит в 1000 строк).
         const allLocations = await fetchAllPages((from, to) =>
           supabase
             .from('inventory_locations')
             .select('id, company_id, location_type')
             .in('location_type', ['warehouse', 'point_display'])
+            .in('company_id', enabledCompanyIds)
             .order('id')
             .range(from, to),
         )
@@ -278,9 +284,12 @@ export async function GET(request: Request) {
         const companyNameById = new Map<string, string>()
         if (locationCompanyIds.length > 0) {
           lowStockStage = 'company-names'
+          // Изоляция: раньше читался справочник компаний ВСЕХ тенантов целиком
+          // (фильтр был только в JS ниже) — и он же упирался в лимит 1000 строк.
           const { data: companies, error: companiesError } = await supabase
             .from('companies')
             .select('id, name')
+            .in('id', locationCompanyIds)
           if (companiesError) throw companiesError
           const locationCompanySet = new Set(locationCompanyIds)
           for (const company of companies || []) {
@@ -312,13 +321,22 @@ export async function GET(request: Request) {
           )
           if (itemIds.length > 0) {
             lowStockStage = 'inventory-items'
-            const allItems = await fetchAllPages((from, to) =>
-              supabase
-                .from('inventory_items')
-                .select('id, name, low_stock_threshold')
-                .order('id')
-                .range(from, to),
-            )
+            // Изоляция: раньше вычитывался ВЕСЬ каталог товаров всех тенантов, и
+            // нужные позиции отбирались в JS — чужие товары вытесняли свои из
+            // лимита в 1000 строк. Теперь спрашиваем только нужные id (чанками,
+            // чтобы не упереться в длину URL).
+            const allItems: any[] = []
+            for (const itemChunk of chunk(itemIds)) {
+              const data = await fetchAllPages((from, to) =>
+                supabase
+                  .from('inventory_items')
+                  .select('id, name, low_stock_threshold')
+                  .in('id', itemChunk)
+                  .order('id')
+                  .range(from, to),
+              )
+              allItems.push(...(data || []))
+            }
             const itemIdSet = new Set(itemIds)
             const items = (allItems || []).filter((row: any) => itemIdSet.has(String(row.id || '')))
 

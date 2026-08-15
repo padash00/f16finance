@@ -588,6 +588,26 @@ export async function POST(request: Request) {
     const supplierCreate = body.payload.supplier_create || null
     let supplierId: string | null = supplierIdRaw || null
 
+    // Изоляция: поставщик из тела запроса обязан быть из организации точки приёмки.
+    // Без проверки приёмку можно было повесить на поставщика чужого арендатора —
+    // и она всплывала в его карточке поставщика (та выбирает приходы по supplier_id).
+    if (supplierId) {
+      let supplierScopeQuery: any = supabase
+        .from('inventory_suppliers')
+        .select('id')
+        .eq('id', supplierId)
+        .limit(1)
+      if (locationOrganizationId) {
+        supplierScopeQuery = supplierScopeQuery.eq('organization_id', locationOrganizationId)
+      } else if (!access.isSuperAdmin) {
+        // NEVER-pattern: орг не определилась и это не супер-админ → отказ.
+        return json({ error: 'Не удалось определить организацию точки приемки' }, 400)
+      }
+      const { data: supplierScopeRow, error: supplierScopeError } = await supplierScopeQuery.maybeSingle()
+      if (supplierScopeError) throw supplierScopeError
+      if (!supplierScopeRow?.id) return json({ error: 'Поставщик недоступен', code: 'supplier-out-of-scope' }, 403)
+    }
+
     if (!supplierId && supplierCreate) {
       const binIin = normalizeDigits(supplierCreate.bin_iin)
       const supplierName = String(supplierCreate.name || '').trim()
@@ -718,11 +738,18 @@ export async function POST(request: Request) {
     const receiptId = String(result?.receipt_id || result?.id || '').trim()
     if (!receiptId) throw new Error('Не удалось получить id приемки')
 
-    const { data: expenseCategory, error: expenseCategoryError } = await supabase
+    // Изоляция: категория расхода — из справочника своей орг. Иначе в расход и в
+    // долг поставщику попадало название/id категории соседнего арендатора.
+    let expenseCategoryQuery: any = supabase
       .from('expense_categories')
       .select('id, name, accounting_group')
       .eq('id', expenseCategoryId)
-      .maybeSingle()
+      .limit(1)
+    // NEVER-pattern: не-супер без орг → нулевой uuid → категория не найдётся.
+    const scopeOrgCategory =
+      access.activeOrganization?.id || (access.isSuperAdmin ? null : '00000000-0000-0000-0000-000000000000')
+    if (scopeOrgCategory) expenseCategoryQuery = expenseCategoryQuery.eq('organization_id', scopeOrgCategory)
+    const { data: expenseCategory, error: expenseCategoryError } = await expenseCategoryQuery.maybeSingle()
     if (expenseCategoryError) throw expenseCategoryError
     if (!expenseCategory?.id || String(expenseCategory.accounting_group || '').trim().toLowerCase() !== 'cogs') {
       return json({ error: 'Категория расхода должна быть из финансовой группы COGS' }, 400)

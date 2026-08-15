@@ -59,6 +59,28 @@ export async function GET(req: Request) {
     const supabase = createAdminSupabaseClient()
     const paired = await findPairedRecord(supabase, { kind, id })
 
+    // Пару findPairedRecord ищет по telegram_chat_id и нормализованному ФИО ПО
+    // ВСЕЙ базе: однофамилец (или общий телеграм) из другой организации
+    // возвращался как «парная запись» вместе с именем и ролью. Отбрасываем всё,
+    // что не входит в свою организацию.
+    if (paired && !access.isSuperAdmin) {
+      const pairedKind = kind === 'staff' ? 'operator' : 'staff'
+      const allowedPairedIds =
+        pairedKind === 'staff'
+          ? await listOrganizationStaffIds({
+              activeOrganizationId: access.activeOrganization?.id || null,
+              isSuperAdmin: access.isSuperAdmin,
+            })
+          : await listOrganizationOperatorIds({
+              activeOrganizationId: access.activeOrganization?.id || null,
+              isSuperAdmin: access.isSuperAdmin,
+              includeInactive: true,
+            })
+      if (allowedPairedIds && !allowedPairedIds.includes(String(paired.id))) {
+        return json({ ok: true, paired: null })
+      }
+    }
+
     // Если парная запись уже уволена — не предлагаем каскад.
     if (paired && !paired.is_active) {
       return json({ ok: true, paired: null })

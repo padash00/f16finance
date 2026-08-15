@@ -108,10 +108,21 @@ export async function GET(req: Request) {
       )
     }
 
+    // operator_auth читался БЕЗ фильтра: выгружались логины операторов всех
+    // организаций, а из-за лимита PostgREST в 1000 строк свои операторы могли
+    // вообще не попасть в выборку (у них «пропадал» логин в HR).
+    let authQuery = supabase.from('operator_auth').select('operator_id, is_active, last_login')
+    if (allowedOperatorIds) {
+      authQuery = authQuery.in(
+        'operator_id',
+        allowedOperatorIds.length > 0 ? allowedOperatorIds : ['00000000-0000-0000-0000-000000000000'],
+      )
+    }
+
     const [staffRes, operatorsRes, authRes, assignmentsRes] = await Promise.all([
       staffQuery,
       operatorsQuery,
-      supabase.from('operator_auth').select('operator_id, is_active, last_login'),
+      authQuery,
       assignmentsQuery,
     ])
     if (staffRes.error) throw staffRes.error

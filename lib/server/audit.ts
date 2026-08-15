@@ -1,5 +1,6 @@
 import 'server-only'
 
+import { deservesTelegram, TELEGRAM_SILENT_ENTITY_TYPES } from '@/lib/core/audit-telegram'
 import { formatAuditEvent } from '@/lib/core/event-formatter'
 import { isAdminEmail } from '@/lib/server/admin'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -55,15 +56,6 @@ async function resolveCompanyOrg(companyId: string | null): Promise<string | nul
 // Дедупликация одинаковых событий: ключ "actor:entityType:action:companyId" → { count, firstSeenAt, timer }
 const dedupeCache = new Map<string, { count: number; firstSeenAt: number; timer: NodeJS.Timeout | null; entry: AuditEntry; actorLabel: string }>()
 const DEDUPE_WINDOW_MS = 5_000
-
-// Типы событий, которые НЕ шлём в Telegram (только в БД)
-const TELEGRAM_SILENT_ENTITY_TYPES = new Set<string>([
-  'page-view',
-  'auth-attempt',
-  'ai-usage',
-  'system-error',
-  'operator-chat',
-])
 
 function escapeTelegramHtml(s: string): string {
   return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -221,6 +213,15 @@ async function notifyLeaderAudit(entry: AuditEntry) {
 
     // Не шлём шумные технические события в Telegram (page-view, ai-usage и т.п.)
     if (TELEGRAM_SILENT_ENTITY_TYPES.has(entry.entityType)) return
+
+    // И не шлём всё подряд: событие должно требовать реакции человека.
+    const preview = formatAuditEvent({
+      entityType: entry.entityType,
+      action: entry.action,
+      payload: entry.payload || {},
+      actorLabel: '',
+    })
+    if (!deservesTelegram(preview, entry.action)) return
 
     const targetChatId = process.env.TELEGRAM_SUPERADMIN_CHAT_ID
     if (!targetChatId) return

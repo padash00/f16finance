@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { explainArticle, logKnowledgeQuestion } from '@/lib/server/knowledge-explain'
 import { requireOperator } from '@/lib/server/operator-context'
+import { resolveCompanyOrganizationId } from '@/lib/server/point-devices'
 
 export const runtime = 'nodejs'
 
@@ -19,11 +20,17 @@ export async function POST(request: Request) {
   const articleId = String(body?.article_id || '').trim()
   if (!articleId) return json({ error: 'article_id обязателен' }, 400)
 
+  // Изоляция: article_id приходит из тела. Проверки по company_id мало —
+  // чужая статья с company_id = null проходила, и её текст уезжал в LLM и в
+  // ответ. Скоупим по организации оператора.
+  const orgId = await resolveCompanyOrganizationId(supabase as any, ctx.companyId)
+
   const { data: article, error } = await supabase
     .from('knowledge_articles')
     .select('id, title, summary, content, company_id, organization_id, is_published')
     .eq('id', articleId)
     .eq('is_published', true)
+    .eq('organization_id', orgId)
     .maybeSingle()
 
   if (error) return json({ error: 'knowledge-explain-failed', detail: error.message }, 400)

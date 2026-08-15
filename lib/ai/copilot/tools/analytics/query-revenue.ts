@@ -71,7 +71,12 @@ export const queryRevenueTool: CopilotTool = {
     }
 
     // «Все точки» = только точки своей организации (мультитенантный скоуп).
-    const ids = companyId ? null : await scopedCompanyIds(ctx)
+    // Скоуп организации считаем всегда: указанная точка не должна его отменять,
+    // иначе чужой company_id отдаёт выручку другого клиента.
+    const ids = await scopedCompanyIds(ctx)
+    if (companyId && ids && !ids.includes(companyId)) {
+      return { ok: false, message: 'Точка не найдена.' }
+    }
     let rows: any[]
     try {
       rows = await fetchAllPages((rFrom, rTo) => {

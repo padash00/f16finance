@@ -40,11 +40,14 @@ export const getReceiptHistoryTool: CopilotTool = {
       .gte('created_at', since)
       .order('created_at', { ascending: false })
       .limit(50)
+    // Скоуп нужен и когда точка указана: иначе чужой company_id отдаёт чеки
+    // и выручку другой организации.
+    const ids = await scopedCompanyIds(ctx)
     if (companyId) {
+      if (ids && !ids.includes(companyId)) return { ok: false, message: 'Точка не найдена.' }
       query = query.eq('company_id', companyId)
-    } else {
-      const ids = await scopedCompanyIds(ctx)
-      if (ids) query = query.in('company_id', ids)
+    } else if (ids) {
+      query = query.in('company_id', ids)
     }
 
     const { data, error } = await query

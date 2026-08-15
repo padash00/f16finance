@@ -220,14 +220,35 @@ export async function GET(request: Request) {
       isSuperAdmin: access.isSuperAdmin,
     })
 
+    // Список проектов сужаем на стороне БД, а не только фильтром в памяти:
+    // PROJECT_SELECT содержит project_token (секрет устройства), и раньше в
+    // процесс вычитывались токены всех организаций. Плюс лимит PostgREST в 1000
+    // строк мог вытеснить свои проекты чужими.
+    let allowedProjectIds: string[] | null = null
+    if (companyScope.allowedCompanyIds) {
+      const { data: projectLinks, error: projectLinksError } = await supabase
+        .from('point_project_companies')
+        .select('project_id')
+        .in('company_id', companyScope.allowedCompanyIds)
+      if (projectLinksError) throw projectLinksError
+      allowedProjectIds = Array.from(
+        new Set(((projectLinks || []) as any[]).map((row) => String(row.project_id || '')).filter(Boolean)),
+      )
+    }
+
+    let projectsQuery = supabase
+      .from('point_projects')
+      .select(PROJECT_SELECT)
+      .order('created_at', { ascending: false })
+    if (allowedProjectIds) {
+      projectsQuery = projectsQuery.in('id', allowedProjectIds.length ? allowedProjectIds : ['00000000-0000-0000-0000-000000000000'])
+    }
+
     const [{ data: companies, error: companiesError }, { data: projects, error: projectsError }] = await Promise.all([
       companyScope.allowedCompanyIds
         ? supabase.from('companies').select('id, name, code').in('id', companyScope.allowedCompanyIds).order('name', { ascending: true })
         : supabase.from('companies').select('id, name, code').order('name', { ascending: true }),
-      supabase
-        .from('point_projects')
-        .select(PROJECT_SELECT)
-        .order('created_at', { ascending: false }),
+      projectsQuery,
     ])
 
     if (companiesError) throw companiesError

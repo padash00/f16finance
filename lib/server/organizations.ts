@@ -648,6 +648,13 @@ export async function resolveCompanyScope(params: {
   // NEVER-pattern: обычный пользователь без валидной организации → НИЧЕГО (пустой набор),
   // а не «все записи». allowedCompanyIds=[] truthy → .in('company_id', []) вернёт 0 строк.
   if (!activeOrganizationId) {
+    // Важно бросить и здесь. Десятки маршрутов используют
+    // resolveCompanyScope({ requestedCompanyId }) как ЕДИНСТВЕННУЮ проверку прав
+    // на точку. Раньше эта ветка молча возвращалась, и у пользователя без
+    // организации любая проверка «своя ли точка» превращалась в no-op.
+    if (requestedCompanyId) {
+      throw new Error('company-out-of-scope')
+    }
     return { allowedCompanyIds: [] as string[], organizationId: null }
   }
 

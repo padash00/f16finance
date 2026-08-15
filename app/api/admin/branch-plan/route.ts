@@ -39,10 +39,15 @@ export async function GET(req: Request) {
     const id = String(url.searchParams.get('id') || '').trim()
     const orgId = access.activeOrganization?.id || null
 
+    // NEVER-pattern: раньше фильтр стоял под `if (orgId && ...)`, поэтому у
+    // пользователя без активной организации он просто исчезал и маршрут отдавал
+    // финмодели (name + payload) ВСЕХ организаций / любой чужой черновик по UUID.
+    if (!access.isSuperAdmin && !orgId) return json({ error: 'forbidden' }, 403)
+
     if (id) {
-      let q: any = supabase.from('branch_plan_drafts').select('*').eq('id', id).limit(1)
-      if (orgId && !access.isSuperAdmin) q = q.eq('organization_id', orgId)
-      const { data, error } = await q.maybeSingle()
+      let q: any = supabase.from('branch_plan_drafts').select('*').eq('id', id)
+      if (!access.isSuperAdmin) q = q.eq('organization_id', orgId)
+      const { data, error } = await q.limit(1).maybeSingle()
       if (error) throw error
       if (!data) return json({ error: 'not-found' }, 404)
       return json({ ok: true, data: { draft: data } })
@@ -51,10 +56,10 @@ export async function GET(req: Request) {
     let listQ: any = supabase
       .from('branch_plan_drafts')
       .select('id, name, payload, updated_at, created_at')
+    if (!access.isSuperAdmin) listQ = listQ.eq('organization_id', orgId)
+    const { data: drafts, error } = await listQ
       .order('updated_at', { ascending: false })
       .limit(100)
-    if (orgId && !access.isSuperAdmin) listQ = listQ.eq('organization_id', orgId)
-    const { data: drafts, error } = await listQ
     if (error) throw error
 
     return json({ ok: true, data: { drafts: drafts || [] } })
@@ -91,11 +96,16 @@ export async function POST(req: Request) {
     const actorUserId = access.user?.id || null
     const orgId = access.activeOrganization?.id || null
 
+    // NEVER-pattern: без активной организации фильтр `if (orgId && ...)` исчезал,
+    // и по UUID можно было удалить/перезаписать чужой черновик финмодели, а insert
+    // создавал бесхозную строку (organization_id = null), видимую всем таким же.
+    if (!access.isSuperAdmin && !orgId) return json({ error: 'forbidden' }, 403)
+
     if (body.action === 'delete') {
       const id = String(body.id || '').trim()
       if (!id) return json({ error: 'id-required' }, 400)
       let delQ: any = supabase.from('branch_plan_drafts').delete().eq('id', id)
-      if (orgId && !access.isSuperAdmin) delQ = delQ.eq('organization_id', orgId)
+      if (!access.isSuperAdmin) delQ = delQ.eq('organization_id', orgId)
       const { error } = await delQ
       if (error) throw error
       await writeAuditLog(supabase as any, {
@@ -117,10 +127,9 @@ export async function POST(req: Request) {
           .from('branch_plan_drafts')
           .update({ name, payload, updated_at: new Date().toISOString() })
           .eq('id', id)
-          .select('id')
-          .single()
-        if (orgId && !access.isSuperAdmin) updQ = updQ.eq('organization_id', orgId)
-        const { data, error } = await updQ
+        // Фильтр организации навешиваем ДО терминальных .select()/.single().
+        if (!access.isSuperAdmin) updQ = updQ.eq('organization_id', orgId)
+        const { data, error } = await updQ.select('id').single()
         if (error) throw error
         await writeAuditLog(supabase as any, {
           actorUserId,

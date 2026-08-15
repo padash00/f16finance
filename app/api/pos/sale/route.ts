@@ -181,10 +181,15 @@ export async function POST(request: Request) {
           .select('id, company_id, location_type, name')
           .eq('id', locationId)
           .maybeSingle(),
-        supabase
-          .from('inventory_items')
-          .select('id, name, sale_price, is_active')
-          .in('id', itemIds),
+        // Изоляция каталога: id товаров приходят из тела запроса. Без скоупа
+        // чужой id резолвился в name и возвращался в тексте ошибки (оракул по
+        // всему каталогу). Легаси-строки без организации оставляем видимыми.
+        (() => {
+          const q = supabase.from('inventory_items').select('id, name, sale_price, is_active').in('id', itemIds)
+          return access.activeOrganization?.id && !access.isSuperAdmin
+            ? q.or(`organization_id.eq.${access.activeOrganization.id},organization_id.is.null`)
+            : q
+        })(),
         supabase
           .from('inventory_locations')
           .select('id, location_type')
@@ -296,9 +301,13 @@ export async function POST(request: Request) {
 
     // Изоляция лояльности: клиент должен принадлежать организации этой компании
     // (иначе арендатор B начислял/списывал баллы клиенту арендатора A).
-    if (customerRow?.organization_id) {
+    // Проверка безусловная: раньше она пропускалась при customers.organization_id
+    // = null, и такой клиент был «общим» для всех арендаторов.
+    if (customerRow) {
       const { data: compOrg } = await supabase.from('companies').select('organization_id').eq('id', companyId).maybeSingle()
-      if (String(compOrg?.organization_id || '') !== String(customerRow.organization_id)) {
+      const companyOrgId = String((compOrg as any)?.organization_id || '')
+      const customerOrgId = String(customerRow.organization_id || '')
+      if (!companyOrgId || !customerOrgId || companyOrgId !== customerOrgId) {
         return json({ error: 'customer-not-found' }, 400)
       }
     }

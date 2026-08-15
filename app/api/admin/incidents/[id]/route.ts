@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog } from '@/lib/server/audit'
-import { resolveCompanyScope } from '@/lib/server/organizations'
+import { ensureOrganizationStaffAccess, resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { requireCapability, requireStaffCapability } from '@/lib/server/capabilities'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -145,6 +145,20 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       patch.decision_notes = body.decision_notes ? String(body.decision_notes).trim() || null : null
     }
     if (body.subject_staff_id !== undefined) {
+      // Изоляция: скоуп самого инцидента проверен выше, а НОВЫЙ subject_staff_id
+      // из body — нет. Можно было перевесить свой штраф на сотрудника чужой
+      // организации (штраф уходил в его зарплату).
+      if (body.subject_staff_id) {
+        try {
+          await ensureOrganizationStaffAccess({
+            activeOrganizationId: access.activeOrganization?.id || null,
+            isSuperAdmin: access.isSuperAdmin,
+            staffId: body.subject_staff_id,
+          })
+        } catch {
+          return json({ error: 'subject-staff-forbidden' }, 403)
+        }
+      }
       patch.subject_staff_id = body.subject_staff_id || null
     }
 

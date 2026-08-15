@@ -21,10 +21,15 @@ export const approveExpenseTool: CopilotTool = {
       required: true,
       description: 'ID ожидающего расхода',
       getOptions: async (ctx) => {
-        const { data, error } = await ctx.supabase
+        // Выпадашка отдаёт данные не хуже отчёта: без скоупа в кнопках были
+        // видны суммы и комментарии расходов других организаций.
+        const scope = await scopedCompanyIds(ctx)
+        let optQ = ctx.supabase
           .from('expenses')
           .select('id, date, category, cash_amount, kaspi_amount, comment, one_off_payee, company_id')
           .eq('status', 'pending_approval')
+        if (scope) optQ = optQ.in('company_id', scope)
+        const { data, error } = await optQ
           .order('created_at', { ascending: false })
           .limit(100)
         if (error) {
@@ -72,6 +77,9 @@ export const approveExpenseTool: CopilotTool = {
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
+        // Тегируем событие организацией: иначе запись уходит в «общий» пул
+        // audit_log и её читают копилоты других клиентов.
+        organizationId: ctx.organizationId || null,
         entityType: 'expense',
         entityId: expenseId,
         action: 'approve',
@@ -98,10 +106,14 @@ export const declineExpenseTool: CopilotTool = {
       required: true,
       description: 'ID',
       getOptions: async (ctx) => {
-        const { data, error } = await ctx.supabase
+        // См. выше: список на отклонение тоже обязан быть в рамках организации.
+        const scope = await scopedCompanyIds(ctx)
+        let optQ = ctx.supabase
           .from('expenses')
           .select('id, date, category, cash_amount, kaspi_amount, one_off_payee, company_id')
           .eq('status', 'pending_approval')
+        if (scope) optQ = optQ.in('company_id', scope)
+        const { data, error } = await optQ
           .order('created_at', { ascending: false })
           .limit(100)
         if (error) {
@@ -151,6 +163,9 @@ export const declineExpenseTool: CopilotTool = {
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
+        // Тегируем событие организацией: иначе запись уходит в «общий» пул
+        // audit_log и её читают копилоты других клиентов.
+        organizationId: ctx.organizationId || null,
         entityType: 'expense',
         entityId: expenseId,
         action: 'decline',

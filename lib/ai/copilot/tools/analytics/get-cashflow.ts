@@ -28,7 +28,12 @@ export const getCashflowTool: CopilotTool = {
     const { from, to, label } = resolveDateRange(input, { defaultPeriod: 'today' })
 
     // «Все точки» = только точки своей организации.
-    const ids = companyId ? null : await scopedCompanyIds(ctx)
+    // Скоуп организации считаем всегда: указанная точка не должна его отменять,
+    // иначе чужой company_id отдаёт денежный поток другого клиента.
+    const ids = await scopedCompanyIds(ctx)
+    if (companyId && ids && !ids.includes(companyId)) {
+      return { ok: false, message: 'Точка не найдена.' }
+    }
     const buildQ = (table: 'incomes' | 'expenses', select: string) => (rFrom: number, rTo: number) => {
       let q = ctx.supabase
         .from(table)

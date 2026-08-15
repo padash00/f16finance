@@ -60,9 +60,13 @@ export async function GET(req: Request) {
         includeInactive: true,
       }),
     ])
-    // null = superadmin / legacy mode → do not filter. Non-null → filter entity_id.
+    // null = «не фильтровать» — только для супер-админа БЕЗ активной орг.
+    // Раньше условие было `isSuperAdmin || !activeOrganization`, и обычный staff
+    // без активной организации проваливался в null → получал HR-ленту всех
+    // тенантов (в payload — причины увольнений, оклады, смены ролей).
+    const orgId = access.activeOrganization?.id || null
     const allowedEntityIds =
-      access.isSuperAdmin || !access.activeOrganization?.id
+      access.isSuperAdmin && !orgId
         ? null
         : Array.from(new Set([...scopedStaffIds, ...scopedOperatorIds].map((id) => String(id))))
 
@@ -72,8 +76,15 @@ export async function GET(req: Request) {
       .in('entity_type', ['staff', 'operator'])
       .in('action', RELEVANT_ACTIONS)
       .gte('created_at', sinceIso)
+    // Второй контур изоляции: сама запись лога должна принадлежать орг
+    // (колонка добавлена миграцией 20260611_audit_log_org.sql).
+    if (orgId) auditQuery = auditQuery.eq('organization_id', orgId)
     if (allowedEntityIds) {
-      auditQuery = auditQuery.in('entity_id', allowedEntityIds)
+      // Пустой список → нулевой uuid, чтобы .in() вернул 0 строк, а не «всё».
+      auditQuery = auditQuery.in(
+        'entity_id',
+        allowedEntityIds.length > 0 ? allowedEntityIds : ['00000000-0000-0000-0000-000000000000'],
+      )
     }
 
     const { data, error } = await auditQuery

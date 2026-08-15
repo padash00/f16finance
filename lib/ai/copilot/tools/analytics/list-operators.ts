@@ -5,7 +5,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { companyOptions, scopedOperatorIds, fetchAllPages } from '../../query-helpers'
+import { companyOptions, isCompanyAllowed, scopedOperatorIds, fetchAllPages } from '../../query-helpers'
 
 export const listOperatorsTool: CopilotTool = {
   name: 'list_operators',
@@ -31,6 +31,9 @@ export const listOperatorsTool: CopilotTool = {
     // Если указана точка — берём операторов из её смен (связь оператор↔точка через shifts).
     let operatorIdsFilter: Set<string> | null = null
     if (companyId) {
+      // Точка из ввода должна быть своей: иначе по чужому company_id мы бы
+      // построили список операторов другой организации по её сменам.
+      if (!(await isCompanyAllowed(ctx, companyId))) return { ok: false, message: 'Точка не найдена.' }
       const shifts = await fetchAllPages((rFrom, rTo) =>
         ctx.supabase
           .from('shifts').select('operator_id').eq('company_id', companyId).not('operator_id', 'is', null)

@@ -115,13 +115,16 @@ export async function GET(request: Request) {
               .gte('started_at', `${todayDate}T00:00:00.000Z`)
               .lt('started_at', todayEndExclusive),
           )
-        : withCo(
-            supabase
-              .from('incomes')
-              .select('cash_amount,kaspi_amount,comment,created_at')
-              .eq('source', 'arena-session')
-              .eq('date', todayDate),
-          ),
+        : // Изоляция: у incomes нет point_project_id, поэтому withCo с
+          // `company_id.is.null` притянул бы кассу других арендаторов (а при
+          // пустом companyId — вообще все доходы за день). NEVER-паттерн:
+          // нет компании → нулевой uuid, запрос вернёт пусто.
+          supabase
+            .from('incomes')
+            .select('cash_amount,kaspi_amount,comment,created_at')
+            .eq('company_id', companyId || '00000000-0000-0000-0000-000000000000')
+            .eq('source', 'arena-session')
+            .eq('date', todayDate),
       withCo(supabase.from('arena_tech_logs').select('id,station_name,reason,amount,created_at').eq('point_project_id', projectId)).gte('created_at', todayDate + 'T00:00:00.000Z').order('created_at'),
     ])
 
@@ -318,6 +321,10 @@ export async function POST(request: Request) {
         .eq('id', stationId)
         .eq('point_project_id', projectId)
         .maybeSingle()
+      // Станция обязана принадлежать проекту. Раньше чужой stationId просто
+      // подставлялся в имя — и сессия создавалась, а broadcastKioskCommand ниже
+      // слал команду в канал kiosk:{stationId} чужого арендатора.
+      if (!stationRow) return json({ error: 'station-not-found' }, 404)
       const stationName = (stationRow as any)?.name || stationId
 
       const { data: arenaSession, error: insertError } = await supabase
@@ -642,6 +649,7 @@ export async function POST(request: Request) {
           shift_id: (current as any).shift_id || openShiftId,
         })
         .eq('id', sessionId)
+        .eq('point_project_id', projectId) // страховка: правим только свою сессию
         .select()
         .single()
 
@@ -720,6 +728,21 @@ export async function POST(request: Request) {
 
       // Send Telegram if operator has chat_id
       if (operatorId) {
+        // Оператор из тела запроса обязан быть закреплён за компанией точки:
+        // иначе по чужому uuid читался telegram_chat_id другого арендатора и
+        // ему же уходило уведомление.
+        const allowedCompanyIds =
+          device.company_ids.length > 0 ? device.company_ids : ['00000000-0000-0000-0000-000000000000']
+        const { data: operatorAssignments } = await supabase
+          .from('operator_company_assignments')
+          .select('operator_id')
+          .eq('operator_id', operatorId)
+          .in('company_id', allowedCompanyIds)
+          .limit(1)
+        if (!operatorAssignments || operatorAssignments.length === 0) {
+          return json({ ok: true, skipped: 'operator-not-in-point' })
+        }
+
         const { data: operator } = await supabase
           .from('operators')
           .select('name, telegram_chat_id')
@@ -750,6 +773,18 @@ export async function POST(request: Request) {
     if (body.action === 'techLog') {
       const { stationId, stationName, reason, amount, operatorId } = body
       if (!reason) return json({ error: 'reason required' }, 400)
+
+      // stationId приходит из тела — не даём привязать свой техлог к станции
+      // другого арендатора (FK на чужую строку + путаница в его отчётах).
+      if (stationId) {
+        const { data: techStation } = await supabase
+          .from('arena_stations')
+          .select('id')
+          .eq('id', stationId)
+          .eq('point_project_id', projectId)
+          .maybeSingle()
+        if (!techStation) return json({ error: 'station-not-found' }, 404)
+      }
 
       const { data: log, error: logError } = await supabase
         .from('arena_tech_logs')

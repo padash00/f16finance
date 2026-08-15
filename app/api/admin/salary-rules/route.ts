@@ -791,6 +791,27 @@ export async function POST(req: Request) {
       const accessCheck = await getRuleForMutation(supabase, payload.rule_id, allowedCompanyCodes)
       if (accessCheck.error) return accessCheck.error
 
+      // Проверка идёт по rule_id ИЗ ТЕЛА запроса, а update ниже — по payload.id.
+      // Прислав id чужой версии вместе со своим rule_id, можно было переписать
+      // чужую строку. Сверяем rule_id, прочитанный из самой версии.
+      if (payload.id) {
+        const { data: currentVersion, error: currentVersionError } = await supabase
+          .from('operator_salary_rule_versions')
+          .select('id, rule_id')
+          .eq('id', payload.id)
+          .maybeSingle()
+        if (currentVersionError && !isOptionalSalarySchemaError(currentVersionError)) throw currentVersionError
+        if (!currentVersion) return json({ error: 'Версия не найдена' }, 404)
+        if (Number((currentVersion as any).rule_id || 0) !== Number(payload.rule_id)) {
+          const ownerCheck = await getRuleForMutation(
+            supabase,
+            Number((currentVersion as any).rule_id || 0),
+            allowedCompanyCodes,
+          )
+          if (ownerCheck.error) return ownerCheck.error
+        }
+      }
+
       const fullRow = {
         rule_id: payload.rule_id,
         effective_from: payload.effective_from,

@@ -158,11 +158,15 @@ export async function POST(request: Request) {
     // Проверяем что роль существует в positions — только для АДМИН-сотрудника.
     // Оператору админ-должность не нужна (role='operator'), проверку пропускаем.
     if (type === 'staff') {
-      const { data: position } = await supabase
-        .from('positions')
-        .select('name')
-        .eq('name', role)
-        .maybeSingle()
+      // Скоуп по организации: без него кастомная должность ЧУЖОЙ орг проходила
+      // проверку, и сотрудника можно было нанять на чужую роль (с её правами).
+      let positionQuery = supabase.from('positions').select('name').eq('name', role)
+      if (organizationId) {
+        positionQuery = positionQuery.or(`organization_id.is.null,organization_id.eq.${organizationId}`)
+      } else if (!access.isSuperAdmin) {
+        positionQuery = positionQuery.is('organization_id', null)
+      }
+      const { data: position } = await positionQuery.maybeSingle()
       if (!position) {
         return json({ error: `Должность "${role}" не найдена. Создай её на /access → Должности.` }, 400)
       }

@@ -228,7 +228,10 @@ export async function POST(request: Request) {
           let categoryName = 'Списание товаров'
           const orgId = access.activeOrganization?.id || null
           let catQuery = supabase.from('expense_categories').select('name').ilike('name', '%списан%').limit(1)
+          // NEVER-pattern: не-супер без орг → только глобальные категории (org IS NULL),
+          // а не справочник чужого арендатора.
           if (orgId) catQuery = catQuery.or(`organization_id.is.null,organization_id.eq.${orgId}`)
+          else if (!access.isSuperAdmin) catQuery = catQuery.is('organization_id', null)
           const { data: catRows } = await catQuery
           if (catRows?.[0]?.name) categoryName = String(catRows[0].name)
           const { error: expErr } = await supabase.from('expenses').insert([{

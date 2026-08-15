@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { requireOperator } from '@/lib/server/operator-context'
+import { resolveCompanyOrganizationId } from '@/lib/server/point-devices'
 import { getCurrentOpenShift } from '@/lib/server/point-shifts'
 
 function json(data: unknown, status = 200) {
@@ -13,6 +14,12 @@ export async function GET(request: Request) {
 
   const { supabase, companyId, staffId } = ctx
 
+  // Изоляция тенанта: knowledge_articles/checklist_templates двухуровневые —
+  // organization_id (арендатор) + nullable company_id (точка). Фильтра только по
+  // company_id мало: строки чужих орг с company_id = null (а это все общие
+  // регламенты) выглядели как «глобальные» и отдавались наружу.
+  const orgId = await resolveCompanyOrganizationId(supabase as any, companyId)
+
   const { data: articles, error } = await supabase
     .from('knowledge_articles')
     .select(
@@ -22,6 +29,7 @@ export async function GET(request: Request) {
        category_id, category:category_id ( id, title, slug, kind )`,
     )
     .eq('is_published', true)
+    .eq('organization_id', orgId)
     .or(`company_id.is.null,company_id.eq.${companyId}`)
     .order('sort_order', { ascending: true })
 
@@ -35,6 +43,7 @@ export async function GET(request: Request) {
       'id, company_id, title, description, role_scope, shift_scope, schedule_type, recurrence_minutes, blocks_shift, sort_order, is_active',
     )
     .eq('is_active', true)
+    .eq('organization_id', orgId)
     .or(`company_id.is.null,company_id.eq.${companyId}`)
     .order('sort_order', { ascending: true })
     .order('title', { ascending: true })

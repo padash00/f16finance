@@ -8,7 +8,7 @@
 
 import type { CopilotTool } from '../../types'
 import { writeAuditLog } from '@/lib/server/audit'
-import { scopedCompanyIds } from '../../query-helpers'
+import { scopedCompanyIds, isOrgRowAllowed } from '../../query-helpers'
 
 function todayISO(): string {
   const d = new Date()
@@ -116,6 +116,14 @@ export const createReceiptTool: CopilotTool = {
       }
     }
 
+    // Товар и поставщик тоже per-org — иначе чужие позиции попадают в свой приход.
+    if (!(await isOrgRowAllowed(ctx, 'inventory_items', itemId))) {
+      return { ok: false, message: 'Товар не найден.' }
+    }
+    if (supplierId && !(await isOrgRowAllowed(ctx, 'inventory_suppliers', supplierId))) {
+      return { ok: false, message: 'Поставщик не найден.' }
+    }
+
     const totalCost = qty * unitCost
     const itemsJson = [{ item_id: itemId, quantity: qty, unit_cost: unitCost, total_cost: totalCost }]
 
@@ -138,6 +146,9 @@ export const createReceiptTool: CopilotTool = {
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
+        // Тегируем событие организацией: иначе запись уходит в «общий» пул
+        // audit_log и её читают копилоты других клиентов.
+        organizationId: ctx.organizationId || null,
         entityType: 'inventory-receipt',
         entityId: receiptId,
         action: 'create',

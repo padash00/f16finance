@@ -74,6 +74,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return json({ error: 'checklist-run-not-in-progress' }, 409)
   }
 
+  // Шаблон run-а тоже обязан быть своим: у легаси-run-ов template_id мог быть
+  // подставлен чужим (создание run-а раньше его не проверяло), а ниже по
+  // пунктам шаблона считаются штрафы/бонусы и создаются инциденты.
+  {
+    const orgId = device.company?.organization_id || '00000000-0000-0000-0000-000000000000'
+    const { data: templateRow } = await supabase
+      .from('checklist_templates')
+      .select('id')
+      .eq('id', (run as any).template_id)
+      .eq('organization_id', orgId)
+      .maybeSingle()
+    if (!templateRow) return json({ error: 'checklist-run-forbidden' }, 403)
+  }
+
   const mergedResponses = {
     ...((run as any).responses || {}),
     ...(body.responses && typeof body.responses === 'object' && !Array.isArray(body.responses)

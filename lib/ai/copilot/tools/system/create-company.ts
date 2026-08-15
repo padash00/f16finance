@@ -23,9 +23,15 @@ export const createCompanyTool: CopilotTool = {
     const address = String(input.address || '').trim() || null
     if (!name) return { ok: false, message: 'Название обязательно.' }
 
+    // Точка без organization_id — «ничья»: не попадает в скоуп своей организации
+    // и при этом просачивается в глобальные выборки. Штампуем владельца сразу.
+    if (!ctx.organizationId && !ctx.isSuperAdmin) {
+      return { ok: false, message: 'Нет активной организации — точку создать нельзя.' }
+    }
+
     const { data, error } = await ctx.supabase
       .from('companies')
-      .insert([{ name, code, address }])
+      .insert([{ name, code, address, organization_id: ctx.organizationId || null }])
       .select('id, name, code')
       .single()
     if (error) return { ok: false, message: `Не удалось создать: ${error.message}` }
@@ -33,6 +39,9 @@ export const createCompanyTool: CopilotTool = {
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
+        // Тегируем событие организацией: иначе запись уходит в «общий» пул
+        // audit_log и её читают копилоты других клиентов.
+        organizationId: ctx.organizationId || null,
         entityType: 'company',
         entityId: data?.id || 'unknown',
         action: 'create',

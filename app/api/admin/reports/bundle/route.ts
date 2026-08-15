@@ -79,10 +79,13 @@ export async function GET(req: Request) {
     const expenseFetchFrom = prevFrom
     const expenseFetchTo = dateTo
 
-    let companiesRes = await supabase.from('companies').select('id, name, code')
+    // Один билдер с условным .in(): раньше сначала БЕЗУСЛОВНО выполнялся запрос
+    // по всем организациям, и только потом результат перезаписывался отскоупленным.
+    let companiesQuery: any = supabase.from('companies').select('id, name, code')
     if (companyScope.allowedCompanyIds !== null) {
-      companiesRes = await supabase.from('companies').select('id, name, code').in('id', companyScope.allowedCompanyIds)
+      companiesQuery = companiesQuery.in('id', companyScope.allowedCompanyIds)
     }
+    const companiesRes = await companiesQuery
     if (companiesRes.error) throw companiesRes.error
     const companies = (companiesRes.data || []) as { id: string; name: string; code: string | null }[]
     const nameById = new Map(companies.map((c) => [c.id, c.name || 'Точка'] as const))

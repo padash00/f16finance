@@ -2,7 +2,11 @@ import { NextResponse } from 'next/server'
 
 import { calculateForecast, type CompanyCode } from '@/lib/kpiEngine'
 import { requireCapability } from '@/lib/server/capabilities'
-import { listOrganizationOperatorIds, resolveCompanyScope } from '@/lib/server/organizations'
+import {
+  listOrganizationCompanyCodes,
+  listOrganizationOperatorIds,
+  resolveCompanyScope,
+} from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -163,9 +167,25 @@ export async function GET(req: Request) {
       return q
     }
 
+    // Изоляция: у kpi_plans нет organization_id, коллективные строки помечены
+    // только company_code. Без фильтра маршрут отдавал планы (обороты, цели)
+    // ВСЕХ тенантов. Скоупим по кодам точек своей организации, fail-closed.
+    const orgCompanyCodes = scope.allowedCompanyIds
+      ? await listOrganizationCompanyCodes({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+        })
+      : null
+    let plansQuery: any = supabase
+      .from('kpi_plans')
+      .select('*')
+      .eq('month_start', monthStart)
+      .eq('entity_type', 'collective')
+    if (orgCompanyCodes) plansQuery = plansQuery.in('company_code', orgCompanyCodes)
+
     const [{ data: plans, error: plansError }, incomesMonth, incomesWeek, hist] =
       await Promise.all([
-        supabase.from('kpi_plans').select('*').eq('month_start', monthStart).eq('entity_type', 'collective'),
+        plansQuery,
         fetchAllPages(buildIncomesMonthQuery),
         fetchAllPages(buildIncomesWeekQuery),
         fetchAllPages(buildHistQuery),
@@ -281,29 +301,44 @@ export async function POST(req: Request) {
       return q
     })
 
-    const sums: Record<CompanyCode, { t1: number; t2: number }> = {
-      arena: { t1: 0, t2: 0 },
-      ramen: { t1: 0, t2: 0 },
-      extra: { t1: 0, t2: 0 },
-    }
+    // Раньше планы генерировались по ХАРДКОДУ ['arena','ramen','extra'] — коды
+    // точек F16. Для чужой организации это создавало/перезаписывало планы с
+    // чужими кодами. Берём коды точек своей организации.
+    const orgCompanyCodes = await listOrganizationCompanyCodes({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+    const targetCodes = Array.from(new Set(orgCompanyCodes.map((code) => code.toLowerCase()).filter(Boolean)))
+    if (targetCodes.length === 0) return json({ ok: true, rows: [] })
+    const targetCodeSet = new Set(targetCodes)
+
+    const sums = new Map<string, { t1: number; t2: number }>()
+    for (const code of targetCodes) sums.set(code, { t1: 0, t2: 0 })
 
     for (const row of ((incomes || []) as IncomeRow[])) {
-      const companyCode = String(row.companies?.code || '').toLowerCase() as CompanyCode
-      if (!COMPANIES.includes(companyCode)) continue
+      const companyCode = String(row.companies?.code || '').toLowerCase()
+      if (!targetCodeSet.has(companyCode)) continue
 
       const amount = Number(row.cash_amount || 0) + Number(row.kaspi_amount || 0) + Number(row.card_amount || 0)
       const monthKey = String(row.date).slice(0, 7)
-      if (monthKey === prev2Key) sums[companyCode].t2 += amount
-      if (monthKey === prev1Key) sums[companyCode].t1 += amount
+      const bucket = sums.get(companyCode)
+      if (!bucket) continue
+      if (monthKey === prev2Key) bucket.t2 += amount
+      if (monthKey === prev1Key) bucket.t1 += amount
     }
 
-    const rows: KpiRow[] = COMPANIES.map((companyCode) => {
-      const calc = calculateForecast(target, sums[companyCode].t1, sums[companyCode].t2)
+    // plan_key не содержал организацию: ключ `<month>|collective|<code>` совпадал
+    // у разных тенантов с одинаковым кодом точки, и upsert перетирал чужой план.
+    const orgKeyPart = access.activeOrganization?.id || 'global'
+
+    const rows: KpiRow[] = targetCodes.map((companyCode) => {
+      const bucket = sums.get(companyCode) || { t1: 0, t2: 0 }
+      const calc = calculateForecast(target, bucket.t1, bucket.t2)
       const targetMonth = Math.round(calc.forecast)
       const targetWeek = Math.round(targetMonth / WEEKS_IN_MONTH)
 
       return {
-        plan_key: `${monthStart}|collective|${companyCode}`,
+        plan_key: `${orgKeyPart}|${monthStart}|collective|${companyCode}`,
         month_start: monthStart,
         entity_type: 'collective',
         company_code: companyCode,
@@ -314,7 +349,7 @@ export async function POST(req: Request) {
         shifts_target_month: 0,
         shifts_target_week: 0,
         meta: {
-          prev2: Math.round(sums[companyCode].t2),
+          prev2: Math.round(bucket.t2),
           prev1_est: Math.round(calc.prev1Estimated),
           trend: calc.trend.toFixed(1),
           generated_via: 'api/admin/kpi-dashboard',

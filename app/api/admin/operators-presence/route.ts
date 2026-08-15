@@ -27,6 +27,10 @@ function canManageDevices(access: { isSuperAdmin: boolean; staffRole?: string | 
 export async function GET(request: Request) {
   const access = await getRequestAccessContext(request)
   if ('response' in access) return access.response
+  // getRequestAccessContext требует только аутентификацию: сюда проходил и
+  // оператор, и клиент гостевого контура, а выдача содержит имена устройств,
+  // версии и обрезанный project_token. Ставим тот же гейт, что и у POST.
+  if (!canManageDevices(access)) return json({ error: 'forbidden' }, 403)
 
   const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
   const scope = await resolveCompanyScope({
@@ -34,13 +38,30 @@ export async function GET(request: Request) {
     isSuperAdmin: access.isSuperAdmin,
   })
 
-  const query = supabase
+  // Сужаем выборку в БД, а не только фильтром в памяти: в select есть
+  // project_token, и раньше в процесс вычитывались токены всех организаций.
+  let allowedProjectIds: string[] | null = null
+  if (scope.allowedCompanyIds) {
+    const { data: links, error: linksError } = await supabase
+      .from('point_project_companies')
+      .select('project_id')
+      .in('company_id', scope.allowedCompanyIds)
+    if (linksError) return json({ error: linksError.message }, 500)
+    allowedProjectIds = Array.from(
+      new Set(((links || []) as any[]).map((row) => String(row.project_id || '')).filter(Boolean)),
+    )
+  }
+
+  let query = supabase
     .from('point_projects')
     .select(
       'id, name, project_token, last_seen_at, last_app_version, is_active, last_operator_id, point_project_companies(company_id), last_operator:last_operator_id(id, name, short_name)',
     )
     .eq('is_active', true)
     .order('last_seen_at', { ascending: false })
+  if (allowedProjectIds) {
+    query = query.in('id', allowedProjectIds.length ? allowedProjectIds : ['00000000-0000-0000-0000-000000000000'])
+  }
 
   const { data, error } = await query
   if (error) return json({ error: error.message }, 500)

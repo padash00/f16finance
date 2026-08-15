@@ -130,7 +130,20 @@ export async function POST(req: Request) {
         .eq('event', event)
         .eq('is_active', true)
         .order('priority', { ascending: true })
-      if (body.company_id) query = query.or(`company_id.is.null,company_id.eq."${body.company_id}"`)
+      // Фильтр вешаем ВСЕГДА, а не только когда прислали точку: без company_id
+      // «проверка правил» возвращала условия и действия правил всех организаций.
+      const testAllowedCompanyIds = await listOrganizationCompanyIds({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+      })
+      if (body.company_id) {
+        query = query.or(`company_id.is.null,company_id.eq."${body.company_id}"`)
+      } else if (testAllowedCompanyIds) {
+        if (testAllowedCompanyIds.length === 0) return json({ ok: true, data: { rulesCount: 0, actions: [], matched: [] } })
+        query = query.or(
+          `company_id.is.null,company_id.in.(${testAllowedCompanyIds.map((id) => `"${id}"`).join(',')})`,
+        )
+      }
       const { data, error } = await query
       if (error) throw error
 
@@ -158,6 +171,12 @@ export async function POST(req: Request) {
           isSuperAdmin: access.isSuperAdmin,
           requestedCompanyId: payload.company_id,
         })
+      } else if (!access.isSuperAdmin) {
+        // company_id=null означает ГЛОБАЛЬНОЕ правило: в point_rules нет
+        // organization_id, и такое правило применяется во всех организациях.
+        // Раньше проверка стояла под `if (payload.company_id)`, поэтому
+        // достаточно было не прислать точку, чтобы написать правило всем.
+        return json({ error: 'Для правила нужно выбрать точку' }, 400)
       }
       const { data, error } = await supabase
         .from('point_rules')
@@ -201,6 +220,10 @@ export async function POST(req: Request) {
           isSuperAdmin: access.isSuperAdmin,
           requestedCompanyId: payload.company_id,
         })
+      } else if (!access.isSuperAdmin) {
+        // Тот же обход при правке: обнулив company_id, своё правило можно было
+        // превратить в глобальное и распространить на чужие организации.
+        return json({ error: 'Для правила нужно выбрать точку' }, 400)
       }
       const { data, error } = await supabase
         .from('point_rules')

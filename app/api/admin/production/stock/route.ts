@@ -153,7 +153,10 @@ export async function POST(request: Request) {
       const ing = await getIng(id)
       if (!ing) return json({ error: 'Ингредиент не найден' }, 404)
       const balance = Number((ing as any).stock_qty || 0) + qty
-      await supabase.from('ingredients').update({ stock_qty: balance, updated_at: new Date().toISOString() }).eq('id', id)
+      // Изоляция (второй слой): раньше запись шла только по id — единственной
+      // защитой был getIng выше. organization_id в самом update гарантирует,
+      // что чужой остаток не перезапишется, даже если проверка выше отвалится.
+      await supabase.from('ingredients').update({ stock_qty: balance, updated_at: new Date().toISOString() }).eq('id', id).eq('organization_id', scopeOrg)
       await move(id, 'receipt', qty, balance, { comment: body?.comment?.trim() || null })
       return json({ ok: true, balance })
     }
@@ -166,7 +169,9 @@ export async function POST(request: Request) {
       if (!ing) return json({ error: 'Ингредиент не найден' }, 404)
       const expected = Number((ing as any).stock_qty || 0)
       const variance = counted - expected // <0 = недостача
-      await supabase.from('ingredients').update({ stock_qty: counted, updated_at: new Date().toISOString() }).eq('id', id)
+      // Изоляция (второй слой): organization_id в самом update — чужой остаток
+      // не перезапишется ревизией, даже если getIng выше отвалится.
+      await supabase.from('ingredients').update({ stock_qty: counted, updated_at: new Date().toISOString() }).eq('id', id).eq('organization_id', scopeOrg)
       await move(id, 'count', counted - expected, counted, { variance, comment: body?.comment?.trim() || null })
       return json({ ok: true, expected, counted, variance })
     }
@@ -182,7 +187,8 @@ export async function POST(request: Request) {
         const ing = await getIng(ingId)
         if (!ing) continue
         const balance = Number((ing as any).stock_qty || 0) - used
-        await supabase.from('ingredients').update({ stock_qty: balance, updated_at: new Date().toISOString() }).eq('id', ingId)
+        // Изоляция (второй слой): списание по продажам пишет только по своей орг.
+        await supabase.from('ingredients').update({ stock_qty: balance, updated_at: new Date().toISOString() }).eq('id', ingId).eq('organization_id', scopeOrg)
         await move(ingId, 'sale_writeoff', -used, balance, { period_from: from, period_to: to })
         count++
       }

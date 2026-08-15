@@ -124,6 +124,52 @@ export async function scopedCompanyIds(
 }
 
 /**
+ * Проверка «эта точка — моя?» для company_id, пришедшего из пользовательского
+ * ввода или от LLM. Без неё фильтр `.eq('company_id', ...)` не защищает: чужой
+ * id просто подменяет собой изоляцию и отдаёт данные другого клиента SaaS.
+ * true = доступ разрешён (в т.ч. супер-админ / нет активной организации).
+ * При false отвечай нейтрально («Точка не найдена») — иначе перебором id
+ * можно узнать, какие точки существуют у других организаций.
+ */
+export async function isCompanyAllowed(
+  ctx: { supabase: any; organizationId?: string | null; isSuperAdmin?: boolean },
+  companyId: string,
+): Promise<boolean> {
+  const ids = await scopedCompanyIds(ctx)
+  return !ids || ids.includes(String(companyId))
+}
+
+/**
+ * Универсальная проверка «эта строка — моей организации?» для таблиц, у которых
+ * есть собственный organization_id (inventory_items, inventory_suppliers и т.п.).
+ * Нужна там, где id приходит параметром: без неё чужой товар можно привязать к
+ * своей локации и потом прочитать его название и цену через остатки.
+ */
+export async function isOrgRowAllowed(
+  ctx: { supabase: any; organizationId?: string | null },
+  table: string,
+  id: string,
+): Promise<boolean> {
+  if (!ctx.organizationId) return true
+  const { data } = await ctx.supabase
+    .from(table)
+    .select('id')
+    .eq('id', id)
+    .eq('organization_id', ctx.organizationId)
+    .maybeSingle()
+  return !!data
+}
+
+/** То же для operator_id: оператор должен работать на точках моей организации. */
+export async function isOperatorAllowed(
+  ctx: { supabase: any; organizationId?: string | null; isSuperAdmin?: boolean },
+  operatorId: string,
+): Promise<boolean> {
+  const ids = await scopedOperatorIds(ctx)
+  return !ids || ids.includes(String(operatorId))
+}
+
+/**
  * Сырые строки компаний своей организации (id, name, code), отсортированы по имени.
  * Для выпадашек, где нужен кастомный формат метки — заменяет прямой
  * `from('companies').select('id, name, code').order('name')`.

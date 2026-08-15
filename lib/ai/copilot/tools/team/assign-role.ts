@@ -20,7 +20,10 @@ export const assignRoleTool: CopilotTool = {
       required: true,
       description: 'Кому меняем роль',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase.from('staff').select('id, full_name, email, role').order('full_name')
+        // Без скоупа в кнопках были видны ФИО и почты сотрудников чужих организаций.
+        let optQ = ctx.supabase.from('staff').select('id, full_name, email, role').order('full_name')
+        if (ctx.organizationId) optQ = optQ.eq('organization_id', ctx.organizationId)
+        const { data } = await optQ
         return (data || []).map((s: any) => ({ value: s.id, label: `${s.full_name || s.email || '?'} · ${s.role || ''}` }))
       },
     },
@@ -60,6 +63,9 @@ export const assignRoleTool: CopilotTool = {
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
+        // Тегируем событие организацией: иначе запись уходит в «общий» пул
+        // audit_log и её читают копилоты других клиентов.
+        organizationId: ctx.organizationId || null,
         entityType: 'staff',
         entityId: staffId,
         action: 'change-role',

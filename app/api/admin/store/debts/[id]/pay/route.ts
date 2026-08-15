@@ -85,13 +85,16 @@ export async function POST(
     // try to find a generic COGS category instead of failing the payment.
     let categoryName = String(debt.category?.name || '').trim()
     if (!categoryName) {
-      const { data: fallbackCategory } = await supabase
+      // Изоляция: fallback-категория только своей орг (scopeOrg уже посчитан выше),
+      // иначе в расход попадало название категории чужого арендатора.
+      let fallbackCategoryQuery: any = supabase
         .from('expense_categories')
         .select('id, name')
         .ilike('accounting_group', 'cogs')
         .order('name', { ascending: true })
         .limit(1)
-        .maybeSingle()
+      if (scopeOrg) fallbackCategoryQuery = fallbackCategoryQuery.eq('organization_id', scopeOrg)
+      const { data: fallbackCategory } = await fallbackCategoryQuery.maybeSingle()
       if (fallbackCategory?.name) {
         categoryName = String(fallbackCategory.name).trim()
       } else {

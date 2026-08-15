@@ -21,9 +21,14 @@ export const deleteExpenseTool: CopilotTool = {
       required: true,
       description: 'ID последних расходов',
       getOptions: async (ctx) => {
-        const { data, error } = await ctx.supabase
+        // Без скоупа в кнопках были видны расходы (суммы, комментарии, точки)
+        // других организаций — выпадашка утекала так же, как отчёт.
+        const scope = await scopedCompanyIds(ctx)
+        let optQ = ctx.supabase
           .from('expenses')
           .select('id, date, category, cash_amount, kaspi_amount, comment, company_id')
+        if (scope) optQ = optQ.in('company_id', scope)
+        const { data, error } = await optQ
           .order('created_at', { ascending: false })
           .limit(100)
         if (error) {
@@ -76,6 +81,9 @@ export const deleteExpenseTool: CopilotTool = {
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
+        // Тегируем событие организацией: иначе запись уходит в «общий» пул
+        // audit_log и её читают копилоты других клиентов.
+        organizationId: ctx.organizationId || null,
         entityType: 'expense',
         entityId: expenseId,
         action: 'delete',

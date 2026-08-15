@@ -25,6 +25,7 @@ import { requireCapability } from '@/lib/server/capabilities'
 import {
   ensureOrganizationOperatorAccess,
   ensureOrganizationStaffAccess,
+  listOrganizationCompanyIds,
 } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { requireAddon } from '@/lib/server/entitlements'
@@ -36,6 +37,30 @@ function json(data: unknown, status = 200) {
 
 type Kind = 'operator' | 'staff'
 type Action = 'updateProfile' | 'changeRole' | 'promote' | 'demote'
+
+/**
+ * Проверка существования должности СО СКОУПОМ по организации.
+ * Раньше искали просто `.eq('name', role)` — кастомная должность ЧУЖОЙ
+ * организации проходила проверку, и её имя можно было проставить своему
+ * сотруднику (а дальше матрица прав чужой роли).
+ * Видимы: встроенные (organization_id is null) + собственные кастомные.
+ */
+async function positionExistsInScope(
+  supabase: ReturnType<typeof createAdminSupabaseClient>,
+  role: string,
+  orgId: string | null,
+  isSuperAdmin: boolean,
+) {
+  let query = supabase.from('positions').select('name').eq('name', role)
+  if (orgId) {
+    query = query.or(`organization_id.is.null,organization_id.eq.${orgId}`)
+  } else if (!isSuperAdmin) {
+    // Нет орг и не супер-админ → только общие встроенные (fail-closed).
+    query = query.is('organization_id', null)
+  }
+  const { data } = await query.maybeSingle()
+  return Boolean(data)
+}
 
 type Payload = {
   full_name?: string
@@ -104,6 +129,7 @@ export async function POST(request: Request) {
 
     const supabase = createAdminSupabaseClient()
     const userId = access.user?.id || null
+    const orgId = access.activeOrganization?.id || null
 
     // ─── PROMOTE (operator → admin staff via is_admin_staff) ──────
     if (action === 'promote') {
@@ -115,9 +141,10 @@ export async function POST(request: Request) {
           : null
       if (!newRole) return json({ error: 'Новая должность обязательна' }, 400)
 
-      // Проверка что роль существует
-      const { data: pos } = await supabase.from('positions').select('name').eq('name', newRole).maybeSingle()
-      if (!pos) return json({ error: `Должность "${newRole}" не найдена` }, 400)
+      // Проверка что роль существует и доступна ЭТОЙ организации
+      if (!(await positionExistsInScope(supabase, newRole, orgId, access.isSuperAdmin))) {
+        return json({ error: `Должность "${newRole}" не найдена` }, 400)
+      }
 
       const { error: opErr } = await supabase
         .from('operators')
@@ -135,18 +162,27 @@ export async function POST(request: Request) {
       const profile = (opData as any)?.operator_profiles?.[0] || (opData as any)?.operator_profiles || {}
       const fullName = profile.full_name || (opData as any)?.name || 'Сотрудник'
 
+      // Поиск «парного» staff ТОЛЬКО внутри своей организации. Без этого
+      // фильтра совпадение по telegram_chat_id или ФИО находило сотрудника
+      // ЧУЖОЙ орг, и следующий update проставлял ему role/is_active/оклад
+      // (достаточно было завести своего оператора с тем же ФИО).
       let staffId: string | null = null
+      if (!access.isSuperAdmin && !orgId) {
+        // Fail-closed: некуда искать пару — не трогаем чужие записи.
+        return json({ error: 'Нет активной организации' }, 400)
+      }
+      const scopeStaff = (q: any) => (orgId ? q.eq('organization_id', orgId) : q)
       const tg = (opData as any)?.telegram_chat_id?.trim() || null
       if (tg) {
-        const { data: byTg } = await supabase.from('staff').select('id').eq('telegram_chat_id', tg).maybeSingle()
+        const { data: byTg } = await scopeStaff(
+          supabase.from('staff').select('id').eq('telegram_chat_id', tg),
+        ).maybeSingle()
         staffId = (byTg as any)?.id || null
       }
       if (!staffId) {
-        const { data: byName } = await supabase
-          .from('staff')
-          .select('id')
-          .ilike('full_name', fullName)
-          .maybeSingle()
+        const { data: byName } = await scopeStaff(
+          supabase.from('staff').select('id').ilike('full_name', fullName),
+        ).maybeSingle()
         staffId = (byName as any)?.id || null
       }
 
@@ -207,8 +243,9 @@ export async function POST(request: Request) {
       const newRole = String(payload.role || '').trim()
       if (!newRole) return json({ error: 'role обязательна' }, 400)
 
-      const { data: pos } = await supabase.from('positions').select('name').eq('name', newRole).maybeSingle()
-      if (!pos) return json({ error: `Должность "${newRole}" не найдена` }, 400)
+      if (!(await positionExistsInScope(supabase, newRole, orgId, access.isSuperAdmin))) {
+        return json({ error: `Должность "${newRole}" не найдена` }, 400)
+      }
 
       const table = kind === 'operator' ? 'operators' : 'staff'
       const { error } = await supabase.from(table).update({ role: newRole }).eq('id', id)
@@ -287,6 +324,21 @@ export async function POST(request: Request) {
       // Обновление точек. ВАЖНО: ошибки записи НЕ проглатываем — иначе точки
       // «не сохраняются» молча, а оператор потом не может войти («не привязан к точке»).
       if (Array.isArray(payload.company_ids)) {
+        // Изоляция: точки из тела запроса обязаны принадлежать организации
+        // вызывающего. Без проверки оператора можно было назначить на ЧУЖУЮ
+        // точку (и он получал доступ к её кассе). Тот же контроль есть в hr/hire.
+        const requestedCompanyIds = payload.company_ids.map((c: any) => String(c))
+        if (requestedCompanyIds.length > 0 && !(access.isSuperAdmin && !orgId)) {
+          const allowedCompanyIds = await listOrganizationCompanyIds({
+            activeOrganizationId: orgId,
+            isSuperAdmin: access.isSuperAdmin,
+          })
+          const foreign = requestedCompanyIds.filter((cid) => !allowedCompanyIds.includes(cid))
+          if (foreign.length > 0) {
+            return json({ error: 'forbidden', code: 'company-not-in-organization' }, 403)
+          }
+        }
+
         // Сносим старые назначения и пишем новые (простая стратегия)
         const { error: delErr } = await supabase
           .from('operator_company_assignments')

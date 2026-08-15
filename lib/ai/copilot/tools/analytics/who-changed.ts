@@ -27,7 +27,9 @@ export const whoChangedTool: CopilotTool = {
       .eq('entity_id', entityId)
       .order('created_at', { ascending: false })
       .limit(30)
-    if (ctx.organizationId) q = q.or(`organization_id.is.null,organization_id.eq.${ctx.organizationId}`)
+    // Строгий скоуп без null-share: иначе по id чужой сущности можно было
+    // прочитать историю её изменений из «общих» записей audit_log.
+    if (ctx.organizationId) q = q.eq('organization_id', ctx.organizationId)
     const { data, error } = await q
     if (error) return { ok: false, message: `Ошибка: ${error.message}` }
     if (!data?.length) return { ok: true, message: 'Записей о изменениях нет.' }

@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { resolveAllRecipeCosts } from '@/lib/domain/production'
 import { writeAuditLog } from '@/lib/server/audit'
 import { requireOrgFeature } from '@/lib/server/entitlements'
+import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { requireAnyCapability, requireCapability } from '@/lib/server/capabilities'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -24,6 +25,56 @@ type ComponentInput = {
   qty?: number
   unit?: string | null
   waste_pct?: number | null
+}
+
+/**
+ * Изоляция: ingredient_id / component_recipe_id приходят из body без проверки.
+ * Так можно было положить в СВОЮ техкарту ЧУЖОЙ ingredient_id — и GET потом
+ * возвращал его name и purchase_price (закупочные цены конкурента) в составе
+ * и в расчёте себестоимости. Возвращает код ошибки или null.
+ */
+async function findForeignComponent(
+  supabase: any,
+  scopeOrg: string,
+  comps: ComponentInput[],
+): Promise<string | null> {
+  const ingIds = Array.from(new Set(comps.map((c) => String(c?.ingredient_id || '')).filter(Boolean)))
+  if (ingIds.length) {
+    const { data, error } = await supabase
+      .from('ingredients')
+      .select('id')
+      .eq('organization_id', scopeOrg)
+      .in('id', ingIds)
+    if (error) throw error
+    const own = new Set((data || []).map((row: any) => String(row.id)))
+    if (ingIds.some((id) => !own.has(id))) return 'ingredient-forbidden'
+  }
+
+  const recipeIds = Array.from(new Set(comps.map((c) => String(c?.component_recipe_id || '')).filter(Boolean)))
+  if (recipeIds.length) {
+    const { data, error } = await supabase
+      .from('recipes')
+      .select('id')
+      .eq('organization_id', scopeOrg)
+      .in('id', recipeIds)
+    if (error) throw error
+    const own = new Set((data || []).map((row: any) => String(row.id)))
+    if (recipeIds.some((id) => !own.has(id))) return 'component-recipe-forbidden'
+  }
+
+  return null
+}
+
+/** Изоляция: sale_item_id тоже из body — товар обязан быть своей организации. */
+async function isForeignSaleItem(supabase: any, scopeOrg: string, saleItemId: string) {
+  const { data, error } = await supabase
+    .from('inventory_items')
+    .select('id')
+    .eq('id', saleItemId)
+    .eq('organization_id', scopeOrg)
+    .maybeSingle()
+  if (error) throw error
+  return !data
 }
 
 // ─── GET: список техкарт с food cost + каталог ингредиентов ──────────────────
@@ -71,9 +122,13 @@ export async function GET(request: Request) {
     const ingredientNameById = new Map<string, string>()
     const ingredientUnitById = new Map<string, string>()
     if (ingIds.length) {
+      // Изоляция: без organization_id этот запрос отдавал name и purchase_price
+      // ЧУЖИХ ингредиентов (закупочные цены конкурента), если в состав техкарты
+      // был подсунут чужой ingredient_id.
       const { data: ings } = await supabase
         .from('ingredients')
         .select('id, name, purchase_price, unit')
+        .eq('organization_id', scopeOrg)
         .in('id', ingIds)
       for (const it of ings || []) {
         ingredientCostById.set(String(it.id), Number((it as any).purchase_price || 0))
@@ -162,6 +217,28 @@ export async function POST(request: Request) {
     if (!recipeCompanyId) return json({ error: 'point-required', message: 'Выберите точку-магазин — техкарта создаётся в конкретной точке.' }, 400)
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
+
+    // Изоляция: company_id брался прямо из body — техкарту можно было создать
+    // в чужой точке. resolveCompanyScope бросает 'company-out-of-scope'.
+    try {
+      await resolveCompanyScope({
+        activeOrganizationId: orgId,
+        isSuperAdmin: access.isSuperAdmin,
+        requestedCompanyId: recipeCompanyId,
+      })
+    } catch {
+      return json({ error: 'company-forbidden' }, 403)
+    }
+
+    const compsInput = (Array.isArray(body?.components) ? body.components : []) as ComponentInput[]
+    const foreignComponent = await findForeignComponent(supabase, orgId, compsInput)
+    if (foreignComponent) return json({ error: foreignComponent }, 403)
+
+    const saleItemId = String(body?.sale_item_id || '').trim() || null
+    if (saleItemId && (await isForeignSaleItem(supabase, orgId, saleItemId))) {
+      return json({ error: 'sale-item-forbidden' }, 403)
+    }
+
     const { data: recipe, error } = await supabase
       .from('recipes')
       .insert({
@@ -172,7 +249,7 @@ export async function POST(request: Request) {
         output_qty: Number(body?.output_qty) || 1,
         output_unit: String(body?.output_unit || 'порц').trim() || 'порц',
         yield_factor: Number(body?.yield_factor) || 1,
-        sale_item_id: body?.sale_item_id || null,
+        sale_item_id: saleItemId,
         is_semi_finished: body?.is_semi_finished === true,
         notes: body?.notes?.trim() || null,
       })
@@ -180,7 +257,7 @@ export async function POST(request: Request) {
       .single()
     if (error) throw error
 
-    const comps = (Array.isArray(body?.components) ? body.components : []) as ComponentInput[]
+    const comps = compsInput
     const rows = comps
       .filter((c) => (c.ingredient_id || c.component_recipe_id || c.name) && Number(c.qty) > 0)
       .map((c, i) => ({
@@ -238,6 +315,18 @@ export async function PATCH(request: Request) {
         .eq('organization_id', scopeOrg)
         .maybeSingle()
       if (!ownRecipe) return json({ error: 'forbidden' }, 403)
+
+      // Изоляция: состав и sale_item_id пишутся из body — их id обязаны быть
+      // своей организации, иначе через свою техкарту утекали чужие
+      // ингредиенты с закупочными ценами (см. GET) и чужие товары.
+      if (Array.isArray(body?.components)) {
+        const foreignComponent = await findForeignComponent(supabase, scopeOrg, body.components as ComponentInput[])
+        if (foreignComponent) return json({ error: foreignComponent }, 403)
+      }
+      const patchSaleItemId = String(body?.sale_item_id || '').trim() || null
+      if (patchSaleItemId && (await isForeignSaleItem(supabase, scopeOrg, patchSaleItemId))) {
+        return json({ error: 'sale-item-forbidden' }, 403)
+      }
     }
 
     let upd = supabase

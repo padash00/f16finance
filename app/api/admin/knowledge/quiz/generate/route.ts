@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { logAiUsageSafe } from '@/lib/ai/usage-tracker'
 import { writeAuditLog } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
+import { ensureOrganizationStaffAccess } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -55,6 +56,23 @@ export async function POST(request: Request) {
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
 
+    const orgId = access.activeOrganization?.id || null
+    // NEVER-паттерн: без организации фильтр по статьям ниже не навешивался —
+    // в модель уходили регламенты всех клиентов сразу.
+    if (!orgId && !access.isSuperAdmin) return json({ error: 'no-organization' }, 400)
+
+    // staff_id приходит из запроса: без проверки можно было завести тест на
+    // сотрудника чужой организации и подтянуть его в свои результаты.
+    try {
+      await ensureOrganizationStaffAccess({
+        activeOrganizationId: orgId,
+        isSuperAdmin: access.isSuperAdmin,
+        staffId: String(body.staff_id),
+      })
+    } catch {
+      return json({ error: 'staff-not-found' }, 404)
+    }
+
     const { data: staff } = await supabase
       .from('staff')
       .select('id, full_name')
@@ -62,8 +80,6 @@ export async function POST(request: Request) {
       .maybeSingle()
 
     if (!staff) return json({ error: 'staff-not-found' }, 404)
-
-    const orgId = access.activeOrganization?.id || null
 
     let articleQuery = supabase
       .from('knowledge_articles')

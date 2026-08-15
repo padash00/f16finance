@@ -5,7 +5,7 @@
 
 import type { CopilotTool } from '../../types'
 import { writeAuditLog } from '@/lib/server/audit'
-import { scopedCompanyIds } from '../../query-helpers'
+import { scopedCompanyIds, isOrgRowAllowed } from '../../query-helpers'
 
 export const recountBalanceTool: CopilotTool = {
   name: 'recount_balance',
@@ -67,6 +67,12 @@ export const recountBalanceTool: CopilotTool = {
       }
     }
 
+    // Товар тоже per-org: иначе пересчёт создаёт остаток по чужому товару,
+    // и его название/цена становятся видны в отчётах по своим локациям.
+    if (!(await isOrgRowAllowed(ctx, 'inventory_items', itemId))) {
+      return { ok: false, message: 'Товар не найден.' }
+    }
+
     const { data: existing } = await ctx.supabase
       .from('inventory_balances')
       .select('id, quantity')
@@ -88,6 +94,9 @@ export const recountBalanceTool: CopilotTool = {
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
+        // Тегируем событие организацией: иначе запись уходит в «общий» пул
+        // audit_log и её читают копилоты других клиентов.
+        organizationId: ctx.organizationId || null,
         entityType: 'inventory-balance',
         entityId: existing?.id || 'new',
         action: 'recount',

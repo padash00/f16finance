@@ -120,8 +120,21 @@ export async function GET(req: Request) {
         })
       : null
 
-    const staffQuery = supabase.from('staff').select('id, full_name, created_at, dismissed_at, monthly_salary')
-    if (scopedStaffIds) staffQuery.in('id', scopedStaffIds)
+    let staffQuery: any = supabase.from('staff').select('id, full_name, created_at, dismissed_at, monthly_salary')
+    // Результат .in() нужно переприсваивать: раньше фильтр держался только на
+    // мутабельности билдера — любая перестановка вызовов молча снимала бы скоуп.
+    if (scopedStaffIds) staffQuery = staffQuery.in('id', scopedStaffIds)
+
+    // Справочник категорий — только своей орг: чужая одноимённая категория
+    // перетирала accounting_group и искажала группировку расходов в отчёте.
+    const orgFilterId = access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000'
+    let categoriesQuery: any = supabase.from('expense_categories').select('name, accounting_group')
+    if (!access.isSuperAdmin) categoriesQuery = categoriesQuery.eq('organization_id', orgFilterId)
+    else if (access.activeOrganization?.id) categoriesQuery = categoriesQuery.eq('organization_id', access.activeOrganization.id)
+
+    // Ставки ЗП тянулись по всем организациям — ограничиваем своими сотрудниками.
+    let staffPeriodsQuery: any = supabase.from('staff_salary_periods').select('staff_id, effective_from, monthly_salary')
+    if (scopedStaffIds) staffPeriodsQuery = staffPeriodsQuery.in('staff_id', scopedStaffIds)
 
     // PostgREST режет ответ до 1000 строк — периодные incomes/expenses забираем
     // постранично, иначе оборот и расходы точки занижаются на длинных периодах.
@@ -160,12 +173,18 @@ export async function GET(req: Request) {
           .order('date', { ascending: true }).order('id', { ascending: true })
           .range(from, to),
       ),
-      supabase.from('expense_categories').select('name, accounting_group'),
+      categoriesQuery,
       staffQuery,
-      supabase.from('staff_salary_periods').select('staff_id, effective_from, monthly_salary'),
+      staffPeriodsQuery,
+      // Корректировки ЗП выбирались ТОЛЬКО по датам — в расчёт попадали строки
+      // чужих организаций. companyId уже проверен через resolveCompanyScope
+      // (значение из allowedCompanyIds, поэтому безопасно для .or()).
+      // company_id IS NULL оставляем: это «неразнесённые» премии/штрафы оператора,
+      // они и раньше учитывались; отсечь их — молча изменить суммы ЗП.
       supabase
         .from('operator_salary_adjustments')
         .select('operator_id,amount,kind,company_id,status,date')
+        .or(`company_id.eq.${companyId},company_id.is.null`)
         .gte('date', fromDate)
         .lte('date', toDate),
       listSalaryReferenceData(supabase, { companyIds: [companyId] }),

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { sanitizeOrFilterValue } from '@/lib/server/postgrest-filter'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
-import { resolveStation, generateToken, sha256 } from '../../_lib/auth'
+import { resolveStation, resolveStationOrganizationId, generateToken, sha256 } from '../../_lib/auth'
 
 export async function POST(req: NextRequest) {
   if (!hasAdminSupabaseCredentials()) {
@@ -46,12 +46,12 @@ export async function POST(req: NextRequest) {
     .eq('is_active', true)
     .or(`phone.eq.${sanitizeOrFilterValue(username)},card_number.eq.${sanitizeOrFilterValue(username)}`)
     .limit(1)
-  // Изоляция: клиент только организации станции (null-company = сетевой своей орг)
-  if ((station as any).company_id) {
-    const { data: stCo } = await admin.from('companies').select('organization_id').eq('id', (station as any).company_id).maybeSingle()
-    const stOrg = (stCo as any)?.organization_id || null
-    customersQuery = customersQuery.eq('organization_id', stOrg || '00000000-0000-0000-0000-000000000000')
-  }
+  // Изоляция: клиент только организации станции. Фильтр применяется ВСЕГДА —
+  // раньше он вешался только при заполненном station.company_id (колонка
+  // nullable), и на такой станции логин по телефону искал клиента по всем
+  // арендаторам сразу.
+  const stationOrgId = await resolveStationOrganizationId(admin, station as any)
+  customersQuery = customersQuery.eq('organization_id', stationOrgId)
   const { data: customers, error: searchErr } = await customersQuery
 
   if (searchErr) {

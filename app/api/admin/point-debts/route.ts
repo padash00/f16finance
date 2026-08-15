@@ -235,10 +235,13 @@ export async function GET(req: Request) {
       .filter(Boolean)
     const originMap = new Map<string, any>()
     if (rolloverOriginIds.length > 0) {
+      // Цепочка переносов может увести в долг чужой точки: сумма и неделя
+      // оригинала попадали в ответ (rolled_over_chain). Режем по своим точкам.
       const { data: origins } = await supabase
         .from('debts')
         .select('id, week_start, amount, rolled_over_from_id')
         .in('id', rolloverOriginIds)
+        .in('company_id', companyIds)
       for (const o of (origins || []) as any[]) {
         originMap.set(String(o.id), o)
       }
@@ -338,6 +341,10 @@ export async function POST(req: Request) {
     if ('response' in access) return access.response
     const addonDenied = await requireAddon(access, 'addon.salary')
     if (addonDenied) return addonDenied
+    // Право спрашивалось только на чтение (GET), а погашение долгов — действие
+    // с деньгами: его мог выполнить любой staff, у кого открыта страница зарплат.
+    const capDenied = await requireCapability(access, 'point-debts.mark_paid')
+    if (capDenied) return capDenied
 
     const allowedCompanyIds = await listOrganizationCompanyIds({
       activeOrganizationId: access.activeOrganization?.id || null,
@@ -364,10 +371,13 @@ export async function POST(req: Request) {
     }
 
     const supabase = createAdminSupabaseClient()
+    // Фильтр по точкам ставим в сам запрос, а не только в цикле ниже: иначе
+    // ответ различал «нет такой позиции» и «чужая позиция», работая оракулом.
     const { data: rows, error: fetchError } = await supabase
       .from('point_debt_items')
       .select('id, company_id, operator_id, client_name, week_start, total_amount, item_name, status')
       .in('id', itemIds)
+      .in('company_id', allowedCompanyIds)
 
     if (fetchError) throw fetchError
 

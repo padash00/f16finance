@@ -43,6 +43,18 @@ async function fetchAllPages<T = any>(buildQuery: (from: number, to: number) => 
   return out
 }
 
+/**
+ * Точка (company_id) обязана принадлежать организации вызывающего.
+ * ПОЧЕМУ отдельный хелпер: раньше проверка писалась как
+ * `allowedCompanyIds?.length && !includes(id)` — при пустом массиве (пользователь
+ * без организации) `.length === 0` даёт falsy, условие пропускалось и чужая точка
+ * проходила. Здесь null (суперадмин без орг) = «не фильтровать», [] = «ничего нельзя».
+ */
+function isCompanyAllowed(allowedCompanyIds: string[] | null, companyId: string) {
+  if (allowedCompanyIds === null) return true
+  return allowedCompanyIds.includes(companyId)
+}
+
 async function ensureCompanyLocation(
   supabase: any,
   companyId: string,
@@ -100,13 +112,19 @@ export async function GET(request: Request) {
       isSuperAdmin: access.isSuperAdmin,
     })
 
-    // Только точки с включённым магазином (активная локация point_display)
-    const { data: enabledLocs, error: enabledErr } = await supabase
+    // Только точки с включённым магазином (активная локация point_display).
+    // Изоляция: без фильтра сюда попадали точки чужих организаций и чужой company_id
+    // проходил проверку store-not-enabled ниже.
+    let enabledLocsQuery = supabase
       .from('inventory_locations')
       .select('company_id')
       .eq('location_type', 'point_display')
       .eq('is_active', true)
       .not('company_id', 'is', null)
+    if (companyScope.allowedCompanyIds) {
+      enabledLocsQuery = enabledLocsQuery.in('company_id', companyScope.allowedCompanyIds)
+    }
+    const { data: enabledLocs, error: enabledErr } = await enabledLocsQuery
     if (enabledErr) throw enabledErr
     const storeEnabledCompanyIds = [...new Set((enabledLocs || []).map((r: any) => String(r.company_id)))]
 
@@ -155,8 +173,9 @@ export async function GET(request: Request) {
       return json({ error: 'store-not-enabled-for-company' }, 400)
     }
 
-    if (!access.isSuperAdmin && companyScope.allowedCompanyIds?.length) {
-      if (!companyScope.allowedCompanyIds.includes(companyId)) return json({ error: 'forbidden' }, 403)
+    // Точка из query обязана быть в организации вызывающего.
+    if (!isCompanyAllowed(companyScope.allowedCompanyIds, companyId)) {
+      return json({ error: 'forbidden' }, 403)
     }
 
     const [warehouseLoc, showcaseLoc] = await Promise.all([
@@ -274,8 +293,9 @@ export async function POST(request: Request) {
       const companyId = String(body.company_id || '').trim()
       if (!companyId) return json({ error: 'company-id-required' }, 400)
 
-      if (!access.isSuperAdmin && companyScope.allowedCompanyIds?.length) {
-        if (!companyScope.allowedCompanyIds.includes(companyId)) return json({ error: 'forbidden' }, 403)
+      // Точка обязана быть в организации вызывающего (см. isCompanyAllowed).
+      if (!isCompanyAllowed(companyScope.allowedCompanyIds, companyId)) {
+        return json({ error: 'forbidden' }, 403)
       }
 
       const itemId = String(body.item_id || '').trim()
@@ -334,8 +354,9 @@ export async function POST(request: Request) {
       const companyId = String(body.company_id || '').trim()
       if (!companyId) return json({ error: 'company-id-required' }, 400)
 
-      if (!access.isSuperAdmin && companyScope.allowedCompanyIds?.length) {
-        if (!companyScope.allowedCompanyIds.includes(companyId)) return json({ error: 'forbidden' }, 403)
+      // Точка обязана быть в организации вызывающего (см. isCompanyAllowed).
+      if (!isCompanyAllowed(companyScope.allowedCompanyIds, companyId)) {
+        return json({ error: 'forbidden' }, 403)
       }
 
       const items: Array<{ item_id: string; requested_qty: number; comment?: string | null }> =
@@ -428,8 +449,9 @@ export async function POST(request: Request) {
       const companyId = String(body.company_id || '').trim()
       if (!companyId) return json({ error: 'company-id-required' }, 400)
 
-      if (!access.isSuperAdmin && companyScope.allowedCompanyIds?.length) {
-        if (!companyScope.allowedCompanyIds.includes(companyId)) return json({ error: 'forbidden' }, 403)
+      // Точка обязана быть в организации вызывающего (см. isCompanyAllowed).
+      if (!isCompanyAllowed(companyScope.allowedCompanyIds, companyId)) {
+        return json({ error: 'forbidden' }, 403)
       }
 
       type ReturnItem = { item_id: string; quantity: number }

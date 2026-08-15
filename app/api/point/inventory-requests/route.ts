@@ -325,7 +325,15 @@ export async function POST(request: Request) {
       for (const b of balRows || []) balMap.set(String((b as any).item_id), Number((b as any).quantity || 0))
       const over = items.find((i) => i.requested_qty > (balMap.get(i.item_id) || 0) + 0.0005)
       if (over) {
-        const { data: itemRow } = await supabase.from('inventory_items').select('name').eq('id', over.item_id).maybeSingle()
+        // item_id из тела запроса: скоупим по организации точки, иначе текст
+        // ошибки превращался в оракул «id → название» по чужому каталогу.
+        const orgId = await resolveCompanyOrganizationId(supabase, device.company_id)
+        const { data: itemRow } = await supabase
+          .from('inventory_items')
+          .select('name')
+          .eq('id', over.item_id)
+          .or(`organization_id.eq.${orgId},organization_id.is.null`)
+          .maybeSingle()
         const available = balMap.get(over.item_id) || 0
         return json(
           { error: `Недостаточно на складе: «${(itemRow as any)?.name || 'товар'}» — доступно ${available}, запрошено ${over.requested_qty}` },

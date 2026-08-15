@@ -147,10 +147,26 @@ async function requirePointOperator(request: Request) {
     return { response: NextResponse.json({ error: 'operator-inactive' }, { status: 403 }) }
   }
 
+  // Изоляция: оператор из заголовков обязан быть закреплён за компанией этой
+  // точки — иначе с любым девайс-токеном можно было читать и комментировать
+  // задачи оператора другого арендатора.
+  const { data: assignments } = await supabase
+    .from('operator_company_assignments')
+    .select('company_id')
+    .eq('operator_id', operatorId)
+    .eq('is_active', true)
+
+  const operatorCompanyIds = ((assignments || []) as any[]).map((a) => String(a.company_id)).filter(Boolean)
+  const deviceCompanyIds = point.device.company_ids.map((id) => String(id))
+  if (!operatorCompanyIds.some((id) => deviceCompanyIds.includes(id))) {
+    return { response: NextResponse.json({ error: 'operator-not-assigned-to-point' }, { status: 403 }) }
+  }
+
   return {
     ...point,
     operator,
     operatorAuth,
+    operatorCompanyIds,
   }
 }
 

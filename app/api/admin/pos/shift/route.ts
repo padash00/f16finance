@@ -70,6 +70,10 @@ export async function POST(request: Request) {
     if ('response' in access) return access.response
     const addonDenied = await requireAddon(access, 'addon.webpos')
     if (addonDenied) return addonDenied
+    // GET спрашивал право, POST — нет: открыть и закрыть кассовую смену мог
+    // любой staff, которому доступен аддон.
+    const denied = await requireCapability(access, 'pos.view')
+    if (denied) return denied
     if (!access.isSuperAdmin && !access.staffRole) return json({ error: 'forbidden' }, 403)
 
     const body = (await request.json().catch(() => ({}))) as any

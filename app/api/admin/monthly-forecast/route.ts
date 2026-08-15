@@ -84,8 +84,14 @@ export async function GET(req: Request) {
     // Прогноз по каждой точке (когда не выбрана конкретная) — для блока сравнения.
     let byCompany: Array<{ id: string; name: string; income: number; expense: number; profit: number; marginPct: number }> | null = null
     if (!companyId || companyId === 'all') {
-      const { data: comps } = await supabase.from('companies').select('id, name')
-      const nameOf = new Map((comps || []).map((c: any) => [c.id, c.name]))
+      // Справочник названий точек читался по ВСЕМ организациям (в ответ не
+      // утекал, но лишний чужой список из БД тянуть незачем) — скоупим.
+      let compsQuery: any = supabase.from('companies').select('id, name')
+      if (allowed) compsQuery = compsQuery.in('id', allowed)
+      const { data: comps } = await compsQuery
+      const nameOf = new Map<string, string>(
+        ((comps || []) as any[]).map((c: any) => [String(c.id), String(c.name || '')] as [string, string]),
+      )
       const ids = new Set<string>()
       for (const r of incomeRows) if (r.company_id) ids.add(r.company_id)
       byCompany = []

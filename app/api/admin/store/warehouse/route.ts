@@ -42,6 +42,18 @@ async function fetchAllPages<T = any>(buildQuery: (from: number, to: number) => 
   return out
 }
 
+/**
+ * Точка (company_id) обязана принадлежать организации вызывающего.
+ * ПОЧЕМУ отдельный хелпер: раньше проверка писалась как
+ * `allowedCompanyIds?.length && !includes(id)` — при пустом массиве (пользователь
+ * без организации) `.length === 0` даёт falsy, условие пропускалось и чужая точка
+ * проходила. Здесь null (суперадмин без орг) = «не фильтровать», [] = «ничего нельзя».
+ */
+function isCompanyAllowed(allowedCompanyIds: string[] | null, companyId: string) {
+  if (allowedCompanyIds === null) return true
+  return allowedCompanyIds.includes(companyId)
+}
+
 // Чанки по 200 id для .in() — иначе упираемся в лимит длины URL.
 function chunkArray<T>(arr: T[], size: number): T[][] {
   if (size <= 0) return [arr]
@@ -111,13 +123,19 @@ export async function GET(request: Request) {
       isSuperAdmin: access.isSuperAdmin,
     })
 
-    // Только точки с включённым магазином (активная локация point_display)
-    const { data: enabledLocs, error: enabledErr } = await supabase
+    // Только точки с включённым магазином (активная локация point_display).
+    // Изоляция: локации других организаций сюда попадать не должны — иначе чужая
+    // точка проходит проверку store-not-enabled ниже.
+    let enabledLocsQuery = supabase
       .from('inventory_locations')
       .select('company_id')
       .eq('location_type', 'point_display')
       .eq('is_active', true)
       .not('company_id', 'is', null)
+    if (companyScope.allowedCompanyIds) {
+      enabledLocsQuery = enabledLocsQuery.in('company_id', companyScope.allowedCompanyIds)
+    }
+    const { data: enabledLocs, error: enabledErr } = await enabledLocsQuery
     if (enabledErr) throw enabledErr
     const storeEnabledCompanyIds = [...new Set((enabledLocs || []).map((r: any) => String(r.company_id)))]
 
@@ -169,10 +187,9 @@ export async function GET(request: Request) {
       return json({ error: 'store-not-enabled-for-company' }, 400)
     }
 
-    if (!access.isSuperAdmin && companyScope.allowedCompanyIds?.length) {
-      if (!companyScope.allowedCompanyIds.includes(companyId)) {
-        return json({ error: 'forbidden' }, 403)
-      }
+    // Точка из query обязана быть в организации вызывающего (иначе читаем чужие остатки).
+    if (!isCompanyAllowed(companyScope.allowedCompanyIds, companyId)) {
+      return json({ error: 'forbidden' }, 403)
     }
 
     const [warehouse, showcase] = await Promise.all([
@@ -233,10 +250,15 @@ export async function GET(request: Request) {
       .filter((b) => Number(b.warehouse_quantity || 0) > 0 || Number(b.warehouse_reserved || 0) > 0)
       .sort((a, b) => Number(b.warehouse_quantity || 0) - Number(a.warehouse_quantity || 0))
 
-    const { data: categories } = await supabase
-      .from('inventory_categories')
-      .select('id, name')
-      .order('name')
+    // Изоляция: справочник категорий тоже тенантный — без фильтра в выпадашку
+    // склада падали названия категорий чужих организаций. Фильтруем по
+    // organization_id (а не company_id: у старых категорий он может быть NULL).
+    // NEVER-pattern: не-супер без орг → нулевой uuid → пусто.
+    let categoriesQuery = supabase.from('inventory_categories').select('id, name').order('name')
+    const categoryScopeOrg =
+      access.activeOrganization?.id || (access.isSuperAdmin ? null : '00000000-0000-0000-0000-000000000000')
+    if (categoryScopeOrg) categoriesQuery = categoriesQuery.eq('organization_id', categoryScopeOrg)
+    const { data: categories } = await categoriesQuery
 
     return json({
       ok: true,
@@ -281,13 +303,16 @@ export async function POST(request: Request) {
 
       // Изоляция: ищем товар по штрихкоду только в своей орг (иначе по общему barcode
       // утекают имя/цены товара чужой орг).
+      // NEVER-pattern: не-супер без активной орг → нулевой uuid → ничего не найдёт.
+      // Раньше при пустой орг фильтр просто не навешивался и штрихкод искался по всей базе.
       let lookupQ = supabase
         .from('inventory_items')
         .select('id, name, barcode, unit, sale_price, default_purchase_price, category_id, category:category_id(id, name)')
         .eq('barcode', barcode)
         .eq('is_active', true)
-      const lookupOrgId = access.activeOrganization?.id || null
-      if (!access.isSuperAdmin && lookupOrgId) lookupQ = lookupQ.eq('organization_id', lookupOrgId)
+      const lookupOrgId =
+        access.activeOrganization?.id || (access.isSuperAdmin ? null : '00000000-0000-0000-0000-000000000000')
+      if (lookupOrgId) lookupQ = lookupQ.eq('organization_id', lookupOrgId)
       const { data: item } = await lookupQ.maybeSingle()
 
       return json({ ok: true, data: { item: item || null } })
@@ -305,7 +330,8 @@ export async function POST(request: Request) {
       // Каталог по точке: товар создаётся в выбранной точке-магазине.
       const createCompanyId = String(body.company_id || '').trim()
       if (!createCompanyId) return json({ error: 'company-id-required', message: 'Выберите точку-магазин' }, 400)
-      if (!access.isSuperAdmin && companyScope.allowedCompanyIds?.length && !companyScope.allowedCompanyIds.includes(createCompanyId)) {
+      // Точка обязана быть в организации вызывающего — иначе товар создавался в чужой точке.
+      if (!isCompanyAllowed(companyScope.allowedCompanyIds, createCompanyId)) {
         return json({ error: 'forbidden' }, 403)
       }
 
@@ -339,8 +365,9 @@ export async function POST(request: Request) {
       const companyId = String(body.company_id || '').trim()
       if (!companyId) return json({ error: 'company-id-required' }, 400)
 
-      if (!access.isSuperAdmin && companyScope.allowedCompanyIds?.length) {
-        if (!companyScope.allowedCompanyIds.includes(companyId)) return json({ error: 'forbidden' }, 403)
+      // Точка обязана быть в организации вызывающего (см. isCompanyAllowed).
+      if (!isCompanyAllowed(companyScope.allowedCompanyIds, companyId)) {
+        return json({ error: 'forbidden' }, 403)
       }
 
       type RawItem = { item_id?: string; barcode?: string; name?: string; unit?: string; quantity: number; unit_cost: number }
@@ -511,8 +538,9 @@ export async function POST(request: Request) {
       const companyId = String(body.company_id || '').trim()
       if (!companyId) return json({ error: 'company-id-required' }, 400)
 
-      if (!access.isSuperAdmin && companyScope.allowedCompanyIds?.length) {
-        if (!companyScope.allowedCompanyIds.includes(companyId)) return json({ error: 'forbidden' }, 403)
+      // Точка обязана быть в организации вызывающего (см. isCompanyAllowed).
+      if (!isCompanyAllowed(companyScope.allowedCompanyIds, companyId)) {
+        return json({ error: 'forbidden' }, 403)
       }
 
       const itemId = String(body.item_id || '').trim()
@@ -577,8 +605,9 @@ export async function POST(request: Request) {
       const companyId = String(body.company_id || '').trim()
       if (!companyId) return json({ error: 'company-id-required' }, 400)
 
-      if (!access.isSuperAdmin && companyScope.allowedCompanyIds?.length) {
-        if (!companyScope.allowedCompanyIds.includes(companyId)) return json({ error: 'forbidden' }, 403)
+      // Точка обязана быть в организации вызывающего (см. isCompanyAllowed).
+      if (!isCompanyAllowed(companyScope.allowedCompanyIds, companyId)) {
+        return json({ error: 'forbidden' }, 403)
       }
 
       type InRow = { barcode: string; quantity: number; name?: string }
@@ -697,8 +726,9 @@ export async function POST(request: Request) {
       const companyId = String(body.company_id || '').trim()
       if (!companyId) return json({ error: 'company-id-required' }, 400)
 
-      if (!access.isSuperAdmin && companyScope.allowedCompanyIds?.length) {
-        if (!companyScope.allowedCompanyIds.includes(companyId)) return json({ error: 'forbidden' }, 403)
+      // Точка обязана быть в организации вызывающего (см. isCompanyAllowed).
+      if (!isCompanyAllowed(companyScope.allowedCompanyIds, companyId)) {
+        return json({ error: 'forbidden' }, 403)
       }
 
       type InRow = { item_id: string; new_warehouse: number }
@@ -785,8 +815,9 @@ export async function POST(request: Request) {
       const companyId = String(body.company_id || '').trim()
       if (!companyId) return json({ error: 'company-id-required' }, 400)
 
-      if (!access.isSuperAdmin && companyScope.allowedCompanyIds?.length) {
-        if (!companyScope.allowedCompanyIds.includes(companyId)) return json({ error: 'forbidden' }, 403)
+      // Точка обязана быть в организации вызывающего (см. isCompanyAllowed).
+      if (!isCompanyAllowed(companyScope.allowedCompanyIds, companyId)) {
+        return json({ error: 'forbidden' }, 403)
       }
 
       const itemIds: string[] = (body.item_ids || [])

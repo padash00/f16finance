@@ -4,6 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
+import { companyOptions, isCompanyAllowed } from '../../query-helpers'
 import { writeAuditLog } from '@/lib/server/audit'
 
 function todayISO(): string {
@@ -58,6 +59,17 @@ export const createPromoTool: CopilotTool = {
       required: false,
       description: 'Если не указано — без срока',
     },
+    {
+      // У discounts нет organization_id — принадлежность определяется только
+      // точкой. Скидка без company_id глобальная и сработала бы у других
+      // клиентов SaaS, поэтому точка обязательна.
+      name: 'company_id',
+      label: 'Точка',
+      type: 'select',
+      required: true,
+      description: 'На какой точке действует промокод',
+      getOptions: async (ctx) => companyOptions(ctx),
+    },
   ],
   handler: async (input, ctx) => {
     const codeInput = String(input.code || '').trim().toUpperCase()
@@ -67,6 +79,10 @@ export const createPromoTool: CopilotTool = {
     const validUntil = String(input.valid_until || '').trim() || null
     if (value <= 0) return { ok: false, message: 'Размер скидки должен быть > 0.' }
     if (type === 'percent' && value > 100) return { ok: false, message: 'Процент не может быть больше 100.' }
+
+    const companyId = String(input.company_id || '').trim()
+    if (!companyId) return { ok: false, message: 'Не выбрана точка.' }
+    if (!(await isCompanyAllowed(ctx, companyId))) return { ok: false, message: 'Точка не найдена.' }
 
     const { data, error } = await ctx.supabase
       .from('discounts')
@@ -78,6 +94,7 @@ export const createPromoTool: CopilotTool = {
         valid_from: todayISO(),
         valid_to: validUntil,
         is_active: true,
+        company_id: companyId,
       }])
       .select('id, promo_code')
       .single()
@@ -86,6 +103,9 @@ export const createPromoTool: CopilotTool = {
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
+        // Тегируем событие организацией: иначе запись уходит в «общий» пул
+        // audit_log и её читают копилоты других клиентов.
+        organizationId: ctx.organizationId || null,
         entityType: 'discount',
         entityId: data?.id || 'unknown',
         action: 'create',

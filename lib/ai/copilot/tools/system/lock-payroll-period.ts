@@ -21,9 +21,22 @@ export const lockPayrollPeriodTool: CopilotTool = {
     const end = String(input.period_end || '')
     if (!start || !end) return { ok: false, message: 'Не хватает данных.' }
 
+    // Уникальность периода в БД — по (organization_id, period_start, period_end).
+    // Без organization_id блокировка ложится на «общую» строку: один клиент
+    // закрывал бы период другим и ловил чужие конфликты уникальности.
+    if (!ctx.organizationId && !ctx.isSuperAdmin) {
+      return { ok: false, message: 'Нет активной организации — период закрыть нельзя.' }
+    }
+
     const { data, error } = await ctx.supabase
       .from('payroll_periods')
-      .insert([{ period_start: start, period_end: end, locked_at: new Date().toISOString(), locked_by: ctx.userId }])
+      .insert([{
+        organization_id: ctx.organizationId || null,
+        period_start: start,
+        period_end: end,
+        locked_at: new Date().toISOString(),
+        locked_by: ctx.userId,
+      }])
       .select('id')
       .single()
     if (error) return { ok: false, message: `Не удалось: ${error.message}` }
@@ -31,6 +44,9 @@ export const lockPayrollPeriodTool: CopilotTool = {
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
+        // Тегируем событие организацией: иначе запись уходит в «общий» пул
+        // audit_log и её читают копилоты других клиентов.
+        organizationId: ctx.organizationId || null,
         entityType: 'payroll-period',
         entityId: data?.id || 'unknown',
         action: 'lock',

@@ -62,6 +62,9 @@ export const addKaspiRecordTool: CopilotTool = {
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
+        // Тегируем событие организацией: иначе запись уходит в «общий» пул
+        // audit_log и её читают копилоты других клиентов.
+        organizationId: ctx.organizationId || null,
         entityType: 'kaspi-terminal',
         entityId: data?.id || 'unknown',
         action: 'create',

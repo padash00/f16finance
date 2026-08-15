@@ -20,7 +20,11 @@ export const closeGoalTool: CopilotTool = {
       required: true,
       description: 'Какую закрываем',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase.from('goals').select('id, title, period_end').eq('status', 'active').order('period_end')
+        // Выпадашка тоже утечка: без фильтра в кнопках показывались цели
+        // других организаций.
+        let optQ = ctx.supabase.from('goals').select('id, title, period_end').eq('status', 'active').order('period_end')
+        if (ctx.organizationId) optQ = optQ.eq('organization_id', ctx.organizationId)
+        const { data } = await optQ
         return (data || []).map((g: any) => ({ value: g.id, label: `${g.title} (до ${g.period_end})` }))
       },
     },
@@ -56,6 +60,9 @@ export const closeGoalTool: CopilotTool = {
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
+        // Тегируем событие организацией: иначе запись уходит в «общий» пул
+        // audit_log и её читают копилоты других клиентов.
+        organizationId: ctx.organizationId || null,
         entityType: 'goal',
         entityId: goalId,
         action: 'close',

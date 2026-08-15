@@ -31,11 +31,14 @@ export const getOverdueDebtsTool: CopilotTool = {
       .eq('status', 'active')
       .order('created_at', { ascending: false })
       .limit(30)
+    // Скоуп нужен и когда точка указана: сам по себе `.eq('company_id', ...)`
+    // с чужим id вернул бы долги клиентов другой организации.
+    const ids = await scopedCompanyIds(ctx)
     if (companyId) {
+      if (ids && !ids.includes(companyId)) return { ok: false, message: 'Точка не найдена.' }
       q = q.eq('company_id', companyId)
-    } else {
-      const ids = await scopedCompanyIds(ctx)
-      if (ids) q = q.in('company_id', ids)
+    } else if (ids) {
+      q = q.in('company_id', ids)
     }
 
     const { data, error } = await q

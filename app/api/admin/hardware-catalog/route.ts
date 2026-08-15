@@ -22,6 +22,9 @@ export async function GET(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+    // Справочник глобальный (межтенантной утечки нет), но роут был открыт любому
+    // залогиненному, включая клиента гостевого контура.
+    if (!access.isSuperAdmin && !access.staffMember) return json({ error: 'forbidden' }, 403)
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const url = new URL(request.url)

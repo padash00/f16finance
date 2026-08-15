@@ -70,6 +70,10 @@ export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    // Гейта на роль не было вовсе: выдача содержит ФИО, телефоны и почту всей
+    // команды тенанта, а сюда проходил любой аутентифицированный субъект той же
+    // организации — оператор и клиент гостевого контура в том числе.
+    if (!access.isSuperAdmin && !access.staffMember) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
 
     const supabase = getSupabase(req)
 

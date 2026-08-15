@@ -126,7 +126,15 @@ function canViewProfitability(access: {
   return access.isSuperAdmin || !!access.staffRole
 }
 
-function collectKaspiDailySplitCompanyIds(deviceRows: any[] | null | undefined, projectRows: any[] | null | undefined) {
+function collectKaspiDailySplitCompanyIds(
+  deviceRows: any[] | null | undefined,
+  projectRows: any[] | null | undefined,
+  // Изоляция: point_projects читаются без фильтра по организации (у проекта нет
+  // company_id), поэтому company_id чужих точек попадали в ответ клиенту как
+  // splitCompanyIds. Отсекаем всё, что вне скоупа (null = супер-админ, без фильтра).
+  allowedCompanyIds?: string[] | null,
+) {
+  const allowed = allowedCompanyIds ? new Set(allowedCompanyIds.map((id) => String(id))) : null
   const splitCompanyIds = new Set<string>()
   for (const row of deviceRows || []) {
     if (row?.company_id && row?.feature_flags?.kaspi_daily_split === true) {
@@ -145,6 +153,11 @@ function collectKaspiDailySplitCompanyIds(deviceRows: any[] | null | undefined, 
         !Array.isArray(flags) &&
         (flags as Record<string, unknown>).kaspi_daily_split === true
       if (on && link?.company_id) splitCompanyIds.add(String(link.company_id))
+    }
+  }
+  if (allowed) {
+    for (const id of Array.from(splitCompanyIds)) {
+      if (!allowed.has(id)) splitCompanyIds.delete(id)
     }
   }
   return splitCompanyIds
@@ -229,7 +242,11 @@ export async function GET(req: Request) {
     if (devicesError) throw devicesError
     if (projectsError) throw projectsError
 
-    const splitCompanyIds = collectKaspiDailySplitCompanyIds(deviceRows as any[], projectRows as any[])
+    const splitCompanyIds = collectKaspiDailySplitCompanyIds(
+      deviceRows as any[],
+      projectRows as any[],
+      scope.allowedCompanyIds,
+    )
 
     const splitRows = ((incomeRows || []) as any[])
       .filter((row) => splitCompanyIds.has(String(row.company_id || '')))

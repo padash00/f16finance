@@ -85,6 +85,19 @@ export async function POST(request: Request) {
     )
   }
 
+  // handover_from_shift_id из тела — только смена своей компании, иначе
+  // передача кассы привязывалась к смене другого арендатора.
+  const handoverFrom = String(body.handover_from_shift_id || '').trim() || null
+  if (handoverFrom) {
+    const { data: prevShift } = await supabase
+      .from('point_shifts')
+      .select('id')
+      .eq('id', handoverFrom)
+      .eq('company_id', companyId)
+      .maybeSingle()
+    if (!prevShift) return json({ error: 'point-shift-handover-not-found' }, 404)
+  }
+
   const { data, error } = await supabase.rpc('point_shift_open', {
     p_company_id: companyId,
     p_operator_id: staffId,   // RPC принимает staff.id, не operators.id
@@ -92,7 +105,7 @@ export async function POST(request: Request) {
     p_shift_type: body.shift_type || 'day',
     p_opening_cash: openingCash,
     p_opening_notes: body.opening_notes || null,
-    p_handover_from: body.handover_from_shift_id || null,
+    p_handover_from: handoverFrom,
   })
 
   if (error) {

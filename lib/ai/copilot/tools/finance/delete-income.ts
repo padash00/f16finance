@@ -21,9 +21,13 @@ export const deleteIncomeTool: CopilotTool = {
       required: true,
       description: 'ID последних записей выручки',
       getOptions: async (ctx) => {
-        const { data, error } = await ctx.supabase
+        // Без скоупа в кнопках была видна выручка других организаций.
+        const scope = await scopedCompanyIds(ctx)
+        let optQ = ctx.supabase
           .from('incomes')
           .select('id, date, shift, cash_amount, kaspi_amount, card_amount, online_amount, company_id')
+        if (scope) optQ = optQ.in('company_id', scope)
+        const { data, error } = await optQ
           .order('date', { ascending: false })
           .limit(100)
         if (error) {
@@ -65,6 +69,9 @@ export const deleteIncomeTool: CopilotTool = {
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
+        // Тегируем событие организацией: иначе запись уходит в «общий» пул
+        // audit_log и её читают копилоты других клиентов.
+        organizationId: ctx.organizationId || null,
         entityType: 'income',
         entityId: incomeId,
         action: 'delete',
