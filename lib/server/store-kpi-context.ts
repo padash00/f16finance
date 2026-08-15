@@ -83,6 +83,13 @@ const AUDIENCE_LABELS: Record<string, string> = {
   all: 'все',
 }
 
+/** Смещение даты на N дней. Ночной смене нужен ряд следующих суток. */
+function addDays(day: string, count: number): string {
+  const date = new Date(`${day}T00:00:00Z`)
+  date.setUTCDate(date.getUTCDate() + count)
+  return date.toISOString().slice(0, 10)
+}
+
 /**
  * Погода точки за период.
  *
@@ -107,7 +114,9 @@ export async function loadWeatherSources(
     )
     .eq('company_id', companyId)
     .gte('day', from)
-    .lte('day', to)
+    // На день дальше: ночная смена последнего дня периода заканчивается уже
+    // на следующих сутках, и без их ряда у неё не было бы погоды вовсе.
+    .lte('day', addDays(to, 1))
     .order('captured_on', { ascending: true })
   if (error) throw error
 

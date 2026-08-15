@@ -12,6 +12,9 @@
 
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   CalendarDays,
   Check,
   ChevronDown,
@@ -419,6 +422,104 @@ function ContextChips({ context }: { context: ShiftContext | null }) {
       ) : null}
     </div>
   )
+}
+
+/**
+ * Сортировка таблицы по колонке.
+ *
+ * Нужна для простых вопросов, на которые иначе приходится листать глазами:
+ * «где худшие смены», «кто больше всех отработал». Первый клик по колонке
+ * ставит порядок, который человек и хочет увидеть: у чисел — от большего,
+ * у дат и имён — от меньшего.
+ *
+ * Пустые значения всегда уезжают в конец, в обе стороны. Смена без оценки —
+ * это не «самая слабая», а «неизвестно», и наверху списка ей не место.
+ */
+type SortState<K extends string> = { key: K; dir: 'asc' | 'desc' }
+
+function sortRows<T, K extends string>(
+  rows: T[],
+  sort: SortState<K> | null,
+  pick: (row: T, key: K) => string | number | null | undefined,
+): T[] {
+  if (!sort) return rows
+  const factor = sort.dir === 'asc' ? 1 : -1
+
+  return [...rows].sort((a, b) => {
+    const left = pick(a, sort.key)
+    const right = pick(b, sort.key)
+    const leftEmpty = left == null || left === ''
+    const rightEmpty = right == null || right === ''
+    if (leftEmpty && rightEmpty) return 0
+    if (leftEmpty) return 1
+    if (rightEmpty) return -1
+    if (typeof left === 'number' && typeof right === 'number') return (left - right) * factor
+    return String(left).localeCompare(String(right), 'ru') * factor
+  })
+}
+
+/** Заголовок-кнопка со стрелкой. Стрелка показывает текущий порядок. */
+function SortHeader<K extends string>(props: {
+  label: string
+  sortKey: K
+  sort: SortState<K> | null
+  onSort: (next: SortState<K>) => void
+  align?: 'left' | 'right'
+  /** Порядок при первом клике. Для чисел естественнее «сначала большие». */
+  initial?: 'asc' | 'desc'
+}) {
+  const active = props.sort?.key === props.sortKey
+  const dir = active ? props.sort!.dir : null
+  const align = props.align === 'right' ? 'justify-end text-right' : 'text-left'
+
+  return (
+    <th className={`whitespace-nowrap px-4 py-2 font-medium ${props.align === 'right' ? 'text-right' : 'text-left'}`}>
+      <button
+        type="button"
+        onClick={() =>
+          props.onSort({
+            key: props.sortKey,
+            dir: active ? (dir === 'asc' ? 'desc' : 'asc') : props.initial || 'asc',
+          })
+        }
+        className={`inline-flex w-full items-center gap-1 uppercase tracking-wide transition-colors hover:text-foreground ${align} ${
+          active ? 'text-foreground' : ''
+        }`}
+        title="Отсортировать"
+      >
+        {props.label}
+        {dir === 'asc' ? (
+          <ArrowUp className="h-3 w-3 shrink-0" />
+        ) : dir === 'desc' ? (
+          <ArrowDown className="h-3 w-3 shrink-0" />
+        ) : (
+          <ArrowUpDown className="h-3 w-3 shrink-0 opacity-30" />
+        )}
+      </button>
+    </th>
+  )
+}
+
+type ShiftSortKey = 'date' | 'cashier' | 'revenue' | 'receipts' | 'score' | 'verdict' | 'confidence'
+type CashierSortKey = 'name' | 'shifts' | 'revenue' | 'score' | 'status' | 'confidence'
+
+/**
+ * Порядок вердиктов и статусов при сортировке.
+ *
+ * Не алфавит и не случайность: первым идёт то, с чем нужно разбираться. Клик
+ * по колонке «Вывод» должен поднимать наверх смены, требующие внимания, а не
+ * начинать с буквы «В».
+ */
+const STATUS_ORDER: Record<string, number> = {
+  POSSIBLE_CASHIER_ISSUE: 0,
+  NEEDS_TRAINING: 0,
+  LOW_DEMAND: 1,
+  NORMAL: 2,
+  HIGH_DEMAND: 3,
+  STRONG_CASHIER: 4,
+  STRONG: 4,
+  TOP: 5,
+  INSUFFICIENT_DATA: 9,
 }
 
 // ─── Настройки ──────────────────────────────────────────────────────────────
@@ -909,6 +1010,12 @@ export default function SalesKpiPage() {
   const [to, setTo] = useState(monthBounds(currentMonthKey()).to)
   const [companyId, setCompanyId] = useState<string>('')
   const [openShift, setOpenShift] = useState<string | null>(null)
+  // По умолчанию смены идут по дате: так их и читают, день за днём.
+  const [shiftSort, setShiftSort] = useState<SortState<ShiftSortKey> | null>({
+    key: 'date',
+    dir: 'asc',
+  })
+  const [cashierSort, setCashierSort] = useState<SortState<CashierSortKey> | null>(null)
   const [showSettings, setShowSettings] = useState(false)
   // «Кому доплатить» первой и по умолчанию: это единственная вкладка, ради
   // которой на страницу заходят регулярно.
@@ -924,8 +1031,59 @@ export default function SalesKpiPage() {
   const { data, error, loading, refreshing, refresh } = useApi<{ data: ApiData }>(apiKey)
 
   const payload = data?.data
-  const shifts = payload?.shifts || []
-  const cashiers = payload?.cashiers || []
+  // Через useMemo, потому что `payload?.shifts || []` создаёт новый массив на
+  // каждый рендер и пересортировка запускалась бы без всякой причины.
+  const allShifts = useMemo(() => payload?.shifts || [], [payload])
+  const allCashiers = useMemo(() => payload?.cashiers || [], [payload])
+
+  const shifts = useMemo(
+    () =>
+      sortRows(allShifts, shiftSort, (row, key) => {
+        switch (key) {
+          case 'date':
+            // Дата и смена вместе: иначе ночь могла встать выше дня того же дня.
+            return `${row.date}|${row.shift === 'night' ? 1 : 0}`
+          case 'cashier':
+            return row.cashier_name
+          case 'revenue':
+            return row.revenue
+          case 'receipts':
+            return row.receipts
+          case 'score':
+            return row.score
+          case 'verdict':
+            return STATUS_ORDER[row.verdict] ?? 99
+          case 'confidence':
+            return row.confidence
+          default:
+            return null
+        }
+      }),
+    [allShifts, shiftSort],
+  )
+
+  const cashiers = useMemo(
+    () =>
+      sortRows(allCashiers, cashierSort, (row, key) => {
+        switch (key) {
+          case 'name':
+            return row.name
+          case 'shifts':
+            return row.shifts
+          case 'revenue':
+            return row.revenue
+          case 'score':
+            return row.score
+          case 'status':
+            return STATUS_ORDER[row.status] ?? 99
+          case 'confidence':
+            return row.confidence
+          default:
+            return null
+        }
+      }),
+    [allCashiers, cashierSort],
+  )
   const coverage = payload?.coverage
   const totals = payload?.totals
 
@@ -1204,12 +1362,39 @@ export default function SalesKpiPage() {
               <table className="w-full min-w-[720px] text-sm">
                 <thead className="bg-surface-muted text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
-                    <th className="px-4 py-2 text-left font-medium">Продавец</th>
-                    <th className="px-4 py-2 text-right font-medium">Смен</th>
-                    <th className="px-4 py-2 text-right font-medium">Выручка</th>
-                    <th className="px-4 py-2 text-right font-medium">Как отработал</th>
-                    <th className="px-4 py-2 text-left font-medium">Статус</th>
-                    <th className="px-4 py-2 text-left font-medium">Можно ли доверять</th>
+                    <SortHeader label="Продавец" sortKey="name" sort={cashierSort} onSort={setCashierSort} />
+                    <SortHeader
+                      label="Смен"
+                      sortKey="shifts"
+                      sort={cashierSort}
+                      onSort={setCashierSort}
+                      align="right"
+                      initial="desc"
+                    />
+                    <SortHeader
+                      label="Выручка"
+                      sortKey="revenue"
+                      sort={cashierSort}
+                      onSort={setCashierSort}
+                      align="right"
+                      initial="desc"
+                    />
+                    <SortHeader
+                      label="Как отработал"
+                      sortKey="score"
+                      sort={cashierSort}
+                      onSort={setCashierSort}
+                      align="right"
+                      initial="desc"
+                    />
+                    <SortHeader label="Статус" sortKey="status" sort={cashierSort} onSort={setCashierSort} />
+                    <SortHeader
+                      label="Можно ли доверять"
+                      sortKey="confidence"
+                      sort={cashierSort}
+                      onSort={setCashierSort}
+                      initial="desc"
+                    />
                     <th className="px-4 py-2 text-left font-medium">Сильное / слабое</th>
                   </tr>
                 </thead>
@@ -1293,15 +1478,42 @@ export default function SalesKpiPage() {
               <table className="w-full min-w-[1240px] text-sm">
                 <thead className="bg-surface-muted text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
-                    <th className="whitespace-nowrap px-4 py-2 text-left font-medium">Дата</th>
+                    <SortHeader label="Дата" sortKey="date" sort={shiftSort} onSort={setShiftSort} />
                     <th className="whitespace-nowrap px-4 py-2 text-left font-medium">Смена</th>
-                    <th className="whitespace-nowrap px-4 py-2 text-left font-medium">Продавец</th>
-                    <th className="whitespace-nowrap px-4 py-2 text-right font-medium">Касса</th>
-                    <th className="whitespace-nowrap px-4 py-2 text-right font-medium">Покупателей</th>
-                    <th className="whitespace-nowrap px-4 py-2 text-right font-medium">Как отработал</th>
-                    <th className="whitespace-nowrap px-4 py-2 text-left font-medium">Вывод</th>
+                    <SortHeader label="Продавец" sortKey="cashier" sort={shiftSort} onSort={setShiftSort} />
+                    <SortHeader
+                      label="Касса"
+                      sortKey="revenue"
+                      sort={shiftSort}
+                      onSort={setShiftSort}
+                      align="right"
+                      initial="desc"
+                    />
+                    <SortHeader
+                      label="Покупателей"
+                      sortKey="receipts"
+                      sort={shiftSort}
+                      onSort={setShiftSort}
+                      align="right"
+                      initial="desc"
+                    />
+                    <SortHeader
+                      label="Как отработал"
+                      sortKey="score"
+                      sort={shiftSort}
+                      onSort={setShiftSort}
+                      align="right"
+                      initial="desc"
+                    />
+                    <SortHeader label="Вывод" sortKey="verdict" sort={shiftSort} onSort={setShiftSort} />
                     <th className="whitespace-nowrap px-4 py-2 text-left font-medium">Обстановка</th>
-                    <th className="whitespace-nowrap px-4 py-2 text-left font-medium">Можно ли доверять</th>
+                    <SortHeader
+                      label="Можно ли доверять"
+                      sortKey="confidence"
+                      sort={shiftSort}
+                      onSort={setShiftSort}
+                      initial="desc"
+                    />
                     <th className="w-8" />
                   </tr>
                 </thead>

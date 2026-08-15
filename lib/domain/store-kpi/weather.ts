@@ -143,10 +143,47 @@ const DEFAULT_WINDOWS: Record<ShiftType, { start: number; hours: number }> = {
   night: { start: 21, hours: 12 },
 }
 
-/** Час суток из отметки времени. Отметка локальная — так её пишет касса. */
+/**
+ * Часовой пояс точки.
+ *
+ * Погода из Open-Meteo запрашивается с `timezone=auto`, то есть её часы —
+ * местные. Значит, и час открытия смены нужно брать местный, иначе окна
+ * разъедутся.
+ *
+ * Казахстан живёт в одном поясе UTC+5, поэтому значение зашито. Появятся
+ * точки в другом поясе — сюда придёт настройка, и менять придётся одну строку.
+ */
+const POINT_TIME_ZONE = 'Asia/Almaty'
+
+/**
+ * Час суток из отметки времени, в поясе точки.
+ *
+ * `opened_at` приходит из Postgres как timestamptz и сериализуется в UTC:
+ * смена, открытая в 21:00 по Алматы, выглядит как «...T16:00:00+00:00».
+ * Читать час прямо из строки нельзя — так ночная смена получала окно с 16:00,
+ * то есть погоду середины дня. Ровно ту ошибку, ради устранения которой
+ * почасовой ряд и заводился.
+ */
 function hourOf(stamp: string | null | undefined): number | null {
   if (!stamp) return null
-  const hour = Number(String(stamp).slice(11, 13))
+
+  const text = String(stamp)
+  // Отметка без пояса — она уже местная, тогда парсить нечего.
+  const hasZone = /[Zz]$|[+-]\d{2}:?\d{2}$/.test(text)
+  if (!hasZone) {
+    const plain = Number(text.slice(11, 13))
+    return Number.isFinite(plain) && plain >= 0 && plain <= 23 ? plain : null
+  }
+
+  const date = new Date(text)
+  if (Number.isNaN(date.getTime())) return null
+
+  const formatted = new Intl.DateTimeFormat('en-GB', {
+    timeZone: POINT_TIME_ZONE,
+    hour: '2-digit',
+    hourCycle: 'h23',
+  }).format(date)
+  const hour = Number(formatted)
   return Number.isFinite(hour) && hour >= 0 && hour <= 23 ? hour : null
 }
 

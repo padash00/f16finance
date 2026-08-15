@@ -154,3 +154,60 @@ test('снег не считается дождём', () => {
   assert.equal(observation?.rain, false, 'мокрый снег не должен уезжать в корзину дождя')
   assert.equal(weatherBucket(observation), 'snow')
 })
+
+// ─── Часовой пояс ───────────────────────────────────────────────────────────
+
+test('час открытия берётся местный, а не UTC', () => {
+  // Postgres отдаёт timestamptz в UTC: смена, открытая в 21:00 по Алматы,
+  // выглядит как 16:00Z. Читая час из строки, ночная смена получала окно с
+  // 16:00 — то есть погоду середины дня.
+  const window = shiftWindow({
+    shift: 'night',
+    opened_at: '2026-08-02T16:00:00+00:00',
+    closed_at: null,
+    duration_minutes: 720,
+  })
+
+  assert.equal(window.start, 21, 'UTC 16:00 — это 21:00 в Казахстане')
+  assert.equal(window.hours, 12)
+})
+
+test('отметка без пояса считается уже местной', () => {
+  const window = shiftWindow({
+    shift: 'day',
+    opened_at: '2026-08-02T09:00:00',
+    closed_at: null,
+    duration_minutes: 600,
+  })
+
+  assert.equal(window.start, 9)
+})
+
+test('ночная смена берёт погоду ночи, а не прошедшего дня', () => {
+  const hot: HourlySeries = {
+    t: Array.from({ length: 24 }, (_, h) => (h >= 10 && h <= 19 ? 34 : 17)),
+    a: Array<number | null>(24).fill(20),
+    p: Array<number | null>(24).fill(0),
+    s: Array<number | null>(24).fill(0),
+    w: Array<number | null>(24).fill(5),
+    c: Array<number | null>(24).fill(0),
+  }
+  const next: HourlySeries = { ...hot, t: Array<number | null>(24).fill(16) }
+
+  const observation = observationForWindow(
+    '2026-08-02',
+    shiftWindow({
+      shift: 'night',
+      opened_at: '2026-08-02T16:00:00+00:00',
+      closed_at: null,
+      duration_minutes: 720,
+    }),
+    new Map([
+      ['2026-08-02', hot],
+      ['2026-08-03', next],
+    ]),
+  )
+
+  assert.equal(weatherBucket(observation), 'normal', 'дневная жара к ночной смене отношения не имеет')
+  assert.ok((observation?.temperature_max ?? 0) < 30)
+})
