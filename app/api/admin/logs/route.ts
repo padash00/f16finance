@@ -1042,18 +1042,21 @@ export async function GET(req: Request) {
     // Мультитенантная изоляция (NEVER-pattern): супер видит все арендаторы
     // (scopeOrgId=null → без фильтра), не-супер — только свою орг; не-супер без
     // активной орг → нулевой uuid → 0 строк (fail-closed).
-    const scopeOrgId = access.isSuperAdmin
-      ? null
-      : (access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+    // Активная организация уважается и для супера: зайдя на поддомен клиента, он
+    // смотрит журнал этого клиента, а не всё сразу. «Всё» — только без орг.
+    const scopeOrgId = access.activeOrganization?.id
+      || (access.isSuperAdmin ? null : '00000000-0000-0000-0000-000000000000')
 
-    // audit_log имеет organization_id (см. 20260611_audit_log_org.sql). Legacy-строки
-    // без орг видны своей орг — как в store/audit-timeline (повторяем тот же паттерн).
+    // audit_log имеет organization_id (см. 20260611_audit_log_org.sql). Фильтр
+    // строгий: строки без организации раньше показывались КАЖДОМУ арендатору,
+    // а это чужая история. Легаси-строки привязывает миграция
+    // 20260815_backfill_organization_ids (по точке из payload и по автору).
     let auditQuery = supabase
       .from('audit_log')
       .select('*')
       .order('created_at', { ascending: false })
       .limit(300)
-    if (scopeOrgId) auditQuery = auditQuery.or(`organization_id.is.null,organization_id.eq.${scopeOrgId}`)
+    if (scopeOrgId) auditQuery = auditQuery.eq('organization_id', scopeOrgId)
 
     // notification_log и ai_usage_log НЕ имеют колонки организации — их нельзя
     // отфильтровать по арендатору. Для не-супера отдаём пусто (fail-closed), чтобы

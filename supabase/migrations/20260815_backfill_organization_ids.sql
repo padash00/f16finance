@@ -53,6 +53,30 @@ begin
   raise notice 'Шаг 1 завершён, всего строк: %', total;
 end $$;
 
+-- ── Шаг 1б: журнал действий — организация по автору события ────────────────
+-- У audit_log нет company_id: организация выводилась из payload, а у событий без
+-- точки (вход, просмотр страницы, работа с ИИ) её взять неоткуда. Берём по
+-- автору — но только если он состоит ровно в одной организации, иначе угадывать
+-- нельзя.
+do $$
+declare
+  moved bigint;
+begin
+  update public.audit_log a
+     set organization_id = m.organization_id
+    from (
+      select user_id, min(organization_id) as organization_id
+        from public.organization_members
+       where user_id is not null
+       group by user_id
+      having count(distinct organization_id) = 1
+    ) m
+   where a.organization_id is null
+     and a.actor_user_id = m.user_id;
+  get diagnostics moved = row_count;
+  raise notice 'Шаг 1б: журнал привязан по автору, строк: %', moved;
+end $$;
+
 -- ── Шаг 2: единственная организация забирает бесхозные строки ──────────────
 do $$
 declare
