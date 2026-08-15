@@ -12,8 +12,11 @@
 import { useMemo, useState } from 'react'
 import { AlertTriangle, CalendarClock, Check, Loader2, Lock, Pencil, RefreshCw, Target } from 'lucide-react'
 
+import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { formatMoney } from '@/lib/core/format'
 import { useApi } from '@/lib/hooks/use-api'
 
@@ -49,11 +52,24 @@ type PlanRow = {
   } | null
 }
 
+type IndexComponent = {
+  key: string
+  value: number
+  weight: number
+  impact: number
+  explanation: string
+  available: boolean
+}
+
 type MonthlyRow = {
   month: string
   value: number | null
   status: string | null
   recommended: number | null
+  components: IndexComponent[]
+  confidence: number | null
+  approval_reason: string | null
+  updated_at: string | null
   effective: number
 }
 
@@ -100,6 +116,14 @@ function weekdayLabel(iso: string): string {
  * «1.08» ничего не сообщает тому, кто не держит в голове, что 1.00 — это норма.
  * «Цели выше на 8%» сообщает сразу. Точное число остаётся в подсказке.
  */
+/** Человеческие названия частей поправки. Ключи приходят с сервера. */
+const COMPONENT_LABELS: Record<string, string> = {
+  historical_seasonality: 'Каким этот месяц был раньше',
+  recent_trend: 'Как идут дела последние недели',
+  academic_context: 'Учёба: семестр, каникулы, сессия',
+  calendar_composition: 'Состав месяца: выходные и праздники',
+}
+
 function monthText(value: number): string {
   const delta = Math.round((Number(value) - 1) * 100)
   if (Math.abs(delta) < 2) return 'как обычно'
@@ -142,7 +166,7 @@ export function PlansTab(props: { companyId: string; canManage: boolean }) {
 
   if (loading) {
     return (
-      <Card className="flex items-center justify-center gap-2 p-10 text-slate-500 dark:text-slate-400">
+      <Card className="flex items-center justify-center gap-2 p-10 text-muted-foreground">
         <Loader2 className="h-5 w-5 animate-spin" /> Считаем планы…
       </Card>
     )
@@ -172,22 +196,22 @@ export function PlansTab(props: { companyId: string; canManage: boolean }) {
       <Card className="p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <div className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Поправка на месяц
             </div>
             <div className="mt-1 flex items-baseline gap-2">
               <span
-                className="text-2xl font-semibold text-slate-900 dark:text-white"
+                className="text-2xl font-semibold text-foreground"
                 title={`Коэффициент ${currentMonth?.effective?.toFixed(2) ?? '1.00'}`}
               >
                 {monthText(currentMonth?.effective ?? 1)}
               </span>
-              <span className="text-xs text-slate-500 dark:text-slate-400">
+              <span className="text-xs text-muted-foreground">
                 {currentMonth?.month || ''}
                 {currentMonth?.status === 'pending_approval' ? ' — ждёт подтверждения' : ''}
               </span>
             </div>
-            <p className="mt-1 max-w-xl text-xs text-slate-500 dark:text-slate-400">
+            <p className="mt-1 max-w-xl text-xs text-muted-foreground">
               Месяц месяцу рознь: сезон, свежий тренд, учебный период и праздники в календаре. Поправка
               двигает все три цели разом — вверх в сильный месяц, вниз в слабый. Дальше чем на{' '}
               {Math.round((1 - (payload?.settings.monthly_index_min ?? 0.85)) * 100)}% вниз и{' '}
@@ -205,7 +229,11 @@ export function PlansTab(props: { companyId: string; canManage: boolean }) {
               >
                 <RefreshCw className="mr-1 h-3.5 w-3.5" /> Пересчитать поправку
               </Button>
-              {currentMonth?.status === 'pending_approval' ? (
+              {/* Из чего сложилась поправка. Без этого «цели выше на 9%» — число
+            с потолка: владелец не может ни проверить его, ни возразить. */}
+        <MonthlyBreakdown row={currentMonth} />
+
+        {currentMonth?.status === 'pending_approval' ? (
                 <Button
                   size="sm"
                   disabled={busy}
@@ -217,6 +245,10 @@ export function PlansTab(props: { companyId: string; canManage: boolean }) {
             </div>
           ) : null}
         </div>
+
+        {/* Из чего сложилась поправка. Без этого «цели выше на 9%» — число
+            с потолка: владелец не может ни проверить его, ни возразить. */}
+        <MonthlyBreakdown row={currentMonth} />
 
         {currentMonth?.status === 'pending_approval' ? (
           <div className="mt-3 flex gap-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
@@ -253,7 +285,7 @@ export function PlansTab(props: { companyId: string; canManage: boolean }) {
           >
             <Lock className="mr-1 h-3.5 w-3.5" /> Зафиксировать ближайшие
           </Button>
-          <span className="text-xs text-slate-500 dark:text-slate-400">
+          <span className="text-xs text-muted-foreground">
             Зафиксированные планы пересчёт не трогает
           </span>
         </div>
@@ -263,10 +295,10 @@ export function PlansTab(props: { companyId: string; canManage: boolean }) {
 
       {/* Таблица планов */}
       <Card className="overflow-hidden">
-        <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3 dark:border-white/10">
-          <CalendarClock className="h-4 w-4 text-slate-400" />
-          <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Ближайшие смены</h2>
-          <span className="text-xs text-slate-500 dark:text-slate-400">
+        <div className="flex items-center gap-2 border-b border-border px-4 py-3 dark:border-white/10">
+          <CalendarClock className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-sm font-semibold text-foreground">Ближайшие смены</h2>
+          <span className="text-xs text-muted-foreground">
             B1 {formatMoney(payload?.settings.b1_amount ?? 0)} · B2 {formatMoney(payload?.settings.b2_amount ?? 0)} ·
             B3 {formatMoney(payload?.settings.b3_amount ?? 0)} · рекорд{' '}
             {formatMoney(payload?.settings.record_amount ?? 0)}
@@ -274,7 +306,7 @@ export function PlansTab(props: { companyId: string; canManage: boolean }) {
         </div>
 
         {withPlan.length === 0 ? (
-          <div className="p-6 text-sm text-slate-600 dark:text-slate-300">
+          <div className="p-6 text-sm text-body">
             Планы построить не из чего: похожих смен набралось меньше{' '}
             {payload?.settings.min_sample_size ?? 8}. План по двум сменам был бы случайным числом, за
             которое платят деньги, — поэтому он не назначается.
@@ -282,7 +314,7 @@ export function PlansTab(props: { companyId: string; canManage: boolean }) {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] text-sm">
-              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-white/5 dark:text-slate-400">
+              <thead className="bg-surface-muted text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="px-4 py-2 text-left font-medium">Дата</th>
                   <th className="px-4 py-2 text-left font-medium">Смена</th>
@@ -297,15 +329,15 @@ export function PlansTab(props: { companyId: string; canManage: boolean }) {
                   {props.canManage ? <th className="w-20" /> : null}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+              <tbody className="divide-y divide-border">
                 {plans.map((p) => (
-                  <tr key={`${p.date}|${p.shift}`} className="hover:bg-slate-50 dark:hover:bg-white/5">
+                  <tr key={`${p.date}|${p.shift}`} className="hover:bg-surface-hover">
                     <td className="px-4 py-2 tabular-nums">
                       {p.date}
-                      <span className="ml-1 text-xs text-slate-400">{weekdayLabel(p.date)}</span>
+                      <span className="ml-1 text-xs text-muted-foreground">{weekdayLabel(p.date)}</span>
                     </td>
                     <td className="px-4 py-2">{p.shift === 'night' ? 'Ночь' : 'День'}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-slate-500 dark:text-slate-400">
+                    <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
                       {p.control == null ? '—' : formatMoney(p.control)}
                     </td>
                     <td className="px-4 py-2 text-right tabular-nums">{p.b1 == null ? '—' : formatMoney(p.b1)}</td>
@@ -313,15 +345,15 @@ export function PlansTab(props: { companyId: string; canManage: boolean }) {
                     <td className="px-4 py-2 text-right tabular-nums font-medium">
                       {p.b3 == null ? '—' : formatMoney(p.b3)}
                     </td>
-                    <td className="px-4 py-2 text-right tabular-nums text-slate-500 dark:text-slate-400">
+                    <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
                       {p.expected_receipts == null ? '—' : p.expected_receipts}
                     </td>
-                    <td className="px-4 py-2 text-right tabular-nums text-slate-500 dark:text-slate-400">
+                    <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
                       {p.expected_revenue == null ? '—' : formatMoney(p.expected_revenue)}
                     </td>
-                    <td className="px-4 py-2 text-xs text-slate-500 dark:text-slate-400">
+                    <td className="px-4 py-2 text-xs text-muted-foreground">
                       {!p.weather?.known ? (
-                        <span className="text-slate-400">—</span>
+                        <span className="text-muted-foreground">—</span>
                       ) : (
                         <span
                           title={
@@ -335,22 +367,22 @@ export function PlansTab(props: { companyId: string; canManage: boolean }) {
                             ? ''
                             : ` ${Math.round(p.weather.temperature_max)}°`}
                           {p.weather.usable && p.weather.factor !== 1 ? (
-                            <span className="ml-1 text-slate-400">×{p.weather.factor.toFixed(2)}</span>
+                            <span className="ml-1 text-muted-foreground">×{p.weather.factor.toFixed(2)}</span>
                           ) : null}
                         </span>
                       )}
                     </td>
                     <td className="px-4 py-2">
                       {p.b1 == null ? (
-                        <span className="text-xs text-slate-400">мало истории</span>
+                        <span className="text-xs text-muted-foreground">мало истории</span>
                       ) : p.locked ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
                           <Lock className="h-3 w-3" /> зафиксирован
                         </span>
                       ) : p.source === 'saved' ? (
-                        <span className="text-xs text-slate-500 dark:text-slate-400">сохранён</span>
+                        <span className="text-xs text-muted-foreground">сохранён</span>
                       ) : (
-                        <span className="text-xs text-slate-400">предварительный</span>
+                        <span className="text-xs text-muted-foreground">предварительный</span>
                       )}
                       {p.override_reason ? (
                         <div className="mt-0.5 text-xs text-amber-600 dark:text-amber-400" title={p.override_reason}>
@@ -366,7 +398,7 @@ export function PlansTab(props: { companyId: string; canManage: boolean }) {
                               title="Зафиксировать"
                               disabled={busy}
                               onClick={() => void post({ action: 'lock', plan_date: p.date, shift: p.shift })}
-                              className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/10"
+                              className="rounded p-1 text-muted-foreground hover:bg-surface-hover hover:text-body"
                             >
                               <Lock className="h-4 w-4" />
                             </button>
@@ -376,7 +408,7 @@ export function PlansTab(props: { companyId: string; canManage: boolean }) {
                               title="Изменить вручную"
                               disabled={busy}
                               onClick={() => setEditing(p)}
-                              className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/10"
+                              className="rounded p-1 text-muted-foreground hover:bg-surface-hover hover:text-body"
                             >
                               <Pencil className="h-4 w-4" />
                             </button>
@@ -392,7 +424,7 @@ export function PlansTab(props: { companyId: string; canManage: boolean }) {
         )}
       </Card>
 
-      <p className="px-1 text-xs text-slate-400 dark:text-slate-500">
+      <p className="px-1 text-xs text-muted-foreground">
         Погода поправляет только прогноз и только тогда, когда по такой погоде накопилось достаточно
         собственных наблюдений. Бонусных порогов она не касается: продавец не отвечает за дождь.
         <br />
@@ -419,7 +451,107 @@ export function PlansTab(props: { companyId: string; canManage: boolean }) {
         />
       ) : null}
 
-      {refreshing ? <div className="text-xs text-slate-400">Обновляем…</div> : null}
+      {refreshing ? <div className="text-xs text-muted-foreground">Обновляем…</div> : null}
+    </div>
+  )
+}
+
+/**
+ * Разбор поправки на месяц по частям.
+ *
+ * Четыре слагаемых с их весами, вкладом и объяснением. Части, которых нет в
+ * данных, показываются отдельно и честно: пока учебные периоды не заведены,
+ * их доля просто не работает, и лучше это видеть, чем гадать.
+ */
+function MonthlyBreakdown({ row }: { row: MonthlyRow | null | undefined }) {
+  const components = row?.components ?? []
+
+  if (components.length === 0) {
+    return (
+      <div className="mt-3 rounded-lg border border-dashed border-border px-3 py-3 text-xs leading-relaxed text-muted-foreground">
+        Разбора пока нет: поправку ни разу не считали для этого месяца. Нажмите «Пересчитать поправку» —
+        и здесь появится, из чего она сложилась.
+      </div>
+    )
+  }
+
+  const working = components.filter((c) => c.available)
+  const idle = components.filter((c) => !c.available)
+  const share = working.reduce((sum, c) => sum + c.weight, 0)
+
+  return (
+    <div className="mt-4">
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Из чего сложилась поправка
+        </span>
+        <span className="text-xs text-muted-foreground">
+          работает {Math.round(share * 100)}% расчёта
+          {row?.updated_at ? ` · посчитано ${String(row.updated_at).slice(0, 10)}` : ''}
+        </span>
+      </div>
+
+      <div className="space-y-1.5">
+        {components.map((c) => {
+          const delta = Math.round((c.value - 1) * 100)
+          const contribution = Math.round(c.impact * 100)
+          return (
+            <div
+              key={c.key}
+              className={`rounded-lg border px-3 py-2 ${
+                c.available ? 'border-border' : 'border-dashed border-border opacity-70'
+              }`}
+            >
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                <span className="text-xs font-medium text-foreground">
+                  {COMPONENT_LABELS[c.key] || c.key}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  вес {Math.round(c.weight * 100)}%
+                </span>
+                <span
+                  className={`text-xs font-medium tabular-nums ${
+                    !c.available
+                      ? 'text-muted-foreground'
+                      : contribution > 0
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : contribution < 0
+                          ? 'text-amber-600 dark:text-amber-400'
+                          : 'text-muted-foreground'
+                  }`}
+                >
+                  {!c.available
+                    ? 'не участвует'
+                    : contribution === 0
+                      ? 'ничего не добавил'
+                      : `${contribution > 0 ? '+' : ''}${contribution}% к целям`}
+                </span>
+              </div>
+              <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                {c.explanation}
+                {c.available && Math.abs(delta) >= 1
+                  ? ` Сам по себе этот кусок ${delta > 0 ? 'выше' : 'ниже'} нормы на ${Math.abs(delta)}%, но в итог идёт только его доля.`
+                  : ''}
+              </p>
+            </div>
+          )
+        })}
+      </div>
+
+      {idle.length > 0 ? (
+        <p className="mt-2 text-[11px] leading-4 text-muted-foreground">
+          {idle.length === 1 ? 'Одна часть не участвует' : `${idle.length} части не участвуют`} — данных для
+          них нет, и их доля расчёта считается нейтральной. Пока это так, поправка опирается на{' '}
+          {Math.round(share * 100)}% задуманного.
+        </p>
+      ) : null}
+
+      {row?.recommended != null && row.value != null && row.recommended !== row.value ? (
+        <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+          Расчёт дал {monthText(row.recommended)}, но применяется {monthText(row.value)}: дальше границ
+          поправка не уходит.
+        </p>
+      ) : null}
     </div>
   )
 }
@@ -441,54 +573,26 @@ function OverrideModal(props: {
   const valid = levels.every((v) => Number.isFinite(v) && v >= 0) && increasing && reason.trim().length >= 5
 
   const field = (label: string, value: string, set: (v: string) => void) => (
-    <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
+    <label className="flex flex-col gap-1 text-xs text-muted-foreground">
       {label}
-      <input
+      <Input
         type="number"
         value={value}
         onChange={(e) => set(e.target.value)}
-        className="w-32 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900 dark:border-white/10 dark:bg-slate-900 dark:text-white"
+        className="w-32"
       />
     </label>
   )
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4 backdrop-blur-sm">
-      <div className="mt-16 w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-xl dark:border-white/10 dark:bg-slate-900">
-        <h3 className="text-base font-semibold text-slate-900 dark:text-white">
-          План на {props.plan.date}, {props.plan.shift === 'night' ? 'ночь' : 'день'}
-        </h3>
-        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-          {props.plan.locked
-            ? 'План уже объявлен продавцу. Причина правки обязательна и попадёт в журнал.'
-            : 'Ручные уровни заменят расчётные. Причина обязательна и попадёт в журнал.'}
-        </p>
-
-        <div className="mt-4 flex flex-wrap gap-3">
-          {field('Контроль', control, setControl)}
-          {field('B1', b1, setB1)}
-          {field('B2', b2, setB2)}
-          {field('B3', b3, setB3)}
-        </div>
-
-        {!increasing ? (
-          <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
-            Уровни должны строго расти: иначе часть из них недостижима или берётся одновременно.
-          </p>
-        ) : null}
-
-        <label className="mt-4 flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
-          Причина правки
-          <textarea
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            rows={2}
-            placeholder="Например: точка не работала половину смены из-за аварии"
-            className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900 dark:border-white/10 dark:bg-slate-900 dark:text-white"
-          />
-        </label>
-
-        <div className="mt-4 flex justify-end gap-2">
+    // Общая обёртка модалок портала: Esc, клик по фону, скролл внутри и
+    // ловушка фокуса уже в ней. Своя разметка всё это теряла.
+    <AppModal
+      open
+      onClose={props.onClose}
+      title={`План на ${props.plan.date}, ${props.plan.shift === 'night' ? 'ночь' : 'день'}`}
+      footer={
+        <div className="flex justify-end gap-2">
           <Button variant="outline" size="sm" onClick={props.onClose}>
             Отмена
           </Button>
@@ -505,7 +609,36 @@ function OverrideModal(props: {
             Сохранить
           </Button>
         </div>
+      }
+    >
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        {props.plan.locked
+          ? 'План уже объявлен продавцу. Причина правки обязательна и попадёт в журнал.'
+          : 'Ручные уровни заменят расчётные. Причина обязательна и попадёт в журнал.'}
+      </p>
+
+      <div className="mt-4 flex flex-wrap gap-3">
+        {field('Контроль', control, setControl)}
+        {field('B1', b1, setB1)}
+        {field('B2', b2, setB2)}
+        {field('B3', b3, setB3)}
       </div>
-    </div>
+
+      {!increasing ? (
+        <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+          Уровни должны строго расти: иначе часть из них недостижима или берётся одновременно.
+        </p>
+      ) : null}
+
+      <label className="mt-4 flex flex-col gap-1 text-xs text-muted-foreground">
+        Причина правки
+        <Textarea
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          rows={2}
+          placeholder="Например: точка не работала половину смены из-за аварии"
+        />
+      </label>
+    </AppModal>
   )
 }

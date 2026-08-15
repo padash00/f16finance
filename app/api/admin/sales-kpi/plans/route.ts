@@ -158,13 +158,15 @@ async function loadMonthlyIndices(
   supabase: any,
   companyId: string,
   months: string[],
-): Promise<Map<string, { value: number; status: string; recommended: number | null }>> {
-  const out = new Map<string, { value: number; status: string; recommended: number | null }>()
+): Promise<Map<string, MonthlyIndexRow>> {
+  const out = new Map<string, MonthlyIndexRow>()
   if (months.length === 0) return out
 
   const { data, error } = await supabase
     .from('store_kpi_monthly_indices')
-    .select('month, value, status, recommended')
+    // components — разбор по частям. Он и так хранится, но наружу не отдавался,
+    // и владелец видел «цели выше на 9%» без единого слова о том, откуда 9%.
+    .select('month, value, status, recommended, components, confidence, approval_reason, updated_at')
     .eq('company_id', companyId)
     .in('month', months.map(monthStart))
   if (error) throw error
@@ -174,9 +176,23 @@ async function loadMonthlyIndices(
       value: Number(row.value) || 1,
       status: String(row.status || 'applied'),
       recommended: row.recommended == null ? null : Number(row.recommended),
+      components: Array.isArray(row.components) ? row.components : [],
+      confidence: row.confidence == null ? null : Number(row.confidence),
+      approval_reason: row.approval_reason ?? null,
+      updated_at: row.updated_at ?? null,
     })
   }
   return out
+}
+
+type MonthlyIndexRow = {
+  value: number
+  status: string
+  recommended: number | null
+  components: unknown[]
+  confidence: number | null
+  approval_reason: string | null
+  updated_at: string | null
 }
 
 /** Индекс, который реально применяется: неподтверждённый в расчёт не идёт. */
@@ -361,6 +377,10 @@ export async function GET(request: Request) {
           value: indices.get(m)?.value ?? null,
           status: indices.get(m)?.status ?? null,
           recommended: indices.get(m)?.recommended ?? null,
+          components: indices.get(m)?.components ?? [],
+          confidence: indices.get(m)?.confidence ?? null,
+          approval_reason: indices.get(m)?.approval_reason ?? null,
+          updated_at: indices.get(m)?.updated_at ?? null,
           effective: effectiveIndex(indices, m),
         })),
         settings: {

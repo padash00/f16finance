@@ -116,7 +116,7 @@ export function AccuracyTab(props: { companyId: string }) {
 
   if (loading) {
     return (
-      <Card className="flex items-center justify-center gap-2 p-10 text-slate-500 dark:text-slate-400">
+      <Card className="flex items-center justify-center gap-2 p-10 text-muted-foreground">
         <Loader2 className="h-5 w-5 animate-spin" /> Прогоняем историю через модель…
       </Card>
     )
@@ -142,16 +142,16 @@ export function AccuracyTab(props: { companyId: string }) {
 
       <Card className="p-4">
         <div className="flex items-center gap-2">
-          <Target className="h-4 w-4 text-slate-400" />
-          <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Калибровка бонусных уровней</h2>
+          <Target className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-sm font-semibold text-foreground">Калибровка бонусных уровней</h2>
         </div>
-        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+        <p className="mt-1 text-xs text-muted-foreground">
           Модель прогнали по всей истории точки так, как она проживала бы её день за днём: план на каждый
           день считался по данным, известным к его началу. Ниже — какая доля смен взяла бы каждый уровень.
         </p>
 
         {!bt || bt.evaluated === 0 ? (
-          <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
+          <p className="mt-3 text-sm text-body">
             Истории пока не хватает: ни одна смена не набрала {payload?.settings.min_sample_size ?? 8}{' '}
             сопоставимых наблюдений. Это нормально в начале — вернитесь сюда, когда накопятся смены.
           </p>
@@ -163,19 +163,19 @@ export function AccuracyTab(props: { companyId: string }) {
                 return (
                   <div
                     key={c.level}
-                    className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-slate-200 p-3 dark:border-white/10"
+                    className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border p-3 dark:border-white/10"
                   >
-                    <span className="w-8 text-sm font-semibold text-slate-900 dark:text-white">
+                    <span className="w-8 text-sm font-semibold text-foreground">
                       {LEVEL_LABELS[c.level] || c.level}
                     </span>
-                    <span className="text-sm tabular-nums text-slate-700 dark:text-slate-200">
+                    <span className="text-sm tabular-nums text-body">
                       берут {pct(c.rate)}
                     </span>
-                    <span className="text-xs text-slate-400">
+                    <span className="text-xs text-muted-foreground">
                       ориентир {pct(c.target[0])}–{pct(c.target[1])}
                     </span>
                     <span className={`text-xs font-medium ${v.className}`}>{v.label}</span>
-                    <span className="w-full text-xs text-slate-500 dark:text-slate-400">{v.hint}</span>
+                    <span className="w-full text-xs text-muted-foreground">{v.hint}</span>
                     {c.alarm ? (
                       <span className="w-full text-xs font-medium text-rose-600 dark:text-rose-400">
                         {c.alarm === 'threshold_too_easy'
@@ -190,29 +190,29 @@ export function AccuracyTab(props: { companyId: string }) {
 
             <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
               <div>
-                <div className="text-xs text-slate-500 dark:text-slate-400">Смен проверено</div>
-                <div className="text-lg font-semibold text-slate-900 dark:text-white">{bt.evaluated}</div>
-                <div className="text-xs text-slate-400">без плана: {bt.skipped_no_history}</div>
+                <div className="text-xs text-muted-foreground">Смен проверено</div>
+                <div className="text-lg font-semibold text-foreground">{bt.evaluated}</div>
+                <div className="text-xs text-muted-foreground">без плана: {bt.skipped_no_history}</div>
               </div>
               <div>
-                <div className="text-xs text-slate-500 dark:text-slate-400">
+                <div className="text-xs text-muted-foreground">
                 {bt.bonus_cost_hypothetical ? 'Бонусы, если бы платил модуль' : 'Бонусы за период'}
               </div>
-                <div className="text-lg font-semibold text-slate-900 dark:text-white">
+                <div className="text-lg font-semibold text-foreground">
                   {formatMoney(bt.bonus_cost)}
                 </div>
-                <div className="text-xs text-slate-400">
+                <div className="text-xs text-muted-foreground">
                   {bt.bonus_share == null ? '' : `${(bt.bonus_share * 100).toFixed(1)}% выручки`}
                 </div>
               </div>
               <div>
-                <div className="text-xs text-slate-500 dark:text-slate-400">Смен ниже контроля</div>
-                <div className="text-lg font-semibold text-slate-900 dark:text-white">{pct(bt.review_rate)}</div>
-                <div className="text-xs text-slate-400">повод разобраться, не штраф</div>
+                <div className="text-xs text-muted-foreground">Смен ниже контроля</div>
+                <div className="text-lg font-semibold text-foreground">{pct(bt.review_rate)}</div>
+                <div className="text-xs text-muted-foreground">повод разобраться, не штраф</div>
               </div>
               <div>
-                <div className="text-xs text-slate-500 dark:text-slate-400">Рекордов</div>
-                <div className="text-lg font-semibold text-slate-900 dark:text-white">
+                <div className="text-xs text-muted-foreground">Рекордов</div>
+                <div className="text-lg font-semibold text-foreground">
                   {pct(bt.hit_rates.record)}
                 </div>
               </div>
@@ -233,33 +233,33 @@ export function AccuracyTab(props: { companyId: string }) {
 
       <Card className="p-4">
         <div className="flex items-center gap-2">
-          <TrendingUp className="h-4 w-4 text-slate-400" />
-          <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Точность ожидания</h2>
+          <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-sm font-semibold text-foreground">Точность ожидания</h2>
         </div>
-        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+        <p className="mt-1 text-xs text-muted-foreground">
           Насколько ожидание расходится с тем, что было на самом деле. «Промахивается на 20%» значит: в
           среднем модуль ошибается на пятую часть кассы. Перекос показывает, в какую сторону ошибка
           постоянная — ждёт больше, чем бывает, или меньше.
         </p>
 
         <div className="mt-3 grid gap-4 lg:grid-cols-2">
-          <div className="rounded-lg border border-slate-200 p-3 dark:border-white/10">
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          <div className="rounded-lg border border-border p-3 dark:border-white/10">
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               По всей истории точки
             </div>
             <div className="mt-2 flex flex-wrap gap-4 text-sm">
               <span>
                 промахивается на <b className="tabular-nums">{errText(bt?.accuracy.wape)}</b>
               </span>
-              <span className="text-slate-600 dark:text-slate-300">{biasText(bt?.accuracy.bias)}</span>
-              <span className="text-slate-500 dark:text-slate-400">
+              <span className="text-body">{biasText(bt?.accuracy.bias)}</span>
+              <span className="text-muted-foreground">
                 смен {bt?.accuracy.n ?? 0}
               </span>
             </div>
           </div>
 
-          <div className="rounded-lg border border-slate-200 p-3 dark:border-white/10">
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          <div className="rounded-lg border border-border p-3 dark:border-white/10">
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               По объявленным планам
             </div>
             {live && live.shifts > 0 ? (
@@ -267,11 +267,11 @@ export function AccuracyTab(props: { companyId: string }) {
                 <span>
                   промахивается на <b className="tabular-nums">{errText(live.accuracy.wape)}</b>
                 </span>
-                <span className="text-slate-600 dark:text-slate-300">{biasText(live.accuracy.bias)}</span>
-                <span className="text-slate-500 dark:text-slate-400">смен {live.shifts}</span>
+                <span className="text-body">{biasText(live.accuracy.bias)}</span>
+                <span className="text-muted-foreground">смен {live.shifts}</span>
               </div>
             ) : (
-              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+              <p className="mt-2 text-xs text-muted-foreground">
                 Пока нет закрытых смен, план на которые был объявлен заранее. Появятся после первых суток
                 работы планировщика.
               </p>
@@ -280,7 +280,7 @@ export function AccuracyTab(props: { companyId: string }) {
         </div>
 
         {live && live.shifts > 0 ? (
-          <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-600 dark:text-slate-300">
+          <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-body">
             <CheckCircle2 className="h-4 w-4 text-emerald-500" />
             <span>
               По объявленным планам выплачено бы {formatMoney(live.bonus_cost)}: B1 — {live.levels.b1 || 0},
@@ -292,34 +292,34 @@ export function AccuracyTab(props: { companyId: string }) {
 
       {payload?.roi ? (
         <Card className="p-4">
-          <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Окупаемость бонусов</h2>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          <h2 className="text-sm font-semibold text-foreground">Окупаемость бонусов</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
             Смысл программы не в том, чтобы меньше платить, а в том, чтобы прирост прибыли был больше
             выплат.
           </p>
           <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
             <div>
-              <div className="text-xs text-slate-500 dark:text-slate-400">Выплачено</div>
-              <div className="text-lg font-semibold text-slate-900 dark:text-white">
+              <div className="text-xs text-muted-foreground">Выплачено</div>
+              <div className="text-lg font-semibold text-foreground">
                 {formatMoney(payload.roi.bonus_cost)}
               </div>
             </div>
             <div>
-              <div className="text-xs text-slate-500 dark:text-slate-400">Прирост выручки над нормой</div>
-              <div className="text-lg font-semibold text-slate-900 dark:text-white">
+              <div className="text-xs text-muted-foreground">Прирост выручки над нормой</div>
+              <div className="text-lg font-semibold text-foreground">
                 {formatMoney(payload.roi.incremental_revenue)}
               </div>
             </div>
             <div>
-              <div className="text-xs text-slate-500 dark:text-slate-400">Прирост валовой прибыли</div>
-              <div className="text-lg font-semibold text-slate-900 dark:text-white">
+              <div className="text-xs text-muted-foreground">Прирост валовой прибыли</div>
+              <div className="text-lg font-semibold text-foreground">
                 {payload.roi.incremental_gross_profit == null
                   ? 'нет себестоимости'
                   : formatMoney(payload.roi.incremental_gross_profit)}
               </div>
             </div>
             <div>
-              <div className="text-xs text-slate-500 dark:text-slate-400">Итог</div>
+              <div className="text-xs text-muted-foreground">Итог</div>
               <div
                 className={`text-lg font-semibold ${
                   (payload.roi.net_effect ?? 0) >= 0
@@ -331,7 +331,7 @@ export function AccuracyTab(props: { companyId: string }) {
               </div>
             </div>
           </div>
-          <ul className="mt-3 space-y-1 text-xs text-slate-500 dark:text-slate-400">
+          <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
             {payload.roi.caveats.map((c) => (
               <li key={c}>• {c}</li>
             ))}
@@ -339,7 +339,7 @@ export function AccuracyTab(props: { companyId: string }) {
         </Card>
       ) : null}
 
-      <p className="px-1 text-xs text-slate-400 dark:text-slate-500">
+      <p className="px-1 text-xs text-muted-foreground">
         История: {payload?.history.from || '—'} — {payload?.history.to || '—'}, всего{' '}
         {payload?.history.shifts ?? 0} смен. Модель {payload?.model_version || '—'}. Ориентиры долей взяты
         из проектного задания и служат рамкой для разговора, а не жёстким правилом: если команда работает

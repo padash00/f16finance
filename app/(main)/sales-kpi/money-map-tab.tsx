@@ -70,10 +70,10 @@ function dt(iso: string | null): string {
 
 function Row(props: { label: string; value: string; hint?: string }) {
   return (
-    <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-100 py-1.5 last:border-0 dark:border-white/5">
-      <span className="text-sm text-slate-600 dark:text-slate-300">{props.label}</span>
-      <span className="text-sm font-medium text-slate-900 tabular-nums dark:text-white">{props.value}</span>
-      {props.hint ? <span className="w-full text-xs text-slate-400">{props.hint}</span> : null}
+    <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border py-1.5 last:border-0 dark:border-white/5">
+      <span className="text-sm text-body">{props.label}</span>
+      <span className="text-sm font-medium text-foreground tabular-nums dark:text-white">{props.value}</span>
+      {props.hint ? <span className="w-full text-xs text-muted-foreground">{props.hint}</span> : null}
     </div>
   )
 }
@@ -86,7 +86,7 @@ export function MoneyMapTab(props: { companyId: string }) {
 
   if (loading) {
     return (
-      <Card className="flex items-center justify-center gap-2 p-10 text-slate-500 dark:text-slate-400">
+      <Card className="flex items-center justify-center gap-2 p-10 text-muted-foreground">
         <Loader2 className="h-5 w-5 animate-spin" /> Собираем настройки денег…
       </Card>
     )
@@ -122,7 +122,7 @@ export function MoneyMapTab(props: { companyId: string }) {
           </ul>
         </Card>
       ) : (
-        <Card className="flex items-center gap-2 p-4 text-sm text-slate-600 dark:text-slate-300">
+        <Card className="flex items-center gap-2 p-4 text-sm text-body">
           <CheckCircle2 className="h-4 w-4 text-emerald-500" />
           Настройки не противоречат друг другу: за оборот платят правила зарплаты, за качество — этот
           модуль.
@@ -133,17 +133,17 @@ export function MoneyMapTab(props: { companyId: string }) {
         {/* Правила зарплаты */}
         <Card className="p-4">
           <div className="flex items-center gap-2">
-            <Coins className="h-4 w-4 text-slate-400" />
-            <h2 className="text-sm font-semibold text-slate-900 dark:text-white">
+            <Coins className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-sm font-semibold text-foreground">
               Правила зарплаты — платят за оборот
             </h2>
           </div>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          <p className="mt-1 text-xs text-muted-foreground">
             Ставка за смену и пороги по обороту. Живут отдельно от этого модуля.
           </p>
 
           {(payload?.salary_rules || []).length === 0 ? (
-            <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
+            <p className="mt-3 text-sm text-muted-foreground">
               Правил для этой точки нет
               {payload?.company?.code ? ` (код «${payload.company.code}»)` : ' — у точки не задан код'}.
             </p>
@@ -151,7 +151,7 @@ export function MoneyMapTab(props: { companyId: string }) {
             <div className="mt-3 space-y-4">
               {(payload?.salary_rules || []).map((r) => (
                 <div key={r.id}>
-                  <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     {r.shift_type === 'night' ? 'Ночная смена' : 'Дневная смена'}
                     {r.is_active === false ? ' · неактивно' : ''}
                     {r.effective_from ? ` · с ${r.effective_from}` : ''}
@@ -196,12 +196,12 @@ export function MoneyMapTab(props: { companyId: string }) {
         {/* Настройки KPI */}
         <Card className="p-4">
           <div className="flex items-center gap-2">
-            <Coins className="h-4 w-4 text-slate-400" />
-            <h2 className="text-sm font-semibold text-slate-900 dark:text-white">
+            <Coins className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-sm font-semibold text-foreground">
               Этот модуль — платит за качество
             </h2>
           </div>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          <p className="mt-1 text-xs text-muted-foreground">
             {kpi?.configured
               ? `Последнее изменение: ${dt(kpi.updated_at)}${kpi.updated_by ? `, ${kpi.updated_by}` : ''}`
               : 'Настройки не сохранялись — действуют значения по умолчанию.'}
@@ -243,31 +243,31 @@ export function MoneyMapTab(props: { companyId: string }) {
 
       {/* История изменений */}
       <Card className="overflow-hidden">
-        <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3 dark:border-white/10">
-          <History className="h-4 w-4 text-slate-400" />
-          <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Кто что менял</h2>
-          <span className="text-xs text-slate-500 dark:text-slate-400">
+        <div className="flex items-center gap-2 border-b border-border px-4 py-3 dark:border-white/10">
+          <History className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-sm font-semibold text-foreground">Кто что менял</h2>
+          <span className="text-xs text-muted-foreground">
             только то, что двигает деньги людей
           </span>
         </div>
 
         {(payload?.changes || []).length === 0 ? (
-          <div className="p-6 text-sm text-slate-500 dark:text-slate-400">
+          <div className="p-6 text-sm text-muted-foreground">
             Изменений пока не было.
           </div>
         ) : (
-          <div className="divide-y divide-slate-100 dark:divide-white/5">
+          <div className="divide-y divide-border">
             {(payload?.changes || []).map((c, i) => (
               <div key={`${c.at}-${i}`} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-4 py-2 text-sm">
-                <span className="w-32 shrink-0 text-xs tabular-nums text-slate-500 dark:text-slate-400">
+                <span className="w-32 shrink-0 text-xs tabular-nums text-muted-foreground">
                   {dt(c.at)}
                 </span>
-                <span className="font-medium text-slate-900 dark:text-white">{c.who}</span>
-                <span className="text-slate-600 dark:text-slate-300">
+                <span className="font-medium text-foreground">{c.who}</span>
+                <span className="text-body">
                   {c.entity} — {c.action}
                 </span>
                 {c.details?.reason ? (
-                  <span className="w-full text-xs text-slate-500 dark:text-slate-400">
+                  <span className="w-full text-xs text-muted-foreground">
                     Причина: {String(c.details.reason)}
                   </span>
                 ) : null}
@@ -277,7 +277,7 @@ export function MoneyMapTab(props: { companyId: string }) {
         )}
       </Card>
 
-      <p className="px-1 text-xs text-slate-400 dark:text-slate-500">
+      <p className="px-1 text-xs text-muted-foreground">
         Полный журнал всех действий — на странице «Журнал». Здесь только денежные настройки этой точки:
         план смены, месячный индекс, начисления, правила допродаж и сама модель.
       </p>

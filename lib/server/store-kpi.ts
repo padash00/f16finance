@@ -274,14 +274,14 @@ export async function loadShiftFacts(
 export async function listStorePoints(
   supabase: AnyClient,
   scope: { allowedCompanyIds: string[] | null },
-): Promise<{ id: string; name: string }[]> {
+): Promise<{ id: string; name: string; organization_id: string | null }[]> {
   let query = supabase
     .from('companies')
-    .select('id, name, store_enabled')
+    .select('id, name, store_enabled, organization_id')
     .eq('store_enabled', true)
     .order('name')
   if (scope.allowedCompanyIds) query = query.in('id', scope.allowedCompanyIds)
   const { data, error } = await query
   if (error) throw error
-  return (data || []) as { id: string; name: string }[]
+  return (data || []) as { id: string; name: string; organization_id: string | null }[]
 }

@@ -17,6 +17,8 @@ import { AlertTriangle, CheckCircle2, Loader2, Plus, ShieldCheck, Trash2, Wallet
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
 import { formatMoney } from '@/lib/core/format'
 import { useApi } from '@/lib/hooks/use-api'
 
@@ -166,7 +168,7 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
 
   if (loading) {
     return (
-      <Card className="flex items-center justify-center gap-2 p-10 text-slate-500 dark:text-slate-400">
+      <Card className="flex items-center justify-center gap-2 p-10 text-muted-foreground">
         <Loader2 className="h-5 w-5 animate-spin" /> Проверяем данные…
       </Card>
     )
@@ -200,22 +202,22 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
       {/* Качество данных */}
       <Card className="p-4">
         <div className="flex items-center gap-2">
-          <ShieldCheck className="h-4 w-4 text-slate-400" />
-          <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Качество данных</h2>
-          <span className="text-lg font-semibold text-slate-900 dark:text-white">
+          <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-sm font-semibold text-foreground">Качество данных</h2>
+          <span className="text-lg font-semibold text-foreground">
             {q ? Math.round(q.score * 100) : 0}%
           </span>
         </div>
-        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+        <p className="mt-1 text-xs text-muted-foreground">
           Балл продавца 1.00 при качестве данных 30% значит куда меньше, чем тот же балл при 90%. Здесь
           видно, где именно данные дырявые.
         </p>
 
         <div className="mt-3 grid gap-2 lg:grid-cols-2">
           {(q?.checks || []).map((c) => (
-            <div key={c.key} className="rounded-lg border border-slate-200 p-3 dark:border-white/10">
+            <div key={c.key} className="rounded-lg border border-border p-3 dark:border-white/10">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-medium text-slate-900 dark:text-white">{c.label}</span>
+                <span className="text-sm font-medium text-foreground">{c.label}</span>
                 <span
                   className={`text-sm tabular-nums ${
                     c.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'
@@ -224,7 +226,7 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
                   {pct(c.value)}
                 </span>
               </div>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{c.hint}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{c.hint}</p>
             </div>
           ))}
         </div>
@@ -232,26 +234,26 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
 
       {/* Подозрительные смены */}
       <Card className="overflow-hidden">
-        <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3 dark:border-white/10">
-          <AlertTriangle className="h-4 w-4 text-slate-400" />
-          <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Подозрительные смены</h2>
-          <span className="text-xs text-slate-500 dark:text-slate-400">
+        <div className="flex items-center gap-2 border-b border-border px-4 py-3 dark:border-white/10">
+          <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-sm font-semibold text-foreground">Подозрительные смены</h2>
+          <span className="text-xs text-muted-foreground">
             детектор предлагает, решение за вами
           </span>
         </div>
 
         {(payload?.anomalies || []).length === 0 ? (
-          <div className="flex items-center gap-2 p-6 text-sm text-slate-600 dark:text-slate-300">
+          <div className="flex items-center gap-2 p-6 text-sm text-body">
             <CheckCircle2 className="h-4 w-4 text-emerald-500" />
             Ничего подозрительного не нашлось.
           </div>
         ) : (
-          <div className="divide-y divide-slate-100 dark:divide-white/5">
+          <div className="divide-y divide-border">
             {(payload?.anomalies || []).slice(0, 30).map((a) => (
               <div key={`${a.date}|${a.shift}|${a.kind}`} className="flex flex-wrap items-center gap-3 px-4 py-2 text-sm">
-                <span className="tabular-nums text-slate-900 dark:text-white">{a.date}</span>
-                <span className="text-slate-500 dark:text-slate-400">{a.shift === 'night' ? 'ночь' : 'день'}</span>
-                <span className="text-slate-600 dark:text-slate-300">{a.reason}</span>
+                <span className="tabular-nums text-foreground">{a.date}</span>
+                <span className="text-muted-foreground">{a.shift === 'night' ? 'ночь' : 'день'}</span>
+                <span className="text-body">{a.reason}</span>
                 {props.canManage ? (
                   <div className="ml-auto flex gap-1">
                     <Button
@@ -297,15 +299,15 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
         )}
 
         {(payload?.flags || []).length > 0 ? (
-          <div className="border-t border-slate-200 px-4 py-3 dark:border-white/10">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          <div className="border-t border-border px-4 py-3 dark:border-white/10">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Уже помечено
             </div>
             <div className="space-y-1">
               {(payload?.flags || []).slice(0, 20).map((f) => (
                 <div key={`${f.shift_date}|${f.shift}`} className="flex items-center gap-2 text-xs">
-                  <span className="tabular-nums text-slate-600 dark:text-slate-300">{f.shift_date}</span>
-                  <span className="text-slate-500 dark:text-slate-400">
+                  <span className="tabular-nums text-body">{f.shift_date}</span>
+                  <span className="text-muted-foreground">
                     {f.shift === 'night' ? 'ночь' : 'день'} — {f.reason}
                   </span>
                   {f.exclude_from_baseline ? (
@@ -319,7 +321,7 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
                         void post({ action: 'unflag_shift', shift_date: f.shift_date, shift: f.shift })
                       }
                       disabled={busy}
-                      className="ml-auto rounded p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10"
+                      className="ml-auto rounded p-1 text-muted-foreground hover:bg-surface-hover"
                       aria-label="Снять пометку"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -334,8 +336,8 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
 
       {/* Деловые события */}
       <Card className="p-4">
-        <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Что мешало работать</h2>
-        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+        <h2 className="text-sm font-semibold text-foreground">Что мешало работать</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
           Отсутствие товара, акция, простой техники. Балл продавца от этого не меняется — кассир не виноват,
           что не смог продать напиток, которого нет на витрине. Но уверенность в оценке снижается, и событие
           попадает в разбор смены.
@@ -343,21 +345,21 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
 
         <div className="mt-3 space-y-1">
           {(payload?.events || []).length === 0 ? (
-            <div className="rounded-lg border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">
+            <div className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground dark:border-white/10 dark:text-muted-foreground">
               Событий не отмечено.
             </div>
           ) : (
             (payload?.events || []).map((e) => (
               <div
                 key={e.id}
-                className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-white/10"
+                className="flex flex-wrap items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm dark:border-white/10"
               >
-                <span className="tabular-nums text-slate-500 dark:text-slate-400">
+                <span className="tabular-nums text-muted-foreground">
                   {e.starts_on}
                   {e.ends_on !== e.starts_on ? ` — ${e.ends_on}` : ''}
                 </span>
-                <span className="text-slate-900 dark:text-white">{e.title}</span>
-                <span className="text-xs text-slate-500 dark:text-slate-400">
+                <span className="text-foreground">{e.title}</span>
+                <span className="text-xs text-muted-foreground">
                   {EVENT_TYPES.find(([v]) => v === e.event_type)?.[1] || e.event_type} ·{' '}
                   {SEVERITY_LABEL[e.severity]}
                   {e.shift ? ` · ${e.shift === 'night' ? 'ночь' : 'день'}` : ''}
@@ -366,7 +368,7 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
                   <button
                     onClick={() => void post({ action: 'delete_event', event_id: e.id })}
                     disabled={busy}
-                    className="ml-auto rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10"
+                    className="ml-auto rounded p-1 text-muted-foreground hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10"
                     aria-label="Удалить событие"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -379,53 +381,49 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
 
         {props.canManage ? (
           <div className="mt-3 flex flex-wrap items-end gap-2">
-            <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
+            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
               С
-              <input
+              <Input
                 type="date"
                 value={eventForm.starts_on}
                 onChange={(e) => setEventForm({ ...eventForm, starts_on: e.target.value })}
-                className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm dark:border-white/10 dark:bg-slate-900 dark:text-white"
-              />
+                              />
             </label>
-            <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
+            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
               По
-              <input
+              <Input
                 type="date"
                 value={eventForm.ends_on}
                 onChange={(e) => setEventForm({ ...eventForm, ends_on: e.target.value })}
-                className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm dark:border-white/10 dark:bg-slate-900 dark:text-white"
-              />
+                              />
             </label>
-            <select
+            <NativeSelect
               value={eventForm.event_type}
               onChange={(e) => setEventForm({ ...eventForm, event_type: e.target.value })}
-              className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm dark:border-white/10 dark:bg-slate-900 dark:text-white"
-            >
+                          >
               {EVENT_TYPES.map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
                 </option>
               ))}
-            </select>
-            <select
+            </NativeSelect>
+            <NativeSelect
               value={eventForm.severity}
               onChange={(e) =>
                 setEventForm({ ...eventForm, severity: e.target.value as 'low' | 'medium' | 'high' })
               }
-              className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm dark:border-white/10 dark:bg-slate-900 dark:text-white"
-            >
+                          >
               {Object.entries(SEVERITY_LABEL).map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
                 </option>
               ))}
-            </select>
-            <input
+            </NativeSelect>
+            <Input
               value={eventForm.title}
               onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })}
               placeholder="Что случилось"
-              className="min-w-[200px] flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm dark:border-white/10 dark:bg-slate-900 dark:text-white"
+              className="min-w-[200px] flex-1"
             />
             <Button
               size="sm"
@@ -449,18 +447,18 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
 
       {/* Месячный бонус */}
       <Card className="overflow-hidden">
-        <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3 dark:border-white/10">
-          <Wallet className="h-4 w-4 text-slate-400" />
-          <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Месячный бонус</h2>
-          <span className="text-xs text-slate-500 dark:text-slate-400">
+        <div className="flex items-center gap-2 border-b border-border px-4 py-3 dark:border-white/10">
+          <Wallet className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-sm font-semibold text-foreground">Месячный бонус</h2>
+          <span className="text-xs text-muted-foreground">
             сильный {formatMoney(payload?.settings.monthly_bonus_strong ?? 0)} · топ{' '}
             {formatMoney(payload?.settings.monthly_bonus_top ?? 0)}
           </span>
         </div>
 
-        <div className="divide-y divide-slate-100 dark:divide-white/5">
+        <div className="divide-y divide-border">
           {(payload?.monthly || []).length === 0 ? (
-            <div className="p-6 text-sm text-slate-500 dark:text-slate-400">
+            <div className="p-6 text-sm text-muted-foreground">
               За период нет продавцов с достаточным числом смен.
             </div>
           ) : (
@@ -468,13 +466,13 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
               const already = awarded.has(`${m.cashier_id}|${currentMonth}`)
               return (
                 <div key={m.cashier_id} className="flex flex-wrap items-center gap-3 px-4 py-2 text-sm">
-                  <span className="font-medium text-slate-900 dark:text-white">
+                  <span className="font-medium text-foreground">
                     {props.cashierNames.get(m.cashier_id) || 'Без имени'}
                   </span>
-                  <span className="text-slate-500 dark:text-slate-400">
+                  <span className="text-muted-foreground">
                     {m.shifts} смен · балл {m.score?.toFixed(2) ?? '—'}
                   </span>
-                  <span className="tabular-nums text-slate-900 dark:text-white">
+                  <span className="tabular-nums text-foreground">
                     {m.amount > 0 ? formatMoney(m.amount) : '—'}
                   </span>
                   {already ? (
@@ -528,7 +526,7 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
             })
           )}
         </div>
-        <p className="border-t border-slate-200 px-4 py-2 text-xs text-slate-400 dark:border-white/10 dark:text-slate-500">
+        <p className="border-t border-border px-4 py-2 text-xs text-muted-foreground dark:border-white/10 dark:text-muted-foreground">
           Бонус считается, но не начисляется сам. По кнопке он попадает в зарплату отдельной
           корректировкой с пометкой источника — повторное нажатие деньги не удвоит. При статусе «мало
           смен» бонус не платится вовсе: платить за статус, который мы не смогли определить, нельзя ни в
@@ -545,8 +543,8 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
 
       {/* Диагностика розницы */}
       <Card className="p-4">
-        <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Показатели периода</h2>
-        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+        <h2 className="text-sm font-semibold text-foreground">Показатели периода</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
           В балл продавца не входят — это диагностика, которая помогает объяснить его.
         </p>
         <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -563,8 +561,8 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
             ['Уникальных товаров', String(d?.unique_skus ?? 0)],
           ].map(([label, value]) => (
             <div key={label}>
-              <div className="text-xs text-slate-500 dark:text-slate-400">{label}</div>
-              <div className="text-sm font-medium text-slate-900 dark:text-white">{value}</div>
+              <div className="text-xs text-muted-foreground">{label}</div>
+              <div className="text-sm font-medium text-foreground">{value}</div>
             </div>
           ))}
         </div>
@@ -572,30 +570,30 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
 
       {/* Структура продаж */}
       <Card className="p-4">
-        <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Что продаётся</h2>
-        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+        <h2 className="text-sm font-semibold text-foreground">Что продаётся</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
           В балл не входит, но часто его объясняет: «средний чек просел» и «продавали в основном напитки
           вместо горячего» — одно и то же наблюдение с разных сторон.
         </p>
 
         {(payload?.category_mix || []).length === 0 ? (
-          <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
+          <p className="mt-3 text-sm text-muted-foreground">
             Нет данных: в чеках нет позиций или у товаров не проставлены категории.
           </p>
         ) : (
           <div className="mt-3 space-y-1.5">
             {(payload?.category_mix || []).slice(0, 8).map((c) => (
               <div key={c.category_id ?? 'none'} className="flex items-center gap-3">
-                <span className="w-40 shrink-0 truncate text-sm text-slate-700 dark:text-slate-200">
+                <span className="w-40 shrink-0 truncate text-sm text-body">
                   {c.category_name}
                 </span>
-                <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10">
+                <div className="h-2 flex-1 overflow-hidden rounded-full bg-surface-hover">
                   <div className="h-full bg-sky-500" style={{ width: `${Math.round(c.share * 100)}%` }} />
                 </div>
-                <span className="w-12 shrink-0 text-right text-xs tabular-nums text-slate-500 dark:text-slate-400">
+                <span className="w-12 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
                   {pct(c.share)}
                 </span>
-                <span className="w-24 shrink-0 text-right text-xs tabular-nums text-slate-500 dark:text-slate-400">
+                <span className="w-24 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
                   {formatMoney(c.revenue)}
                 </span>
               </div>
@@ -605,15 +603,15 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
 
         {(payload?.cashier_mix || []).some((m) => m.notable.length > 0) ? (
           <div className="mt-4">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Чем продавцы отличаются от точки
             </div>
             <div className="space-y-2">
               {(payload?.cashier_mix || [])
                 .filter((m) => m.notable.length > 0)
                 .map((m) => (
-                  <div key={m.cashier_id} className="rounded-lg border border-slate-200 p-2.5 dark:border-white/10">
-                    <div className="text-sm font-medium text-slate-900 dark:text-white">
+                  <div key={m.cashier_id} className="rounded-lg border border-border p-2.5 dark:border-white/10">
+                    <div className="text-sm font-medium text-foreground">
                       {props.cashierNames.get(m.cashier_id) || 'Без имени'}
                     </div>
                     <div className="mt-1 flex flex-wrap gap-2 text-xs">
@@ -635,7 +633,7 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
                   </div>
                 ))}
             </div>
-            <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+            <p className="mt-2 text-xs text-muted-foreground">
               Отклонение — это факт, а не вывод. Оно может объясняться сменой (ночью берут другое),
               отсутствием товара или тем, что человек работал в другие дни.
             </p>

@@ -73,9 +73,9 @@ const METRIC_WORDS: Record<string, string> = {
 const STATUS_STYLE: Record<string, string> = {
   TOP: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300',
   STRONG: 'bg-teal-50 text-teal-700 dark:bg-teal-500/10 dark:text-teal-300',
-  NORMAL: 'bg-slate-100 text-slate-600 dark:bg-white/5 dark:text-slate-300',
+  NORMAL: 'bg-surface-hover text-body',
   NEEDS_TRAINING: 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300',
-  INSUFFICIENT_DATA: 'bg-slate-100 text-slate-500 dark:bg-white/5 dark:text-slate-400',
+  INSUFFICIENT_DATA: 'bg-surface-hover text-muted-foreground',
 }
 
 function currentMonth(): string {
@@ -186,12 +186,12 @@ export function PayoutTab(props: { companyId: string; canManage: boolean }) {
       {/* Что это вообще такое */}
       <Card className="p-4">
         <div className="flex items-center gap-2">
-          <Wallet className="h-4 w-4 text-slate-400" />
-          <h2 className="text-sm font-semibold text-slate-900 dark:text-white">
+          <Wallet className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-sm font-semibold text-foreground">
             Доплата за качество работы
           </h2>
         </div>
-        <div className="mt-2 space-y-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+        <div className="mt-2 space-y-2 text-sm leading-relaxed text-body">
           <p>
             Это единственная выплата, которую добавляет модуль. Ставка за смену и бонусы за оборот
             считаются как раньше — на странице{' '}
@@ -205,7 +205,7 @@ export function PayoutTab(props: { companyId: string; canManage: boolean }) {
             допродажи, сколько товаров в чеке. Продавец может отработать смену с маленькой кассой просто
             потому, что мало кто зашёл, — за это здесь не наказывают.
           </p>
-          <p className="text-slate-500 dark:text-slate-400">
+          <p className="text-muted-foreground">
             Сильный — {formatMoney(payload?.settings.monthly_bonus_strong ?? 0)}, топ —{' '}
             {formatMoney(payload?.settings.monthly_bonus_top ?? 0)}. Статус ставится от{' '}
             {payload?.settings.min_qualifying_shifts ?? 6} отработанных смен: по паре смен человека
@@ -221,7 +221,7 @@ export function PayoutTab(props: { companyId: string; canManage: boolean }) {
             <Button variant="outline" size="sm" onClick={() => setMonth(shiftMonth(month, -1))}>
               ←
             </Button>
-            <span className="min-w-[150px] text-center text-sm font-medium text-slate-900 dark:text-white">
+            <span className="min-w-[150px] text-center text-sm font-medium text-foreground">
               {monthLabel(month)}
             </span>
             <Button
@@ -236,21 +236,21 @@ export function PayoutTab(props: { companyId: string; canManage: boolean }) {
 
           <div className="flex flex-wrap gap-6">
             <div>
-              <div className="text-xs text-slate-500 dark:text-slate-400">К доплате</div>
-              <div className="text-2xl font-semibold text-slate-900 dark:text-white">
+              <div className="text-xs text-muted-foreground">К доплате</div>
+              <div className="text-2xl font-semibold text-foreground">
                 {formatMoney(t?.to_pay ?? 0)}
               </div>
-              <div className="text-xs text-slate-500 dark:text-slate-400">
+              <div className="text-xs text-muted-foreground">
                 {t?.to_pay_people ?? 0} чел.
               </div>
             </div>
             {(t?.already_paid ?? 0) > 0 ? (
               <div>
-                <div className="text-xs text-slate-500 dark:text-slate-400">Уже начислено</div>
+                <div className="text-xs text-muted-foreground">Уже начислено</div>
                 <div className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">
                   {formatMoney(t?.already_paid ?? 0)}
                 </div>
-                <div className="text-xs text-slate-500 dark:text-slate-400">
+                <div className="text-xs text-muted-foreground">
                   {t?.already_paid_people ?? 0} чел.
                 </div>
               </div>
@@ -263,11 +263,11 @@ export function PayoutTab(props: { companyId: string; canManage: boolean }) {
 
       {/* Люди */}
       {loading ? (
-        <Card className="flex items-center justify-center gap-2 p-10 text-slate-500 dark:text-slate-400">
+        <Card className="flex items-center justify-center gap-2 p-10 text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin" /> Считаем…
         </Card>
       ) : (payload?.rows || []).length === 0 ? (
-        <Card className="p-6 text-sm text-slate-600 dark:text-slate-300">
+        <Card className="p-6 text-sm text-body">
           За этот месяц нет смен с указанным продавцом.
         </Card>
       ) : (
@@ -277,7 +277,7 @@ export function PayoutTab(props: { companyId: string; canManage: boolean }) {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-base font-semibold text-slate-900 dark:text-white">{r.name}</span>
+                    <span className="text-base font-semibold text-foreground">{r.name}</span>
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                         STATUS_STYLE[r.status] || STATUS_STYLE.NORMAL
@@ -287,7 +287,7 @@ export function PayoutTab(props: { companyId: string; canManage: boolean }) {
                     </span>
                   </div>
 
-                  <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  <div className="mt-1 text-sm text-muted-foreground">
                     {r.shifts} смен · {r.receipts} чеков · {formatMoney(r.revenue)} выручки
                   </div>
 
@@ -307,7 +307,7 @@ export function PayoutTab(props: { companyId: string; canManage: boolean }) {
                   ) : null}
 
                   {r.zero_reason ? (
-                    <div className="mt-2 flex gap-2 text-xs text-slate-500 dark:text-slate-400">
+                    <div className="mt-2 flex gap-2 text-xs text-muted-foreground">
                       <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                       <span>{r.zero_reason}</span>
                     </div>
@@ -319,8 +319,8 @@ export function PayoutTab(props: { companyId: string; canManage: boolean }) {
                     <div
                       className={`text-xl font-semibold ${
                         r.amount > 0
-                          ? 'text-slate-900 dark:text-white'
-                          : 'text-slate-400 dark:text-slate-500'
+                          ? 'text-foreground'
+                          : 'text-muted-foreground'
                       }`}
                     >
                       {r.amount > 0 ? formatMoney(r.amount) : '—'}
@@ -364,8 +364,8 @@ export function PayoutTab(props: { companyId: string; canManage: boolean }) {
       <Card className="p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Что было в этом месяце</h3>
-            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+            <h3 className="text-sm font-semibold text-foreground">Что было в этом месяце</h3>
+            <p className="mt-0.5 text-xs text-muted-foreground">
               Связный разбор: спрос, команда, деньги и что делать дальше. Считают цифры код и модель, ИИ
               только излагает.
             </p>
@@ -383,7 +383,7 @@ export function PayoutTab(props: { companyId: string; canManage: boolean }) {
         </div>
 
         {report ? (
-          <div className="mt-3 space-y-3 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+          <div className="mt-3 space-y-3 text-sm leading-relaxed text-body">
             {[
               ['Коротко', report.summary],
               ['Спрос', report.demand],
@@ -394,7 +394,7 @@ export function PayoutTab(props: { companyId: string; canManage: boolean }) {
               .filter(([, text]) => Boolean(text))
               .map(([title, text]) => (
                 <div key={title as string}>
-                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     {title as string}
                   </div>
                   <p className="mt-0.5">{text as string}</p>
@@ -402,10 +402,10 @@ export function PayoutTab(props: { companyId: string; canManage: boolean }) {
               ))}
             {report.watch_out.length > 0 ? (
               <div>
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Оговорки
                 </div>
-                <ul className="mt-0.5 space-y-1 text-xs text-slate-500 dark:text-slate-400">
+                <ul className="mt-0.5 space-y-1 text-xs text-muted-foreground">
                   {report.watch_out.map((w) => (
                     <li key={w}>• {w}</li>
                   ))}
@@ -416,8 +416,8 @@ export function PayoutTab(props: { companyId: string; canManage: boolean }) {
         ) : null}
       </Card>
 
-      <Card className="p-4 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-        <div className="mb-2 text-sm font-semibold text-slate-900 dark:text-white">Как это работает</div>
+      <Card className="p-4 text-sm leading-relaxed text-body">
+        <div className="mb-2 text-sm font-semibold text-foreground">Как это работает</div>
         <ul className="space-y-1.5">
           <li>
             <b>Нажали «Начислить»</b> — сумма уходит в зарплату отдельной строкой с пометкой, что это

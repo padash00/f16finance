@@ -30,7 +30,7 @@ export function SectionIntro(props: {
     sky: 'bg-sky-50 text-sky-600 dark:bg-sky-500/10 dark:text-sky-300',
     amber: 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-300',
     violet: 'bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-300',
-    slate: 'bg-slate-100 text-slate-600 dark:bg-white/5 dark:text-slate-300',
+    slate: 'bg-surface-hover text-body',
   }
 
   return (
@@ -40,15 +40,15 @@ export function SectionIntro(props: {
           {props.icon}
         </span>
         <div className="min-w-0 flex-1">
-          <h2 className="text-base font-semibold text-slate-900 dark:text-white">{props.title}</h2>
-          <p className="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-300">{props.what}</p>
+          <h2 className="text-base font-semibold text-foreground">{props.title}</h2>
+          <p className="mt-1 text-sm leading-relaxed text-body">{props.what}</p>
 
           {props.todo.length > 0 ? (
             <div className="mt-3">
-              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Что тут делать
               </div>
-              <ul className="mt-1 space-y-1 text-sm text-slate-600 dark:text-slate-300">
+              <ul className="mt-1 space-y-1 text-sm text-body">
                 {props.todo.map((t) => (
                   <li key={t}>• {t}</li>
                 ))}
@@ -56,8 +56,8 @@ export function SectionIntro(props: {
             </div>
           ) : null}
 
-          <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-500 dark:bg-white/5 dark:text-slate-400">
-            <b className="text-slate-600 dark:text-slate-300">Откуда числа.</b> {props.how}
+          <div className="mt-3 rounded-lg bg-surface-muted px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+            <b className="text-body">Откуда числа.</b> {props.how}
           </div>
         </div>
       </div>

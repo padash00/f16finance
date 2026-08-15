@@ -15,6 +15,8 @@ import { useState } from 'react'
 import { AlertTriangle, CalendarDays, Check, Download, GraduationCap, Loader2, Plus, Trash2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
 import { Card } from '@/components/ui/card'
 import { useApi } from '@/lib/hooks/use-api'
 
@@ -126,26 +128,24 @@ export function CalendarBlock(props: { companyId: string; canManage: boolean }) 
     }
   }
 
-  const input =
-    'rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-900 outline-none transition focus:border-sky-400 dark:border-white/10 dark:bg-slate-950 dark:text-white'
 
   return (
     <Card className="p-4">
       <div className="flex items-center gap-2">
-        <CalendarDays className="h-4 w-4 text-slate-400" />
-        <h2 className="text-sm font-semibold text-slate-900 dark:text-white">
+        <CalendarDays className="h-4 w-4 text-muted-foreground" />
+        <h2 className="text-sm font-semibold text-foreground">
           Праздники и учебные периоды
         </h2>
-        <span className="text-xs text-slate-500 dark:text-slate-400">{year} год</span>
+        <span className="text-xs text-muted-foreground">{year} год</span>
       </div>
-      <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
         Из этого складывается месячный индекс: в месяце с длинными выходными или каникулами спрос другой,
         и цели должны это учитывать. Пока здесь пусто, обе части индекса считаются нейтральными — то есть
         не работают.
       </p>
 
       {loading ? (
-        <div className="flex items-center gap-2 py-6 text-sm text-slate-500">
+        <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" /> Загружаем…
         </div>
       ) : (
@@ -153,7 +153,7 @@ export function CalendarBlock(props: { companyId: string; canManage: boolean }) 
           {/* Особые дни */}
           <div>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Особые дни · {payload?.days.length ?? 0}
               </span>
               {props.canManage && (payload?.holidays_to_import.length ?? 0) > 0 ? (
@@ -170,7 +170,7 @@ export function CalendarBlock(props: { companyId: string; canManage: boolean }) 
             </div>
 
             {(payload?.holidays_need_dates.length ?? 0) > 0 ? (
-              <p className="mb-2 text-[11px] leading-4 text-slate-500 dark:text-slate-400">
+              <p className="mb-2 text-[11px] leading-4 text-muted-foreground">
                 Даты задаются вручную: {payload?.holidays_need_dates.join(', ')} — они привязаны к лунному
                 календарю и заранее в законе не закреплены.
               </p>
@@ -178,22 +178,22 @@ export function CalendarBlock(props: { companyId: string; canManage: boolean }) 
 
             <div className="max-h-52 space-y-1 overflow-y-auto pr-1">
               {(payload?.days || []).length === 0 ? (
-                <div className="rounded-lg border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">
+                <div className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground dark:border-white/10 dark:text-muted-foreground">
                   Дней нет. Начните с праздников РК: официальные даты и переносы выходных уже в системе.
                 </div>
               ) : (
                 (payload?.days || []).map((d) => (
                   <div
                     key={d.id}
-                    className="flex items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-1.5 text-sm dark:bg-white/5"
+                    className="flex items-center gap-2 rounded-lg bg-surface-muted px-2.5 py-1.5 text-sm"
                   >
-                    <span className="w-24 shrink-0 tabular-nums text-slate-500 dark:text-slate-400">
+                    <span className="w-24 shrink-0 tabular-nums text-muted-foreground">
                       {d.day}
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-slate-700 dark:text-slate-200">
+                    <span className="min-w-0 flex-1 truncate text-body">
                       {d.name}
                     </span>
-                    <span className="shrink-0 text-xs text-slate-400">{impactText(d.impact_index)}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">{impactText(d.impact_index)}</span>
                     {!d.verified ? (
                       props.canManage ? (
                         <button
@@ -216,7 +216,7 @@ export function CalendarBlock(props: { companyId: string; canManage: boolean }) 
                       <button
                         onClick={() => void post({ action: 'delete_day', day_id: d.id })}
                         disabled={busy}
-                        className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10"
+                        className="rounded p-1 text-muted-foreground hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10"
                         aria-label="Удалить день"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -229,28 +229,26 @@ export function CalendarBlock(props: { companyId: string; canManage: boolean }) 
 
             {props.canManage ? (
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <input
+                <Input
                   type="date"
                   value={dayForm.day}
                   onChange={(e) => setDayForm({ ...dayForm, day: e.target.value })}
-                  className={input}
                 />
-                <select
+                <NativeSelect
                   value={dayForm.day_type}
                   onChange={(e) => setDayForm({ ...dayForm, day_type: e.target.value })}
-                  className={input}
                 >
                   {DAY_TYPES.map(([v, l]) => (
                     <option key={v} value={v}>
                       {l}
                     </option>
                   ))}
-                </select>
-                <input
+                </NativeSelect>
+                <Input
                   value={dayForm.name}
                   onChange={(e) => setDayForm({ ...dayForm, name: e.target.value })}
                   placeholder="Что за день"
-                  className={`${input} min-w-[140px] flex-1`}
+                  className="min-w-[140px] flex-1"
                 />
                 <Button
                   size="sm"
@@ -271,7 +269,7 @@ export function CalendarBlock(props: { companyId: string; canManage: boolean }) 
           {/* Учебные периоды */}
           <div>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 <GraduationCap className="h-3.5 w-3.5" />
                 Учебные периоды · {payload?.periods.length ?? 0}
               </span>
@@ -290,31 +288,31 @@ export function CalendarBlock(props: { companyId: string; canManage: boolean }) 
 
             <div className="max-h-52 space-y-1 overflow-y-auto pr-1">
               {(payload?.periods || []).length === 0 ? (
-                <div className="rounded-lg border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">
+                <div className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground dark:border-white/10 dark:text-muted-foreground">
                   Периодов нет. Добавьте семестр и каникулы — модель узнает, когда студенты в городе.
                 </div>
               ) : (
                 (payload?.periods || []).map((p) => (
-                  <div key={p.id} className="rounded-lg bg-slate-50 px-2.5 py-1.5 text-sm dark:bg-white/5">
+                  <div key={p.id} className="rounded-lg bg-surface-muted px-2.5 py-1.5 text-sm">
                     <div className="flex items-center gap-2">
-                      <span className="min-w-0 flex-1 truncate text-slate-700 dark:text-slate-200">
+                      <span className="min-w-0 flex-1 truncate text-body">
                         {p.name}
                       </span>
-                      <span className="shrink-0 text-xs text-slate-400">
+                      <span className="shrink-0 text-xs text-muted-foreground">
                         {impactText(p.manual_index)}
                       </span>
                       {props.canManage ? (
                         <button
                           onClick={() => void post({ action: 'delete_period', period_id: p.id })}
                           disabled={busy}
-                          className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10"
+                          className="rounded p-1 text-muted-foreground hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10"
                           aria-label="Удалить период"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       ) : null}
                     </div>
-                    <div className="text-xs tabular-nums text-slate-500 dark:text-slate-400">
+                    <div className="text-xs tabular-nums text-muted-foreground">
                       {p.start_date} — {p.end_date} · {label(PERIOD_TYPES, p.period_type)}
                       {p.audience ? ` · ${p.audience}` : ''}
                     </div>
@@ -333,7 +331,7 @@ export function CalendarBlock(props: { companyId: string; canManage: boolean }) 
                       </div>
                     ) : null}
                     {p.source ? (
-                      <div className="mt-0.5 text-[11px] text-slate-400 dark:text-slate-500">
+                      <div className="mt-0.5 text-[11px] text-muted-foreground">
                         Источник: {p.source_url ? (
                           <a
                             href={p.source_url}
@@ -356,37 +354,34 @@ export function CalendarBlock(props: { companyId: string; canManage: boolean }) 
             {props.canManage ? (
               <div className="mt-2 space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <input
+                  <Input
                     type="date"
                     value={periodForm.start_date}
                     onChange={(e) => setPeriodForm({ ...periodForm, start_date: e.target.value })}
-                    className={input}
                   />
-                  <span className="text-slate-400">—</span>
-                  <input
+                  <span className="text-muted-foreground">—</span>
+                  <Input
                     type="date"
                     value={periodForm.end_date}
                     onChange={(e) => setPeriodForm({ ...periodForm, end_date: e.target.value })}
-                    className={input}
                   />
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <select
+                  <NativeSelect
                     value={periodForm.period_type}
                     onChange={(e) => setPeriodForm({ ...periodForm, period_type: e.target.value })}
-                    className={input}
                   >
                     {PERIOD_TYPES.map(([v, l]) => (
                       <option key={v} value={v}>
                         {l}
                       </option>
                     ))}
-                  </select>
-                  <input
+                  </NativeSelect>
+                  <Input
                     value={periodForm.name}
                     onChange={(e) => setPeriodForm({ ...periodForm, name: e.target.value })}
                     placeholder="Название"
-                    className={`${input} min-w-[120px] flex-1`}
+                    className="min-w-[120px] flex-1"
                   />
                   <Button
                     size="sm"
@@ -412,17 +407,20 @@ export function CalendarBlock(props: { companyId: string; canManage: boolean }) 
       <div className="mt-4 flex gap-2 rounded-lg bg-amber-50 p-3 text-xs leading-relaxed text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
         <div>
-          <b>Праздники нужно сверить.</b> Список в системе — ручной справочник, а не выгрузка из
-          официального источника, поэтому импортированные дни помечаются как непроверенные. Сверьте их с
-          постановлением правительства и нажмите «проверить».
+          <b>Праздники</b> берутся из справочника с официальными датами и переносами выходных. Даты,
+          которые в самом справочнике помечены предварительными, приезжают со значком «не проверено» —
+          сверьте их с постановлением правительства и нажмите «проверить».
           <br />
-          Чего в справочнике точно нет: <b>Курбан айт</b> — его дата плавает по лунному календарю, и{' '}
-          <b>переносы выходных</b> — их утверждают отдельно каждый год. Добавьте их вручную: тип
-          «Религиозный праздник» и «Перенос выходного».
+          Вручную заводится только <b>Курбан айт</b>: его дата привязана к лунному календарю и заранее
+          законом не закрепляется. Тип — «Религиозный праздник».
           <br />
           <b>Учебный календарь</b> загружается отдельной кнопкой. Его даты берутся из официальных
           источников, но влияние на спрос там — оценка составителя, а не измерение на ваших продажах.
           Периоды со статусом «не подтверждён» в расчёт не идут, пока вы их не проверите.
+          <br />
+          <b>Влияние праздников</b> остаётся нейтральным намеренно. Своей истории по конкретному
+          празднику пока нет, а придумывать коэффициент нельзя — модуль посчитает его сам, когда
+          накопятся данные.
         </div>
       </div>
 

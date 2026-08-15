@@ -12,18 +12,19 @@
 
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import {
+  CalendarDays,
   Check,
   ChevronDown,
   CloudSun,
-  GraduationCap,
-  ShoppingBag,
   Download,
   Gauge,
+  GraduationCap,
   Info,
   Loader2,
   Plus,
   RefreshCw,
   Settings,
+  ShoppingBag,
   Store,
   Trash2,
   TrendingDown,
@@ -35,6 +36,8 @@ import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { formatMoney } from '@/lib/core/format'
 import { mutateApi, useApi } from '@/lib/hooks/use-api'
@@ -45,7 +48,7 @@ import { MoneyMapTab } from './money-map-tab'
 import { PayoutTab } from './payout-tab'
 import { PlansTab } from './plans-tab'
 import { QualityTab } from './quality-tab'
-import { ShiftDetail, type ShiftExplanation } from './shift-detail'
+import { ShiftDetail, type ShiftContext, type ShiftExplanation } from './shift-detail'
 
 // ─── Типы ответа API ────────────────────────────────────────────────────────
 
@@ -80,6 +83,7 @@ type ShiftRow = {
   missing: string[]
   metrics: MetricRow[]
   explanation: ShiftExplanation | null
+  context: ShiftContext | null
 }
 
 type CashierRow = {
@@ -172,13 +176,13 @@ const VERDICTS: Record<string, { label: string; hint: string; className: string 
     label: 'Норма',
     hint: 'Отклонения в пределах обычного разброса.',
     className:
-      'bg-slate-100 text-slate-600 ring-slate-500/20 dark:bg-white/5 dark:text-slate-300 dark:ring-white/10',
+      'bg-surface-hover text-body ring-border',
   },
   INSUFFICIENT_DATA: {
     label: 'Мало данных',
     hint: 'Истории или показателей не хватило, чтобы делать выводы.',
     className:
-      'bg-slate-100 text-slate-500 ring-slate-500/20 dark:bg-white/5 dark:text-slate-400 dark:ring-white/10',
+      'bg-surface-hover text-muted-foreground ring-border',
   },
 }
 
@@ -191,28 +195,51 @@ const STATUSES: Record<string, { label: string; className: string }> = {
     label: 'Сильный',
     className: 'bg-teal-50 text-teal-700 dark:bg-teal-500/10 dark:text-teal-300',
   },
-  NORMAL: { label: 'Норма', className: 'bg-slate-100 text-slate-600 dark:bg-white/5 dark:text-slate-300' },
+  NORMAL: { label: 'Норма', className: 'bg-surface-hover text-body' },
   NEEDS_TRAINING: {
     label: 'Нужно обучение',
     className: 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300',
   },
   INSUFFICIENT_DATA: {
     label: 'Мало смен',
-    className: 'bg-slate-100 text-slate-500 dark:bg-white/5 dark:text-slate-400',
+    className: 'bg-surface-hover text-muted-foreground',
   },
 }
 
 // ─── Форматирование ─────────────────────────────────────────────────────────
 
-function isoToday(): string {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+/**
+ * Месяц как период.
+ *
+ * Владелец мыслит месяцами: «июль» и «август», а не «с 17.07 по 16.08».
+ * Скользящее окно в тридцать дней резало месяц пополам, из-за чего поправка на
+ * месяц относилась к одному месяцу, а смены в таблице — к двум.
+ */
+function monthBounds(month: string): { from: string; to: string } {
+  const [year, m] = month.split('-').map(Number)
+  const last = new Date(year || 1970, m || 1, 0).getDate()
+  return { from: `${month}-01`, to: `${month}-${String(last).padStart(2, '0')}` }
 }
 
-function isoDaysAgo(days: number): string {
-  const d = new Date()
-  d.setDate(d.getDate() - days)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+function currentMonthKey(): string {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+}
+
+/** Список месяцев назад от текущего — для выпадающего списка. */
+function recentMonths(count: number): { key: string; label: string }[] {
+  const names = [
+    'январь', 'февраль', 'март', 'апрель', 'май', 'июнь',
+    'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь',
+  ]
+  const now = new Date()
+  const out: { key: string; label: string }[] = []
+  for (let i = 0; i < count; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    out.push({ key, label: `${names[d.getMonth()]} ${d.getFullYear()}` })
+  }
+  return out
 }
 
 function deltaPct(ratio: number | null): string {
@@ -240,10 +267,10 @@ function scoreText(score: number | null): string {
 }
 
 function toneFor(ratio: number | null): string {
-  if (ratio == null) return 'text-slate-400 dark:text-slate-500'
+  if (ratio == null) return 'text-muted-foreground'
   if (ratio >= 1.05) return 'text-emerald-600 dark:text-emerald-400'
   if (ratio <= 0.95) return 'text-amber-600 dark:text-amber-400'
-  return 'text-slate-600 dark:text-slate-300'
+  return 'text-body'
 }
 
 // ─── Мелкие блоки ───────────────────────────────────────────────────────────
@@ -251,14 +278,14 @@ function toneFor(ratio: number | null): string {
 function StatCard(props: { label: string; value: string; hint?: string; tone?: string }) {
   return (
     <Card className="p-4">
-      <div className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+      <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {props.label}
       </div>
-      <div className={`mt-1 text-2xl font-semibold ${props.tone || 'text-slate-900 dark:text-white'}`}>
+      <div className={`mt-1 text-2xl font-semibold ${props.tone || 'text-foreground'}`}>
         {props.value}
       </div>
       {props.hint ? (
-        <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{props.hint}</div>
+        <div className="mt-1 text-xs text-muted-foreground">{props.hint}</div>
       ) : null}
     </Card>
   )
@@ -302,17 +329,86 @@ function Confidence({ value }: { value: number }) {
           }
         : {
             label: 'рано судить',
-            tone: 'bg-slate-400',
-            text: 'text-slate-500 dark:text-slate-400',
+            tone: 'bg-muted-foreground',
+            text: 'text-muted-foreground',
             hint: 'Данных слишком мало. Это не про человека — это про то, что модулю пока не с чем сравнивать.',
           }
 
   return (
     <div className="flex items-center gap-2" title={v.hint}>
-      <div className="h-1.5 w-10 shrink-0 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
+      <div className="h-1.5 w-10 shrink-0 overflow-hidden rounded-full bg-surface-hover">
         <div className={`h-full ${v.tone}`} style={{ width: `${pct}%` }} />
       </div>
       <span className={`text-xs ${v.text}`}>{v.label}</span>
+    </div>
+  )
+}
+
+/**
+ * Обстановка смены одной строкой в таблице.
+ *
+ * Развёрнутое объяснение живёт внутри разбора, но увидеть «в этот день был
+ * снег и каникулы» нужно сразу, не раскрывая каждую смену: иначе таблица
+ * показывает провал по кассе и молчит о его причине.
+ */
+function ContextChips({ context }: { context: ShiftContext | null }) {
+  if (!context) return <span className="text-xs text-muted-foreground">—</span>
+
+  const chips: { key: string; icon: React.ReactNode; text: string; title: string; tone: string }[] = []
+
+  if (context.weather && context.weather.bucket !== 'normal') {
+    chips.push({
+      key: 'weather',
+      icon: <CloudSun className="h-3 w-3" />,
+      text: context.weather.label.toLowerCase(),
+      title: context.weather.summary,
+      tone: 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300',
+    })
+  }
+  for (const d of context.days) {
+    chips.push({
+      key: `day-${d.name}`,
+      icon: <CalendarDays className="h-3 w-3" />,
+      text: d.name.length > 22 ? `${d.name.slice(0, 21)}…` : d.name,
+      title: `${d.type_label}: ${d.name}`,
+      tone: 'bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300',
+    })
+  }
+  for (const p of context.periods) {
+    chips.push({
+      key: `period-${p.name}`,
+      icon: <GraduationCap className="h-3 w-3" />,
+      text: p.type_label.toLowerCase(),
+      title: `${p.name}${p.audience_label ? ` · ${p.audience_label}` : ''}${p.confirmed ? '' : ' · не подтверждён'}`,
+      tone: 'bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300',
+    })
+  }
+
+  if (chips.length === 0) {
+    // Обычный день — это тоже ответ, и он важен: значит, кассу нечем оправдать
+    // и нечем объяснить, кроме работы.
+    return (
+      <span className="text-xs text-muted-foreground" title="Ни погоды, ни праздников, ни учебных периодов">
+        обычный день
+      </span>
+    )
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1">
+      {chips.slice(0, 3).map((c) => (
+        <span
+          key={c.key}
+          title={c.title}
+          className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-medium ${c.tone}`}
+        >
+          {c.icon}
+          {c.text}
+        </span>
+      ))}
+      {chips.length > 3 ? (
+        <span className="text-[11px] text-muted-foreground">+{chips.length - 3}</span>
+      ) : null}
     </div>
   )
 }
@@ -506,10 +602,10 @@ function SettingsModal(props: {
       title={
         <div className="flex flex-wrap items-center gap-2">
           <span>Настройки</span>
-          <span className="rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-white/10 dark:text-slate-200">
+          <span className="rounded-lg bg-surface-hover px-2 py-0.5 text-xs font-medium text-body">
             {props.companyName}
           </span>
-          <span className="text-sm font-normal text-slate-500 dark:text-slate-400">
+          <span className="text-sm font-normal text-muted-foreground">
             настройки относятся к этой точке
           </span>
         </div>
@@ -533,22 +629,22 @@ function SettingsModal(props: {
     >
       <>
         {loading ? (
-          <div className="flex items-center justify-center gap-2 p-12 text-sm text-slate-500 dark:text-slate-400">
+          <div className="flex items-center justify-center gap-2 p-12 text-sm text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin" /> Загружаем настройки…
           </div>
         ) : (
           <div className="space-y-4">
             {/* Погода */}
-            <section className="rounded-xl border border-slate-200 p-4 dark:border-white/10">
+            <section className="rounded-xl border border-border p-4 dark:border-white/10">
               <div className="flex items-start gap-3">
                 <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-300">
                   <CloudSun className="h-4.5 w-4.5" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
+                  <h3 className="text-sm font-semibold text-foreground">
                     Где находится магазин
                   </h3>
-                  <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                     Координаты нужны только для погоды: по ним берётся прогноз вашего города. Погода
                     объясняет, почему покупателей было больше или меньше, но на бонусы не влияет —
                     продавец за дождь не отвечает.
@@ -556,25 +652,25 @@ function SettingsModal(props: {
 
                   <div className="mt-3 flex flex-wrap items-end gap-3">
                     <label className="flex flex-col gap-1">
-                      <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Широта</span>
-                      <input
+                      <span className="text-xs font-medium text-body">Широта</span>
+                      <Input
                         type="text"
                         inputMode="decimal"
                         value={lat}
                         onChange={(e) => setLat(e.target.value)}
                         placeholder="43.238949"
-                        className="w-40 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100 dark:border-white/10 dark:bg-slate-950 dark:text-white dark:focus:ring-sky-500/20"
+                        className="w-40"
                       />
                     </label>
                     <label className="flex flex-col gap-1">
-                      <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Долгота</span>
-                      <input
+                      <span className="text-xs font-medium text-body">Долгота</span>
+                      <Input
                         type="text"
                         inputMode="decimal"
                         value={lon}
                         onChange={(e) => setLon(e.target.value)}
                         placeholder="76.889709"
-                        className="w-40 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100 dark:border-white/10 dark:bg-slate-950 dark:text-white dark:focus:ring-sky-500/20"
+                        className="w-40"
                       />
                     </label>
                     <span
@@ -583,7 +679,7 @@ function SettingsModal(props: {
                           ? 'text-rose-600 dark:text-rose-400'
                           : hasCoords
                             ? 'text-emerald-600 dark:text-emerald-400'
-                            : 'text-slate-400 dark:text-slate-500'
+                            : 'text-muted-foreground'
                       }`}
                     >
                       {coordsBroken
@@ -594,15 +690,15 @@ function SettingsModal(props: {
                     </span>
                   </div>
 
-                  <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+                  <p className="mt-2 text-xs text-muted-foreground">
                     Как узнать: откройте Google Карты, нажмите правой кнопкой на здание магазина — первая
                     строка меню и есть эти два числа.
                   </p>
 
                   {hasCoords ? (
-                    <div className="mt-3 rounded-lg bg-slate-50 p-3 dark:bg-white/5">
+                    <div className="mt-3 rounded-lg bg-surface-muted p-3">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="text-xs font-medium text-slate-700 dark:text-slate-200">
+                        <span className="text-xs font-medium text-body">
                           Погода за прошлое
                         </span>
                         <Button
@@ -619,7 +715,7 @@ function SettingsModal(props: {
                           Догрузить
                         </Button>
                       </div>
-                      <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                         Каждую ночь погода собирается на неделю назад, поэтому влияние снега и жары
                         набиралось бы месяцами. Кнопка забирает архив за всю историю продаж сразу — один
                         раз, дальше справляется крон.
@@ -636,27 +732,27 @@ function SettingsModal(props: {
             </section>
 
             {/* Ворота */}
-            <section className="rounded-xl border border-slate-200 p-4 dark:border-white/10">
+            <section className="rounded-xl border border-border p-4 dark:border-white/10">
               <div className="flex items-start gap-3">
                 <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-300">
                   <GraduationCap className="h-4.5 w-4.5" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Знание товара</h3>
-                  <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                  <h3 className="text-sm font-semibold text-foreground">Знание товара</h3>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                     Верхние уровни (B3 и рекорд) можно закрыть для тех, кто не сдал тест. Включайте,
                     только если тесты действительно проводятся: иначе уровень срежется всем за
                     отсутствие данных, а не за незнание.
                   </p>
 
-                  <label className="mt-3 flex cursor-pointer items-center gap-2.5 rounded-lg bg-slate-50 px-3 py-2.5 transition hover:bg-slate-100 dark:bg-white/5 dark:hover:bg-white/10">
+                  <label className="mt-3 flex cursor-pointer items-center gap-2.5 rounded-lg bg-surface-muted px-3 py-2.5 transition hover:bg-surface-hover">
                     <input
                       type="checkbox"
                       checked={testGate}
                       onChange={(e) => setTestGate(e.target.checked)}
-                      className="h-4 w-4 rounded border-slate-300 text-sky-600 dark:border-white/20"
+                      className="h-4 w-4 rounded border-border text-sky-600"
                     />
-                    <span className="text-sm text-slate-700 dark:text-slate-200">
+                    <span className="text-sm text-body">
                       Требовать сданный тест для B3 и рекорда
                     </span>
                   </label>
@@ -665,28 +761,28 @@ function SettingsModal(props: {
             </section>
 
             {/* Допродажи */}
-            <section className="rounded-xl border border-slate-200 p-4 dark:border-white/10">
+            <section className="rounded-xl border border-border p-4 dark:border-white/10">
               <div className="flex items-start gap-3">
                 <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300">
                   <ShoppingBag className="h-4.5 w-4.5" />
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-baseline gap-2">
-                    <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Допродажи</h3>
-                    <span className="text-xs text-slate-400">
+                    <h3 className="text-sm font-semibold text-foreground">Допродажи</h3>
+                    <span className="text-xs text-muted-foreground">
                       {rules.length > 0 ? `${rules.length} прав.` : 'сохраняются сразу'}
                     </span>
                   </div>
-                  <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                     «Взяли одно — предложи другое». Модуль считает, как часто продавец добавлял второе к
                     первому. Можно указать и категорию, и конкретный товар.
                   </p>
 
                   <div className="mt-3 space-y-1.5">
                     {rules.length === 0 ? (
-                      <div className="rounded-lg border border-dashed border-slate-200 px-3 py-5 text-center dark:border-white/10">
-                        <p className="text-sm text-slate-500 dark:text-slate-400">Правил пока нет</p>
-                        <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
+                      <div className="rounded-lg border border-dashed border-border px-3 py-5 text-center dark:border-white/10">
+                        <p className="text-sm text-muted-foreground">Правил пока нет</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
                           Пока их нет, допродажи не считаются и в оценке не участвуют
                         </p>
                       </div>
@@ -694,19 +790,19 @@ function SettingsModal(props: {
                       rules.map((r) => (
                         <div
                           key={r.id}
-                          className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm dark:bg-white/5"
+                          className="flex items-center gap-2 rounded-lg bg-surface-muted px-3 py-2 text-sm"
                         >
-                          <span className="text-slate-700 dark:text-slate-200">
+                          <span className="text-body">
                             {refName(r.source_kind, r.source_ref)}
                           </span>
-                          <span className="text-slate-400">→</span>
-                          <span className="text-slate-700 dark:text-slate-200">
+                          <span className="text-muted-foreground">→</span>
+                          <span className="text-body">
                             {refName(r.target_kind, r.target_ref)}
                           </span>
                           <button
                             onClick={() => void removeRule(r.id)}
                             disabled={busy}
-                            className="ml-auto rounded p-1 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10"
+                            className="ml-auto rounded p-1 text-muted-foreground transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10"
                             aria-label="Удалить правило"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -727,11 +823,11 @@ function SettingsModal(props: {
                         ['Что предложить', target, setTarget],
                       ] as const).map(([placeholder, value, setValue], i) => (
                         <Fragment key={placeholder}>
-                          {i === 1 ? <span className="text-slate-400">→</span> : null}
-                          <select
+                          {i === 1 ? <span className="text-muted-foreground">→</span> : null}
+                          <NativeSelect
                             value={value}
                             onChange={(e) => setValue(e.target.value)}
-                            className="max-w-[200px] flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 dark:border-white/10 dark:bg-slate-950 dark:text-white dark:focus:ring-emerald-500/20"
+                            className="max-w-[200px] flex-1"
                           >
                             <option value="">{placeholder}</option>
                             <optgroup label="Категории">
@@ -748,7 +844,7 @@ function SettingsModal(props: {
                                 </option>
                               ))}
                             </optgroup>
-                          </select>
+                          </NativeSelect>
                         </Fragment>
                       ))}
                       <Button
@@ -794,8 +890,13 @@ function SettingsModal(props: {
 // ─── Страница ───────────────────────────────────────────────────────────────
 
 export default function SalesKpiPage() {
-  const [from, setFrom] = useState(isoDaysAgo(30))
-  const [to, setTo] = useState(isoToday())
+  // Период задаётся месяцем. Произвольные даты остаются доступны, но по
+  // умолчанию страница показывает целый месяц: так поправка на месяц и смены в
+  // таблице говорят об одном и том же отрезке.
+  const [month, setMonth] = useState(currentMonthKey())
+  const [customRange, setCustomRange] = useState(false)
+  const [from, setFrom] = useState(monthBounds(currentMonthKey()).from)
+  const [to, setTo] = useState(monthBounds(currentMonthKey()).to)
   const [companyId, setCompanyId] = useState<string>('')
   const [openShift, setOpenShift] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
@@ -844,31 +945,46 @@ export default function SalesKpiPage() {
 
   const toolbar = (
     <div className="flex flex-wrap items-end gap-2">
-      <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
-        С
-        <input
-          type="date"
-          value={from}
-          onChange={(e) => setFrom(e.target.value)}
-          className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900 dark:border-white/10 dark:bg-slate-900 dark:text-white"
-        />
-      </label>
-      <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
-        По
-        <input
-          type="date"
-          value={to}
-          onChange={(e) => setTo(e.target.value)}
-          className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900 dark:border-white/10 dark:bg-slate-900 dark:text-white"
-        />
-      </label>
+      {customRange ? (
+        <>
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+            С
+            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-40" />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+            По
+            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-40" />
+          </label>
+        </>
+      ) : (
+        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+          Месяц
+          <NativeSelect
+            value={month}
+            onChange={(e) => {
+              const next = e.target.value
+              const bounds = monthBounds(next)
+              setMonth(next)
+              setFrom(bounds.from)
+              setTo(bounds.to)
+            }}
+            className="w-44"
+          >
+            {recentMonths(18).map((m) => (
+              <option key={m.key} value={m.key}>
+                {m.label}
+              </option>
+            ))}
+          </NativeSelect>
+        </label>
+      )}
       {(payload?.stores?.length || 0) > 1 ? (
-        <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
+        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
           Точка
-          <select
+          <NativeSelect
             value={companyId}
             onChange={(e) => setCompanyId(e.target.value)}
-            className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900 dark:border-white/10 dark:bg-slate-900 dark:text-white"
+            className="w-48"
           >
             <option value="">Выберите точку</option>
             {(payload?.stores || []).map((s) => (
@@ -876,15 +992,27 @@ export default function SalesKpiPage() {
                 {s.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </label>
       ) : null}
       <div className="flex gap-1">
-        <Button variant="outline" size="sm" onClick={() => { setFrom(isoDaysAgo(7)); setTo(isoToday()) }}>
-          7 дней
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => { setFrom(isoDaysAgo(30)); setTo(isoToday()) }}>
-          30 дней
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            if (customRange) {
+              // Возврат к месяцам: показываем тот, в котором начинался
+              // выбранный отрезок, иначе экран прыгнул бы на текущий месяц.
+              const next = from.slice(0, 7)
+              const bounds = monthBounds(next)
+              setMonth(next)
+              setFrom(bounds.from)
+              setTo(bounds.to)
+            }
+            setCustomRange(!customRange)
+          }}
+        >
+          {customRange ? 'По месяцам' : 'Свои даты'}
         </Button>
         <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={refreshing}>
           {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
@@ -922,7 +1050,7 @@ export default function SalesKpiPage() {
       ) : null}
 
       {loading ? (
-        <Card className="flex items-center justify-center gap-2 p-10 text-slate-500 dark:text-slate-400">
+        <Card className="flex items-center justify-center gap-2 p-10 text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin" />
           Считаем ожидания по истории…
         </Card>
@@ -931,19 +1059,23 @@ export default function SalesKpiPage() {
           Не удалось загрузить данные: {error}
         </Card>
       ) : payload?.no_store ? (
-        <Card className="p-6 text-sm text-slate-600 dark:text-slate-300">
-          <Store className="mb-2 h-5 w-5 text-slate-400" />
+        <Card className="p-6 text-sm text-body">
+          <Store className="mb-2 h-5 w-5 text-muted-foreground" />
           Ни на одной точке не включён магазин. Модуль считает продажи магазина — включите магазин на точке
           в настройках, и страница оживёт.
         </Card>
       ) : payload?.needs_company ? (
-        <Card className="p-6 text-sm text-slate-600 dark:text-slate-300">
+        <Card className="p-6 text-sm text-body">
           Выберите точку в фильтре выше. Смешивать точки в один рейтинг нельзя: у них разный ассортимент,
           поток и ожидания, и общий балл не значил бы ничего.
         </Card>
       ) : (
         <>
-          <div className="flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-1 dark:border-white/10 dark:bg-slate-900/60">
+          <div
+            className="inline-flex flex-wrap gap-1 rounded-2xl border border-border bg-surface-muted p-1"
+            role="tablist"
+            aria-label="Разделы эффективности продавцов"
+          >
             {([
               ['payout', 'Кому доплатить'],
               ['review', 'Почему такая касса'],
@@ -955,10 +1087,13 @@ export default function SalesKpiPage() {
               <button
                 key={id}
                 onClick={() => setTab(id)}
-                className={`rounded-lg px-3.5 py-2 text-sm font-medium transition-colors ${
+                type="button"
+                role="tab"
+                aria-selected={tab === id}
+                className={`rounded-xl px-4 py-2 text-sm font-medium transition-all ${
                   tab === id
-                    ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
-                    : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10'
+                    ? 'bg-card text-foreground shadow-sm ring-1 ring-border'
+                    : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {label}
@@ -984,8 +1119,8 @@ export default function SalesKpiPage() {
         <>
 
           {warnings.length > 0 ? (
-            <Card className="flex gap-3 p-4 text-sm text-slate-600 dark:text-slate-300">
-              <Info className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+            <Card className="flex gap-3 p-4 text-sm text-body">
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
               <ul className="space-y-1">
                 {warnings.map((w) => (
                   <li key={w}>{w}</li>
@@ -1037,16 +1172,16 @@ export default function SalesKpiPage() {
 
           {/* Продавцы */}
           <Card className="overflow-hidden">
-            <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3 dark:border-white/10">
-              <Users className="h-4 w-4 text-slate-400" />
-              <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Продавцы</h2>
-              <span className="text-xs text-slate-500 dark:text-slate-400">
+            <div className="flex items-center gap-2 border-b border-border px-4 py-3 dark:border-white/10">
+              <Users className="h-4 w-4 text-muted-foreground" />
+              <h2 className="text-sm font-semibold text-foreground">Продавцы</h2>
+              <span className="text-xs text-muted-foreground">
                 статус присваивается от {payload?.settings?.min_qualifying_shifts ?? 6} смен
               </span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[720px] text-sm">
-                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-white/5 dark:text-slate-400">
+                <thead className="bg-surface-muted text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="px-4 py-2 text-left font-medium">Продавец</th>
                     <th className="px-4 py-2 text-right font-medium">Смен</th>
@@ -1057,10 +1192,10 @@ export default function SalesKpiPage() {
                     <th className="px-4 py-2 text-left font-medium">Сильное / слабое</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                <tbody className="divide-y divide-border">
                   {cashiers.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-4 py-6 text-center text-slate-500 dark:text-slate-400">
+                      <td colSpan={7} className="px-4 py-6 text-center text-muted-foreground">
                         За период нет смен с указанным продавцом.
                       </td>
                     </tr>
@@ -1068,8 +1203,8 @@ export default function SalesKpiPage() {
                     cashiers.map((c) => {
                       const status = STATUSES[c.status] || STATUSES.NORMAL
                       return (
-                        <tr key={c.cashier_id} className="hover:bg-slate-50 dark:hover:bg-white/5">
-                          <td className="px-4 py-2 font-medium text-slate-900 dark:text-white">{c.name}</td>
+                        <tr key={c.cashier_id} className="hover:bg-surface-hover">
+                          <td className="px-4 py-2 font-medium text-foreground">{c.name}</td>
                           <td className="px-4 py-2 text-right tabular-nums">{c.shifts}</td>
                           <td className="px-4 py-2 text-right tabular-nums">{formatMoney(c.revenue)}</td>
                           <td
@@ -1127,15 +1262,15 @@ export default function SalesKpiPage() {
 
           {/* Смены */}
           <Card className="overflow-hidden">
-            <div className="border-b border-slate-200 px-4 py-3 dark:border-white/10">
-              <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Смены</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+            <div className="border-b border-border px-4 py-3 dark:border-white/10">
+              <h2 className="text-sm font-semibold text-foreground">Смены</h2>
+              <p className="text-xs text-muted-foreground">
                 Нажмите на смену, чтобы увидеть, из чего сложился вывод
               </p>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[820px] text-sm">
-                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-white/5 dark:text-slate-400">
+              <table className="w-full min-w-[960px] text-sm">
+                <thead className="bg-surface-muted text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="px-4 py-2 text-left font-medium">Дата</th>
                     <th className="px-4 py-2 text-left font-medium">Смена</th>
@@ -1144,14 +1279,15 @@ export default function SalesKpiPage() {
                     <th className="px-4 py-2 text-right font-medium">Покупателей</th>
                     <th className="px-4 py-2 text-right font-medium">Как отработал</th>
                     <th className="px-4 py-2 text-left font-medium">Вывод</th>
+                    <th className="px-4 py-2 text-left font-medium">Обстановка</th>
                     <th className="px-4 py-2 text-left font-medium">Можно ли доверять</th>
                     <th className="w-8" />
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                <tbody className="divide-y divide-border">
                   {shifts.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="px-4 py-6 text-center text-slate-500 dark:text-slate-400">
+                      <td colSpan={10} className="px-4 py-6 text-center text-muted-foreground">
                         За выбранный период смен магазина нет.
                       </td>
                     </tr>
@@ -1165,12 +1301,12 @@ export default function SalesKpiPage() {
                         <Fragment key={key}>
                           <tr
                             onClick={() => setOpenShift(isOpen ? null : key)}
-                            className="cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5"
+                            className="cursor-pointer hover:bg-surface-hover"
                           >
                             <td className="px-4 py-2 tabular-nums">
                               {s.date}
                               {s.duration_minutes ? (
-                                <div className="text-xs text-slate-400">
+                                <div className="text-xs text-muted-foreground">
                                   {Math.round((s.duration_minutes / 60) * 10) / 10} ч
                                 </div>
                               ) : null}
@@ -1212,20 +1348,24 @@ export default function SalesKpiPage() {
                               <VerdictBadge verdict={s.verdict} />
                             </td>
                             <td className="px-4 py-2">
+                              <ContextChips context={s.context} />
+                            </td>
+                            <td className="px-4 py-2">
                               <Confidence value={s.confidence} />
                             </td>
-                            <td className="px-2 py-2 text-slate-400">
+                            <td className="px-2 py-2 text-muted-foreground">
                               <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                             </td>
                           </tr>
                           {isOpen ? (
-                            <tr className="bg-slate-50/60 dark:bg-white/[0.02]">
-                              <td colSpan={9} className="px-4 py-4">
+                            <tr className="bg-surface-muted">
+                              <td colSpan={10} className="px-4 py-4">
                                 <ShiftDetail
                                   companyId={payload?.company?.id || ''}
                                   date={s.date}
                                   shift={s.shift}
                                   explanation={s.explanation}
+                                  context={s.context}
                                   canAskAi
                                 />
                               </td>
@@ -1240,7 +1380,7 @@ export default function SalesKpiPage() {
             </div>
           </Card>
 
-          <p className="px-1 text-xs text-slate-400 dark:text-slate-500">
+          <p className="px-1 text-xs text-muted-foreground">
             Модель {payload?.model_version || '—'}. «Лучше на 13%» значит: продавец сработал на 13% выше
             того, что обычно бывает в таких же сменах — тот же сезон, тот же день недели, та же смена. Это
             не доля от плана. Спрос меряется числом чеков: счётчика посетителей у магазина нет, но чек

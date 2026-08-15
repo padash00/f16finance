@@ -13,7 +13,7 @@
  */
 
 import { useState } from 'react'
-import { AlertTriangle, Bot, Loader2, Sparkles } from 'lucide-react'
+import { AlertTriangle, Bot, CalendarDays, CloudSun, GraduationCap, Loader2, Sparkles } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { formatMoney } from '@/lib/core/format'
@@ -37,6 +37,33 @@ export type ShiftExplanation = {
   caveats: string[]
 }
 
+/**
+ * Обстановка смены: погода, праздники, учебный период.
+ *
+ * Всё это уже было в системе, но лежало по разным экранам. Здесь оно рядом с
+ * выводом, потому что вопрос «почему такая касса» без него не закрывается.
+ */
+export type ShiftContext = {
+  weather: {
+    bucket: string
+    label: string
+    windowed: boolean
+    temperature_max: number | null
+    temperature_min: number | null
+    precipitation_mm: number | null
+    window_label: string
+    summary: string
+  } | null
+  days: { name: string; type_label: string; impact_index: number; verified: boolean }[]
+  periods: {
+    name: string
+    type_label: string
+    audience_label: string | null
+    index: number | null
+    confirmed: boolean
+  }[]
+}
+
 type AiResult = {
   summary: string
   traffic: string
@@ -56,19 +83,101 @@ function formatMetric(metric: string, value: number | null): string {
 }
 
 function deltaTone(delta: number | null): string {
-  if (delta == null) return 'text-slate-400 dark:text-slate-500'
+  if (delta == null) return 'text-muted-foreground'
   if (delta >= 5) return 'text-emerald-600 dark:text-emerald-400'
   if (delta <= -5) return 'text-amber-600 dark:text-amber-400'
-  return 'text-slate-600 dark:text-slate-300'
+  return 'text-body'
 }
 
 function Block(props: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+      <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         {props.title}
       </div>
       {props.children}
+    </div>
+  )
+}
+
+/** Влияние особого дня словами: 1.00 — нейтрально, отклонение в процентах. */
+function impactText(value: number): string {
+  const delta = Math.round((Number(value) - 1) * 100)
+  if (delta === 0) return 'влияние не задано'
+  return delta > 0 ? `спрос выше на ${delta}%` : `спрос ниже на ${Math.abs(delta)}%`
+}
+
+function ContextBlock(props: { context: ShiftContext }) {
+  const { weather, days, periods } = props.context
+  const empty = !weather && days.length === 0 && periods.length === 0
+
+  return (
+    <div className="rounded-lg border border-border bg-surface-muted p-3">
+      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Обстановка в этот день
+      </div>
+
+      {empty ? (
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          Ничего не известно: погода не загружена, праздников и учебных периодов на эту дату нет.
+          Догрузить погоду и справочники можно во вкладке «Цели на смену».
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {weather ? (
+            <div className="flex items-start gap-2">
+              <CloudSun className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
+              <div className="min-w-0 text-xs leading-relaxed text-body">
+                <span className="font-medium">{weather.label}</span>
+                {weather.windowed ? (
+                  <span className="text-muted-foreground"> · окно смены {weather.window_label}</span>
+                ) : null}
+                <div className="text-muted-foreground">{weather.summary}</div>
+              </div>
+            </div>
+          ) : null}
+
+          {days.map((d) => (
+            <div key={`${d.type_label}-${d.name}`} className="flex items-start gap-2">
+              <CalendarDays className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sky-500" />
+              <div className="min-w-0 text-xs leading-relaxed text-body">
+                <span className="font-medium">{d.name}</span>
+                <span className="text-muted-foreground"> · {d.type_label}</span>
+                <div className="text-muted-foreground">
+                  {impactText(d.impact_index)}
+                  {!d.verified ? ' · дата не сверена' : ''}
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {periods.map((p) => (
+            <div key={`${p.type_label}-${p.name}`} className="flex items-start gap-2">
+              <GraduationCap className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-500" />
+              <div className="min-w-0 text-xs leading-relaxed text-body">
+                <span className="font-medium">{p.name}</span>
+                <span className="text-muted-foreground">
+                  {' '}
+                  · {p.type_label}
+                  {p.audience_label ? ` · ${p.audience_label}` : ''}
+                </span>
+                <div className="text-muted-foreground">
+                  {p.confirmed
+                    ? p.index != null
+                      ? impactText(p.index)
+                      : 'влияние не задано'
+                    : 'период не подтверждён — в расчёт не идёт'}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <p className="mt-2 text-[11px] leading-4 text-muted-foreground">
+        Обстановка объясняет, сколько людей зашло. На баллы продавца она не влияет: за погоду и
+        праздники он не отвечает.
+      </p>
     </div>
   )
 }
@@ -78,6 +187,7 @@ export function ShiftDetail(props: {
   date: string
   shift: 'day' | 'night'
   explanation: ShiftExplanation | null
+  context?: ShiftContext | null
   canAskAi: boolean
 }) {
   const [ai, setAi] = useState<AiResult | null>(null)
@@ -107,7 +217,7 @@ export function ShiftDetail(props: {
   }
 
   if (!explanation) {
-    return <div className="text-xs text-slate-500 dark:text-slate-400">Разбор недоступен.</div>
+    return <div className="text-xs text-muted-foreground">Разбор недоступен.</div>
   }
 
   return (
@@ -115,24 +225,26 @@ export function ShiftDetail(props: {
       <div className="grid gap-5 lg:grid-cols-2">
         {/* Что произошло */}
         <div className="space-y-3">
-          <div className="text-sm font-semibold text-slate-900 dark:text-white">{explanation.headline}</div>
+          <div className="text-sm font-semibold text-foreground">{explanation.headline}</div>
           {explanation.paragraphs.map((p) => (
-            <p key={p.slice(0, 40)} className="text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+            <p key={p.slice(0, 40)} className="text-xs leading-relaxed text-body">
               {p}
             </p>
           ))}
 
           <Block title="Что это значит">
-            <p className="text-xs leading-relaxed text-slate-700 dark:text-slate-200">{explanation.conclusion}</p>
+            <p className="text-xs leading-relaxed text-body">{explanation.conclusion}</p>
           </Block>
 
+          {props.context ? <ContextBlock context={props.context} /> : null}
+
           <Block title="Что делать">
-            <p className="text-xs leading-relaxed text-slate-700 dark:text-slate-200">{explanation.action}</p>
+            <p className="text-xs leading-relaxed text-body">{explanation.action}</p>
           </Block>
 
           {explanation.caveats.length > 0 ? (
             <Block title="Где выводу нельзя доверять">
-              <ul className="space-y-1 text-xs text-slate-500 dark:text-slate-400">
+              <ul className="space-y-1 text-xs text-muted-foreground">
                 {explanation.caveats.map((c) => (
                   <li key={c}>• {c}</li>
                 ))}
@@ -143,35 +255,35 @@ export function ShiftDetail(props: {
 
         {/* Метрики с прочтением */}
         <div className="space-y-2">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Что видно по работе с покупателем
           </div>
           {explanation.metrics.map((m) => (
             <div
               key={m.metric}
-              className="rounded-lg border border-slate-200 p-2.5 dark:border-white/10"
+              className="rounded-lg border border-border p-2.5 dark:border-white/10"
             >
               <div className="flex items-baseline justify-between gap-2">
-                <span className="text-xs font-medium text-slate-900 dark:text-white">{m.label}</span>
+                <span className="text-xs font-medium text-foreground">{m.label}</span>
                 <span className={`text-xs tabular-nums ${deltaTone(m.delta_pct)}`}>
                   {m.delta_pct == null ? '—' : `${m.delta_pct > 0 ? '+' : ''}${m.delta_pct}%`}
                 </span>
               </div>
-              <div className="mt-0.5 text-xs tabular-nums text-slate-500 dark:text-slate-400">
+              <div className="mt-0.5 text-xs tabular-nums text-muted-foreground">
                 было {formatMetric(m.metric, m.actual)} · обычно бывает{' '}
                 {formatMetric(m.metric, m.expected)}
                 {m.sample > 0 ? ` · по ${m.sample} похожим сменам` : ''}
               </div>
-              <p className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-300">{m.reading}</p>
+              <p className="mt-1 text-xs leading-relaxed text-body">{m.reading}</p>
             </div>
           ))}
         </div>
       </div>
 
       {/* ИИ поверх готового разбора */}
-      <div className="rounded-lg border border-slate-200 p-3 dark:border-white/10">
+      <div className="rounded-lg border border-border p-3 dark:border-white/10">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             <Bot className="h-4 w-4" /> Разбор от ИИ
           </div>
           {props.canAskAi && !ai ? (
@@ -187,7 +299,7 @@ export function ShiftDetail(props: {
         </div>
 
         {!ai && !loading && !aiError ? (
-          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+          <p className="mt-2 text-xs text-muted-foreground">
             Модель не считает цифры — она объясняет уже посчитанное. Разбор выше от неё не зависит.
           </p>
         ) : null}
@@ -212,13 +324,13 @@ export function ShiftDetail(props: {
               .filter(([, text]) => Boolean(text))
               .map(([title, text]) => (
                 <Block key={title as string} title={title as string}>
-                  <p className="text-xs leading-relaxed text-slate-700 dark:text-slate-200">{text as string}</p>
+                  <p className="text-xs leading-relaxed text-body">{text as string}</p>
                 </Block>
               ))}
 
             {ai.uncertainties.length > 0 ? (
               <Block title="Оговорки">
-                <ul className="space-y-1 text-xs text-slate-500 dark:text-slate-400">
+                <ul className="space-y-1 text-xs text-muted-foreground">
                   {ai.uncertainties.map((u) => (
                     <li key={u}>• {u}</li>
                   ))}

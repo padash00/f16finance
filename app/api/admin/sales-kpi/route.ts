@@ -22,6 +22,7 @@ import {
   inScope,
 } from '@/lib/server/store-kpi'
 import { analyzeStoreKpi, explainShift, trainingFlag } from '@/lib/domain/store-kpi'
+import { contextForShift, loadContextSources } from '@/lib/server/store-kpi-context'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -76,6 +77,10 @@ export async function GET(request: Request) {
     const targetFacts = facts.filter((f) => f.date >= from && f.date <= to)
 
     const result = analyzeStoreKpi({ baselineFacts, targetFacts, settings })
+
+    // Погода, праздники и учебные периоды за показываемый отрезок. Они не
+    // участвуют в баллах — только объясняют, каким был спрос.
+    const context = await loadContextSources(supabase, company.id, company.organization_id ?? null, from, to)
 
     // ── Имена продавцов ───────────────────────────────────────────────────
     const cashierIds = [...new Set(targetFacts.map((f) => f.cashier_id).filter(Boolean))] as string[]
@@ -141,6 +146,7 @@ export async function GET(request: Request) {
           // Развёрнутый разбор считается здесь же: он детерминированный и
           // должен быть виден без отдельного запроса и без участия ИИ.
           explanation: explainShift(s, settings),
+          context: contextForShift(s.fact, context),
         })),
         cashiers: result.cashiers.map((c) => {
           // Флаг обучения — рекомендация управляющему, а не наказание: он
