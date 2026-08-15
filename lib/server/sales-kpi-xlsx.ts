@@ -33,6 +33,28 @@ const MUTED_FILL = 'FFF8FAFC'
 
 const MONEY_FMT = '# ##0 " ₸"'
 
+/**
+ * Полоска внутри ячейки.
+ *
+ * `cfvo` обязателен: без границ шкалы писатель ExcelJS падает на
+ * `undefined.forEach` уже при сохранении файла, и отчёт не собирается вовсе.
+ * Минимум шкалы — ноль, а не наименьшее значение: иначе самая слабая смена
+ * выглядела бы пустой строкой, будто продаж не было совсем.
+ */
+function dataBarRule(color: string, priority: number) {
+  return {
+    type: 'dataBar' as const,
+    priority,
+    color: { argb: color },
+    cfvo: [
+      { type: 'num' as const, value: 0 },
+      { type: 'max' as const },
+    ],
+    showValue: true,
+    gradient: false,
+  }
+}
+
 function headerRow(sheet: ExcelJS.Worksheet, row: number, values: string[]) {
   const r = sheet.getRow(row)
   r.values = values
@@ -175,11 +197,11 @@ function sheetCashiers(wb: ExcelJS.Workbook, c: Contract) {
     // Полоски внутри ячеек: сравнение выручки без отдельного графика.
     sheet.addConditionalFormatting({
       ref: `F2:F${row - 1}`,
-      rules: [{ type: 'dataBar', color: { argb: 'FF16A34A' }, priority: 1 } as any],
+      rules: [dataBarRule('FF16A34A', 1) as any],
     })
     sheet.addConditionalFormatting({
       ref: `D2:D${row - 1}`,
-      rules: [{ type: 'dataBar', color: { argb: 'FF3B82F6' }, priority: 2 } as any],
+      rules: [dataBarRule('FF3B82F6', 2) as any],
     })
   }
 
@@ -295,11 +317,11 @@ function sheetShifts(wb: ExcelJS.Workbook, c: Contract) {
     sheet.autoFilter = { from: 'A1', to: `K${row - 1}` }
     sheet.addConditionalFormatting({
       ref: `D2:D${row - 1}`,
-      rules: [{ type: 'dataBar', color: { argb: 'FF16A34A' }, priority: 1 } as any],
+      rules: [dataBarRule('FF16A34A', 1) as any],
     })
     sheet.addConditionalFormatting({
       ref: `F2:F${row - 1}`,
-      rules: [{ type: 'dataBar', color: { argb: 'FF3B82F6' }, priority: 2 } as any],
+      rules: [dataBarRule('FF3B82F6', 2) as any],
     })
   }
 
