@@ -130,13 +130,20 @@ export async function GET(request: Request) {
         shift,
         locked: Boolean(planRow.locked_at),
         revenue,
+        // Суммы отдаём, только если модуль их действительно платит. Иначе
+        // экран обещал бы деньги, которые начисляет другое правило со своими
+        // порогами — а обманутое ожидание хуже, чем отсутствие цифры.
         levels: [
-          { code: 'b1', threshold: plan.b1, bonus: settings.b1_amount },
-          { code: 'b2', threshold: plan.b2, bonus: settings.b2_amount },
-          { code: 'b3', threshold: plan.b3, bonus: settings.b3_amount },
+          { code: 'b1', threshold: plan.b1, bonus: settings.shift_bonus_paid ? settings.b1_amount : null },
+          { code: 'b2', threshold: plan.b2, bonus: settings.shift_bonus_paid ? settings.b2_amount : null },
+          { code: 'b3', threshold: plan.b3, bonus: settings.shift_bonus_paid ? settings.b3_amount : null },
         ],
+        bonus_paid_here: settings.shift_bonus_paid,
+        payout_note: settings.shift_bonus_paid
+          ? null
+          : 'Уровни — цель на смену. Деньги за оборот начисляются по правилам зарплаты.',
         reached: outcome.level,
-        earned: outcome.amount,
+        earned: settings.shift_bonus_paid ? outcome.amount : null,
         next_level: outcome.next_level,
         to_next: outcome.to_next,
         // Уровень взят по выручке, но срезан воротами — продавцу важно видеть

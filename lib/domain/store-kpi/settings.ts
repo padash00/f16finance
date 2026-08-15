@@ -87,6 +87,17 @@ export type StoreKpiSettings = {
   monthly_bonus_strong: number
   monthly_bonus_top: number
 
+  /**
+   * Платятся ли сменные бонусы B1/B2/B3 из этого модуля.
+   *
+   * По умолчанию нет: пороги по обороту уже есть в правилах зарплаты, и
+   * платить за одну смену дважды нельзя. Уровни остаются целью на смену —
+   * продавец видит, к чему идёт, а деньги за оборот начисляет прежнее
+   * правило. KPI платит за качество работы: средний чек, допродажи, товары
+   * в чеке — то есть месячный бонус за статус.
+   */
+  shift_bonus_paid: boolean
+
   /** Версия модели: расчёты прошлых периодов должны помнить свою формулу. */
   model_version: string
 }
@@ -147,6 +158,7 @@ export const DEFAULT_STORE_KPI_SETTINGS: StoreKpiSettings = {
 
   monthly_bonus_strong: 10000,
   monthly_bonus_top: 20000,
+  shift_bonus_paid: false,
 
   model_version: 'STORE_KPI_V1',
 }
@@ -251,6 +263,7 @@ export function normalizeStoreKpiSettings(row: Record<string, unknown> | null | 
     product_test_valid_days: positiveInt(row.product_test_valid_days, d.product_test_valid_days),
     monthly_bonus_strong: moneyOr(row.monthly_bonus_strong, d.monthly_bonus_strong),
     monthly_bonus_top: moneyOr(row.monthly_bonus_top, d.monthly_bonus_top),
+    shift_bonus_paid: row.shift_bonus_paid === true,
 
     model_version: typeof row.model_version === 'string' && row.model_version ? row.model_version : d.model_version,
   }

@@ -12,6 +12,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { awardMonthlyBonusToPayroll, voidMonthlyBonus } from '@/lib/server/store-kpi-payroll'
 import {
   earliestSaleDate,
   inScope,
@@ -103,7 +104,7 @@ export async function GET(request: Request) {
 
     const { data: awards } = await supabase
       .from('store_kpi_bonus_awards')
-      .select('cashier_id, kind, period_start, level, amount')
+      .select('cashier_id, kind, period_start, level, amount, salary_adjustment_id, voided_at')
       .eq('company_id', companyId)
       .eq('kind', 'monthly')
       .order('period_start', { ascending: false })
@@ -138,6 +139,7 @@ export async function GET(request: Request) {
         settings: {
           monthly_bonus_strong: settings.monthly_bonus_strong,
           monthly_bonus_top: settings.monthly_bonus_top,
+          shift_bonus_paid: settings.shift_bonus_paid,
         },
       },
     })
@@ -321,35 +323,44 @@ export async function POST(request: Request) {
       // Платить за статус, которого мы не смогли определить, нельзя.
       if (bonus.amount <= 0) return json({ error: 'nothing-to-award' }, 400)
 
-      const { error } = await supabase.from('store_kpi_bonus_awards').upsert(
-        {
-          organization_id: organizationId,
-          company_id: companyId,
-          cashier_id: cashierId,
-          kind: 'monthly',
-          period_start: `${month}-01`,
-          shift: null,
-          level: bonus.level,
-          amount: bonus.amount,
-          details: { status, score: body.score ?? null, shifts: body.shifts ?? null },
-          model_version: settings.model_version,
-          approved_by: actor,
-          approved_at: new Date().toISOString(),
-        },
-        { onConflict: 'company_id,cashier_id,kind,period_start,shift' },
-      )
-      if (error) throw error
-
-      await writeAuditLog(supabase, {
-        actorUserId: actor,
-        entityType: 'store_kpi_bonus_awards',
-        entityId: companyId,
-        action: 'create',
+      const result = await awardMonthlyBonusToPayroll({
+        supabase,
         organizationId,
-        payload: { company_id: companyId, cashier_id: cashierId, month, amount: bonus.amount, status },
+        companyId,
+        cashierId,
+        month,
+        amount: bonus.amount,
+        level: bonus.level,
+        status,
+        details: { status, score: body.score ?? null, shifts: body.shifts ?? null },
+        modelVersion: settings.model_version,
+        actorUserId: actor,
       })
 
-      return json({ ok: true, amount: bonus.amount })
+      if (!result.ok) return json({ error: result.error }, 400)
+      return json({ ok: true, amount: result.amount, created: result.created })
+    }
+
+    // ── Отмена начисления ─────────────────────────────────────────────────
+    if (action === 'void_monthly') {
+      const month = String(body.month || '')
+      const cashierId = String(body.cashier_id || '')
+      const reason = String(body.reason || '').trim()
+      if (!/^\d{4}-\d{2}$/.test(month) || !cashierId) return json({ error: 'award-invalid' }, 400)
+      // Снятие денег у человека требует причины не меньше, чем начисление.
+      if (reason.length < 5) return json({ error: 'reason-required' }, 400)
+
+      const result = await voidMonthlyBonus({
+        supabase,
+        organizationId,
+        companyId,
+        cashierId,
+        month,
+        reason,
+        actorUserId: actor,
+      })
+      if (!result.ok) return json({ error: result.error || 'void-failed' }, 400)
+      return json({ ok: true })
     }
 
     return json({ error: 'unknown-action' }, 400)

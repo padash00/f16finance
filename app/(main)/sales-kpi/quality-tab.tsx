@@ -89,8 +89,15 @@ type QualityData = {
     unique_skus: number
   }
   monthly: MonthlyRow[]
-  awards: { cashier_id: string; period_start: string; amount: number; level: string }[]
-  settings: { monthly_bonus_strong: number; monthly_bonus_top: number }
+  awards: {
+    cashier_id: string
+    period_start: string
+    amount: number
+    level: string
+    salary_adjustment_id: string | null
+    voided_at: string | null
+  }[]
+  settings: { monthly_bonus_strong: number; monthly_bonus_top: number; shift_bonus_paid: boolean }
 }
 
 const EVENT_TYPES: [string, string][] = [
@@ -165,7 +172,11 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
 
   const q = payload?.quality
   const d = payload?.diagnostics
-  const awarded = new Set((payload?.awards || []).map((a) => `${a.cashier_id}|${monthOf(a.period_start)}`))
+  const awarded = new Set(
+    (payload?.awards || [])
+      .filter((a) => !a.voided_at && a.salary_adjustment_id)
+      .map((a) => `${a.cashier_id}|${monthOf(a.period_start)}`),
+  )
   const currentMonth = monthOf(payload?.period.to || '')
 
   return (
@@ -451,9 +462,31 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
                     {m.amount > 0 ? formatMoney(m.amount) : '—'}
                   </span>
                   {already ? (
-                    <span className="rounded bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
-                      начислено
-                    </span>
+                    <>
+                      <span className="rounded bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+                        начислено в зарплату
+                      </span>
+                      {props.canManage ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="ml-auto"
+                          disabled={busy}
+                          onClick={() => {
+                            const reason = window.prompt('Причина отмены начисления (минимум 5 символов):')
+                            if (!reason || reason.trim().length < 5) return
+                            void post({
+                              action: 'void_monthly',
+                              month: currentMonth,
+                              cashier_id: m.cashier_id,
+                              reason: reason.trim(),
+                            })
+                          }}
+                        >
+                          Отменить
+                        </Button>
+                      ) : null}
+                    </>
                   ) : props.canManage && m.amount > 0 ? (
                     <Button
                       size="sm"
@@ -480,8 +513,17 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
           )}
         </div>
         <p className="border-t border-slate-200 px-4 py-2 text-xs text-slate-400 dark:border-white/10 dark:text-slate-500">
-          Бонус считается, но не начисляется сам. При статусе «мало смен» он не платится вовсе: платить за
-          статус, который мы не смогли определить, нельзя ни в плюс, ни в минус.
+          Бонус считается, но не начисляется сам. По кнопке он попадает в зарплату отдельной
+          корректировкой с пометкой источника — повторное нажатие деньги не удвоит. При статусе «мало
+          смен» бонус не платится вовсе: платить за статус, который мы не смогли определить, нельзя ни в
+          плюс, ни в минус.
+          {payload?.settings.shift_bonus_paid === false ? (
+            <>
+              {' '}
+              Сменные бонусы B1/B2/B3 этот модуль не платит — пороги по обороту уже есть в правилах
+              зарплаты, и начислять за одну смену дважды нельзя. Уровни остаются целью на смену.
+            </>
+          ) : null}
         </p>
       </Card>
 

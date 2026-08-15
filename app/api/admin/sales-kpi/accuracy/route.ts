@@ -116,12 +116,29 @@ export async function GET(request: Request) {
       targetFacts: facts.filter((f) => f.date >= livePeriodFrom),
       settings,
     })
-    const roi = bonusRoi(liveAnalysis.shifts, liveBonusCost, settings)
+    // Окупаемость должна считать те деньги, которые модуль РЕАЛЬНО платит.
+    // Сменные бонусы по умолчанию платятся правилами зарплаты, а не отсюда —
+    // ставить их в расход означало бы посчитать чужие выплаты своими.
+    let paidBonusCost = liveBonusCost
+    if (!settings.shift_bonus_paid) {
+      const { data: awards } = await supabase
+        .from('store_kpi_bonus_awards')
+        .select('amount, period_start, voided_at')
+        .eq('company_id', companyId)
+        .eq('kind', 'monthly')
+        .gte('period_start', livePeriodFrom)
+      paidBonusCost = (awards || [])
+        .filter((a: any) => !a.voided_at)
+        .reduce((sum: number, a: any) => sum + Number(a.amount || 0), 0)
+    }
+
+    const roi = bonusRoi(liveAnalysis.shifts, paidBonusCost, settings)
 
     return json({
       data: {
         company_id: companyId,
         roi,
+        shift_bonus_paid: settings.shift_bonus_paid,
         history: {
           from: facts[0]?.date ?? null,
           to: facts[facts.length - 1]?.date ?? null,
@@ -132,7 +149,9 @@ export async function GET(request: Request) {
           skipped_no_history: backtest.skipped_no_history,
           hit_rates: backtest.hit_rates,
           review_rate: backtest.review_rate,
+          // Сколько стоили бы сменные бонусы, если бы их платил этот модуль.
           bonus_cost: backtest.bonus_cost,
+          bonus_cost_hypothetical: !settings.shift_bonus_paid,
           revenue: backtest.revenue,
           // Доля бонусного фонда в выручке — главный ограничитель здравого
           // смысла: бонусы не должны съедать маржу.

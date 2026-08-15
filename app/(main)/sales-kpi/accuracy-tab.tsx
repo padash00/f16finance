@@ -45,6 +45,7 @@ type AccuracyData = {
     hit_rates: Record<string, number>
     review_rate: number
     bonus_cost: number
+    bonus_cost_hypothetical?: boolean
     revenue: number
     bonus_share: number | null
     accuracy: { n: number; wape: number | null; bias: number | null; mae: number | null }
@@ -159,7 +160,9 @@ export function AccuracyTab(props: { companyId: string }) {
                 <div className="text-xs text-slate-400">без плана: {bt.skipped_no_history}</div>
               </div>
               <div>
-                <div className="text-xs text-slate-500 dark:text-slate-400">Бонусы за период</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">
+                {bt.bonus_cost_hypothetical ? 'Бонусы, если бы платил модуль' : 'Бонусы за период'}
+              </div>
                 <div className="text-lg font-semibold text-slate-900 dark:text-white">
                   {formatMoney(bt.bonus_cost)}
                 </div>
