@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 
 import { OperatorSectionCard } from '@/components/operator/operator-app-shell'
+import { SalesKpiCard } from '@/components/operator/sales-kpi-card'
 import {
   OperatorEmptyState,
   OperatorMetricCard,
@@ -157,6 +158,8 @@ export default function OperatorHomePage() {
           hint={`Начислено ${formatMoney(data.week.netAmount)} · Выплачено ${formatMoney(data.week.paidAmount)}`}
         />
       </div>
+
+      <SalesKpiCard />
 
       <div className="grid gap-4 sm:grid-cols-3">
         <OperatorMetricCard label="Активные задачи" value={data.counters.activeTasks} icon={Briefcase} tone="violet" hint={`На проверке: ${data.counters.reviewTasks}`} />
