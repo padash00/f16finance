@@ -40,6 +40,10 @@ export type ContractShift = {
   date: string
   shift: string
   cashier_name: string | null
+  duration_minutes?: number | null
+  items?: number
+  /** Метрики смены как есть — для колонок таблицы и своих сводных. */
+  metrics?: { metric: string; actual: number | null; expected: number | null; ratio: number | null }[]
   revenue: number
   expected_revenue: number | null
   receipts: number
@@ -64,7 +68,15 @@ export type ContractShift = {
     caveats: string[]
   } | null
   context: {
-    weather: { summary: string; label: string; windowed: boolean; window_label: string } | null
+    weather: {
+      summary: string
+      label: string
+      windowed: boolean
+      window_label: string
+      temperature_max?: number | null
+      temperature_min?: number | null
+      precipitation_mm?: number | null
+    } | null
     days: { name: string; type_label: string }[]
     periods: { name: string; type_label: string; audience_label: string | null; confirmed: boolean }[]
   } | null
@@ -134,12 +146,101 @@ export type ShiftReportInput = {
   minSampleSize: number
 }
 
+const WEEKDAY_NAMES = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота']
+
+function weekdayOf(iso: string): number {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(y || 1970, (m || 1) - 1, d || 1).getDay()
+}
+
+/** Номер недели внутри периода: «неделя 1», «неделя 2». */
+function weekIndex(iso: string, from: string): number {
+  const a = new Date(`${from}T00:00:00Z`).getTime()
+  const b = new Date(`${iso}T00:00:00Z`).getTime()
+  return Math.floor((b - a) / 86_400_000 / 7) + 1
+}
+
+type Bucket = {
+  key: string
+  label: string
+  shifts: number
+  revenue: number
+  expected: number | null
+  receipts: number
+  expectedReceipts: number | null
+}
+
+function emptyBucket(key: string, label: string): Bucket {
+  return { key, label, shifts: 0, revenue: 0, expected: null, receipts: 0, expectedReceipts: null }
+}
+
+function addToBucket(bucket: Bucket, s: ContractShift) {
+  bucket.shifts += 1
+  bucket.revenue += s.revenue
+  bucket.receipts += s.receipts
+  if (s.expected_revenue != null) bucket.expected = (bucket.expected ?? 0) + s.expected_revenue
+  if (s.expected_receipts != null) {
+    bucket.expectedReceipts = (bucket.expectedReceipts ?? 0) + s.expected_receipts
+  }
+}
+
+/**
+ * Срезы периода.
+ *
+ * Отдельными сводками, а не одной таблицей: вопросы разные. «Какая неделя
+ * провалилась» и «какой день недели слабый» — это не одно и то же, и смешивать
+ * их в один список значит не ответить ни на один.
+ */
+function buildSlices(shifts: ContractShift[], from: string) {
+  const weeks = new Map<number, Bucket>()
+  const weekdays = new Map<number, Bucket>()
+  const parts = new Map<string, Bucket>()
+
+  for (const s of shifts) {
+    const w = weekIndex(s.date, from)
+    if (!weeks.has(w)) weeks.set(w, emptyBucket(String(w), `Неделя ${w}`))
+    addToBucket(weeks.get(w)!, s)
+
+    const d = weekdayOf(s.date)
+    if (!weekdays.has(d)) weekdays.set(d, emptyBucket(String(d), WEEKDAY_NAMES[d]))
+    addToBucket(weekdays.get(d)!, s)
+
+    const p = s.shift === 'night' ? 'night' : 'day'
+    if (!parts.has(p)) parts.set(p, emptyBucket(p, p === 'night' ? 'Ночные смены' : 'Дневные смены'))
+    addToBucket(parts.get(p)!, s)
+  }
+
+  // Дни недели — в человеческом порядке, с понедельника.
+  const weekdayOrder = [1, 2, 3, 4, 5, 6, 0]
+
+  return {
+    weeks: [...weeks.values()].sort((a, b) => Number(a.key) - Number(b.key)),
+    weekdays: weekdayOrder.map((d) => weekdays.get(d)).filter(Boolean) as Bucket[],
+    parts: [...parts.values()].sort((a) => (a.key === 'day' ? -1 : 1)),
+  }
+}
+
 export function buildShiftReportContract(input: ShiftReportInput) {
   const totalRevenue = input.shifts.reduce((sum, s) => sum + s.revenue, 0)
   const totalReceipts = input.shifts.reduce((sum, s) => sum + s.receipts, 0)
   const questioned = input.shifts.filter((s) => s.verdict === 'POSSIBLE_CASHIER_ISSUE').length
   const strong = input.shifts.filter((s) => s.verdict === 'STRONG_CASHIER').length
   const lowDemand = input.shifts.filter((s) => s.verdict === 'LOW_DEMAND').length
+  const highDemand = input.shifts.filter((s) => s.verdict === 'HIGH_DEMAND').length
+  const normal = input.shifts.filter((s) => s.verdict === 'NORMAL').length
+  const insufficient = input.shifts.filter((s) => s.verdict === 'INSUFFICIENT_DATA').length
+
+  const slices = buildSlices(input.shifts, input.period.from)
+  const avgTicket = totalReceipts > 0 ? Math.round(totalRevenue / totalReceipts) : null
+
+  // Лучшая и худшая смены — по работе с покупателем, а не по кассе: касса
+  // зависит от потока, и «лучшей» оказалась бы просто самая людная пятница.
+  const scored = input.shifts.filter((s) => s.score != null)
+  const best = [...scored].sort((a, b) => (b.score as number) - (a.score as number))[0] || null
+  const worst = [...scored].sort((a, b) => (a.score as number) - (b.score as number))[0] || null
+
+  const metricValue = (s: ContractShift, metric: string): number | null =>
+    s.metrics?.find((m) => m.metric === metric)?.actual ?? null
 
   return {
     meta: {
@@ -168,6 +269,50 @@ export function buildShiftReportContract(input: ShiftReportInput) {
         { label: 'Мало покупателей', value: String(lowDemand), sub: 'слабый поток, не вина продавца' },
       ],
       notes: input.warnings,
+
+      // ── Срезы периода ───────────────────────────────────────────────────
+      totals: {
+        shifts: input.shifts.length,
+        revenue: Math.round(totalRevenue),
+        receipts: totalReceipts,
+        avg_ticket: avgTicket,
+        verdicts: [
+          { label: 'Сильная смена', count: strong, hint: 'выше нормы по нескольким метрикам' },
+          { label: 'Вытянул поток', count: highDemand, hint: 'покупателей пришло больше обычного' },
+          { label: 'Норма', count: normal, hint: 'работал как обычно для этой точки' },
+          { label: 'Мало покупателей', count: lowDemand, hint: 'слабый поток, не вина продавца' },
+          { label: 'Вопрос к продавцу', count: questioned, hint: 'покупатели были, отдача ниже' },
+          { label: 'Мало данных', count: insufficient, hint: 'сравнивать было не с чем' },
+        ],
+      },
+
+      weeks: slices.weeks,
+      weekdays: slices.weekdays,
+      parts: slices.parts,
+
+      highlights: {
+        best: best
+          ? {
+              date: best.date,
+              shift: best.shift === 'night' ? 'ночь' : 'день',
+              cashier: best.cashier_name,
+              score_text: scoreText(best.score),
+              revenue: best.revenue,
+              receipts: best.receipts,
+            }
+          : null,
+        worst: worst
+          ? {
+              date: worst.date,
+              shift: worst.shift === 'night' ? 'ночь' : 'день',
+              cashier: worst.cashier_name,
+              score_text: scoreText(worst.score),
+              revenue: worst.revenue,
+              receipts: worst.receipts,
+            }
+          : null,
+      },
+
       method:
         'Каждая смена сравнивается не со средним по году, а с похожими сменами: тот же сезон, тот же день недели, дневная или ночная. Спрос меряется числом чеков — счётчика посетителей у магазина нет, но чек оставляет каждый купивший, а привести людей в помещение продавец не может. Норма считается по истории до начала периода и без собственных смен продавца, иначе человек сравнивался бы сам с собой. Если похожих смен меньше ' +
         `${input.minSampleSize}, вывод не делается вовсе.`,
@@ -212,8 +357,23 @@ export function buildShiftReportContract(input: ShiftReportInput) {
 
       return {
         date: s.date,
+        weekday: WEEKDAY_NAMES[weekdayOf(s.date)],
         shift: s.shift === 'night' ? 'ночь' : 'день',
         cashier: s.cashier_name,
+        duration_hours:
+          s.duration_minutes == null ? null : Math.round((s.duration_minutes / 60) * 10) / 10,
+        items: s.items ?? null,
+        // Числовые метрики отдельно от текста: по ним строят свои сводные.
+        avg_ticket: metricValue(s, 'avg_ticket'),
+        items_per_receipt: metricValue(s, 'items_per_receipt'),
+        attach_rate: metricValue(s, 'attach_rate'),
+        weather_label: ctx?.weather?.label ?? null,
+        temperature_max: ctx?.weather?.temperature_max ?? null,
+        temperature_min: ctx?.weather?.temperature_min ?? null,
+        precipitation_mm: ctx?.weather?.precipitation_mm ?? null,
+        weather_window: ctx?.weather?.windowed ? ctx.weather.window_label : null,
+        holidays_text: (ctx?.days || []).map((d) => d.name).join('; ') || null,
+        periods_text: (ctx?.periods || []).map((p) => p.name).join('; ') || null,
         verdict: verdict.label,
         verdict_tone: verdict.tone,
         score_text: scoreText(s.score),
@@ -290,7 +450,7 @@ export function buildShiftReportContract(input: ShiftReportInput) {
       {
         term: 'Допродажи',
         meaning:
-          'Как часто к основному товару предлагалось дополнение — по правилам, заданным в настройках модуля.',
+          'Считается внутри ОДНОГО чека. Рамен и напиток в одном чеке — допродажа засчитана. Рамен одним чеком, напиток следующим — это два разных покупателя или две покупки, и допродажей это не считается. Возможность появляется, когда в чеке есть товар из правила «что купили», успех — когда в том же чеке есть и товар из правила «что предложить». Считается по факту присутствия, а не по количеству: два рамена и один напиток — одна засчитанная допродажа.',
       },
       {
         term: 'Обстановка',
