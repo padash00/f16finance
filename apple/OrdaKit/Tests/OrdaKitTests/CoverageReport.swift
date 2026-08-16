@@ -30,8 +30,10 @@ struct CoverageReport {
         //   dashboard/welcome/workspace — служебные, есть иначе;
         //   operator-* — операторские, у оператора свои экраны;
         //   pos — дубль нативной кассы оператора;
-        //   branch-plan, operator-analytics — нужен серверный расчёт;
+        //   branch-plan — нужен серверный расчёт;
+        //   operator-tasks, operator-lead — это перенаправления в операторский
+        //   контур, у оператора в приложении свои экраны;
         //   knowledge-setup — правка регламентов, работа за столом;
-        #expect(rest.count <= 9, "Охват уменьшился: было 9 незакрытых, стало \(rest.count)")
+        #expect(rest.count <= 8, "Охват уменьшился: было 8 незакрытых, стало \(rest.count)")
     }
 }

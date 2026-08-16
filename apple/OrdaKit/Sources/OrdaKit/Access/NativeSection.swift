@@ -26,6 +26,7 @@ public enum NativeSection: String, CaseIterable, Sendable {
     case profitability
     case salesKpi
     case operatorExams
+    case operatorRoster
     case pointDevices
     case revisions
     case suppliers
@@ -116,6 +117,7 @@ public enum NativeSection: String, CaseIterable, Sendable {
         case .profitability: ["profitability"]
         case .salesKpi: ["sales-kpi"]
         case .operatorExams: ["operator-exams"]
+        case .operatorRoster: ["operator-analytics"]
         case .pointDevices: ["point-devices"]
         case .revisions: ["store-revisions"]
         case .suppliers: ["store-suppliers"]

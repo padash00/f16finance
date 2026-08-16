@@ -57,6 +57,7 @@ enum NativePage {
         case .profitability: PnlScreen()
         case .salesKpi: SalesKpiScreen()
         case .operatorExams: AdminExamsScreen()
+        case .operatorRoster: OperatorRosterScreen()
         case .pointDevices: PointDevicesScreen()
         case .revisions: RevisionsScreen()
         case .suppliers: SuppliersScreen()
