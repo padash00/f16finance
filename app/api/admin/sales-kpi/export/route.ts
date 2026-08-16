@@ -20,10 +20,8 @@ import {
   lineChartSvg,
   CHART_SIZE,
 } from '@/lib/reports/shift-report-charts'
-import {
-  renderShiftReportHTML,
-  PDF_OPTIONS,
-} from '@/lib/reports/orda-shift-report-pdf'
+import { mapReportToPdfDto } from '@/lib/reports/shift-efficiency-pdf-adapter'
+import { buildShiftEfficiencyPdf } from '@/lib/server/shift-efficiency-pdf'
 import { buildSalesKpiWorkbook } from '@/lib/server/sales-kpi-xlsx'
 import { buildStoreKpiReport, coverageWarnings } from '@/lib/server/store-kpi-report'
 import { inScope, listStorePoints, resolveStoreKpiContext } from '@/lib/server/store-kpi'
@@ -34,9 +32,6 @@ export const dynamic = 'force-dynamic'
 
 const CHROMIUM_PACK_URL =
   'https://github.com/Sparticuz/chromium/releases/download/v148.0.0/chromium-v148.0.0-pack.x64.tar'
-
-const FONT_CSS =
-  "@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Manrope:wght@700;800&display=swap');"
 
 /** Родительный падеж — для дат («1 августа»). */
 const MONTHS_OF = [
@@ -84,6 +79,7 @@ function safeName(base: string): string {
 }
 
 export async function POST(request: Request) {
+  // Браузер нужен только Excel — для съёмки графиков. PDF поднимает свой.
   let browser: Awaited<ReturnType<typeof import('puppeteer-core').default.launch>> | null = null
 
   try {
@@ -127,26 +123,17 @@ export async function POST(request: Request) {
     const filename = safeName(`Razbor_smen_${company.name}_${from}_${to}`)
 
     // ── PDF ────────────────────────────────────────────────────────────────
+    // Отдельный документ со смешанной ориентацией: сводка и продавцы —
+    // альбомные, страницы смен — книжные, их читают с телефона.
     if (format === 'pdf') {
-      const html = renderShiftReportHTML(contract, { fontCss: FONT_CSS })
-
-      const [{ default: puppeteer }, { default: chromium }] = await Promise.all([
-        import('puppeteer-core'),
-        import('@sparticuz/chromium-min'),
-      ])
-      browser = await puppeteer.launch({
-        args: chromium.args,
-        executablePath: await chromium.executablePath(CHROMIUM_PACK_URL),
-        headless: true,
+      const dto = mapReportToPdfDto({
+        report,
+        point: { id: companyId, name: company.name },
+        monthLabel: periodLabel(from, to),
+        generatedAt: new Date().toLocaleString('ru-RU', { timeZone: 'Asia/Almaty' }),
       })
-      const page = await browser.newPage()
-      await page.setContent(html, { waitUntil: 'load', timeout: 45_000 })
-      try {
-        await page.evaluate(() => (document as any).fonts?.ready)
-      } catch {
-        /* шрифты не критичны */
-      }
-      const pdf = await page.pdf(PDF_OPTIONS as any)
+
+      const pdf = await buildShiftEfficiencyPdf(dto)
 
       await writeAuditLog(supabase, {
         actorUserId: access.user?.id || null,
