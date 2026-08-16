@@ -24,6 +24,7 @@ import {
   setAutoThemeEnabled,
 } from '@/components/auto-theme'
 import { Card } from '@/components/ui/card'
+import { prewarmThemeDust } from '@/lib/hooks/theme-dust-canvas'
 import { originOfEvent, useThemeSweep } from '@/lib/hooks/use-theme-sweep'
 
 export function ThemeCard() {
@@ -80,6 +81,7 @@ export function ThemeCard() {
             <button
               key={value}
               type="button"
+              onPointerEnter={() => prewarmThemeDust()}
               onClick={(event) => choose(value, event)}
               className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-all ${
                 active

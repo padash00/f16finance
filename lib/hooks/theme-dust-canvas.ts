@@ -3,23 +3,25 @@
 /**
  * Распад страницы в пыль.
  *
- * Устроено так же, как в известной реализации «щелчка»: страница
- * растеризуется, и каждая крупинка берёт цвет РЕАЛЬНОГО пикселя под собой.
- * Без этого рассыпается абстрактная пыль, а нужно, чтобы рассыпалась сама
- * страница — разница видна сразу.
+ * Идея та же, что в известной реализации «щелчка»: страница растеризуется, и
+ * каждая крупинка берёт цвет РЕАЛЬНОГО пикселя под собой. Иначе рассыпается
+ * абстрактная пыль поверх страницы, а нужно, чтобы рассыпалась сама страница.
  *
- * Производительность решается двумя приёмами.
+ * Дальше три решения, без которых это вешает браузер. Каждое появилось после
+ * того, как предыдущая версия именно вешала.
  *
- * Первый: снимок делается в половинном разрешении. Крупинка всё равно 3–4
- * пикселя, разглядывать в ней нечего, а растеризация ускоряется вчетверо.
+ * ПАМЯТЬ. Холсты живут в разрешении СНИМКА, а не экрана, и растягиваются
+ * стилями. Два десятка холстов 1920×1080 при DPR 2 — это под гигабайт
+ * видеопамяти и гарантированный фриз. В разрешении снимка те же холсты
+ * занимают около тридцати мегабайт.
  *
- * Второй: крупинки не двигаются по отдельности в JS. Они разложены по
- * нескольким десяткам холстов, и каждый холст целиком уносит CSS-анимация.
- * Пятьдесят тысяч частиц покадрово не нарисовать, а тридцать слоёв браузер
- * тянет на композиторе.
+ * ГЛАВНЫЙ ПОТОК. Крупинки не рисуются вызовами fillRect: их больше сотни
+ * тысяч, и это полсекунды заморозки. Один проход раскладывает пиксели по
+ * типизированным массивам, и каждый холст получает готовый putImageData.
  *
- * Порядок слоёв задаёт фронт: чем дальше крупинка от кнопки, тем позже
- * оторвётся. Именно это и читается как распад, а не как общее растворение.
+ * ОЖИДАНИЕ. Снимок делается заранее — по наведению на кнопку, а не по нажатию.
+ * Растеризация тяжёлой админки занимает сотни миллисекунд, и делать её после
+ * клика значит показывать человеку паузу.
  */
 
 export type DustOptions = {
@@ -34,55 +36,106 @@ export type DustOptions = {
 }
 
 /**
- * Слои устроены двумя измерениями, и это главное решение здесь.
- *
- * Волны задают ФРОНТ: чем дальше крупинка от кнопки, тем позже её волна
- * трогается. Потоки задают РАЗЛЁТ: внутри одной волны крупинки случайно
- * раскиданы по нескольким потокам, и каждый летит по-своему.
- *
- * Без потоков волна улетает единым пластом — видно, что это сдвигают
- * картинку, а не рассыпают. Разложить пиксели по потокам случайно стоит
- * ничего, а выглядит как облако.
+ * Волны задают фронт: чем дальше крупинка от кнопки, тем позже трогается её
+ * волна. Потоки задают разлёт: внутри волны крупинки раскиданы случайно, и
+ * каждый поток летит по-своему. Без потоков волна уезжает единым пластом —
+ * видно, что картинку двигают, а не рассыпают.
  */
-const WAVES = 12
-const STREAMS = 4
+const WAVES = 9
+const STREAMS = 3
 
-/** Сторона крупинки в пикселях экрана. */
-const GRAIN = 4
+/** Сторона крупинки в пикселях СНИМКА. При масштабе 0.4 это ~5 px экрана. */
+const GRAIN = 2
 
-/** Во сколько раз уменьшается снимок. Половина — незаметно и вчетверо быстрее. */
-const CAPTURE_SCALE = 0.5
+/**
+ * Во сколько раз уменьшается снимок.
+ *
+ * 0.4 — компромисс: крупинка всё равно несколько пикселей, разглядывать в ней
+ * нечего, а растеризация и память падают более чем вшестеро.
+ */
+const CAPTURE_SCALE = 0.4
+
+/** Сколько снимок считается свежим. Дольше — покажем устаревшую страницу. */
+const CAPTURE_TTL_MS = 4000
+
+type Capture = { data: ImageData; width: number; height: number; takenAt: number }
+
+let cached: Capture | null = null
+let pending: Promise<Capture | null> | null = null
 
 /**
  * Снимок видимой части страницы.
  *
- * Чужие картинки (аватары, логотипы с другого домена) растеризацию рушат,
- * поэтому весь вызов обёрнут и при неудаче возвращает null: анимация должна
+ * Чужие картинки и шрифты растеризацию рушат, поэтому вызов обёрнут: при
+ * неудаче вернётся null, и распад пойдёт на запасных цветах. Анимация обязана
  * деградировать, а не ломать переключение темы.
  */
-async function capture(width: number, height: number): Promise<ImageData | null> {
+async function capture(): Promise<Capture | null> {
   try {
     const { toCanvas } = await import('html-to-image')
+    const width = window.innerWidth
+    const height = window.innerHeight
+
     const canvas = await toCanvas(document.body, {
       width,
       height,
       pixelRatio: CAPTURE_SCALE,
-      // Внешние ресурсы пропускаем: один недоступный логотип не должен
-      // отменять весь эффект.
       skipFonts: true,
+      cacheBust: false,
+      // Свои холсты в снимок не попадают: иначе прошлая пыль окажется в новой.
       filter: (node) => !(node instanceof HTMLElement && node.dataset.dustIgnore === 'true'),
     })
-    const context = canvas.getContext('2d')
+
+    const context = canvas.getContext('2d', { willReadFrequently: true })
     if (!context) return null
-    return context.getImageData(0, 0, canvas.width, canvas.height)
+
+    return {
+      data: context.getImageData(0, 0, canvas.width, canvas.height),
+      width: canvas.width,
+      height: canvas.height,
+      takenAt: performance.now(),
+    }
   } catch {
     return null
   }
 }
 
+/**
+ * Готовит снимок заранее.
+ *
+ * Зовётся по наведению на кнопку темы. Нажмут — распад начнётся мгновенно;
+ * пройдут мимо — снимок просто устареет.
+ */
+export function prewarmThemeDust(): void {
+  if (typeof document === 'undefined') return
+  if (pending) return
+  if (cached && performance.now() - cached.takenAt < CAPTURE_TTL_MS) return
+
+  pending = capture()
+  void pending
+    .then((result) => {
+      cached = result
+    })
+    .finally(() => {
+      pending = null
+    })
+}
+
+async function takeCapture(): Promise<Capture | null> {
+  if (cached && performance.now() - cached.takenAt < CAPTURE_TTL_MS) return cached
+  if (pending) return pending
+  const promise = capture()
+  pending = promise
+  const result = await promise
+  pending = null
+  cached = result
+  return result
+}
+
 type Layer = {
   canvas: HTMLCanvasElement
-  /** Доля общей длительности, на которой слой начинает уноситься. */
+  image: ImageData
+  /** Доля общей длительности, на которой слой трогается. */
   delay: number
   dx: number
   dy: number
@@ -90,87 +143,122 @@ type Layer = {
   scale: number
 }
 
+/** Запасной цвет крупинки в виде трёх компонент. */
+function parseColor(value: string): [number, number, number] {
+  const text = value.trim()
+  if (text.startsWith('#')) {
+    const full =
+      text.length === 4 ? `#${text[1]}${text[1]}${text[2]}${text[2]}${text[3]}${text[3]}` : text
+    return [
+      parseInt(full.slice(1, 3), 16) || 0,
+      parseInt(full.slice(3, 5), 16) || 0,
+      parseInt(full.slice(5, 7), 16) || 0,
+    ]
+  }
+  const nums = text.match(/\d+/g)
+  return nums ? [Number(nums[0]) || 0, Number(nums[1]) || 0, Number(nums[2]) || 0] : [148, 163, 184]
+}
+
 /**
- * Раскладывает пиксели по слоям.
+ * Раскладывает пиксели снимка по слоям.
  *
- * Номер слоя = расстояние до кнопки плюс разброс. Разброс обязателен: без него
- * граница между слоями видна как ровная дуга, и вместо осыпания получается
- * расходящаяся волна.
+ * Один проход по блокам, запись сразу в типизированные массивы. Это и есть
+ * разница между «мгновенно» и «браузер завис».
  */
-function buildLayers(
-  image: ImageData | null,
-  width: number,
-  height: number,
-  options: DustOptions,
-): Layer[] {
-  const dpr = Math.min(2, window.devicePixelRatio || 1)
+function buildLayers(shot: Capture | null, options: DustOptions): Layer[] {
+  const width = shot?.width ?? Math.floor(window.innerWidth * CAPTURE_SCALE)
+  const height = shot?.height ?? Math.floor(window.innerHeight * CAPTURE_SCALE)
+  if (width < 2 || height < 2) return []
+
+  // Координаты кнопки — в системе снимка.
+  const originX = options.origin.x * (width / window.innerWidth)
+  const originY = options.origin.y * (height / window.innerHeight)
   const maxDistance = Math.hypot(width, height)
 
-  const layers: Layer[] = []
-  const contexts: (CanvasRenderingContext2D | null)[] = []
+  const total = WAVES * STREAMS
+  const buffers: Uint8ClampedArray[] = []
+  for (let i = 0; i < total; i++) buffers.push(new Uint8ClampedArray(width * height * 4))
 
+  const fallback = options.fallbackColors.map(parseColor)
+  const source = shot?.data.data
+
+  for (let y = 0; y < height; y += GRAIN) {
+    for (let x = 0; x < width; x += GRAIN) {
+      const distance = Math.hypot(x - originX, y - originY)
+      // Разброс рвёт ровную дугу фронта: без него видна граница волны.
+      const position = Math.min(
+        0.999,
+        Math.max(0, distance / maxDistance + (Math.random() - 0.5) * 0.2),
+      )
+      const wave = Math.min(WAVES - 1, (position * WAVES) | 0)
+      // Поток случайный: соседние крупинки должны улетать по-разному.
+      const stream = (Math.random() * STREAMS) | 0
+      const buffer = buffers[wave * STREAMS + stream]
+
+      let r = 148
+      let g = 163
+      let b = 184
+      let a = 255
+
+      if (source) {
+        const offset = (y * width + x) * 4
+        a = source[offset + 3]
+        // Прозрачные места страницы крупинками не становятся.
+        if (a < 8) continue
+        r = source[offset]
+        g = source[offset + 1]
+        b = source[offset + 2]
+      } else {
+        const color = fallback[(wave + stream) % fallback.length]
+        if (color) {
+          r = color[0]
+          g = color[1]
+          b = color[2]
+        }
+      }
+
+      // Блок одним цветом: так он читается как частица, а не как кусок
+      // изображения.
+      for (let dy = 0; dy < GRAIN && y + dy < height; dy++) {
+        let offset = ((y + dy) * width + x) * 4
+        for (let dx = 0; dx < GRAIN && x + dx < width; dx++) {
+          buffer[offset] = r
+          buffer[offset + 1] = g
+          buffer[offset + 2] = b
+          buffer[offset + 3] = a
+          offset += 4
+        }
+      }
+    }
+  }
+
+  const layers: Layer[] = []
   for (let wave = 0; wave < WAVES; wave++) {
     for (let stream = 0; stream < STREAMS; stream++) {
       const canvas = document.createElement('canvas')
-      canvas.width = Math.floor(width * dpr)
-      canvas.height = Math.floor(height * dpr)
+      canvas.width = width
+      canvas.height = height
       canvas.style.cssText = [
         'position:fixed',
         'inset:0',
         'width:100%',
         'height:100%',
         'pointer-events:none',
-        'will-change:transform,opacity,filter',
+        'will-change:transform,opacity',
       ].join(';')
 
-      const context = canvas.getContext('2d')
-      contexts.push(context)
-      if (context) context.scale(dpr, dpr)
-
-      // Разлёт вверх и вправо — как в оригинале. Направление не зависит от
-      // того, где кнопка: от неё идёт фронт, а не ветер.
+      // Разлёт вверх и вправо, как в оригинале: от кнопки идёт фронт, а не
+      // ветер.
       const spread = (stream - (STREAMS - 1) / 2) / STREAMS
       layers.push({
         canvas,
-        delay: (wave / WAVES) * 0.62,
-        dx: 34 + wave * 2.2 + spread * 46 + Math.random() * 18,
-        dy: -(46 + wave * 2.6) + spread * 26 - Math.random() * 22,
-        rotate: spread * 5 + (Math.random() - 0.5) * 3,
-        scale: 1.02 + Math.random() * 0.05,
+        image: new ImageData(buffers[wave * STREAMS + stream], width, height),
+        delay: (wave / WAVES) * 0.6,
+        dx: 30 + wave * 2.4 + spread * 44,
+        dy: -(42 + wave * 3) + spread * 22,
+        rotate: spread * 4,
+        scale: 1.03,
       })
-    }
-  }
-
-  if (layers.length === 0) return []
-
-  for (let x = 0; x < width; x += GRAIN) {
-    for (let y = 0; y < height; y += GRAIN) {
-      const distance = Math.hypot(x - options.origin.x, y - options.origin.y)
-      // Разброс по волне рвёт ровную дугу фронта: без него видно границу.
-      const jitter = (Math.random() - 0.5) * 0.2
-      const position = Math.min(0.999, Math.max(0, distance / maxDistance + jitter))
-      const wave = Math.min(WAVES - 1, Math.floor(position * WAVES))
-      // Поток — случайно: соседние крупинки должны улетать по-разному.
-      const stream = Math.floor(Math.random() * STREAMS)
-
-      let color: string
-      if (image) {
-        // Снимок уменьшен, поэтому координаты пересчитываются.
-        const sx = Math.floor(x * CAPTURE_SCALE)
-        const sy = Math.floor(y * CAPTURE_SCALE)
-        const offset = (sy * image.width + sx) * 4
-        // Прозрачные места страницы крупинками не становятся.
-        if (image.data[offset + 3] < 8) continue
-        color = `rgb(${image.data[offset]},${image.data[offset + 1]},${image.data[offset + 2]})`
-      } else {
-        color = options.fallbackColors[(wave + stream) % options.fallbackColors.length]
-      }
-
-      const context = contexts[wave * STREAMS + stream]
-      if (!context) continue
-      context.fillStyle = color
-      // Смещение на пиксель-другой: ровная сетка читается как решётка.
-      context.fillRect(x + (Math.random() - 0.5) * 2, y + (Math.random() - 0.5) * 2, GRAIN, GRAIN)
     }
   }
 
@@ -181,29 +269,30 @@ function buildLayers(
  * Запускает распад и возвращает обещание, которое исполняется по окончании.
  *
  * Холсты живут только на время анимации: постоянные элементы поверх портала
- * ловили бы клики и мешали бы, даже прозрачные.
+ * ловили бы клики, даже прозрачные.
  */
 export async function runThemeDust(options: DustOptions): Promise<void> {
   if (typeof document === 'undefined') return
 
-  const width = window.innerWidth
-  const height = window.innerHeight
+  const shot = await takeCapture()
+  // Снимок одноразовый: после переключения темы он устарел.
+  cached = null
 
-  const image = await capture(width, height)
-  const layers = buildLayers(image, width, height, options)
-  if (layers.length === 0) return
+  const layers = buildLayers(shot, options)
+  if (layers.length === 0) {
+    options.onCovered?.()
+    return
+  }
 
   const host = document.createElement('div')
   host.dataset.dustIgnore = 'true'
-  host.style.cssText = [
-    'position:fixed',
-    'inset:0',
-    'pointer-events:none',
-    // Выше снимков перехода: крупинки летят над страницей.
-    'z-index:2147483000',
-  ].join(';')
+  host.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483000'
 
-  for (const layer of layers) host.appendChild(layer.canvas)
+  for (const layer of layers) {
+    const context = layer.canvas.getContext('2d')
+    context?.putImageData(layer.image, 0, 0)
+    host.appendChild(layer.canvas)
+  }
   document.body.appendChild(host)
 
   // Слои вместе содержат каждый пиксель страницы, поэтому экран сейчас
@@ -213,27 +302,22 @@ export async function runThemeDust(options: DustOptions): Promise<void> {
   const animations = layers.map((layer) =>
     layer.canvas.animate(
       [
-        { transform: 'none', opacity: 1, filter: 'blur(0px)', offset: 0 },
-        { transform: 'none', opacity: 1, filter: 'blur(0px)', offset: layer.delay },
+        { transform: 'none', opacity: 1, offset: 0 },
+        { transform: 'none', opacity: 1, offset: layer.delay },
         {
-          // Середина пути: крупинки уже оторвались, но ещё различимы.
-          transform: `translate3d(${layer.dx * 0.32}px, ${layer.dy * 0.32}px, 0) rotate(${layer.rotate * 0.35}deg) scale(${1 + (layer.scale - 1) * 0.4})`,
-          opacity: 0.72,
-          filter: 'blur(0.6px)',
+          transform: `translate3d(${layer.dx * 0.3}px, ${layer.dy * 0.3}px, 0) rotate(${layer.rotate * 0.3}deg)`,
+          opacity: 0.75,
           offset: layer.delay + (1 - layer.delay) * 0.45,
         },
         {
-          // Ускорение и лёгкая усадка к концу — крупинка не уезжает, а тает.
+          // Ускорение и лёгкая усадка к концу: крупинка не уезжает, а тает.
           transform: `translate3d(${layer.dx}px, ${layer.dy}px, 0) rotate(${layer.rotate}deg) scale(${layer.scale})`,
           opacity: 0,
-          filter: 'blur(3px)',
           offset: 1,
         },
       ],
       {
         duration: options.duration,
-        // Медленно отходит, потом уносит — так в оригинале и так это читается
-        // как распад, а не как отъезд.
         easing: 'cubic-bezier(0.35, 0, 0.35, 1)',
         fill: 'forwards',
       },
