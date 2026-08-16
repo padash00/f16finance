@@ -23,10 +23,20 @@ struct AddReceiptSheet: View {
     @State private var isSaving = false
     @State private var didPrepare = false
 
+    // ── Накладная с фотографии ───────────────────────────────────────────────
+    @State private var showingScanner = false
+    @State private var isScanning = false
+    @State private var scanError: String?
+    /// Позиции, которых нет в каталоге. Их не выбросить молча: человек должен
+    /// увидеть, что три строки из накладной не легли на склад.
+    @State private var unmatched: [ScannedInvoice.Item] = []
+    @Environment(\.api) private var api
+
     var body: some View {
         NavigationStack {
             ScreenScroll {
                 VStack(spacing: Spacing.lg) {
+                    scanCard
                     headerCard
                     paymentCard
                     linesCard
@@ -55,6 +65,138 @@ struct AddReceiptSheet: View {
             }
         }
     }
+
+    /// Съёмка накладной.
+    ///
+    /// Товар принимают у машины: коробки на полу, водитель ждёт. Набивать
+    /// двадцать позиций пальцем в такой обстановке никто не станет — приёмку
+    /// откладывают, и склад весь день показывает вчерашние остатки.
+    @ViewBuilder
+    private var scanCard: some View {
+        #if os(iOS)
+        Card(accent: draft.lines.isEmpty ? Theme.brand : nil) {
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                SectionHeader(
+                    "Накладная с фотографии",
+                    subtitle: "Сфотографируйте — позиции заполнятся сами"
+                )
+
+                Button {
+                    showingScanner = true
+                } label: {
+                    if isScanning {
+                        HStack(spacing: Spacing.sm) {
+                            ProgressView().controlSize(.small)
+                            Text("Разбираем накладную…")
+                        }
+                    } else {
+                        Label("Сфотографировать", systemImage: "doc.viewfinder")
+                    }
+                }
+                .buttonStyle(SecondaryButtonStyle())
+                .disabled(isScanning)
+
+                if let scanError {
+                    Text(scanError)
+                        .font(Typography.caption)
+                        .foregroundStyle(Theme.negative)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                if !unmatched.isEmpty {
+                    RowDivider()
+                    Text("Не нашлись в каталоге")
+                        .font(Typography.label)
+                        .foregroundStyle(Theme.warning)
+                    ForEach(unmatched) { item in
+                        HStack(alignment: .top, spacing: Spacing.sm) {
+                            Image(systemName: "questionmark.circle")
+                                .foregroundStyle(Theme.warning)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(item.invoiceName)
+                                    .font(Typography.callout)
+                                    .foregroundStyle(Theme.text)
+                                Text("\(Money.format(item.unitCost)) × \(Quantity.format(item.quantity))")
+                                    .font(Typography.caption)
+                                    .foregroundStyle(Theme.textMuted)
+                            }
+                        }
+                    }
+                    Text("Заведите товар в каталоге и снимите накладную ещё раз — или добавьте позицию руками ниже.")
+                        .font(Typography.caption)
+                        .foregroundStyle(Theme.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .fullScreenCover(isPresented: $showingScanner) {
+            CameraCapture { data in
+                Task { await scan(data) }
+            }
+            .ignoresSafeArea()
+        }
+        #endif
+    }
+
+    #if os(iOS)
+    /// Разобрать снимок и разложить по строкам приёмки.
+    private func scan(_ data: Data) async {
+        isScanning = true
+        scanError = nil
+        defer { isScanning = false }
+
+        do {
+            let parsed = try await InvoiceScanService(api: api).scan(
+                imageData: data,
+                supplierID: draft.supplierID.isEmpty ? nil : draft.supplierID
+            )
+
+            if let number = parsed.invoiceNumber, !number.isEmpty, draft.invoiceNumber.isEmpty {
+                draft.invoiceNumber = number
+            }
+
+            // Сопоставленные позиции кладём в накладную, остальные показываем
+            // отдельно. Молча выбросить их нельзя: человек решит, что принял
+            // всё, а трёх строк на складе не окажется.
+            var added = 0
+            for item in parsed.items where item.isMatched {
+                guard let id = item.matchedItemID else { continue }
+                if let index = draft.lines.firstIndex(where: { $0.itemID == id }) {
+                    draft.lines[index].quantity += item.quantity
+                    if item.unitCost > 0 { draft.lines[index].unitCost = item.unitCost }
+                } else {
+                    draft.lines.append(
+                        ReceiptLine(
+                            itemID: id,
+                            name: item.matchedItemName ?? item.invoiceName,
+                            unit: unitFor(id),
+                            quantity: item.quantity,
+                            unitCost: item.unitCost
+                        )
+                    )
+                }
+                added += 1
+            }
+
+            unmatched = parsed.items.filter { !$0.isMatched }
+            if added == 0 && unmatched.isEmpty {
+                scanError = "В снимке не нашлось позиций. Снимите накладную целиком, при свете и без бликов."
+            }
+            Haptics.success()
+        } catch let error as APIError {
+            Haptics.error()
+            scanError = error.userMessage
+        } catch {
+            Haptics.error()
+            scanError = error.localizedDescription
+        }
+    }
+
+    /// Единица измерения из каталога: в ответе разбора её нет.
+    private func unitFor(_ itemID: String) -> String {
+        store.store?.balances.first { $0.itemID == itemID }?.unit ?? "шт"
+    }
+    #endif
 
     private var headerCard: some View {
         Card {
