@@ -4,15 +4,14 @@ import { writeAuditLog } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
 import {
   buildOperatorTicket,
-  generateExamQuestions,
-  generateOpenQuestions,
   isOpenAnswer,
   recomputeAttempt,
   sendExamQuestion,
   type ExamAttemptRow,
   type ExamQuestion,
 } from '@/lib/server/operator-exams'
-import { collectFactQuestions, type FactTopic } from '@/lib/server/exam-facts'
+import { type FactTopic } from '@/lib/server/exam-facts'
+import { composeExamPool } from '@/lib/server/operator-exam-compose'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { pushToOperators } from '@/lib/server/push'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
@@ -66,6 +65,14 @@ export async function GET(request: Request) {
       activeOrganizationId: orgId,
       isSuperAdmin: access.isSuperAdmin,
     })
+
+    // Расписания читаются мягко: пока миграция не применена, страница
+    // работает как раньше, просто без блока регулярных экзаменов.
+    const { data: scheduleRows } = await supabase
+      .from('operator_exam_schedules')
+      .select('*')
+      .then((r: any) => r, () => ({ data: null }))
+    const schedules = Array.isArray(scheduleRows) ? scheduleRows : []
 
     const url = new URL(request.url)
     const examId = url.searchParams.get('id')
@@ -338,6 +345,10 @@ export async function GET(request: Request) {
         }),
         companies: companies || [],
         operators,
+        // Расписания регулярных экзаменов по точкам. Таблицы может ещё не
+        // быть — миграция применяется отдельно, и страница не должна из-за
+        // этого падать.
+        schedules,
         readiness: {
           pointsTotal: (companies || []).length,
           pointsWithIndustry: ((companies || []) as any[]).filter((c) => !!c.industry).length,
@@ -379,6 +390,12 @@ export async function POST(request: Request) {
           days?: number
           questions?: number
           open?: number
+          // Расписание регулярного экзамена по точке.
+          company_id?: string
+          is_active?: boolean
+          weekday?: number
+          deadline_days?: number
+          fact_topics?: string[]
         }
       | null
     if (!body?.action) return json({ error: 'action обязателен' }, 400)
@@ -426,65 +443,29 @@ export async function POST(request: Request) {
       const foreign = operatorIds.filter((id) => !eligible.has(id))
       if (foreign.length > 0) return json({ error: 'operator-not-in-selected-points', detail: foreign }, 403)
 
-      // Пул вопросов: с запасом, чтобы билеты у людей отличались.
-      const poolSize = Math.min(questionCount * 2, 20)
-      const { questions: generated, error: generationError } = await generateExamQuestions({
-        supabase,
-        organizationId: orgId,
-        companyIds,
-        questionCount: poolSize,
-      })
-      // Пустой регламент — ещё не приговор: экзамен может состоять только из
-      // вопросов по данным точки. Ошибку показываем, когда не набралось ничего.
-      const pool = [...generated]
-
-      // Вопросы по данным точки: цены, тарифы, железо, товары, склад.
-      // Их не пишет модель — факт берётся из базы, поэтому в билете они
-      // всегда точные и обновляются вместе с прайсом.
+      // Темы вопросов по данным точки: цены, тарифы, железо, товары, склад.
+      // Их не пишет модель — факт берётся из базы, поэтому в билете они всегда
+      // точные и обновляются вместе с прайсом.
       const factTopics = (body.topics || [])
         .map(String)
         .filter((topic): topic is FactTopic =>
           ['catalog', 'tariffs', 'hardware', 'stations', 'warehouse'].includes(topic),
         )
 
-      if (factTopics.length > 0) {
-        const facts = await collectFactQuestions({ supabase, companyIds, topics: factTopics })
-        // Половина билета максимум: экзамен по одним ценникам не проверяет,
-        // умеет ли человек работать.
-        const factLimit = Math.min(facts.length, Math.ceil(questionCount / 2))
-        for (const fact of facts.slice(0, factLimit)) {
-          pool.push({
-            article_id: '',
-            company_id: companyIds[0] || null,
-            article_title: fact.source,
-            type: 'choice' as const,
-            q: fact.q,
-            choices: fact.choices,
-            correct: fact.correct,
-          })
-        }
-      }
+      // Сборка общая с расписанием: две копии этой логики разъехались бы, и
+      // еженедельный билет тихо начал бы отличаться от собранного руками.
+      const composed = await composeExamPool({
+        supabase,
+        organizationId: orgId,
+        companyIds,
+        questionCount,
+        openCount,
+        factTopics,
+      })
+      if (!composed.ok) return json({ error: composed.error }, 400)
 
-      if (pool.length === 0) {
-        const message =
-          generationError === 'not-enough-articles'
-            ? 'Нечего спрашивать: в регламентах точки меньше 3 статей с текстом, а темы по данным не выбраны или пусты.'
-            : generationError === 'openai-not-configured'
-              ? 'Не настроен OPENAI_API_KEY.'
-              : 'Не удалось собрать вопросы.'
-        return json({ error: message }, 400)
-      }
-
-      // Ситуационные генерим отдельно: у них другой промпт, рубрика и вес.
-      // Пул общий на экзамен — билеты собираются из него.
-      const openPool = openCount > 0
-        ? await generateOpenQuestions({
-            supabase,
-            organizationId: orgId,
-            companyIds,
-            count: Math.min(openCount * 2, 8),
-          })
-        : []
+      const pool = composed.pool
+      const openPool = composed.openPool
 
       // Создание НЕ рассылает: сохраняем пул и ждём, пока владелец прочитает
       // вопросы. Кривой вопрос дешевле выкинуть здесь, чем узнать о нём от семи
@@ -496,8 +477,8 @@ export async function POST(request: Request) {
           title,
           company_ids: companyIds,
           operator_ids: operatorIds,
-          question_count: questionCount,
-          open_count: Math.min(openCount, openPool.length),
+          question_count: composed.questionCount,
+          open_count: composed.openCount,
           pass_score: passScore,
           deadline_at: body.deadline_at || null,
           topics: factTopics,
@@ -866,6 +847,87 @@ export async function POST(request: Request) {
     }
 
     // ─── Настройки автоаттестации новичка ─────────────────────────────────
+    // ─── Регулярный экзамен: расписание точки ─────────────────────────────
+    if (body.action === 'schedule_save') {
+      const denied = await requireCapability(access, 'operator-exams.create')
+      if (denied) return denied
+      if (!orgId) return json({ error: 'no-organization' }, 400)
+
+      const companyId = String(body.company_id || '')
+      if (!companyId) return json({ error: 'Выберите точку' }, 400)
+      if (companyScope.allowedCompanyIds && !companyScope.allowedCompanyIds.includes(companyId)) {
+        return json({ error: 'company-out-of-scope' }, 403)
+      }
+
+      const patch = {
+        organization_id: orgId,
+        company_id: companyId,
+        title: String(body.title || 'Еженедельная проверка').trim() || 'Еженедельная проверка',
+        is_active: body.is_active !== false,
+        weekday: Math.max(1, Math.min(7, Number(body.weekday) || 7)),
+        question_count: Math.max(3, Math.min(20, Number(body.question_count) || 10)),
+        open_count: Math.max(0, Math.min(5, Number(body.open_count) || 2)),
+        pass_score: Math.max(1, Math.min(100, Number(body.pass_score) || 70)),
+        deadline_days: Math.max(1, Math.min(14, Number(body.deadline_days) || 4)),
+        // Пусто — крон возьмёт типовые темы ниши этой точки.
+        fact_topics: (body.fact_topics || [])
+          .map(String)
+          .filter((t: string) =>
+            ['catalog', 'tariffs', 'hardware', 'stations', 'warehouse'].includes(t),
+          ),
+        updated_at: new Date().toISOString(),
+        created_by: access.user?.id || null,
+      }
+
+      const { error: saveError } = await supabase
+        .from('operator_exam_schedules')
+        .upsert(patch, { onConflict: 'company_id' })
+      if (saveError) {
+        return json(
+          { error: 'Не удалось сохранить: примените миграцию 20260902_operator_exam_schedules', detail: saveError.message },
+          400,
+        )
+      }
+
+      await writeAuditLog(supabase as any, {
+        actorUserId: access.user?.id || null,
+        action: 'operator_exam.schedule_save',
+        entityType: 'company',
+        entityId: companyId,
+        organizationId: orgId,
+        payload: patch,
+      })
+
+      return json({ ok: true, data: patch })
+    }
+
+    if (body.action === 'schedule_delete') {
+      const denied = await requireCapability(access, 'operator-exams.create')
+      if (denied) return denied
+
+      const companyId = String(body.company_id || '')
+      if (!companyId) return json({ error: 'Выберите точку' }, 400)
+      if (companyScope.allowedCompanyIds && !companyScope.allowedCompanyIds.includes(companyId)) {
+        return json({ error: 'company-out-of-scope' }, 403)
+      }
+
+      const { error: dropError } = await supabase
+        .from('operator_exam_schedules')
+        .delete()
+        .eq('company_id', companyId)
+      if (dropError) return json({ error: 'schedule-delete-failed', detail: dropError.message }, 500)
+
+      await writeAuditLog(supabase as any, {
+        actorUserId: access.user?.id || null,
+        action: 'operator_exam.schedule_delete',
+        entityType: 'company',
+        entityId: companyId,
+        organizationId: orgId,
+      })
+
+      return json({ ok: true })
+    }
+
     if (body.action === 'auto_settings') {
       const denied = await requireCapability(access, 'operator-exams.create')
       if (denied) return denied

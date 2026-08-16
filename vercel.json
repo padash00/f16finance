@@ -106,6 +106,10 @@
       "schedule": "0 15 * * *"
     },
     {
+      "path": "/api/cron/operator-exam-weekly",
+      "schedule": "0 15 * * *"
+    },
+    {
       "path": "/api/cron/sales-kpi-digest",
       "schedule": "0 4 * * *"
     },

@@ -11,7 +11,9 @@ import { Card } from '@/components/ui/card'
 import { PageSkeleton } from '@/components/skeleton'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 
-type Company = { id: string; name: string; code: string | null }
+import { WeeklySchedule, type ExamSchedule } from './weekly-schedule'
+
+type Company = { id: string; name: string; code: string | null; industry?: string | null }
 type Operator = { id: string; name: string; telegram_chat_id: string | null; company_ids: string[] }
 
 type ExamRow = {
@@ -363,6 +365,7 @@ export default function OperatorExamsPage() {
   const [companies, setCompanies] = useState<Company[]>([])
   const [operators, setOperators] = useState<Operator[]>([])
   const [readiness, setReadiness] = useState<Readiness | null>(null)
+  const [schedules, setSchedules] = useState<ExamSchedule[]>([])
 
   const [openForm, setOpenForm] = useState(false)
   const [title, setTitle] = useState('')
@@ -392,6 +395,7 @@ export default function OperatorExamsPage() {
       setCompanies(body.data?.companies || [])
       setOperators(body.data?.operators || [])
       setReadiness(body.data?.readiness || null)
+      setSchedules(body.data?.schedules || [])
       setAutoExam(body.data?.auto_exam || null)
     } catch (e: any) {
       setError(e?.message || 'Не удалось загрузить')
@@ -584,6 +588,9 @@ export default function OperatorExamsPage() {
       )}
 
       {readiness && <ReadinessGuide readiness={readiness} />}
+
+      {/* Регулярный экзамен: расписание по точке. */}
+      <WeeklySchedule companies={companies} schedules={schedules} onSaved={() => void load()} />
 
       {autoExam && canCreate && (
         <Card className="p-4">
