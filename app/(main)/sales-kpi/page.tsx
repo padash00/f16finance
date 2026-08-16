@@ -1363,6 +1363,9 @@ export default function SalesKpiPage() {
 
           {tab === 'people' && payload?.company ? (
             <CashiersTab
+              companyId={payload.company.id}
+              from={from}
+              to={to}
               cashiers={cashiers as any}
               shifts={shifts as any}
               minQualifyingShifts={payload?.settings?.min_qualifying_shifts ?? 6}

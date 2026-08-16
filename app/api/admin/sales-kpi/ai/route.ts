@@ -20,7 +20,9 @@ import {
   loadStoreKpiSettings,
   resolveStoreKpiContext,
 } from '@/lib/server/store-kpi'
-import { runMonthlyReview, runPostShiftReview } from '@/lib/server/store-kpi-ai'
+import { runCashierReview, runMonthlyReview, runPostShiftReview } from '@/lib/server/store-kpi-ai'
+import { contextForShift, loadContextSources } from '@/lib/server/store-kpi-context'
+import { buildStoreKpiReport } from '@/lib/server/store-kpi-report'
 import {
   analyzeStoreKpi,
   bonusRoi,
@@ -44,6 +46,82 @@ export async function POST(request: Request) {
 
     const body = (await request.json().catch(() => ({}))) as Record<string, any>
     const companyId = String(body.company_id || '')
+
+    // ── Разбор одного продавца ────────────────────────────────────────────
+    // Отвечает управляющему на вопрос «как с ним разговаривать», которого нет
+    // ни у разбора смены, ни у разбора месяца.
+    if (String(body.action || '') === 'cashier') {
+      const cashierId = String(body.cashier_id || '')
+      const from = String(body.from || '').slice(0, 10)
+      const to = String(body.to || '').slice(0, 10)
+      if (!companyId || !cashierId) return json({ error: 'cashier-required' }, 400)
+      if (!from || !to) return json({ error: 'period-required' }, 400)
+      if (!inScope(scope, companyId)) return json({ error: 'forbidden', code: 'company-out-of-scope' }, 403)
+
+      const { data: co } = await supabase
+        .from('companies')
+        .select('id, name, organization_id')
+        .eq('id', companyId)
+        .maybeSingle()
+      if (!co?.organization_id) return json({ error: 'company-without-organization' }, 400)
+
+      const report = await buildStoreKpiReport(supabase, {
+        companyId,
+        organizationId: String(co.organization_id),
+        from,
+        to,
+      })
+
+      const target = report.cashiers.find((c: any) => c.cashier_id === cashierId)
+      if (!target) return json({ error: 'cashier-not-found' }, 404)
+
+      const mine = report.shifts.filter((s: any) => s.cashier_id === cashierId)
+
+      const { result, error } = await runCashierReview({
+        supabase,
+        organizationId: String(co.organization_id),
+        companyId,
+        actorUserId: access.user?.id || null,
+        modelVersion: report.settings.model_version,
+        period: { from, to },
+        cashier: {
+          name: target.name,
+          shifts: target.shifts,
+          receipts: target.receipts,
+          revenue: target.revenue,
+          score: target.score,
+          status: target.status,
+          confidence: target.confidence,
+          metric_ratios: target.metric_ratios,
+          strengths: target.strengths,
+          weaknesses: target.weaknesses,
+          verdicts: target.verdicts,
+          training_flag: target.training_flag,
+          training_reason: target.training_reason,
+        },
+        shifts: mine.map((s: any) => ({
+          date: s.date,
+          shift: s.shift,
+          verdict: s.verdict,
+          score: s.score,
+          confidence: s.confidence,
+          revenue: s.revenue,
+          expected_revenue: s.expected_revenue,
+          receipts: s.receipts,
+          expected_receipts: s.expected_receipts,
+          // Обстановка нужна, чтобы модель не приняла снежный вечер за
+          // слабую работу человека.
+          weather: s.context?.weather?.label ?? null,
+          holidays: (s.context?.days || []).map((d: any) => d.name),
+          academic: (s.context?.periods || []).map((p: any) => p.name),
+        })),
+        peers: report.cashiers
+          .filter((c: any) => c.cashier_id !== cashierId)
+          .map((c: any) => ({ name: c.name, score: c.score, status: c.status, shifts: c.shifts })),
+      })
+
+      return json({ data: { cashier_id: cashierId, ai: result, ai_error: error } })
+    }
 
     // ── Разбор месяца ─────────────────────────────────────────────────────
     if (String(body.action || '') === 'monthly') {
@@ -156,6 +234,17 @@ export async function POST(request: Request) {
     const shiftAnalysis = analysis.shifts[0]
     const explanation = explainShift(shiftAnalysis, settings)
 
+    // Обстановка дня: погода в окне смены, праздники, учебные периоды.
+    // Без неё модель объясняла провал, не зная, что шёл снег и были каникулы.
+    const sources = await loadContextSources(
+      supabase,
+      companyId,
+      String(company.organization_id),
+      date,
+      date,
+    )
+    const context = contextForShift(shiftAnalysis.fact, sources)
+
     let cashierName: string | null = null
     if (shiftAnalysis.fact.cashier_id) {
       const { data: op } = await supabase
@@ -185,6 +274,25 @@ export async function POST(request: Request) {
         confidence: shiftAnalysis.confidence,
         verdict: shiftAnalysis.verdict,
         season: shiftAnalysis.season,
+        duration_minutes: shiftAnalysis.fact.duration_minutes,
+      },
+      // Контекст отдельно от фактов смены: он объясняет спрос, но не входит
+      // в оценку продавца, и модель не должна их смешивать.
+      context: {
+        weather: context.weather
+          ? {
+              summary: context.weather.summary,
+              kind: context.weather.label,
+              window: context.weather.windowed ? context.weather.window_label : null,
+            }
+          : null,
+        holidays: context.days.map((d) => `${d.name} (${d.type_label})`),
+        academic: context.periods.map(
+          (p) =>
+            `${p.name} — ${p.type_label}${p.audience_label ? `, ${p.audience_label}` : ''}${
+              p.confirmed ? '' : ' (не подтверждён)'
+            }`,
+        ),
       },
       explanation,
     })

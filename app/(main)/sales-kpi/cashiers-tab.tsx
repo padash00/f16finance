@@ -16,8 +16,9 @@
  */
 
 import { useMemo, useState } from 'react'
-import { ChevronDown, GraduationCap, Users } from 'lucide-react'
+import { Bot, ChevronDown, GraduationCap, Loader2, Sparkles, Users } from 'lucide-react'
 
+import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { formatMoney } from '@/lib/core/format'
 
@@ -150,12 +151,59 @@ function MetricBar({ label, ratio }: { label: string; ratio: number }) {
   )
 }
 
+type CashierAi = {
+  summary: string
+  strengths: string
+  weaknesses: string
+  pattern: string
+  conversation: string
+  watch_out: string[]
+}
+
 export function CashiersTab(props: {
+  companyId: string
+  from: string
+  to: string
   cashiers: CashierRow[]
   shifts: CashierShiftRow[]
   minQualifyingShifts: number
 }) {
   const [open, setOpen] = useState<string | null>(null)
+  const [ai, setAi] = useState<Record<string, CashierAi>>({})
+  const [aiBusy, setAiBusy] = useState<string | null>(null)
+  const [aiError, setAiError] = useState<string | null>(null)
+
+  /**
+   * Разбор человека от ИИ — только по нажатию.
+   *
+   * Модель ничего не решает: она объясняет уже посчитанное и подсказывает, как
+   * построить разговор. Ни статуса, ни доплаты она не меняет.
+   */
+  async function askAi(cashierId: string) {
+    setAiBusy(cashierId)
+    setAiError(null)
+    try {
+      const res = await fetch('/api/admin/sales-kpi/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'cashier',
+          company_id: props.companyId,
+          cashier_id: cashierId,
+          from: props.from,
+          to: props.to,
+        }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json?.error || `HTTP ${res.status}`)
+      if (json?.data?.ai) setAi((prev) => ({ ...prev, [cashierId]: json.data.ai }))
+      if (json?.data?.ai_error) setAiError(String(json.data.ai_error))
+    } catch (e) {
+      setAiError(e instanceof Error ? e.message : 'Не удалось получить разбор')
+    } finally {
+      setAiBusy(null)
+    }
+  }
 
   const shiftsByCashier = useMemo(() => {
     const map = new Map<string, CashierShiftRow[]>()
@@ -361,6 +409,58 @@ export function CashiersTab(props: {
                       {c.training_reason} Это повод сесть рядом на смену, а не наказать.
                     </p>
                   ) : null}
+
+                  {/* Разбор от ИИ поверх готовых цифр: он объясняет, а не считает. */}
+                  <div className="mt-4 rounded-lg border border-border p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        <Bot className="h-4 w-4" /> Как с ним разговаривать
+                      </div>
+                      {!ai[c.cashier_id] ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={aiBusy !== null}
+                          onClick={() => void askAi(c.cashier_id)}
+                        >
+                          {aiBusy === c.cashier_id ? (
+                            <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Sparkles className="mr-1 h-3.5 w-3.5" />
+                          )}
+                          Спросить ИИ
+                        </Button>
+                      ) : null}
+                    </div>
+
+                    {ai[c.cashier_id] ? (
+                      <div className="mt-2 space-y-2 text-xs leading-relaxed text-body">
+                        <p>{ai[c.cashier_id].summary}</p>
+                        {ai[c.cashier_id].pattern ? (
+                          <p>
+                            <b>Закономерность.</b> {ai[c.cashier_id].pattern}
+                          </p>
+                        ) : null}
+                        <div className="rounded-lg bg-surface-muted p-2.5">
+                          <b>Разговор.</b> {ai[c.cashier_id].conversation}
+                        </div>
+                        {ai[c.cashier_id].watch_out.length > 0 ? (
+                          <p className="text-muted-foreground">
+                            Где вывод слабый: {ai[c.cashier_id].watch_out.join('; ')}
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                        Модель не считает цифры — она объясняет уже посчитанное и подсказывает, с чего
+                        начать разговор. Ни статус, ни доплату она не меняет.
+                      </p>
+                    )}
+
+                    {aiError && aiBusy === null ? (
+                      <p className="mt-1.5 text-xs text-rose-600 dark:text-rose-400">{aiError}</p>
+                    ) : null}
+                  </div>
                 </div>
               ) : null}
             </Card>

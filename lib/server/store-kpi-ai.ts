@@ -80,6 +80,24 @@ const MONTHLY_SCHEMA = `{
   "watch_out": ["чего не хватило в данных и где выводы слабые"]
 }`
 
+export type CashierAiResult = {
+  summary: string
+  strengths: string
+  weaknesses: string
+  pattern: string
+  conversation: string
+  watch_out: string[]
+}
+
+const CASHIER_SCHEMA = `{
+  "summary": "3-5 предложений: как человек работает в целом за период",
+  "strengths": "2-4 предложения: что у него получается и на чём это видно",
+  "weaknesses": "2-4 предложения: что проседает и на чём это видно",
+  "pattern": "2-4 предложения: есть ли закономерность — по сменам, дням недели, дневным и ночным",
+  "conversation": "3-5 предложений: как управляющему построить разговор с этим человеком, что спросить и что показать",
+  "watch_out": ["чего не хватило в данных и где вывод слабый"]
+}`
+
 function hashInput(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0, 32)
 }
@@ -122,6 +140,8 @@ export async function runPostShiftReview(args: {
   modelVersion: string
   subject: { date: string; shift: string; cashier_name: string | null }
   facts: Record<string, unknown>
+  /** Обстановка дня: погода в окне смены, праздники, учебные периоды. */
+  context?: Record<string, unknown>
   explanation: ShiftExplanation
 }): Promise<{ result: PostShiftAiResult | null; error: string | null }> {
   const input = {
@@ -137,10 +157,16 @@ export async function runPostShiftReview(args: {
       metrics: args.explanation.metrics,
       caveats: args.explanation.caveats,
     },
+    // Обстановка отдельно от фактов: она объясняет спрос, но в оценку
+    // продавца не входит, и модель не должна их смешивать.
+    context: args.context ?? null,
     notes: [
-      'Поток измеряется выручкой клуба за ту же смену: числа посетителей нет, клуб работает на стороннем SENET.',
+      'Спрос измеряется числом чеков: счётчика посетителей у магазина нет, но чек оставляет каждый купивший.',
+      'Привести людей в помещение продавец не может — за число чеков он не отвечает.',
       'Метрики продавца сравниваются с нормой для сопоставимых условий (сезон, день недели, смена).',
       'Собственные смены продавца исключены из его же базы сравнения.',
+      'Погода посчитана в часы именно этой смены, а не за сутки.',
+      'Обстановка объясняет спрос и понижает доверие к выводу, но НЕ меняет оценку продавца.',
     ],
   }
 
@@ -162,9 +188,12 @@ ${JSON.stringify(input, null, 2)}
 Верни JSON строго такой структуры:
 ${POST_SHIFT_SCHEMA}
 
-Пиши развёрнуто: каждый блок должен объяснять, а не повторять цифры. Если поток
-измерить было нечем или метрик не хватило — скажи это прямо в uncertainties и не
-делай уверенных выводов.`,
+Пиши развёрнуто: каждый блок должен объяснять, а не повторять цифры. Если метрик
+не хватило — скажи это прямо в uncertainties и не делай уверенных выводов.
+
+Обстановку используй только для объяснения спроса: снег, праздник или каникулы
+могут объяснить, почему зашло меньше людей, но не могут быть заслугой или виной
+продавца.`,
         },
       ],
     })
@@ -237,12 +266,15 @@ export async function runMonthlyReview(args: {
   modelVersion: string
   month: string
   facts: Record<string, unknown>
+  /** Обстановка месяца: погода, праздники, учебные периоды. */
+  context?: Record<string, unknown>
 }): Promise<{ result: MonthlyAiResult | null; error: string | null }> {
   const input = {
     task: 'MONTHLY_MANAGEMENT_REVIEW',
     point: 'Магазин',
     month: args.month,
     facts: args.facts,
+    context: args.context ?? null,
     notes: [
       'Спрос измеряется числом чеков: счётчика посетителей у магазина нет.',
       'Метрики продавца сравниваются с нормой для сопоставимых условий.',
@@ -321,6 +353,117 @@ ${MONTHLY_SCHEMA}
       created_by: args.actorUserId,
     })
 
+    return { result: null, error: message }
+  }
+}
+
+
+/**
+ * Разбор одного продавца за период.
+ *
+ * Отвечает на вопрос, которого не было ни у смены, ни у месяца: как построить
+ * разговор именно с этим человеком. Управляющему нужен не список метрик, а
+ * что спросить и что показать.
+ *
+ * Ограничения те же: модель объясняет уже посчитанное и не предлагает
+ * кадровых решений. «Разобрать смену» и «сесть рядом» — можно, «лишить
+ * премии» — нет.
+ */
+export async function runCashierReview(args: {
+  supabase: any
+  organizationId: string
+  companyId: string
+  actorUserId: string | null
+  modelVersion: string
+  period: { from: string; to: string }
+  cashier: Record<string, unknown>
+  /** Смены этого человека: без них закономерность не увидеть. */
+  shifts: Record<string, unknown>[]
+  peers?: Record<string, unknown>[]
+}): Promise<{ result: CashierAiResult | null; error: string | null }> {
+  const input = {
+    task: 'CASHIER_PERIOD_REVIEW',
+    point: 'Магазин внутри компьютерного клуба',
+    period: args.period,
+    cashier: args.cashier,
+    shifts: args.shifts,
+    // Остальные продавцы — только как фон: показать, что норма достижима.
+    // Сравнивать людей между собой на экране самого продавца нельзя.
+    peers: args.peers ?? null,
+    notes: [
+      'Оценивается работа с покупателем, а не выручка: выручка зависит от того, сколько людей зашло.',
+      'Метрики сравниваются с нормой для сопоставимых условий, а не между людьми.',
+      'Собственные смены продавца исключены из его же базы сравнения.',
+      'Статус ставится только после минимального числа смен: по паре смен человека не оценивают.',
+    ],
+  }
+
+  const inputHash = hashInput(input)
+
+  try {
+    const response = await generateAiText({
+      maxTokens: 2200,
+      messages: [
+        { role: 'system', content: STORE_KPI_SYSTEM_PROMPT },
+        {
+          role: 'user',
+          content: `Разбери работу одного продавца за период и подскажи, как с ним говорить.
+
+ДАННЫЕ:
+${JSON.stringify(input, null, 2)}
+
+Верни JSON строго такой структуры:
+${CASHIER_SCHEMA}
+
+Главное — блок conversation: управляющий должен понять, с чего начать разговор,
+что показать человеку и какой вопрос задать. Не «улучшить показатели», а
+конкретное действие. Если смен мало — скажи об этом прямо и предложи подождать,
+а не делай выводов о человеке.`,
+        },
+      ],
+    })
+
+    const parsed = parseJsonLoose(response.text)
+    const result: CashierAiResult = {
+      summary: asString(parsed.summary),
+      strengths: asString(parsed.strengths),
+      weaknesses: asString(parsed.weaknesses),
+      pattern: asString(parsed.pattern),
+      conversation: asString(parsed.conversation),
+      watch_out: Array.isArray(parsed.watch_out) ? parsed.watch_out.map((x: unknown) => asString(x)) : [],
+    }
+
+    await args.supabase.from('store_kpi_ai_runs').insert({
+      organization_id: args.organizationId,
+      company_id: args.companyId,
+      task_type: 'CASHIER_PERIOD_REVIEW',
+      subject_date: args.period.to,
+      provider: response.provider,
+      model: response.model,
+      model_version: args.modelVersion,
+      input_hash: inputHash,
+      input_json: input,
+      output_json: result,
+      success: true,
+      tokens: response.usage?.total_tokens ?? null,
+      created_by: args.actorUserId,
+    })
+
+    return { result, error: null }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    await args.supabase.from('store_kpi_ai_runs').insert({
+      organization_id: args.organizationId,
+      company_id: args.companyId,
+      task_type: 'CASHIER_PERIOD_REVIEW',
+      subject_date: args.period.to,
+      model_version: args.modelVersion,
+      input_hash: inputHash,
+      input_json: input,
+      success: false,
+      error: message,
+      created_by: args.actorUserId,
+    })
     return { result: null, error: message }
   }
 }
