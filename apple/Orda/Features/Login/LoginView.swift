@@ -176,10 +176,14 @@ struct LoginView: View {
         @ViewBuilder content: () -> Content
     ) -> some View {
         if isWide(width) {
-            HStack(alignment: .center, spacing: Spacing.xxl * 2) {
+            // Выравниваем по верхнему краю, а не по середине. Колонки разной
+            // высоты: слева текст, справа карточка с полями. При центровке их
+            // верхние края расходились, и глаз читал это как перекос — даже
+            // когда середины совпадали.
+            HStack(alignment: .top, spacing: Spacing.xxl) {
                 content()
             }
-            .frame(maxWidth: 980)
+            .frame(maxWidth: 940)
             .frame(maxWidth: .infinity)
         } else {
             VStack(spacing: Spacing.xl) {
@@ -237,7 +241,7 @@ struct LoginView: View {
             }
             .padding(.top, Spacing.xs)
         }
-        .frame(width: 420, alignment: .leading)
+        .frame(maxWidth: 440, alignment: .leading)
         .fixedSize(horizontal: false, vertical: true)
     }
 
