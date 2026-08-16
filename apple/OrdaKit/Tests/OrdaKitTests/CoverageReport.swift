@@ -32,8 +32,6 @@ struct CoverageReport {
         //   pos — дубль нативной кассы оператора;
         //   branch-plan, operator-analytics — нужен серверный расчёт;
         //   knowledge-setup — правка регламентов, работа за столом;
-        //   operator-exams — назначение аттестации, у оператора свой экран
-        //   сдачи.
-        #expect(rest.count <= 10, "Охват уменьшился: было 10 незакрытых, стало \(rest.count)")
+        #expect(rest.count <= 9, "Охват уменьшился: было 9 незакрытых, стало \(rest.count)")
     }
 }

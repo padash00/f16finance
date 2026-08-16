@@ -148,14 +148,14 @@ public struct SalesKpiService: Sendable {
     public func stores(month: String) async throws -> SalesKpiStores {
         let bounds = SalesKpiService.monthBounds(month)
         let response: DataEnvelope<SalesKpiStores> = try await api.send(
-            APIRequest(path: "/api/admin/sales-kpi?from=\(bounds.from)&to=\(bounds.to)")
+            APIRequest(path: "/api/admin/sales-kpi", query: ["from": bounds.from, "to": bounds.to])
         )
         return response.data
     }
 
     public func payout(companyID: String, month: String) async throws -> SalesKpiPayout {
         let response: DataEnvelope<SalesKpiPayout> = try await api.send(
-            APIRequest(path: "/api/admin/sales-kpi/payout?company_id=\(companyID)&month=\(month)")
+            APIRequest(path: "/api/admin/sales-kpi/payout", query: ["company_id": companyID, "month": month])
         )
         return response.data
     }

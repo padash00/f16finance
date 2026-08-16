@@ -98,9 +98,14 @@ public struct SalesQualityService: Sendable {
 
     /// Мой месяц. `month` — «2026-08»; пусто — текущий.
     public func myMonth(month: String? = nil) async throws -> SalesQualityMonth {
-        var path = "/api/operator/sales-kpi"
-        if let month, !month.isEmpty { path += "?month=\(month)" }
-        let response: DataEnvelope<SalesQualityMonth> = try await api.send(APIRequest(path: path))
+        // Параметры — через `query`, а не строкой в пути: клиент кодирует путь
+        // целиком, и «?» превращался в часть адреса. Экран отвечал «Не
+        // найдено», хотя маршрут на сервере есть.
+        var query: [String: String] = [:]
+        if let month, !month.isEmpty { query["month"] = month }
+        let response: DataEnvelope<SalesQualityMonth> = try await api.send(
+            APIRequest(path: "/api/operator/sales-kpi", query: query)
+        )
         return response.data
     }
 }
