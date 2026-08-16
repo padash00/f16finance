@@ -41,6 +41,7 @@ import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { ScrollToEdge } from '@/components/ui/scroll-to-edge'
@@ -1163,11 +1164,11 @@ export default function SalesKpiPage() {
         <>
           <label className="flex flex-col gap-1 text-xs text-muted-foreground">
             С
-            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-40" />
+            <DatePicker value={from} onChange={setFrom} className="w-40" />
           </label>
           <label className="flex flex-col gap-1 text-xs text-muted-foreground">
             По
-            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-40" />
+            <DatePicker value={to} onChange={setTo} className="w-40" />
           </label>
         </>
       ) : (

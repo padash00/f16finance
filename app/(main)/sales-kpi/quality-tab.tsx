@@ -17,6 +17,7 @@ import { AlertTriangle, CheckCircle2, Loader2, Plus, ShieldCheck, Trash2, Wallet
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { formatMoney } from '@/lib/core/format'
@@ -383,19 +384,17 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
           <div className="mt-3 flex flex-wrap items-end gap-2">
             <label className="flex flex-col gap-1 text-xs text-muted-foreground">
               С
-              <Input
-                type="date"
+              <DatePicker
                 value={eventForm.starts_on}
-                onChange={(e) => setEventForm({ ...eventForm, starts_on: e.target.value })}
+                onChange={(starts_on) => setEventForm({ ...eventForm, starts_on })}
                 className="w-36"
               />
             </label>
             <label className="flex flex-col gap-1 text-xs text-muted-foreground">
               По
-              <Input
-                type="date"
+              <DatePicker
                 value={eventForm.ends_on}
-                onChange={(e) => setEventForm({ ...eventForm, ends_on: e.target.value })}
+                onChange={(ends_on) => setEventForm({ ...eventForm, ends_on })}
                 className="w-36"
               />
             </label>

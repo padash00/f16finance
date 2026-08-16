@@ -39,6 +39,11 @@ export const STORE_KPI_SYSTEM_PROMPT = `Ты — аналитик розничн
 9. Если данных мало — скажи об этом прямо и не строй уверенных выводов.
 10. Пиши по-русски, спокойно и по делу. Без канцелярита, без мотивационных лозунгов,
     без обращения к продавцу на «ты» в третьем лице.
+11. НИКОГДА не пиши технические коды и английские слова: ни STRONG_CASHIER, ни LOW_DEMAND,
+    ни NORMAL, ни INSUFFICIENT_DATA, ни score, ни confidence, ни verdict. Во входных данных
+    их и не будет — там всё уже по-русски. Пиши «сильная смена», «мало покупателей»,
+    «оценка», «насколько можно доверять».
+12. Не пиши коэффициенты вида 1.036. Говори «выше обычного на 4%» или «как обычно».
 
 ФОРМАТ: только валидный JSON, без markdown и пояснений вокруг.`
 
@@ -97,6 +102,76 @@ const CASHIER_SCHEMA = `{
   "conversation": "3-5 предложений: как управляющему построить разговор с этим человеком, что спросить и что показать",
   "watch_out": ["чего не хватило в данных и где вывод слабый"]
 }`
+
+// ─── Человеческие названия для модели ───────────────────────────────────────
+// Модель пишет то, что видит. Отдашь ей STRONG_CASHIER — она и напечатает
+// STRONG_CASHIER владельцу. Поэтому коды переводятся ДО отправки, а не
+// запрещаются постфактум.
+
+const VERDICT_RU: Record<string, string> = {
+  STRONG_CASHIER: 'сильная смена',
+  LOW_DEMAND: 'мало покупателей',
+  POSSIBLE_CASHIER_ISSUE: 'вопрос к продавцу',
+  HIGH_DEMAND: 'вытянул поток',
+  NORMAL: 'норма',
+  INSUFFICIENT_DATA: 'мало данных',
+}
+
+const STATUS_RU: Record<string, string> = {
+  TOP: 'топ',
+  STRONG: 'сильный',
+  NORMAL: 'норма',
+  NEEDS_TRAINING: 'нужна помощь',
+  INSUFFICIENT_DATA: 'рано судить',
+}
+
+const METRIC_RU: Record<string, string> = {
+  avg_ticket: 'средний чек',
+  items_per_receipt: 'товаров на чек',
+  attach_rate: 'допродажи',
+  revenue_efficiency: 'отдача с покупателя',
+  plan_attainment: 'выполнение плана',
+  product_knowledge: 'знание товара',
+}
+
+export function verdictRu(code: unknown): string {
+  return VERDICT_RU[String(code)] || String(code ?? '')
+}
+
+export function statusRu(code: unknown): string {
+  return STATUS_RU[String(code)] || String(code ?? '')
+}
+
+export function metricRu(code: unknown): string {
+  return METRIC_RU[String(code)] || String(code ?? '')
+}
+
+/** Балл словами: «выше обычного на 4%». Коэффициент 1.036 модели не нужен. */
+export function scoreRu(score: unknown): string {
+  const value = Number(score)
+  if (!Number.isFinite(value)) return 'оценки нет'
+  const delta = Math.round((value - 1) * 100)
+  if (Math.abs(delta) < 3) return 'как обычно'
+  return delta > 0 ? `выше обычного на ${delta}%` : `ниже обычного на ${Math.abs(delta)}%`
+}
+
+/** Доверие словами — теми же, что видит человек на экране. */
+export function confidenceRu(confidence: unknown): string {
+  const pct = Math.round((Number(confidence) || 0) * 100)
+  if (pct >= 75) return 'можно доверять'
+  if (pct >= 45) return 'есть сомнения'
+  return 'рано судить'
+}
+
+/** Счётчик вердиктов в человеческий вид: {«сильная смена»: 3}. */
+export function verdictsRu(verdicts: Record<string, unknown> | null | undefined) {
+  const out: Record<string, number> = {}
+  for (const [code, n] of Object.entries(verdicts || {})) {
+    const value = Number(n) || 0
+    if (value > 0) out[verdictRu(code)] = value
+  }
+  return out
+}
 
 function hashInput(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0, 32)

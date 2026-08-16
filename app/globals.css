@@ -303,6 +303,72 @@
   }
 }
 
+/* ─── Смена темы: распад в пыль ────────────────────────────────────────────
+   Старый экран рассыпается зерном и уносится, новый проступает под ним.
+
+   Как это устроено. View Transitions дают снимок старого экрана, но не дают
+   доступа к его пикселям — настоящие частицы пришлось бы считать на canvas,
+   а это значит растеризовать всю страницу админки на каждое переключение.
+   Поэтому распад собран из двух масок: SVG-шум даёт зерно, градиент с
+   двигающимися стопами — фронт распада. Вместе с уходом, размытием и
+   прозрачностью это читается как рассыпание, стоит нисколько и не тормозит.
+
+   Направление осмысленное: тёмная съедает светлую сверху вниз, светлая
+   поднимается снизу — «вечер наступил» и «утро пришло».
+
+   Где View Transitions нет (Safari до 18, Firefox), тема переключается
+   мгновенно: эффекта нет, функция есть. */
+
+html.theme-sweep::view-transition-new(root) {
+  /* Новый экран не анимируем: он лежит под распадающимся старым. Любое
+     движение под ним даёт шов на краях. */
+  animation: none;
+  z-index: 1;
+}
+
+html.theme-sweep::view-transition-old(root) {
+  z-index: 2;
+  animation: orda-theme-dust 0.8s cubic-bezier(0.4, 0, 0.6, 1) both;
+  mask-size: 240px 240px, 100% 100%;
+  mask-repeat: repeat, no-repeat;
+  mask-composite: intersect;
+  -webkit-mask-size: 240px 240px, 100% 100%;
+  -webkit-mask-repeat: repeat, no-repeat;
+  -webkit-mask-composite: source-in;
+}
+
+/* Фронт распада — круг, расходящийся от кнопки. Координаты ставит хук.
+   Радиус доводится до 180%: этого хватает, чтобы круг накрыл экран из любого
+   угла, включая противоположный. */
+@keyframes orda-theme-dust {
+  0% {
+    mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' seed='7'/><feColorMatrix type='matrix' values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1 0 0 0 -0.35'/></filter><rect width='240' height='240' filter='url(%23n)'/></svg>"),
+      radial-gradient(circle at var(--sweep-x, 100%) var(--sweep-y, 0%), transparent 0%, #000 5%);
+    -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' seed='7'/><feColorMatrix type='matrix' values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1 0 0 0 -0.35'/></filter><rect width='240' height='240' filter='url(%23n)'/></svg>"),
+      radial-gradient(circle at var(--sweep-x, 100%) var(--sweep-y, 0%), transparent 0%, #000 5%);
+    filter: blur(0);
+    opacity: 1;
+  }
+  100% {
+    mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' seed='7'/><feColorMatrix type='matrix' values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1 0 0 0 -0.35'/></filter><rect width='240' height='240' filter='url(%23n)'/></svg>"),
+      radial-gradient(circle at var(--sweep-x, 100%) var(--sweep-y, 0%), transparent 180%, #000 185%);
+    -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' seed='7'/><feColorMatrix type='matrix' values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1 0 0 0 -0.35'/></filter><rect width='240' height='240' filter='url(%23n)'/></svg>"),
+      radial-gradient(circle at var(--sweep-x, 100%) var(--sweep-y, 0%), transparent 180%, #000 185%);
+    filter: blur(6px);
+    opacity: 0;
+  }
+}
+
+/* Экономный режим: никакого распада, тема просто меняется. */
+@media (prefers-reduced-motion: reduce) {
+  html.theme-sweep::view-transition-old(root),
+  html.theme-sweep::view-transition-new(root) {
+    animation: none !important;
+    mask-image: none !important;
+    -webkit-mask-image: none !important;
+  }
+}
+
 /* Единая типографика шапок страниц (подключайте class на корневом блоке заголовка) */
 @layer components {
   .page-header {

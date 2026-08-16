@@ -20,7 +20,17 @@ import {
   loadStoreKpiSettings,
   resolveStoreKpiContext,
 } from '@/lib/server/store-kpi'
-import { runCashierReview, runMonthlyReview, runPostShiftReview } from '@/lib/server/store-kpi-ai'
+import {
+  confidenceRu,
+  metricRu,
+  runCashierReview,
+  runMonthlyReview,
+  runPostShiftReview,
+  scoreRu,
+  statusRu,
+  verdictRu,
+  verdictsRu,
+} from '@/lib/server/store-kpi-ai'
 import { contextForShift, loadContextSources } from '@/lib/server/store-kpi-context'
 import { buildStoreKpiReport } from '@/lib/server/store-kpi-report'
 import {
@@ -84,40 +94,51 @@ export async function POST(request: Request) {
         actorUserId: access.user?.id || null,
         modelVersion: report.settings.model_version,
         period: { from, to },
+        // Всё по-русски: модель печатает то, что видит, и код STRONG_CASHIER
+        // из входных данных ушёл бы прямо в текст владельцу.
         cashier: {
-          name: target.name,
-          shifts: target.shifts,
-          receipts: target.receipts,
-          revenue: target.revenue,
-          score: target.score,
-          status: target.status,
-          confidence: target.confidence,
-          metric_ratios: target.metric_ratios,
-          strengths: target.strengths,
-          weaknesses: target.weaknesses,
-          verdicts: target.verdicts,
-          training_flag: target.training_flag,
-          training_reason: target.training_reason,
+          имя: target.name,
+          смен: target.shifts,
+          чеков: target.receipts,
+          выручка: target.revenue,
+          как_отработал: scoreRu(target.score),
+          статус: statusRu(target.status),
+          можно_ли_доверять: confidenceRu(target.confidence),
+          метрики: Object.fromEntries(
+            Object.entries(target.metric_ratios || {})
+              .filter(([, r]) => r != null)
+              .map(([m, r]) => [metricRu(m), scoreRu(r)]),
+          ),
+          сильные_стороны: (target.strengths || []).map(metricRu),
+          стоит_подтянуть: (target.weaknesses || []).map(metricRu),
+          смены_по_выводам: verdictsRu(target.verdicts),
+          рекомендуется_обучение: target.training_flag,
+          причина: target.training_reason,
         },
         shifts: mine.map((s: any) => ({
-          date: s.date,
-          shift: s.shift,
-          verdict: s.verdict,
-          score: s.score,
-          confidence: s.confidence,
-          revenue: s.revenue,
-          expected_revenue: s.expected_revenue,
-          receipts: s.receipts,
-          expected_receipts: s.expected_receipts,
+          дата: s.date,
+          смена: s.shift === 'night' ? 'ночь' : 'день',
+          вывод: verdictRu(s.verdict),
+          как_отработал: scoreRu(s.score),
+          можно_ли_доверять: confidenceRu(s.confidence),
+          касса: s.revenue,
+          обычно_касса: s.expected_revenue,
+          покупателей: s.receipts,
+          обычно_покупателей: s.expected_receipts,
           // Обстановка нужна, чтобы модель не приняла снежный вечер за
           // слабую работу человека.
-          weather: s.context?.weather?.label ?? null,
-          holidays: (s.context?.days || []).map((d: any) => d.name),
-          academic: (s.context?.periods || []).map((p: any) => p.name),
+          погода: s.context?.weather?.label ?? null,
+          праздники: (s.context?.days || []).map((d: any) => d.name),
+          учёба: (s.context?.periods || []).map((p: any) => p.name),
         })),
         peers: report.cashiers
           .filter((c: any) => c.cashier_id !== cashierId)
-          .map((c: any) => ({ name: c.name, score: c.score, status: c.status, shifts: c.shifts })),
+          .map((c: any) => ({
+            имя: c.name,
+            как_отработал: scoreRu(c.score),
+            статус: statusRu(c.status),
+            смен: c.shifts,
+          })),
       })
 
       return json({ data: { cashier_id: cashierId, ai: result, ai_error: error } })
@@ -181,27 +202,29 @@ export async function POST(request: Request) {
         modelVersion: settings.model_version,
         month,
         facts: {
-          shifts: analysis.shifts.length,
-          verdicts: analysis.shifts.reduce(
-            (acc: Record<string, number>, s) => {
-              acc[s.verdict] = (acc[s.verdict] || 0) + 1
-              return acc
-            },
-            {},
+          смен: analysis.shifts.length,
+          смены_по_выводам: verdictsRu(
+            analysis.shifts.reduce(
+              (acc: Record<string, number>, s) => {
+                acc[s.verdict] = (acc[s.verdict] || 0) + 1
+                return acc
+              },
+              {},
+            ),
           ),
-          diagnostics: retailDiagnostics(analysis.shifts),
-          coverage: analysis.coverage,
-          cashiers: analysis.cashiers.map((c) => ({
-            name: names.get(c.cashier_id) || 'Без имени',
-            shifts: c.shifts,
-            score: c.score,
-            status: c.status,
-            strengths: c.strengths,
-            weaknesses: c.weaknesses,
-            bonus: monthlyBonus(c.status, settings).amount,
+          диагностика: retailDiagnostics(analysis.shifts),
+          охват_данных: analysis.coverage,
+          продавцы: analysis.cashiers.map((c) => ({
+            имя: names.get(c.cashier_id) || 'Без имени',
+            смен: c.shifts,
+            как_отработал: scoreRu(c.score),
+            статус: statusRu(c.status),
+            сильные_стороны: (c.strengths || []).map(metricRu),
+            стоит_подтянуть: (c.weaknesses || []).map(metricRu),
+            доплата: monthlyBonus(c.status, settings).amount,
           })),
-          bonus_paid: paid,
-          roi: bonusRoi(analysis.shifts, paid, settings),
+          доплат_начислено: paid,
+          окупаемость: bonusRoi(analysis.shifts, paid, settings),
         },
       })
 
@@ -263,18 +286,18 @@ export async function POST(request: Request) {
       modelVersion: settings.model_version,
       subject: { date, shift, cashier_name: cashierName },
       facts: {
-        revenue: Math.round(shiftAnalysis.fact.revenue),
-        expected_revenue: shiftAnalysis.expected_revenue,
-        expected_receipts: shiftAnalysis.expected_receipts,
-        expected_avg_ticket: shiftAnalysis.expected_avg_ticket,
-        receipts: shiftAnalysis.fact.receipts,
-        items: shiftAnalysis.fact.items,
-        refunds: Math.round(shiftAnalysis.fact.refunds),
-        score: shiftAnalysis.score,
-        confidence: shiftAnalysis.confidence,
-        verdict: shiftAnalysis.verdict,
-        season: shiftAnalysis.season,
-        duration_minutes: shiftAnalysis.fact.duration_minutes,
+        касса: Math.round(shiftAnalysis.fact.revenue),
+        обычно_касса: shiftAnalysis.expected_revenue,
+        покупателей: shiftAnalysis.fact.receipts,
+        обычно_покупателей: shiftAnalysis.expected_receipts,
+        обычно_средний_чек: shiftAnalysis.expected_avg_ticket,
+        товаров: shiftAnalysis.fact.items,
+        возвраты: Math.round(shiftAnalysis.fact.refunds),
+        как_отработал: scoreRu(shiftAnalysis.score),
+        можно_ли_доверять: confidenceRu(shiftAnalysis.confidence),
+        вывод: verdictRu(shiftAnalysis.verdict),
+        сезон: shiftAnalysis.season === 'summer' ? 'лето' : 'учебный сезон',
+        длительность_минут: shiftAnalysis.fact.duration_minutes,
       },
       // Контекст отдельно от фактов смены: он объясняет спрос, но не входит
       // в оценку продавца, и модель не должна их смешивать.

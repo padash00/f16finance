@@ -10,6 +10,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 
+import { ThemeCard } from './theme-card'
+
 type SessionInfo = {
   email: string | null
   displayName: string | null
@@ -273,6 +275,8 @@ export default function ProfilePage() {
           </Button>
         </div>
       </Card>
+
+      <ThemeCard />
 
       {/* Email */}
       <Card className="border-border bg-white dark:bg-slate-950/70 p-6 text-foreground">

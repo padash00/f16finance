@@ -1,13 +1,15 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useTheme } from 'next-themes'
 import { Moon, Sun } from 'lucide-react'
+
+import { rememberManualChoice } from '@/components/auto-theme'
+import { originOfEvent, useThemeSweep } from '@/lib/hooks/use-theme-sweep'
 
 // Переключатель светлая/тёмная тема. Использует next-themes (класс на <html>).
 // mounted-гард — чтобы не было рассинхрона SSR/CSR (тема известна только на клиенте).
 export function ThemeToggle({ className }: { className?: string }) {
-  const { resolvedTheme, setTheme } = useTheme()
+  const { resolvedTheme, sweepTo } = useThemeSweep()
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
 
@@ -18,7 +20,12 @@ export function ThemeToggle({ className }: { className?: string }) {
       type="button"
       aria-label={isDark ? 'Включить светлую тему' : 'Включить тёмную тему'}
       title={isDark ? 'Светлая тема' : 'Тёмная тема'}
-      onClick={() => setTheme(isDark ? 'light' : 'dark')}
+      onClick={(event) => {
+        // Ручной выбор сильнее расписания до конца суток: раз человек нажал,
+        // значит ему сейчас так надо.
+        rememberManualChoice()
+        sweepTo(isDark ? 'light' : 'dark', originOfEvent(event))
+      }}
       className={
         className ??
         'inline-flex items-center gap-2 rounded-xl border border-border bg-card/60 px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted'

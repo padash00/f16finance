@@ -4,6 +4,7 @@ import { Analytics } from '@vercel/analytics/next'
 
 import { ClientErrorReporter } from '@/components/client-error-reporter'
 import { GlobalAssistant } from '@/components/ai/global-assistant'
+import { AutoTheme } from '@/components/auto-theme'
 import { ThemeProvider } from '@/components/theme-provider'
 import { Toaster } from '@/components/ui/toaster'
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from '@/lib/core/site'
@@ -108,6 +109,9 @@ export default function RootLayout({
       <head />
       <body className={`${inter.variable} ${manrope.variable} ${ibmPlexMono.variable} app-shell font-sans antialiased`}>
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} disableTransitionOnChange>
+          {/* Следит за временем и переключает тему, если человек это включил
+              в профиле. Ничего не рисует. */}
+          <AutoTheme />
           {children}
           <GlobalAssistant />
           <ClientErrorReporter />

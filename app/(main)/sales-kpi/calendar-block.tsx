@@ -15,6 +15,7 @@ import { useState } from 'react'
 import { AlertTriangle, CalendarDays, Check, Download, GraduationCap, Loader2, Plus, Trash2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { Card } from '@/components/ui/card'
@@ -231,10 +232,9 @@ export function CalendarBlock(props: { companyId: string; canManage: boolean }) 
 
             {props.canManage ? (
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <Input
-                  type="date"
+                <DatePicker
                   value={dayForm.day}
-                  onChange={(e) => setDayForm({ ...dayForm, day: e.target.value })}
+                  onChange={(day) => setDayForm({ ...dayForm, day })}
                   className="w-36"
                 />
                 <NativeSelect
@@ -360,17 +360,15 @@ export function CalendarBlock(props: { companyId: string; canManage: boolean }) 
             {props.canManage ? (
               <div className="mt-2 space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Input
-                    type="date"
+                  <DatePicker
                     value={periodForm.start_date}
-                    onChange={(e) => setPeriodForm({ ...periodForm, start_date: e.target.value })}
+                    onChange={(start_date) => setPeriodForm({ ...periodForm, start_date })}
                     className="w-36"
                   />
                   <span className="text-muted-foreground">—</span>
-                  <Input
-                    type="date"
+                  <DatePicker
                     value={periodForm.end_date}
-                    onChange={(e) => setPeriodForm({ ...periodForm, end_date: e.target.value })}
+                    onChange={(end_date) => setPeriodForm({ ...periodForm, end_date })}
                     className="w-36"
                   />
                 </div>
