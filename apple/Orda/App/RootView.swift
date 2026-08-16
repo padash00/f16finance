@@ -17,9 +17,6 @@ struct RootView: View {
     /// но восстановление сессии при этом уже идёт в фоне.
     @State private var introFinished = false
 
-    /// Крупный шрифт за стойкой. Настройка устройства, а не учётной записи.
-    @AppStorage(LargeType.storageKey) private var largeType = false
-
     var body: some View {
         content
             // Нижняя граница размера текста, а не фиксированный размер: более
@@ -28,7 +25,7 @@ struct RootView: View {
             // Два шага вверх, а не один: обычный системный размер — «Large», и
             // граница в «xLarge» давала прибавку, которой не видно. Ради
             // незаметного человек настройку не включает.
-            .dynamicTypeSize(largeType ? .xxLarge... : .xSmall...)
+            .largeTypeIfEnabled()
             // Заставка лежит поверх готового интерфейса, а не вместо него:
             // экран под ней уже собран и уже тянет данные, поэтому к моменту
             // ухода заставки показывать нечего — всё на месте.
@@ -243,5 +240,29 @@ struct NoAccessView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.background)
+    }
+}
+
+/// Крупный шрифт за стойкой.
+///
+/// Отдельным модификатором, а не строкой в корне: листы («Аккаунт», формы
+/// ввода) показываются своим контроллером и настройку из корня не наследуют.
+/// Человек переключал её в «Аккаунте», вокруг ничего не менялось — и настройка
+/// выглядела мёртвой, хотя на экранах под листом уже работала.
+private struct LargeTypeModifier: ViewModifier {
+    @AppStorage(LargeType.storageKey) private var largeType = false
+
+    func body(content: Content) -> some View {
+        // Нижняя граница размера, а не фиксированный размер: более крупный
+        // системный шрифт настройка не отменяет. Два шага вверх, а не один:
+        // обычный системный размер — «Large», и прибавки в один шаг не видно.
+        content.dynamicTypeSize(largeType ? .xxLarge... : .xSmall...)
+    }
+}
+
+extension View {
+    /// Поднять размер текста, если включён крупный шрифт.
+    func largeTypeIfEnabled() -> some View {
+        modifier(LargeTypeModifier())
     }
 }

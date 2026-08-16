@@ -36,6 +36,9 @@ struct AccountSheet: View {
                 }
             }
             .background(Theme.background)
+            // Лист живёт своим контроллером: без этого крупный шрифт
+            // включался «где-то там», а на экране, где его включают, — нет.
+            .largeTypeIfEnabled()
             .navigationTitle("Аккаунт")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
