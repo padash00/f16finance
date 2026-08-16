@@ -30,6 +30,9 @@ struct PlatformRootView: View {
     #endif
 
     var body: some View {
+        // Как и в остальных контурах: без этого характер устройства оставался
+        // «телефоном», и платформенные сетки на планшете шли в один столбик.
+        SurfaceReader { _ in
         Group {
             if let store, let business {
                 VStack(spacing: 0) {
@@ -72,6 +75,7 @@ struct PlatformRootView: View {
         .onOpenURL { url in
             guard let pageID = DeepLink.pageID(from: url) else { return }
             openIfAllowed(pageID: pageID)
+        }
         }
     }
 

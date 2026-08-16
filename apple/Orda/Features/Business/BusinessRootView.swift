@@ -45,13 +45,20 @@ struct BusinessRootView: View {
     #endif
 
     var body: some View {
-        Group {
-            if let store {
-                content
-                    .environment(store)
-                    .environment(\.access, resolver)
-            } else {
-                LaunchView(message: "Загружаем данные…")
+        // Характер устройства проставляется здесь, как и в операторском
+        // контуре. Без этого он оставался значением по умолчанию — «телефон», —
+        // и весь владельческий раздел на планшете раскладывался как на
+        // телефоне: сетки схлопывались в столбик, карточка метрики занимала всю
+        // ширину, а справа от цифры оставалось полэкрана пустоты.
+        SurfaceReader { _ in
+            Group {
+                if let store {
+                    content
+                        .environment(store)
+                        .environment(\.access, resolver)
+                } else {
+                    LaunchView(message: "Загружаем данные…")
+                }
             }
         }
         .task {

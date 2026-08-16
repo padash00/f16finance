@@ -439,6 +439,10 @@ struct OperatorProfileScreen: View {
                     .buttonStyle(DestructiveButtonStyle())
             }
             .padding(Spacing.lg)
+            // Запас снизу под плавающую панель вкладок: без него последняя
+            // кнопка — а это «Выйти из аккаунта» — уезжала под неё и читалась
+            // наполовину.
+            .padding(.bottom, Spacing.xxl * 2)
             .frame(maxWidth: 640)
             .frame(maxWidth: .infinity)
         }
