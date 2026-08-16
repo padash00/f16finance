@@ -17,6 +17,11 @@ public struct TeamOperator: Decodable, Sendable, Identifiable, Hashable {
     public let username: String?
     public let lastLogin: Date?
     public let hasTelegram: Bool
+    /// Учётная запись входа. Нужна, чтобы сбросить пароль: сервер работает с
+    /// пользователем, а не с карточкой оператора.
+    public let authUserID: String?
+    /// Куда слать логин и пароль. Пусто — Telegram не привязан.
+    public let telegramChatID: String?
     public let stats: Stats
 
     /// Показываем полное имя из профиля, если оно есть: в `name` часто
@@ -95,10 +100,12 @@ public struct TeamOperator: Decodable, Sendable, Identifiable, Hashable {
     private struct Auth: Decodable {
         let username: String?
         let lastLogin: String?
+        let userID: String?
 
         private enum CodingKeys: String, CodingKey {
             case username
             case lastLogin = "last_login"
+            case userID = "user_id"
         }
     }
 
@@ -109,7 +116,8 @@ public struct TeamOperator: Decodable, Sendable, Identifiable, Hashable {
         shortName = try c.decodeFlexibleString(forKey: .shortName)
         isActive = try c.decodeIfPresent(Bool.self, forKey: .isActive) ?? true
         role = try c.decodeFlexibleString(forKey: .role) ?? "operator"
-        hasTelegram = (try c.decodeFlexibleString(forKey: .telegramChatID))?.isEmpty == false
+        telegramChatID = try c.decodeFlexibleString(forKey: .telegramChatID)
+        hasTelegram = telegramChatID?.isEmpty == false
 
         // `operator_profiles` приходит объектом при связи один-к-одному и
         // массивом при один-ко-многим — Supabase решает это по схеме, а не по
@@ -129,6 +137,7 @@ public struct TeamOperator: Decodable, Sendable, Identifiable, Hashable {
         let auth = try? c.decodeIfPresent(Auth.self, forKey: .auth)
         username = auth?.username
         lastLogin = DateParsing.date(from: auth?.lastLogin)
+        authUserID = auth?.userID
 
         stats = (try? c.decodeIfPresent(Stats.self, forKey: .stats)) ?? .zero
     }

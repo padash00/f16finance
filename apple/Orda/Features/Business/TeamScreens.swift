@@ -157,18 +157,20 @@ private struct OperatorDetail: View {
     @Environment(\.access) private var access
 
     @State private var confirmingToggle = false
+    @State private var resetting = false
     @State private var isToggling = false
     @State private var toggleError: String?
 
     /// Право то же, что проверяет сервер.
     private var canToggle: Bool { access?.can("operators.toggle_active") ?? false }
+    private var canReset: Bool { access?.can("operators.reset_password") ?? false }
 
     var body: some View {
         ScreenScroll {
             VStack(spacing: Spacing.lg) {
                 header
 
-                if canToggle { accessCard }
+                if canToggle || canReset { accessCard }
 
                 DashboardGrid {
                     MetricTile(
@@ -229,6 +231,18 @@ private struct OperatorDetail: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
+                if canReset {
+                    // Пароль забывают перед сменой — сбрасывать его надо там
+                    // же, где стоит человек.
+                    Button {
+                        resetting = true
+                    } label: {
+                        Label("Сбросить пароль", systemImage: "key")
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                }
+
+                if canToggle {
                 Button {
                     confirmingToggle = true
                 } label: {
@@ -243,7 +257,11 @@ private struct OperatorDetail: View {
                 }
                 .buttonStyle(person.isActive ? AnyButtonStyle(DestructiveButtonStyle()) : AnyButtonStyle(SecondaryButtonStyle()))
                 .disabled(isToggling)
+                }
             }
+        }
+        .sheet(isPresented: $resetting) {
+            ResetPasswordSheet(person: person) { await store.loadTeam() }
         }
         .alert(
             person.isActive ? "Закрыть доступ?" : "Открыть доступ?",
