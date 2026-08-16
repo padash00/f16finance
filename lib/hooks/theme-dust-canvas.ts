@@ -19,9 +19,12 @@
  * тысяч, и это полсекунды заморозки. Один проход раскладывает пиксели по
  * типизированным массивам, и каждый холст получает готовый putImageData.
  *
- * ОЖИДАНИЕ. Снимок делается заранее — по наведению на кнопку, а не по нажатию.
- * Растеризация тяжёлой админки занимает сотни миллисекунд, и делать её после
- * клика значит показывать человеку паузу.
+ * ОЖИДАНИЕ. Тема не ждёт анимацию никогда. Растеризация тяжёлой админки
+ * занимает секунды, и если переключение ждёт снимок — человек нажимает кнопку
+ * и три секунды смотрит в неизменившийся экран. Поэтому распад играет только
+ * на ГОТОВОМ снимке: он делается заранее, в простое и по наведению на кнопку.
+ * Снимка нет — тема переключается мгновенно и без эффекта. Это не деградация,
+ * а приоритет: работающая кнопка важнее анимации.
  */
 
 export type DustOptions = {
@@ -53,10 +56,10 @@ const GRAIN = 2
  * 0.4 — компромисс: крупинка всё равно несколько пикселей, разглядывать в ней
  * нечего, а растеризация и память падают более чем вшестеро.
  */
-const CAPTURE_SCALE = 0.4
+const CAPTURE_SCALE = 0.35
 
 /** Сколько снимок считается свежим. Дольше — покажем устаревшую страницу. */
-const CAPTURE_TTL_MS = 4000
+const CAPTURE_TTL_MS = 8000
 
 type Capture = { data: ImageData; width: number; height: number; takenAt: number }
 
@@ -121,15 +124,19 @@ export function prewarmThemeDust(): void {
     })
 }
 
-async function takeCapture(): Promise<Capture | null> {
-  if (cached && performance.now() - cached.takenAt < CAPTURE_TTL_MS) return cached
-  if (pending) return pending
-  const promise = capture()
-  pending = promise
-  const result = await promise
-  pending = null
-  cached = result
-  return result
+/**
+ * Снимок устарел: страницу прокрутили или изменили размер окна.
+ *
+ * Показывать пыль от чужого кадра нельзя — она не совпадёт с тем, что человек
+ * видит, и это выглядит как сбой, а не как эффект.
+ */
+export function invalidateThemeDust(): void {
+  cached = null
+}
+
+/** Есть ли готовый свежий снимок. */
+export function isThemeDustReady(): boolean {
+  return Boolean(cached && performance.now() - cached.takenAt < CAPTURE_TTL_MS)
 }
 
 type Layer = {
@@ -266,23 +273,23 @@ function buildLayers(shot: Capture | null, options: DustOptions): Layer[] {
 }
 
 /**
- * Запускает распад и возвращает обещание, которое исполняется по окончании.
+ * Запускает распад на уже готовом снимке.
  *
- * Холсты живут только на время анимации: постоянные элементы поверх портала
- * ловили бы клики, даже прозрачные.
+ * Синхронно до вызова `onCovered`: между нажатием и подменой темы не должно
+ * быть ни одного ожидания. Возвращает false, если снимка нет — тогда тема
+ * просто переключается без эффекта.
  */
-export async function runThemeDust(options: DustOptions): Promise<void> {
-  if (typeof document === 'undefined') return
+export function runThemeDust(options: DustOptions): boolean {
+  if (typeof document === 'undefined') return false
 
-  const shot = await takeCapture()
+  const shot = cached && performance.now() - cached.takenAt < CAPTURE_TTL_MS ? cached : null
+  if (!shot) return false
+
   // Снимок одноразовый: после переключения темы он устарел.
   cached = null
 
   const layers = buildLayers(shot, options)
-  if (layers.length === 0) {
-    options.onCovered?.()
-    return
-  }
+  if (layers.length === 0) return false
 
   const host = document.createElement('div')
   host.dataset.dustIgnore = 'true'
@@ -324,13 +331,17 @@ export async function runThemeDust(options: DustOptions): Promise<void> {
     ),
   )
 
-  try {
-    await Promise.all(animations.map((a) => a.finished))
-  } catch {
-    /* анимацию прервали — важно только убрать холсты */
-  } finally {
-    host.remove()
-  }
+  Promise.all(animations.map((a) => a.finished))
+    .catch(() => {
+      /* анимацию прервали — важно только убрать холсты */
+    })
+    .finally(() => {
+      host.remove()
+      // Следующий распад пойдёт уже по новой теме.
+      prewarmThemeDust()
+    })
+
+  return true
 }
 
 /** Запасная палитра, если снимок сделать не удалось. */
