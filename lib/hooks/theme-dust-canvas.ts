@@ -1,21 +1,25 @@
 'use client'
 
 /**
- * Частицы распада темы.
+ * Распад страницы в пыль.
  *
- * Почему холст, а не CSS. Маской можно сделать скол — область просто перестаёт
- * существовать. Но в кино видно сами крупинки: они отрываются, летят и гаснут.
- * Маска этого не даёт никогда, сколько её ни настраивай.
+ * Устроено так же, как в известной реализации «щелчка»: страница
+ * растеризуется, и каждая крупинка берёт цвет РЕАЛЬНОГО пикселя под собой.
+ * Без этого рассыпается абстрактная пыль, а нужно, чтобы рассыпалась сама
+ * страница — разница видна сразу.
  *
- * Пиксели страницы нам недоступны: View Transitions отдают снимок, но не его
- * содержимое, а растеризовать всю админку на каждое переключение — это
- * полсекунды тормозов и риск сломаться на чужих картинках. Поэтому крупинки
- * берут не цвет пикселя под собой, а цвет темы: тёмные на светлой, светлые на
- * тёмной. Глаз читает это как ту же самую пыль.
+ * Производительность решается двумя приёмами.
  *
- * Фронт идёт от угла, где кнопка: клетка отрывается тем позже, чем дальше она
- * от него. Именно это и создаёт ощущение постепенного распада, а не общего
- * растворения.
+ * Первый: снимок делается в половинном разрешении. Крупинка всё равно 3–4
+ * пикселя, разглядывать в ней нечего, а растеризация ускоряется вчетверо.
+ *
+ * Второй: крупинки не двигаются по отдельности в JS. Они разложены по
+ * нескольким десяткам холстов, и каждый холст целиком уносит CSS-анимация.
+ * Пятьдесят тысяч частиц покадрово не нарисовать, а тридцать слоёв браузер
+ * тянет на композиторе.
+ *
+ * Порядок слоёв задаёт фронт: чем дальше крупинка от кнопки, тем позже
+ * оторвётся. Именно это и читается как распад, а не как общее растворение.
  */
 
 export type DustOptions = {
@@ -23,144 +27,204 @@ export type DustOptions = {
   origin: { x: number; y: number }
   /** Сколько длится всё целиком, мс. */
   duration: number
-  /** Цвет крупинок: берётся у темы, которая рассыпается. */
-  colors: string[]
+  /** Запасные цвета, если снимок сделать не удалось. */
+  fallbackColors: string[]
+  /** Экран закрыт копией страницы — можно менять тему под ней. */
+  onCovered?: () => void
 }
 
-type Particle = {
-  x: number
-  y: number
-  size: number
-  /** Доля общей длительности, на которой крупинка отрывается. */
-  delay: number
-  /** Сколько живёт после отрыва, в долях длительности. */
-  life: number
-  vx: number
-  vy: number
-  rotation: number
-  color: string
-}
+/** Слоёв распада. Больше — плавнее фронт и больше элементов в DOM. */
+const LAYERS = 26
 
-/** Шаг сетки. Мельче — красивее и тяжелее; 18px держит ~3000 крупинок на FullHD. */
-const CELL = 18
+/** Сторона крупинки в пикселях экрана. */
+const GRAIN = 4
 
-/** Доля клеток, которые вообще становятся крупинками. */
-const DENSITY = 0.55
+/** Во сколько раз уменьшается снимок. Половина — незаметно и вчетверо быстрее. */
+const CAPTURE_SCALE = 0.5
 
 /**
- * Раскладывает экран на крупинки.
+ * Снимок видимой части страницы.
  *
- * Задержка считается от расстояния до угла, а не от координаты: иначе фронт
- * идёт ровной линией и выглядит как шторка, а не как осыпание.
+ * Чужие картинки (аватары, логотипы с другого домена) растеризацию рушат,
+ * поэтому весь вызов обёрнут и при неудаче возвращает null: анимация должна
+ * деградировать, а не ломать переключение темы.
  */
-function buildParticles(width: number, height: number, options: DustOptions): Particle[] {
-  const particles: Particle[] = []
+async function capture(width: number, height: number): Promise<ImageData | null> {
+  try {
+    const { toCanvas } = await import('html-to-image')
+    const canvas = await toCanvas(document.body, {
+      width,
+      height,
+      pixelRatio: CAPTURE_SCALE,
+      // Внешние ресурсы пропускаем: один недоступный логотип не должен
+      // отменять весь эффект.
+      skipFonts: true,
+      filter: (node) => !(node instanceof HTMLElement && node.dataset.dustIgnore === 'true'),
+    })
+    const context = canvas.getContext('2d')
+    if (!context) return null
+    return context.getImageData(0, 0, canvas.width, canvas.height)
+  } catch {
+    return null
+  }
+}
+
+type Layer = {
+  canvas: HTMLCanvasElement
+  /** Доля общей длительности, на которой слой начинает уноситься. */
+  delay: number
+  dx: number
+  dy: number
+}
+
+/**
+ * Раскладывает пиксели по слоям.
+ *
+ * Номер слоя = расстояние до кнопки плюс разброс. Разброс обязателен: без него
+ * граница между слоями видна как ровная дуга, и вместо осыпания получается
+ * расходящаяся волна.
+ */
+function buildLayers(
+  image: ImageData | null,
+  width: number,
+  height: number,
+  options: DustOptions,
+): Layer[] {
+  const dpr = Math.min(2, window.devicePixelRatio || 1)
   const maxDistance = Math.hypot(width, height)
 
-  for (let x = 0; x < width; x += CELL) {
-    for (let y = 0; y < height; y += CELL) {
-      if (Math.random() > DENSITY) continue
+  const layers: Layer[] = []
+  const contexts: CanvasRenderingContext2D[] = []
 
+  for (let i = 0; i < LAYERS; i++) {
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.floor(width * dpr)
+    canvas.height = Math.floor(height * dpr)
+    canvas.style.cssText = [
+      'position:fixed',
+      'inset:0',
+      'width:100%',
+      'height:100%',
+      'pointer-events:none',
+      'will-change:transform,opacity,filter',
+    ].join(';')
+
+    const context = canvas.getContext('2d')
+    if (!context) continue
+    context.scale(dpr, dpr)
+    contexts.push(context)
+
+    // Разлёт прочь от кнопки и вверх: пыль не падает, её уносит.
+    const angle = Math.atan2(height / 2 - options.origin.y, width / 2 - options.origin.x)
+    layers.push({
+      canvas,
+      delay: 0,
+      dx: Math.cos(angle) * (30 + i * 3) + 40,
+      dy: Math.sin(angle) * (14 + i * 1.5) - (60 + i * 4),
+    })
+  }
+
+  if (layers.length === 0) return []
+
+  for (let x = 0; x < width; x += GRAIN) {
+    for (let y = 0; y < height; y += GRAIN) {
       const distance = Math.hypot(x - options.origin.x, y - options.origin.y)
-      // Разброс по задержке ломает ровный край фронта: без него видно линию.
-      const jitter = (Math.random() - 0.5) * 0.12
-      const delay = Math.min(0.72, Math.max(0, (distance / maxDistance) * 0.62 + jitter))
+      const jitter = (Math.random() - 0.5) * 0.22
+      const position = Math.min(0.999, Math.max(0, distance / maxDistance + jitter))
+      const index = Math.min(layers.length - 1, Math.floor(position * layers.length))
 
-      // Направление разлёта — прочь от угла, куда указывает фронт, плюс
-      // подъём: пыль не падает, её уносит.
-      const angle = Math.atan2(y - options.origin.y, x - options.origin.x)
-      const speed = 26 + Math.random() * 46
+      let color: string
+      if (image) {
+        // Снимок уменьшен, поэтому координаты пересчитываются.
+        const sx = Math.floor(x * CAPTURE_SCALE)
+        const sy = Math.floor(y * CAPTURE_SCALE)
+        const offset = (sy * image.width + sx) * 4
+        const alpha = image.data[offset + 3]
+        // Прозрачные места страницы крупинками не становятся.
+        if (alpha < 8) continue
+        color = `rgb(${image.data[offset]},${image.data[offset + 1]},${image.data[offset + 2]})`
+      } else {
+        color = options.fallbackColors[index % options.fallbackColors.length]
+      }
 
-      particles.push({
-        x,
-        y,
-        size: CELL * (0.45 + Math.random() * 0.5),
-        delay,
-        life: 0.28 + Math.random() * 0.22,
-        vx: Math.cos(angle) * speed * 0.35 + (Math.random() - 0.5) * 14,
-        vy: Math.sin(angle) * speed * 0.2 - (34 + Math.random() * 40),
-        rotation: (Math.random() - 0.5) * 1.4,
-        color: options.colors[Math.floor(Math.random() * options.colors.length)] || '#94a3b8',
-      })
+      const context = contexts[index]
+      context.fillStyle = color
+      context.fillRect(x, y, GRAIN, GRAIN)
     }
   }
 
-  return particles
+  // Задержка по порядку слоя: первый — у кнопки, последний — в дальнем углу.
+  layers.forEach((layer, i) => {
+    layer.delay = (i / layers.length) * 0.55
+  })
+
+  return layers
 }
 
 /**
  * Запускает распад и возвращает обещание, которое исполняется по окончании.
  *
- * Холст живёт только на время анимации: постоянный элемент поверх портала
- * ловил бы клики и мешал бы, даже прозрачный.
+ * Холсты живут только на время анимации: постоянные элементы поверх портала
+ * ловили бы клики и мешали бы, даже прозрачные.
  */
-export function runThemeDust(options: DustOptions): Promise<void> {
-  if (typeof document === 'undefined') return Promise.resolve()
+export async function runThemeDust(options: DustOptions): Promise<void> {
+  if (typeof document === 'undefined') return
 
   const width = window.innerWidth
   const height = window.innerHeight
 
-  const canvas = document.createElement('canvas')
-  canvas.width = Math.floor(width * Math.min(2, window.devicePixelRatio || 1))
-  canvas.height = Math.floor(height * Math.min(2, window.devicePixelRatio || 1))
-  canvas.style.cssText = [
+  const image = await capture(width, height)
+  const layers = buildLayers(image, width, height, options)
+  if (layers.length === 0) return
+
+  const host = document.createElement('div')
+  host.dataset.dustIgnore = 'true'
+  host.style.cssText = [
     'position:fixed',
     'inset:0',
-    'width:100%',
-    'height:100%',
     'pointer-events:none',
-    // Выше снимков перехода: крупинки должны лететь над страницей.
+    // Выше снимков перехода: крупинки летят над страницей.
     'z-index:2147483000',
   ].join(';')
 
-  const context = canvas.getContext('2d')
-  if (!context) return Promise.resolve()
+  for (const layer of layers) host.appendChild(layer.canvas)
+  document.body.appendChild(host)
 
-  const scale = canvas.width / width
-  context.scale(scale, scale)
+  // Слои вместе содержат каждый пиксель страницы, поэтому экран сейчас
+  // выглядит ровно как до нажатия. Момент подменить тему.
+  options.onCovered?.()
 
-  const particles = buildParticles(width, height, options)
-  document.body.appendChild(canvas)
+  const animations = layers.map((layer) =>
+    layer.canvas.animate(
+      [
+        { transform: 'translate3d(0,0,0) scale(1)', opacity: 1, filter: 'blur(0px)', offset: 0 },
+        { transform: 'translate3d(0,0,0) scale(1)', opacity: 1, filter: 'blur(0px)', offset: layer.delay },
+        {
+          // Усадка и ускорение к концу — крупинка не просто уезжает, а тает.
+          transform: `translate3d(${layer.dx}px, ${layer.dy}px, 0) scale(1.04)`,
+          opacity: 0,
+          filter: 'blur(3px)',
+          offset: 1,
+        },
+      ],
+      {
+        duration: options.duration,
+        easing: 'cubic-bezier(0.3, 0, 0.5, 1)',
+        fill: 'forwards',
+      },
+    ),
+  )
 
-  return new Promise<void>((resolve) => {
-    const started = performance.now()
-
-    const frame = (now: number) => {
-      const progress = (now - started) / options.duration
-      context.clearRect(0, 0, width, height)
-
-      if (progress >= 1) {
-        canvas.remove()
-        resolve()
-        return
-      }
-
-      for (const p of particles) {
-        const own = (progress - p.delay) / p.life
-        // Ещё не оторвалась или уже погасла.
-        if (own <= 0 || own >= 1) continue
-
-        // Ускорение к концу: сначала крупинка отходит нехотя, потом её уносит.
-        const eased = own * own
-        const alpha = 1 - own
-
-        context.save()
-        context.globalAlpha = alpha * 0.85
-        context.fillStyle = p.color
-        context.translate(p.x + p.vx * eased, p.y + p.vy * eased)
-        context.rotate(p.rotation * own)
-        context.fillRect(-p.size / 2, -p.size / 2, p.size, p.size)
-        context.restore()
-      }
-
-      requestAnimationFrame(frame)
-    }
-
-    requestAnimationFrame(frame)
-  })
+  try {
+    await Promise.all(animations.map((a) => a.finished))
+  } catch {
+    /* анимацию прервали — важно только убрать холсты */
+  } finally {
+    host.remove()
+  }
 }
 
-/** Палитра крупинок текущей темы: цвет текста и приглушённый. */
+/** Запасная палитра, если снимок сделать не удалось. */
 export function dustColorsOf(theme: 'light' | 'dark'): string[] {
   const styles = getComputedStyle(document.documentElement)
   const read = (name: string, fallback: string) => styles.getPropertyValue(name).trim() || fallback

@@ -1,40 +1,41 @@
 'use client'
 
 /**
- * Смена темы с распадом старого экрана в пыль.
+ * Смена темы с распадом страницы в пыль.
  *
- * Распад собран из двух слоёв, и оба нужны.
+ * Порядок важен и именно такой:
  *
- * Первый — сама страница: снимок старой темы уходит фронтом от угла, где
- * кнопка. Это делают View Transitions и CSS-маска.
+ *   1. снимаем страницу и раскладываем её пиксели по слоям крупинок;
+ *   2. кладём слои поверх — экран выглядит ровно как был;
+ *   3. переключаем тему под ними, этого не видно;
+ *   4. крупинки уносит, и под ними оказывается новая тема.
  *
- * Второй — крупинки: холст поверх страницы, на нём частицы отрываются тем же
- * фронтом и улетают. Без него распада не видно — маска даёт только скол, а в
- * кино видно именно летящую пыль.
+ * View Transitions здесь не участвуют: они делают свой снимок старого экрана,
+ * и вместе с нашим он получился бы дважды. Заодно ушла возможность застрять —
+ * раньше незавершённый переход оставлял снимок поверх портала.
  *
- * Где View Transitions недоступны (Safari до 18, Firefox), тема меняется
- * мгновенно: функция работает, эффекта нет.
+ * Если снимок сделать не удалось (чужая картинка на странице, старый браузер),
+ * тема переключается мгновенно. Эффект — украшение, функция важнее.
  */
 
-/** Длительность распада. Быстрее — читается как моргание, а не как распад. */
-const DUST_MS = 1500
-
 import { useCallback } from 'react'
-import { flushSync } from 'react-dom'
 import { useTheme } from 'next-themes'
 
 import { dustColorsOf, runThemeDust } from './theme-dust-canvas'
 
-/** Класс на <html> на время перехода — по нему CSS выбирает нужную анимацию. */
-const SWEEP_CLASS = 'theme-sweep'
-
 /** Откуда расходится распад. По умолчанию — правый верхний угол. */
 export type SweepOrigin = { x: number; y: number }
 
-function supportsViewTransition(): boolean {
+/** Длительность распада. Быстрее — читается как моргание, а не как распад. */
+const DUST_MS = 1600
+
+/** Идёт ли распад прямо сейчас: два одновременно дали бы кашу из слоёв. */
+let running = false
+
+function canAnimate(): boolean {
   return (
     typeof document !== 'undefined' &&
-    typeof (document as any).startViewTransition === 'function' &&
+    typeof HTMLElement.prototype.animate === 'function' &&
     !window.matchMedia('(prefers-reduced-motion: reduce)').matches
   )
 }
@@ -44,61 +45,32 @@ export function useThemeSweep() {
 
   const sweepTo = useCallback(
     (next: 'light' | 'dark', origin?: SweepOrigin) => {
-      if (!supportsViewTransition()) {
+      if (!canAnimate() || running) {
         setTheme(next)
         return
       }
 
-      const root = document.documentElement
-      // Распад расходится от кнопки, по которой нажали: движение начинается
-      // там, где был палец, и переход читается как следствие нажатия, а не
-      // как самостоятельное событие.
-      root.style.setProperty('--sweep-x', `${origin?.x ?? window.innerWidth - 48}px`)
-      root.style.setProperty('--sweep-y', `${origin?.y ?? 40}px`)
-      root.classList.add(SWEEP_CLASS)
-
-      const cleanup = () => {
-        root.classList.remove(SWEEP_CLASS)
-        root.style.removeProperty('--sweep-x')
-        root.style.removeProperty('--sweep-y')
-      }
-
-      // Крупинки берут цвет уходящей темы: тёмные с светлой, светлые с тёмной.
+      running = true
       const leaving = resolvedTheme === 'light' ? 'light' : 'dark'
-      const colors = dustColorsOf(leaving)
       const originPoint = {
         x: origin?.x ?? window.innerWidth - 48,
         y: origin?.y ?? 40,
       }
 
-      const transition = (document as any).startViewTransition(() => {
-        // Синхронно: браузер снимает новый кадр сразу после колбэка, а
-        // обычный setState React ещё не успел бы примениться — переход снял
-        // бы старую тему как новую.
-        flushSync(() => setTheme(next))
+      runThemeDust({
+        origin: originPoint,
+        duration: DUST_MS,
+        fallbackColors: dustColorsOf(leaving),
+        // Тема меняется под уже разложенными крупинками: в этот момент экран
+        // закрыт копией старой страницы, и подмены не видно.
+        onCovered: () => setTheme(next),
       })
-
-      // Страховка. Если переход почему-то не завершится, класс останется на
-      // <html>, а вместе с ним — снимок старой темы с маской поверх всей
-      // страницы. Это выглядит как поломка портала, поэтому чистим по таймеру
-      // в любом случае.
-      const guard = window.setTimeout(cleanup, 3500)
-
-      // Крупинки запускаются, когда браузер уже снял оба кадра: раньше они
-      // попали бы в снимок и застыли бы на нём картинкой.
-      transition.ready
-        .then(() => runThemeDust({ origin: originPoint, duration: DUST_MS, colors }))
         .catch(() => {
-          /* переход прерван — крупинки не нужны */
-        })
-
-      transition.finished
-        .catch(() => {
-          /* прерванный переход — не ошибка: человек нажал ещё раз */
+          // Снимок не удался — тема всё равно должна переключиться.
+          setTheme(next)
         })
         .finally(() => {
-          window.clearTimeout(guard)
-          cleanup()
+          running = false
         })
     },
     [resolvedTheme, setTheme],
