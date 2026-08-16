@@ -71,33 +71,43 @@ export function Breadcrumbs() {
   return (
     <nav
       aria-label="Навигация"
-      className="flex items-center gap-1.5 px-4 py-2.5 text-xs text-slate-400 md:px-6 xl:px-8"
+      // Цвета из токенов темы, а не захардкоженные: с фиксированным slate
+      // крошки на светлой теме выглядели чужими — серый текст на светлом фоне
+      // и подсветка белым по белому.
+      className="flex items-center gap-1 border-b border-border/60 px-4 py-2.5 text-xs text-muted-foreground md:px-6 xl:px-8"
     >
       <Link
         href="/dashboard"
-        className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-slate-500 transition hover:bg-white/5 hover:text-slate-200"
+        aria-label="На главную"
+        className="flex items-center gap-1 rounded-md px-1.5 py-1 text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
       >
         <Home className="h-3.5 w-3.5" />
       </Link>
       {sectionTitle ? (
         <>
-          <ChevronRight className="h-3 w-3 text-slate-600" />
-          <span className="rounded-md px-1.5 py-0.5 text-slate-500">{sectionTitle}</span>
+          <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground/60" />
+          <span className="rounded-md px-1.5 py-1">{sectionTitle}</span>
         </>
       ) : null}
       {crumbs.map((crumb, index) => {
         const isLast = index === crumbs.length - 1
         return (
           <Fragment key={crumb.href}>
-            <ChevronRight className="h-3 w-3 text-slate-600" />
+            <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground/60" />
             {isLast ? (
-              <span className="truncate rounded-md px-1.5 py-0.5 font-medium text-slate-200">{crumb.label}</span>
+              // Текущая страница — не ссылка: на саму себя не ходят.
+              <span
+                aria-current="page"
+                className="truncate rounded-md px-1.5 py-1 font-medium text-foreground"
+              >
+                {crumb.label}
+              </span>
             ) : (
               <Link
                 href={crumb.href}
                 className={cn(
-                  'truncate rounded-md px-1.5 py-0.5 transition hover:bg-white/5 hover:text-slate-200',
-                  'text-slate-400',
+                  'truncate rounded-md px-1.5 py-1 transition-colors',
+                  'hover:bg-surface-hover hover:text-foreground',
                 )}
               >
                 {crumb.label}

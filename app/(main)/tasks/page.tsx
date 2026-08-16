@@ -14,7 +14,6 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { supabase } from '@/lib/supabaseClient'
 import { useToast } from '@/hooks/use-toast'
 import { confirmDialog } from '@/components/ui/confirm-dialog'
 import {
@@ -447,25 +446,37 @@ function TasksContent() {
       }, 250)
     }
 
-    const channel = supabase
-      .channel('tasks-live-updates')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'tasks' },
-        scheduleRefresh,
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'task_comments' },
-        scheduleRefresh,
-      )
-      .subscribe()
+    // Клиент Supabase подключается лениво и после первой отрисовки: статический
+    // импорт тянул 212 КБ в страницу и грузил их до того, как человек увидит
+    // список задач. Живое обновление от этого не пропадает — оно просто
+    // включается на секунду позже.
+    let channel: any = null
+    let client: any = null
+    let cancelled = false
+
+    const connect = async () => {
+      try {
+        const { supabase } = await import('@/lib/supabaseClient')
+        if (cancelled) return
+        client = supabase
+        channel = supabase
+          .channel('tasks-live-updates')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, scheduleRefresh)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'task_comments' }, scheduleRefresh)
+          .subscribe()
+      } catch {
+        // Не подключились — список всё равно обновляется при действиях.
+      }
+    }
+
+    const schedule = (window as any).requestIdleCallback || ((cb: () => void) => window.setTimeout(cb, 1200))
+    const handle = schedule(() => void connect(), { timeout: 4000 })
 
     return () => {
-      if (realtimeRefreshRef.current) {
-        clearTimeout(realtimeRefreshRef.current)
-      }
-      supabase.removeChannel(channel)
+      cancelled = true
+      if (realtimeRefreshRef.current) clearTimeout(realtimeRefreshRef.current)
+      if ((window as any).cancelIdleCallback) (window as any).cancelIdleCallback(handle)
+      if (channel && client) client.removeChannel(channel)
     }
   }, [loadData])
 

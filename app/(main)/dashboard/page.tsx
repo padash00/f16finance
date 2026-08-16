@@ -11,7 +11,6 @@ import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Card } from '@/components/ui/card'
 import { CardSkeleton, StatGridSkeleton } from '@/components/skeleton'
 import { Button } from '@/components/ui/button'
-import { supabase } from '@/lib/supabaseClient'
 
 import {
   Activity,
@@ -404,12 +403,13 @@ export default function SmartDashboardPage() {
     let mounted = true
 
     ;(async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
+      // Через свой роут, а не через клиент Supabase: ради одной проверки
+      // «вошёл или нет» в страницу тянулось 212 КБ библиотеки.
+      const res = await fetch('/api/auth/session-role', { cache: 'no-store' }).catch(() => null)
+      const json = await res?.json().catch(() => null)
 
       if (!mounted) return
-      setIsAuthenticated(!!user)
+      setIsAuthenticated(Boolean(res?.ok && json?.userId))
       setAuthResolved(true)
     })()
 
@@ -467,14 +467,42 @@ export default function SmartDashboardPage() {
       void refreshExpenses()
     }
   }, [refreshIncomes, refreshExpenses])
+  /**
+   * Живое обновление дашборда.
+   *
+   * Клиент Supabase подключается лениво и после первой отрисовки: статический
+   * импорт тянул 212 КБ в саму страницу, и они грузились до того, как человек
+   * увидит цифры. Обновление и без него работает — рядом идёт обычный опрос.
+   */
   useEffect(() => {
     if (!isAuthenticated) return
-    const channel = supabase
-      .channel('dashboard-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'incomes' }, () => realtimeRefreshRef.current())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, () => realtimeRefreshRef.current())
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
+    let channel: any = null
+    let client: any = null
+    let cancelled = false
+
+    const connect = async () => {
+      try {
+        const { supabase } = await import('@/lib/supabaseClient')
+        if (cancelled) return
+        client = supabase
+        channel = supabase
+          .channel('dashboard-realtime')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'incomes' }, () => realtimeRefreshRef.current())
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, () => realtimeRefreshRef.current())
+          .subscribe()
+      } catch {
+        // Не подключились — остаётся опрос.
+      }
+    }
+
+    const schedule = (window as any).requestIdleCallback || ((cb: () => void) => window.setTimeout(cb, 1200))
+    const handle = schedule(() => void connect(), { timeout: 4000 })
+
+    return () => {
+      cancelled = true
+      if ((window as any).cancelIdleCallback) (window as any).cancelIdleCallback(handle)
+      if (channel && client) client.removeChannel(channel)
+    }
   }, [isAuthenticated])
 
   const companyById = useMemo(() => {
@@ -581,13 +609,13 @@ export default function SmartDashboardPage() {
     if (!isAuthenticated) return
     let mounted = true
     ;(async () => {
-      const today = DateUtils.todayISO()
-      const { count } = await supabase
-        .from('tasks')
-        .select('id', { count: 'exact', head: true })
-        .lt('due_date', today)
-        .not('status', 'in', '("done","archived")')
-      if (mounted && count != null && count > 0) setOverdueCount(count)
+      // Через серверный роут: браузер ходил в таблицу задач напрямую, в обход
+      // правила «Supabase только через API», и считал чужие просрочки — скоупа
+      // по организации в том запросе не было.
+      const res = await fetch('/api/admin/tasks?overdue_count=1', { cache: 'no-store' }).catch(() => null)
+      const json = await res?.json().catch(() => null)
+      const count = Number(json?.overdue)
+      if (mounted && Number.isFinite(count) && count > 0) setOverdueCount(count)
     })()
     return () => { mounted = false }
   }, [isAuthenticated])

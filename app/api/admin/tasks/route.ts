@@ -541,6 +541,33 @@ export async function GET(req: Request) {
       ? createAdminSupabaseClient()
       : createRequestSupabaseClient(req)
 
+    /**
+     * Счётчик просрочки: ?overdue_count=1
+     *
+     * Дашборду нужно одно число, а не список задач. Раньше он спрашивал его у
+     * Supabase прямо из браузера — в обход правила «Supabase только через
+     * серверные роуты», да ещё и без скоупа по организации: чужие просроченные
+     * задачи попадали в счётчик.
+     */
+    if (url.searchParams.get('overdue_count') === '1') {
+      const today = new Date().toISOString().slice(0, 10)
+      const scope = await resolveCompanyScope({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+      })
+
+      let query = supabase
+        .from('tasks')
+        .select('id', { count: 'exact', head: true })
+        .lt('due_date', today)
+        .not('status', 'in', '("done","archived")')
+      if (scope.allowedCompanyIds) query = query.in('company_id', scope.allowedCompanyIds)
+
+      const { count, error } = await query
+      if (error) throw error
+      return json({ ok: true, overdue: count || 0 })
+    }
+
     // Comments sub-route: ?comments=1&taskId=<uuid>
     if (url.searchParams.get('comments') === '1') {
       const taskId = url.searchParams.get('taskId')
