@@ -449,6 +449,9 @@ struct RequestsScreen: View {
     /// Права те же, что проверяет сервер: одобрение и отклонение раздельно.
     private var canApprove: Bool { access?.can("store-requests.approve") ?? false }
     private var canReject: Bool { access?.can("store-requests.reject") ?? false }
+    private var canCreate: Bool { access?.can("store-requests.create") ?? false }
+
+    @State private var isAdding = false
 
     var body: some View {
         let requests = scope == .journal
@@ -494,6 +497,16 @@ struct RequestsScreen: View {
             )
         }
         .background(Theme.background)
+        .sheet(isPresented: $isAdding) {
+            NewRequestSheet { await store.loadStore() }
+        }
+        .toolbar {
+            if canCreate {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { isAdding = true } label: { Image(systemName: "plus") }
+                }
+            }
+        }
         .navigationTitle(scope == .journal ? "Журнал заявок" : "Заявки")
         .task { await store.loadStore() }
         .refreshable { await store.loadStore() }
