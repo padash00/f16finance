@@ -20,6 +20,7 @@ struct LoginView: View {
     /// выдаёт владелец, они длинные и случайные, и человек за стойкой три раза
     /// подряд получает «неверный пароль», не понимая, где промахнулся.
     @State private var revealPassword = false
+    @State private var showingHelp = false
     @FocusState private var focusedField: Field?
 
     private enum Field { case login, password }
@@ -36,10 +37,16 @@ struct LoginView: View {
             // экрану, поэтому на телефоне с клавиатурой прокрутка остаётся.
             GeometryReader { proxy in
                 ScrollView {
-                    VStack(spacing: Spacing.xl) {
+                    // На планшете и Mac форма шириной в 420 точек посреди
+                    // экрана выглядела потерянной: пустоты вокруг больше, чем
+                    // содержимого. Широким экранам даём две колонки — слева
+                    // фирменная часть, справа вход, — как на странице входа
+                    // сайта. На телефоне порядок прежний, сверху вниз.
+                    layout(width: proxy.size.width) {
                         header
 
-                    VStack(spacing: Spacing.md) {
+                        VStack(spacing: Spacing.xl) {
+                            VStack(spacing: Spacing.md) {
                         field(
                             "Логин или почта",
                             text: $login,
@@ -96,22 +103,36 @@ struct LoginView: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
                         }
-                    }
-                    .padding(Spacing.lg)
-                    .background(Theme.surface.opacity(0.9), in: RoundedRectangle(cornerRadius: Radius.xl, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: Radius.xl, style: .continuous)
-                            .strokeBorder(Theme.border, lineWidth: 1)
-                    }
-                    .shake(on: auth.signInError ?? "")
 
-                    Text(configuration.displayHost)
-                        .font(Typography.caption)
-                        .foregroundStyle(Theme.textDim)
+                        // Тупик без выхода: пароль не подошёл, и человеку
+                        // некуда деться с этого экрана. Восстановление у
+                        // сотрудника и у оператора разное, поэтому не ссылка
+                        // «забыли пароль», а объяснение — кому куда.
+                        Button {
+                            showingHelp = true
+                        } label: {
+                            Text("Не получается войти?")
+                                .font(Typography.caption.weight(.medium))
+                                .foregroundStyle(Theme.textDim)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.top, Spacing.xxs)
+                            }
+                            .padding(Spacing.lg)
+                            .background(Theme.surface.opacity(0.92), in: RoundedRectangle(cornerRadius: Radius.xl, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: Radius.xl, style: .continuous)
+                                    .strokeBorder(Theme.border, lineWidth: 1)
+                            }
+                            .shadow(color: .black.opacity(0.35), radius: 30, x: 0, y: 18)
+                            .shake(on: auth.signInError ?? "")
 
+                            Text(configuration.displayHost)
+                                .font(Typography.caption)
+                                .foregroundStyle(Theme.textDim)
+                        }
+                        .frame(maxWidth: 420)
                     }
-                    .frame(maxWidth: 420)
-                    .frame(maxWidth: .infinity)
                     .padding(.horizontal, Spacing.xl)
                     .padding(.vertical, Spacing.xxl)
                     .frame(minHeight: proxy.size.height)
@@ -132,15 +153,50 @@ struct LoginView: View {
             try? await Task.sleep(for: .milliseconds(350))
             await auth.offerQuickEntryIfPossible()
         }
+        // Тёмная схема на весь экран, а не только на фон: поля и карточка
+        // берут цвета из темы, и на тёмной обложке светлая форма выглядела бы
+        // вырезанной из другого приложения.
+        .environment(\.colorScheme, .dark)
         .animation(Motion.value, value: auth.signInError)
+        .sheet(isPresented: $showingHelp) { LoginHelpSheet() }
+    }
+
+    /// Широкий экран — две колонки, узкий — одна.
+    private func isWide(_ width: CGFloat) -> Bool { width >= 820 }
+
+    @ViewBuilder
+    private func layout<Content: View>(
+        width: CGFloat,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        if isWide(width) {
+            HStack(alignment: .center, spacing: Spacing.xxl * 2) {
+                content()
+            }
+            .frame(maxWidth: 980)
+            .frame(maxWidth: .infinity)
+        } else {
+            VStack(spacing: Spacing.xl) {
+                content()
+            }
+            .frame(maxWidth: 420)
+            .frame(maxWidth: .infinity)
+        }
     }
 
     private var header: some View {
+        // На широком экране шапка становится левой колонкой: выравнивание по
+        // левому краю и строки о том, что внутри. На телефоне это была бы
+        // лишняя простыня перед полем логина, поэтому список только здесь.
+        ViewThatFits(in: .horizontal) {
+            wideHeader
+            compactHeader
+        }
+    }
+
+    private var compactHeader: some View {
         VStack(spacing: Spacing.md) {
-            Image(systemName: "cube.transparent.fill")
-                .font(.system(size: 52, weight: .light))
-                .foregroundStyle(Theme.brand)
-                .shadow(color: Theme.brand.opacity(0.45), radius: 22)
+            mark(size: 52)
 
             Text("Orda")
                 .font(.system(size: 34, weight: .bold, design: .rounded))
@@ -151,6 +207,51 @@ struct LoginView: View {
                 .foregroundStyle(Theme.textDim)
                 .multilineTextAlignment(.center)
         }
+    }
+
+    private var wideHeader: some View {
+        VStack(alignment: .leading, spacing: Spacing.lg) {
+            mark(size: 76)
+
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                Text("Orda")
+                    .font(.system(size: 52, weight: .bold, design: .rounded))
+                    .foregroundStyle(Theme.text)
+
+                Text("Управление клубом и точками продаж")
+                    .font(Typography.title)
+                    .foregroundStyle(Theme.textDim)
+            }
+
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                headerLine("banknote", "Деньги точки: выручка, расходы, ОПиУ")
+                headerLine("clock.arrow.circlepath", "Смены и касса — от открытия до сменного отчёта")
+                headerLine("shippingbox", "Склад, ревизии и заявки на витрину")
+                headerLine("person.2", "Команда: график, зарплата, задачи, аттестация")
+            }
+            .padding(.top, Spacing.xs)
+        }
+        .frame(width: 420, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func headerLine(_ icon: String, _ text: String) -> some View {
+        HStack(spacing: Spacing.sm) {
+            Image(systemName: icon)
+                .font(.callout)
+                .foregroundStyle(Theme.brand)
+                .frame(width: 24)
+            Text(text)
+                .font(Typography.callout)
+                .foregroundStyle(Theme.textDim)
+        }
+    }
+
+    private func mark(size: CGFloat) -> some View {
+        Image(systemName: "cube.transparent.fill")
+            .font(.system(size: size, weight: .light))
+            .foregroundStyle(Theme.brand)
+            .shadow(color: Theme.brand.opacity(0.45), radius: 22)
     }
 
     private func field(
@@ -235,53 +336,127 @@ struct LoginView: View {
     }
 }
 
-/// Живой фон входа: медленно дышащий градиент. На iOS 18+ — настоящая
-/// сетка цветов, ниже — мягкий радиальный запасной вариант.
+/// Фон экрана входа.
+///
+/// Экран входа всегда тёмный — независимо от выбранной темы. Так делают
+/// банковские приложения, и не ради моды: это единственный экран, который
+/// видят до входа, и он должен читаться как обложка, а не как пустая страница
+/// настроек. Светлый вариант выцветал в белый лист, особенно на планшете, где
+/// карточка занимает шестую часть экрана.
+///
+/// Растровой картинки нет намеренно: снимок растянулся бы на планшете и мылил
+/// бы на Retina. Всё рисуется по размеру экрана и остаётся резким везде.
 struct AuroraBackground: View {
     @State private var phase: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// Тёмная основа. Не чёрный: чистый чёрный на OLED даёт провал, в котором
+    /// теряются края карточки.
+    private let base = Color(red: 0.043, green: 0.067, blue: 0.078)
+
     var body: some View {
         ZStack {
-            Theme.background.ignoresSafeArea()
+            base.ignoresSafeArea()
 
-            if #available(iOS 18.0, macOS 15.0, *) {
-                MeshGradient(
-                    width: 3,
-                    height: 3,
-                    points: meshPoints,
-                    colors: [
-                        Theme.background, Theme.background, Theme.background,
-                        Theme.brand.opacity(0.20), Theme.background, Theme.accent.opacity(0.14),
-                        Theme.background, Theme.brand.opacity(0.10), Theme.background,
-                    ]
-                )
-                .ignoresSafeArea()
-                .blur(radius: 40)
-            } else {
-                RadialGradient(
-                    colors: [Theme.brand.opacity(0.16), .clear],
-                    center: .top,
-                    startRadius: 40,
-                    endRadius: 460
-                )
-                .ignoresSafeArea()
+            // Свечение там, где содержимое: на телефоне это знак и название,
+            // на планшете — левая колонка. Раньше оно стояло у самого верха, и
+            // на планшете форма оказывалась в сером поле, а свет грелся сам по
+            // себе выше неё.
+            GeometryReader { proxy in
+                let wide = proxy.size.width >= 820
+                ZStack {
+                    RadialGradient(
+                        colors: [Theme.brand.opacity(0.40), Theme.brand.opacity(0.12), .clear],
+                        center: UnitPoint(x: wide ? 0.26 : 0.5, y: wide ? 0.46 : 0.28),
+                        startRadius: 0,
+                        endRadius: max(proxy.size.width, proxy.size.height) * 0.52
+                    )
+
+                    // Холодный отсвет с другой стороны: без него половина
+                    // экрана проваливалась в одинаковую темноту.
+                    RadialGradient(
+                        colors: [Theme.accent.opacity(0.22), .clear],
+                        center: UnitPoint(
+                            x: wide ? 0.78 : 0.18 + phase * 0.06,
+                            y: wide ? 0.58 : 0.9
+                        ),
+                        startRadius: 0,
+                        endRadius: max(proxy.size.width, proxy.size.height) * 0.42
+                    )
+                }
+                .frame(width: proxy.size.width, height: proxy.size.height)
             }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+
+            lattice
+            vignette
         }
         .onAppear {
             guard !reduceMotion else { return }
-            withAnimation(.easeInOut(duration: 8).repeatForever(autoreverses: true)) {
+            withAnimation(.easeInOut(duration: 10).repeatForever(autoreverses: true)) {
                 phase = 1
             }
         }
     }
 
-    private var meshPoints: [SIMD2<Float>] {
-        let drift = Float(phase) * 0.12
-        return [
-            SIMD2(0, 0), SIMD2(0.5, 0), SIMD2(1, 0),
-            SIMD2(0, 0.5), SIMD2(0.5 + drift, 0.5 - drift), SIMD2(1, 0.5),
-            SIMD2(0, 1), SIMD2(0.5, 1), SIMD2(1, 1),
-        ]
+    /// Решётка из фирменных кубов — тот же знак, что на заставке: экран входа
+    /// и заставка должны выглядеть одним приложением.
+    ///
+    /// Рисуется в `Canvas`, а не полусотней вложенных `Shape`: столько фигур в
+    /// иерархии видов заметно тормозят, а один слой рисуется за проход.
+    private var lattice: some View {
+        GeometryReader { proxy in
+            Canvas { context, size in
+                let cell: CGFloat = 104
+                let markWidth = cell * 0.58
+                let markHeight = markWidth * 1.14
+                let rowStep = markHeight * 0.76
+
+                var row = 0
+                var y = -markHeight
+                while y < size.height + markHeight {
+                    let shift = row.isMultiple(of: 2) ? 0 : cell / 2
+                    var x = -markWidth + shift
+                    while x < size.width + markWidth {
+                        let rect = CGRect(x: x, y: y, width: markWidth, height: markHeight)
+                        for index in 0..<3 {
+                            let path = RhombusFacet(index: index).path(in: rect)
+                            context.fill(
+                                path,
+                                with: .color(Color.white.opacity(index == 0 ? 0.030 : 0.016))
+                            )
+                            context.stroke(path, with: .color(Color.white.opacity(0.045)), lineWidth: 0.6)
+                        }
+                        x += cell
+                    }
+                    y += rowStep
+                    row += 1
+                }
+            }
+            // Решётка живёт по краям: под карточкой она мешала бы читать поля.
+            .mask(
+                RadialGradient(
+                    colors: [.clear, .black.opacity(0.6), .black],
+                    center: .center,
+                    startRadius: min(proxy.size.width, proxy.size.height) * 0.20,
+                    endRadius: max(proxy.size.width, proxy.size.height) * 0.60
+                )
+            )
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+    }
+
+    /// Затемнение по краям: собирает взгляд к центру, где форма.
+    private var vignette: some View {
+        RadialGradient(
+            colors: [.clear, base.opacity(0.85)],
+            center: .center,
+            startRadius: 160,
+            endRadius: 760
+        )
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
     }
 }

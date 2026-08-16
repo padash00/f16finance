@@ -55,6 +55,7 @@ enum NativePage {
         case .incidents: IncidentsScreen()
         case .pointDebts: PointDebtsScreen()
         case .profitability: PnlScreen()
+        case .salesKpi: SalesKpiScreen()
         case .pointDevices: PointDevicesScreen()
         case .revisions: RevisionsScreen()
         case .suppliers: SuppliersScreen()
