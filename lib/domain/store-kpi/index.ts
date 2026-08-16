@@ -317,3 +317,14 @@ export function analyzeStoreKpi(args: {
 }
 
 export { trainingFlag as computeTrainingFlag }
+
+export {
+  findStockouts,
+  stockoutSeverity,
+  stockoutTitle,
+  MIN_WINDOW_DAYS,
+  REGULAR_ITEM_SHARE,
+  type ItemSalesFrequency,
+  type StockLevel,
+  type StockoutCandidate,
+} from './stockouts'

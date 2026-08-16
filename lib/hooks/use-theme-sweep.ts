@@ -14,6 +14,7 @@
  */
 
 import { useCallback } from 'react'
+import { flushSync } from 'react-dom'
 import { useTheme } from 'next-themes'
 
 /** Класс на <html> на время перехода — по нему CSS выбирает нужную анимацию. */
@@ -48,16 +49,32 @@ export function useThemeSweep() {
       root.style.setProperty('--sweep-y', `${origin?.y ?? 40}px`)
       root.classList.add(SWEEP_CLASS)
 
+      const cleanup = () => {
+        root.classList.remove(SWEEP_CLASS)
+        root.style.removeProperty('--sweep-x')
+        root.style.removeProperty('--sweep-y')
+      }
+
       const transition = (document as any).startViewTransition(() => {
-        setTheme(next)
+        // Синхронно: браузер снимает новый кадр сразу после колбэка, а
+        // обычный setState React ещё не успел бы примениться — переход снял
+        // бы старую тему как новую.
+        flushSync(() => setTheme(next))
       })
+
+      // Страховка. Если переход почему-то не завершится, класс останется на
+      // <html>, а вместе с ним — снимок старой темы с маской поверх всей
+      // страницы. Это выглядит как поломка портала, поэтому чистим по таймеру
+      // в любом случае.
+      const guard = window.setTimeout(cleanup, 2000)
 
       transition.finished
         .catch(() => {
           /* прерванный переход — не ошибка: человек нажал ещё раз */
         })
         .finally(() => {
-          root.classList.remove(SWEEP_CLASS)
+          window.clearTimeout(guard)
+          cleanup()
         })
     },
     [setTheme],
