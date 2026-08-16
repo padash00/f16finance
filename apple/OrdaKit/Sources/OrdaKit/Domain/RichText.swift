@@ -72,24 +72,12 @@ public enum RichText {
             .filter { !$0.isEmpty }
             .map { line in
                 if line.hasPrefix("\u{0002}") {
-                    let cells = String(line.dropFirst())
-                        .components(separatedBy: "\u{0003}")
-                        .map { $0.trimmingCharacters(in: .whitespaces) }
-                        .filter { !$0.isEmpty }
+                    let cells = tableCells(line)
+                    // Строка с ячейками `th` — это шапка, где бы она ни лежала.
+                    let isHeader = line.contains("\u{0005}")
                     return Block(
-                        kind: .tableRow,
-                        text: cells.joined(separator: " — "),
-                        cells: cells
-                    )
-                }
-                if line.hasPrefix("\u{0004}") {
-                    let cells = String(line.dropFirst())
-                        .components(separatedBy: "\u{0003}")
-                        .map { $0.trimmingCharacters(in: .whitespaces) }
-                        .filter { !$0.isEmpty }
-                    return Block(
-                        kind: .tableHeader,
-                        text: cells.joined(separator: " · "),
+                        kind: isHeader ? .tableHeader : .tableRow,
+                        text: cells.joined(separator: isHeader ? " · " : " — "),
                         cells: cells
                     )
                 }
@@ -112,17 +100,19 @@ public enum RichText {
     /// Строка помечается в начале, ячейки разделяются внутри. Дальше общий
     /// разбор относится к ним как к обычным строкам, а сборка блоков узнаёт
     /// пометку и достаёт ячейки обратно.
+    ///
+    /// Шапку узнаём по самим ячейкам, а не по обёртке `<thead>`: редакторы
+    /// сплошь и рядом кладут строку с `th` прямо в `tbody`, и пометка по
+    /// обёртке такую шапку теряла — подписи колонок вставали в текст как
+    /// обычные данные.
     private static func extractTables(_ html: String) -> String {
         var working = html
 
-        // Шапку строки помечаем до того, как исчезнут теги ячеек.
-        working = markHeaderRows(working, original: html)
-
-        // Ячейки. Выражение для `th` обязано требовать конец имени тега:
-        // иначе `<th[^>]*>` съедало и `<thead>`, шапка теряла пометку, и
-        // подписи колонок вставали в текст как обычная строка данных.
+        // Ячейка шапки и ячейка данных получают разные знаки. Выражение для
+        // `th` обязано требовать конец имени тега: иначе `<th[^>]*>` съедало и
+        // `<thead>`.
         working = working.replacingOccurrences(
-            of: #"<th(\s[^>]*)?>"#, with: "\u{0003}", options: [.regularExpression, .caseInsensitive]
+            of: #"<th(\s[^>]*)?>"#, with: "\u{0005}", options: [.regularExpression, .caseInsensitive]
         )
         working = working.replacingOccurrences(
             of: #"<td[^>]*>"#, with: "\u{0003}", options: [.regularExpression, .caseInsensitive]
@@ -143,16 +133,12 @@ public enum RichText {
         return working
     }
 
-    /// Строки, содержавшие `th`, помечаем как шапку.
-    private static func markHeaderRows(_ working: String, original: String) -> String {
-        guard original.range(of: "<th", options: [.caseInsensitive]) != nil else { return working }
-        // Шапка в регламентах всегда первая строка таблицы — большего разбора
-        // здесь не нужно, а полноценный парсер HTML ради этого не заводим.
-        return working.replacingOccurrences(
-            of: #"<thead[^>]*>\s*<tr[^>]*>"#,
-            with: "\n\u{0004}",
-            options: [.regularExpression, .caseInsensitive]
-        )
+    /// Разобрать помеченную строку таблицы на ячейки.
+    private static func tableCells(_ line: String) -> [String] {
+        line.dropFirst()
+            .components(separatedBy: CharacterSet(charactersIn: "\u{0003}\u{0005}"))
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
     }
 
     /// Плоский текст без разметки — для превью и поиска.

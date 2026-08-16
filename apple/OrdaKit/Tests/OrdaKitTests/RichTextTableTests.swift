@@ -34,4 +34,20 @@ struct RichTextTableTests {
         #expect(blocks.map(\.kind) == [.paragraph, .paragraph, .listItem])
         #expect(blocks.first?.text == "Первый абзац.")
     }
+
+    /// Редактор часто отдаёт таблицу без `<thead>`: шапка — это первая строка
+    /// с ячейками `th` внутри `tbody`. Пометка по `<thead>` такую строку не
+    /// ловила, и подписи колонок вставали в текст как обычные данные.
+    @Test("Шапка без thead тоже опознаётся")
+    func headerWithoutThead() {
+        let html = """
+        <table><tbody><tr><th>Ситуация</th><th>Правило</th></tr>\
+        <tr><td>Приход</td><td>Прийти к началу смены.</td></tr></tbody></table>
+        """
+
+        let blocks = RichText.blocks(from: html)
+        let header = blocks.first { $0.kind == .tableHeader }
+        #expect(header?.cells == ["Ситуация", "Правило"])
+        #expect(blocks.filter { $0.kind == .tableRow }.count == 1)
+    }
 }
