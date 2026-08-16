@@ -530,9 +530,13 @@ private struct RosterDayCell: View {
 /// Клиентская база: кто сколько тратит и как часто приходит.
 struct CustomersScreen: View {
     @Environment(BusinessStore.self) private var store
+    @Environment(\.access) private var access
 
     @State private var selected: Customer?
     @State private var search = ""
+    @State private var isAdding = false
+
+    private var canCreate: Bool { access?.can("customers.create") ?? false }
 
     var body: some View {
         Group {
@@ -561,9 +565,19 @@ struct CustomersScreen: View {
             }
         }
         .background(Theme.background)
+        .sheet(isPresented: $isAdding) {
+            AddCustomerSheet { await store.loadCustomers() }
+        }
         .navigationTitle("Клиенты")
         .searchable(text: $search, prompt: "Имя, телефон или карта")
-        .toolbar { LogoutToolbarItem() }
+        .toolbar {
+            if canCreate {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { isAdding = true } label: { Image(systemName: "plus") }
+                }
+            }
+            LogoutToolbarItem()
+        }
         .task { await store.loadCustomers() }
         .refreshable { await store.loadCustomers() }
     }

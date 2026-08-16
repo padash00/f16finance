@@ -361,6 +361,58 @@ public struct BusinessService: Sendable {
         )
     }
 
+    /// Завести клиента.
+    ///
+    /// Карту оформляют при человеке, у кассы: он стоит и ждёт. Пока это было
+    /// только на сайте, оператор записывал телефон на бумажке и «заводил
+    /// потом» — то есть никогда.
+    public func createCustomer(
+        name: String,
+        phone: String?,
+        cardNumber: String?,
+        companyID: String?
+    ) async throws {
+        var payload: [String: Any] = ["name": name]
+        if let phone, !phone.isEmpty { payload["phone"] = phone }
+        if let cardNumber, !cardNumber.isEmpty { payload["card_number"] = cardNumber }
+        if let companyID, !companyID.isEmpty { payload["company_id"] = companyID }
+
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/customers",
+                method: .post,
+                body: try JSONSerialization.data(
+                    withJSONObject: ["action": "createCustomer", "payload": payload]
+                )
+            )
+        )
+    }
+
+    /// Завести поставщика.
+    ///
+    /// Новый поставщик появляется в момент приёмки: машина у дверей, накладная
+    /// в руках, а в списке его нет.
+    public func createSupplier(
+        name: String,
+        companyID: String,
+        contactName: String?,
+        phone: String?,
+        binIIN: String?
+    ) async throws {
+        var payload: [String: Any] = ["name": name, "company_id": companyID]
+        if let contactName, !contactName.isEmpty { payload["contact_name"] = contactName }
+        if let phone, !phone.isEmpty { payload["phone"] = phone }
+        if let binIIN, !binIIN.isEmpty { payload["bin_iin"] = binIIN }
+
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/store/suppliers",
+                method: .post,
+                body: try JSONSerialization.data(withJSONObject: payload)
+            )
+        )
+    }
+
     /// График смен на неделю. Требует `shifts.view` либо `dashboard.view`.
     public func schedule(weekStart: String) async throws -> ShiftSchedule {
         try await api.send(
