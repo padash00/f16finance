@@ -3,19 +3,27 @@
 /**
  * Смена темы с распадом старого экрана в пыль.
  *
- * Обычное переключение классом моргает: половина экрана уже тёмная, половина
- * ещё светлая, и глаз ловит это как сбой. View Transitions делают снимок
- * старого экрана и кладут поверх нового — снимок можно рассыпать, и переход
- * становится цельным.
+ * Распад собран из двух слоёв, и оба нужны.
  *
- * Сама анимация живёт в CSS (`orda-theme-dust-*`): здесь только запуск и
- * направление. Где API нет (Safari до 18, Firefox), тема меняется мгновенно —
- * функция работает, эффекта нет.
+ * Первый — сама страница: снимок старой темы уходит фронтом от угла, где
+ * кнопка. Это делают View Transitions и CSS-маска.
+ *
+ * Второй — крупинки: холст поверх страницы, на нём частицы отрываются тем же
+ * фронтом и улетают. Без него распада не видно — маска даёт только скол, а в
+ * кино видно именно летящую пыль.
+ *
+ * Где View Transitions недоступны (Safari до 18, Firefox), тема меняется
+ * мгновенно: функция работает, эффекта нет.
  */
+
+/** Длительность распада. Быстрее — читается как моргание, а не как распад. */
+const DUST_MS = 1500
 
 import { useCallback } from 'react'
 import { flushSync } from 'react-dom'
 import { useTheme } from 'next-themes'
+
+import { dustColorsOf, runThemeDust } from './theme-dust-canvas'
 
 /** Класс на <html> на время перехода — по нему CSS выбирает нужную анимацию. */
 const SWEEP_CLASS = 'theme-sweep'
@@ -55,6 +63,14 @@ export function useThemeSweep() {
         root.style.removeProperty('--sweep-y')
       }
 
+      // Крупинки берут цвет уходящей темы: тёмные с светлой, светлые с тёмной.
+      const leaving = resolvedTheme === 'light' ? 'light' : 'dark'
+      const colors = dustColorsOf(leaving)
+      const originPoint = {
+        x: origin?.x ?? window.innerWidth - 48,
+        y: origin?.y ?? 40,
+      }
+
       const transition = (document as any).startViewTransition(() => {
         // Синхронно: браузер снимает новый кадр сразу после колбэка, а
         // обычный setState React ещё не успел бы примениться — переход снял
@@ -68,6 +84,14 @@ export function useThemeSweep() {
       // в любом случае.
       const guard = window.setTimeout(cleanup, 3500)
 
+      // Крупинки запускаются, когда браузер уже снял оба кадра: раньше они
+      // попали бы в снимок и застыли бы на нём картинкой.
+      transition.ready
+        .then(() => runThemeDust({ origin: originPoint, duration: DUST_MS, colors }))
+        .catch(() => {
+          /* переход прерван — крупинки не нужны */
+        })
+
       transition.finished
         .catch(() => {
           /* прерванный переход — не ошибка: человек нажал ещё раз */
@@ -77,7 +101,7 @@ export function useThemeSweep() {
           cleanup()
         })
     },
-    [setTheme],
+    [resolvedTheme, setTheme],
   )
 
   const toggle = useCallback(
