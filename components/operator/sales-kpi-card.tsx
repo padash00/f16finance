@@ -40,6 +40,13 @@ type KpiData = {
     strong: number
     top: number
   }
+  exam?: {
+    title: string
+    score: number
+    passed: boolean
+    on: string
+    gates_top_bonus: boolean
+  } | null
 }
 
 const STATUS_TONE: Record<string, 'emerald' | 'amber' | 'default'> = {
@@ -127,6 +134,40 @@ export function SalesKpiCard() {
               <span>Стоит подтянуть: {data.weaknesses?.join(', ').toLowerCase()}</span>
             </div>
           ) : null}
+        </div>
+      ) : null}
+
+      {/* Последний экзамен: человек должен видеть свой результат, иначе
+          проверка знаний быстро превращается в формальность. */}
+      {data.exam ? (
+        <div className="mt-3 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-500">
+                Проверка знаний
+              </div>
+              <div className="mt-1 truncate text-[13px] text-zinc-300">{data.exam.title}</div>
+            </div>
+            <div className="shrink-0 text-right">
+              <div
+                className={`font-mono text-xl font-semibold ${
+                  data.exam.passed ? 'text-emerald-400' : 'text-amber-400'
+                }`}
+              >
+                {data.exam.score}%
+              </div>
+              <div className="text-[11px] text-zinc-500">{data.exam.on}</div>
+            </div>
+          </div>
+
+          <p className="mt-2 text-[12px] leading-5 text-zinc-500">
+            {data.exam.passed
+              ? 'Тест сдан.'
+              : 'Тест не сдан — стоит перечитать регламент и пройти ещё раз.'}
+            {data.exam.gates_top_bonus && !data.exam.passed
+              ? ' Без сданного теста верхний уровень бонуса за смену не берётся.'
+              : ''}
+          </p>
         </div>
       ) : null}
 

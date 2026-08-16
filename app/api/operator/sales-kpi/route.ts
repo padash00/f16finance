@@ -100,6 +100,35 @@ export async function GET(request: Request) {
     const paid = Boolean(award && award.salary_adjustment_id && !award.voided_at)
     const status = STATUS_TEXT[mine.status] || STATUS_TEXT.NORMAL
 
+    /**
+     * Последний экзамен продавца.
+     *
+     * Показывать его человеку обязательно. Экзамен, результат которого не
+     * возвращают, за месяц превращается в формальность: люди перестают
+     * понимать, зачем они его пишут, и начинают отвечать наугад.
+     *
+     * Мягко: экзаменов в организации может не быть вовсе, и экран кассира от
+     * этого падать не должен.
+     */
+    const { data: examRows } = await supabase
+      .from('operator_exam_attempts')
+      .select('score, passed, completed_at, exam:exam_id(title)')
+      .eq('operator_id', operatorId)
+      .eq('status', 'completed')
+      .order('completed_at', { ascending: false })
+      .limit(1)
+      .then((r: any) => r, () => ({ data: null }))
+
+    const lastExam = (examRows || [])[0] as any
+    const exam = lastExam
+      ? {
+          title: String(lastExam.exam?.title || 'Проверка знаний'),
+          score: Number(lastExam.score) || 0,
+          passed: Boolean(lastExam.passed),
+          on: String(lastExam.completed_at || '').slice(0, 10),
+        }
+      : null
+
     return json({
       data: {
         available: true,
@@ -126,6 +155,14 @@ export async function GET(request: Request) {
           strong: settings.monthly_bonus_strong,
           top: settings.monthly_bonus_top,
         },
+        exam: exam
+          ? {
+              ...exam,
+              // Ворота на верхний уровень: без сданного теста он не берётся.
+              // Про это человек должен знать заранее, а не узнавать по факту.
+              gates_top_bonus: settings.require_product_test_for_top_bonus,
+            }
+          : null,
       },
     })
   } catch (error) {
