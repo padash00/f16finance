@@ -84,7 +84,7 @@ struct ReceiptsScreen: View {
                 ) { receipt in
                     ReceiptRow(receipt: receipt)
                 } detail: { receipt in
-                    ReceiptDetail(receipt: receipt)
+                    ReceiptDetail(receipt: receipt) { await store.loadReceipts() }
                 } empty: {
                     WideEmptyState(
                         icon: kind == .posting ? "square.and.arrow.down" : "arrow.down.circle",
@@ -193,6 +193,13 @@ private struct ReceiptRow: View {
 
 private struct ReceiptDetail: View {
     let receipt: Receipt
+    var onChanged: (() async -> Void)? = nil
+
+    @Environment(\.access) private var access
+    @Environment(\.api) private var api
+    @State private var cancelling = false
+
+    private var canCancel: Bool { access?.can("store-receipts.cancel") ?? false }
 
     var body: some View {
         ScreenScroll {
@@ -218,6 +225,19 @@ private struct ReceiptDetail: View {
                         }
                         RowDivider()
                         StatRow("Сумма", value: Money.format(receipt.totalAmount), emphasized: true)
+
+                        // Ошибку в приёмке видно, когда товар уже разложили:
+                        // пересчитали коробку, а там не двадцать, а
+                        // восемнадцать. Отмена возвращает остатки как было.
+                        if canCancel, !receipt.isCancelled {
+                            RowDivider()
+                            Button {
+                                cancelling = true
+                            } label: {
+                                Label("Отменить приёмку", systemImage: "arrow.uturn.backward")
+                            }
+                            .buttonStyle(DestructiveButtonStyle())
+                        }
 
                         if let reason = receipt.cancelReason, !reason.isEmpty {
                             RowDivider()
@@ -251,6 +271,17 @@ private struct ReceiptDetail: View {
             }
         }
         .background(Theme.background)
+        .sheet(isPresented: $cancelling) {
+            CancelDocumentSheet(
+                kind: .receipt(
+                    id: receipt.id,
+                    title: receipt.supplierName ?? "Приёмка",
+                    amount: receipt.totalAmount
+                )
+            ) {
+                await onChanged?()
+            }
+        }
         .navigationTitle("Приёмка")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -290,7 +321,7 @@ struct WriteoffsScreen: View {
                 ) { writeoff in
                     WriteoffRow(writeoff: writeoff)
                 } detail: { writeoff in
-                    WriteoffDetail(writeoff: writeoff)
+                    WriteoffDetail(writeoff: writeoff) { await store.loadWriteoffs() }
                 } empty: {
                     WideEmptyState(
                         icon: "trash",
@@ -391,6 +422,12 @@ private struct WriteoffRow: View {
 
 private struct WriteoffDetail: View {
     let writeoff: Writeoff
+    var onChanged: (() async -> Void)? = nil
+
+    @Environment(\.access) private var access
+    @State private var cancelling = false
+
+    private var canCancel: Bool { access?.can("store-writeoffs.cancel") ?? false }
 
     var body: some View {
         ScreenScroll {
@@ -409,6 +446,18 @@ private struct WriteoffDetail: View {
 
                         if let date = writeoff.writtenAt {
                             StatRow("Списано", value: date.formatted(.dateTime.day().month(.wide).hour().minute()), icon: "calendar")
+                        }
+
+                        // Списали не то или не столько — товар должен
+                        // вернуться на остаток, пока расхождение свежее.
+                        if canCancel, !writeoff.isCancelled {
+                            RowDivider()
+                            Button {
+                                cancelling = true
+                            } label: {
+                                Label("Отменить списание", systemImage: "arrow.uturn.backward")
+                            }
+                            .buttonStyle(DestructiveButtonStyle())
                         }
                         if let location = writeoff.locationName {
                             StatRow("Откуда", value: location, icon: "shippingbox")
@@ -445,6 +494,17 @@ private struct WriteoffDetail: View {
             }
         }
         .background(Theme.background)
+        .sheet(isPresented: $cancelling) {
+            CancelDocumentSheet(
+                kind: .writeoff(
+                    id: writeoff.id,
+                    title: writeoff.reasonLabel,
+                    amount: writeoff.totalAmount
+                )
+            ) {
+                await onChanged?()
+            }
+        }
         .navigationTitle("Списание")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)

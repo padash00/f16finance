@@ -493,6 +493,50 @@ public struct BusinessService: Sendable {
         )
     }
 
+    /// Отменить проведённую приёмку.
+    ///
+    /// Ошибку в приёмке видно, когда товар уже разложили: пересчитали коробку,
+    /// а там не двадцать, а восемнадцать. Отмена возвращает остатки как было и
+    /// остаётся в истории — это не удаление документа.
+    ///
+    /// Причина обязательна по делу, а не по форме: через месяц «отменено» без
+    /// объяснения выглядит как воровство.
+    public func cancelReceipt(receiptID: String, reason: String) async throws {
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/store/receipts",
+                method: .post,
+                body: try JSONSerialization.data(
+                    withJSONObject: [
+                        "action": "cancelReceipt",
+                        "receipt_id": receiptID,
+                        "cancel_reason": reason,
+                    ]
+                )
+            )
+        )
+    }
+
+    /// Отменить списание.
+    ///
+    /// Списали не то или не столько — товар должен вернуться на остаток, пока
+    /// расхождение свежее.
+    public func cancelWriteoff(writeoffID: String, reason: String) async throws {
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/store/writeoffs",
+                method: .post,
+                body: try JSONSerialization.data(
+                    withJSONObject: [
+                        "action": "cancelWriteoff",
+                        "writeoff_id": writeoffID,
+                        "cancel_reason": reason,
+                    ]
+                )
+            )
+        )
+    }
+
     /// График смен на неделю. Требует `shifts.view` либо `dashboard.view`.
     public func schedule(weekStart: String) async throws -> ShiftSchedule {
         try await api.send(
