@@ -31,6 +31,11 @@ struct AddReceiptSheet: View {
     /// увидеть, что три строки из накладной не легли на склад.
     @State private var unmatched: [ScannedInvoice.Item] = []
     @Environment(\.api) private var api
+    @Environment(\.access) private var access
+
+    /// Распознавание накладной — платное действие на сервере, и право у него
+    /// своё. Без права кнопки быть не должно.
+    private var canScan: Bool { access?.can("store-receipts.ai_parse") ?? false }
 
     var body: some View {
         NavigationStack {
@@ -74,6 +79,7 @@ struct AddReceiptSheet: View {
     @ViewBuilder
     private var scanCard: some View {
         #if os(iOS)
+        if canScan {
         Card(accent: draft.lines.isEmpty ? Theme.brand : nil) {
             VStack(alignment: .leading, spacing: Spacing.md) {
                 SectionHeader(
@@ -134,6 +140,7 @@ struct AddReceiptSheet: View {
                 Task { await scan(data) }
             }
             .ignoresSafeArea()
+        }
         }
         #endif
     }
