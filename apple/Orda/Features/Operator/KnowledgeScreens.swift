@@ -113,7 +113,35 @@ private struct KnowledgeSummary: View {
 
                 Spacer(minLength: 0)
             }
+
+            // Полоса прогресса, а не только число: «осталось 27» звучит как
+            // приговор, «14 из 27 подтверждено» — как работа, которая идёт.
+            if total > 0, pending > 0 {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    GeometryReader { proxy in
+                        ZStack(alignment: .leading) {
+                            Capsule()
+                                .fill(Theme.info.opacity(0.15))
+                            Capsule()
+                                .fill(Theme.info)
+                                .frame(width: max(4, proxy.size.width * ratio))
+                        }
+                    }
+                    .frame(height: 6)
+
+                    Text("\(total - pending) из \(total) подтверждено")
+                        .font(Typography.caption)
+                        .foregroundStyle(Theme.textMuted)
+                }
+                .padding(.top, Spacing.sm)
+            }
         }
+    }
+
+    /// Доля подтверждённого. Ноль статей — делить не на что.
+    private var ratio: Double {
+        guard total > 0 else { return 0 }
+        return Double(total - pending) / Double(total)
     }
 }
 
@@ -230,14 +258,15 @@ struct ArticleReader: View {
                         .font(Typography.callout)
                         .foregroundStyle(Theme.textDim)
                 } else {
-                    VStack(alignment: .leading, spacing: Spacing.md) {
+                    // Регламент читают не как книгу, а глазами по диагонали,
+                    // ища нужный кусок. Воздуха между блоками больше обычного:
+                    // сплошная простыня заставляет перечитывать.
+                    VStack(alignment: .leading, spacing: Spacing.lg) {
                         ForEach(blocks) { block in
                             blockView(block)
                         }
                     }
                 }
-
-                if needsConfirmation { confirmCard }
 
                 if let error {
                     Text(error).font(Typography.callout).foregroundStyle(Theme.negative)
@@ -250,10 +279,52 @@ struct ArticleReader: View {
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .background(Theme.background)
+        // Подтверждение закреплено снизу, а не спрятано в конце текста: у
+        // длинного регламента до него надо было домотать, и человек уходил,
+        // прочитав, но не подтвердив, — а смену это потом не давало закрыть.
+        .safeAreaInset(edge: .bottom) {
+            if needsConfirmation {
+                confirmBar
+            }
+        }
         .navigationTitle("Статья")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+    }
+
+    /// Полоса подтверждения над нижним краем.
+    private var confirmBar: some View {
+        VStack(spacing: Spacing.sm) {
+            if let error {
+                Text(error)
+                    .font(Typography.caption)
+                    .foregroundStyle(Theme.negative)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            Button {
+                Task { await confirm() }
+            } label: {
+                if isConfirming {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Text("Прочитал и понял")
+                }
+            }
+            .buttonStyle(PrimaryButtonStyle())
+            .disabled(isConfirming)
+
+            Text("Подтверждение привязано к версии \(article.version): если правила изменят, вас попросят прочитать заново.")
+                .font(Typography.caption)
+                .foregroundStyle(Theme.textMuted)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: 680)
+        .frame(maxWidth: .infinity)
+        .padding(Spacing.lg)
+        .background(.bar)
     }
 
     @ViewBuilder
@@ -321,45 +392,23 @@ struct ArticleReader: View {
             Text(block.text)
                 .font(Typography.body)
                 .foregroundStyle(Theme.textMuted)
+                // Межстрочный интервал: строки регламента длинные, и без него
+                // глаз теряет начало следующей.
+                .lineSpacing(4)
                 .textSelection(.enabled)
         }
     }
 
-    private var confirmCard: some View {
-        Card(accent: Theme.info) {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                Text("Подтвердите, что прочитали")
-                    .font(Typography.callout.weight(.semibold))
-                    .foregroundStyle(Theme.text)
-                Text("Подтверждение привязано к версии \(article.version): если правила изменят, вас попросят прочитать заново.")
-                    .font(Typography.caption)
-                    .foregroundStyle(Theme.textDim)
-
-                Button {
-                    confirm()
-                } label: {
-                    if isConfirming {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Text("Прочитал и понял")
-                    }
-                }
-                .buttonStyle(PrimaryButtonStyle(tint: Theme.info))
-                .disabled(isConfirming)
-            }
-        }
-    }
-
-    private func confirm() {
+    private func confirm() async {
         isConfirming = true
-        Task {
-            if let failure = await cabinet.confirmArticle(article) {
-                error = failure
-                Haptics.error()
-            } else {
-                Haptics.success()
-            }
-            isConfirming = false
+        error = nil
+        defer { isConfirming = false }
+
+        if let failure = await cabinet.confirmArticle(article) {
+            error = failure
+            Haptics.error()
+        } else {
+            Haptics.success()
         }
     }
 }
