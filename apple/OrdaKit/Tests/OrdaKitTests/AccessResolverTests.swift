@@ -40,8 +40,8 @@ struct AccessResolverTests {
     func catalogIsPopulated() {
         let summary = CapabilityCatalog.summary
         #expect(summary.groups == 9)
-        #expect(summary.pages == 82)
-        #expect(summary.capabilities == 397)
+        #expect(summary.pages == 85)
+        #expect(summary.capabilities == 409)
     }
 
     @Test("Права разбираются на страницу и действие")

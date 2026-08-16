@@ -260,7 +260,7 @@ struct MoneyScreen: View {
 /// непрочитанных, — и свежий переход схлопывался обратно: «с первого раза не
 /// открывается, со второго открывается».
 enum OperatorProfileRoute: Hashable {
-    case schedule, money, knowledge, exams, chat, messages, pointQR
+    case schedule, money, salesQuality, knowledge, exams, chat, messages, pointQR
 }
 
 struct OperatorProfileScreen: View {
@@ -303,6 +303,21 @@ struct OperatorProfileScreen: View {
 
                         NavigationLink(value: OperatorProfileRoute.money) {
                             NavigationRow(icon: "wallet.bifold", iconColor: Theme.brand, title: "Мои деньги")
+                        }
+                        .buttonStyle(.pressable)
+
+                        RowDivider()
+
+                        // Оценка работы за прилавком. Стоит рядом с деньгами
+                        // намеренно: доплата за качество приходит именно
+                        // отсюда, и человек должен видеть, из чего она вышла.
+                        NavigationLink(value: OperatorProfileRoute.salesQuality) {
+                            NavigationRow(
+                                icon: "chart.line.uptrend.xyaxis",
+                                iconColor: Theme.positive,
+                                title: "Как я работаю",
+                                subtitle: "Оценка за месяц и доплата за качество"
+                            )
                         }
                         .buttonStyle(.pressable)
 
@@ -419,6 +434,7 @@ struct OperatorProfileScreen: View {
             case .schedule: ScheduleScreen()
             case .money: MoneyScreen()
             case .knowledge: KnowledgeScreen()
+            case .salesQuality: SalesQualityScreen()
             case .exams: ExamsScreen()
             case .chat: TeamChatScreen()
             case .messages: MessagesScreen()
