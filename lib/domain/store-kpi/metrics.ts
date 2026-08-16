@@ -61,8 +61,7 @@ export const METRIC_DUPLICATE_OF: Partial<Record<MetricKey, MetricKey>> = {
  * Ноль вместо null здесь был бы ошибкой: смена без пробитых позиций дала бы
  * «0 товаров на чек» и утащила продавца вниз за проблему учёта.
  *
- * `plan_attainment` и `product_knowledge` считаются не отсюда: первому нужна
- * норма выручки из базы, второму — результат теста.
+ * `plan_attainment` считается не отсюда: ему нужна норма выручки из базы.
  */
 export function metricValue(fact: ShiftFact, metric: MetricKey): number | null {
   // Денежные метрики считаются в ценах базового месяца: иначе повышение цен
@@ -91,8 +90,10 @@ export function metricValue(fact: ShiftFact, metric: MetricKey): number | null {
       return realRevenue
 
     case 'product_knowledge':
-      // Появится вместе с воротами по тесту знания товара.
-      return null
+      // Результат последнего экзамена. Не сдавал или экзамен устарел — null,
+      // а не ноль: «не проверяли» и «знает на ноль» это разные вещи, и вторая
+      // утащила бы человека вниз за то, чего он не делал.
+      return fact.exam_score == null ? null : fact.exam_score
   }
 }
 

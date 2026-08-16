@@ -14,6 +14,11 @@ import { answerTelegramCallback, editTelegramMessage, sendTelegramMessage } from
 
 const OPENAI_MODEL = process.env.OPENAI_QUIZ_MODEL || process.env.OPENAI_MODEL || 'gpt-4o-mini'
 import { analyzeOpenAnswer, type IntegrityReport } from '@/lib/server/exam-integrity'
+import {
+  markAnswerHistory,
+  pickWithRotation,
+  type AskedQuestion,
+} from '@/lib/server/operator-exam-rotation'
 
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions'
 
@@ -416,8 +421,17 @@ export function buildOperatorTicket(
   count: number,
   openPool: ExamQuestion[] = [],
   openCount = 0,
+  /**
+   * Что этому человеку уже задавали. Пусто — отбор как раньше, случайный.
+   * С историей вопросы, заданные за последний месяц, уходят в конец очереди:
+   * еженедельный экзамен с повторами превращается в заучивание ответов.
+   */
+  history: AskedQuestion[] = [],
 ): ExamQuestion[] {
-  const picked = [...pool].sort(() => Math.random() - 0.5).slice(0, Math.min(count, pool.length))
+  const picked =
+    history.length > 0
+      ? pickWithRotation(pool, Math.min(count, pool.length), history)
+      : [...pool].sort(() => Math.random() - 0.5).slice(0, Math.min(count, pool.length))
   const shuffled = picked.map((question) => {
     const order = question.choices.map((_, i) => i).sort(() => Math.random() - 0.5)
     return {
@@ -430,7 +444,10 @@ export function buildOperatorTicket(
 
   // Ситуационные идут в конце: они дольше и тяжелее, и если поставить их первыми,
   // часть людей бросит экзамен на первом же вопросе.
-  const open = [...openPool].sort(() => Math.random() - 0.5).slice(0, Math.min(openCount, openPool.length))
+  const open =
+    history.length > 0
+      ? pickWithRotation(openPool, Math.min(openCount, openPool.length), history)
+      : [...openPool].sort(() => Math.random() - 0.5).slice(0, Math.min(openCount, openPool.length))
   return [...shuffled, ...open]
 }
 
@@ -975,6 +992,15 @@ async function advanceAttempt(params: {
       completed_at: new Date().toISOString(),
     })
     .eq('id', attempt.id)
+
+  // Отмечаем в истории, где человек ошибся: такой вопрос вернётся через две
+  // недели, а верно отвеченный — только через месяц. Смысл повтора в том,
+  // чтобы закрыть пробел, а не переспросить то, что человек знает.
+  await markAnswerHistory(supabase, {
+    operatorId: attempt.operator_id,
+    questions: attempt.questions || [],
+    wrong: result.wrong,
+  })
 
   // Разбор ошибок: какие регламенты перечитать. Сами верные ответы не шлём —
   // иначе билет утечёт следующему сдающему через пересылку сообщения.

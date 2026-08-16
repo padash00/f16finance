@@ -117,6 +117,8 @@ export async function GET(request: Request) {
           longitude: settings.longitude,
           weather_adjusts_bonus_threshold: settings.weather_adjusts_bonus_threshold,
           require_product_test_for_top_bonus: settings.require_product_test_for_top_bonus,
+          monthly_bonus_strong: settings.monthly_bonus_strong,
+          monthly_bonus_top: settings.monthly_bonus_top,
         },
         companies: companies || [],
         categories: categories || [],
@@ -191,6 +193,24 @@ export async function POST(request: Request) {
       }
       if ('weather_adjusts_bonus_threshold' in body) {
         patch.weather_adjusts_bonus_threshold = body.weather_adjusts_bonus_threshold === true
+      }
+
+      // Суммы доплаты. Это правило, а не разовое решение: продавец должен
+      // знать заранее, к чему идёт. Разово поправить сумму можно при самом
+      // начислении — там для этого нужна причина.
+      const money = (raw: unknown): number | null => {
+        const n = typeof raw === 'string' ? Number(raw.replace(/[^\d]/g, '')) : Number(raw)
+        return Number.isFinite(n) && n >= 0 && n <= 10_000_000 ? Math.round(n) : null
+      }
+      if ('monthly_bonus_strong' in body) {
+        const value = money(body.monthly_bonus_strong)
+        if (value == null) return json({ error: 'bonus-invalid' }, 400)
+        patch.monthly_bonus_strong = value
+      }
+      if ('monthly_bonus_top' in body) {
+        const value = money(body.monthly_bonus_top)
+        if (value == null) return json({ error: 'bonus-invalid' }, 400)
+        patch.monthly_bonus_top = value
       }
 
       const { error } = await supabase

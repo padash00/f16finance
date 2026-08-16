@@ -13,6 +13,7 @@ import { AlertCircle, Check, Coins, Loader2, Sparkles, Wallet } from 'lucide-rea
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { formatMoney } from '@/lib/core/format'
 import { useApi } from '@/lib/hooks/use-api'
 
@@ -117,7 +118,19 @@ export function PayoutTab(props: { companyId: string; month: string; canManage: 
   const { data, loading, refresh } = useApi<{ data: PayoutData }>(key)
   const payload = data?.data
 
-  async function pay(row: PayoutRow) {
+  /**
+   * Разовая правка суммы.
+   *
+   * Обычная сумма зависит от статуса — это правило, к которому человек может
+   * стремиться, и менять его от настроения нельзя. Но бывает месяц, который
+   * правило не описывает, и тогда владелец должен уметь заплатить иначе —
+   * назвав причину.
+   */
+  const [editing, setEditing] = useState<string | null>(null)
+  const [amount, setAmount] = useState('')
+  const [reason, setReason] = useState('')
+
+  async function pay(row: PayoutRow, override?: { amount: number; reason: string }) {
     setBusy(row.cashier_id)
     setProblem(null)
     try {
@@ -132,10 +145,19 @@ export function PayoutTab(props: { companyId: string; month: string; canManage: 
           status: row.status,
           score: row.score,
           shifts: row.shifts,
+          ...(override ? { amount: override.amount, override_reason: override.reason } : {}),
         }),
       })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json?.error || `HTTP ${res.status}`)
+      if (!res.ok) {
+        throw new Error(
+          json?.error === 'override-reason-required'
+            ? 'Сумма отличается от правила — напишите причину, она уйдёт в журнал'
+            : json?.error || `HTTP ${res.status}`,
+        )
+      }
+      setEditing(null)
+      setReason('')
       await refresh()
     } catch (e) {
       setProblem(e instanceof Error ? e.message : 'Не удалось начислить')
@@ -303,18 +325,74 @@ export function PayoutTab(props: { companyId: string; month: string; canManage: 
                         Отменить
                       </Button>
                     ) : (
-                      <Button size="sm" disabled={busy === r.cashier_id} onClick={() => void pay(r)}>
-                        {busy === r.cashier_id ? (
-                          <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Coins className="mr-1 h-3.5 w-3.5" />
-                        )}
-                        Начислить
-                      </Button>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button size="sm" disabled={busy === r.cashier_id} onClick={() => void pay(r)}>
+                          {busy === r.cashier_id ? (
+                            <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Coins className="mr-1 h-3.5 w-3.5" />
+                          )}
+                          Начислить
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={busy === r.cashier_id}
+                          onClick={() => {
+                            setEditing(editing === r.cashier_id ? null : r.cashier_id)
+                            setAmount(String(r.amount || 0))
+                            setReason('')
+                          }}
+                        >
+                          Другая сумма
+                        </Button>
+                      </div>
                     )
                   ) : null}
                 </div>
               </div>
+
+              {editing === r.cashier_id && !r.paid ? (
+                <div className="mt-3 rounded-lg bg-surface-muted p-3">
+                  <div className="flex flex-wrap items-end gap-2">
+                    <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                      Сумма, ₸
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        className="w-32"
+                      />
+                    </label>
+                    <label className="flex min-w-[240px] flex-1 flex-col gap-1 text-xs text-muted-foreground">
+                      Причина
+                      <Input
+                        value={reason}
+                        onChange={(e) => setReason(e.target.value)}
+                        placeholder="Например: закрывал смены за двоих весь месяц"
+                      />
+                    </label>
+                    <Button
+                      size="sm"
+                      disabled={busy === r.cashier_id || reason.trim().length < 5}
+                      onClick={() =>
+                        void pay(r, {
+                          amount: Number(String(amount).replace(/[^\d]/g, '')) || 0,
+                          reason: reason.trim(),
+                        })
+                      }
+                    >
+                      Начислить
+                    </Button>
+                  </div>
+                  <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                    По правилу сейчас {formatMoney(r.amount)}. Причина обязательна и попадёт в журнал:
+                    сумма, отличающаяся от правила без объяснения, через полгода выглядит ошибкой, а не
+                    решением.
+                  </p>
+                </div>
+              ) : null}
             </Card>
           ))}
         </div>

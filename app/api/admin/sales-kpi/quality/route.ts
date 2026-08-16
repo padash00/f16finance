@@ -320,8 +320,35 @@ export async function POST(request: Request) {
       const { settings } = await loadStoreKpiSettings(supabase, companyId)
       const status = String(body.status || '')
       const bonus = monthlyBonus(status as any, settings)
-      // Платить за статус, которого мы не смогли определить, нельзя.
-      if (bonus.amount <= 0) return json({ error: 'nothing-to-award' }, 400)
+
+      /**
+       * Разовая правка суммы.
+       *
+       * Обычная сумма зависит от статуса — это правило, к которому человек
+       * может стремиться. Но бывает месяц, когда правило не описывает
+       * происходящего, и владелец должен уметь заплатить иначе.
+       *
+       * Причина обязательна и уходит в журнал: сумма, отличающаяся от правила
+       * без объяснения, через полгода выглядит ошибкой, а не решением.
+       */
+      const overrideRaw = body.amount
+      const hasOverride = overrideRaw != null && overrideRaw !== ''
+      const overrideAmount = Math.round(Number(overrideRaw))
+      const overrideReason = String(body.override_reason || '').trim()
+
+      if (hasOverride) {
+        if (!Number.isFinite(overrideAmount) || overrideAmount < 0 || overrideAmount > 10_000_000) {
+          return json({ error: 'amount-invalid' }, 400)
+        }
+        if (overrideAmount !== bonus.amount && overrideReason.length < 5) {
+          return json({ error: 'override-reason-required' }, 400)
+        }
+      }
+
+      const amount = hasOverride ? overrideAmount : bonus.amount
+      // Платить за статус, которого мы не смогли определить, нельзя — но
+      // если владелец назвал сумму сам, это его решение.
+      if (amount <= 0) return json({ error: 'nothing-to-award' }, 400)
 
       const result = await awardMonthlyBonusToPayroll({
         supabase,
@@ -329,10 +356,17 @@ export async function POST(request: Request) {
         companyId,
         cashierId,
         month,
-        amount: bonus.amount,
+        amount,
         level: bonus.level,
         status,
-        details: { status, score: body.score ?? null, shifts: body.shifts ?? null },
+        details: {
+          status,
+          score: body.score ?? null,
+          shifts: body.shifts ?? null,
+          by_rule: bonus.amount,
+          overridden: hasOverride && amount !== bonus.amount,
+          override_reason: hasOverride && amount !== bonus.amount ? overrideReason : null,
+        },
         modelVersion: settings.model_version,
         actorUserId: actor,
       })

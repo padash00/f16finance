@@ -33,6 +33,7 @@ import {
   Store,
   Trash2,
   TrendingDown,
+  Wallet,
   TrendingUp,
   Users,
 } from 'lucide-react'
@@ -535,6 +536,8 @@ type SettingsData = {
     longitude: number | null
     weather_adjusts_bonus_threshold: boolean
     require_product_test_for_top_bonus: boolean
+    monthly_bonus_strong: number
+    monthly_bonus_top: number
   }
   companies: { id: string; name: string; store_enabled: boolean }[]
   categories: { id: string; name: string }[]
@@ -563,6 +566,8 @@ function SettingsModal(props: {
   const [lat, setLat] = useState('')
   const [lon, setLon] = useState('')
   const [testGate, setTestGate] = useState(false)
+  const [bonusStrong, setBonusStrong] = useState('')
+  const [bonusTop, setBonusTop] = useState('')
   // Каждая сторона правила — «категория:id» или «товар:id». Один select
   // вместо двух: администратору не нужно сначала выбирать вид, а потом
   // позицию, он просто ищет нужное в списке.
@@ -582,6 +587,8 @@ function SettingsModal(props: {
     setLat(payload.settings.latitude == null ? '' : String(payload.settings.latitude))
     setLon(payload.settings.longitude == null ? '' : String(payload.settings.longitude))
     setTestGate(Boolean(payload.settings.require_product_test_for_top_bonus))
+    setBonusStrong(String(payload.settings.monthly_bonus_strong ?? ''))
+    setBonusTop(String(payload.settings.monthly_bonus_top ?? ''))
   }, [payload])
 
   async function post(body: Record<string, unknown>) {
@@ -616,6 +623,8 @@ function SettingsModal(props: {
       latitude: latValue,
       longitude: lonValue,
       require_product_test_for_top_bonus: testGate,
+      monthly_bonus_strong: bonusStrong,
+      monthly_bonus_top: bonusTop,
     })
     if (ok) {
       // Подтверждение вместо молчания, а затем закрытие: раньше окно просто
@@ -840,6 +849,47 @@ function SettingsModal(props: {
                       ) : null}
                     </div>
                   ) : null}
+                </div>
+              </div>
+            </section>
+
+            {/* Суммы доплаты */}
+            <section className="rounded-xl border border-border p-4">
+              <div className="flex items-start gap-3">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300">
+                  <Wallet className="h-4.5 w-4.5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-sm font-semibold text-foreground">Сколько доплачивать</h3>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    Это правило, а не разовое решение: продавец должен заранее знать, к чему идёт. Сумму
+                    конкретного начисления можно поправить при выплате — там нужно указать причину.
+                  </p>
+
+                  <div className="mt-3 flex flex-wrap items-end gap-3">
+                    <label className="flex flex-col gap-1">
+                      <span className="text-xs font-medium text-body">Сильный, ₸</span>
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        value={bonusStrong}
+                        onChange={(e) => setBonusStrong(e.target.value)}
+                        placeholder="10000"
+                        className="w-36"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span className="text-xs font-medium text-body">Топ, ₸</span>
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        value={bonusTop}
+                        onChange={(e) => setBonusTop(e.target.value)}
+                        placeholder="20000"
+                        className="w-36"
+                      />
+                    </label>
+                  </div>
                 </div>
               </div>
             </section>

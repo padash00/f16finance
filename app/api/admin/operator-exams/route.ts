@@ -12,6 +12,7 @@ import {
 } from '@/lib/server/operator-exams'
 import { type FactTopic } from '@/lib/server/exam-facts'
 import { composeExamPool } from '@/lib/server/operator-exam-compose'
+import { loadAskedHistory, rememberAsked } from '@/lib/server/operator-exam-rotation'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { pushToOperators } from '@/lib/server/push'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
@@ -575,8 +576,18 @@ export async function POST(request: Request) {
         .select('id, name, short_name, telegram_chat_id')
         .in('id', draftOperatorIds)
 
+      // Что каждому уже задавали: без этого еженедельный экзамен за месяц
+      // превращается в заучивание ответов.
+      const askedHistory = await loadAskedHistory(supabase, draftOperatorIds)
+
       const attemptsToInsert = ((operatorRows || []) as any[]).map((operator) => {
-        const ticket: ExamQuestion[] = buildOperatorTicket(pool, ticketSize, openPool, ticketOpen)
+        const ticket: ExamQuestion[] = buildOperatorTicket(
+          pool,
+          ticketSize,
+          openPool,
+          ticketOpen,
+          askedHistory.get(String(operator.id)) || [],
+        )
         const chatId = operator.telegram_chat_id ? String(operator.telegram_chat_id) : null
         // Без Telegram экзамен больше не «недоставлен»: оператор сдаёт его в
         // приложении. Раньше такая попытка сразу помечалась ошибкой, и человек
@@ -598,6 +609,15 @@ export async function POST(request: Request) {
         .insert(attemptsToInsert)
         .select('id, exam_id, organization_id, operator_id, telegram_chat_id, status, questions, answers, current_index, total_questions, correct_answers, score, passed')
       if (attemptsError) return json({ error: 'attempts-create-failed', detail: attemptsError.message }, 500)
+
+      // Запоминаем билеты: следующий раз эти вопросы этому человеку не придут.
+      for (const attempt of (inserted || []) as any[]) {
+        await rememberAsked(supabase, {
+          organizationId: orgId,
+          operatorId: String(attempt.operator_id),
+          questions: (attempt.questions || []) as { q?: string }[],
+        })
+      }
 
       let sent = 0
       const failures: Array<{ operator_id: string; error: string }> = []
