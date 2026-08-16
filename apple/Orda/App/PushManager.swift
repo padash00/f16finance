@@ -82,6 +82,73 @@ final class PushManager {
 
     func configure(api: APIClient) {
         self.api = api
+        registerCategories()
+    }
+
+    // ── Действия прямо в уведомлении ─────────────────────────────────────────
+
+    /// Категории с кнопками.
+    ///
+    /// Смысл в том, чтобы не открывать приложение ради одного касания:
+    /// расход одобряют между делом, на сообщение отвечают одной строкой. Обе
+    /// категории безопасны — одобрение и ответ не разрушают ничего, что нельзя
+    /// поправить, и оба видны в журнале.
+    private func registerCategories() {
+        let approve = UNNotificationAction(
+            identifier: Action.approveExpense.rawValue,
+            title: "Одобрить",
+            options: [.authenticationRequired]
+        )
+        let expense = UNNotificationCategory(
+            identifier: Category.expenseApproval.rawValue,
+            actions: [approve],
+            intentIdentifiers: []
+        )
+
+        let reply = UNTextInputNotificationAction(
+            identifier: Action.replyMessage.rawValue,
+            title: "Ответить",
+            options: [],
+            textInputButtonTitle: "Отправить",
+            textInputPlaceholder: "Сообщение"
+        )
+        let message = UNNotificationCategory(
+            identifier: Category.directMessage.rawValue,
+            actions: [reply],
+            intentIdentifiers: []
+        )
+
+        UNUserNotificationCenter.current().setNotificationCategories([expense, message])
+    }
+
+    enum Category: String {
+        case expenseApproval = "expense-approval"
+        case directMessage = "direct-message"
+    }
+
+    enum Action: String {
+        case approveExpense = "orda.action.approve-expense"
+        case replyMessage = "orda.action.reply-message"
+    }
+
+    /// Одобрить расход, не открывая приложение.
+    func approveExpense(id: String) async {
+        guard let api else { return }
+        _ = try? await api.send(
+            APIRequest(path: "/api/admin/expenses/\(id)/approve", method: .post)
+        )
+    }
+
+    /// Ответить на личное сообщение прямо из уведомления.
+    func replyToMessage(userID: String, text: String) async {
+        guard let api, !text.isEmpty else { return }
+        // Имена полей — те, что читает роут: `recipientUserId` и `message`.
+        let body = try? JSONSerialization.data(
+            withJSONObject: ["recipientUserId": userID, "message": text]
+        )
+        _ = try? await api.send(
+            APIRequest(path: "/api/direct-messages", method: .post, body: body)
+        )
     }
 
     // ── Разрешение ───────────────────────────────────────────────────────────
@@ -200,6 +267,27 @@ final class PushDelegate: NSObject, UNUserNotificationCenterDelegate, @unchecked
         didReceive response: UNNotificationResponse
     ) async {
         let payload = response.notification.request.content.userInfo
+
+        // Сначала кнопки: нажали «Одобрить» — приложение открывать незачем.
+        switch response.actionIdentifier {
+        case PushManager.Action.approveExpense.rawValue:
+            if let id = payload["expenseId"] as? String, !id.isEmpty {
+                await PushManager.shared.approveExpense(id: id)
+            }
+            return
+        case PushManager.Action.replyMessage.rawValue:
+            if let textResponse = response as? UNTextInputNotificationResponse,
+               let from = payload["from"] as? String {
+                await PushManager.shared.replyToMessage(
+                    userID: from,
+                    text: textResponse.userText.trimmingCharacters(in: .whitespacesAndNewlines)
+                )
+            }
+            return
+        default:
+            break
+        }
+
         guard let kind = payload["kind"] as? String,
               let route = PushManager.PushRoute(kind: kind) else { return }
         await MainActor.run { PushManager.shared.pendingRoute = route }

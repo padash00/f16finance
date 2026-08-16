@@ -353,7 +353,9 @@ export async function POST(request: Request) {
       await pushToOrganization(supabase as any, access.activeOrganization?.id || null, {
         title: 'Серия расходов на одобрение',
         body: `${payload.category_name || 'Расход'} · ${rows.length} периодов · ${fmtMoney(totalAmount)}`,
-        data: { type: 'expense_approval', seriesId },
+        // `kind` — поле, по которому приложение находит раздел.
+        data: { kind: 'expense-approval', type: 'expense_approval', seriesId },
+        categoryId: 'expense-approval',
       })
     }
 

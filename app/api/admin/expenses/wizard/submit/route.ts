@@ -311,7 +311,15 @@ export async function POST(request: Request) {
       await pushToOrganization(supabase as any, access.activeOrganization?.id || null, {
         title: 'Расход на одобрение',
         body: `${payload.category_name || 'Расход'} · ${fmtMoney(pushTotal)} — нужно одобрить`,
-        data: { type: 'expense_approval', expenseId: (inserted as any)?.id || null },
+        // `kind` — то поле, по которому приложение находит раздел; `type`
+        // оставлен ради прежних клиентов. Пока слался только он,
+        // уведомление о расходе не открывало ничего.
+        data: {
+          kind: 'expense-approval',
+          type: 'expense_approval',
+          expenseId: (inserted as any)?.id || null,
+        },
+        categoryId: 'expense-approval',
       })
     }
 

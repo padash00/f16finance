@@ -179,6 +179,9 @@ export async function POST(request: Request) {
     title: senderName,
     body: messageText ? shorten(messageText) : 'Вложение',
     data: { kind: 'direct-message', from: access.user.id },
+    // Категория включает кнопку «Ответить» прямо в уведомлении: без неё
+    // система показывает голый баннер.
+    categoryId: 'direct-message',
     // Схлопываем по отправителю: десять сообщений подряд — это один разговор,
     // а не десять уведомлений на экране блокировки.
     collapseId: `dm-${access.user.id}`,
