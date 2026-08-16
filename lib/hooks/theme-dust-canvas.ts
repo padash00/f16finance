@@ -33,8 +33,19 @@ export type DustOptions = {
   onCovered?: () => void
 }
 
-/** Слоёв распада. Больше — плавнее фронт и больше элементов в DOM. */
-const LAYERS = 26
+/**
+ * Слои устроены двумя измерениями, и это главное решение здесь.
+ *
+ * Волны задают ФРОНТ: чем дальше крупинка от кнопки, тем позже её волна
+ * трогается. Потоки задают РАЗЛЁТ: внутри одной волны крупинки случайно
+ * раскиданы по нескольким потокам, и каждый летит по-своему.
+ *
+ * Без потоков волна улетает единым пластом — видно, что это сдвигают
+ * картинку, а не рассыпают. Разложить пиксели по потокам случайно стоит
+ * ничего, а выглядит как облако.
+ */
+const WAVES = 12
+const STREAMS = 4
 
 /** Сторона крупинки в пикселях экрана. */
 const GRAIN = 4
@@ -75,6 +86,8 @@ type Layer = {
   delay: number
   dx: number
   dy: number
+  rotate: number
+  scale: number
 }
 
 /**
@@ -94,34 +107,38 @@ function buildLayers(
   const maxDistance = Math.hypot(width, height)
 
   const layers: Layer[] = []
-  const contexts: CanvasRenderingContext2D[] = []
+  const contexts: (CanvasRenderingContext2D | null)[] = []
 
-  for (let i = 0; i < LAYERS; i++) {
-    const canvas = document.createElement('canvas')
-    canvas.width = Math.floor(width * dpr)
-    canvas.height = Math.floor(height * dpr)
-    canvas.style.cssText = [
-      'position:fixed',
-      'inset:0',
-      'width:100%',
-      'height:100%',
-      'pointer-events:none',
-      'will-change:transform,opacity,filter',
-    ].join(';')
+  for (let wave = 0; wave < WAVES; wave++) {
+    for (let stream = 0; stream < STREAMS; stream++) {
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.floor(width * dpr)
+      canvas.height = Math.floor(height * dpr)
+      canvas.style.cssText = [
+        'position:fixed',
+        'inset:0',
+        'width:100%',
+        'height:100%',
+        'pointer-events:none',
+        'will-change:transform,opacity,filter',
+      ].join(';')
 
-    const context = canvas.getContext('2d')
-    if (!context) continue
-    context.scale(dpr, dpr)
-    contexts.push(context)
+      const context = canvas.getContext('2d')
+      contexts.push(context)
+      if (context) context.scale(dpr, dpr)
 
-    // Разлёт прочь от кнопки и вверх: пыль не падает, её уносит.
-    const angle = Math.atan2(height / 2 - options.origin.y, width / 2 - options.origin.x)
-    layers.push({
-      canvas,
-      delay: 0,
-      dx: Math.cos(angle) * (30 + i * 3) + 40,
-      dy: Math.sin(angle) * (14 + i * 1.5) - (60 + i * 4),
-    })
+      // Разлёт вверх и вправо — как в оригинале. Направление не зависит от
+      // того, где кнопка: от неё идёт фронт, а не ветер.
+      const spread = (stream - (STREAMS - 1) / 2) / STREAMS
+      layers.push({
+        canvas,
+        delay: (wave / WAVES) * 0.62,
+        dx: 34 + wave * 2.2 + spread * 46 + Math.random() * 18,
+        dy: -(46 + wave * 2.6) + spread * 26 - Math.random() * 22,
+        rotate: spread * 5 + (Math.random() - 0.5) * 3,
+        scale: 1.02 + Math.random() * 0.05,
+      })
+    }
   }
 
   if (layers.length === 0) return []
@@ -129,9 +146,12 @@ function buildLayers(
   for (let x = 0; x < width; x += GRAIN) {
     for (let y = 0; y < height; y += GRAIN) {
       const distance = Math.hypot(x - options.origin.x, y - options.origin.y)
-      const jitter = (Math.random() - 0.5) * 0.22
+      // Разброс по волне рвёт ровную дугу фронта: без него видно границу.
+      const jitter = (Math.random() - 0.5) * 0.2
       const position = Math.min(0.999, Math.max(0, distance / maxDistance + jitter))
-      const index = Math.min(layers.length - 1, Math.floor(position * layers.length))
+      const wave = Math.min(WAVES - 1, Math.floor(position * WAVES))
+      // Поток — случайно: соседние крупинки должны улетать по-разному.
+      const stream = Math.floor(Math.random() * STREAMS)
 
       let color: string
       if (image) {
@@ -139,24 +159,20 @@ function buildLayers(
         const sx = Math.floor(x * CAPTURE_SCALE)
         const sy = Math.floor(y * CAPTURE_SCALE)
         const offset = (sy * image.width + sx) * 4
-        const alpha = image.data[offset + 3]
         // Прозрачные места страницы крупинками не становятся.
-        if (alpha < 8) continue
+        if (image.data[offset + 3] < 8) continue
         color = `rgb(${image.data[offset]},${image.data[offset + 1]},${image.data[offset + 2]})`
       } else {
-        color = options.fallbackColors[index % options.fallbackColors.length]
+        color = options.fallbackColors[(wave + stream) % options.fallbackColors.length]
       }
 
-      const context = contexts[index]
+      const context = contexts[wave * STREAMS + stream]
+      if (!context) continue
       context.fillStyle = color
-      context.fillRect(x, y, GRAIN, GRAIN)
+      // Смещение на пиксель-другой: ровная сетка читается как решётка.
+      context.fillRect(x + (Math.random() - 0.5) * 2, y + (Math.random() - 0.5) * 2, GRAIN, GRAIN)
     }
   }
-
-  // Задержка по порядку слоя: первый — у кнопки, последний — в дальнем углу.
-  layers.forEach((layer, i) => {
-    layer.delay = (i / layers.length) * 0.55
-  })
 
   return layers
 }
@@ -197,11 +213,18 @@ export async function runThemeDust(options: DustOptions): Promise<void> {
   const animations = layers.map((layer) =>
     layer.canvas.animate(
       [
-        { transform: 'translate3d(0,0,0) scale(1)', opacity: 1, filter: 'blur(0px)', offset: 0 },
-        { transform: 'translate3d(0,0,0) scale(1)', opacity: 1, filter: 'blur(0px)', offset: layer.delay },
+        { transform: 'none', opacity: 1, filter: 'blur(0px)', offset: 0 },
+        { transform: 'none', opacity: 1, filter: 'blur(0px)', offset: layer.delay },
         {
-          // Усадка и ускорение к концу — крупинка не просто уезжает, а тает.
-          transform: `translate3d(${layer.dx}px, ${layer.dy}px, 0) scale(1.04)`,
+          // Середина пути: крупинки уже оторвались, но ещё различимы.
+          transform: `translate3d(${layer.dx * 0.32}px, ${layer.dy * 0.32}px, 0) rotate(${layer.rotate * 0.35}deg) scale(${1 + (layer.scale - 1) * 0.4})`,
+          opacity: 0.72,
+          filter: 'blur(0.6px)',
+          offset: layer.delay + (1 - layer.delay) * 0.45,
+        },
+        {
+          // Ускорение и лёгкая усадка к концу — крупинка не уезжает, а тает.
+          transform: `translate3d(${layer.dx}px, ${layer.dy}px, 0) rotate(${layer.rotate}deg) scale(${layer.scale})`,
           opacity: 0,
           filter: 'blur(3px)',
           offset: 1,
@@ -209,7 +232,9 @@ export async function runThemeDust(options: DustOptions): Promise<void> {
       ],
       {
         duration: options.duration,
-        easing: 'cubic-bezier(0.3, 0, 0.5, 1)',
+        // Медленно отходит, потом уносит — так в оригинале и так это читается
+        // как распад, а не как отъезд.
+        easing: 'cubic-bezier(0.35, 0, 0.35, 1)',
         fill: 'forwards',
       },
     ),
