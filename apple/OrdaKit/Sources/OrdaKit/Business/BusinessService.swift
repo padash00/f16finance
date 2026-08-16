@@ -467,6 +467,32 @@ public struct BusinessService: Sendable {
         )
     }
 
+    /// Отправить оператору его расчёт за неделю в Telegram.
+    ///
+    /// «Сколько мне начислили» спрашивают в конце недели, и объяснять это
+    /// голосом у стойки — верный способ поспорить. Сообщение показывает то же,
+    /// что видит владелец: смены, надбавки, удержания, итог.
+    public func sendSalaryToTelegram(
+        operatorID: String,
+        weekStart: String,
+        weekEnd: String
+    ) async throws {
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/telegram/salary-snapshot",
+                method: .post,
+                body: try JSONSerialization.data(
+                    withJSONObject: [
+                        "operatorId": operatorID,
+                        "dateFrom": weekStart,
+                        "dateTo": weekEnd,
+                        "weekStart": weekStart,
+                    ]
+                )
+            )
+        )
+    }
+
     /// График смен на неделю. Требует `shifts.view` либо `dashboard.view`.
     public func schedule(weekStart: String) async throws -> ShiftSchedule {
         try await api.send(

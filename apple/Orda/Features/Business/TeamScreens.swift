@@ -398,7 +398,11 @@ struct SalaryScreen: View {
         .task { await store.loadSalary() }
         .refreshable { await store.loadSalary() }
         .sheet(item: $advanceRow) { row in
-            AdvanceSheet(row: row, weekStart: store.salary?.weekStart ?? store.salaryWeek) {
+            AdvanceSheet(
+                row: row,
+                weekStart: store.salary?.weekStart ?? store.salaryWeek,
+                weekEnd: store.salary?.weekEnd ?? store.salaryWeek
+            ) {
                 await store.loadSalary()
             }
         }

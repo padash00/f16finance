@@ -2,7 +2,7 @@
 
 Собрано `scripts/triage-mobile-actions.mjs` по каталогу прав и коду приложения. Считается «есть», если право упомянуто в Swift.
 
-Всего: **262**. На телефон просятся **26**, работа за столом — **107**, спорных — **129**.
+Всего: **260**. На телефон просятся **24**, работа за столом — **107**, спорных — **129**.
 
 ## Нужно на телефоне
 
@@ -15,7 +15,6 @@
 | Доверенные поставщики | Создание | `expense-whitelist.create` | medium |
 | Задачи | Ответить на задачу | `tasks.respond` | low |
 | Задачи | Отправить уведомление по задаче | `tasks.notify` | medium |
-| Зарплата операторов | Отправить расчёт ЗП в Telegram | `salary.send_telegram` | medium |
 | Заявки поставщикам | Создание | `store-purchase-orders.create` | medium |
 | Заявки поставщикам | Отменить заявку поставщику | `store-purchase-orders.cancel` | medium |
 | Заявки склад → витрина | Создание заявки | `store-requests.create` | medium |
@@ -23,7 +22,6 @@
 | Кассовые устройства | Создание | `point-devices.create` | medium |
 | Каталог товаров | Создание | `store-catalog.create` | medium |
 | Новости | Опубликовать пост | `news.create` | medium |
-| Поставщики | Создание | `store-suppliers.create` | medium |
 | Приёмки от поставщиков | Отмена проведённой приёмки | `store-receipts.cancel` | high |
 | Расходники | Добавить расходник | `store-consumables.create` | medium |
 | Ревизии (инвентаризация) | Создание | `store-revisions.create` | medium |

@@ -46,6 +46,8 @@ struct AdvanceSheet: View {
 
     let row: SalaryRow
     let weekStart: String
+    /// Конец недели: расчёт отправляется за период, а не за день.
+    let weekEnd: String
     var onDone: () async -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -54,6 +56,7 @@ struct AdvanceSheet: View {
     @Environment(AuthStore.self) private var auth
 
     private var canMarkDebt: Bool { auth.resolver?.can("salary.mark_debt_paid") ?? false }
+    private var canSendTelegram: Bool { auth.resolver?.can("salary.send_telegram") ?? false }
     private var canAdvance: Bool { auth.resolver?.can("salary.create_advance") ?? false }
     private var canAdjust: Bool { auth.resolver?.can("salary.create_adjustment") ?? false }
 
@@ -190,6 +193,31 @@ struct AdvanceSheet: View {
                     .fixedSize(horizontal: false, vertical: true)
                 }
 
+                // Расчёт целиком — тоже про неделю, а не про сумму в поле.
+                if canSendTelegram {
+                    Card {
+                        VStack(alignment: .leading, spacing: Spacing.md) {
+                            SectionHeader(
+                                "Расчёт за неделю",
+                                subtitle: Money.format(row.week.netAmount)
+                            )
+
+                            Button {
+                                Task { await sendPayslip() }
+                            } label: {
+                                Label("Отправить в Telegram", systemImage: "paperplane")
+                            }
+                            .buttonStyle(SecondaryButtonStyle())
+                            .disabled(isSaving)
+
+                            Text("Человек увидит то же, что и вы: смены, надбавки, удержания и итог. Объяснять голосом у стойки — верный способ поспорить.")
+                                .font(Typography.caption)
+                                .foregroundStyle(Theme.textMuted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+
                 // Долг относится к неделе целиком, а не к сумме в поле, —
                 // поэтому отдельной кнопкой, а не ещё одним видом сверху.
                 if row.week.debtAmount > 0, canMarkDebt {
@@ -294,6 +322,28 @@ struct AdvanceSheet: View {
             }
             Haptics.success()
             await onDone()
+            dismiss()
+        } catch let apiError as APIError {
+            Haptics.error()
+            error = apiError.userMessage
+        } catch {
+            Haptics.error()
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func sendPayslip() async {
+        isSaving = true
+        error = nil
+        defer { isSaving = false }
+
+        do {
+            try await BusinessService(api: api).sendSalaryToTelegram(
+                operatorID: row.operatorID,
+                weekStart: weekStart,
+                weekEnd: weekEnd
+            )
+            Haptics.success()
             dismiss()
         } catch let apiError as APIError {
             Haptics.error()

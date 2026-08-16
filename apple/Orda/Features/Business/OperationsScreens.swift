@@ -224,10 +224,14 @@ private struct RevisionLineRow: View {
 /// Поставщики: сколько закупали и сколько должны.
 struct SuppliersScreen: View {
     @Environment(BusinessStore.self) private var store
+    @Environment(\.access) private var access
 
     @State private var selected: Supplier?
     @State private var search = ""
     @State private var onlyDebtors = false
+    @State private var isAdding = false
+
+    private var canCreate: Bool { access?.can("store-suppliers.create") ?? false }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -265,7 +269,15 @@ struct SuppliersScreen: View {
         .background(Theme.background)
         .navigationTitle("Поставщики")
         .searchable(text: $search, prompt: "Название, БИН или телефон")
+        .sheet(isPresented: $isAdding) {
+            AddSupplierSheet { await store.loadSuppliers() }
+        }
         .toolbar {
+            if canCreate {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { isAdding = true } label: { Image(systemName: "plus") }
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 Toggle(isOn: $onlyDebtors) {
                     Label("Только с долгом", systemImage: "creditcard.trianglebadge.exclamationmark")
