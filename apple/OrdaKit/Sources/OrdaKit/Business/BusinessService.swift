@@ -307,6 +307,60 @@ public struct BusinessService: Sendable {
         )
     }
 
+    /// Заявка на перенос со склада на витрину.
+    ///
+    /// Товар кончается на полке — это видно, стоя у полки, а не за столом.
+    /// Заявку одобряет управляющий, и только тогда остаток уходит со склада:
+    /// сервер делает это одной операцией, иначе при обрыве связи товар
+    /// пропадал бы из обоих мест.
+    public func requestToShowcase(
+        companyID: String,
+        itemID: String,
+        quantity: Double,
+        comment: String?
+    ) async throws {
+        var item: [String: Any] = ["item_id": itemID, "requested_qty": quantity]
+        if let comment, !comment.isEmpty { item["comment"] = comment }
+
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/store/showcase",
+                method: .post,
+                body: try JSONSerialization.data(
+                    withJSONObject: [
+                        "action": "createRequest",
+                        "company_id": companyID,
+                        "items": [item],
+                    ]
+                )
+            )
+        )
+    }
+
+    /// Возврат с витрины на склад.
+    ///
+    /// Обратная дорога нужна не реже прямой: товар не пошёл, витрину
+    /// перебрали, освободили место под сезонное.
+    public func returnFromShowcase(
+        companyID: String,
+        itemID: String,
+        quantity: Double
+    ) async throws {
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/store/showcase",
+                method: .post,
+                body: try JSONSerialization.data(
+                    withJSONObject: [
+                        "action": "returnToWarehouse",
+                        "company_id": companyID,
+                        "items": [["item_id": itemID, "quantity": quantity]],
+                    ]
+                )
+            )
+        )
+    }
+
     /// График смен на неделю. Требует `shifts.view` либо `dashboard.view`.
     public func schedule(weekStart: String) async throws -> ShiftSchedule {
         try await api.send(

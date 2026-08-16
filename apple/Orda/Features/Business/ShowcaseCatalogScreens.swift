@@ -15,6 +15,15 @@ struct ShowcaseScreen: View {
     @State private var store: ShowcaseStore?
     @State private var search = ""
     @State private var onlyRefill = false
+    @Environment(\.access) private var access
+    /// Позиция, которую двигаем. Лист открывается по строке.
+    @State private var moving: ShowcaseRow?
+
+    /// Хотя бы одно направление разрешено — значит, строка нажимается.
+    private var canMove: Bool {
+        (access?.can("store-showcase.move") ?? false)
+            || (access?.can("store-showcase.return_to_warehouse") ?? false)
+    }
 
     var body: some View {
         Group {
@@ -31,6 +40,13 @@ struct ShowcaseScreen: View {
             }
         }
         .background(Theme.background)
+        .sheet(item: $moving) { row in
+            if let store, let companyID = store.companyID {
+                ShowcaseMoveSheet(row: row, companyID: companyID) {
+                    await store.load()
+                }
+            }
+        }
         .navigationTitle("Витрина")
         .searchable(text: $search, prompt: "Название товара")
         .toolbar {
@@ -83,9 +99,23 @@ struct ShowcaseScreen: View {
                     summary(page.balances)
 
                     ForEach(rows) { row in
-                        ShowcaseRowView(row: row)
-                            .padding(.horizontal, Spacing.lg)
-                            .padding(.vertical, Spacing.sm)
+                        if canMove {
+                            // Строка ведёт к движению товара: другого действия
+                            // у неё нет, прятать его за меню незачем.
+                            Button {
+                                moving = row
+                            } label: {
+                                ShowcaseRowView(row: row)
+                                    .padding(.horizontal, Spacing.lg)
+                                    .padding(.vertical, Spacing.sm)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.pressable)
+                        } else {
+                            ShowcaseRowView(row: row)
+                                .padding(.horizontal, Spacing.lg)
+                                .padding(.vertical, Spacing.sm)
+                        }
                         RowDivider().padding(.horizontal, Spacing.lg)
                     }
                 }
