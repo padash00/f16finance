@@ -55,23 +55,31 @@ import {
   Bookmark,
   CalendarRange,
 } from 'lucide-react'
-import {
-  ResponsiveContainer,
-  Line,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-  Tooltip,
-  Area,
-  ComposedChart,
-  Bar,
-  BarChart,
-  Cell,
-  PieChart as RePieChart,
-  Pie,
-} from 'recharts'
+import dynamic from 'next/dynamic'
 
 import type { Company, DateRangePreset, SessionRoleInfo } from '@/lib/core/types'
+
+/**
+ * Графики грузятся отдельно и только когда нужны: библиотека весит 382 КБ и
+ * раньше качалась до первой цифры на экране. `ssr: false` обязателен — они
+ * меряют ширину контейнера, которой на сервере нет.
+ */
+const chartFallback = (
+  <div className="h-full w-full animate-pulse rounded-xl bg-slate-100 dark:bg-gray-800/60" />
+)
+
+const ExpenseTrendChart = dynamic(() => import('./charts').then((m) => m.ExpenseTrendChart), {
+  ssr: false,
+  loading: () => chartFallback,
+})
+const ExpenseCategoryPie = dynamic(() => import('./charts').then((m) => m.ExpenseCategoryPie), {
+  ssr: false,
+  loading: () => chartFallback,
+})
+const ExpensePaymentBars = dynamic(() => import('./charts').then((m) => m.ExpensePaymentBars), {
+  ssr: false,
+  loading: () => chartFallback,
+})
 
 // ================== TYPES ==================
 type PayFilter = 'all' | 'cash' | 'kaspi'
@@ -1869,22 +1877,7 @@ function OverviewTab({ analytics, trendIcon, rows, companyName, extraCompanyId, 
           </div>
           
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={analytics.chartData}>
-                <defs>
-                  <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.4} stroke="#94a3b8" vertical={false} />
-                <XAxis dataKey="formattedDate" stroke="#6b7280" fontSize={10} tickLine={false} axisLine={false} />
-                <YAxis stroke="#6b7280" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => Formatters.money(v)} />
-                <Tooltip {...Formatters.tooltip} formatter={(val: number) => [Formatters.moneyDetailed(val), '']} />
-                <Area type="monotone" dataKey="total" stroke="#ef4444" strokeWidth={2} fillOpacity={1} fill="url(#colorExpense)" />
-                <Line type="monotone" dataKey="movingAvg" stroke="#fbbf24" strokeWidth={2} dot={false} strokeDasharray="5 5" name="Среднее (7 дней)" />
-              </ComposedChart>
-            </ResponsiveContainer>
+            <ExpenseTrendChart data={analytics.chartData} />
           </div>
         </Card>
 
@@ -1897,24 +1890,7 @@ function OverviewTab({ analytics, trendIcon, rows, companyName, extraCompanyId, 
           </div>
           
           <div className="h-48 mb-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <RePieChart>
-                <Pie
-                  data={analytics.categoryData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius="58%"
-                  outerRadius="88%"
-                  paddingAngle={2}
-                  dataKey="value"
-                >
-                  {analytics.categoryData.map((entry: any, index: number) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(val: number) => [Formatters.moneyDetailed(val), '']} contentStyle={Formatters.tooltip.contentStyle} />
-              </RePieChart>
-            </ResponsiveContainer>
+            <ExpenseCategoryPie data={analytics.categoryData} />
           </div>
 
           <div className="space-y-2 max-h-40 overflow-auto">
@@ -2070,21 +2046,12 @@ function AnalyticsTab({ analytics }: any) {
         <Card className="p-6 border-0 bg-white dark:bg-gray-800/50 backdrop-blur-sm">
           <h3 className="text-sm font-semibold text-foreground mb-4">Распределение по способам оплаты</h3>
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={[
+            <ExpensePaymentBars
+              data={[
                 { name: 'Наличные', value: analytics.cash, color: '#f59e0b' },
-                { name: cashLabels.providerName, value: analytics.kaspi, color: '#ef4444' }
-              ]}>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.4} stroke="#94a3b8" />
-                <XAxis dataKey="name" stroke="#6b7280" fontSize={10} />
-                <YAxis stroke="#6b7280" fontSize={10} tickFormatter={(v) => Formatters.money(v)} />
-                <Tooltip formatter={(v: number) => Formatters.moneyDetailed(v)} contentStyle={Formatters.tooltip.contentStyle} />
-                <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                  <Cell fill="#f59e0b" />
-                  <Cell fill="#ef4444" />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+                { name: cashLabels.providerName, value: analytics.kaspi, color: '#ef4444' },
+              ]}
+            />
           </div>
         </Card>
 
