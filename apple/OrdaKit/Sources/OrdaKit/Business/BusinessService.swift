@@ -263,6 +263,50 @@ public struct BusinessService: Sendable {
         )
     }
 
+    /// Корректировка бонусов клиента.
+    ///
+    /// Спор на кассе решается на месте: «начислите, у меня не прошло». Идти
+    /// ради этого к компьютеру — значит отпустить человека недовольным.
+    ///
+    /// `delta` со знаком: плюс начисляет, минус списывает. Ноль сервер
+    /// отвергает — это не корректировка, а опечатка.
+    public func adjustLoyaltyPoints(customerID: String, delta: Int, reason: String?) async throws {
+        var payload: [String: Any] = [
+            "action": "adjustPoints",
+            "customerId": customerID,
+            "delta": delta,
+        ]
+        if let reason, !reason.isEmpty { payload["reason"] = reason }
+
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/customers",
+                method: .post,
+                body: try JSONSerialization.data(withJSONObject: payload)
+            )
+        )
+    }
+
+    /// Включить или отключить оператора.
+    ///
+    /// Человек уволился в середине смены — доступ надо снять сразу, а не
+    /// «когда дойду до сайта». Записи и история остаются: это не удаление.
+    public func setOperatorActive(operatorID: String, isActive: Bool) async throws {
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/operators",
+                method: .post,
+                body: try JSONSerialization.data(
+                    withJSONObject: [
+                        "action": "toggleOperatorActive",
+                        "operatorId": operatorID,
+                        "is_active": isActive,
+                    ]
+                )
+            )
+        )
+    }
+
     /// График смен на неделю. Требует `shifts.view` либо `dashboard.view`.
     public func schedule(weekStart: String) async throws -> ShiftSchedule {
         try await api.send(

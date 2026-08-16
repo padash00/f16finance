@@ -619,7 +619,21 @@ struct CustomerRowView: View {
 private struct CustomerDetail: View {
     let customer: Customer
 
+    @Environment(BusinessStore.self) private var store
+    @Environment(\.access) private var access
+    @State private var adjusting = false
+
+    /// Право то же, что проверяет сервер: корректировка баллов — это деньги.
+    private var canAdjust: Bool { access?.can("customers.adjust_points") ?? false }
+
     var body: some View {
+        content
+            .sheet(isPresented: $adjusting) {
+                AdjustPointsSheet(customer: customer) { await store.loadCustomers() }
+            }
+    }
+
+    private var content: some View {
         ScreenScroll {
             VStack(spacing: Spacing.lg) {
                 Card {
@@ -644,6 +658,15 @@ private struct CustomerDetail: View {
                             }
                         }
                         Spacer()
+
+                        if canAdjust {
+                            Button {
+                                adjusting = true
+                            } label: {
+                                Label("Баллы", systemImage: "plusminus.circle")
+                            }
+                            .buttonStyle(SecondaryButtonStyle())
+                        }
                     }
                 }
 

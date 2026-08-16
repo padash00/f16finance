@@ -152,10 +152,23 @@ struct OperatorAvatar: View {
 private struct OperatorDetail: View {
     let person: TeamOperator
 
+    @Environment(BusinessStore.self) private var store
+    @Environment(\.api) private var api
+    @Environment(\.access) private var access
+
+    @State private var confirmingToggle = false
+    @State private var isToggling = false
+    @State private var toggleError: String?
+
+    /// Право то же, что проверяет сервер.
+    private var canToggle: Bool { access?.can("operators.toggle_active") ?? false }
+
     var body: some View {
         ScreenScroll {
             VStack(spacing: Spacing.lg) {
                 header
+
+                if canToggle { accessCard }
 
                 DashboardGrid {
                     MetricTile(
@@ -192,6 +205,80 @@ private struct OperatorDetail: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+    }
+
+    /// Доступ оператора.
+    ///
+    /// Человек уволился в середине смены — вход надо закрыть сразу, а не
+    /// «когда дойду до сайта». Это не удаление: смены, выручка и ведомости
+    /// остаются, иначе рассыпалась бы отчётность за прошлые недели.
+    private var accessCard: some View {
+        Card(accent: person.isActive ? nil : Theme.warning) {
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                SectionHeader(
+                    person.isActive ? "Доступ открыт" : "Доступ закрыт",
+                    subtitle: person.isActive
+                        ? "Может входить в программу точки и в приложение"
+                        : "Войти не может. Смены и выплаты сохранены"
+                )
+
+                if let toggleError {
+                    Text(toggleError)
+                        .font(Typography.caption)
+                        .foregroundStyle(Theme.negative)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Button {
+                    confirmingToggle = true
+                } label: {
+                    if isToggling {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Label(
+                            person.isActive ? "Закрыть доступ" : "Открыть доступ",
+                            systemImage: person.isActive ? "lock" : "lock.open"
+                        )
+                    }
+                }
+                .buttonStyle(person.isActive ? AnyButtonStyle(DestructiveButtonStyle()) : AnyButtonStyle(SecondaryButtonStyle()))
+                .disabled(isToggling)
+            }
+        }
+        .alert(
+            person.isActive ? "Закрыть доступ?" : "Открыть доступ?",
+            isPresented: $confirmingToggle
+        ) {
+            Button(person.isActive ? "Закрыть" : "Открыть", role: person.isActive ? .destructive : nil) {
+                Task { await toggle() }
+            }
+            Button("Отмена", role: .cancel) {}
+        } message: {
+            Text(person.isActive
+                ? "\(person.name) не сможет войти ни в программу точки, ни в приложение. Смены и выплаты останутся."
+                : "\(person.name) снова сможет входить под своим логином.")
+        }
+    }
+
+    private func toggle() async {
+        isToggling = true
+        toggleError = nil
+        defer { isToggling = false }
+
+        do {
+            try await BusinessService(api: api).setOperatorActive(
+                operatorID: person.id,
+                isActive: !person.isActive
+            )
+            Haptics.success()
+            await store.loadTeam()
+        } catch let error as APIError {
+            Haptics.error()
+            toggleError = error.userMessage
+        } catch {
+            Haptics.error()
+            toggleError = error.localizedDescription
+        }
     }
 
     private var header: some View {
