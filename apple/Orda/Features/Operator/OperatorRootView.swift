@@ -92,6 +92,12 @@ struct OperatorRootView: View {
                             }
                         }
                         .animation(Motion.transition, value: cabinet.deferredNotice)
+                        // Действие легло в очередь — счётчики и карточка смены
+                        // должны узнать об этом сразу, а не после отправки.
+                        .task(id: cabinet.deferredNotice) {
+                            guard cabinet.deferredNotice != nil else { return }
+                            await store.refreshQueuedCounts()
+                        }
                 } else {
                     LaunchView(message: "Загружаем смену…")
                 }
@@ -122,6 +128,10 @@ struct OperatorRootView: View {
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
             applyQuickAction()
+            // Связь возвращается, пока приложение свёрнуто: в подвале телефон
+            // ловит у входа. Очередь отправлялась только при запуске и по
+            // кнопке — чек мог пролежать на устройстве всю смену.
+            Task { await store?.flushQueue() }
         }
         #endif
     }

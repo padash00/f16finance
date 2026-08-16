@@ -369,6 +369,17 @@ final class OperatorStore {
         }
     }
 
+    /// Пересчитать очереди.
+    ///
+    /// Не только после отправки: действие может лечь в очередь посреди смены —
+    /// чек-лист сохранили без связи, — и до следующей отправки полоса в
+    /// профиле об этом молчала.
+    func refreshQueuedCounts() async {
+        await refreshQueueCount()
+        // Строка предупреждения на экране блокировки считается отсюда же.
+        syncLiveActivity()
+    }
+
     private func refreshQueueCount() async {
         queuedSalesCount = await queue.pendingCount
         queuedActionsCount = await outbox.pendingCount
