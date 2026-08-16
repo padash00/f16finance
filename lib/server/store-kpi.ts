@@ -177,6 +177,86 @@ export async function loadPriceIndex(
  * Свёртку считает БД (`store_kpi_shift_facts`): год работы точки — это десятки
  * тысяч строк позиций, тянуть их сюда нельзя.
  */
+/**
+ * Насколько свежим считается экзамен.
+ *
+ * Знание, подтверждённое полгода назад, о сегодняшней работе не говорит.
+ * После этого срока метрика становится пустой — не нулевой: «не проверяли» и
+ * «знает на ноль» это разные вещи, и второе утащило бы человека вниз за то,
+ * чего он не делал.
+ */
+const EXAM_FRESH_DAYS = 60
+
+type ExamResult = { on: string; score: number }
+
+/** Сданные экзамены продавцов за период плюс запас на свежесть. */
+async function loadExamScores(
+  supabase: AnyClient,
+  operatorIds: string[],
+  from: string,
+  to: string,
+): Promise<Map<string, ExamResult[]>> {
+  const out = new Map<string, ExamResult[]>()
+  if (operatorIds.length === 0) return out
+
+  const since = new Date(`${from}T00:00:00Z`)
+  since.setUTCDate(since.getUTCDate() - EXAM_FRESH_DAYS)
+
+  // Мягко: у организации может не быть экзаменов вовсе, и модуль
+  // эффективности от этого падать не должен.
+  const { data } = await supabase
+    .from('operator_exam_attempts')
+    .select('operator_id, score, completed_at, status')
+    .in('operator_id', operatorIds)
+    .eq('status', 'completed')
+    .gte('completed_at', since.toISOString())
+    .lte('completed_at', `${to}T23:59:59Z`)
+    .then((r: any) => r, () => ({ data: null }))
+
+  for (const row of (data || []) as any[]) {
+    const score = Number(row.score)
+    if (!Number.isFinite(score)) continue
+    const key = String(row.operator_id)
+    const list = out.get(key) || []
+    list.push({ on: String(row.completed_at).slice(0, 10), score })
+    out.set(key, list)
+  }
+
+  for (const list of out.values()) list.sort((a, b) => a.on.localeCompare(b.on))
+  return out
+}
+
+/**
+ * Результат последнего экзамена, сданного ДО этой смены.
+ *
+ * Именно «до»: если взять последний вообще, смена в начале месяца получила бы
+ * оценку знаний, подтверждённых через три недели после неё. Так модуль
+ * выглядел бы точнее, чем есть.
+ */
+function examScoreAt(
+  scores: Map<string, ExamResult[]>,
+  operatorId: string,
+  date: string,
+): number | null {
+  const list = scores.get(operatorId)
+  if (!list || list.length === 0) return null
+
+  let best: ExamResult | null = null
+  for (const item of list) {
+    if (item.on > date) break
+    best = item
+  }
+  if (!best) return null
+
+  const age = Math.floor(
+    (new Date(`${date}T00:00:00Z`).getTime() - new Date(`${best.on}T00:00:00Z`).getTime()) / 86_400_000,
+  )
+  if (age > EXAM_FRESH_DAYS) return null
+
+  // Балл экзамена приходит в процентах, метрика работает в долях.
+  return Math.max(0, Math.min(1, best.score / 100))
+}
+
 export async function loadShiftFacts(
   supabase: AnyClient,
   args: { companyId: string; from: string; to: string },
@@ -195,6 +275,14 @@ export async function loadShiftFacts(
   }
 
   const priceIndex = await loadPriceIndex(supabase, companyId, from, to)
+
+  // Результаты экзаменов продавцов: метрика «знание товара» берётся отсюда.
+  const examScores = await loadExamScores(
+    supabase,
+    [...new Set(factRows.map((r) => r.cashier_id).filter(Boolean))] as string[],
+    from,
+    to,
+  )
 
   // Пометки смен и деловые события: они не меняют цифры, но меняют то, как
   // эти цифры читать. Оба списка небольшие — грузим целиком за период.
@@ -242,6 +330,9 @@ export async function loadShiftFacts(
       company_id: companyId,
       shift_id: row.shift_id,
       duration_minutes: row.duration_minutes == null ? null : num(row.duration_minutes),
+      // Экзамен, сданный ДО этой смены: знание, подтверждённое позже, о работе
+      // в этот вечер ничего не говорит.
+      exam_score: row.cashier_id ? examScoreAt(examScores, row.cashier_id, row.sale_date) : null,
       opened_at: row.opened_at,
       closed_at: row.closed_at,
       date: row.sale_date,

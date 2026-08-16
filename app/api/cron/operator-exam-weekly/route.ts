@@ -30,6 +30,7 @@ import {
   operatorsOfCompanies,
 } from '@/lib/server/operator-exam-compose'
 import { sendTelegram } from '@/lib/server/telegram'
+import { buildStoreKpiReport } from '@/lib/server/store-kpi-report'
 import type { FactTopic } from '@/lib/server/exam-facts'
 
 export const runtime = 'nodejs'
@@ -54,6 +55,60 @@ function addDaysISO(iso: string, days: number): string {
   const date = new Date(`${iso}T00:00:00Z`)
   date.setUTCDate(date.getUTCDate() + days)
   return date.toISOString()
+}
+
+const METRIC_RU: Record<string, string> = {
+  avg_ticket: 'средний чек',
+  items_per_receipt: 'сколько товаров берут в один чек',
+  attach_rate: 'допродажи — что предлагать к основному товару',
+  revenue_efficiency: 'отдача с покупателя',
+  plan_attainment: 'выполнение плана смены',
+  product_knowledge: 'знание товара',
+}
+
+/**
+ * Слабые места точки за последний месяц.
+ *
+ * Берутся из модуля эффективности: метрики, где продавцы устойчиво ниже нормы.
+ * Это и есть обратная связь между модулями — экзамен спрашивает про то, что
+ * проседает, а не про то, что и так знают.
+ *
+ * Мягко: у точки может не быть магазина или данных, и еженедельный экзамен от
+ * этого срываться не должен.
+ */
+async function weakSpots(
+  supabase: any,
+  companyId: string,
+  organizationId: string,
+  today: string,
+): Promise<string[]> {
+  try {
+    const from = addDaysISO(today, -30).slice(0, 10)
+    const report = await buildStoreKpiReport(supabase, {
+      companyId,
+      organizationId,
+      from,
+      to: today,
+    })
+
+    const counts = new Map<string, number>()
+    for (const cashier of report.cashiers as any[]) {
+      for (const metric of cashier.weaknesses || []) {
+        counts.set(metric, (counts.get(metric) || 0) + 1)
+      }
+    }
+
+    // Слабое место точки, а не одного человека: билет общий, и подстраивать
+    // его под одного было бы несправедливо к остальным.
+    const threshold = Math.max(2, Math.ceil((report.cashiers.length || 1) / 2))
+    return [...counts.entries()]
+      .filter(([, n]) => n >= threshold)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([metric]) => METRIC_RU[metric] || metric)
+  } catch {
+    return []
+  }
 }
 
 export async function GET(request: Request) {
@@ -107,6 +162,10 @@ export async function GET(request: Request) {
         )
         const factTopics = configured.length > 0 ? configured : factTopicsForIndustry(company.industry)
 
+        // Чего людям на этой точке не хватало последний месяц. Экзамен должен
+        // проверять именно это, иначе он живёт отдельно от работы.
+        const focus = await weakSpots(supabase, companyId, organizationId, today)
+
         const composed = await composeExamPool({
           supabase,
           organizationId,
@@ -114,6 +173,7 @@ export async function GET(request: Request) {
           questionCount: Number(schedule.question_count) || 10,
           openCount: Number(schedule.open_count) || 0,
           factTopics,
+          focus,
         })
 
         if (!composed.ok) {

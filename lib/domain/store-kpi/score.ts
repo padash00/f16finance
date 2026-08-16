@@ -425,6 +425,14 @@ export function summarizeCashier(
  * повторяется и просели именно управляемые продавцом метрики. Это
  * рекомендация управляющему, а не наказание и не автоматическое решение.
  */
+/**
+ * Ниже какого результата экзамена стоит сесть рядом.
+ *
+ * 0.6 — не «двойка», а «половина мимо»: на таком уровне человек уже не может
+ * ответить покупателю, но это ещё не повод для выводов о нём.
+ */
+const EXAM_TRAINING_BELOW = 0.6
+
 export function trainingFlag(
   summary: CashierSummary,
   shifts: ShiftAnalysis[],
@@ -443,14 +451,32 @@ export function trainingFlag(
   const weakMetrics = controllable.filter((m) => (summary.metric_ratios[m] ?? 1) < NORMAL_BAND_LOW)
 
   // Большинство смен слабые И минимум две управляемые метрики ниже нормы.
-  const flagged = weakShifts >= Math.ceil(mine.length * 0.6) && weakMetrics.length >= 2
+  const byShifts = weakShifts >= Math.ceil(mine.length * 0.6) && weakMetrics.length >= 2
 
-  return {
-    flagged,
-    reason: flagged
-      ? `${weakShifts} из ${mine.length} последних смен ниже нормы, просели: ${weakMetrics
-          .map((m) => METRIC_LABELS[m].toLowerCase())
-          .join(', ')}`
-      : null,
+  /**
+   * Проваленный экзамен — тоже повод сесть рядом.
+   *
+   * Отдельно от смен: человек может работать ровно и при этом не знать
+   * ассортимент — по сменам это не всплывёт, а на вопрос покупателя он не
+   * ответит. Порог мягкий: одна неудачная попытка бывает у любого, речь про
+   * устойчиво низкий результат.
+   */
+  const examKnowledge = summary.metric_ratios.product_knowledge
+  const byExam = examKnowledge != null && examKnowledge < EXAM_TRAINING_BELOW
+
+  const flagged = byShifts || byExam
+
+  const reasons: string[] = []
+  if (byShifts) {
+    reasons.push(
+      `${weakShifts} из ${mine.length} последних смен ниже нормы, просели: ${weakMetrics
+        .map((m) => METRIC_LABELS[m].toLowerCase())
+        .join(', ')}`,
+    )
   }
+  if (byExam) {
+    reasons.push(`тест на знание товара сдан на ${Math.round((examKnowledge as number) * 100)}%`)
+  }
+
+  return { flagged, reason: flagged ? reasons.join('; ') : null }
 }

@@ -61,6 +61,14 @@ export async function composeExamPool(args: {
   questionCount: number
   openCount: number
   factTopics: FactTopic[]
+  /**
+   * Слабые места точки за последний месяц.
+   *
+   * Ради этого связка и затевалась: модуль эффективности говорит, чего людям
+   * не хватает, а экзамен это проверяет. Без обратной связи получились бы два
+   * независимых модуля рядом.
+   */
+  focus?: string[]
 }): Promise<ComposeResult> {
   const questionCount = Math.max(3, Math.min(20, args.questionCount))
   const openCount = Math.max(0, Math.min(5, args.openCount))
@@ -71,6 +79,7 @@ export async function composeExamPool(args: {
     organizationId: args.organizationId,
     companyIds: args.companyIds,
     questionCount: poolSize,
+    focus: args.focus,
   })
 
   // Пустой регламент — ещё не приговор: билет может состоять из вопросов по
@@ -119,6 +128,7 @@ export async function composeExamPool(args: {
           organizationId: args.organizationId,
           companyIds: args.companyIds,
           count: Math.min(openCount * 2, 8),
+          focus: args.focus,
         })
       : []
 

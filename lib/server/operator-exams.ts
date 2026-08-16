@@ -203,6 +203,14 @@ export async function generateExamQuestions(params: {
   organizationId: string
   companyIds: string[]
   questionCount: number
+  /**
+   * На что налечь в вопросах.
+   *
+   * Сюда приходят слабые места точки из модуля эффективности: если весь месяц
+   * проседали допродажи, спрашивать надо про них, а не про то, что и так
+   * знают. Это и делает экзамен продолжением работы, а не отдельным ритуалом.
+   */
+  focus?: string[]
 }): Promise<{ questions: ExamQuestion[]; error?: string }> {
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) return { questions: [], error: 'openai-not-configured' }
@@ -259,7 +267,19 @@ export async function generateExamQuestions(params: {
               { role: 'system', content: systemPrompt },
               {
                 role: 'user',
-                content: `Регламент «${article.title}»:\n\n${String(article.content || '').slice(0, 1200)}\n\nСоставь вопрос по этому регламенту.`,
+                content:
+                  `Регламент «${article.title}»:
+
+${String(article.content || '').slice(0, 1200)}
+
+Составь вопрос по этому регламенту.` +
+                  // Слабые места точки из модуля эффективности: спрашивать
+                  // надо про то, что проседает, а не про то, что и так знают.
+                  (params.focus?.length
+                    ? `
+
+Если регламент это позволяет, спроси про: ${params.focus.join(', ')}. Это слабые места точки за последний месяц. Не притягивай тему за уши — вопрос должен оставаться по регламенту.`
+                    : ''),
               },
             ],
           }),
@@ -321,6 +341,8 @@ export async function generateOpenQuestions(params: {
   organizationId: string
   companyIds: string[]
   count: number
+  /** Слабые места точки: ситуацию лучше придумать про них. */
+  focus?: string[]
 }): Promise<ExamQuestion[]> {
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey || params.count <= 0) return []
@@ -377,7 +399,17 @@ export async function generateOpenQuestions(params: {
               { role: 'system', content: systemPrompt },
               {
                 role: 'user',
-                content: `Регламент «${article.title}»:\n\n${String(article.content || '').slice(0, 1200)}\n\nПридумай ситуацию по этому регламенту.`,
+                content:
+                  `Регламент «${article.title}»:
+
+${String(article.content || '').slice(0, 1200)}
+
+Придумай ситуацию по этому регламенту.` +
+                  (params.focus?.length
+                    ? `
+
+Если регламент это позволяет, построй ситуацию вокруг: ${params.focus.join(', ')}. Это слабые места точки за последний месяц.`
+                    : ''),
               },
             ],
           }),
