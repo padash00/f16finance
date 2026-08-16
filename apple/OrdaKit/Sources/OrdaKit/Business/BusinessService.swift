@@ -170,6 +170,44 @@ public struct BusinessService: Sendable {
         return response.data
     }
 
+    /// Выдать аванс оператору.
+    ///
+    /// Аванс просят у стойки, посреди смены, — это одно из немногих денежных
+    /// действий, которое делают именно с телефона. Сервер сам заводит расход и
+    /// корректировку недели: приложению остаётся собрать форму.
+    ///
+    /// Дата выплаты и неделя — разные вещи: аванс за текущую неделю могут
+    /// выдать в понедельник следующей.
+    public func createSalaryAdvance(
+        operatorID: String,
+        companyID: String,
+        weekStart: String,
+        paymentDate: String,
+        cashAmount: Double,
+        kaspiAmount: Double,
+        comment: String?
+    ) async throws {
+        var payload: [String: Any] = [
+            "operator_id": operatorID,
+            "company_id": companyID,
+            "week_start": weekStart,
+            "payment_date": paymentDate,
+            "cash_amount": cashAmount,
+            "kaspi_amount": kaspiAmount,
+        ]
+        if let comment, !comment.isEmpty { payload["comment"] = comment }
+
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/salary",
+                method: .post,
+                body: try JSONSerialization.data(
+                    withJSONObject: ["action": "createAdvance", "payload": payload]
+                )
+            )
+        )
+    }
+
     /// График смен на неделю. Требует `shifts.view` либо `dashboard.view`.
     public func schedule(weekStart: String) async throws -> ShiftSchedule {
         try await api.send(

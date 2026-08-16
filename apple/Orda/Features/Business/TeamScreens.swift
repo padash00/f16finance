@@ -254,6 +254,13 @@ private struct OperatorDetail: View {
 struct SalaryScreen: View {
     @Environment(BusinessStore.self) private var store
     @Environment(\.surface) private var surface
+    @Environment(AuthStore.self) private var auth
+
+    /// Кому выдаём аванс. Лист открывается по строке оператора.
+    @State private var advanceRow: SalaryRow?
+
+    /// Аванс просят у стойки: без права его выдавать кнопки быть не должно.
+    private var canAdvance: Bool { auth.resolver?.can("salary.create_advance") ?? false }
 
     var body: some View {
         @Bindable var bindable = store
@@ -279,6 +286,11 @@ struct SalaryScreen: View {
         .toolbar { LogoutToolbarItem() }
         .task { await store.loadSalary() }
         .refreshable { await store.loadSalary() }
+        .sheet(item: $advanceRow) { row in
+            AdvanceSheet(row: row, weekStart: store.salary?.weekStart ?? store.salaryWeek) {
+                await store.loadSalary()
+            }
+        }
     }
 
     // ── Содержимое ───────────────────────────────────────────────────────────
@@ -339,7 +351,19 @@ struct SalaryScreen: View {
                 } else {
                     ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                         if index > 0 { RowDivider() }
-                        SalaryRowView(row: row)
+                        if canAdvance {
+                            // Строка ведёт к авансу: другого действия у неё
+                            // нет, и прятать его за меню незачем.
+                            Button {
+                                advanceRow = row
+                            } label: {
+                                SalaryRowView(row: row)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.pressable)
+                        } else {
+                            SalaryRowView(row: row)
+                        }
                     }
                 }
             }

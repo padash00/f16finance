@@ -13,6 +13,11 @@ import SwiftUI
 /// работа с текстом, её на телефоне не делают.
 struct AdminExamsScreen: View {
     @Environment(\.api) private var api
+    @Environment(AuthStore.self) private var auth
+
+    /// Права решают, что человек видит. Кнопка, которую сервер отвергнет,
+    /// хуже её отсутствия: человек считает, что сломалось приложение.
+    private var canCreate: Bool { auth.resolver?.can("operator-exams.create") ?? false }
 
     @State private var overview: AdminExamsOverview?
     @State private var loadError: APIError?
@@ -58,12 +63,14 @@ struct AdminExamsScreen: View {
         #endif
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button {
-                    assigning = true
-                } label: {
-                    Image(systemName: "plus")
+                if canCreate {
+                    Button {
+                        assigning = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .disabled(overview == nil)
                 }
-                .disabled(overview == nil)
             }
         }
         .navigationDestination(for: AdminExamRoute.self) { route in
@@ -169,6 +176,12 @@ struct AdminExamDetailScreen: View {
     let operators: [AdminExamsOverview.ExamOperator]
 
     @Environment(\.api) private var api
+    @Environment(AuthStore.self) private var auth
+
+    /// Рассылка и пересдача — то же право: и то и другое отправляет человеку
+    /// билет.
+    private var canSend: Bool { auth.resolver?.can("operator-exams.create") ?? false }
+    private var canRemind: Bool { auth.resolver?.can("operator-exams.remind") ?? false }
 
     @State private var detail: AdminExamDetail?
     @State private var loadError: APIError?
@@ -228,7 +241,7 @@ struct AdminExamDetailScreen: View {
                     subtitle: "\(exam.questionCount) вопросов, порог \(exam.passScore)%"
                 )
 
-                if !exam.isSent {
+                if !exam.isSent, canSend {
                     // Черновик существует, чтобы посмотреть вопросы до
                     // рассылки. Отозвать разосланный билет уже нельзя.
                     Button {
@@ -238,7 +251,7 @@ struct AdminExamDetailScreen: View {
                     }
                     .buttonStyle(PrimaryButtonStyle())
                     .disabled(busy)
-                } else {
+                } else if exam.isSent, canRemind {
                     Button {
                         Task { await run { try await AdminExamService(api: api).remind(examID: examID) } }
                     } label: {
@@ -279,7 +292,7 @@ struct AdminExamDetailScreen: View {
 
             // Пересдача собирает новый билет: тот же список вопросов человек
             // уже видел, и повтор проверял бы память о разборе, а не знание.
-            if attempt.isFinished, attempt.passed != true {
+            if attempt.isFinished, attempt.passed != true, canSend {
                 Button {
                     Task { await run { try await AdminExamService(api: api).retake(attemptID: attempt.id) } }
                 } label: {
