@@ -208,6 +208,61 @@ public struct BusinessService: Sendable {
         )
     }
 
+    /// Корректировка зарплаты: премия или штраф по факту смены.
+    ///
+    /// Решение о премии принимают в тот же день, когда её заслужили, — иначе
+    /// оно тонет в списке недели и до сайта не доходит.
+    ///
+    /// `kind` — `bonus` или `fine`. Сумму сервер ждёт положительной: знак
+    /// задаёт вид, а не минус в поле.
+    public func createSalaryAdjustment(
+        operatorID: String,
+        companyID: String?,
+        date: String,
+        amount: Double,
+        kind: String,
+        comment: String?
+    ) async throws {
+        var payload: [String: Any] = [
+            "operator_id": operatorID,
+            "date": date,
+            "amount": amount,
+            "kind": kind,
+        ]
+        if let companyID, !companyID.isEmpty { payload["company_id"] = companyID }
+        if let comment, !comment.isEmpty { payload["comment"] = comment }
+
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/salary",
+                method: .post,
+                body: try JSONSerialization.data(
+                    withJSONObject: ["action": "createAdjustment", "payload": payload]
+                )
+            )
+        )
+    }
+
+    /// Отметить долги оператора за неделю погашенными.
+    ///
+    /// Долг возвращают наличными у стойки, и до сайта эта запись доезжала
+    /// в лучшем случае к вечеру.
+    public func markOperatorDebtsPaid(operatorID: String, weekStart: String) async throws {
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/salary",
+                method: .post,
+                body: try JSONSerialization.data(
+                    withJSONObject: [
+                        "action": "markDebtsPaid",
+                        "operatorId": operatorID,
+                        "weekStart": weekStart,
+                    ]
+                )
+            )
+        )
+    }
+
     /// График смен на неделю. Требует `shifts.view` либо `dashboard.view`.
     public func schedule(weekStart: String) async throws -> ShiftSchedule {
         try await api.send(

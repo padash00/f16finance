@@ -259,8 +259,14 @@ struct SalaryScreen: View {
     /// Кому выдаём аванс. Лист открывается по строке оператора.
     @State private var advanceRow: SalaryRow?
 
-    /// Аванс просят у стойки: без права его выдавать кнопки быть не должно.
-    private var canAdvance: Bool { auth.resolver?.can("salary.create_advance") ?? false }
+    /// Деньги по оператору: аванс, премия, штраф, погашение долга. Строка
+    /// открывается, если разрешено хотя бы одно из них.
+    private var canAdvance: Bool {
+        guard let resolver = auth.resolver else { return false }
+        return resolver.can("salary.create_advance")
+            || resolver.can("salary.create_adjustment")
+            || resolver.can("salary.mark_debt_paid")
+    }
 
     var body: some View {
         @Bindable var bindable = store
