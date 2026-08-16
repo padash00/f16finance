@@ -8,9 +8,41 @@ import Foundation
 /// остатки везде одни и те же.
 public struct OperatorService: Sendable {
     private let api: APIClient
+    /// Очередь отложенных действий. Без неё сервис работает как раньше —
+    /// нужен, чтобы превью и тесты не тащили за собой файл на диске.
+    private let outbox: ActionOutbox?
 
-    public init(api: APIClient) {
+    public init(api: APIClient, outbox: ActionOutbox? = nil) {
         self.api = api
+        self.outbox = outbox
+    }
+
+    /// Выполнить идемпотентное действие: сразу или отложив до появления сети.
+    ///
+    /// Возвращает `true`, если ушло на сервер. `false` — легло в очередь, и
+    /// экран обязан сказать об этом словами: молчаливое «сделано» при
+    /// оборванной связи хуже честной ошибки.
+    @discardableResult
+    private func deferrable(
+        path: String,
+        method: HTTPMethod,
+        body: Data,
+        title: String,
+        mergeKey: String
+    ) async throws -> Bool {
+        guard let outbox else {
+            _ = try await api.send(APIRequest(path: path, method: method, body: body))
+            return true
+        }
+        return try await outbox.perform(
+            ActionOutbox.Item(
+                path: path,
+                method: method.rawValue,
+                body: body,
+                title: title,
+                mergeKey: mergeKey
+            )
+        )
     }
 
     // ── Смена ────────────────────────────────────────────────────────────────
@@ -146,15 +178,18 @@ public struct OperatorService: Sendable {
     /// сам и заодно пишет комментарий в историю задачи — чтобы потом было
     /// видно, кто и когда что сказал. Приложение слало «updateStatus», и
     /// сервер честно отвечал «Неизвестное действие».
-    public func respondToTask(id: String, response: TaskResponse, note: String? = nil) async throws {
+    @discardableResult
+    public func respondToTask(id: String, response: TaskResponse, note: String? = nil) async throws -> Bool {
         var body: [String: Any] = ["action": "respondTask", "taskId": id, "response": response.rawValue]
         if let note, !note.isEmpty { body["note"] = note }
-        _ = try await api.send(
-            APIRequest(
-                path: "/api/operator/tasks",
-                method: .post,
-                body: try JSONSerialization.data(withJSONObject: body)
-            )
+        // Ответ на задачу — установка статуса: повтор приводит к тому же
+        // результату, поэтому его можно отложить до сети.
+        return try await deferrable(
+            path: "/api/operator/tasks",
+            method: .post,
+            body: try JSONSerialization.data(withJSONObject: body),
+            title: "Ответ на задачу",
+            mergeKey: "task:\(id)"
         )
     }
 
@@ -206,14 +241,15 @@ public struct OperatorService: Sendable {
 
     /// Подтвердить прочтение статьи. Версию передаём обязательно: подтверждение
     /// привязано к версии, иначе правка текста осталась бы незамеченной.
-    public func confirmArticle(id: String, version: Int) async throws {
+    @discardableResult
+    public func confirmArticle(id: String, version: Int) async throws -> Bool {
         let body: [String: Any] = ["article_id": id, "version": version]
-        _ = try await api.send(
-            APIRequest(
-                path: "/api/operator/knowledge/confirm",
-                method: .post,
-                body: try JSONSerialization.data(withJSONObject: body)
-            )
+        return try await deferrable(
+            path: "/api/operator/knowledge/confirm",
+            method: .post,
+            body: try JSONSerialization.data(withJSONObject: body),
+            title: "Подтверждение прочтения",
+            mergeKey: "knowledge:\(id):\(version)"
         )
     }
 
@@ -231,14 +267,18 @@ public struct OperatorService: Sendable {
 
     /// Сохранить ответы. Отправляем целиком, а не по одному: так прогресс
     /// переживает выход из приложения посреди чек-листа.
-    public func saveChecklistAnswers(runID: String, answers: [ChecklistAnswer]) async throws {
+    @discardableResult
+    public func saveChecklistAnswers(runID: String, answers: [ChecklistAnswer]) async throws -> Bool {
         let body: [String: Any] = ["answers": answers.map { $0.requestPayload() }]
-        _ = try await api.send(
-            APIRequest(
-                path: "/api/operator/checklist/run/\(runID)",
-                method: .patch,
-                body: try JSONSerialization.data(withJSONObject: body)
-            )
+        // Ответы шлём целиком, поэтому повтор просто перезаписывает их теми
+        // же значениями. По этой же причине в очереди хватает одной записи на
+        // запуск — новая заменяет прежнюю.
+        return try await deferrable(
+            path: "/api/operator/checklist/run/\(runID)",
+            method: .patch,
+            body: try JSONSerialization.data(withJSONObject: body),
+            title: "Ответы чек-листа",
+            mergeKey: "checklist:\(runID)"
         )
     }
 

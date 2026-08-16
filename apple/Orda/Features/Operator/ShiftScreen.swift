@@ -345,8 +345,13 @@ struct OpenShiftSheet: View {
             let failure = await store.openShift(openingCash: cash, kind: kind)
             isSubmitting = false
             if let failure {
+                // Открытие и закрытие смены отзываются в руке: за стойкой на
+                // экран смотрят мельком, и «получилось или нет» человек должен
+                // понимать, не вчитываясь.
+                Haptics.error()
                 error = failure
             } else {
+                Haptics.success()
                 dismiss()
             }
         }
@@ -597,8 +602,10 @@ struct CloseShiftSheet: View {
             )
             isSubmitting = false
             if let failure {
+                Haptics.error()
                 error = failure
             } else {
+                Haptics.success()
                 dismiss()
             }
         }

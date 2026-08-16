@@ -19,6 +19,7 @@ struct OperatorRootView: View {
     @State private var store: OperatorStore?
     @State private var cabinet: CabinetStore?
     @State private var selection: OperatorSection? = .shift
+    @Environment(\.scenePhase) private var scenePhase
 
     /// Разделы операторского контура.
     enum OperatorSection: String, CaseIterable, Identifiable, Hashable {
@@ -77,6 +78,20 @@ struct OperatorRootView: View {
                     layout(surface: surface)
                         .environment(store)
                         .environment(cabinet)
+                        // Отложенное действие обязано сказать о себе. Иначе
+                        // человек уходит со смены уверенным, что чек-лист
+                        // засчитан, а он лежит на устройстве.
+                        .overlay(alignment: .bottom) {
+                            if let notice = cabinet.deferredNotice {
+                                DeferredNoticeBanner(text: notice) {
+                                    cabinet.deferredNotice = nil
+                                }
+                                .padding(.horizontal, Spacing.md)
+                                .padding(.bottom, Spacing.xxl * 2)
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                            }
+                        }
+                        .animation(Motion.transition, value: cabinet.deferredNotice)
                 } else {
                     LaunchView(message: "Загружаем смену…")
                 }
@@ -84,8 +99,11 @@ struct OperatorRootView: View {
         }
         .task {
             guard store == nil else { return }
-            let operatorStore = OperatorStore(api: api)
-            let cabinetStore = CabinetStore(api: api)
+            // Очередь отложенных действий одна на оба стора: файл на диске
+            // общий, и две очереди поверх него затирали бы друг друга.
+            let outbox = ActionOutbox(api: api)
+            let operatorStore = OperatorStore(api: api, outbox: outbox)
+            let cabinetStore = CabinetStore(api: api, outbox: outbox)
             store = operatorStore
             cabinet = cabinetStore
 
@@ -94,8 +112,35 @@ struct OperatorRootView: View {
             _ = await (shift, overview)
 
             await cabinetStore.loadKnowledge()
+
+            #if os(iOS)
+            QuickActions.refreshForOperator()
+            applyQuickAction()
+            #endif
+        }
+        #if os(iOS)
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            applyQuickAction()
+        }
+        #endif
+    }
+
+    #if os(iOS)
+    /// Открыть раздел, выбранный в меню иконки.
+    ///
+    /// Долгое нажатие на иконку — единственный способ попасть в кассу одним
+    /// касанием: за стойкой очередь, и три перехода до «Продажи» человек
+    /// проходит по сорок раз за смену.
+    private func applyQuickAction() {
+        guard let kind = QuickActions.takeOperator() else { return }
+        switch kind {
+        case .shift: selection = .shift
+        case .sale: selection = .sale
+        case .audit: selection = .audit
         }
     }
+    #endif
 
     @ViewBuilder
     private func layout(surface: Surface) -> some View {
@@ -109,11 +154,12 @@ struct OperatorRootView: View {
     // ── iPhone ───────────────────────────────────────────────────────────────
 
     private var phoneTabs: some View {
-        TabView {
+        TabView(selection: $selection) {
             ForEach(OperatorSection.phoneTabs) { section in
                 NavigationStack { screen(for: section) }
                     .tabItem { Label(section.title, systemImage: section.icon) }
                     .badge(badge(for: section))
+                    .tag(Optional(section))
             }
         }
         .tint(Theme.accent(for: .operator))
@@ -202,6 +248,40 @@ struct OperatorRootView: View {
         case .profile: (cabinet?.pendingArticles.count ?? 0) + (cabinet?.unreadMessages ?? 0)
         case .checklists: store?.blockingChecklists.count ?? 0
         default: 0
+        }
+    }
+}
+
+/// Полоса «сохранено на устройстве».
+///
+/// Не алерт: действие уже сделано, прерывать работу нечем. Показывается внизу
+/// и уходит сама через несколько секунд — как уведомление о сохранении, а не
+/// как ошибка.
+private struct DeferredNoticeBanner: View {
+    let text: String
+    var onDismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: Spacing.sm) {
+            Image(systemName: "arrow.triangle.2.circlepath")
+                .foregroundStyle(Theme.warning)
+            Text(text)
+                .font(Typography.caption)
+                .foregroundStyle(Theme.text)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: Spacing.xs)
+        }
+        .padding(Spacing.md)
+        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+                .strokeBorder(Theme.warning.opacity(0.35), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.25), radius: 18, y: 8)
+        .onTapGesture(perform: onDismiss)
+        .task {
+            try? await Task.sleep(for: .seconds(6))
+            onDismiss()
         }
     }
 }

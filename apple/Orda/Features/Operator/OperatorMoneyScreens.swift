@@ -400,17 +400,32 @@ struct OperatorProfileScreen: View {
                 }
                 .task { await cabinet.refreshUnreadMessages() }
 
-                if store.queuedSalesCount > 0 {
+                if store.queuedSalesCount > 0 || store.queuedActionsCount > 0 {
                     Card(accent: Theme.warning) {
                         VStack(alignment: .leading, spacing: Spacing.md) {
-                            Label(
-                                "\(store.queuedSalesCount) \(pluralize(store.queuedSalesCount, "неотправленный чек", "неотправленных чека", "неотправленных чеков"))",
-                                systemImage: "arrow.triangle.2.circlepath"
-                            )
-                            .font(Typography.callout.weight(.semibold))
-                            .foregroundStyle(Theme.warning)
+                            if store.queuedSalesCount > 0 {
+                                Label(
+                                    "\(store.queuedSalesCount) \(pluralize(store.queuedSalesCount, "неотправленный чек", "неотправленных чека", "неотправленных чеков"))",
+                                    systemImage: "arrow.triangle.2.circlepath"
+                                )
+                                .font(Typography.callout.weight(.semibold))
+                                .foregroundStyle(Theme.warning)
+                            }
 
-                            Text("Чеки сохранены на устройстве и уйдут при связи. Не удаляйте приложение.")
+                            // Чек-листы и подтверждения считаем отдельно от
+                            // чеков: там деньги, здесь работа смены, и «три
+                            // чека и два действия» человеку понятнее, чем
+                            // общее «пять».
+                            if store.queuedActionsCount > 0 {
+                                Label(
+                                    "\(store.queuedActionsCount) \(pluralize(store.queuedActionsCount, "действие ждёт", "действия ждут", "действий ждут")) отправки",
+                                    systemImage: "checklist"
+                                )
+                                .font(Typography.callout.weight(.semibold))
+                                .foregroundStyle(Theme.warning)
+                            }
+
+                            Text("Всё сохранено на устройстве и уйдёт при связи. Не удаляйте приложение.")
                                 .font(Typography.caption)
                                 .foregroundStyle(Theme.textMuted)
 

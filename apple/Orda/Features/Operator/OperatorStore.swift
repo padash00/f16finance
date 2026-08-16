@@ -55,10 +55,16 @@ final class OperatorStore {
 
     private let service: OperatorService
     private let queue: SaleQueue
+    private let outbox: ActionOutbox
 
-    init(api: APIClient) {
-        let service = OperatorService(api: api)
+    /// Сколько действий смены ждёт сети: чек-листы, подтверждения регламентов,
+    /// ответы на задачи. Отдельно от чеков — у них своя очередь и свои деньги.
+    private(set) var queuedActionsCount = 0
+
+    init(api: APIClient, outbox: ActionOutbox) {
+        let service = OperatorService(api: api, outbox: outbox)
         self.service = service
+        self.outbox = outbox
         self.queue = SaleQueue(service: service)
     }
 
@@ -66,6 +72,7 @@ final class OperatorStore {
 
     func bootstrap() async {
         await queue.load()
+        await outbox.load()
         await refreshQueueCount()
         await loadShift()
         // Накопленные офлайн-чеки уходят при первой же возможности — деньги
@@ -305,13 +312,17 @@ final class OperatorStore {
 
     func flushQueue() async {
         let result = await queue.flush()
+        // Отложенные действия уходят вместе с чеками: связь появилась —
+        // отправляем всё, что накопилось, а не только деньги.
+        let actions = await outbox.flush()
         await refreshQueueCount()
-        if result.sent > 0 {
+        if result.sent > 0 || actions.sent > 0 {
             await loadShift()
         }
     }
 
     private func refreshQueueCount() async {
         queuedSalesCount = await queue.pendingCount
+        queuedActionsCount = await outbox.pendingCount
     }
 }

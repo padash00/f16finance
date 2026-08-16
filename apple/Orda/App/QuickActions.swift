@@ -63,7 +63,59 @@ enum QuickActions {
     }
 
     @MainActor static func handle(_ item: UIApplicationShortcutItem) {
+        // Два контура, два набора: какой именно пришёл, видно по префиксу.
+        if let operatorKind = OperatorKind(rawValue: item.type) {
+            pendingOperator = operatorKind
+            return
+        }
         pending = Kind(rawValue: item.type)
+    }
+
+    /// Быстрые действия оператора.
+    ///
+    /// У оператора прав в админском смысле нет — у него пять вкладок и смена.
+    /// Поэтому список фиксированный: то, ради чего он вообще достаёт телефон
+    /// за стойкой.
+    enum OperatorKind: String, CaseIterable {
+        case shift = "orda.operator.shift"
+        case sale = "orda.operator.sale"
+        case audit = "orda.operator.audit"
+
+        var title: String {
+            switch self {
+            case .shift: "Смена"
+            case .sale: "Продажа"
+            case .audit: "Ревизия"
+            }
+        }
+
+        var icon: UIApplicationShortcutIcon {
+            switch self {
+            case .shift: UIApplicationShortcutIcon(systemImageName: "clock")
+            case .sale: UIApplicationShortcutIcon(systemImageName: "cart")
+            case .audit: UIApplicationShortcutIcon(systemImageName: "list.clipboard")
+            }
+        }
+    }
+
+    @MainActor private(set) static var pendingOperator: OperatorKind?
+
+    @MainActor static func takeOperator() -> OperatorKind? {
+        defer { pendingOperator = nil }
+        return pendingOperator
+    }
+
+    /// Собрать меню оператора.
+    @MainActor static func refreshForOperator() {
+        UIApplication.shared.shortcutItems = OperatorKind.allCases.map { kind in
+            UIApplicationShortcutItem(
+                type: kind.rawValue,
+                localizedTitle: kind.title,
+                localizedSubtitle: nil,
+                icon: kind.icon,
+                userInfo: nil
+            )
+        }
     }
 
     /// Пересобрать меню под текущие права.

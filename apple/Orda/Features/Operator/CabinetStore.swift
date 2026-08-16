@@ -66,12 +66,21 @@ final class CabinetStore {
 
     private(set) var error: String?
 
+    /// Действие легло в очередь вместо отправки.
+    ///
+    /// Молчаливое «сделано» при оборванной связи хуже честной ошибки: человек
+    /// уходит со смены уверенным, что чек-лист засчитан. Поэтому очередь
+    /// говорит о себе вслух.
+    var deferredNotice: String?
+
+    private static let offlineNotice = "Связи нет — сохранено на устройстве и уйдёт само, как появится сеть."
+
     private let service: OperatorService
     private let feed: FeedService
     private let exams: ExamService
 
-    init(api: APIClient) {
-        self.service = OperatorService(api: api)
+    init(api: APIClient, outbox: ActionOutbox) {
+        self.service = OperatorService(api: api, outbox: outbox)
         self.feed = FeedService(api: api)
         self.exams = ExamService(api: api)
     }
@@ -153,7 +162,8 @@ final class CabinetStore {
     /// без них единственным способом сказать «не получится» был звонок.
     func respondToTask(_ task: OperatorTask, response: TaskResponse, note: String? = nil) async -> String? {
         do {
-            try await service.respondToTask(id: task.id, response: response, note: note)
+            let sent = try await service.respondToTask(id: task.id, response: response, note: note)
+            deferredNotice = sent ? nil : Self.offlineNotice
             await loadTasks()
             await loadOverview()
             return nil
@@ -170,7 +180,8 @@ final class CabinetStore {
 
     func confirmArticle(_ article: KnowledgeArticle) async -> String? {
         do {
-            try await service.confirmArticle(id: article.id, version: article.version)
+            let sent = try await service.confirmArticle(id: article.id, version: article.version)
+            deferredNotice = sent ? nil : Self.offlineNotice
             await loadKnowledge()
             return nil
         } catch let apiError as APIError {
@@ -195,7 +206,8 @@ final class CabinetStore {
 
     func saveChecklist(runID: String, answers: [ChecklistAnswer]) async -> String? {
         do {
-            try await service.saveChecklistAnswers(runID: runID, answers: answers)
+            let sent = try await service.saveChecklistAnswers(runID: runID, answers: answers)
+            deferredNotice = sent ? nil : Self.offlineNotice
             return nil
         } catch let apiError as APIError {
             return apiError.operatorMessage
