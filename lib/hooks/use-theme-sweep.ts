@@ -66,7 +66,7 @@ export function useThemeSweep() {
       // <html>, а вместе с ним — снимок старой темы с маской поверх всей
       // страницы. Это выглядит как поломка портала, поэтому чистим по таймеру
       // в любом случае.
-      const guard = window.setTimeout(cleanup, 2000)
+      const guard = window.setTimeout(cleanup, 3500)
 
       transition.finished
         .catch(() => {

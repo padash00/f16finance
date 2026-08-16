@@ -319,47 +319,61 @@
    Где View Transitions нет (Safari до 18, Firefox), тема переключается
    мгновенно: эффекта нет, функция есть. */
 
-/* Новая тема проступает кругом от кнопки, по которой нажали. Анимируется
-   clip-path — он интерполируется всегда. Маски в кейфреймах не анимируются:
-   на них переход застревал на нулевом кадре, и зерно оставалось поверх
-   страницы насовсем. */
+/* Новая тема лежит неподвижно снизу: её открывает не движение, а осыпание
+   старой. Так переход читается как «эта тема рассыпалась», а не «поверх
+   наехала другая». */
 html.theme-sweep::view-transition-new(root) {
-  z-index: 2;
-  animation: orda-theme-reveal 0.7s cubic-bezier(0.32, 0, 0.24, 1) both;
-}
-
-/* Старая тема рассыпается под ней: зерно даёт статичная маска, а уносит её
-   размытие с прозрачностью. */
-html.theme-sweep::view-transition-old(root) {
   z-index: 1;
-  animation: orda-theme-dust 0.7s ease-out both;
-  mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='7'/><feColorMatrix type='matrix' values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1 0 0 0 -0.28'/></filter><rect width='220' height='220' filter='url(%23n)'/></svg>");
-  mask-size: 220px 220px;
-  mask-repeat: repeat;
-  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='7'/><feColorMatrix type='matrix' values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1 0 0 0 -0.28'/></filter><rect width='220' height='220' filter='url(%23n)'/></svg>");
-  -webkit-mask-size: 220px 220px;
-  -webkit-mask-repeat: repeat;
+  animation: none;
 }
 
-@keyframes orda-theme-reveal {
-  from {
-    clip-path: circle(0% at var(--sweep-x, 100%) var(--sweep-y, 0%));
-  }
-  to {
-    clip-path: circle(150% at var(--sweep-x, 100%) var(--sweep-y, 0%));
-  }
+/* Старая тема осыпается от правого верхнего угла — оттуда, где кнопка.
+
+   Как это анимируется. `mask-image` браузер не интерполирует, поэтому маска
+   статична, а движется её ПОЗИЦИЯ — это свойство анимируется. Маска из двух
+   слоёв: зерно даёт крупинки, диагональная полоса — фронт осыпания. Полоса
+   втрое больше экрана и проезжает по нему из угла в угол.
+
+   Медленно намеренно: на 0.4 с это читается как моргание, а не как распад. */
+html.theme-sweep::view-transition-old(root) {
+  z-index: 2;
+  animation: orda-theme-dust 1.5s cubic-bezier(0.45, 0, 0.35, 1) both;
+
+  mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' seed='11'/><feColorMatrix type='matrix' values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1 0 0 0 -0.30'/></filter><rect width='200' height='200' filter='url(%23n)'/></svg>"), linear-gradient(to bottom left, transparent 0%, transparent 26%, rgba(0,0,0,0.15) 33%, rgba(0,0,0,0.45) 39%, rgba(0,0,0,0.75) 45%, #000 54%, #000 100%);
+  mask-size: 200px 200px, 300% 300%;
+  mask-repeat: repeat, no-repeat;
+  mask-composite: intersect;
+
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' seed='11'/><feColorMatrix type='matrix' values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1 0 0 0 -0.30'/></filter><rect width='200' height='200' filter='url(%23n)'/></svg>"), linear-gradient(to bottom left, transparent 0%, transparent 26%, rgba(0,0,0,0.15) 33%, rgba(0,0,0,0.45) 39%, rgba(0,0,0,0.75) 45%, #000 54%, #000 100%);
+  -webkit-mask-size: 200px 200px, 300% 300%;
+  -webkit-mask-repeat: repeat, no-repeat;
+  -webkit-mask-composite: source-in;
 }
 
 @keyframes orda-theme-dust {
-  from {
+  0% {
+    /* Полоса стоит так, что экран целиком в её плотной части: ничего ещё не
+       осыпалось. */
+    mask-position: 0 0, 0% 100%;
+    -webkit-mask-position: 0 0, 0% 100%;
     filter: blur(0);
     opacity: 1;
-    transform: scale(1);
+    transform: translate3d(0, 0, 0);
   }
-  to {
-    filter: blur(5px);
+  55% {
+    /* Крупинки уносит вправо-вверх, к тому же углу. */
+    mask-position: 26px -22px, 55% 45%;
+    -webkit-mask-position: 26px -22px, 55% 45%;
+    filter: blur(1.4px);
+    opacity: 0.92;
+    transform: translate3d(6px, -5px, 0);
+  }
+  100% {
+    mask-position: 60px -52px, 100% 0%;
+    -webkit-mask-position: 60px -52px, 100% 0%;
+    filter: blur(4px);
     opacity: 0;
-    transform: scale(1.03);
+    transform: translate3d(14px, -12px, 0);
   }
 }
 
