@@ -425,6 +425,14 @@ struct BusinessSectionsScreen: View {
 
     @Environment(AuthStore.self) private var auth
 
+    /// Поиск по разделам и действиям.
+    ///
+    /// Разделов под восемьдесят, и человек помнит не название страницы, а что
+    /// хочет сделать: «списать», «пересчитать», «начислить». Поэтому ищем и по
+    /// названиям разделов, и по названиям действий внутри них — «списание»
+    /// приводит на склад, хотя такого раздела нет.
+    @State private var query = ""
+
     /// Группы считаются один раз на построение экрана.
     ///
     /// `nativeGroups()` перебирает весь каталог — 82 страницы, — а вызывался он
@@ -434,12 +442,63 @@ struct BusinessSectionsScreen: View {
         resolver.nativeGroups()
     }
 
+    /// Разделы, подходящие под запрос, с подсказкой — чем именно подошли.
+    private func matches(in groups: [(group: CapabilityGroup, pages: [CapabilityPage])]) -> [(page: CapabilityPage, hint: String?)] {
+        let needle = query.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !needle.isEmpty else { return [] }
+
+        var found: [(page: CapabilityPage, hint: String?)] = []
+        for (_, pages) in groups {
+            for page in pages {
+                if page.label.lowercased().contains(needle) {
+                    found.append((page, nil))
+                    continue
+                }
+                // Нашлось не название раздела, а действие внутри — покажем
+                // какое: иначе непонятно, почему «Склад» в ответ на «списать».
+                let action = resolver.availableActions(on: page)
+                    .first { $0.label.lowercased().contains(needle) }
+                if let action {
+                    found.append((page, action.label))
+                }
+            }
+        }
+        return found
+    }
+
     var body: some View {
         let groups = groups
         return ScrollView {
             // Лениво: разделов бывает под восемьдесят, и строить их все разом
             // ради первого экрана незачем.
             LazyVStack(spacing: Spacing.lg) {
+                if !query.trimmingCharacters(in: .whitespaces).isEmpty {
+                    let found = matches(in: groups)
+                    if found.isEmpty {
+                        EmptyStateView(
+                            icon: "magnifyingglass",
+                            title: "Ничего не нашлось",
+                            message: "Поиск идёт по разделам и действиям внутри них — и только по тем, что вам открыты."
+                        )
+                    } else {
+                        Card {
+                            VStack(spacing: Spacing.sm) {
+                                ForEach(Array(found.enumerated()), id: \.element.page.id) { index, item in
+                                    if index > 0 { RowDivider() }
+                                    NavigationLink(value: SectionRoute(pageID: item.page.id)) {
+                                        NavigationRow(
+                                            icon: BusinessRootView.icon(forPage: item.page.id),
+                                            iconColor: Theme.brand,
+                                            title: item.page.label,
+                                            subtitle: item.hint
+                                        )
+                                    }
+                                    .buttonStyle(.pressable)
+                                }
+                            }
+                        }
+                    }
+                } else {
                 ForEach(groups, id: \.group.id) { group, pages in
                     Card {
                         VStack(spacing: Spacing.sm) {
@@ -487,6 +546,7 @@ struct BusinessSectionsScreen: View {
                         message: "Доступ пока не выдали. Потяните вниз — список обновится, когда его выдадут."
                     )
                 }
+                }
             }
             .padding(Spacing.lg)
             .frame(maxWidth: 720)
@@ -503,6 +563,7 @@ struct BusinessSectionsScreen: View {
             NativePage.screen(pageID: route.pageID)
         }
         .navigationTitle("Разделы")
+        .searchable(text: $query, prompt: "Раздел или действие")
         .toolbar { LogoutToolbarItem() }
         // Права выдают на сайте, пока человек ждёт с телефоном в руках.
         // Потянуть список — самый очевидный способ спросить «ну что, дали?».

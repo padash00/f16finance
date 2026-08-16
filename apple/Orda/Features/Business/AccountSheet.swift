@@ -27,6 +27,7 @@ struct AccountSheet: View {
                     identityCard
                     MyContactsCard()
                     AppearancePicker()
+                    LargeTypeToggle()
                     BiometricLockToggle()
                     quickEntryCard
                     logoutButton
@@ -413,6 +414,42 @@ struct AppearancePicker: View {
             }
         }
     }
+}
+
+/// Крупный шрифт за стойкой.
+///
+/// Кассир смотрит на телефон мельком, между покупателем и терминалом, часто с
+/// вытянутой руки. Системный размер текста при этом трогать не хочется: тем же
+/// телефоном человек пользуется и вне смены.
+///
+/// Не фиксированный размер, а нижняя граница: если в системе выставлен ещё
+/// более крупный шрифт, он и останется — иначе настройка доступности молча
+/// отменялась бы.
+struct LargeTypeToggle: View {
+    @AppStorage(LargeType.storageKey) private var isEnabled = false
+
+    var body: some View {
+        Card {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                Toggle(isOn: $isEnabled) {
+                    Label("Крупный шрифт", systemImage: "textformat.size")
+                        .font(Typography.callout.weight(.medium))
+                }
+                .tint(Theme.brand)
+
+                Text("Цифры и подписи крупнее — чтобы видеть их с вытянутой руки. Системный размер текста не меняется.")
+                    .font(Typography.caption)
+                    .foregroundStyle(Theme.textDim)
+            }
+        }
+    }
+}
+
+/// Настройка крупного шрифта. Живёт на устройстве: это настройка глаз, а не
+/// учётной записи — на планшете у стойки и на личном телефоне удобно
+/// по-разному.
+enum LargeType {
+    static let storageKey = "orda.type.large"
 }
 
 /// Замок по биометрии.
