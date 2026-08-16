@@ -26,9 +26,13 @@ export async function GET(request: Request) {
   const ctx = await requireOperator(request)
   if ('response' in ctx) return ctx.response
 
-  const { supabase, companyId, staffId, operatorId } = ctx
+  const { supabase, companyId, companyIds, staffId, operatorId } = ctx
 
-  const { data: shift, error } = await supabase
+  // Смотрим все точки, куда оператор назначен, а не только основную.
+  // У человека, приписанного к двум точкам, основной считается первая, и
+  // раньше приложение показывало смену соседней точки — чужую по смыслу,
+  // хотя своя в это время была открыта рядом.
+  const { data: openShifts, error } = await supabase
     .from('point_shifts')
     .select(
       `id, company_id, organization_id, operator_id, point_device_id,
@@ -36,13 +40,49 @@ export async function GET(request: Request) {
        opening_cash, opening_notes, handover_from_shift_id,
        operator:staff!operator_id ( id, full_name, short_name )`,
     )
-    .eq('company_id', companyId)
+    .in('company_id', companyIds.length ? companyIds : [companyId])
     .eq('status', 'open')
-    .maybeSingle()
+    .order('opened_at', { ascending: false })
 
   if (error) {
     return json({ error: 'point-shift-current-failed', detail: (error as any).message }, 500)
   }
+
+  const openRows = (openShifts || []) as any[]
+  const ownedByStaff = staffId
+    ? openRows.find((row) => String(row.operator_id || '') === String(staffId))
+    : undefined
+
+  // Смена без владельца — след старой ошибки: оператор без связки со
+  // staff открывал смену, и она записывалась ничьей. Хозяина в таком случае
+  // восстанавливаем по журналу: кто открывал, тот и на смене.
+  let ownerlessMine: any | undefined
+  if (!ownedByStaff) {
+    const ownerless = openRows.filter((row) => !row.operator_id)
+    if (ownerless.length > 0) {
+      const { data: openEvents } = await supabase
+        .from('audit_log')
+        .select('entity_id, payload')
+        .eq('action', 'point_shift.open')
+        .in(
+          'entity_id',
+          ownerless.map((row) => row.id),
+        )
+      const minePerAudit = new Set(
+        ((openEvents || []) as any[])
+          .filter((row) => String(row?.payload?.operator_id || '') === String(operatorId))
+          .map((row) => String(row.entity_id)),
+      )
+      ownerlessMine = ownerless.find((row) => minePerAudit.has(String(row.id)))
+    }
+  }
+
+  const shift =
+    ownedByStaff ||
+    ownerlessMine ||
+    openRows.find((row) => String(row.company_id) === String(companyId)) ||
+    openRows[0] ||
+    null
 
   if (!shift) {
     return json({ shift: null })
@@ -138,6 +178,7 @@ export async function GET(request: Request) {
   // ним стоит тот, кто смену открыл.
   const shiftOperatorId = String((shift as any).operator_id || '')
   const isMine =
+    shift === ownerlessMine ||
     (!!staffId && shiftOperatorId === String(staffId)) ||
     (!!operatorId && shiftOperatorId === String(operatorId))
 

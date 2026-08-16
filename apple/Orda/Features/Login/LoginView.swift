@@ -14,6 +14,12 @@ struct LoginView: View {
     @State private var login = ""
     @State private var password = ""
     @State private var appeared = false
+    /// Показывать пароль открытым.
+    ///
+    /// Без этого набранный вслепую пароль проверить нечем: рабочие пароли
+    /// выдаёт владелец, они длинные и случайные, и человек за стойкой три раза
+    /// подряд получает «неверный пароль», не понимая, где промахнулся.
+    @State private var revealPassword = false
     @FocusState private var focusedField: Field?
 
     private enum Field { case login, password }
@@ -118,6 +124,14 @@ struct LoginView: View {
         .onAppear {
             withAnimation(Motion.appear.delay(0.1)) { appeared = true }
         }
+        // Лицо спрашиваем сразу, как в банке: человек открыл приложение, а не
+        // пришёл нажимать кнопку «войти по Face ID». Отказался — экран остаётся
+        // обычным, кнопка на месте, повторно система не пристаёт.
+        .task {
+            guard auth.shouldOfferQuickEntry else { return }
+            try? await Task.sleep(for: .milliseconds(350))
+            await auth.offerQuickEntryIfPossible()
+        }
         .animation(Motion.value, value: auth.signInError)
     }
 
@@ -168,11 +182,36 @@ struct LoginView: View {
             Image(systemName: "lock")
                 .foregroundStyle(focusedField == .password ? Theme.brand : Theme.textDim)
                 .frame(width: 20)
-            SecureField("Пароль", text: $password)
-                .textFieldStyle(.plain)
-                .textContentType(.password)
-                .focused($focusedField, equals: .password)
-                .onSubmit(submit)
+
+            // Два поля, а не одно с переключателем: SecureField и TextField —
+            // разные виды, и подмена типа на лету стирает набранное.
+            Group {
+                if revealPassword {
+                    TextField("Пароль", text: $password)
+                        #if os(iOS)
+                        .textInputAutocapitalization(.never)
+                        #endif
+                        .autocorrectionDisabled()
+                } else {
+                    SecureField("Пароль", text: $password)
+                }
+            }
+            .textFieldStyle(.plain)
+            .textContentType(.password)
+            .focused($focusedField, equals: .password)
+            .onSubmit(submit)
+
+            Button {
+                revealPassword.toggle()
+                focusedField = .password
+            } label: {
+                Image(systemName: revealPassword ? "eye.slash" : "eye")
+                    .foregroundStyle(Theme.textDim)
+                    .frame(width: 20)
+                    .contentTransition(.symbolEffect(.replace))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(revealPassword ? "Скрыть пароль" : "Показать пароль")
         }
         .padding(Spacing.md)
         .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))

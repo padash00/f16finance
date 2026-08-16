@@ -82,6 +82,21 @@ struct KeychainStore: Sendable {
         var attributes: [String: Any] = [kSecValueData as String: data]
         attributes.merge(accessAttributes()) { current, _ in current }
 
+        // Биометрическую запись не обновляем, а перекладываем заново.
+        // `SecItemUpdate` над записью с `.userPresence` требует подтверждения
+        // личности: система либо показывала Face ID посреди работы — при
+        // каждом продлении токена, — либо отказывала, и быстрый вход тихо
+        // оставался со старым токеном, а потом переставал работать вовсе.
+        // Удаление и добавление подтверждения не требуют.
+        if requiresBiometry {
+            SecItemDelete(query as CFDictionary)
+            var insert = query
+            insert[kSecValueData as String] = data
+            insert.merge(accessAttributes()) { current, _ in current }
+            SecItemAdd(insert as CFDictionary, nil)
+            return
+        }
+
         let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
         guard status != errSecSuccess else { return }
 

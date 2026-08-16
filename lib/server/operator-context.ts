@@ -24,12 +24,16 @@ export async function requireOperator(
     ? createAdminSupabaseClient()
     : (context.supabase as any)
 
-  const { data: staffLink } = await supabase
+  // Берём первую связку, а не единственную: `maybeSingle()` отдаёт ошибку и
+  // пустые данные, если строк оказалось две. Оператора с двумя связками мы
+  // молча считали не привязанным ни к кому — а без staff_id смена открывалась
+  // ничьей, и человек потом видел собственную смену как чужую.
+  const { data: staffLinks } = await supabase
     .from('operator_staff_links')
     .select('staff_id')
     .eq('operator_id', operatorId)
-    .maybeSingle()
-  const staffId = (staffLink as any)?.staff_id || null
+    .limit(1)
+  const staffId = ((staffLinks || []) as any[])[0]?.staff_id || null
 
   const { data: assignments } = await supabase
     .from('operator_company_assignments')

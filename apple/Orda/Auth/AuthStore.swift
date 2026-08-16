@@ -81,6 +81,31 @@ final class AuthStore {
     private(set) var hasQuickEntry = false
     private(set) var quickEntryError: String?
 
+    /// Запрос лица уже показывали в этом запуске.
+    ///
+    /// Как в банковском приложении: открыл — сразу Face ID, без нажатия
+    /// кнопки. Но ровно один раз: отказался или приложил чужой палец — дальше
+    /// экран ведёт себя обычно и ждёт пароль, а не долбит запросом по кругу.
+    private(set) var quickEntryOffered = false
+
+    /// Не предлагать лицо автоматически до следующего запуска.
+    ///
+    /// Ставится после явного выхода: человек вышел осознанно — может, отдаёт
+    /// телефон сменщику, — и встречать его тем же лицом было бы издевательством.
+    private var suppressAutoQuickEntry = false
+
+    /// Показать ли Face ID сразу при открытии экрана входа.
+    var shouldOfferQuickEntry: Bool {
+        hasQuickEntry && !quickEntryOffered && !suppressAutoQuickEntry && Biometrics.isAvailable
+    }
+
+    /// Автоматический быстрый вход при запуске.
+    func offerQuickEntryIfPossible() async {
+        guard shouldOfferQuickEntry else { return }
+        quickEntryOffered = true
+        await signInWithBiometrics()
+    }
+
     /// Сохранить возможность быстрого возврата.
     ///
     /// Храним refresh-токен, а не пароль: пароль в связке ключей — это пароль,
@@ -101,6 +126,7 @@ final class AuthStore {
     /// Войти по Face ID. Запрос лица покажет сама система — при чтении записи.
     func signInWithBiometrics() async {
         quickEntryError = nil
+        quickEntryOffered = true
         guard let data = quickEntry.load(prompt: "Вход в Orda"),
               let stored = try? JSONDecoder().decode(SessionClient.Session.self, from: data)
         else {
@@ -166,6 +192,7 @@ final class AuthStore {
 
         do {
             let newSession = try await auth.signIn(login: login, password: password)
+            suppressAutoQuickEntry = false
             persist(newSession)
             phase = .loadingRole
             await loadRole()
@@ -183,6 +210,7 @@ final class AuthStore {
         // затевалось. Стереть её можно в настройках аккаунта — «забыть это
         // устройство».
         PushManager.shared.sessionDidEnd()
+        suppressAutoQuickEntry = true
         session = nil
         role = nil
         organizationID = nil

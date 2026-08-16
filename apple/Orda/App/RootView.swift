@@ -18,18 +18,32 @@ struct RootView: View {
     @State private var introFinished = false
 
     var body: some View {
+        content
+            // Заставка лежит поверх готового интерфейса, а не вместо него:
+            // экран под ней уже собран и уже тянет данные, поэтому к моменту
+            // ухода заставки показывать нечего — всё на месте.
+            .overlay {
+                if !introFinished {
+                    LaunchAnimationView(
+                        onFinish: { introFinished = true },
+                        isReady: { auth.phase != .restoring && auth.phase != .loadingRole }
+                    )
+                    .transition(.opacity)
+                }
+            }
+            .animation(Motion.transition, value: introFinished)
+    }
+
+    @ViewBuilder
+    private var content: some View {
         Group {
             switch auth.phase {
             case .restoring:
-                LaunchAnimationView { introFinished = true }
+                Color.clear
 
             case .signedOut:
-                if introFinished {
-                    LoginView()
-                        .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                } else {
-                    LaunchAnimationView { introFinished = true }
-                }
+                LoginView()
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
 
             case .loadingRole:
                 LaunchView(message: "Проверяем доступ…")
