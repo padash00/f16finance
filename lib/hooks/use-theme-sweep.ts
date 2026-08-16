@@ -1,109 +1,46 @@
 'use client'
 
 /**
- * Смена темы с распадом.
+ * Переключение темы.
  *
- * Собрано из двух вещей, и обе бесплатны по времени.
+ * Здесь была анимация распада страницы в пыль. Её убрали, и это осознанное
+ * решение, а не недоделка.
  *
- * Страница уходит снимком, который делает сам браузер (View Transitions). Это
- * мгновенно: снимок берётся из уже отрисованного кадра, ничего не
- * растеризуется. Дальше снимок уводит CSS-маска — фронтом от кнопки.
+ * Что пробовали и почему каждый раз не годилось:
  *
- * Поверх летят крупинки — холсты с частицами. Их рисует
- * `theme-dust-canvas`.
+ *   * CSS-маска поверх снимка View Transitions — даёт скол, а не летящие
+ *     крупинки: маска умеет только убирать область;
+ *   * растеризация страницы, чтобы крупинки знали цвет пикселя под собой —
+ *     единственный способ сделать это в браузере обходит весь DOM и вписывает
+ *     стили в каждый узел, а это блокировка главного потока на секунды:
+ *     портал замирает целиком;
+ *   * снимок заранее — блокировка никуда не делась, просто стала случайной;
+ *   * два десятка полноэкранных холстов — сотни мегабайт в композиторе и
+ *     подвисание на каждом кадре;
+ *   * снимок браузера с ручной анимацией — при перерисовке React страница
+ *     уходила в пустой экран.
  *
- * Чего здесь принципиально нет: растеризации страницы. Чтобы крупинки знали
- * цвет пикселя под собой, DOM пришлось бы обойти целиком и вписать стили в
- * каждый узел — это многосекундная блокировка главного потока, портал замирает
- * и кнопки не нажимаются. Такой ценой эффект не нужен.
+ * Общий итог простой: красивый распад на странице из тысяч узлов стоит либо
+ * отзывчивости, либо надёжности. Переключатель темы этого не стоит.
  *
- * Тема переключается синхронно, в том же кадре, что и нажатие. Анимация её
- * никогда не ждёт.
+ * Плавность осталась там, где ей и место, — в CSS: цвета переходят по
+ * transition, без снимков и холстов. Сама тема меняется мгновенно.
  */
 
 import { useCallback } from 'react'
-import { flushSync } from 'react-dom'
 import { useTheme } from 'next-themes'
 
-import { dustColorsOf, runThemeDust } from './theme-dust-canvas'
-
-/** Откуда расходится распад. По умолчанию — правый верхний угол. */
+/** Точка нажатия. Сохранена в сигнатуре: её передают вызывающие. */
 export type SweepOrigin = { x: number; y: number }
-
-/** Длительность распада. Быстрее — читается как моргание, а не как распад. */
-const DUST_MS = 1100
-
-/** Класс на <html> на время перехода — по нему CSS выбирает анимацию. */
-const SWEEP_CLASS = 'theme-sweep'
-
-/** Идёт ли распад прямо сейчас: два одновременно дали бы кашу. */
-let running = false
-
-function canAnimate(): boolean {
-  return (
-    typeof document !== 'undefined' &&
-    typeof (document as any).startViewTransition === 'function' &&
-    !window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  )
-}
 
 export function useThemeSweep() {
   const { resolvedTheme, setTheme } = useTheme()
 
   const sweepTo = useCallback(
-    (next: 'light' | 'dark', origin?: SweepOrigin) => {
-      if (!canAnimate() || running) {
-        setTheme(next)
-        return
-      }
-
-      running = true
-      const leaving = resolvedTheme === 'light' ? 'light' : 'dark'
-      const originPoint = {
-        x: origin?.x ?? window.innerWidth - 48,
-        y: origin?.y ?? 40,
-      }
-
-      const root = document.documentElement
-      root.style.setProperty('--sweep-x', `${originPoint.x}px`)
-      root.style.setProperty('--sweep-y', `${originPoint.y}px`)
-      root.classList.add(SWEEP_CLASS)
-
-      const cleanup = () => {
-        root.classList.remove(SWEEP_CLASS)
-        root.style.removeProperty('--sweep-x')
-        root.style.removeProperty('--sweep-y')
-        running = false
-      }
-
-      const transition = (document as any).startViewTransition(() => {
-        // Синхронно: браузер снимает новый кадр сразу после колбэка, а обычный
-        // setState React применить не успел бы — переход снял бы старую тему
-        // как новую.
-        flushSync(() => setTheme(next))
-      })
-
-      // Крупинки запускаются, когда оба кадра уже сняты: раньше они попали бы
-      // в снимок и застыли бы на нём картинкой.
-      transition.ready
-        .then(() => runThemeDust({ origin: originPoint, duration: DUST_MS, colors: dustColorsOf(leaving) }))
-        .catch(() => {
-          /* переход прерван — крупинки не нужны */
-        })
-
-      // Страховка: незавершённый переход оставил бы снимок поверх портала.
-      const guard = window.setTimeout(cleanup, DUST_MS + 1500)
-
-      transition.finished
-        .catch(() => {
-          /* прерванный переход — не ошибка: человек нажал ещё раз */
-        })
-        .finally(() => {
-          window.clearTimeout(guard)
-          cleanup()
-        })
+    (next: 'light' | 'dark', _origin?: SweepOrigin) => {
+      setTheme(next)
     },
-    [resolvedTheme, setTheme],
+    [setTheme],
   )
 
   const toggle = useCallback(
@@ -116,7 +53,7 @@ export function useThemeSweep() {
   return { resolvedTheme, sweepTo, toggle }
 }
 
-/** Центр элемента, по которому нажали, — точка старта распада. */
+/** Центр нажатой кнопки. Оставлен ради совместимости вызовов. */
 export function originOfEvent(event: { currentTarget: EventTarget | null }): SweepOrigin | undefined {
   const el = event.currentTarget as HTMLElement | null
   if (!el || typeof el.getBoundingClientRect !== 'function') return undefined
