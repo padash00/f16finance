@@ -42,6 +42,7 @@ struct LoginView: View {
                     // содержимого. Широким экранам даём две колонки — слева
                     // фирменная часть, справа вход, — как на странице входа
                     // сайта. На телефоне порядок прежний, сверху вниз.
+                    VStack(spacing: 0) {
                     layout(width: proxy.size.width) {
                         header
 
@@ -126,12 +127,17 @@ struct LoginView: View {
                             }
                             .shadow(color: .black.opacity(0.35), radius: 30, x: 0, y: 18)
                             .shake(on: auth.signInError ?? "")
-
-                            Text(configuration.displayHost)
-                                .font(Typography.caption)
-                                .foregroundStyle(Theme.textDim)
                         }
                         .frame(maxWidth: 420)
+                    }
+
+                    // Адрес сервера — под обеими колонками, а не внутри
+                    // формы: на планшете он тянул правую колонку вниз, и
+                    // колонки переставали совпадать по середине.
+                    Text(configuration.displayHost)
+                        .font(Typography.caption)
+                        .foregroundStyle(Theme.textDim)
+                        .padding(.top, Spacing.lg)
                     }
                     .padding(.horizontal, Spacing.xl)
                     .padding(.vertical, Spacing.xxl)
