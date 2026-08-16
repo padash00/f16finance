@@ -2,9 +2,48 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DatePicker } from '@/components/ui/date-picker'
+import dynamic from 'next/dynamic'
+
 import { useApiCache } from '@/lib/client/use-api-cache'
 import { useCashlessLabels } from '@/lib/client/use-cashless-labels'
 import { splitIncomeKaspiByCalendarDay } from '@/lib/reports/income-calendar-kaspi'
+
+import {
+  COLORS,
+  DateUtils,
+  Formatters,
+  type CategoryData,
+  type ChartPoint,
+} from './chart-types'
+
+/**
+ * Графики грузятся отдельно и только когда нужны.
+ *
+ * Библиотека графиков весит 382 КБ. Раньше она лежала в самой странице и
+ * качалась до того, как человек увидит хоть одну цифру, — а у каждой страницы
+ * с графиками была своя копия, поэтому переход с дашборда на расходы качал их
+ * заново. Теперь модуль общий и подгружается после первой отрисовки.
+ *
+ * `ssr: false` обязателен: графики меряют ширину контейнера, на сервере её нет.
+ */
+const chartFallback = (height: string) => (
+  <div className={`${height} animate-pulse rounded-xl bg-slate-100 dark:bg-slate-800/50`} />
+)
+
+const ChartCard = dynamic(() => import('./charts').then((m) => m.ChartCard), {
+  ssr: false,
+  loading: () => chartFallback('h-96'),
+})
+
+const CategoryPie = dynamic(() => import('./charts').then((m) => m.CategoryPie), {
+  ssr: false,
+  loading: () => chartFallback('h-72'),
+})
+
+const PaymentBars = dynamic(() => import('./charts').then((m) => m.PaymentBars), {
+  ssr: false,
+  loading: () => chartFallback('h-64'),
+})
 import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
@@ -31,22 +70,6 @@ import {
   Wallet,
 } from 'lucide-react'
 
-import {
-  ResponsiveContainer,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-  Tooltip,
-  Legend,
-  Area,
-  ComposedChart,
-  Line,
-  PieChart as RePieChart,
-  Pie,
-  Cell,
-  BarChart,
-  Bar,
-} from 'recharts'
 
 async function fetchJson<T>(url: string): Promise<T> {
   const response = await fetch(url, { cache: 'no-store' })
@@ -134,22 +157,6 @@ type AIInsight = {
   }
 }
 
-type ChartPoint = {
-  date: string
-  income: number
-  expense: number
-  profit: number
-  movingAvg: number
-  label: string
-}
-
-type CategoryData = {
-  name: string
-  value: number
-  percentage: number
-  color: string
-}
-
 type FeedItem = {
   id: string
   date: string
@@ -175,91 +182,6 @@ type DashboardWidgetData = {
 
 // ==================== UTILS ====================
 
-const DateUtils = {
-  toISODateLocal(d: Date) {
-    const t = d.getTime() - d.getTimezoneOffset() * 60_000
-    return new Date(t).toISOString().slice(0, 10)
-  },
-  fromISO(iso: string) {
-    const [y, m, d] = iso.split('-').map(Number)
-    return new Date(y, (m || 1) - 1, d || 1)
-  },
-  todayISO() {
-    return DateUtils.toISODateLocal(new Date())
-  },
-  monthStartISO() {
-    const d = new Date()
-    return DateUtils.toISODateLocal(new Date(d.getFullYear(), d.getMonth(), 1))
-  },
-  addDaysISO(iso: string, diff: number) {
-    const d = DateUtils.fromISO(iso)
-    d.setDate(d.getDate() + diff)
-    return DateUtils.toISODateLocal(d)
-  },
-  formatShort(iso: string) {
-    const d = DateUtils.fromISO(iso)
-    return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
-  },
-  formatFull(iso: string) {
-    const d = DateUtils.fromISO(iso)
-    return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
-  },
-  getQuarterBounds() {
-    const now = new Date()
-    const y = now.getFullYear()
-    const q = Math.floor(now.getMonth() / 3)
-    return {
-      start: DateUtils.toISODateLocal(new Date(y, q * 3, 1)),
-      end: DateUtils.toISODateLocal(new Date(y, q * 3 + 3, 0)),
-    }
-  },
-  getYearBounds() {
-    const now = new Date()
-    const y = now.getFullYear()
-    return {
-      start: DateUtils.toISODateLocal(new Date(y, 0, 1)),
-      end: DateUtils.toISODateLocal(new Date(y, 11, 31)),
-    }
-  },
-  calcPrevPeriod(dateFrom: string, dateTo: string) {
-    const dFrom = DateUtils.fromISO(dateFrom)
-    const dTo = DateUtils.fromISO(dateTo)
-    const days = Math.floor((dTo.getTime() - dFrom.getTime()) / 86_400_000) + 1
-    return {
-      prevFrom: DateUtils.addDaysISO(dateFrom, -days),
-      prevTo: DateUtils.addDaysISO(dateFrom, -1),
-      days,
-    }
-  },
-  rangeDates(from: string, to: string) {
-    const out: string[] = []
-    let cur = DateUtils.fromISO(from)
-    const end = DateUtils.fromISO(to)
-    while (cur <= end) {
-      out.push(DateUtils.toISODateLocal(cur))
-      cur.setDate(cur.getDate() + 1)
-    }
-    return out
-  },
-}
-
-const Formatters = {
-  moneyDetailed(v: number) {
-    return (Number.isFinite(v) ? v : 0).toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₸'
-  },
-  percentChange(current: number, previous: number) {
-    if (!previous) return { text: '—', positive: true }
-    const p = ((current - previous) / Math.abs(previous)) * 100
-    return { text: `${p >= 0 ? '+' : ''}${p.toFixed(1)}%`, positive: p >= 0 }
-  },
-}
-
-const COLORS = {
-  income: '#10b981',
-  expense: '#ef4444',
-  profit: '#8b5cf6',
-  chart: ['#8b5cf6', '#10b981', '#ef4444', '#f59e0b', '#3b82f6', '#ec4899'],
-}
 
 // ==================== “AI” ANALYTICS (простая, но честная) ====================
 
@@ -1520,154 +1442,7 @@ function MetricCard(props: {
   )
 }
 
-function ChartCard(props: {
-  data: ChartPoint[]
-  metric: 'income' | 'expense' | 'profit'
-  showMovingAvg: boolean
-  onToggleMovingAvg: () => void
-}) {
-  const metricName = props.metric === 'income' ? 'Доход' : props.metric === 'expense' ? 'Расход' : 'Прибыль'
-  const metricColor = props.metric === 'income' ? COLORS.income : props.metric === 'expense' ? COLORS.expense : COLORS.profit
 
-  return (
-    <Card className="p-6 border border-slate-200 bg-white dark:border-0 dark:bg-slate-800/50 backdrop-blur-sm">
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-amber-500/20 rounded-xl">
-            <LineChart className="w-5 h-5 text-amber-600 dark:text-amber-300" />
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-foreground">Динамика: {metricName}</h3>
-            <p className="text-xs text-slate-500">
-              {props.data.length ? `с ${DateUtils.formatShort(props.data[0].date)} по ${DateUtils.formatShort(props.data[props.data.length - 1].date)}` : 'Нет данных'}
-            </p>
-          </div>
-        </div>
-
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={props.onToggleMovingAvg}
-          className="text-xs h-8 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700/50 dark:hover:bg-slate-700 dark:text-slate-200"
-        >
-          {props.showMovingAvg ? 'Скрыть среднее' : 'Показать среднее'}
-        </Button>
-      </div>
-
-      {!props.data.length ? (
-        <div className="h-80 flex items-center justify-center text-slate-500">Нет данных</div>
-      ) : (
-        <div className="h-80 w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={props.data}>
-              <defs>
-                <linearGradient id="metricFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={metricColor} stopOpacity={0.25} />
-                  <stop offset="95%" stopColor={metricColor} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-
-              <CartesianGrid strokeDasharray="3 3" opacity={0.4} stroke="#94a3b8" vertical={false} />
-              <XAxis dataKey="label" stroke="#6b7280" fontSize={10} tickLine={false} axisLine={false} />
-              <YAxis
-                stroke="#6b7280"
-                fontSize={10}
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={(v) => Formatters.moneyDetailed(v)}
-              />
-              <Tooltip
-                contentStyle={{ backgroundColor: '#111827', border: '1px solid rgba(139,92,246,.25)', borderRadius: 12 }}
-                itemStyle={{ color: '#fff' }}
-                labelStyle={{ color: '#9ca3af', fontSize: 12 }}
-                formatter={(val: any) => [Formatters.moneyDetailed(Number(val)), '']}
-              />
-              <Legend />
-
-              <Area
-                type="monotone"
-                dataKey={props.metric}
-                name={metricName}
-                stroke={metricColor}
-                strokeWidth={2}
-                fill="url(#metricFill)"
-              />
-
-              {props.showMovingAvg && (
-                <Line
-                  type="monotone"
-                  dataKey="movingAvg"
-                  name="Среднее (7д)"
-                  stroke="#fbbf24"
-                  strokeWidth={2}
-                  dot={false}
-                  strokeDasharray="5 5"
-                />
-              )}
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-    </Card>
-  )
-}
-
-function CategoryPie(props: { title: string; data: CategoryData[]; total: number; icon: ReactNode }) {
-  return (
-    <Card className="p-6 border border-slate-200 bg-white dark:border-0 dark:bg-slate-800/50 backdrop-blur-sm">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="p-2 bg-slate-100 dark:bg-slate-700/40 rounded-xl">{props.icon}</div>
-        <h3 className="text-sm font-semibold text-foreground">{props.title}</h3>
-      </div>
-
-      {!props.data.length ? (
-        <div className="h-48 flex items-center justify-center text-slate-500">Нет данных</div>
-      ) : (
-        <div className="space-y-4">
-          <div className="h-48">
-            <ResponsiveContainer width="100%" height="100%">
-              <RePieChart>
-                <Pie data={props.data} dataKey="value" cx="50%" cy="50%" innerRadius="58%" outerRadius="88%" paddingAngle={2}>
-                  {props.data.map((e, i) => (
-                    <Cell key={i} fill={e.color} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#111827', border: '1px solid rgba(139,92,246,.25)', borderRadius: 12 }}
-                  itemStyle={{ color: '#fff' }}
-                  labelStyle={{ color: '#9ca3af', fontSize: 12 }}
-                  formatter={(v: any) => [Formatters.moneyDetailed(Number(v)), '']}
-                />
-              </RePieChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="space-y-2 max-h-32 overflow-auto">
-            {props.data.map((x, i) => (
-              <div key={i} className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: x.color }} />
-                  <span className="text-body truncate max-w-[120px]">{x.name}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-foreground font-medium">{Formatters.moneyDetailed(x.value)}</span>
-                  <span className="text-slate-500">({x.percentage.toFixed(1)}%)</span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="pt-2 border-t border-border">
-            <div className="flex justify-between text-xs">
-              <span className="text-muted-foreground">Всего</span>
-              <span className="text-foreground font-medium">{Formatters.moneyDetailed(props.total)}</span>
-            </div>
-          </div>
-        </div>
-      )}
-    </Card>
-  )
-}
 
 function AnomaliesCard({ anomalies }: { anomalies: AIInsight['anomalies'] }) {
   const severityStyle: Record<'low' | 'medium' | 'high', string> = {
@@ -1833,24 +1608,7 @@ function Details(props: {
         <Card className="p-6 border border-slate-200 bg-white dark:border-0 dark:bg-slate-800/50 backdrop-blur-sm">
           <h3 className="text-sm font-semibold text-foreground mb-4">Способы оплаты</h3>
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={paymentStats}>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.4} stroke="#94a3b8" />
-                <XAxis dataKey="name" stroke="#6b7280" fontSize={10} />
-                <YAxis stroke="#6b7280" fontSize={10} tickFormatter={(v) => Formatters.moneyDetailed(v)} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#111827', border: '1px solid rgba(139,92,246,.25)', borderRadius: 12 }}
-                  itemStyle={{ color: '#fff' }}
-                  labelStyle={{ color: '#9ca3af', fontSize: 12 }}
-                  formatter={(v: any) => Formatters.moneyDetailed(Number(v))}
-                />
-                <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                  {paymentStats.map((e, i) => (
-                    <Cell key={i} fill={e.color} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            <PaymentBars data={paymentStats} />
           </div>
         </Card>
 
