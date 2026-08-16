@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { AlertTriangle, Bell, Cake, Check, ClipboardList, Receipt } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
-import { supabase } from '@/lib/supabaseClient'
 
 type NotificationItem = {
   id: string
@@ -125,19 +124,46 @@ export function NotificationsBell() {
     return () => clearInterval(id)
   }, [load])
 
-  // Realtime подписка: при любом INSERT/UPDATE/DELETE в таблицах источников — релоад.
+  /**
+   * Живые уведомления.
+   *
+   * Клиент Supabase подключается ЛЕНИВО. Статический импорт тянул его (212 КБ)
+   * в шапку, а шапка есть на каждой странице портала — то есть эти килобайты
+   * скачивались всегда и до первой отрисовки. Уведомления и без него не
+   * пропадут: рядом работает обычный опрос, realtime только ускоряет.
+   */
   useEffect(() => {
-    const channel = supabase
-      .channel('notifications-bell')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_requests' }, scheduleReload)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'debts' }, scheduleReload)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_balances' }, scheduleReload)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, scheduleReload)
-      .subscribe()
+    let channel: { unsubscribe?: () => void } | null = null
+    let client: any = null
+    let cancelled = false
+
+    const connect = async () => {
+      try {
+        const { supabase } = await import('@/lib/supabaseClient')
+        if (cancelled) return
+        client = supabase
+        channel = supabase
+          .channel('notifications-bell')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_requests' }, scheduleReload)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'debts' }, scheduleReload)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_balances' }, scheduleReload)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, scheduleReload)
+          .subscribe()
+      } catch {
+        // Не подключились — остаётся опрос. Колокольчик работать не перестанет.
+      }
+    }
+
+    // После первой отрисовки: подписка не должна конкурировать с загрузкой
+    // страницы за главный поток.
+    const schedule = (window as any).requestIdleCallback || ((cb: () => void) => window.setTimeout(cb, 1200))
+    const handle = schedule(() => void connect(), { timeout: 4000 })
 
     return () => {
+      cancelled = true
       if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
-      supabase.removeChannel(channel)
+      if ((window as any).cancelIdleCallback) (window as any).cancelIdleCallback(handle)
+      if (channel && client) client.removeChannel(channel)
     }
   }, [scheduleReload])
 

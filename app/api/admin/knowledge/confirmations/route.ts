@@ -49,11 +49,19 @@ export async function GET(request: Request) {
     const { data: articles, error: articleError } = await articleQuery
     if (articleError) throw articleError
 
+    // Подтверждения ограничиваем статьями, а не организацией: колонки
+    // organization_id у них нет и быть не должно — статья уже принадлежит
+    // организации, и дублировать её принадлежность в каждом подтверждении
+    // значит однажды получить два разных ответа на один вопрос.
+    const scopedArticleIds = ((articles || []) as any[]).map((a) => String(a.id))
+
     // PostgREST режет ответ до 1000 строк (прежний .limit(2000) молча обрезался) —
     // подтверждения забираем постранично, иначе статусы «pending» ложные.
     const PAGE = 1000
     const confirmations: any[] = []
-    for (let from = 0; ; from += PAGE) {
+    // Статей с обязательным подтверждением нет — подтверждать нечего, и
+    // запрашивать тоже.
+    for (let from = 0; scopedArticleIds.length > 0; from += PAGE) {
       let confirmQuery = supabase
         .from('knowledge_article_confirmations')
         .select(
@@ -64,9 +72,9 @@ export async function GET(request: Request) {
         .order('confirmed_at', { ascending: false })
         .order('id')
         .range(from, from + PAGE - 1)
+      confirmQuery = confirmQuery.in('article_id', scopedArticleIds)
       if (articleId) confirmQuery = confirmQuery.eq('article_id', articleId)
       if (staffId) confirmQuery = confirmQuery.eq('staff_id', staffId)
-      if (orgScope) confirmQuery = confirmQuery.or(orgScope)
 
       const { data: pageRows, error: confirmError } = await confirmQuery
       if (confirmError) throw confirmError

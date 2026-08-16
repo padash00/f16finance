@@ -3,7 +3,6 @@
 import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabaseClient'
 import {
   Activity, Boxes, Warehouse, FileText, ClipboardList, Building2,
   Receipt, Users2, Monitor, ReceiptText, ArrowLeft, Store, LogOut,
@@ -124,7 +123,9 @@ function StoreShellInner({ children }: { children: React.ReactNode }) {
     item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(item.href + '/')
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
+    // Сессия живёт в куках — снимает её сервер. Клиент Supabase ради одного
+    // выхода тянул 212 КБ в оболочку всего раздела «Магазин».
+    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => null)
     router.push('/login')
     router.refresh()
   }

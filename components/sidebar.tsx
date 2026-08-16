@@ -3,7 +3,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabaseClient'
 import { canAccessPath, type StaffRole, type SubscriptionFeature } from '@/lib/core/access'
 import { findCapabilityPageByPath } from '@/lib/core/capabilities'
 import { useCapabilities } from '@/lib/client/use-capabilities'
@@ -423,18 +422,14 @@ export function Sidebar({ desktopEnabled = true }: { desktopEnabled?: boolean } 
     let ignore = false
 
     const loadUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      if (!ignore) {
-        setUserEmail(user?.email || null)
-      }
-
+      // Почта берётся из того же ответа, что и роль. Отдельный вызов
+      // supabase.auth.getUser() тянул в сайдбар весь клиент Supabase — 212 КБ
+      // на каждой странице портала ради одной строки с адресом.
       const response = await fetch('/api/auth/session-role').catch(() => null)
       const json = await response?.json().catch(() => null)
 
       if (!ignore && response?.ok) {
+        setUserEmail(json?.email || null)
         const superAdmin = !!json?.isSuperAdmin
         setIsSuperAdmin(superAdmin)
         setIsTenantContext(!!json?.isTenantContext)
@@ -583,7 +578,9 @@ export function Sidebar({ desktopEnabled = true }: { desktopEnabled?: boolean } 
   }, [pathname, visibleSections])
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
+    // Сессия живёт в куках, поэтому снимает её сервер. Ошибку не показываем:
+    // человек нажал «выйти» и должен выйти в любом случае.
+    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => null)
     router.push('/login')
     router.refresh()
   }

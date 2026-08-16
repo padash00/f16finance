@@ -6,7 +6,6 @@ import type { ComponentType, ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 import { Briefcase, CalendarDays, ChevronRight, CircleUserRound, Home, MonitorSmartphone, ScanLine, Wallet } from 'lucide-react'
 
-import { supabase } from '@/lib/supabaseClient'
 import { cn } from '@/lib/utils'
 
 type NavItem = {
@@ -65,7 +64,9 @@ export function OperatorAppShell({ children }: { children: ReactNode }) {
       }
       const code = json?.error
       if (code === 'operator-inactive' || code === 'operator-auth-disabled') {
-        await supabase.auth.signOut().catch(() => null)
+        // Сессия в куках — снимает её сервер. Клиент Supabase ради этого
+        // одного вызова тянулся в оболочку всего кабинета оператора.
+        await fetch('/api/auth/logout', { method: 'POST' }).catch(() => null)
         window.location.href = '/login?reason=operator-disabled'
       }
     })()
