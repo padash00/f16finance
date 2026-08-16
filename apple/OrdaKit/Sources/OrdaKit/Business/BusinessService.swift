@@ -446,6 +446,27 @@ public struct BusinessService: Sendable {
         )
     }
 
+    /// Включить или отключить кассовое устройство.
+    ///
+    /// Планшет забыли на точке, компьютер увезли в ремонт — доступ надо
+    /// закрыть в ту же минуту, а не «когда доберусь до сайта». Токен при этом
+    /// остаётся: устройство можно включить обратно, не настраивая заново.
+    public func setPointDeviceActive(projectID: String, isActive: Bool) async throws {
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/point-devices",
+                method: .post,
+                body: try JSONSerialization.data(
+                    withJSONObject: [
+                        "action": "toggleProjectActive",
+                        "projectId": projectID,
+                        "is_active": isActive,
+                    ]
+                )
+            )
+        )
+    }
+
     /// График смен на неделю. Требует `shifts.view` либо `dashboard.view`.
     public func schedule(weekStart: String) async throws -> ShiftSchedule {
         try await api.send(

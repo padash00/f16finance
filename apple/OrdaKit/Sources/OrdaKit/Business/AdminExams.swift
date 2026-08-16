@@ -267,6 +267,15 @@ public struct AdminExamService: Sendable {
         try await post(["action": "retake", "attempt_id": attemptID])
     }
 
+    /// Закрыть экзамен: «завершить» — норма, «отменить» — ошиблись при
+    /// назначении. Оба оставляют его в истории; удаление это другое действие.
+    public func finish(examID: String, cancelled: Bool) async throws {
+        try await post([
+            "action": cancelled ? "cancel" : "finish",
+            "exam_id": examID,
+        ])
+    }
+
     public func delete(examID: String) async throws {
         try await post(["action": "delete", "exam_id": examID])
     }

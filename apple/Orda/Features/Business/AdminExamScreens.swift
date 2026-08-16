@@ -165,6 +165,9 @@ struct AdminExamDetailScreen: View {
     /// билет.
     private var canSend: Bool { auth.resolver?.can("operator-exams.create") ?? false }
     private var canRemind: Bool { auth.resolver?.can("operator-exams.remind") ?? false }
+    /// Завершить или отменить — одно право: и то и другое закрывает экзамен.
+    private var canFinish: Bool { auth.resolver?.can("operator-exams.cancel") ?? false }
+    @State private var closing: Bool?
 
     @State private var detail: AdminExamDetail?
     @State private var loadError: APIError?
@@ -214,6 +217,21 @@ struct AdminExamDetailScreen: View {
         #endif
         .task { await load() }
         .refreshable { await load() }
+        .alert(
+            closing == true ? "Отменить экзамен?" : "Завершить экзамен?",
+            isPresented: .constant(closing != nil)
+        ) {
+            Button(closing == true ? "Отменить экзамен" : "Завершить", role: closing == true ? .destructive : nil) {
+                let cancelled = closing == true
+                closing = nil
+                Task { await run { try await AdminExamService(api: api).finish(examID: examID, cancelled: cancelled) } }
+            }
+            Button("Назад", role: .cancel) { closing = nil }
+        } message: {
+            Text(closing == true
+                ? "Незавершённые билеты пропадут, результаты сдавших останутся в истории."
+                : "Кто не успел — не успел: экзамен закроется, результаты сдавших останутся.")
+        }
     }
 
     private func actionsCard(_ exam: AdminExam) -> some View {
@@ -242,6 +260,21 @@ struct AdminExamDetailScreen: View {
                     }
                     .buttonStyle(SecondaryButtonStyle())
                     .disabled(busy)
+                }
+
+                // Закрыть экзамен. Завершение — норма: все сдали, ждать
+                // остальных незачем. Отмена — ошиблись при назначении. Оба
+                // оставляют экзамен в истории.
+                if canFinish, exam.status != "closed", exam.status != "cancelled" {
+                    RowDivider()
+                    HStack(spacing: Spacing.sm) {
+                        Button("Завершить") { closing = false }
+                            .buttonStyle(SecondaryButtonStyle())
+                            .disabled(busy)
+                        Button("Отменить экзамен") { closing = true }
+                            .buttonStyle(DestructiveButtonStyle())
+                            .disabled(busy)
+                    }
                 }
             }
         }

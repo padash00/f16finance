@@ -10,6 +10,15 @@ import SwiftUI
 /// а прописывают его один раз при установке, с компьютера.
 struct PointDevicesScreen: View {
     @Environment(BusinessStore.self) private var store
+    @Environment(\.access) private var access
+    @Environment(\.api) private var api
+
+    @State private var toggling: PointProject?
+    @State private var actionError: String?
+
+    /// Включение и отключение устройства — право высокой важности: отключённая
+    /// касса не работает вовсе.
+    private var canToggle: Bool { access?.can("point-devices.toggle_active") ?? false }
 
     var body: some View {
         ScreenScroll {
@@ -27,8 +36,52 @@ struct PointDevicesScreen: View {
         .background(Theme.background)
         .navigationTitle("Точки и устройства")
         .toolbar { LogoutToolbarItem() }
+        .alert(
+            toggling?.isActive == true ? "Отключить устройство?" : "Включить устройство?",
+            isPresented: .constant(toggling != nil)
+        ) {
+            Button(toggling?.isActive == true ? "Отключить" : "Включить", role: toggling?.isActive == true ? .destructive : nil) {
+                if let project = toggling { Task { await toggle(project) } }
+            }
+            Button("Отмена", role: .cancel) { toggling = nil }
+        } message: {
+            if let project = toggling {
+                Text(project.isActive
+                    ? "\(project.name) перестанет работать: касса не откроется и чеки не пробьются. Токен сохранится — включить обратно можно здесь же."
+                    : "\(project.name) снова заработает с прежним токеном, настраивать заново не нужно.")
+            }
+        }
+        .overlay(alignment: .top) {
+            if let actionError {
+                Text(actionError)
+                    .font(Typography.caption)
+                    .foregroundStyle(Theme.negative)
+                    .padding(Spacing.md)
+                    .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                    .padding(Spacing.md)
+            }
+        }
         .task { await store.loadDevices() }
         .refreshable { await store.loadDevices() }
+    }
+
+    private func toggle(_ project: PointProject) async {
+        toggling = nil
+        actionError = nil
+        do {
+            try await BusinessService(api: api).setPointDeviceActive(
+                projectID: project.id,
+                isActive: !project.isActive
+            )
+            Haptics.success()
+            await store.loadDevices()
+        } catch let error as APIError {
+            Haptics.error()
+            actionError = error.userMessage
+        } catch {
+            Haptics.error()
+            actionError = error.localizedDescription
+        }
     }
 
     @ViewBuilder
@@ -81,7 +134,19 @@ struct PointDevicesScreen: View {
                         SectionHeader("Все программы")
                         ForEach(Array(list.projects.enumerated()), id: \.element.id) { index, project in
                             if index > 0 { RowDivider() }
-                            ProjectRow(project: project)
+                            if canToggle {
+                                // Планшет забыли на точке, компьютер увезли в
+                                // ремонт — доступ закрывают в ту же минуту.
+                                Button {
+                                    toggling = project
+                                } label: {
+                                    ProjectRow(project: project)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.pressable)
+                            } else {
+                                ProjectRow(project: project)
+                            }
                         }
                     }
                 }

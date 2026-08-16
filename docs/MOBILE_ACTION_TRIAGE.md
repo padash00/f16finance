@@ -2,7 +2,7 @@
 
 Собрано `scripts/triage-mobile-actions.mjs` по каталогу прав и коду приложения. Считается «есть», если право упомянуто в Swift.
 
-Всего: **266**. На телефон просятся **30**, работа за столом — **107**, спорных — **129**.
+Всего: **263**. На телефон просятся **27**, работа за столом — **107**, спорных — **129**.
 
 ## Нужно на телефоне
 
@@ -14,7 +14,6 @@
 | Движения товара | Создать перемещение | `store-movements.create` | medium |
 | Доверенные поставщики | Создание | `expense-whitelist.create` | medium |
 | Задачи | Ответить на задачу | `tasks.respond` | low |
-| Задачи | Назначить оператору | `tasks.assign` | medium |
 | Задачи | Отправить уведомление по задаче | `tasks.notify` | medium |
 | Зарплата операторов | Отправить расчёт ЗП в Telegram | `salary.send_telegram` | medium |
 | Заявки поставщикам | Создание | `store-purchase-orders.create` | medium |
@@ -22,7 +21,6 @@
 | Заявки склад → витрина | Создание заявки | `store-requests.create` | medium |
 | Инциденты | Закрыть инцидент | `incidents.close` | medium |
 | Кассовые устройства | Создание | `point-devices.create` | medium |
-| Кассовые устройства | Включить/отключить устройство | `point-devices.toggle_active` | high |
 | Каталог товаров | Создание | `store-catalog.create` | medium |
 | Новости | Опубликовать пост | `news.create` | medium |
 | Операторы | Сбросить пароль | `operators.reset_password` | high |
@@ -37,7 +35,6 @@
 | Сотрудники | Сбросить пароль сотрудника | `staff.reset_password` | high |
 | Списания товара | Отменить списание | `store-writeoffs.cancel` | high |
 | Цели | Создать цель/KPI-план | `goals.create` | medium |
-| Экзамены операторов | Завершить или отменить экзамен | `operator-exams.cancel` | medium |
 
 ## Спорные — решить владельцу
 

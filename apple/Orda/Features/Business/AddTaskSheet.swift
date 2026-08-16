@@ -10,6 +10,7 @@ import SwiftUI
 /// исполнитель со сроком.
 struct AddTaskSheet: View {
     @Environment(BusinessStore.self) private var store
+    @Environment(\.access) private var access
     @Environment(\.dismiss) private var dismiss
 
     @State private var draft = TaskDraft()
@@ -94,6 +95,9 @@ struct AddTaskSheet: View {
             VStack(alignment: .leading, spacing: Spacing.md) {
                 SectionHeader("Кому и когда")
 
+                // Назначение исполнителя — своё право: задачу может ставить и
+                // тот, кому назначать людей не разрешено.
+                if access?.can("tasks.assign") ?? false {
                 FieldLabel("Исполнитель")
                 Picker("Исполнитель", selection: Binding(
                     get: { draft.operatorID ?? "" },
@@ -107,6 +111,7 @@ struct AddTaskSheet: View {
                     }
                 }
                 .pickerStyle(.menu)
+                }
 
                 Toggle(isOn: $hasDueDate) {
                     Text("Со сроком")
