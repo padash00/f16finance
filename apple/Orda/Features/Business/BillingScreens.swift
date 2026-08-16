@@ -460,6 +460,15 @@ private struct IncidentDetail: View {
 /// Долги клиентов, записанные операторами за неделю.
 struct PointDebtsScreen: View {
     @Environment(BusinessStore.self) private var store
+    @Environment(\.access) private var access
+    @Environment(\.api) private var api
+
+    @State private var settling: PointDebt?
+    @State private var isSaving = false
+    @State private var actionError: String?
+
+    /// Погашение — действие с деньгами, и право у него своё.
+    private var canSettle: Bool { access?.can("point-debts.mark_paid") ?? false }
 
     var body: some View {
         @Bindable var bindable = store
@@ -486,8 +495,47 @@ struct PointDebtsScreen: View {
         .background(Theme.background)
         .navigationTitle("Долги с точки")
         .toolbar { LogoutToolbarItem() }
+        .alert("Долг погашен?", isPresented: .constant(settling != nil)) {
+            Button("Погашен") {
+                if let debt = settling { Task { await settle(debt) } }
+            }
+            Button("Отмена", role: .cancel) { settling = nil }
+        } message: {
+            if let debt = settling {
+                Text("\(debt.clientName) — \(Money.format(debt.amount)). Отмечайте, только когда деньги вернули: запись видна в журнале.")
+            }
+        }
+        .overlay(alignment: .top) {
+            if let actionError {
+                Text(actionError)
+                    .font(Typography.caption)
+                    .foregroundStyle(Theme.negative)
+                    .padding(Spacing.md)
+                    .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                    .padding(Spacing.md)
+            }
+        }
         .task { await store.loadDebts() }
         .refreshable { await store.loadDebts() }
+    }
+
+    private func settle(_ debt: PointDebt) async {
+        settling = nil
+        isSaving = true
+        actionError = nil
+        defer { isSaving = false }
+
+        do {
+            try await BusinessService(api: api).markPointDebtsPaid(itemIDs: [debt.id])
+            Haptics.success()
+            await store.loadDebts()
+        } catch let error as APIError {
+            Haptics.error()
+            actionError = error.userMessage
+        } catch {
+            Haptics.error()
+            actionError = error.localizedDescription
+        }
     }
 
     @ViewBuilder
@@ -533,7 +581,19 @@ struct PointDebtsScreen: View {
                                 )
                                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, debt in
                                     if index > 0 { RowDivider() }
-                                    DebtRow(debt: debt)
+                                    if canSettle, !debt.isPaid {
+                                        // Долг возвращают наличными у стойки —
+                                        // отметить надо там же, а не вечером.
+                                        Button {
+                                            settling = debt
+                                        } label: {
+                                            DebtRow(debt: debt)
+                                                .contentShape(Rectangle())
+                                        }
+                                        .buttonStyle(.pressable)
+                                    } else {
+                                        DebtRow(debt: debt)
+                                    }
                                 }
                             }
                         }

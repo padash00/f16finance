@@ -413,6 +413,39 @@ public struct BusinessService: Sendable {
         )
     }
 
+    /// Отметить долги точки погашенными.
+    ///
+    /// Долг за смену возвращают наличными у стойки. До сайта эта запись
+    /// доезжала к вечеру, а к вечеру уже не помнят, кто из троих вернул.
+    public func markPointDebtsPaid(itemIDs: [String]) async throws {
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/point-debts",
+                method: .post,
+                body: try JSONSerialization.data(
+                    withJSONObject: ["action": "markPaid", "itemIds": itemIDs]
+                )
+            )
+        )
+    }
+
+    /// Сбросить пароль оператору.
+    ///
+    /// Пароль забывают перед сменой, и человек стоит у кассы, пока владелец
+    /// «дойдёт до компьютера». Новый пароль сервер не придумывает — его задаёт
+    /// тот, кто сбрасывает, и передаёт из рук в руки.
+    public func resetOperatorPassword(userID: String, password: String) async throws {
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/reset-password",
+                method: .post,
+                body: try JSONSerialization.data(
+                    withJSONObject: ["userId": userID, "password": password]
+                )
+            )
+        )
+    }
+
     /// График смен на неделю. Требует `shifts.view` либо `dashboard.view`.
     public func schedule(weekStart: String) async throws -> ShiftSchedule {
         try await api.send(
