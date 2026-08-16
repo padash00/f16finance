@@ -23,37 +23,35 @@ struct AdminExamsScreen: View {
     @State private var loadError: APIError?
     @State private var isLoading = false
     @State private var assigning = false
-    @State private var actionError: String?
+    @State private var selected: AdminExam?
 
     var body: some View {
-        ScreenScroll {
+        Group {
             if let loadError {
                 ErrorStateView(error: loadError) { Task { await load() } }
             } else if isLoading && overview == nil {
                 LoadingRows(count: 3)
-            } else if let overview {
-                if let actionError {
-                    Card(accent: Theme.negative) {
-                        Text(actionError)
-                            .font(Typography.callout)
-                            .foregroundStyle(Theme.negative)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-
-                if overview.exams.isEmpty {
+            } else {
+                // Список слева, разбор справа — как в остальных разделах. На
+                // планшете переход «открыл попытки — вернулся — открыл
+                // следующий экзамен» лишний: обе части помещаются рядом.
+                MasterDetail(
+                    items: overview?.exams ?? [],
+                    selection: $selected,
+                    listWidth: 360
+                ) { exam in
+                    examCard(exam, companies: overview?.companies ?? [])
+                } detail: { exam in
+                    AdminExamDetailScreen(
+                        examID: exam.id,
+                        operators: overview?.operators ?? []
+                    )
+                } empty: {
                     WideEmptyState(
                         icon: "graduationcap",
                         title: "Экзаменов пока нет",
                         message: "Вопросы собираются из базы знаний вашей точки — списать со стороны нельзя."
                     )
-                } else {
-                    ForEach(overview.exams) { exam in
-                        NavigationLink(value: AdminExamRoute(examID: exam.id)) {
-                            examCard(exam, companies: overview.companies)
-                        }
-                        .buttonStyle(.pressable)
-                    }
                 }
             }
         }
@@ -72,12 +70,6 @@ struct AdminExamsScreen: View {
                     .disabled(overview == nil)
                 }
             }
-        }
-        .navigationDestination(for: AdminExamRoute.self) { route in
-            AdminExamDetailScreen(
-                examID: route.examID,
-                operators: overview?.operators ?? []
-            )
         }
         .sheet(isPresented: $assigning) {
             if let overview {
@@ -158,15 +150,6 @@ struct AdminExamsScreen: View {
         }
         isLoading = false
     }
-}
-
-/// Адрес экзамена в админском контуре.
-///
-/// Имя своё, а не общее с операторским `ExamRoute`: у оператора маршрут ведёт
-/// к сдаче билета, здесь — к разбору попыток, и один тип на оба означал бы, что
-/// `navigationDestination` выберет чужой экран.
-struct AdminExamRoute: Hashable {
-    let examID: String
 }
 
 // ── Один экзамен ─────────────────────────────────────────────────────────────

@@ -1,6 +1,9 @@
 import OrdaKit
 import OrdaUI
 import SwiftUI
+#if os(iOS)
+import UIKit
+#endif
 
 /// Команда: стаж и сроки документов.
 ///
@@ -16,6 +19,7 @@ struct OperatorRosterScreen: View {
     @State private var isLoading = false
     @State private var showInactive = false
     @State private var query = ""
+    @State private var selected: OperatorRoster.Person?
 
     private var people: [OperatorRoster.Person] {
         let all = (roster?.people ?? []).filter { showInactive || $0.isActive }
@@ -41,35 +45,37 @@ struct OperatorRosterScreen: View {
     }
 
     var body: some View {
-        ScreenScroll {
+        Group {
             if let loadError {
                 ErrorStateView(error: loadError) { Task { await load() } }
             } else if isLoading && roster == nil {
                 LoadingRows(count: 4)
-            } else if people.isEmpty {
-                WideEmptyState(
-                    icon: "person.2",
-                    title: query.isEmpty ? "Операторов нет" : "Никого не нашлось",
-                    message: query.isEmpty
-                        ? "Заведите операторов — здесь появятся стаж и сроки документов."
-                        : "По запросу «\(query)» никого."
-                )
             } else {
-                if !attention.isEmpty { attentionCard }
+                MasterDetail(
+                    items: people,
+                    selection: $selected,
+                    listWidth: 340
+                ) { person in
+                    personRow(person)
+                } detail: { person in
+                    personCard(person)
+                } empty: {
+                    WideEmptyState(
+                        icon: "person.2",
+                        title: query.isEmpty ? "Операторов нет" : "Никого не нашлось",
+                        message: query.isEmpty
+                            ? "Заведите операторов — здесь появятся стаж и сроки документов."
+                            : "По запросу «\(query)» никого."
+                    )
+                } header: {
+                    VStack(spacing: Spacing.md) {
+                        if !attention.isEmpty { attentionCard }
 
-                Card {
-                    VStack(spacing: Spacing.sm) {
-                        ForEach(Array(people.enumerated()), id: \.element.id) { index, person in
-                            if index > 0 { RowDivider() }
-                            personRow(person)
-                        }
+                        Toggle("Показывать уволенных", isOn: $showInactive)
+                            .font(Typography.callout)
+                            .tint(Theme.brand)
                     }
                 }
-
-                Toggle("Показывать уволенных", isOn: $showInactive)
-                    .font(Typography.callout)
-                    .tint(Theme.brand)
-                    .padding(.horizontal, Spacing.xs)
             }
         }
         .navigationTitle("Команда")
@@ -142,6 +148,94 @@ struct OperatorRosterScreen: View {
             }
         }
         .contentShape(Rectangle())
+    }
+
+    /// Карточка человека: то же, что в строке, но с местом под подробности.
+    private func personCard(_ person: OperatorRoster.Person) -> some View {
+        ScreenScroll {
+            Card {
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    HStack(spacing: Spacing.md) {
+                        avatar(person)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(person.name)
+                                .font(Typography.title)
+                                .foregroundStyle(Theme.text)
+                            if let position = person.position, !position.isEmpty {
+                                Text(position)
+                                    .font(Typography.callout)
+                                    .foregroundStyle(Theme.textMuted)
+                            }
+                        }
+                        Spacer()
+                        if !person.isActive { StatusChip("уволен", kind: .neutral) }
+                    }
+
+                    RowDivider()
+
+                    if let tenure = person.tenureLabel {
+                        infoRow("Стаж", tenure)
+                    }
+                    if let hire = person.hireDate {
+                        infoRow("Принят", hire.formatted(date: .abbreviated, time: .omitted))
+                    }
+                    if let phone = person.phone, !phone.isEmpty {
+                        // Телефон нажимается: человека с горящим документом
+                        // проще набрать сразу, чем переписывать номер.
+                        Button {
+                            call(phone)
+                        } label: {
+                            HStack {
+                                Text("Телефон")
+                                    .font(Typography.callout)
+                                    .foregroundStyle(Theme.textDim)
+                                Spacer()
+                                Text(phone)
+                                    .font(Typography.callout.weight(.medium))
+                                    .foregroundStyle(Theme.brand)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.pressable)
+                    }
+                }
+            }
+
+            if let expiry = expiryLabel(person) {
+                Card(accent: person.documentNeedsAttention ? Theme.warning : nil) {
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        SectionHeader("Документы")
+                        Text(expiry)
+                            .font(Typography.callout)
+                            .foregroundStyle(person.documentNeedsAttention ? Theme.warning : Theme.textDim)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text("Сроки заводятся на сайте, в карточке оператора.")
+                            .font(Typography.caption)
+                            .foregroundStyle(Theme.textMuted)
+                    }
+                }
+            }
+        }
+    }
+
+    private func infoRow(_ title: String, _ value: String) -> some View {
+        HStack {
+            Text(title)
+                .font(Typography.callout)
+                .foregroundStyle(Theme.textDim)
+            Spacer()
+            Text(value)
+                .font(Typography.callout.weight(.medium))
+                .foregroundStyle(Theme.text)
+        }
+    }
+
+    private func call(_ phone: String) {
+        #if os(iOS)
+        let digits = phone.filter { $0.isNumber || $0 == "+" }
+        guard let url = URL(string: "tel:\(digits)") else { return }
+        UIApplication.shared.open(url)
+        #endif
     }
 
     private func avatar(_ person: OperatorRoster.Person) -> some View {
