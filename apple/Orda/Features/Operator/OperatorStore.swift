@@ -71,6 +71,11 @@ final class OperatorStore {
     // ── Загрузка ─────────────────────────────────────────────────────────────
 
     func bootstrap() async {
+        #if os(iOS)
+        // Активность переживает выгрузку процесса: не подобрав её, приложение
+        // завело бы вторую карточку поверх первой.
+        ShiftLiveActivityController.adopt()
+        #endif
         await queue.load()
         await outbox.load()
         await refreshQueueCount()
@@ -87,11 +92,54 @@ final class OperatorStore {
 
         do {
             shiftState = try await service.currentShift()
+            syncLiveActivity()
         } catch let error as APIError {
             shiftError = error.operatorMessage
         } catch {
             shiftError = error.localizedDescription
         }
+    }
+
+    /// Держать карточку на экране блокировки в согласии со сменой.
+    ///
+    /// Одна точка сборки вместо вызовов из каждого места: смена открывается,
+    /// закрывается и перезагружается из полудюжины экранов, и забытая ветка
+    /// оставила бы на блокировке карточку закрытой смены — с чужими деньгами.
+    ///
+    /// Карточку показываем только на своей смене: на чужой оператор и в
+    /// приложении не видит ни выручки, ни закрытия.
+    private func syncLiveActivity() {
+        #if os(iOS)
+        guard hasOpenShift, isMyShift, let shift, let openedAt = shift.openedAt else {
+            ShiftLiveActivityController.stop()
+            return
+        }
+
+        let state = ShiftActivityAttributes.ContentState(
+            revenue: totals.netTotal,
+            receipts: totals.salesCount,
+            cash: totals.expectedCash,
+            kaspi: totals.expectedKaspi,
+            attention: liveActivityAttention
+        )
+        ShiftLiveActivityController.start(
+            pointName: companyName,
+            openedAt: openedAt,
+            isNight: shift.shiftType == "night",
+            state: state
+        )
+        #endif
+    }
+
+    /// Что показать строкой предупреждения. Пусто — всё в порядке.
+    private var liveActivityAttention: String? {
+        if queuedSalesCount > 0 {
+            return "\(queuedSalesCount) \(pluralize(queuedSalesCount, "чек", "чека", "чеков")) не отправлен"
+        }
+        if queuedActionsCount > 0 {
+            return "\(queuedActionsCount) \(pluralize(queuedActionsCount, "действие ждёт", "действия ждут", "действий ждут")) сети"
+        }
+        return nil
     }
 
     func loadCatalog() async {

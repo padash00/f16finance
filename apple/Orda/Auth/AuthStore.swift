@@ -210,6 +210,11 @@ final class AuthStore {
         // затевалось. Стереть её можно в настройках аккаунта — «забыть это
         // устройство».
         PushManager.shared.sessionDidEnd()
+        #if os(iOS)
+        // Иначе карточка смены останется на экране блокировки уже вышедшего
+        // человека — с выручкой точки.
+        ShiftLiveActivityController.stop()
+        #endif
         suppressAutoQuickEntry = true
         session = nil
         role = nil
