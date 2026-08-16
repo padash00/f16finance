@@ -17,7 +17,13 @@ import { AlertTriangle, CalendarDays, Check, Download, GraduationCap, Loader2, P
 import { Button } from '@/components/ui/button'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Input } from '@/components/ui/input'
-import { NativeSelect } from '@/components/ui/native-select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Card } from '@/components/ui/card'
 import { useApi } from '@/lib/hooks/use-api'
 
@@ -237,17 +243,23 @@ export function CalendarBlock(props: { companyId: string; canManage: boolean }) 
                   onChange={(day) => setDayForm({ ...dayForm, day })}
                   className="w-36"
                 />
-                <NativeSelect
+                {/* Общий Select портала, а не родной <select>: его список
+                    рисует система, и на тёмной теме он нечитаем. */}
+                <Select
                   value={dayForm.day_type}
-                  onChange={(e) => setDayForm({ ...dayForm, day_type: e.target.value })}
-                  className="w-44"
+                  onValueChange={(day_type) => setDayForm({ ...dayForm, day_type })}
                 >
-                  {DAY_TYPES.map(([v, l]) => (
-                    <option key={v} value={v}>
-                      {l}
-                    </option>
-                  ))}
-                </NativeSelect>
+                  <SelectTrigger className="w-44">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DAY_TYPES.map(([v, l]) => (
+                      <SelectItem key={v} value={v}>
+                        {l}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <Input
                   value={dayForm.name}
                   onChange={(e) => setDayForm({ ...dayForm, name: e.target.value })}
@@ -373,17 +385,21 @@ export function CalendarBlock(props: { companyId: string; canManage: boolean }) 
                   />
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <NativeSelect
+                  <Select
                     value={periodForm.period_type}
-                    onChange={(e) => setPeriodForm({ ...periodForm, period_type: e.target.value })}
-                    className="w-44"
+                    onValueChange={(period_type) => setPeriodForm({ ...periodForm, period_type })}
                   >
-                    {PERIOD_TYPES.map(([v, l]) => (
-                      <option key={v} value={v}>
-                        {l}
-                      </option>
-                    ))}
-                  </NativeSelect>
+                    <SelectTrigger className="w-44">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PERIOD_TYPES.map(([v, l]) => (
+                        <SelectItem key={v} value={v}>
+                          {l}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <Input
                     value={periodForm.name}
                     onChange={(e) => setPeriodForm({ ...periodForm, name: e.target.value })}

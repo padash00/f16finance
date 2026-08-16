@@ -44,12 +44,13 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Input } from '@/components/ui/input'
-import { NativeSelect } from '@/components/ui/native-select'
 import { ScrollToEdge } from '@/components/ui/scroll-to-edge'
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
@@ -990,27 +991,31 @@ function SettingsModal(props: {
                       ] as const).map(([placeholder, value, setValue], i) => (
                         <Fragment key={placeholder}>
                           {i === 1 ? <span className="text-muted-foreground">→</span> : null}
-                          <NativeSelect
-                            value={value}
-                            onChange={(e) => setValue(e.target.value)}
-                            className="max-w-[200px] flex-1"
-                          >
-                            <option value="">{placeholder}</option>
-                            <optgroup label="Категории">
-                              {(payload?.categories || []).map((c) => (
-                                <option key={`c-${c.id}`} value={`category:${c.id}`}>
-                                  {c.name}
-                                </option>
-                              ))}
-                            </optgroup>
-                            <optgroup label="Товары">
-                              {(payload?.items || []).map((it) => (
-                                <option key={`i-${it.id}`} value={`item:${it.id}`}>
-                                  {it.name}
-                                </option>
-                              ))}
-                            </optgroup>
-                          </NativeSelect>
+                          {/* Общий Select портала: родной <select> рисует
+                              список силами системы — на тёмной теме нечитаем. */}
+                          <Select value={value} onValueChange={setValue}>
+                            <SelectTrigger className="max-w-[200px] flex-1">
+                              <SelectValue placeholder={placeholder} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectGroup>
+                                <SelectLabel>Категории</SelectLabel>
+                                {(payload?.categories || []).map((c) => (
+                                  <SelectItem key={`c-${c.id}`} value={`category:${c.id}`}>
+                                    {c.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                              <SelectGroup>
+                                <SelectLabel>Товары</SelectLabel>
+                                {(payload?.items || []).map((it) => (
+                                  <SelectItem key={`i-${it.id}`} value={`item:${it.id}`}>
+                                    {it.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                            </SelectContent>
+                          </Select>
                         </Fragment>
                       ))}
                       <Button

@@ -19,7 +19,13 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Input } from '@/components/ui/input'
-import { NativeSelect } from '@/components/ui/native-select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { formatMoney } from '@/lib/core/format'
 import { useApi } from '@/lib/hooks/use-api'
 
@@ -398,30 +404,40 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
                 className="w-36"
               />
             </label>
-            <NativeSelect
+            {/* Общий Select портала: родной <select> рисует список силами
+                системы, и на тёмной теме он нечитаем. */}
+            <Select
               value={eventForm.event_type}
-              onChange={(e) => setEventForm({ ...eventForm, event_type: e.target.value })}
-              className="w-44"
+              onValueChange={(event_type) => setEventForm({ ...eventForm, event_type })}
             >
-              {EVENT_TYPES.map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </NativeSelect>
-            <NativeSelect
+              <SelectTrigger className="w-44">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {EVENT_TYPES.map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
               value={eventForm.severity}
-              onChange={(e) =>
-                setEventForm({ ...eventForm, severity: e.target.value as 'low' | 'medium' | 'high' })
+              onValueChange={(value) =>
+                setEventForm({ ...eventForm, severity: value as 'low' | 'medium' | 'high' })
               }
-              className="w-36"
             >
-              {Object.entries(SEVERITY_LABEL).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </NativeSelect>
+              <SelectTrigger className="w-36">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(SEVERITY_LABEL).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Input
               value={eventForm.title}
               onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })}
