@@ -287,6 +287,36 @@ struct ArticleReader: View {
                     .foregroundStyle(Theme.textMuted)
             }
 
+        case .tableHeader:
+            // Шапку таблицы показываем подписью, а не строкой данных: она
+            // объясняет колонки, а не содержит правило.
+            Text(block.cells.joined(separator: " · ").uppercased())
+                .font(Typography.label)
+                .foregroundStyle(Theme.textDim)
+                .padding(.top, Spacing.sm)
+
+        case .tableRow:
+            // Регламенты пишут таблицами «ситуация — правило». На телефоне
+            // две колонки не помещаются, поэтому левая ячейка становится
+            // заголовком строки, остальные — текстом под ней. Так читается и
+            // на узком экране, и на планшете.
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                if let head = block.cells.first {
+                    Text(head)
+                        .font(Typography.body.weight(.semibold))
+                        .foregroundStyle(Theme.text)
+                }
+                ForEach(Array(block.cells.dropFirst().enumerated()), id: \.offset) { _, cell in
+                    Text(cell)
+                        .font(Typography.body)
+                        .foregroundStyle(Theme.textMuted)
+                        .textSelection(.enabled)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(Spacing.md)
+            .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+
         case .paragraph:
             Text(block.text)
                 .font(Typography.body)

@@ -125,6 +125,26 @@ struct AiTextBlocks: View {
                         .overlay(alignment: .leading) {
                             Capsule().fill(Theme.accent.opacity(0.5)).frame(width: 2)
                         }
+                case .tableHeader:
+                    Text(block.text.uppercased())
+                        .font(Typography.label)
+                        .foregroundStyle(Theme.textDim)
+                case .tableRow:
+                    // Разбор ИИ таблицами почти не пишет, но статья из базы
+                    // знаний может прийти и сюда — строку показываем
+                    // «заголовок: значение», а не склеенной.
+                    VStack(alignment: .leading, spacing: 2) {
+                        if let head = block.cells.first {
+                            Text(head)
+                                .font(Typography.callout.weight(.semibold))
+                                .foregroundStyle(Theme.text)
+                        }
+                        ForEach(Array(block.cells.dropFirst().enumerated()), id: \.offset) { _, cell in
+                            Text(cell)
+                                .font(Typography.callout)
+                                .foregroundStyle(Theme.textMuted)
+                        }
+                    }
                 case .paragraph:
                     Text(block.text)
                         .font(Typography.callout)

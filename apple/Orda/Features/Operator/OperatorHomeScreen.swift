@@ -490,7 +490,9 @@ struct LogoutToolbarItem: ToolbarContent {
                 Image(systemName: "person.crop.circle")
             }
             .sheet(isPresented: $showingAccount) { AccountSheet() }
-            .confirmationDialog("Выйти из аккаунта?", isPresented: $confirming, titleVisibility: .visible) {
+            // Окно, а не подсказка у кнопки: подсказка сжимается под размер
+            // якоря в панели, и длинный текст в ней обрезался.
+            .alert("Выйти из аккаунта?", isPresented: $confirming) {
                 Button("Выйти", role: .destructive) {
                     Task { await auth.signOut() }
                 }

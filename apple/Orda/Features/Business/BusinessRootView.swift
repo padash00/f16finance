@@ -631,7 +631,7 @@ struct BusinessProfileScreen: View {
         .background(Theme.background)
         .navigationTitle("Профиль")
 
-        .confirmationDialog("Выйти из аккаунта?", isPresented: $confirmingLogout, titleVisibility: .visible) {
+        .alert("Выйти из аккаунта?", isPresented: $confirmingLogout) {
             Button("Выйти", role: .destructive) { Task { await auth.signOut() } }
             Button("Отмена", role: .cancel) {}
         }

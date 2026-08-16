@@ -75,6 +75,27 @@ private struct FeedBlocksView: View {
                             .foregroundStyle(Theme.textMuted)
                     }
 
+                case .tableHeader:
+                    Text(block.text.uppercased())
+                        .font(Typography.label)
+                        .foregroundStyle(Theme.textDim)
+
+                case .tableRow:
+                    // Новость может прийти таблицей из редактора сайта. Без
+                    // отдельной ветки ячейки склеивались в одну строку.
+                    VStack(alignment: .leading, spacing: 2) {
+                        if let head = block.cells.first {
+                            Text(head)
+                                .font(Typography.body.weight(.semibold))
+                                .foregroundStyle(Theme.text)
+                        }
+                        ForEach(Array(block.cells.dropFirst().enumerated()), id: \.offset) { _, cell in
+                            Text(cell)
+                                .font(Typography.body)
+                                .foregroundStyle(Theme.textMuted)
+                        }
+                    }
+
                 case .paragraph:
                     Text(block.text)
                         .font(Typography.body)

@@ -456,7 +456,10 @@ struct OperatorProfileScreen: View {
             case .pointQR: PointQRLoginScreen()
             }
         }
-        .confirmationDialog("Выйти из аккаунта?", isPresented: $confirmingLogout, titleVisibility: .visible) {
+        // Окно, а не всплывающая подсказка: подсказку система прижимает к
+        // размеру якоря, и с крупным шрифтом текст переносился с дефисом, а
+        // кнопка «Выйти» обрезалась. Окно центрируется и растёт под текст.
+        .alert("Выйти из аккаунта?", isPresented: $confirmingLogout) {
             Button("Выйти", role: .destructive) { Task { await auth.signOut() } }
             Button("Отмена", role: .cancel) {}
         } message: {

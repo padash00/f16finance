@@ -19,15 +19,24 @@ public enum RichText {
             case heading
             case listItem
             case quote
+            /// Строка таблицы. Регламенты пишут таблицами «ситуация — правило»,
+            /// и без отдельного вида ячейки склеивались в одну строку:
+            /// «СитуацияПравилоПриходПрийти к началу смены».
+            case tableRow
+            /// Шапка таблицы: те же ячейки, но подписи.
+            case tableHeader
         }
 
         public let id = UUID()
         public let kind: Kind
         public let text: String
+        /// Ячейки строки таблицы. У остальных видов пусто.
+        public let cells: [String]
 
-        public init(kind: Kind, text: String) {
+        public init(kind: Kind, text: String, cells: [String] = []) {
             self.kind = kind
             self.text = text
+            self.cells = cells
         }
     }
 
@@ -35,9 +44,10 @@ public enum RichText {
     public static func blocks(from html: String?) -> [Block] {
         guard let html, !html.isEmpty else { return [] }
 
-        // Переносы строк из блочных тегов ставим до вырезания разметки,
-        // иначе абзацы склеятся в одну простыню.
+        // Таблицы разбираем первыми и целиком: у них своя разметка, и общая
+        // чистка тегов превратила бы ячейки в сплошной текст.
         var working = html
+        working = extractTables(working)
         for (pattern, replacement) in [
             (#"<br\s*/?>"#, "\n"),
             (#"</(p|div|h[1-6]|li|blockquote)>"#, "\n"),
@@ -61,6 +71,28 @@ public enum RichText {
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
             .map { line in
+                if line.hasPrefix("\u{0002}") {
+                    let cells = String(line.dropFirst())
+                        .components(separatedBy: "\u{0003}")
+                        .map { $0.trimmingCharacters(in: .whitespaces) }
+                        .filter { !$0.isEmpty }
+                    return Block(
+                        kind: .tableRow,
+                        text: cells.joined(separator: " — "),
+                        cells: cells
+                    )
+                }
+                if line.hasPrefix("\u{0004}") {
+                    let cells = String(line.dropFirst())
+                        .components(separatedBy: "\u{0003}")
+                        .map { $0.trimmingCharacters(in: .whitespaces) }
+                        .filter { !$0.isEmpty }
+                    return Block(
+                        kind: .tableHeader,
+                        text: cells.joined(separator: " · "),
+                        cells: cells
+                    )
+                }
                 if line.hasPrefix("\u{0001}") {
                     return Block(kind: .heading, text: String(line.dropFirst()).trimmingCharacters(in: .whitespaces))
                 }
@@ -73,6 +105,54 @@ public enum RichText {
                 return Block(kind: .paragraph, text: line)
             }
             .filter { !$0.text.isEmpty }
+    }
+
+    /// Пометить строки таблицы служебными знаками.
+    ///
+    /// Строка помечается в начале, ячейки разделяются внутри. Дальше общий
+    /// разбор относится к ним как к обычным строкам, а сборка блоков узнаёт
+    /// пометку и достаёт ячейки обратно.
+    private static func extractTables(_ html: String) -> String {
+        var working = html
+
+        // Шапку строки помечаем до того, как исчезнут теги ячеек.
+        working = markHeaderRows(working, original: html)
+
+        // Ячейки. Выражение для `th` обязано требовать конец имени тега:
+        // иначе `<th[^>]*>` съедало и `<thead>`, шапка теряла пометку, и
+        // подписи колонок вставали в текст как обычная строка данных.
+        working = working.replacingOccurrences(
+            of: #"<th(\s[^>]*)?>"#, with: "\u{0003}", options: [.regularExpression, .caseInsensitive]
+        )
+        working = working.replacingOccurrences(
+            of: #"<td[^>]*>"#, with: "\u{0003}", options: [.regularExpression, .caseInsensitive]
+        )
+        working = working.replacingOccurrences(
+            of: #"</t[dh]>"#, with: "", options: [.regularExpression, .caseInsensitive]
+        )
+
+        working = working.replacingOccurrences(
+            of: #"<tr[^>]*>"#, with: "\n\u{0002}", options: [.regularExpression, .caseInsensitive]
+        )
+        working = working.replacingOccurrences(
+            of: #"</tr>"#, with: "\n", options: [.regularExpression, .caseInsensitive]
+        )
+        working = working.replacingOccurrences(
+            of: #"</?(table|thead|tbody)[^>]*>"#, with: "\n", options: [.regularExpression, .caseInsensitive]
+        )
+        return working
+    }
+
+    /// Строки, содержавшие `th`, помечаем как шапку.
+    private static func markHeaderRows(_ working: String, original: String) -> String {
+        guard original.range(of: "<th", options: [.caseInsensitive]) != nil else { return working }
+        // Шапка в регламентах всегда первая строка таблицы — большего разбора
+        // здесь не нужно, а полноценный парсер HTML ради этого не заводим.
+        return working.replacingOccurrences(
+            of: #"<thead[^>]*>\s*<tr[^>]*>"#,
+            with: "\n\u{0004}",
+            options: [.regularExpression, .caseInsensitive]
+        )
     }
 
     /// Плоский текст без разметки — для превью и поиска.

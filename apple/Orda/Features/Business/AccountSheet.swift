@@ -200,7 +200,7 @@ struct AccountSheet: View {
     private var logoutButton: some View {
         Button("Выйти из аккаунта") { confirmingLogout = true }
             .buttonStyle(DestructiveButtonStyle())
-            .confirmationDialog("Выйти из аккаунта?", isPresented: $confirmingLogout, titleVisibility: .visible) {
+            .alert("Выйти из аккаунта?", isPresented: $confirmingLogout) {
                 Button("Выйти", role: .destructive) {
                     Task { await auth.signOut() }
                 }
