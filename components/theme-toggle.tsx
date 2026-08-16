@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import { Moon, Sun } from 'lucide-react'
 
 import { rememberManualChoice } from '@/components/auto-theme'
-import { prewarmThemeDust } from '@/lib/hooks/theme-dust-canvas'
 import { originOfEvent, useThemeSweep } from '@/lib/hooks/use-theme-sweep'
 
 // Переключатель светлая/тёмная тема. Использует next-themes (класс на <html>).
@@ -21,10 +20,6 @@ export function ThemeToggle({ className }: { className?: string }) {
       type="button"
       aria-label={isDark ? 'Включить светлую тему' : 'Включить тёмную тему'}
       title={isDark ? 'Светлая тема' : 'Тёмная тема'}
-      // Снимок готовится, пока курсор идёт к кнопке: после нажатия на него
-      // уже не будет времени, а пауза перед распадом читается как тормоза.
-      onPointerEnter={() => prewarmThemeDust()}
-      onFocus={() => prewarmThemeDust()}
       onClick={(event) => {
         // Ручной выбор сильнее расписания до конца суток: раз человек нажал,
         // значит ему сейчас так надо.

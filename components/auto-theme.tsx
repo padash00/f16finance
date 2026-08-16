@@ -15,7 +15,6 @@
 
 import { useEffect, useRef } from 'react'
 
-import { invalidateThemeDust, prewarmThemeDust } from '@/lib/hooks/theme-dust-canvas'
 import { useThemeSweep } from '@/lib/hooks/use-theme-sweep'
 
 /** Ключи в localStorage: настройка живёт на устройстве, как и сама тема. */
@@ -104,35 +103,6 @@ export function AutoTheme() {
       document.removeEventListener('visibilitychange', onVisible)
     }
   }, [resolvedTheme, sweepTo])
-
-  // ── Снимок для распада темы ───────────────────────────────────────────────
-  // Готовится в простое: к моменту нажатия он уже есть, и тема меняется без
-  // паузы. Прокрутка и смена размера окна снимок обесценивают — пыль от
-  // чужого кадра не совпадёт с тем, что на экране.
-  useEffect(() => {
-    let idle = 0
-    const warm = () => {
-      const schedule = (window as any).requestIdleCallback || window.setTimeout
-      idle = schedule(() => prewarmThemeDust(), { timeout: 3000 })
-    }
-
-    const invalidate = () => {
-      invalidateThemeDust()
-      window.clearTimeout(idle)
-      // Перед новым снимком даём прокрутке закончиться.
-      idle = window.setTimeout(() => prewarmThemeDust(), 600)
-    }
-
-    warm()
-    window.addEventListener('scroll', invalidate, { passive: true })
-    window.addEventListener('resize', invalidate)
-
-    return () => {
-      window.clearTimeout(idle)
-      window.removeEventListener('scroll', invalidate)
-      window.removeEventListener('resize', invalidate)
-    }
-  }, [])
 
   return null
 }
