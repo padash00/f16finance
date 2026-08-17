@@ -93,6 +93,29 @@ async function resolvePointProject(supabase: any, companyId: string) {
   }
 }
 
+/**
+ * Зал среди точек оператора.
+ *
+ * Оператор бывает привязан к нескольким точкам, и «главная» из них — не всегда
+ * та, где есть зал: человек числится основным в кафе, а смены стоит в клубе.
+ * Поэтому перебираем все его точки, начиная с главной.
+ */
+async function resolveArenaScope(
+  supabase: any,
+  primaryCompanyId: string,
+  companyIds: string[],
+) {
+  const ordered = [primaryCompanyId, ...companyIds.filter((id) => id !== primaryCompanyId)]
+
+  for (const candidate of ordered) {
+    if (!candidate) continue
+    const project = await resolvePointProject(supabase, candidate)
+    if (project) return { project, companyId: candidate }
+  }
+
+  return null
+}
+
 // ─── GET ──────────────────────────────────────────────────────────────────────
 
 export async function GET(request: Request) {
@@ -256,12 +279,13 @@ export async function POST(request: Request) {
     const ctx = await requireOperator(request)
     if ('response' in ctx) return ctx.response
 
-    const { supabase, companyId, operatorId } = ctx
+    const { supabase, operatorId } = ctx
 
-    const pointProject = await resolvePointProject(supabase, companyId)
-    if (!pointProject) {
+    const scope = await resolveArenaScope(supabase, ctx.companyId, ctx.companyIds || [])
+    if (!scope) {
       return json({ error: 'no-point-project', detail: 'No active point project for this company' }, 404)
     }
+    const { project: pointProject, companyId } = scope
 
     const projectId = pointProject.id
     const deferIncomes = deferArenaSessionIncomes(pointProject.feature_flags as Record<string, unknown>) || (pointProject as any).isExtra === true

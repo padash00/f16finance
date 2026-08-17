@@ -427,6 +427,9 @@ enum OperatorProfileRoute: Hashable {
     case audit, checklists
     /// Только у старших смены — у остальных пункта нет.
     case lead
+    /// Зал клуба. В нижней панели он есть не у всех: у точки, где и торгуют, и
+    /// сажают за станции, места на все вкладки не хватает.
+    case arena
 }
 
 struct OperatorProfileScreen: View {
@@ -434,6 +437,12 @@ struct OperatorProfileScreen: View {
 
     /// Торгует ли точка: от этого зависит, показывать ли ревизию.
     private var sellsGoods: Bool { cabinet.overview?.points?.sellsGoods ?? true }
+
+    /// Есть ли зал: у клуба он в нижней панели, у смешанной точки — здесь.
+    private var hasArena: Bool {
+        let industries = cabinet.overview?.points?.industries ?? []
+        return industries.contains("club") || industries.contains("ps_club")
+    }
     @Environment(OperatorStore.self) private var store
     @Environment(CabinetStore.self) private var cabinet
 
@@ -510,6 +519,23 @@ struct OperatorProfileScreen: View {
                         .buttonStyle(.pressable)
 
                         RowDivider()
+
+                        // Зал — там, где гости садятся за станции. У точки,
+                        // которая ещё и торгует, вкладки в панели нет: пять
+                        // мест уже заняты, а зал нужен не меньше кассы.
+                        if hasArena, sellsGoods {
+                            NavigationLink(value: OperatorProfileRoute.arena) {
+                                NavigationRow(
+                                    icon: "desktopcomputer",
+                                    iconColor: Theme.info,
+                                    title: "Зал",
+                                    subtitle: "Станции, сессии и продления"
+                                )
+                            }
+                            .buttonStyle(.pressable)
+
+                            RowDivider()
+                        }
 
                         // Ревизия нужна кассиру магазина, но не каждый день —
                         // поэтому она здесь, а не в панели, где место занимает
@@ -679,6 +705,7 @@ struct OperatorProfileScreen: View {
             case .messages: MessagesScreen()
             case .pointQR: PointQRLoginScreen()
             case .lead: LeadDeskScreen()
+            case .arena: ArenaScreen()
             }
         }
         // Окно, а не всплывающая подсказка: подсказку система прижимает к
