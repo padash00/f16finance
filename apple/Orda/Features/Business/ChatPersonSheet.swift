@@ -23,6 +23,8 @@ struct ChatPersonSheet: View {
     @Environment(\.api) private var api
 
     @State private var writing = false
+    @State private var card: ChatPersonCard?
+    @State private var isLoading = true
 
     var body: some View {
         NavigationStack {
@@ -37,19 +39,54 @@ struct ChatPersonSheet: View {
                         )
 
                         VStack(spacing: Spacing.xxs) {
-                            Text(name)
+                            Text(card?.name ?? name)
                                 .font(Typography.title)
                                 .foregroundStyle(Theme.text)
                                 .multilineTextAlignment(.center)
 
-                            if let roleLabel, !roleLabel.isEmpty {
-                                Text(roleLabel)
+                            if let position = card?.position ?? roleLabel, !position.isEmpty {
+                                Text(position)
                                     .font(Typography.callout)
                                     .foregroundStyle(Theme.textMuted)
+                            }
+
+                            // На смене или нет — то, ради чего чаще всего и
+                            // открывают карточку: писать человеку, который
+                            // сейчас за стойкой, и человеку, который спит
+                            // после ночной, — разные разговоры.
+                            if let card {
+                                StatusChip(
+                                    card.onShift
+                                        ? (card.shiftCompany.map { "на смене · \($0)" } ?? "на смене")
+                                        : "не на смене",
+                                    kind: card.onShift ? .good : .neutral
+                                )
+                                .padding(.top, Spacing.xxs)
                             }
                         }
                     }
                     .frame(maxWidth: .infinity)
+                }
+
+                if isLoading && card == nil {
+                    LoadingRows(count: 1)
+                } else if let card {
+                    Card {
+                        VStack(spacing: Spacing.sm) {
+                            if !card.companies.isEmpty {
+                                StatRow(
+                                    card.companies.count > 1 ? "Точки" : "Точка",
+                                    value: card.companies.joined(separator: ", "),
+                                    icon: "storefront"
+                                )
+                            }
+
+                            if let tenure = card.tenureLabel {
+                                if !card.companies.isEmpty { RowDivider() }
+                                StatRow("Стаж", value: tenure, icon: "clock.arrow.circlepath")
+                            }
+                        }
+                    }
                 }
 
                 if let userID, !userID.isEmpty {
@@ -77,6 +114,16 @@ struct ChatPersonSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Готово") { dismiss() }
                 }
+            }
+            .task {
+                guard let userID, !userID.isEmpty else {
+                    isLoading = false
+                    return
+                }
+                // Молча: карточка — удобство, и её отказ не должен мешать
+                // написать человеку.
+                card = try? await FeedService(api: api).chatPerson(userID: userID)
+                isLoading = false
             }
             .navigationDestination(isPresented: $writing) {
                 if let userID {

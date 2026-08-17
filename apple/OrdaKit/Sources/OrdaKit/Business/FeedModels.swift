@@ -552,6 +552,51 @@ extension DirectThread {
     }
 }
 
+/// Карточка коллеги из чата: `/api/team-chat/person`.
+///
+/// Три факта и ничего больше: где работает, сколько работает и на смене ли
+/// сейчас. Телефон намеренно не приходит — рабочий чат для того и есть, а
+/// личный номер коллеги человек не соглашался показывать всей смене.
+public struct ChatPersonCard: Decodable, Sendable {
+    public let name: String
+    public let position: String?
+    public let companies: [String]
+    public let hireDate: Date?
+    public let onShift: Bool
+    /// Где именно на смене. Пусто — точка не определилась.
+    public let shiftCompany: String?
+
+    /// Сколько работает. `nil` — дата приёма не заполнена.
+    public var tenureLabel: String? {
+        guard let hireDate else { return nil }
+        let days = Calendar.current.dateComponents([.day], from: hireDate, to: Date()).day ?? 0
+        guard days >= 0 else { return nil }
+        if days < 31 { return "\(days) дн." }
+        let months = days / 30
+        if months < 12 { return "\(months) мес." }
+        let years = months / 12
+        let rest = months % 12
+        return rest == 0 ? "\(years) г." : "\(years) г. \(rest) мес."
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case name, position, companies
+        case hireDate = "hire_date"
+        case onShift = "on_shift"
+        case shiftCompany = "shift_company"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? "Коллега"
+        position = try c.decodeIfPresent(String.self, forKey: .position)
+        companies = try c.decodeIfPresent([String].self, forKey: .companies) ?? []
+        hireDate = (try c.decodeIfPresent(String.self, forKey: .hireDate)).flatMap(DateParsing.parseDateOnly)
+        onShift = try c.decodeIfPresent(Bool.self, forKey: .onShift) ?? false
+        shiftCompany = try c.decodeIfPresent(String.self, forKey: .shiftCompany)
+    }
+}
+
 public struct DirectThreadList: Decodable, Sendable {
     public let threads: [DirectThread]
 
@@ -1036,6 +1081,14 @@ public struct FeedService: Sendable {
             )
         )
         return UploadedAttachment(type: kind, url: response.url, name: response.name ?? fileName)
+    }
+
+    /// Карточка коллеги из чата.
+    public func chatPerson(userID: String) async throws -> ChatPersonCard {
+        let response: DataEnvelope<ChatPersonCard> = try await api.send(
+            APIRequest(path: "/api/team-chat/person", query: ["userId": userID])
+        )
+        return response.data
     }
 
     /// Реакция на сообщение. Повторная с тем же значком — снимает.
