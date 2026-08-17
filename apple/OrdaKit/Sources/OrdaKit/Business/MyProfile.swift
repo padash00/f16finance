@@ -13,6 +13,8 @@ public struct MyProfile: Decodable, Sendable, Equatable {
     public let phone: String?
     public let email: String?
     public let telegramChatID: String?
+    /// Своя фотография. Пусто — показываются инициалы.
+    public let photoURL: String?
 
     /// Telegram есть только у операторов: сотрудникам уведомления приходят
     /// иначе, и пустое поле в форме сбивало бы с толку.
@@ -21,6 +23,7 @@ public struct MyProfile: Decodable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case kind, fullName, position, phone, email
         case telegramChatID = "telegramChatId"
+        case photoURL = "photoUrl"
     }
 }
 
@@ -77,6 +80,28 @@ public struct MyProfileService: Sendable {
     public func load() async throws -> MyProfile {
         let response: Envelope<MyProfile> = try await api.send(APIRequest(path: "/api/me/profile"))
         return response.data
+    }
+
+    /// Заменить свою фотографию. Возвращает адрес новой.
+    ///
+    /// Право здесь не нужно и не спрашивается: человек меняет своё фото, а
+    /// `operators.avatar_upload` — про чужие карточки.
+    public func uploadAvatar(_ data: Data, fileName: String = "avatar.jpg") async throws -> String {
+        let response: AvatarResult = try await api.send(
+            APIRequest.multipart(
+                "/api/me/avatar",
+                fileField: "file",
+                fileName: fileName,
+                mimeType: "image/jpeg",
+                fileData: data
+            )
+        )
+        return response.data.url
+    }
+
+    private struct AvatarResult: Decodable, Sendable {
+        let data: Inner
+        struct Inner: Decodable, Sendable { let url: String }
     }
 
     public func save(_ change: MyProfileChange) async throws {

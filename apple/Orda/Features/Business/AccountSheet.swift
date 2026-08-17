@@ -234,6 +234,8 @@ struct MyContactsCard: View {
     /// Почему не загрузилось. Пустое состояние и загрузка выглядят одинаково,
     /// и без этого карточка крутила скелет бесконечно.
     @State private var loadError: APIError?
+    @State private var pickingPhoto = false
+    @State private var isUploading = false
 
     var body: some View {
         Card {
@@ -241,6 +243,37 @@ struct MyContactsCard: View {
                 SectionHeader("Мои данные")
 
                 if let profile {
+                    // Своё фото: его меняют раз в год, но когда собираются —
+                    // ищут именно здесь, рядом с остальными своими данными.
+                    HStack(spacing: Spacing.md) {
+                        FeedAvatar(
+                            initials: FeedText.initials(profile.fullName ?? "?"),
+                            side: 64,
+                            tint: Theme.brand,
+                            photoURL: profile.photoURL
+                        )
+
+                        VStack(alignment: .leading, spacing: Spacing.xxs) {
+                            Text(profile.fullName ?? "Без имени")
+                                .font(Typography.callout.weight(.semibold))
+                                .foregroundStyle(Theme.text)
+
+                            #if os(iOS)
+                            Button(isUploading ? "Загружаем…" : "Сменить фото") {
+                                pickingPhoto = true
+                            }
+                            .buttonStyle(.pressable)
+                            .font(Typography.caption.weight(.medium))
+                            .foregroundStyle(Theme.brand)
+                            .disabled(isUploading)
+                            #endif
+                        }
+
+                        Spacer()
+                    }
+
+                    RowDivider()
+
                     if let position = profile.position, !position.isEmpty {
                         StatRow("Должность", value: position, icon: "briefcase")
                         Text("Должность и имя меняет владелец — по ним считается зарплата.")
@@ -283,6 +316,9 @@ struct MyContactsCard: View {
                 }
             }
         }
+        #if os(iOS)
+        .fullScreenCover(isPresented: $pickingPhoto) { photoPicker }
+        #endif
         .task {
             guard !didLoad else { return }
             didLoad = true
@@ -311,6 +347,16 @@ struct MyContactsCard: View {
     }
 
     private enum Keyboard { case phone, email, plain }
+
+    #if os(iOS)
+    /// Системный выбор: камера на устройстве, галерея в симуляторе.
+    private var photoPicker: some View {
+        CameraCapture { data in
+            Task { await upload(data) }
+        }
+        .ignoresSafeArea()
+    }
+    #endif
 
     @ViewBuilder
     private func field(_ text: Binding<String>, placeholder: String, keyboard: Keyboard) -> some View {
@@ -356,6 +402,34 @@ struct MyContactsCard: View {
             loadError = .transport(message: error.localizedDescription)
         }
     }
+
+    #if os(iOS)
+    /// Загрузить снимок и обновить карточку.
+    ///
+    /// Данные приходят готовым JPEG из системного выбора — пережимать их
+    /// второй раз незачем.
+    ///
+    private func upload(_ data: Data) async {
+        isUploading = true
+        defer { isUploading = false }
+
+        do {
+            _ = try await MyProfileService(api: api).uploadAvatar(data)
+            await load()
+            message = "Фото обновлено"
+            isError = false
+            Haptics.success()
+        } catch let error as APIError {
+            message = error.userMessage
+            isError = true
+            Haptics.error()
+        } catch {
+            message = error.localizedDescription
+            isError = true
+            Haptics.error()
+        }
+    }
+    #endif
 
     private func save() async {
         guard !isSaving, let profile else { return }

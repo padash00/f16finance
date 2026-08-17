@@ -72,7 +72,7 @@ export async function GET(request: Request) {
     if (identity.kind === 'staff') {
       const { data, error } = await supabase
         .from('staff')
-        .select('id, full_name, short_name, role, phone, email')
+        .select('id, full_name, short_name, role, phone, email, photo_url')
         .eq('id', identity.id)
         .maybeSingle()
       if (error) throw error
@@ -84,13 +84,18 @@ export async function GET(request: Request) {
           phone: data?.phone || null,
           email: data?.email || null,
           telegramChatId: null,
+          photoUrl: data?.photo_url || null,
         },
       })
     }
 
     const [operatorRes, profileRes] = await Promise.all([
       supabase.from('operators').select('id, name, short_name, telegram_chat_id').eq('id', identity.id).maybeSingle(),
-      supabase.from('operator_profiles').select('full_name, position, phone, email').eq('operator_id', identity.id).maybeSingle(),
+      supabase
+        .from('operator_profiles')
+        .select('full_name, position, phone, email, photo_url')
+        .eq('operator_id', identity.id)
+        .maybeSingle(),
     ])
     if (operatorRes.error) throw operatorRes.error
 
@@ -102,6 +107,7 @@ export async function GET(request: Request) {
         phone: profileRes.data?.phone || null,
         email: profileRes.data?.email || null,
         telegramChatId: operatorRes.data?.telegram_chat_id || null,
+        photoUrl: profileRes.data?.photo_url || null,
       },
     })
   } catch (error: any) {

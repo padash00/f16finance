@@ -1617,6 +1617,9 @@ private struct ThreadRow: View {
 }
 
 struct ConversationPane: View {
+    /// Открыта ли карточка собеседника.
+    @State private var showingPerson = false
+
     let thread: DirectThread
     let store: MessagesStore
 
@@ -1734,12 +1737,34 @@ struct ConversationPane: View {
             }
         }
         .background(Theme.background)
-        .navigationTitle(thread.otherName)
+        .navigationTitle("")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        .sheet(isPresented: $showingPerson) {
+            ChatPersonSheet(
+                name: thread.otherName,
+                roleLabel: nil,
+                avatarURL: nil,
+                userID: thread.otherUserID
+            )
+        }
         // Блокировка и жалоба — там же, где всё остальное про собеседника.
         .toolbar {
+            // Имя в шапке — вход в карточку: «кто это, где работает, на смене
+            // ли» спрашивают прямо посреди переписки.
+            ToolbarItem(placement: .principal) {
+                Button {
+                    showingPerson = true
+                } label: {
+                    Text(thread.otherName)
+                        .font(Typography.headline)
+                        .foregroundStyle(Theme.text)
+                        .lineLimit(1)
+                }
+                .buttonStyle(.pressable)
+            }
+
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     Button(role: isBlocked ? nil : .destructive) {
