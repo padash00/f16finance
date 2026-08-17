@@ -225,7 +225,9 @@ export async function GET(request: Request) {
     const { data: pointRows } = await supabase
       .from('companies')
       .select('id, industry')
-      .in('id', operatorCompanyIds.length > 0 ? operatorCompanyIds : ['00000000-0000-0000-0000-000000000000'])
+      // Именно назначения, а не расширенный список: оператор клуба, взявший
+      // товар в магазине, попал бы в «продавцы» и получил бы кассу в панели.
+      .in('id', assignedCompanyIds.length > 0 ? assignedCompanyIds : ['00000000-0000-0000-0000-000000000000'])
 
     const industries = Array.from(
       new Set(((pointRows as any[]) || []).map((row) => String(row.industry || 'other'))),
