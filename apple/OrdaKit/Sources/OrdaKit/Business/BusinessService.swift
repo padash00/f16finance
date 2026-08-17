@@ -582,6 +582,35 @@ public struct BusinessService: Sendable {
         )
     }
 
+    /// Поставить человека в смену или освободить её.
+    ///
+    /// Пустое имя освобождает смену — так же это делает сайт: отдельного
+    /// «удалить» у расписания нет, есть «в этот день никого».
+    public func saveShift(
+        companyID: String,
+        date: String,
+        shiftType: String,
+        operatorName: String
+    ) async throws {
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/shifts",
+                method: .post,
+                body: try JSONSerialization.data(
+                    withJSONObject: [
+                        "action": "saveShift",
+                        "payload": [
+                            "companyId": companyID,
+                            "date": date,
+                            "shiftType": shiftType,
+                            "operatorName": operatorName,
+                        ],
+                    ]
+                )
+            )
+        )
+    }
+
     /// График смен на неделю. Требует `shifts.view` либо `dashboard.view`.
     public func schedule(weekStart: String) async throws -> ShiftSchedule {
         try await api.send(

@@ -403,6 +403,21 @@ private struct TeamTaskDetail: View {
 struct ScheduleWeekScreen: View {
     @Environment(BusinessStore.self) private var store
     @Environment(\.surface) private var surface
+    @Environment(\.access) private var access
+
+    /// Какую клетку правим. Открывается нажатием на день.
+    @State private var editing: ShiftSlot?
+
+    private var canEdit: Bool { access?.can("shifts.create") ?? false }
+
+    /// Клетка расписания: точка и день.
+    struct ShiftSlot: Identifiable, Hashable {
+        let companyID: String
+        let companyName: String
+        let day: Date
+
+        var id: String { companyID + DateParsing.dateOnlyString(from: day) }
+    }
 
     var body: some View {
         @Bindable var bindable = store
@@ -432,6 +447,15 @@ struct ScheduleWeekScreen: View {
             }
         }
         .background(Theme.background)
+        .sheet(item: $editing) { slot in
+            AssignShiftSheet(
+                companyID: slot.companyID,
+                companyName: slot.companyName,
+                date: slot.day
+            ) {
+                await store.loadSchedule()
+            }
+        }
         .navigationTitle("Смены")
         .toolbar { LogoutToolbarItem() }
         .task { await store.loadSchedule() }
@@ -457,13 +481,30 @@ struct ScheduleWeekScreen: View {
 
                 LazyVGrid(columns: columns, spacing: Spacing.sm) {
                     ForEach(weekDays, id: \.self) { day in
-                        RosterDayCell(
+                        let cell = RosterDayCell(
                             day: day,
                             shifts: schedule.shifts(
                                 on: DateParsing.dateOnlyString(from: day),
                                 companyID: company.id
                             )
                         )
+
+                        if canEdit {
+                            // График правят по дороге: кто-то заболел утром,
+                            // кого-то переставили вечером.
+                            Button {
+                                editing = ShiftSlot(
+                                    companyID: company.id,
+                                    companyName: company.name,
+                                    day: day
+                                )
+                            } label: {
+                                cell.contentShape(Rectangle())
+                            }
+                            .buttonStyle(.pressable)
+                        } else {
+                            cell
+                        }
                     }
                 }
             }
