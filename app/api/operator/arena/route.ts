@@ -47,18 +47,50 @@ function isExtraCompany(company: { code?: string | null; name?: string | null } 
   return code === 'extra' || name.includes('extra')
 }
 
+/**
+ * Проект точки, к которому привязана компания оператора.
+ *
+ * Связь идёт через `point_project_companies`: один проект обслуживает
+ * несколько компаний (клуб и кухня в одном помещении — это две компании и один
+ * зал). Колонки `point_projects.company_id` не существует, и запрос по ней
+ * молча не находил ничего — зал не открывался ни на одной точке.
+ *
+ * Флаги компании перекрывают проектные: `arena_defer_income_to_shift` включают
+ * поточечно, и проектное значение для остальных должно остаться прежним.
+ */
 async function resolvePointProject(supabase: any, companyId: string) {
-  const { data } = await supabase
-    .from('point_projects')
-    .select('id, feature_flags')
+  const { data: links, error } = await supabase
+    .from('point_project_companies')
+    .select('project_id, feature_flags, project:project_id(id, feature_flags, is_active, created_at)')
     .eq('company_id', companyId)
-    .eq('is_active', true)
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle()
-  if (!data) return null
+
+  if (error) throw error
+
+  const active = ((links || []) as any[])
+    .map((row) => ({
+      link: row,
+      project: Array.isArray(row.project) ? row.project[0] : row.project,
+    }))
+    .filter((row) => row.project?.is_active)
+    .sort((left, right) =>
+      String(left.project?.created_at || '').localeCompare(String(right.project?.created_at || '')),
+    )[0]
+
+  if (!active?.project) return null
+
+  const projectFlags =
+    active.project.feature_flags && typeof active.project.feature_flags === 'object'
+      ? active.project.feature_flags
+      : {}
+  const companyFlags =
+    active.link.feature_flags && typeof active.link.feature_flags === 'object' ? active.link.feature_flags : {}
+
   const { data: co } = await supabase.from('companies').select('code, name').eq('id', companyId).maybeSingle()
-  return { ...data, isExtra: isExtraCompany(co) }
+  return {
+    id: active.project.id,
+    feature_flags: { ...projectFlags, ...companyFlags },
+    isExtra: isExtraCompany(co),
+  }
 }
 
 // ─── GET ──────────────────────────────────────────────────────────────────────

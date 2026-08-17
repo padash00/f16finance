@@ -33,6 +33,16 @@ struct ArenaScreen: View {
                         .foregroundStyle(Theme.textMuted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+            } else if let hall, hall.stations.isEmpty {
+                // Проект точки есть, а станций в нём нет: зал заводят в
+                // веб-разделе «Зал», и пустая сетка без объяснения выглядела
+                // бы поломкой.
+                Card {
+                    Text("Зал пока пустой: станции и тарифы заводит владелец в разделе «Зал».")
+                        .font(Typography.callout)
+                        .foregroundStyle(Theme.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             } else if let hall {
                 summaryCard(hall)
 
