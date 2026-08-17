@@ -10,6 +10,10 @@ struct MoneyScreen: View {
 
     var body: some View {
         ScreenScroll {
+            // Переключатель недель: «сколько я заработала в прошлом месяце»
+            // посмотреть было негде — экран всегда показывал текущую.
+            weekStepper
+
             if let week = cabinet.salary?.week ?? cabinet.overview?.week {
                 heroCard(week)
 
@@ -186,6 +190,44 @@ struct MoneyScreen: View {
     /// Раньше список шёл одной кучей за всё время: двадцать строк подряд, в
     /// которых не видно, что своё за эту неделю, а что тянется с прошлого
     /// месяца. Долг спрашивают по неделям — и гасят тоже по неделям.
+    /// Шаг по неделям. Вперёд дальше текущей не пускаем: там ещё не работали.
+    private var weekStepper: some View {
+        HStack(spacing: Spacing.sm) {
+            Button {
+                cabinet.shiftSalaryWeek(by: -1)
+            } label: {
+                Image(systemName: "chevron.left")
+            }
+            .buttonStyle(.pressable)
+
+            Spacer()
+
+            VStack(spacing: 2) {
+                Text(MoneyScreen.weekTitle(cabinet.salaryWeek))
+                    .font(Typography.callout.weight(.semibold))
+                    .foregroundStyle(Theme.text)
+                if cabinet.salaryWeek == CabinetStore.currentWeekStart() {
+                    Text("текущая неделя")
+                        .font(Typography.caption)
+                        .foregroundStyle(Theme.textMuted)
+                }
+            }
+
+            Spacer()
+
+            Button {
+                cabinet.shiftSalaryWeek(by: 1)
+            } label: {
+                Image(systemName: "chevron.right")
+            }
+            .buttonStyle(.pressable)
+            .disabled(cabinet.salaryWeek >= CabinetStore.currentWeekStart())
+            .opacity(cabinet.salaryWeek >= CabinetStore.currentWeekStart() ? 0.35 : 1)
+        }
+        .padding(.horizontal, Spacing.xs)
+    }
+
+    @ViewBuilder
     private var debtsCard: some View {
         let debts = (cabinet.overview?.recentDebts ?? []).filter { $0.amount > 0 }
         let weeks = MoneyScreen.groupByWeek(debts)
@@ -327,6 +369,8 @@ struct MoneyScreen: View {
 /// открывается, со второго открывается».
 enum OperatorProfileRoute: Hashable {
     case schedule, money, salesQuality, knowledge, exams, chat, messages, pointQR
+    /// Ревизия и чек-листы ушли из нижней панели — но не из приложения.
+    case audit, checklists
 }
 
 struct OperatorProfileScreen: View {
@@ -383,6 +427,33 @@ struct OperatorProfileScreen: View {
                                 iconColor: Theme.positive,
                                 title: "Как я работаю",
                                 subtitle: "Оценка за месяц и доплата за качество"
+                            )
+                        }
+                        .buttonStyle(.pressable)
+
+                        RowDivider()
+
+                        // Ревизия нужна кассиру магазина, но не каждый день —
+                        // поэтому она здесь, а не в панели, где место занимает
+                        // постоянно.
+                        NavigationLink(value: OperatorProfileRoute.audit) {
+                            NavigationRow(
+                                icon: "list.clipboard",
+                                iconColor: Theme.info,
+                                title: "Ревизия",
+                                subtitle: "Пересчёт товара по актам"
+                            )
+                        }
+                        .buttonStyle(.pressable)
+
+                        RowDivider()
+
+                        NavigationLink(value: OperatorProfileRoute.checklists) {
+                            NavigationRow(
+                                icon: "checkmark.seal",
+                                iconColor: Theme.positive,
+                                title: "Чек-листы",
+                                subtitle: "Приём, обход, закрытие смены"
                             )
                         }
                         .buttonStyle(.pressable)
@@ -520,6 +591,8 @@ struct OperatorProfileScreen: View {
             case .money: MoneyScreen()
             case .knowledge: KnowledgeScreen()
             case .salesQuality: SalesQualityScreen()
+            case .audit: AuditScreen()
+            case .checklists: ChecklistsScreen()
             case .exams: ExamsScreen()
             case .chat: TeamChatScreen()
             case .messages: MessagesScreen()

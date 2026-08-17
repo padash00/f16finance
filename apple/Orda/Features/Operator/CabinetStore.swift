@@ -129,8 +129,37 @@ final class CabinetStore {
         tasks = (try? await service.tasks()) ?? tasks
     }
 
+    /// Какую неделю смотрим. Понедельник, «2026-08-17».
+    var salaryWeek: String = CabinetStore.currentWeekStart() {
+        didSet {
+            guard salaryWeek != oldValue else { return }
+            Task { await loadSalary() }
+        }
+    }
+
+    /// Начало текущей недели — понедельник, как считает сервер.
+    static func currentWeekStart(from date: Date = Date()) -> String {
+        var calendar = Calendar(identifier: .iso8601)
+        calendar.timeZone = .current
+        let start = calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: start)
+    }
+
+    /// Сдвинуть неделю: минус — назад.
+    func shiftSalaryWeek(by weeks: Int) {
+        guard let current = DateParsing.parseDateOnly(salaryWeek) else { return }
+        let moved = current.addingTimeInterval(Double(weeks) * 7 * 86_400)
+        // Вперёд дальше текущей недели ходить некуда: там ещё не работали.
+        let next = CabinetStore.currentWeekStart(from: moved)
+        guard next <= CabinetStore.currentWeekStart() else { return }
+        salaryWeek = next
+    }
+
     func loadSalary() async {
-        salary = (try? await service.salary()) ?? salary
+        salary = (try? await service.salary(weekStart: salaryWeek)) ?? salary
     }
 
     func loadSchedule() async {

@@ -219,8 +219,15 @@ public struct OperatorService: Sendable {
         )
     }
 
-    public func salary() async throws -> OperatorSalary {
-        try await api.send(APIRequest(path: "/api/operator/salary"))
+    /// Мой расчёт за неделю. Пусто — текущая.
+    ///
+    /// «Сколько я заработала в прошлом месяце» посмотреть было негде: экран
+    /// всегда показывал текущую неделю, и прошлые расчёты человек знал только
+    /// по выпискам.
+    public func salary(weekStart: String? = nil) async throws -> OperatorSalary {
+        var query: [String: String] = [:]
+        if let weekStart, !weekStart.isEmpty { query["weekStart"] = weekStart }
+        return try await api.send(APIRequest(path: "/api/operator/salary", query: query))
     }
 
     public func schedule() async throws -> OperatorSchedule {
