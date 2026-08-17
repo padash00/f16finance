@@ -181,26 +181,92 @@ struct MoneyScreen: View {
     }
 
     @ViewBuilder
+    /// Долг перед точкой — по неделям.
+    ///
+    /// Раньше список шёл одной кучей за всё время: двадцать строк подряд, в
+    /// которых не видно, что своё за эту неделю, а что тянется с прошлого
+    /// месяца. Долг спрашивают по неделям — и гасят тоже по неделям.
     private var debtsCard: some View {
-        let debts = cabinet.overview?.recentDebts ?? []
-        if !debts.isEmpty {
+        let debts = (cabinet.overview?.recentDebts ?? []).filter { $0.amount > 0 }
+        let weeks = MoneyScreen.groupByWeek(debts)
+
+        if !weeks.isEmpty {
             Card(accent: Theme.negative) {
                 VStack(alignment: .leading, spacing: Spacing.md) {
-                    Text("Долг перед точкой")
-                        .font(Typography.label)
-                        .foregroundStyle(Theme.negative)
-                        .textCase(.uppercase)
+                    HStack {
+                        Text("Долг перед точкой")
+                            .font(Typography.label)
+                            .foregroundStyle(Theme.negative)
+                            .textCase(.uppercase)
+                        Spacer()
+                        Text(Money.format(debts.reduce(0) { $0 + $1.amount }))
+                            .font(Typography.callout.weight(.semibold))
+                            .foregroundStyle(Theme.negative)
+                    }
 
-                    ForEach(debts) { debt in
-                        StatRow(
-                            debt.comment ?? debt.companyName ?? "Долг",
-                            value: Money.format(debt.amount),
-                            valueColor: Theme.negative
-                        )
+                    ForEach(Array(weeks.enumerated()), id: \.element.key) { index, group in
+                        if index > 0 { RowDivider() }
+
+                        VStack(alignment: .leading, spacing: Spacing.xs) {
+                            HStack {
+                                Text(group.title)
+                                    .font(Typography.caption.weight(.semibold))
+                                    .foregroundStyle(Theme.textDim)
+                                Spacer()
+                                Text(Money.format(group.total))
+                                    .font(Typography.caption.weight(.semibold).monospacedDigit())
+                                    .foregroundStyle(Theme.negative)
+                            }
+
+                            ForEach(group.debts) { debt in
+                                StatRow(
+                                    debt.comment ?? debt.companyName ?? "Долг",
+                                    value: Money.format(debt.amount),
+                                    valueColor: Theme.negative
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
+    }
+
+    /// Долги, сгруппированные по неделе. Свежие сверху.
+    struct DebtWeek: Identifiable {
+        let key: String
+        let title: String
+        let total: Double
+        let debts: [OperatorDebt]
+
+        var id: String { key }
+    }
+
+    static func groupByWeek(_ debts: [OperatorDebt]) -> [DebtWeek] {
+        let grouped = Dictionary(grouping: debts) { $0.weekStart ?? "" }
+        return grouped
+            .map { key, list in
+                DebtWeek(
+                    key: key,
+                    title: weekTitle(key),
+                    total: list.reduce(0) { $0 + $1.amount },
+                    debts: list
+                )
+            }
+            .sorted { $0.key > $1.key }
+    }
+
+    /// «17 авг. — 23 авг.» Без даты — «Без недели»: такие строки бывают у
+    /// старых записей, и прятать их нельзя, это тоже деньги.
+    static func weekTitle(_ weekStart: String) -> String {
+        guard !weekStart.isEmpty, let start = DateParsing.parseDateOnly(weekStart) else {
+            return "Без недели"
+        }
+        let end = start.addingTimeInterval(6 * 86_400)
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ru_RU")
+        formatter.dateFormat = "d MMM"
+        return "\(formatter.string(from: start)) — \(formatter.string(from: end))"
     }
 
     @ViewBuilder

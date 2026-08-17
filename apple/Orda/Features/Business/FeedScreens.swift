@@ -19,7 +19,7 @@ private func feedTint(for kind: TeamCalendarEventKind) -> Color {
 }
 
 /// Кружок с инициалами вместо фото — узнаваемость строки в списке.
-private struct FeedAvatar: View {
+struct FeedAvatar: View {
     let initials: String
     var side: CGFloat = 36
     var tint: Color = Theme.brand
@@ -140,6 +140,8 @@ private struct FeedBubble: View {
     var replyPreview: String?
     var reactions: [FeedReactionGroup] = []
     var poll: ChatPoll?
+    /// Нажатие на имя или аватар автора. Пусто — имя не нажимается.
+    var openSender: (() -> Void)?
     var vote: (String) -> Void = { _ in }
     /// Нажатие на уже стоящую реакцию — свой голос за неё или снятие своего.
     var react: (String) -> Void = { _ in }
@@ -149,27 +151,43 @@ private struct FeedBubble: View {
             if isMine { Spacer(minLength: Spacing.xxl) }
 
             if !isMine && showsSender {
-                FeedAvatar(
+                let avatar = FeedAvatar(
                     initials: FeedText.initials(senderName),
                     side: 30,
                     tint: Theme.info,
                     photoURL: avatarURL
                 )
+                if let openSender {
+                    Button(action: openSender) { avatar }
+                        .buttonStyle(.pressable)
+                } else {
+                    avatar
+                }
             } else if !isMine {
                 Color.clear.frame(width: 30, height: 1)
             }
 
             VStack(alignment: isMine ? .trailing : .leading, spacing: Spacing.xs) {
                 if !isMine && showsSender {
-                    HStack(spacing: Spacing.xs) {
+                    let header = HStack(spacing: Spacing.xs) {
                         Text(senderName)
                             .font(Typography.caption.weight(.semibold))
-                            .foregroundStyle(Theme.text)
+                            .foregroundStyle(openSender == nil ? Theme.text : Theme.brand)
                         if let roleLabel {
                             Text(roleLabel)
                                 .font(Typography.caption)
                                 .foregroundStyle(Theme.textDim)
                         }
+                    }
+
+                    if let openSender {
+                        // Имя в чате — вход в карточку человека: спросить «кто
+                        // это и как с ним связаться» проще всего там, где его
+                        // и увидел.
+                        Button(action: openSender) { header.contentShape(Rectangle()) }
+                            .buttonStyle(.pressable)
+                    } else {
+                        header
                     }
                 }
 
@@ -964,9 +982,22 @@ final class TeamChatStore {
 }
 
 /// Общий чат команды.
+/// Человек, чью карточку открыли из чата.
+struct ChatPerson: Identifiable, Hashable {
+    let name: String
+    let roleLabel: String?
+    let avatarURL: String?
+    let userID: String?
+
+    var id: String { (userID ?? "") + name }
+}
+
 struct TeamChatScreen: View {
     @Environment(\.api) private var api
     @Environment(AuthStore.self) private var auth
+
+    /// Кого открыли по имени в чате.
+    @State private var person: ChatPerson?
 
     @Environment(\.access) private var access
 
@@ -1030,6 +1061,14 @@ struct TeamChatScreen: View {
             }
         }
         .background(Theme.background)
+        .sheet(item: $person) { who in
+            ChatPersonSheet(
+                name: who.name,
+                roleLabel: who.roleLabel,
+                avatarURL: who.avatarURL,
+                userID: who.userID
+            )
+        }
         .navigationTitle("Командный чат")
         // Поиск по чату: сервер ищет и по тексту, и по имени отправителя.
         // «Кто говорил про поставщика» иначе листают руками за неделю.
@@ -1113,6 +1152,14 @@ struct TeamChatScreen: View {
                                     replyPreview: replyPreview(for: message, in: feed),
                                     reactions: message.reactionGroups,
                                     poll: feed.poll(for: message),
+                                    openSender: {
+                                        person = ChatPerson(
+                                            name: message.senderName,
+                                            roleLabel: message.roleLabel,
+                                            avatarURL: message.senderAvatarURL,
+                                            userID: message.senderUserID
+                                        )
+                                    },
                                     vote: { optionID in
                                         guard let poll = feed.poll(for: message) else { return }
                                         store.vote(pollID: poll.id, optionID: optionID)
@@ -1569,7 +1616,7 @@ private struct ThreadRow: View {
     }
 }
 
-private struct ConversationPane: View {
+struct ConversationPane: View {
     let thread: DirectThread
     let store: MessagesStore
 

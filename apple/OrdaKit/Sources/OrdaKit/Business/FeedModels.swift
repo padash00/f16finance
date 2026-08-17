@@ -535,8 +535,16 @@ extension DirectThread {
     /// Нужна, чтобы после выбора собеседника открылся разговор, а не список:
     /// на сервере такой переписки пока нет, она появится с первым сообщением.
     public init(placeholderFor contact: DirectContact) {
-        otherUserID = contact.userID
-        otherName = contact.name
+        self.init(withUserID: contact.userID, name: contact.name)
+    }
+
+    /// То же, но по человеку из чата: там на руках только идентификатор и имя.
+    ///
+    /// Нужна, чтобы из командного чата можно было написать лично, не выходя в
+    /// список переписок и не отыскивая человека в списке заново.
+    public init(withUserID userID: String, name: String) {
+        otherUserID = userID
+        otherName = name
         lastMessage = ""
         lastAt = nil
         lastFromMe = false
