@@ -26,6 +26,7 @@ struct AccountSheet: View {
                 VStack(spacing: Spacing.lg) {
                     identityCard
                     MyContactsCard()
+                    NotificationsCard()
                     AppearancePicker()
                     LargeTypeToggle()
                     BiometricLockToggle()
@@ -415,6 +416,105 @@ struct AppearancePicker: View {
                     .font(Typography.caption)
                     .foregroundStyle(Theme.textDim)
             }
+        }
+    }
+}
+
+/// Состояние уведомлений.
+///
+/// «Мне не приходят уведомления» — жалоба, которую нельзя проверить со стороны:
+/// причина либо в выключенном разрешении, либо в том, что телефон не успел
+/// зарегистрироваться. Карточка показывает, что именно, и ведёт туда, где это
+/// чинится, — иначе разбираться приходится вслепую.
+struct NotificationsCard: View {
+    @State private var status: PushManager.Status = .unknown
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        Card(accent: accent) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(spacing: Spacing.sm) {
+                    Image(systemName: icon)
+                        .foregroundStyle(accent ?? Theme.positive)
+                    Text(title)
+                        .font(Typography.callout.weight(.medium))
+                        .foregroundStyle(Theme.text)
+                    Spacer()
+                }
+
+                Text(explanation)
+                    .font(Typography.caption)
+                    .foregroundStyle(Theme.textDim)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                #if os(iOS)
+                if case .denied = status {
+                    Button("Открыть настройки") {
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            openURL(url)
+                        }
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                } else if case .notRequested = status {
+                    Button("Включить уведомления") {
+                        Task {
+                            await PushManager.shared.request()
+                            await refresh()
+                        }
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                }
+                #endif
+            }
+        }
+        .task { await refresh() }
+    }
+
+    private func refresh() async {
+        await PushManager.shared.refreshStatus()
+        status = PushManager.shared.status
+    }
+
+    private var accent: Color? {
+        switch status {
+        case .authorized(true): nil
+        case .unknown: nil
+        default: Theme.warning
+        }
+    }
+
+    private var icon: String {
+        switch status {
+        case .authorized(true): "bell.badge.fill"
+        case .authorized(false): "bell.slash"
+        case .denied: "bell.slash.fill"
+        case .notRequested: "bell"
+        case .unknown: "bell"
+        }
+    }
+
+    private var title: String {
+        switch status {
+        case .authorized(true): "Уведомления приходят"
+        case .authorized(false): "Уведомления разрешены, но телефон не зарегистрирован"
+        case .denied: "Уведомления выключены"
+        case .notRequested: "Уведомления не включены"
+        case .unknown: "Уведомления"
+        }
+    }
+
+    private var explanation: String {
+        switch status {
+        case .authorized(true):
+            "Придут упоминания в чате, личные сообщения, задачи и напоминания об экзаменах."
+        case .authorized(false):
+            "Разрешение есть, но телефон ещё не отметился на сервере. Обычно проходит само; если нет — перезапустите приложение."
+        case .denied:
+            "Разрешение отозвано в настройках телефона. Пока оно выключено, упоминание в чате не придёт — его видно только в самом чате."
+        case .notRequested:
+            "Пока не включены. Без них упоминание в чате и сообщение от управляющего можно заметить только зайдя в приложение."
+        case .unknown:
+            "Проверяем состояние…"
         }
     }
 }

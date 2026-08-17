@@ -62,7 +62,7 @@ final class PushManager {
             switch kind {
             case "news": self = .news
             case "direct-message": self = .directMessages
-            case "team-chat-announcement": self = .teamChat
+            case "team-chat-announcement", "team-chat-mention": self = .teamChat
             case "staff-account-deleted": self = .staff
             case "birthday": self = .birthdays
             case "expense-approval": self = .approvals

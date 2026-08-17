@@ -43,6 +43,15 @@ struct OperatorRootView: View {
             }
         }
 
+        /// Подпись в нижней панели. Там места на слово: «Командный чат» не
+        /// влезает и обрезается многоточием.
+        var tabTitle: String {
+            switch self {
+            case .chat: "Чат"
+            default: title
+            }
+        }
+
         var icon: String {
             switch self {
             case .shift: "square.grid.2x2.fill"
@@ -60,7 +69,10 @@ struct OperatorRootView: View {
         }
 
         /// Что видно в таб-баре телефона: пять пунктов, остальное — в профиле.
-        static let phoneTabs: [OperatorSection] = [.shift, .sale, .audit, .tasks, .profile]
+        /// Ревизия ушла из нижней панели: она нужна кассиру магазина и не
+        /// нужна оператору клуба, а вот чат нужен обоим — там задают вопросы
+        /// посреди смены. Ревизия осталась в профиле и в меню иконки.
+        static let phoneTabs: [OperatorSection] = [.shift, .sale, .chat, .tasks, .profile]
 
         /// Группировка боковой панели на большом экране.
         static let sidebarGroups: [(title: String, items: [OperatorSection])] = [
@@ -167,7 +179,7 @@ struct OperatorRootView: View {
         TabView(selection: $selection) {
             ForEach(OperatorSection.phoneTabs) { section in
                 NavigationStack { screen(for: section) }
-                    .tabItem { Label(section.title, systemImage: section.icon) }
+                    .tabItem { Label(section.tabTitle, systemImage: section.icon) }
                     .badge(badge(for: section))
                     .tag(Optional(section))
             }
