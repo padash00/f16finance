@@ -187,9 +187,10 @@ struct MoneyScreen: View {
     @ViewBuilder
     /// Долг перед точкой — по неделям.
     ///
-    /// Раньше список шёл одной кучей за всё время: двадцать строк подряд, в
-    /// которых не видно, что своё за эту неделю, а что тянется с прошлого
-    /// месяца. Долг спрашивают по неделям — и гасят тоже по неделям.
+    /// Долг это не недельная величина, а остаток: непогашенное с прошлых
+    /// недель никуда не девается. Но карточка стоит под переключателем недель
+    /// и потому читалась как «долг за эту неделю» — поэтому здесь сказано
+    /// прямо, что это всё непогашенное, а неделя выбранного периода помечена.
     /// Шаг по неделям. Вперёд дальше текущей не пускаем: там ещё не работали.
     private var weekStepper: some View {
         HStack(spacing: Spacing.sm) {
@@ -235,25 +236,40 @@ struct MoneyScreen: View {
         if !weeks.isEmpty {
             Card(accent: Theme.negative) {
                 VStack(alignment: .leading, spacing: Spacing.md) {
-                    HStack {
-                        Text("Долг перед точкой")
-                            .font(Typography.label)
-                            .foregroundStyle(Theme.negative)
-                            .textCase(.uppercase)
-                        Spacer()
-                        Text(Money.format(debts.reduce(0) { $0 + $1.amount }))
-                            .font(Typography.callout.weight(.semibold))
-                            .foregroundStyle(Theme.negative)
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack {
+                            Text("Непогашенный долг")
+                                .font(Typography.label)
+                                .foregroundStyle(Theme.negative)
+                                .textCase(.uppercase)
+                            Spacer()
+                            Text(Money.format(debts.reduce(0) { $0 + $1.amount }))
+                                .font(Typography.callout.weight(.semibold))
+                                .foregroundStyle(Theme.negative)
+                        }
+
+                        Text("Всё, что не погашено, — не только за выбранную неделю.")
+                            .font(Typography.caption)
+                            .foregroundStyle(Theme.textMuted)
                     }
 
                     ForEach(Array(weeks.enumerated()), id: \.element.key) { index, group in
                         if index > 0 { RowDivider() }
 
                         VStack(alignment: .leading, spacing: Spacing.xs) {
-                            HStack {
+                            HStack(spacing: Spacing.xs) {
                                 Text(group.title)
                                     .font(Typography.caption.weight(.semibold))
-                                    .foregroundStyle(Theme.textDim)
+                                    .foregroundStyle(
+                                        group.key == cabinet.salaryWeek ? Theme.text : Theme.textDim
+                                    )
+                                // Долг выбранной недели помечаем: остальные —
+                                // хвосты, и путать их с текущим нельзя.
+                                if group.key == cabinet.salaryWeek {
+                                    Text("выбранная неделя")
+                                        .font(Typography.caption)
+                                        .foregroundStyle(Theme.textMuted)
+                                }
                                 Spacer()
                                 Text(Money.format(group.total))
                                     .font(Typography.caption.weight(.semibold).monospacedDigit())
