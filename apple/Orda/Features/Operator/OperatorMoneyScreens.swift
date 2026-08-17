@@ -391,6 +391,9 @@ enum OperatorProfileRoute: Hashable {
 
 struct OperatorProfileScreen: View {
     @Environment(AuthStore.self) private var auth
+
+    /// Торгует ли точка: от этого зависит, показывать ли ревизию.
+    private var sellsGoods: Bool { cabinet.overview?.points?.sellsGoods ?? true }
     @Environment(OperatorStore.self) private var store
     @Environment(CabinetStore.self) private var cabinet
 
@@ -451,7 +454,9 @@ struct OperatorProfileScreen: View {
 
                         // Ревизия нужна кассиру магазина, но не каждый день —
                         // поэтому она здесь, а не в панели, где место занимает
-                        // постоянно.
+                        // постоянно. Оператору клуба она не нужна вовсе: он
+                        // ничего не продаёт и остатки не считает.
+                        if sellsGoods {
                         NavigationLink(value: OperatorProfileRoute.audit) {
                             NavigationRow(
                                 icon: "list.clipboard",
@@ -463,6 +468,7 @@ struct OperatorProfileScreen: View {
                         .buttonStyle(.pressable)
 
                         RowDivider()
+                        }
 
                         NavigationLink(value: OperatorProfileRoute.checklists) {
                             NavigationRow(

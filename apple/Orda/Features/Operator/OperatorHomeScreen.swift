@@ -74,12 +74,13 @@ struct OperatorHomeScreen: View {
             await store.loadShift()
             await cabinet.loadOverview()
             await cabinet.loadTasks()
-            if store.hasOpenShift { await store.loadCatalog() }
+            // Каталог нужен только кассе: у клуба его незачем даже тянуть.
+            if store.hasOpenShift, sellsGoods { await store.loadCatalog() }
         }
         .sheet(isPresented: $showOpenSheet) { OpenShiftSheet() }
         .sheet(isPresented: $showCloseSheet) { CloseShiftSheet() }
         .task {
-            if store.hasOpenShift && store.recentSales.isEmpty { await store.loadCatalog() }
+            if store.hasOpenShift, sellsGoods, store.recentSales.isEmpty { await store.loadCatalog() }
         }
     }
 

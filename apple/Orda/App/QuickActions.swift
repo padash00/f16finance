@@ -106,8 +106,12 @@ enum QuickActions {
     }
 
     /// Собрать меню оператора.
-    @MainActor static func refreshForOperator() {
-        UIApplication.shared.shortcutItems = OperatorKind.allCases.map { kind in
+    ///
+    /// У клуба продажи и ревизии нет — пункт, ведущий в пустой экран, хуже
+    /// отсутствия пункта: человек нажимает и не понимает, что сломалось.
+    @MainActor static func refreshForOperator(sellsGoods: Bool = true) {
+        let kinds = sellsGoods ? OperatorKind.allCases : [OperatorKind.shift]
+        UIApplication.shared.shortcutItems = kinds.map { kind in
             UIApplicationShortcutItem(
                 type: kind.rawValue,
                 localizedTitle: kind.title,

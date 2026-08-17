@@ -143,13 +143,15 @@ struct OperatorRootView: View {
             await cabinetStore.loadKnowledge()
 
             #if os(iOS)
-            QuickActions.refreshForOperator()
+            QuickActions.refreshForOperator(sellsGoods: sellsGoods)
             applyQuickAction()
             #endif
         }
         #if os(iOS)
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
+            // Ниша точки могла загрузиться позже, чем собралось меню иконки.
+            QuickActions.refreshForOperator(sellsGoods: sellsGoods)
             applyQuickAction()
             // Связь возвращается, пока приложение свёрнуто: в подвале телефон
             // ловит у входа. Очередь отправлялась только при запуске и по
