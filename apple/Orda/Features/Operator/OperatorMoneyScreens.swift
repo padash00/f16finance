@@ -8,8 +8,10 @@ import SwiftUI
 struct MoneyScreen: View {
     @Environment(CabinetStore.self) private var cabinet
 
-    /// Какие недели долга раскрыты. Свёрнуто по умолчанию: сначала суммы.
+    /// Какие недели долга раскрыты в общем списке.
     @State private var expandedDebtWeeks: Set<String> = []
+    /// Открыт список всех непогашенных долгов.
+    @State private var showingAllDebts = false
 
     var body: some View {
         ScreenScroll {
@@ -35,6 +37,14 @@ struct MoneyScreen: View {
             } else {
                 Skeleton(height: 140, cornerRadius: Radius.lg)
             }
+        }
+        .sheet(isPresented: $showingAllDebts) {
+            AllDebtsSheet(
+                weeks: MoneyScreen.groupByWeek(
+                    (cabinet.overview?.recentDebts ?? []).filter { $0.amount > 0 }
+                ),
+                currentWeek: cabinet.salaryWeek
+            )
         }
         .navigationTitle("Мои деньги")
         .toolbar { LogoutToolbarItem() }
@@ -231,100 +241,82 @@ struct MoneyScreen: View {
         .padding(.horizontal, Spacing.xs)
     }
 
+    /// Долг выбранной недели.
+    ///
+    /// Экран про неделю — значит и карточка про неделю: показывать под
+    /// переключателем периода долги июля значит спорить с собственной шапкой.
+    /// Но и прятать остальное нельзя, это деньги, — поэтому строкой ниже
+    /// стоит весь непогашенный остаток и открывается отдельным списком.
     @ViewBuilder
     private var debtsCard: some View {
-        let debts = (cabinet.overview?.recentDebts ?? []).filter { $0.amount > 0 }
-        let weeks = MoneyScreen.groupByWeek(debts)
+        let all = (cabinet.overview?.recentDebts ?? []).filter { $0.amount > 0 }
+        let week = all.filter { ($0.weekStart ?? "") == cabinet.salaryWeek }
+        let weekTotal = week.reduce(0) { $0 + $1.amount }
+        let total = all.reduce(0) { $0 + $1.amount }
+        let rest = total - weekTotal
 
-        if !weeks.isEmpty {
-            Card(accent: Theme.negative) {
+        if !all.isEmpty {
+            Card(accent: week.isEmpty ? nil : Theme.negative) {
                 VStack(alignment: .leading, spacing: Spacing.md) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack {
-                            Text("Непогашенный долг")
-                                .font(Typography.label)
-                                .foregroundStyle(Theme.negative)
-                                .textCase(.uppercase)
-                            Spacer()
-                            Text(Money.format(debts.reduce(0) { $0 + $1.amount }))
-                                .font(Typography.callout.weight(.semibold))
-                                .foregroundStyle(Theme.negative)
-                        }
-
-                        Text("Всё, что не погашено, — не только за выбранную неделю.")
-                            .font(Typography.caption)
-                            .foregroundStyle(Theme.textMuted)
+                    HStack {
+                        Text("Долг за неделю")
+                            .font(Typography.label)
+                            .foregroundStyle(week.isEmpty ? Theme.textDim : Theme.negative)
+                            .textCase(.uppercase)
+                        Spacer()
+                        Text(Money.format(weekTotal))
+                            .font(Typography.callout.weight(.semibold))
+                            .foregroundStyle(week.isEmpty ? Theme.textMuted : Theme.negative)
                     }
 
-                    // Недели свёрнуты.
-                    //
-                    // В одной записи долга лежит весь список товаров, который
-                    // человек забрал: пять строк на запись, двадцать записей —
-                    // и экран превращается в стену, где не найти ни суммы, ни
-                    // недели. Сначала суммы, подробности по нажатию.
-                    ForEach(Array(weeks.enumerated()), id: \.element.key) { index, group in
-                        if index > 0 { RowDivider() }
-
-                        VStack(alignment: .leading, spacing: Spacing.xs) {
-                            Button {
-                                if expandedDebtWeeks.contains(group.key) {
-                                    expandedDebtWeeks.remove(group.key)
-                                } else {
-                                    expandedDebtWeeks.insert(group.key)
-                                }
-                            } label: {
-                                HStack(spacing: Spacing.xs) {
-                                    Image(systemName: expandedDebtWeeks.contains(group.key) ? "chevron.down" : "chevron.right")
-                                        .font(.caption2.weight(.bold))
-                                        .foregroundStyle(Theme.textMuted)
-
-                                    VStack(alignment: .leading, spacing: 1) {
-                                        Text(group.title)
-                                            .font(Typography.callout.weight(.medium))
-                                            .foregroundStyle(
-                                                group.key == cabinet.salaryWeek ? Theme.text : Theme.textDim
-                                            )
-                                        Text(
-                                            "\(group.debts.count) \(pluralize(group.debts.count, "запись", "записи", "записей"))"
-                                                + (group.key == cabinet.salaryWeek ? " · выбранная неделя" : "")
-                                        )
-                                        .font(Typography.caption)
-                                        .foregroundStyle(Theme.textMuted)
-                                    }
-
-                                    Spacer()
-
-                                    Text(Money.format(group.total))
-                                        .font(Typography.callout.weight(.semibold).monospacedDigit())
-                                        .foregroundStyle(Theme.negative)
-                                }
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.pressable)
-
-                            if expandedDebtWeeks.contains(group.key) {
-                                ForEach(group.debts) { debt in
-                                    HStack(alignment: .top, spacing: Spacing.sm) {
-                                        // Список товаров в записи бывает
-                                        // длинным — показываем начало, целиком
-                                        // он и на сайте не помещается.
-                                        Text(MoneyScreen.debtTitle(debt))
-                                            .font(Typography.caption)
-                                            .foregroundStyle(Theme.textDim)
-                                            .lineLimit(2)
-                                        Spacer(minLength: Spacing.sm)
-                                        Text(Money.format(debt.amount))
-                                            .font(Typography.caption.monospacedDigit())
-                                            .foregroundStyle(Theme.negative)
-                                    }
-                                    .padding(.leading, Spacing.lg)
-                                }
+                    if week.isEmpty {
+                        Text("За эту неделю долгов нет.")
+                            .font(Typography.caption)
+                            .foregroundStyle(Theme.textMuted)
+                    } else {
+                        ForEach(week) { debt in
+                            HStack(alignment: .top, spacing: Spacing.sm) {
+                                Text(MoneyScreen.debtTitle(debt))
+                                    .font(Typography.caption)
+                                    .foregroundStyle(Theme.textDim)
+                                    .lineLimit(2)
+                                Spacer(minLength: Spacing.sm)
+                                Text(Money.format(debt.amount))
+                                    .font(Typography.caption.monospacedDigit())
+                                    .foregroundStyle(Theme.negative)
                             }
                         }
+                    }
+
+                    // Остальное — не за эту неделю, но никуда не делось.
+                    if rest > 0 {
+                        RowDivider()
+                        Button {
+                            showingAllDebts = true
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text("Всего непогашено")
+                                        .font(Typography.callout)
+                                        .foregroundStyle(Theme.textDim)
+                                    Text("включая прошлые недели")
+                                        .font(Typography.caption)
+                                        .foregroundStyle(Theme.textMuted)
+                                }
+                                Spacer()
+                                Text(Money.format(total))
+                                    .font(Typography.callout.weight(.semibold).monospacedDigit())
+                                    .foregroundStyle(Theme.negative)
+                                Image(systemName: "chevron.right")
+                                    .font(.caption2.weight(.bold))
+                                    .foregroundStyle(Theme.textMuted)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.pressable)
                     }
                 }
             }
-            .animation(Motion.value, value: expandedDebtWeeks)
         }
     }
 
@@ -726,5 +718,115 @@ private struct SalaryShiftRow: View {
         if shift.totalIncome > 0 { items.append("выручка \(Money.format(shift.totalIncome))") }
         if let company = shift.companyName, !company.isEmpty { items.append(company) }
         return items.joined(separator: " · ")
+    }
+}
+
+
+/// Все непогашенные долги — по неделям.
+///
+/// Отдельным списком, а не на экране недели: там разговор про выбранный
+/// период, а здесь про остаток целиком. Недели свёрнуты — в одной записи
+/// лежит весь список товаров, и раскрытые они дают стену текста.
+struct AllDebtsSheet: View {
+    let weeks: [MoneyScreen.DebtWeek]
+    let currentWeek: String
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var expanded: Set<String> = []
+
+    private var total: Double { weeks.reduce(0) { $0 + $1.total } }
+
+    var body: some View {
+        NavigationStack {
+            ScreenScroll {
+                Card(accent: Theme.negative) {
+                    HStack {
+                        Text("Всего непогашено")
+                            .font(Typography.callout)
+                            .foregroundStyle(Theme.textDim)
+                        Spacer()
+                        Text(Money.format(total))
+                            .font(Typography.title.monospacedDigit())
+                            .foregroundStyle(Theme.negative)
+                    }
+                }
+
+                Card {
+                    VStack(spacing: Spacing.sm) {
+                        ForEach(Array(weeks.enumerated()), id: \.element.key) { index, group in
+                            if index > 0 { RowDivider() }
+
+                            VStack(alignment: .leading, spacing: Spacing.xs) {
+                                Button {
+                                    if expanded.contains(group.key) {
+                                        expanded.remove(group.key)
+                                    } else {
+                                        expanded.insert(group.key)
+                                    }
+                                } label: {
+                                    HStack(spacing: Spacing.xs) {
+                                        Image(systemName: expanded.contains(group.key) ? "chevron.down" : "chevron.right")
+                                            .font(.caption2.weight(.bold))
+                                            .foregroundStyle(Theme.textMuted)
+
+                                        VStack(alignment: .leading, spacing: 1) {
+                                            Text(group.title)
+                                                .font(Typography.callout.weight(.medium))
+                                                .foregroundStyle(Theme.text)
+                                            Text(
+                                                "\(group.debts.count) \(pluralize(group.debts.count, "запись", "записи", "записей"))"
+                                                    + (group.key == currentWeek ? " · текущая" : "")
+                                            )
+                                            .font(Typography.caption)
+                                            .foregroundStyle(Theme.textMuted)
+                                        }
+
+                                        Spacer()
+
+                                        Text(Money.format(group.total))
+                                            .font(Typography.callout.weight(.semibold).monospacedDigit())
+                                            .foregroundStyle(Theme.negative)
+                                    }
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.pressable)
+
+                                if expanded.contains(group.key) {
+                                    ForEach(group.debts) { debt in
+                                        HStack(alignment: .top, spacing: Spacing.sm) {
+                                            Text(MoneyScreen.debtTitle(debt))
+                                                .font(Typography.caption)
+                                                .foregroundStyle(Theme.textDim)
+                                                .lineLimit(2)
+                                            Spacer(minLength: Spacing.sm)
+                                            Text(Money.format(debt.amount))
+                                                .font(Typography.caption.monospacedDigit())
+                                                .foregroundStyle(Theme.negative)
+                                        }
+                                        .padding(.leading, Spacing.lg)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Text("Долг гасят на точке: отметить оплату может управляющий.")
+                    .font(Typography.caption)
+                    .foregroundStyle(Theme.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .background(Theme.background)
+            .navigationTitle("Непогашенный долг")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Готово") { dismiss() }
+                }
+            }
+            .animation(Motion.value, value: expanded)
+        }
     }
 }
