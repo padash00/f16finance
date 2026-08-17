@@ -280,6 +280,43 @@ public struct OperatorService: Sendable {
         )
     }
 
+    // ── Старший смены ────────────────────────────────────────────────────────
+
+    /// Стол старшего. 403 значит «этот человек не старший» — не ошибка, а факт,
+    /// и экран должен просто не появляться.
+    public func leadDesk() async throws -> LeadDesk {
+        try await api.send(APIRequest(path: "/api/operator/lead"))
+    }
+
+    /// Предложение старшего по заявке: оставить, снять или заменить.
+    ///
+    /// Именно предложение: последнее слово за руководителем. Старший ближе к
+    /// точке и знает, кто отработал две ночи подряд, — но подписывает не он.
+    public func submitLeadProposal(
+        requestID: String,
+        action: String,
+        note: String? = nil,
+        replacementOperatorID: String? = nil
+    ) async throws {
+        var body: [String: Any] = [
+            "action": "submitLeadProposal",
+            "requestId": requestID,
+            "proposalAction": action,
+        ]
+        if let note, !note.isEmpty { body["proposalNote"] = note }
+        if let replacementOperatorID, !replacementOperatorID.isEmpty {
+            body["replacementOperatorId"] = replacementOperatorID
+        }
+
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/operator/lead",
+                method: .post,
+                body: try JSONSerialization.data(withJSONObject: body)
+            )
+        )
+    }
+
     public func incidents() async throws -> [OperatorIncident] {
         let response: OperatorIncidentList = try await api.send(APIRequest(path: "/api/operator/incidents"))
         return response.incidents

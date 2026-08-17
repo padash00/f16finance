@@ -116,6 +116,10 @@ final class CabinetStore {
         do {
             overview = try await service.overview()
             error = nil
+            if !didProbeLead {
+                didProbeLead = true
+                Task { await loadLeadDesk() }
+            }
         } catch let apiError as APIError {
             error = apiError.operatorMessage
         } catch {
@@ -179,6 +183,47 @@ final class CabinetStore {
 
     func loadSchedule() async {
         schedule = (try? await service.schedule(weekStart: scheduleWeek)) ?? schedule
+    }
+
+    // ── Старший смены ────────────────────────────────────────────────────────
+
+    /// Стол старшего. `nil` — человек не старший, и раздела для него нет.
+    private(set) var leadDesk: LeadDesk?
+
+    /// Старшинство не меняется по ходу дня, и спрашивать о нём при каждом
+    /// обновлении экрана — лишний запрос, который у большинства вернёт отказ.
+    private var didProbeLead = false
+
+    var isLead: Bool { leadDesk != nil }
+
+    /// Сколько заявок ждёт именно его решения — число для значка в меню.
+    var leadPendingCount: Int { leadDesk?.awaitingProposal.count ?? 0 }
+
+    /// Молча: отказ здесь означает «не старший», и жаловаться не на что.
+    func loadLeadDesk() async {
+        leadDesk = (try? await service.leadDesk()) ?? leadDesk
+    }
+
+    func submitLeadProposal(
+        requestID: String,
+        action: String,
+        note: String?,
+        replacementOperatorID: String?
+    ) async -> String? {
+        do {
+            try await service.submitLeadProposal(
+                requestID: requestID,
+                action: action,
+                note: note,
+                replacementOperatorID: replacementOperatorID
+            )
+            await loadLeadDesk()
+            return nil
+        } catch let error as APIError {
+            return error.operatorMessage
+        } catch {
+            return error.localizedDescription
+        }
     }
 
     /// Подтвердить неделю. Возвращает текст ошибки, если не вышло.

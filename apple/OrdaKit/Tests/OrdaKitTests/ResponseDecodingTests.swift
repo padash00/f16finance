@@ -195,6 +195,74 @@ struct ResponseDecodingTests {
         #expect(unmatched.invoiceName == "Салфетки")
     }
 
+    // ── Стол старшего смены ──────────────────────────────────────────────────
+
+    @Test("Заявки команды и готовность недели")
+    func leadDesk() throws {
+        let desk = try decode(
+            LeadDesk.self,
+            """
+            {"ok":true,
+            "lead":{"operator":{"id":"op-1","name":"Сержан","short_name":"Сержан"}},
+            "companies":[{"id":"c-1","name":"F16 Arena","code":"ARN",
+            "publication":{"id":"p-1","week_start":"2026-08-17","week_end":"2026-08-23",
+            "status":"published"},
+            "weeklyStatus":{"state":"published","total":5,"confirmed":3,"pending":2,
+            "issues":1,"proposals":0,"resolved":0}}],
+            "teamAssignments":[
+            {"id":"a-1","operator_id":"op-2","company_id":"c-1","role_in_company":"operator",
+            "is_primary":true,"operator_name":"Алима"},
+            {"id":"a-2","operator_id":"op-1","company_id":"c-1","role_in_company":"senior_operator",
+            "is_primary":true,"operator_name":"Сержан"}],
+            "requests":[{"id":"r-1","company_id":"c-1","company_name":"F16 Arena",
+            "operator_id":"op-2","operator_name":"Алима","shift_date":"2026-08-20",
+            "shift_type":"night","status":"open","reason":"Заболел","source":"operator",
+            "lead_status":null,"lead_action":null,"lead_note":null,
+            "lead_replacement_operator_name":null,"resolution_note":null,
+            "created_at":"2026-08-17T09:00:00.000Z"}]}
+            """
+        )
+
+        #expect(desk.leadName == "Сержан")
+        #expect(desk.companies.first?.pending == 2)
+        #expect(desk.companies.first?.confirmed == 3)
+        #expect(desk.companies.first?.isDraft == false)
+        #expect(desk.companies.first?.weekStart == "2026-08-17")
+
+        // Заявка без предложения — она и ждёт старшего.
+        #expect(desk.awaitingProposal.count == 1)
+        #expect(desk.awaitingDecision.isEmpty)
+        let request = try #require(desk.requests.first)
+        #expect(request.operatorName == "Алима")
+        #expect(request.isNight)
+        #expect(request.reason == "Заболел")
+        #expect(request.statusLabel == "Ждёт вашего решения")
+
+        // В кандидаты на замену не должен попасть сам заявитель.
+        let candidates = desk.replacements(companyID: "c-1", excluding: "op-2")
+        #expect(candidates.map(\.operatorID) == ["op-1"])
+        #expect(candidates.first?.roleLabel == "Старший")
+    }
+
+    @Test("Предложенная замена ждёт уже руководителя")
+    func leadDeskProposed() throws {
+        let desk = try decode(
+            LeadDesk.self,
+            """
+            {"requests":[{"id":"r-2","company_id":"c-1","company_name":"F16 Arena",
+            "operator_id":"op-2","operator_name":"Алима","shift_date":"2026-08-20",
+            "shift_type":"day","status":"open","reason":"Учёба",
+            "lead_status":"proposed","lead_action":"replace",
+            "lead_replacement_operator_name":"Данияр","created_at":null}]}
+            """
+        )
+
+        #expect(desk.awaitingProposal.isEmpty)
+        #expect(desk.awaitingDecision.count == 1)
+        #expect(desk.requests.first?.proposalLabel == "Заменить: Данияр")
+        #expect(desk.requests.first?.statusLabel == "Ждёт руководителя")
+    }
+
     /// Обёртка `{ "data": … }` админских ответов. У операторского контура для
     /// этого есть `DataEnvelope`, но он объявлен только там.
     private struct Wrapper<Value: Decodable & Sendable>: Decodable, Sendable {

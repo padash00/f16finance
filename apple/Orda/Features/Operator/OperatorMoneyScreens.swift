@@ -425,6 +425,8 @@ enum OperatorProfileRoute: Hashable {
     case schedule, money, salesQuality, knowledge, exams, chat, messages, pointQR
     /// Ревизия и чек-листы ушли из нижней панели — но не из приложения.
     case audit, checklists
+    /// Только у старших смены — у остальных пункта нет.
+    case lead
 }
 
 struct OperatorProfileScreen: View {
@@ -467,6 +469,25 @@ struct OperatorProfileScreen: View {
                         .buttonStyle(.pressable)
 
                         RowDivider()
+
+                        // Старший смены — только тем, кто им назначен. У
+                        // остальных сервер отвечает отказом, и показывать
+                        // пункт, который откроет пустой экран, незачем.
+                        if cabinet.isLead {
+                            NavigationLink(value: OperatorProfileRoute.lead) {
+                                NavigationRow(
+                                    icon: "person.2.badge.gearshape",
+                                    iconColor: Theme.warning,
+                                    title: "Старший смены",
+                                    subtitle: "Заявки команды и готовность недели",
+                                    badge: cabinet.leadPendingCount,
+                                    badgeColor: Theme.warning
+                                )
+                            }
+                            .buttonStyle(.pressable)
+
+                            RowDivider()
+                        }
 
                         NavigationLink(value: OperatorProfileRoute.money) {
                             NavigationRow(icon: "wallet.bifold", iconColor: Theme.brand, title: "Мои деньги")
@@ -657,6 +678,7 @@ struct OperatorProfileScreen: View {
             case .chat: TeamChatScreen()
             case .messages: MessagesScreen()
             case .pointQR: PointQRLoginScreen()
+            case .lead: LeadDeskScreen()
             }
         }
         // Окно, а не всплывающая подсказка: подсказку система прижимает к

@@ -36,6 +36,7 @@ struct ScheduleScreen: View {
                 weekHeader
                 weekGrid
                 confirmationCard
+                leadCard
                 requestsCard
                 summaryCards
 
@@ -99,6 +100,40 @@ struct ScheduleScreen: View {
     }
 
     // ── Подтверждение недели ─────────────────────────────────────────────────
+
+    /// Для старшего: заявки команды ждут именно здесь, рядом с графиком.
+    ///
+    /// Отдельный пункт в профиле есть, но человек, который открыл график,
+    /// думает про смены прямо сейчас — и заявку в этот момент видеть должен.
+    @ViewBuilder
+    private var leadCard: some View {
+        if cabinet.isLead, cabinet.leadPendingCount > 0 {
+            NavigationLink {
+                LeadDeskScreen()
+            } label: {
+                Card(accent: Theme.warning) {
+                    HStack(spacing: Spacing.md) {
+                        Image(systemName: "person.2.badge.gearshape")
+                            .font(.system(size: 22))
+                            .foregroundStyle(Theme.warning)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Заявки команды: \(cabinet.leadPendingCount)")
+                                .font(Typography.body.weight(.medium))
+                                .foregroundStyle(Theme.text)
+                            Text("Ждут вашего предложения по замене")
+                                .font(Typography.caption)
+                                .foregroundStyle(Theme.textMuted)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(Typography.caption)
+                            .foregroundStyle(Theme.textMuted)
+                    }
+                }
+            }
+            .buttonStyle(.pressable)
+        }
+    }
 
     /// График опубликован — его надо принять.
     ///
