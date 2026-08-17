@@ -201,3 +201,37 @@ struct ResponseDecodingTests {
         let data: Value
     }
 }
+
+/// Отправка своих контактов.
+///
+/// Сервер читает `null` как «стереть», а пропущенное поле — как «не трогать».
+/// Синтезированный кодировщик писал `null` вместо пропуска, и сохранение
+/// телефона стирало почту.
+@Suite("Правка своих контактов")
+struct MyProfileChangeTests {
+    private func json(_ change: MyProfileChange) throws -> [String: Any] {
+        let data = try JSONEncoder().encode(change)
+        return try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+    }
+
+    @Test("Незаполненные поля не уходят на сервер")
+    func onlyChangedFieldsAreSent() throws {
+        var change = MyProfileChange()
+        change.phone = "+7 777 123 45 67"
+
+        let body = try json(change)
+        #expect(body["phone"] as? String == "+7 777 123 45 67")
+        #expect(body["email"] == nil)
+        #expect(body["telegram_chat_id"] == nil)
+    }
+
+    @Test("Пустая строка уходит: это «стереть»")
+    func emptyStringIsSent() throws {
+        var change = MyProfileChange()
+        change.email = ""
+
+        let body = try json(change)
+        #expect(body["email"] as? String == "")
+        #expect(body["phone"] == nil)
+    }
+}

@@ -42,6 +42,19 @@ public struct MyProfileChange: Encodable, Sendable {
         case telegramChatID = "telegram_chat_id"
     }
 
+    /// Кодируем только заполненные поля.
+    ///
+    /// Синтезированный кодировщик пишет `null` вместо пропущенного поля, а
+    /// сервер читает `null` как «стереть». Из-за этого сохранение телефона
+    /// стирало почту, сохранение почты — телефон, и человеку казалось, что
+    /// «нажимаю сохранить, и ничего не сохраняется».
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(phone, forKey: .phone)
+        try container.encodeIfPresent(email, forKey: .email)
+        try container.encodeIfPresent(telegramChatID, forKey: .telegramChatID)
+    }
+
     /// Что мешает сохранить. Правила те же, что на сервере.
     public var validationMessage: String? {
         if let email, !email.isEmpty, !Self.isEmailValid(email) { return "Проверьте почту" }
