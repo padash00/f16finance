@@ -18,6 +18,7 @@ import SwiftUI
 /// дойдут руки.
 enum NativePage {
     /// Экран раздела каталога, если он нативный. `nil` — открывать веб.
+    @MainActor
     @ViewBuilder
     static func screen(pageID: String) -> some View {
         if let section = NativeSection.forPage(id: pageID) {
@@ -30,11 +31,16 @@ enum NativePage {
     }
 
     /// Экран раздела вне каталога прав.
+    @MainActor
     @ViewBuilder
     static func screen(section: NativeSection) -> some View {
         view(for: section)
     }
 
+    // Экраны собираются на главном потоке: у части из них состояние
+    // инициализируется main-актором, и без пометки Swift 6 справедливо ругался
+    // на вызов из неизолированного контекста.
+    @MainActor
     @ViewBuilder
     private static func view(for section: NativeSection) -> some View {
         switch section {
