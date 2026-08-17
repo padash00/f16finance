@@ -232,23 +232,45 @@ struct OperatorHomeScreen: View {
 
     // ── Быстрые действия ─────────────────────────────────────────────────────
 
+    /// Плитки быстрых действий.
+    ///
+    /// Продажа и ревизия — работа магазина. Оператору клуба они не нужны: он
+    /// обслуживает гостей за компьютерами, и вместо кассы ему полезнее
+    /// регламенты и чат.
     private var quickActions: some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: Spacing.md) {
-            NavigationLink(value: OperatorHomeRoute.sale) {
-                ActionTileLabel(icon: "barcode.viewfinder", title: "Продать", tint: Theme.accent(for: .operator))
-            }
-            .buttonStyle(PressableTileStyle())
+            if sellsGoods {
+                NavigationLink(value: OperatorHomeRoute.sale) {
+                    ActionTileLabel(icon: "barcode.viewfinder", title: "Продать", tint: Theme.accent(for: .operator))
+                }
+                .buttonStyle(PressableTileStyle())
 
-            NavigationLink(value: OperatorHomeRoute.audit) {
-                ActionTileLabel(icon: "list.clipboard", title: "Ревизия", tint: ChartPalette.series2)
+                NavigationLink(value: OperatorHomeRoute.audit) {
+                    ActionTileLabel(icon: "list.clipboard", title: "Ревизия", tint: ChartPalette.series2)
+                }
+                .buttonStyle(PressableTileStyle())
+            } else {
+                NavigationLink(value: OperatorHomeRoute.knowledge) {
+                    ActionTileLabel(icon: "book.closed", title: "Регламенты", tint: ChartPalette.series2)
+                }
+                .buttonStyle(PressableTileStyle())
+
+                NavigationLink(value: OperatorHomeRoute.tasks) {
+                    ActionTileLabel(icon: "checklist", title: "Задачи", tint: Theme.accent(for: .operator))
+                }
+                .buttonStyle(PressableTileStyle())
             }
-            .buttonStyle(PressableTileStyle())
 
             NavigationLink(value: OperatorHomeRoute.checklists) {
                 ActionTileLabel(icon: "checklist", title: "Чек-листы", tint: ChartPalette.series3)
             }
             .buttonStyle(PressableTileStyle())
         }
+    }
+
+    /// Торгует ли точка. Пока сводка не пришла — считаем, что да.
+    private var sellsGoods: Bool {
+        cabinet.overview?.points?.sellsGoods ?? true
     }
 
     // ── Требует внимания ─────────────────────────────────────────────────────
