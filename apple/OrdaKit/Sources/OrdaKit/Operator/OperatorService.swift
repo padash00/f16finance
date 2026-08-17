@@ -280,6 +280,109 @@ public struct OperatorService: Sendable {
         )
     }
 
+    // ── Зал клуба ────────────────────────────────────────────────────────────
+
+    /// Зал: станции, тарифы и активные сессии.
+    public func arena() async throws -> ArenaHall {
+        let response: DataEnvelope<ArenaHall> = try await api.send(APIRequest(path: "/api/operator/arena"))
+        return response.data
+    }
+
+    /// Посадить гостя за станцию.
+    ///
+    /// Суммы передаём раздельно: смешанная оплата — обычное дело, и сервер
+    /// разносит наличные и Kaspi по разным строкам кассы.
+    public func startArenaSession(
+        stationID: String,
+        tariffID: String,
+        payment: ArenaPayment,
+        cash: Double,
+        kaspi: Double,
+        discountPercent: Double = 0
+    ) async throws {
+        try await arenaAction([
+            "action": "startSession",
+            "stationId": stationID,
+            "tariffId": tariffID,
+            "payment_method": payment.rawValue,
+            "cash_amount": cash,
+            "kaspi_amount": kaspi,
+            "discount_percent": discountPercent,
+        ])
+    }
+
+    /// Завершить сессию: гость ушёл.
+    public func endArenaSession(sessionID: String) async throws {
+        try await arenaAction(["action": "endSession", "sessionId": sessionID])
+    }
+
+    /// Завершить с возвратом за неиспользованное время.
+    ///
+    /// Долю считает сервер: делить деньги на глазок у стойки — то, из-за чего
+    /// потом не сходится смена.
+    public func refundArenaSession(sessionID: String) async throws {
+        try await arenaAction(["action": "endSessionWithRefund", "sessionId": sessionID])
+    }
+
+    /// Продлить пакетом тарифа.
+    public func extendArenaSession(
+        sessionID: String,
+        tariffID: String,
+        payment: ArenaPayment,
+        cash: Double,
+        kaspi: Double
+    ) async throws {
+        try await arenaAction([
+            "action": "extendSession",
+            "sessionId": sessionID,
+            "tariffId": tariffID,
+            "payment_method": payment.rawValue,
+            "cash_amount": cash,
+            "kaspi_amount": kaspi,
+        ])
+    }
+
+    /// Продлить на сумму: «добавь на тысячу». Минуты сервер считает сам по
+    /// цене часа — так же, как это делает программа за стойкой.
+    public func extendArenaSessionByAmount(
+        sessionID: String,
+        payment: ArenaPayment,
+        cash: Double,
+        kaspi: Double
+    ) async throws {
+        try await arenaAction([
+            "action": "extendSession",
+            "sessionId": sessionID,
+            "amount_extension": true,
+            "payment_method": payment.rawValue,
+            "cash_amount": cash,
+            "kaspi_amount": kaspi,
+        ])
+    }
+
+    /// Техническая заметка по станции: не работает мышь, сгорел монитор.
+    public func logArenaTech(
+        stationID: String?,
+        stationName: String?,
+        reason: String,
+        amount: Double
+    ) async throws {
+        var body: [String: Any] = ["action": "techLog", "reason": reason, "amount": amount]
+        if let stationID { body["stationId"] = stationID }
+        if let stationName { body["stationName"] = stationName }
+        try await arenaAction(body)
+    }
+
+    private func arenaAction(_ body: [String: Any]) async throws {
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/operator/arena",
+                method: .post,
+                body: try JSONSerialization.data(withJSONObject: body)
+            )
+        )
+    }
+
     // ── Старший смены ────────────────────────────────────────────────────────
 
     /// Стол старшего. 403 значит «этот человек не старший» — не ошибка, а факт,

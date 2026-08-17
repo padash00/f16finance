@@ -17,13 +17,16 @@ struct OperatorRootView: View {
 
     @Environment(\.api) private var api
     @State private var store: OperatorStore?
+    /// Зал живёт отдельным хранилищем: обратный отсчёт тикает каждую секунду,
+    /// и пересобирать из-за него весь кабинет незачем.
+    @State private var arena: ArenaStore?
     @State private var cabinet: CabinetStore?
     @State private var selection: OperatorSection? = .shift
     @Environment(\.scenePhase) private var scenePhase
 
     /// Разделы операторского контура.
     enum OperatorSection: String, CaseIterable, Identifiable, Hashable {
-        case shift, sale, audit, tasks, checklists, knowledge, chat, messages, money, schedule, profile
+        case shift, sale, arena, audit, tasks, checklists, knowledge, chat, messages, money, schedule, profile
 
         var id: String { rawValue }
 
@@ -31,6 +34,7 @@ struct OperatorRootView: View {
             switch self {
             case .shift: "Смена"
             case .sale: "Продажа"
+            case .arena: "Зал"
             case .audit: "Ревизия"
             case .tasks: "Задачи"
             case .checklists: "Чек-листы"
@@ -56,6 +60,7 @@ struct OperatorRootView: View {
             switch self {
             case .shift: "square.grid.2x2.fill"
             case .sale: "cart.fill"
+            case .arena: "desktopcomputer"
             case .audit: "list.clipboard.fill"
             case .tasks: "checklist"
             case .checklists: "checkmark.seal"
@@ -75,18 +80,20 @@ struct OperatorRootView: View {
         /// продаёт товар — он обслуживает гостей, и «Продажа» у него только
         /// занимает место. Ревизия ушла из панели у обоих: она нужна не каждый
         /// день и живёт в профиле.
-        static func phoneTabs(sellsGoods: Bool) -> [OperatorSection] {
-            sellsGoods
-                ? [.shift, .sale, .chat, .tasks, .profile]
-                : [.shift, .chat, .knowledge, .tasks, .profile]
+        static func phoneTabs(sellsGoods: Bool, hasArena: Bool) -> [OperatorSection] {
+            if sellsGoods { return [.shift, .sale, .chat, .tasks, .profile] }
+            // У клуба место «Продажи» занимает зал: за прилавком оператор не
+            // стоит, а по залу ходит всю смену.
+            if hasArena { return [.shift, .arena, .chat, .tasks, .profile] }
+            return [.shift, .chat, .knowledge, .tasks, .profile]
         }
 
         /// Группировка боковой панели на большом экране.
         /// Боковая панель планшета: места больше, но лишнего всё равно не
         /// показываем — продажа и ревизия у клуба ни к чему.
-        static func sidebarGroups(sellsGoods: Bool) -> [(title: String, items: [OperatorSection])] {
+        static func sidebarGroups(sellsGoods: Bool, hasArena: Bool) -> [(title: String, items: [OperatorSection])] {
             [
-                ("Работа", sellsGoods ? [.shift, .sale, .audit] : [.shift]),
+                ("Работа", sellsGoods ? [.shift, .sale, .audit] : (hasArena ? [.shift, .arena] : [.shift])),
                 ("Задачи", [.tasks, .checklists, .knowledge]),
                 ("Общение", [.chat, .messages]),
                 ("Личное", [.money, .schedule, .profile]),
@@ -97,10 +104,11 @@ struct OperatorRootView: View {
     var body: some View {
         SurfaceReader { surface in
             Group {
-                if let store, let cabinet {
+                if let store, let cabinet, let arena {
                     layout(surface: surface)
                         .environment(store)
                         .environment(cabinet)
+                        .environment(arena)
                         // Отложенное действие обязано сказать о себе. Иначе
                         // человек уходит со смены уверенным, что чек-лист
                         // засчитан, а он лежит на устройстве.
@@ -135,6 +143,7 @@ struct OperatorRootView: View {
             let cabinetStore = CabinetStore(api: api, outbox: outbox)
             store = operatorStore
             cabinet = cabinetStore
+            arena = ArenaStore(service: OperatorService(api: api))
 
             async let shift: Void = operatorStore.bootstrap()
             async let overview: Void = cabinetStore.bootstrap()
@@ -194,9 +203,17 @@ struct OperatorRootView: View {
         cabinet?.overview?.points?.sellsGoods ?? true
     }
 
+    /// Есть ли у точки зал. Ниша точки знает об этом раньше сервера зала:
+    /// спрашивать «а есть ли проект» ради того, показывать ли вкладку, —
+    /// лишний запрос у всех, включая магазины.
+    private var hasArena: Bool {
+        let industries = cabinet?.overview?.points?.industries ?? []
+        return industries.contains("club") || industries.contains("ps_club")
+    }
+
     private var phoneTabs: some View {
         TabView(selection: $selection) {
-            ForEach(OperatorSection.phoneTabs(sellsGoods: sellsGoods)) { section in
+            ForEach(OperatorSection.phoneTabs(sellsGoods: sellsGoods, hasArena: hasArena)) { section in
                 NavigationStack { screen(for: section) }
                     .tabItem { Label(section.tabTitle, systemImage: section.icon) }
                     .badge(badge(for: section))
@@ -211,7 +228,7 @@ struct OperatorRootView: View {
     private var sidebarLayout: some View {
         NavigationSplitView {
             List(selection: $selection) {
-                ForEach(OperatorSection.sidebarGroups(sellsGoods: sellsGoods), id: \.title) { group in
+                ForEach(OperatorSection.sidebarGroups(sellsGoods: sellsGoods, hasArena: hasArena), id: \.title) { group in
                     Section {
                         ForEach(group.items) { section in
                             NavigationLink(value: section) {
@@ -263,6 +280,7 @@ struct OperatorRootView: View {
             SurfaceReader { surface in
                 if surface.isCompact { SaleScreen() } else { SaleWideScreen() }
             }
+        case .arena: ArenaScreen()
         case .audit: AuditScreen()
         case .tasks: TasksScreen()
         case .checklists: ChecklistsScreen()

@@ -195,6 +195,84 @@ struct ResponseDecodingTests {
         #expect(unmatched.invoiceName == "Салфетки")
     }
 
+    // ── Зал клуба ────────────────────────────────────────────────────────────
+
+    @Test("Зал: станции, тарифы и активные сессии")
+    func arenaHall() throws {
+        let hall = try decode(
+            DataEnvelope<ArenaHall>.self,
+            """
+            {"ok":true,"data":{
+            "zones":[{"id":"z-1","name":"VIP","is_active":true,"extension_hourly_price":1200}],
+            "stations":[{"id":"s-1","name":"PC-01","zone_id":"z-1","order_index":1,"is_active":true},
+            {"id":"s-2","name":"PC-02","zone_id":"z-1","order_index":2,"is_active":true},
+            {"id":"s-3","name":"PS-01","zone_id":null,"order_index":1,"is_active":true}],
+            "tariffs":[{"id":"t-1","name":"1 час","price":900,"duration_minutes":60,
+            "zone_id":"z-1","tariff_type":"fixed","is_active":true},
+            {"id":"t-2","name":"Ночь","price":4000,"duration_minutes":600,"zone_id":null,
+            "tariff_type":"time_window","window_start_time":"22:00:00",
+            "window_end_time":"08:00:00","is_active":true}],
+            "sessions":[{"id":"ses-1","station_id":"s-1","tariff_id":"t-1",
+            "started_at":"2026-08-17T10:00:00.000Z","ends_at":"2026-08-17T11:00:00.000Z",
+            "amount":900,"cash_amount":900,"kaspi_amount":0,"status":"active",
+            "payment_method":"cash","discount_percent":0}],
+            "decorations":[],
+            "today_income":{"cash":12500,"kaspi":8000,"rows":[]},
+            "today_tech_logs":[]}}
+            """
+        ).data
+
+        #expect(hall.stations.count == 3)
+        #expect(hall.busyCount == 1)
+        #expect(hall.todayCash == 12_500)
+        #expect(hall.todayKaspi == 8_000)
+        #expect(hall.todayTotal == 20_500)
+
+        // Станция занята ровно та, на которой сессия.
+        #expect(hall.session(stationID: "s-1") != nil)
+        #expect(hall.session(stationID: "s-2") == nil)
+
+        // Станции без зоны не теряются и не приписываются к чужой.
+        #expect(hall.stations(zoneID: "z-1").map(\.name) == ["PC-01", "PC-02"])
+        #expect(hall.stations(zoneID: nil).map(\.name) == ["PS-01"])
+
+        // Тариф зоны — только своей зоне; общий годится везде.
+        let vip = try #require(hall.stations.first { $0.id == "s-1" })
+        let console = try #require(hall.stations.first { $0.id == "s-3" })
+        #expect(hall.tariffs(for: vip).map(\.id) == ["t-1", "t-2"])
+        #expect(hall.tariffs(for: console).map(\.id) == ["t-2"])
+    }
+
+    @Test("Остаток времени и просрочка считаются от конца сессии")
+    func arenaCountdown() throws {
+        let hall = try decode(
+            DataEnvelope<ArenaHall>.self,
+            """
+            {"data":{"stations":[],"zones":[],"tariffs":[],
+            "sessions":[{"id":"ses-1","station_id":"s-1","tariff_id":"t-1",
+            "started_at":"2026-08-17T10:00:00.000Z","ends_at":"2026-08-17T11:00:00.000Z",
+            "amount":900,"cash_amount":0,"kaspi_amount":900,"status":"active"}]}}
+            """
+        ).data
+
+        let session = try #require(hall.sessions.first)
+        let ends = try #require(session.endsAt)
+
+        // За пять минут до конца — «пора подойти», но время ещё не вышло.
+        let fiveBefore = ends.addingTimeInterval(-5 * 60)
+        #expect(session.isEndingSoon(now: fiveBefore))
+        #expect(!session.isExpired(now: fiveBefore))
+
+        // За полчаса — ещё рано.
+        #expect(!session.isEndingSoon(now: ends.addingTimeInterval(-30 * 60)))
+
+        // После конца — просрочено, и остаток отрицательный: гость сидит
+        // сверх оплаченного, и оператор должен видеть, насколько.
+        let after = ends.addingTimeInterval(12 * 60)
+        #expect(session.isExpired(now: after))
+        #expect(session.remaining(now: after) < 0)
+    }
+
     // ── Стол старшего смены ──────────────────────────────────────────────────
 
     @Test("Заявки команды и готовность недели")
