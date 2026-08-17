@@ -69,18 +69,29 @@ struct OperatorRootView: View {
         }
 
         /// Что видно в таб-баре телефона: пять пунктов, остальное — в профиле.
-        /// Ревизия ушла из нижней панели: она нужна кассиру магазина и не
-        /// нужна оператору клуба, а вот чат нужен обоим — там задают вопросы
-        /// посреди смены. Ревизия осталась в профиле и в меню иконки.
-        static let phoneTabs: [OperatorSection] = [.shift, .sale, .chat, .tasks, .profile]
+        /// Что видно в нижней панели.
+        ///
+        /// Панель не одинакова для всех: оператор компьютерного клуба не
+        /// продаёт товар — он обслуживает гостей, и «Продажа» у него только
+        /// занимает место. Ревизия ушла из панели у обоих: она нужна не каждый
+        /// день и живёт в профиле.
+        static func phoneTabs(sellsGoods: Bool) -> [OperatorSection] {
+            sellsGoods
+                ? [.shift, .sale, .chat, .tasks, .profile]
+                : [.shift, .chat, .knowledge, .tasks, .profile]
+        }
 
         /// Группировка боковой панели на большом экране.
-        static let sidebarGroups: [(title: String, items: [OperatorSection])] = [
-            ("Работа", [.shift, .sale, .audit]),
-            ("Задачи", [.tasks, .checklists, .knowledge]),
-            ("Общение", [.chat, .messages]),
-            ("Личное", [.money, .schedule, .profile]),
-        ]
+        /// Боковая панель планшета: места больше, но лишнего всё равно не
+        /// показываем — продажа и ревизия у клуба ни к чему.
+        static func sidebarGroups(sellsGoods: Bool) -> [(title: String, items: [OperatorSection])] {
+            [
+                ("Работа", sellsGoods ? [.shift, .sale, .audit] : [.shift]),
+                ("Задачи", [.tasks, .checklists, .knowledge]),
+                ("Общение", [.chat, .messages]),
+                ("Личное", [.money, .schedule, .profile]),
+            ]
+        }
     }
 
     var body: some View {
@@ -175,9 +186,15 @@ struct OperatorRootView: View {
 
     // ── iPhone ───────────────────────────────────────────────────────────────
 
+    /// Торгует ли точка. Пока сводка не загрузилась — считаем, что да: убрать
+    /// кассу у того, кто ею пользуется, хуже, чем на секунду показать лишнее.
+    private var sellsGoods: Bool {
+        cabinet?.overview?.points?.sellsGoods ?? true
+    }
+
     private var phoneTabs: some View {
         TabView(selection: $selection) {
-            ForEach(OperatorSection.phoneTabs) { section in
+            ForEach(OperatorSection.phoneTabs(sellsGoods: sellsGoods)) { section in
                 NavigationStack { screen(for: section) }
                     .tabItem { Label(section.tabTitle, systemImage: section.icon) }
                     .badge(badge(for: section))
@@ -192,7 +209,7 @@ struct OperatorRootView: View {
     private var sidebarLayout: some View {
         NavigationSplitView {
             List(selection: $selection) {
-                ForEach(OperatorSection.sidebarGroups, id: \.title) { group in
+                ForEach(OperatorSection.sidebarGroups(sellsGoods: sellsGoods), id: \.title) { group in
                     Section {
                         ForEach(group.items) { section in
                             NavigationLink(value: section) {

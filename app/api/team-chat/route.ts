@@ -245,9 +245,58 @@ export async function GET(request: Request) {
     }
   }
 
+  // Фотографии отправителей.
+  //
+  // В самом сообщении `sender_avatar_url` никогда не заполнялся — поле есть, а
+  // писать в него забыли, и в чате у всех были инициалы, даже когда фото
+  // загружено. Берём текущее фото по отправителю: так поменявший аватар
+  // человек меняет его и в старой переписке, а не только в новых сообщениях.
+  const operatorIds = Array.from(
+    new Set((data || []).map((m: any) => m.sender_operator_id).filter(Boolean).map(String)),
+  )
+  const userIds = Array.from(
+    new Set(
+      (data || [])
+        .filter((m: any) => !m.sender_operator_id)
+        .map((m: any) => m.sender_user_id)
+        .filter(Boolean)
+        .map(String),
+    ),
+  )
+
+  const avatarByOperator = new Map<string, string>()
+  const avatarByUser = new Map<string, string>()
+
+  if (operatorIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from('operator_profiles')
+      .select('operator_id, photo_url')
+      .in('operator_id', operatorIds)
+    for (const row of (profiles as any[]) || []) {
+      if (row.photo_url) avatarByOperator.set(String(row.operator_id), String(row.photo_url))
+    }
+  }
+
+  if (userIds.length > 0) {
+    const { data: members } = await supabase
+      .from('organization_members')
+      .select('user_id, staff:staff_id(photo_url)')
+      .eq('organization_id', orgId)
+      .in('user_id', userIds)
+    for (const row of (members as any[]) || []) {
+      const person = Array.isArray(row.staff) ? row.staff[0] : row.staff
+      if (person?.photo_url) avatarByUser.set(String(row.user_id), String(person.photo_url))
+    }
+  }
+
   // Прикрепляем реакции к каждому сообщению (inline) + отдаём polls map.
   const enriched = (data || []).map((m: any) => ({
     ...m,
+    sender_avatar_url:
+      (m.sender_operator_id ? avatarByOperator.get(String(m.sender_operator_id)) : null) ||
+      (m.sender_user_id ? avatarByUser.get(String(m.sender_user_id)) : null) ||
+      m.sender_avatar_url ||
+      null,
     reactions: reactionsByMsg[m.id] || [],
   }))
 

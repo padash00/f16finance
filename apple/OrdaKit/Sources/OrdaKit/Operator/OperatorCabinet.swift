@@ -137,6 +137,27 @@ public struct LeadAssignment: Decodable, Sendable, Identifiable, Hashable {
 }
 
 /// Ответ `GET /api/operator/overview`.
+/// Чем занимаются точки оператора.
+///
+/// От этого зависит, что показывать: оператор компьютерного клуба не продаёт
+/// товар и не считает остатки — он обслуживает гостей, и вкладка «Продажа» у
+/// него только занимает место в панели.
+public struct OperatorPoints: Decodable, Sendable {
+    public let industries: [String]
+    public let sellsGoods: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case industries
+        case sellsGoods = "sellsGoods"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        industries = try c.decodeIfPresent([String].self, forKey: .industries) ?? []
+        sellsGoods = try c.decodeIfPresent(Bool.self, forKey: .sellsGoods) ?? true
+    }
+}
+
 public struct OperatorOverview: Decodable, Sendable {
     public let operatorName: String
     public let week: SalaryWeek?
@@ -145,9 +166,12 @@ public struct OperatorOverview: Decodable, Sendable {
     public let activeTasks: [OperatorTask]
     public let recentDebts: [OperatorDebt]
     public let leadAssignments: [LeadAssignment]
+    /// Чем занимаются точки. Старый сервер поля не шлёт — тогда считаем, что
+    /// торговля есть: прятать кассу у того, кто ею пользуется, хуже.
+    public let points: OperatorPoints?
 
     private enum CodingKeys: String, CodingKey {
-        case `operator`, week, counters, nextShift, activeTasks, recentDebts, leadAssignments
+        case `operator`, week, counters, nextShift, activeTasks, recentDebts, leadAssignments, points
     }
 
     private struct OperatorRef: Decodable {
@@ -165,6 +189,7 @@ public struct OperatorOverview: Decodable, Sendable {
         activeTasks = try c.decodeIfPresent([OperatorTask].self, forKey: .activeTasks) ?? []
         recentDebts = try c.decodeIfPresent([OperatorDebt].self, forKey: .recentDebts) ?? []
         leadAssignments = try c.decodeIfPresent([LeadAssignment].self, forKey: .leadAssignments) ?? []
+        points = try c.decodeIfPresent(OperatorPoints.self, forKey: .points)
     }
 }
 

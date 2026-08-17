@@ -191,12 +191,32 @@ export async function GET(request: Request) {
       .filter((shift: any) => new Date(`${shift.date}T00:00:00`).getTime() >= new Date().setHours(0, 0, 0, 0))
       .sort((left: any, right: any) => left.date.localeCompare(right.date))[0]
 
+    // Ниша точек, где человек работает.
+    //
+    // От неё зависит, что ему вообще показывать: оператор компьютерного клуба
+    // не продаёт товар и не считает остатки — он обслуживает гостей, и вкладка
+    // «Продажа» у него только занимает место в панели.
+    const { data: pointRows } = await supabase
+      .from('companies')
+      .select('id, industry')
+      .in('id', operatorCompanyIds.length > 0 ? operatorCompanyIds : ['00000000-0000-0000-0000-000000000000'])
+
+    const industries = Array.from(
+      new Set(((pointRows as any[]) || []).map((row) => String(row.industry || 'other'))),
+    )
+
     return json({
       ok: true,
       operator: {
         id: context.operator.id,
         name: getOperatorDisplayName(context.operator, 'Оператор'),
         short_name: context.operator.short_name,
+      },
+      points: {
+        industries,
+        // Товар продаёт магазин и общепит; в клубе продажи ведут через
+        // тарификацию, а не через кассу приложения.
+        sellsGoods: industries.some((code) => code === 'shop' || code === 'food'),
       },
       week: {
         weekStart,
