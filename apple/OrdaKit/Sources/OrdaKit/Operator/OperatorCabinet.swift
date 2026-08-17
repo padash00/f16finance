@@ -353,16 +353,88 @@ public struct ScheduledShift: Decodable, Sendable, Identifiable, Hashable {
 public struct ScheduleGroup: Decodable, Sendable, Identifiable, Hashable {
     public let companyName: String
     public let shifts: [ScheduledShift]
+    /// Ответ на опубликованную неделю: подтверждена ли она человеком.
+    public let response: ScheduleWeekResponse?
+    /// Уже поданные заявки на замену по этой точке.
+    public let requests: [ShiftChangeRequest]
 
     public var id: String { companyName }
 
-    private enum CodingKeys: String, CodingKey { case company, shifts }
+    /// Неделя опубликована и ждёт подтверждения.
+    public var needsConfirmation: Bool {
+        guard let response else { return false }
+        return response.status != "confirmed"
+    }
+
+    private enum CodingKeys: String, CodingKey { case company, shifts, response, requests }
     private struct Company: Decodable { let name: String? }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         companyName = (try c.decodeIfPresent(Company.self, forKey: .company))?.name ?? "Точка"
         shifts = try c.decodeIfPresent([ScheduledShift].self, forKey: .shifts) ?? []
+        response = try? c.decodeIfPresent(ScheduleWeekResponse.self, forKey: .response)
+        requests = (try? c.decodeIfPresent([ShiftChangeRequest].self, forKey: .requests)) ?? []
+    }
+}
+
+/// Ответ оператора на опубликованный график недели.
+///
+/// График публикует руководитель, а человек подтверждает, что видел его и
+/// выходит. Без подтверждения «я не знал про смену» — не отговорка, а факт.
+public struct ScheduleWeekResponse: Decodable, Sendable, Hashable {
+    public let id: String
+    public let status: String
+    public let confirmedAt: Date?
+
+    public var isConfirmed: Bool { status == "confirmed" }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, status
+        case confirmedAt = "confirmed_at"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeFlexibleString(forKey: .id) ?? ""
+        status = try c.decodeFlexibleString(forKey: .status) ?? "pending"
+        confirmedAt = DateParsing.date(from: try c.decodeFlexibleString(forKey: .confirmedAt))
+    }
+}
+
+/// Заявка «не смогу выйти» по конкретной смене.
+public struct ShiftChangeRequest: Decodable, Sendable, Identifiable, Hashable {
+    public let id: String
+    /// `YYYY-MM-DD`.
+    public let shiftDate: String
+    public let shiftType: String
+    public let reason: String?
+    public let status: String
+
+    public var isOpen: Bool { status == "open" || status == "awaiting_reason" }
+
+    public var statusLabel: String {
+        switch status {
+        case "open", "awaiting_reason": "На рассмотрении"
+        case "resolved", "closed": "Решено"
+        case "rejected": "Отклонено"
+        default: status
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, reason, status
+        case shiftDate = "shift_date"
+        case shiftType = "shift_type"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeFlexibleString(forKey: .id) ?? UUID().uuidString
+        shiftDate = try c.decodeFlexibleString(forKey: .shiftDate) ?? ""
+        shiftType = try c.decodeFlexibleString(forKey: .shiftType) ?? "day"
+        reason = try c.decodeFlexibleString(forKey: .reason)
+        status = try c.decodeFlexibleString(forKey: .status) ?? "open"
     }
 }
 

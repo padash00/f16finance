@@ -162,8 +162,59 @@ final class CabinetStore {
         salary = (try? await service.salary(weekStart: salaryWeek)) ?? salary
     }
 
+    /// Какую неделю графика смотрим.
+    var scheduleWeek: String = CabinetStore.currentWeekStart() {
+        didSet {
+            guard scheduleWeek != oldValue else { return }
+            Task { await loadSchedule() }
+        }
+    }
+
+    /// Шаг по неделям графика. Вперёд ходить можно: график публикуют заранее.
+    func shiftScheduleWeek(by weeks: Int) {
+        guard let current = DateParsing.parseDateOnly(scheduleWeek) else { return }
+        let moved = current.addingTimeInterval(Double(weeks) * 7 * 86_400)
+        scheduleWeek = CabinetStore.currentWeekStart(from: moved)
+    }
+
     func loadSchedule() async {
-        schedule = (try? await service.schedule()) ?? schedule
+        schedule = (try? await service.schedule(weekStart: scheduleWeek)) ?? schedule
+    }
+
+    /// Подтвердить неделю. Возвращает текст ошибки, если не вышло.
+    func confirmScheduleWeek(responseID: String) async -> String? {
+        do {
+            try await service.confirmScheduleWeek(responseID: responseID)
+            await loadSchedule()
+            return nil
+        } catch let error as APIError {
+            return error.operatorMessage
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    /// Сообщить, что не получится выйти.
+    func reportShiftIssue(
+        responseID: String,
+        shiftDate: String,
+        shiftType: String,
+        reason: String
+    ) async -> String? {
+        do {
+            try await service.reportShiftIssue(
+                responseID: responseID,
+                shiftDate: shiftDate,
+                shiftType: shiftType,
+                reason: reason
+            )
+            await loadSchedule()
+            return nil
+        } catch let error as APIError {
+            return error.operatorMessage
+        } catch {
+            return error.localizedDescription
+        }
     }
 
     func loadIncidents() async {

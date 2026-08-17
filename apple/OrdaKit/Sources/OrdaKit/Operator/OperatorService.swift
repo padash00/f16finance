@@ -230,8 +230,54 @@ public struct OperatorService: Sendable {
         return try await api.send(APIRequest(path: "/api/operator/salary", query: query))
     }
 
-    public func schedule() async throws -> OperatorSchedule {
-        try await api.send(APIRequest(path: "/api/operator/shifts"))
+    /// Мой график. Пусто — текущая неделя.
+    public func schedule(weekStart: String? = nil) async throws -> OperatorSchedule {
+        var query: [String: String] = [:]
+        if let weekStart, !weekStart.isEmpty { query["weekStart"] = weekStart }
+        return try await api.send(APIRequest(path: "/api/operator/shifts", query: query))
+    }
+
+    /// Подтвердить, что видел график недели и выходишь.
+    ///
+    /// Без подтверждения «я не знал про смену» перестаёт быть отговоркой: у
+    /// руководителя видно, кто принял неделю, а кто ещё нет.
+    public func confirmScheduleWeek(responseID: String) async throws {
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/operator/shifts",
+                method: .post,
+                body: try JSONSerialization.data(
+                    withJSONObject: ["action": "confirmWeek", "responseId": responseID]
+                )
+            )
+        )
+    }
+
+    /// Сказать, что на смену выйти не получится.
+    ///
+    /// Это не отказ и не самовольная замена: заявка уходит руководителю, а
+    /// решение и подмену он принимает сам. Молча не выйти — хуже для всех.
+    public func reportShiftIssue(
+        responseID: String,
+        shiftDate: String,
+        shiftType: String,
+        reason: String
+    ) async throws {
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/operator/shifts",
+                method: .post,
+                body: try JSONSerialization.data(
+                    withJSONObject: [
+                        "action": "reportIssue",
+                        "responseId": responseID,
+                        "shiftDate": shiftDate,
+                        "shiftType": shiftType,
+                        "reason": reason,
+                    ]
+                )
+            )
+        )
     }
 
     public func incidents() async throws -> [OperatorIncident] {

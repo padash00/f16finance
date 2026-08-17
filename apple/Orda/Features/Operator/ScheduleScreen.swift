@@ -11,6 +11,11 @@ struct ScheduleScreen: View {
     @Environment(CabinetStore.self) private var cabinet
     @Environment(\.surface) private var surface
 
+    /// По какой смене пишем «не смогу выйти».
+    @State private var reporting: Day?
+    @State private var actionError: String?
+    @State private var isBusy = false
+
     /// Смена конкретного дня, если она есть.
     private struct Day: Identifiable {
         let date: Date
@@ -30,6 +35,8 @@ struct ScheduleScreen: View {
             } else {
                 weekHeader
                 weekGrid
+                confirmationCard
+                requestsCard
                 summaryCards
 
                 if days.allSatisfy({ !$0.isWorking }) {
@@ -45,6 +52,18 @@ struct ScheduleScreen: View {
             }
         }
         .navigationTitle("Мой график")
+        .sheet(item: $reporting) { day in
+            if let response = responseForReporting {
+                ShiftIssueSheet(
+                    responseID: response.id,
+                    shiftDate: DateParsing.dateOnlyString(from: day.date),
+                    shiftType: day.shift?.shiftType ?? "day",
+                    companyName: day.companyName ?? ""
+                ) {
+                    await cabinet.loadSchedule()
+                }
+            }
+        }
         .toolbar { LogoutToolbarItem() }
         .task { if cabinet.schedule == nil { await cabinet.loadSchedule() } }
         .refreshable { await cabinet.loadSchedule() }
@@ -54,6 +73,14 @@ struct ScheduleScreen: View {
 
     private var weekHeader: some View {
         HStack {
+            // Шаг по неделям: график публикуют заранее, и «что у меня на
+            // следующей» — первый вопрос после «что у меня сегодня».
+            Button { cabinet.shiftScheduleWeek(by: -1) } label: {
+                Image(systemName: "chevron.left")
+            }
+            .buttonStyle(.pressable)
+            .padding(.trailing, Spacing.sm)
+
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(weekTitle)
                     .font(Typography.title)
@@ -63,6 +90,113 @@ struct ScheduleScreen: View {
                     .foregroundStyle(Theme.textDim)
             }
             Spacer()
+
+            Button { cabinet.shiftScheduleWeek(by: 1) } label: {
+                Image(systemName: "chevron.right")
+            }
+            .buttonStyle(.pressable)
+        }
+    }
+
+    // ── Подтверждение недели ─────────────────────────────────────────────────
+
+    /// График опубликован — его надо принять.
+    ///
+    /// Подтверждение снимает вечный спор «я не знал про смену»: у руководителя
+    /// видно, кто неделю принял, а кто ещё нет. Раньше это можно было сделать
+    /// только на сайте или в Telegram.
+    @ViewBuilder
+    private var confirmationCard: some View {
+        ForEach(cabinet.schedule?.groups ?? []) { group in
+            if let response = group.response, group.needsConfirmation {
+                Card(accent: Theme.info) {
+                    VStack(alignment: .leading, spacing: Spacing.md) {
+                        SectionHeader(
+                            "График опубликован",
+                            subtitle: group.companyName
+                        )
+
+                        Text("Подтвердите, что видели неделю и выходите. Без этого у руководителя вы числитесь не ознакомленным.")
+                            .font(Typography.callout)
+                            .foregroundStyle(Theme.textDim)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Button {
+                            Task { await confirm(responseID: response.id) }
+                        } label: {
+                            if isBusy {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Label("Ознакомлен, выхожу", systemImage: "checkmark.circle")
+                            }
+                        }
+                        .buttonStyle(PrimaryButtonStyle())
+                        .disabled(isBusy)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Уже поданные заявки на замену.
+    @ViewBuilder
+    private var requestsCard: some View {
+        let requests = (cabinet.schedule?.groups ?? []).flatMap(\.requests).filter(\.isOpen)
+
+        if !requests.isEmpty {
+            Card(accent: Theme.warning) {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    SectionHeader("Заявки на замену", subtitle: "Решение принимает руководитель")
+
+                    ForEach(requests) { request in
+                        HStack(alignment: .top, spacing: Spacing.sm) {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(ScheduleScreen.dayTitle(request.shiftDate) + (request.shiftType == "night" ? ", ночная" : ", дневная"))
+                                    .font(Typography.callout)
+                                    .foregroundStyle(Theme.text)
+                                if let reason = request.reason, !reason.isEmpty {
+                                    Text(reason)
+                                        .font(Typography.caption)
+                                        .foregroundStyle(Theme.textMuted)
+                                        .lineLimit(2)
+                                }
+                            }
+                            Spacer(minLength: Spacing.sm)
+                            StatusChip(request.statusLabel, kind: .warning)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// «12 авг.» из «2026-08-12».
+    static func dayTitle(_ iso: String) -> String {
+        guard let date = DateParsing.parseDateOnly(iso) else { return iso }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ru_RU")
+        formatter.dateFormat = "d MMM"
+        return formatter.string(from: date)
+    }
+
+    /// Заявку можно подать только по опубликованной неделе: она привязана к
+    /// публикации, без неё сервер её не примет.
+    private var responseForReporting: ScheduleWeekResponse? {
+        (cabinet.schedule?.groups ?? []).compactMap(\.response).first
+    }
+
+    private var canReport: Bool { responseForReporting != nil }
+
+    private func confirm(responseID: String) async {
+        isBusy = true
+        actionError = nil
+        defer { isBusy = false }
+
+        if let failure = await cabinet.confirmScheduleWeek(responseID: responseID) {
+            actionError = failure
+            Haptics.error()
+        } else {
+            Haptics.success()
         }
     }
 
@@ -84,14 +218,25 @@ struct ScheduleScreen: View {
 
                 HStack(spacing: Spacing.sm) {
                     ForEach(days) { day in
-                        DayCell(
+                        let cell = DayCell(
                             dayNumber: dayNumber(day.date),
                             isToday: day.isToday,
                             isPast: day.isPast,
                             shift: day.shift,
                             compact: surface == .handheld
                         )
-                        .frame(maxWidth: .infinity)
+
+                        // Нажатие на свою будущую смену — «не смогу выйти».
+                        // Прошедшую менять поздно, а чужой день не твой.
+                        if day.isWorking, !day.isPast, canReport {
+                            Button { reporting = day } label: {
+                                cell.contentShape(Rectangle())
+                            }
+                            .buttonStyle(.pressable)
+                            .frame(maxWidth: .infinity)
+                        } else {
+                            cell.frame(maxWidth: .infinity)
+                        }
                     }
                 }
             }
