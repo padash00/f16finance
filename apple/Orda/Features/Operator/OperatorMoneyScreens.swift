@@ -8,6 +8,9 @@ import SwiftUI
 struct MoneyScreen: View {
     @Environment(CabinetStore.self) private var cabinet
 
+    /// Какие недели долга раскрыты. Свёрнуто по умолчанию: сначала суммы.
+    @State private var expandedDebtWeeks: Set<String> = []
+
     var body: some View {
         ScreenScroll {
             // Переключатель недель: «сколько я заработала в прошлом месяце»
@@ -253,41 +256,84 @@ struct MoneyScreen: View {
                             .foregroundStyle(Theme.textMuted)
                     }
 
+                    // Недели свёрнуты.
+                    //
+                    // В одной записи долга лежит весь список товаров, который
+                    // человек забрал: пять строк на запись, двадцать записей —
+                    // и экран превращается в стену, где не найти ни суммы, ни
+                    // недели. Сначала суммы, подробности по нажатию.
                     ForEach(Array(weeks.enumerated()), id: \.element.key) { index, group in
                         if index > 0 { RowDivider() }
 
                         VStack(alignment: .leading, spacing: Spacing.xs) {
-                            HStack(spacing: Spacing.xs) {
-                                Text(group.title)
-                                    .font(Typography.caption.weight(.semibold))
-                                    .foregroundStyle(
-                                        group.key == cabinet.salaryWeek ? Theme.text : Theme.textDim
-                                    )
-                                // Долг выбранной недели помечаем: остальные —
-                                // хвосты, и путать их с текущим нельзя.
-                                if group.key == cabinet.salaryWeek {
-                                    Text("выбранная неделя")
+                            Button {
+                                if expandedDebtWeeks.contains(group.key) {
+                                    expandedDebtWeeks.remove(group.key)
+                                } else {
+                                    expandedDebtWeeks.insert(group.key)
+                                }
+                            } label: {
+                                HStack(spacing: Spacing.xs) {
+                                    Image(systemName: expandedDebtWeeks.contains(group.key) ? "chevron.down" : "chevron.right")
+                                        .font(.caption2.weight(.bold))
+                                        .foregroundStyle(Theme.textMuted)
+
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(group.title)
+                                            .font(Typography.callout.weight(.medium))
+                                            .foregroundStyle(
+                                                group.key == cabinet.salaryWeek ? Theme.text : Theme.textDim
+                                            )
+                                        Text(
+                                            "\(group.debts.count) \(pluralize(group.debts.count, "запись", "записи", "записей"))"
+                                                + (group.key == cabinet.salaryWeek ? " · выбранная неделя" : "")
+                                        )
                                         .font(Typography.caption)
                                         .foregroundStyle(Theme.textMuted)
-                                }
-                                Spacer()
-                                Text(Money.format(group.total))
-                                    .font(Typography.caption.weight(.semibold).monospacedDigit())
-                                    .foregroundStyle(Theme.negative)
-                            }
+                                    }
 
-                            ForEach(group.debts) { debt in
-                                StatRow(
-                                    debt.comment ?? debt.companyName ?? "Долг",
-                                    value: Money.format(debt.amount),
-                                    valueColor: Theme.negative
-                                )
+                                    Spacer()
+
+                                    Text(Money.format(group.total))
+                                        .font(Typography.callout.weight(.semibold).monospacedDigit())
+                                        .foregroundStyle(Theme.negative)
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.pressable)
+
+                            if expandedDebtWeeks.contains(group.key) {
+                                ForEach(group.debts) { debt in
+                                    HStack(alignment: .top, spacing: Spacing.sm) {
+                                        // Список товаров в записи бывает
+                                        // длинным — показываем начало, целиком
+                                        // он и на сайте не помещается.
+                                        Text(MoneyScreen.debtTitle(debt))
+                                            .font(Typography.caption)
+                                            .foregroundStyle(Theme.textDim)
+                                            .lineLimit(2)
+                                        Spacer(minLength: Spacing.sm)
+                                        Text(Money.format(debt.amount))
+                                            .font(Typography.caption.monospacedDigit())
+                                            .foregroundStyle(Theme.negative)
+                                    }
+                                    .padding(.leading, Spacing.lg)
+                                }
                             }
                         }
                     }
                 }
             }
+            .animation(Motion.value, value: expandedDebtWeeks)
         }
+    }
+
+    /// Короткая подпись записи: первая строка списка, без хвоста.
+    static func debtTitle(_ debt: OperatorDebt) -> String {
+        let raw = debt.comment ?? debt.companyName ?? "Долг"
+        let lines = raw.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+        guard let first = lines.first, !first.isEmpty else { return "Долг" }
+        return lines.count > 1 ? "\(first) и ещё \(lines.count - 1)" : first
     }
 
     /// Долги, сгруппированные по неделе. Свежие сверху.
