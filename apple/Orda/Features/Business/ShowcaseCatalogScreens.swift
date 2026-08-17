@@ -181,9 +181,13 @@ private struct ShowcaseRowView: View {
 /// Каталог товаров: номенклатура с ценой, штрихкодом и категорией.
 struct CatalogScreen: View {
     @Environment(\.api) private var api
+    @Environment(\.access) private var access
     @State private var store: CatalogStore?
     @State private var search = ""
     @State private var onlyMissing = false
+    @State private var isAdding = false
+
+    private var canCreate: Bool { access?.can("store-catalog.create") ?? false }
 
     var body: some View {
         Group {
@@ -200,9 +204,17 @@ struct CatalogScreen: View {
             }
         }
         .background(Theme.background)
+        .sheet(isPresented: $isAdding) {
+            AddItemSheet(isConsumable: false) { await store?.load() }
+        }
         .navigationTitle("Каталог товаров")
         .searchable(text: $search, prompt: "Название или штрихкод")
         .toolbar {
+            if canCreate {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { isAdding = true } label: { Image(systemName: "plus") }
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 Toggle(isOn: $onlyMissing) {
                     Label("Только отсутствующие", systemImage: "tray")

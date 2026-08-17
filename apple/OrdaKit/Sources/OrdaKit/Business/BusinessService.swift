@@ -611,6 +611,43 @@ public struct BusinessService: Sendable {
         )
     }
 
+    /// Завести товар или расходник в каталоге.
+    ///
+    /// Товар заводят у коробки: приехало новое, а в каталоге его нет — и
+    /// приёмку не оформить, потому что позицию не с чем сопоставить.
+    ///
+    /// Расходник отличается только видом: он не продаётся, а списывается —
+    /// перчатки, пакеты, чековая лента.
+    public func createInventoryItem(
+        name: String,
+        barcode: String,
+        unit: String,
+        salePrice: Double,
+        purchasePrice: Double,
+        isConsumable: Bool,
+        requiresExpiry: Bool
+    ) async throws {
+        let payload: [String: Any] = [
+            "name": name,
+            "barcode": barcode,
+            "unit": unit,
+            "sale_price": salePrice,
+            "default_purchase_price": purchasePrice,
+            "item_type": isConsumable ? "consumable" : "product",
+            "requires_expiry": requiresExpiry,
+        ]
+
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/inventory",
+                method: .post,
+                body: try JSONSerialization.data(
+                    withJSONObject: ["action": "createItem", "payload": payload]
+                )
+            )
+        )
+    }
+
     /// График смен на неделю. Требует `shifts.view` либо `dashboard.view`.
     public func schedule(weekStart: String) async throws -> ShiftSchedule {
         try await api.send(

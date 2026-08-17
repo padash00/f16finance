@@ -1313,9 +1313,13 @@ final class ConsumablesStore {
 /// вынесены отдельно: по ним прогноза нет, и это тоже повод их завести.
 struct ConsumablesScreen: View {
     @Environment(\.api) private var api
+    @Environment(\.access) private var access
     @State private var store: ConsumablesStore?
     @State private var tab: Tab = .stock
     @State private var selectedIssue: ConsumableIssue?
+    @State private var isAdding = false
+
+    private var canCreate: Bool { access?.can("store-consumables.create") ?? false }
 
     private enum Tab: Hashable { case stock, issues }
 
@@ -1334,8 +1338,20 @@ struct ConsumablesScreen: View {
             }
         }
         .background(Theme.background)
+        .sheet(isPresented: $isAdding) {
+            // Расходник заводится тем же вызовом, что и товар: отличается
+            // только видом — он не продаётся, а списывается.
+            AddItemSheet(isConsumable: true) { await store?.load() }
+        }
         .navigationTitle("Расходники")
-        .toolbar { LogoutToolbarItem() }
+        .toolbar {
+            if canCreate {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { isAdding = true } label: { Image(systemName: "plus") }
+                }
+            }
+            LogoutToolbarItem()
+        }
         .task {
             if store == nil {
                 let created = ConsumablesStore(api: api)
