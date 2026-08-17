@@ -537,6 +537,51 @@ public struct BusinessService: Sendable {
         )
     }
 
+    /// Уволить оператора или сотрудника.
+    ///
+    /// Увольнение — не удаление: смены, выручка и ведомости остаются, иначе
+    /// рассыпалась бы отчётность прошлых недель. Сервер закрывает доступ,
+    /// проставляет дату и снимает человека с графика.
+    ///
+    /// `kind` — `operator` или `staff`. Причина обязательна: через полгода
+    /// «уволен» без объяснения не отличить от ошибки.
+    public func dismissPerson(
+        kind: String,
+        id: String,
+        reason: String,
+        dismissalType: String,
+        cascadePaired: Bool
+    ) async throws {
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/hr/dismiss",
+                method: .post,
+                body: try JSONSerialization.data(
+                    withJSONObject: [
+                        "kind": kind,
+                        "id": id,
+                        "reason": reason,
+                        "dismissal_type": dismissalType,
+                        "cascade_paired": cascadePaired,
+                    ]
+                )
+            )
+        )
+    }
+
+    /// Восстановить уволенного: человек вернулся.
+    public func restorePerson(kind: String, id: String) async throws {
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/hr/restore",
+                method: .post,
+                body: try JSONSerialization.data(
+                    withJSONObject: ["kind": kind, "id": id]
+                )
+            )
+        )
+    }
+
     /// График смен на неделю. Требует `shifts.view` либо `dashboard.view`.
     public func schedule(weekStart: String) async throws -> ShiftSchedule {
         try await api.send(

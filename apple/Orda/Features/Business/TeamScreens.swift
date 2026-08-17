@@ -164,6 +164,10 @@ private struct OperatorDetail: View {
     /// Право то же, что проверяет сервер.
     private var canToggle: Bool { access?.can("operators.toggle_active") ?? false }
     private var canReset: Bool { access?.can("operators.reset_password") ?? false }
+    /// Увольнение закрыто тем же правом, что и на сервере.
+    private var canDismiss: Bool { access?.can("hr.dismiss") ?? false }
+
+    @State private var dismissing = false
 
     var body: some View {
         ScreenScroll {
@@ -231,6 +235,20 @@ private struct OperatorDetail: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
+                if canDismiss {
+                    // Решение принимают на месте, а оформляют «когда дойду до
+                    // компьютера» — и всё это время у уволенного открыт вход.
+                    Button {
+                        dismissing = true
+                    } label: {
+                        Label(
+                            person.isActive ? "Уволить" : "Восстановить",
+                            systemImage: person.isActive ? "person.badge.minus" : "person.badge.plus"
+                        )
+                    }
+                    .buttonStyle(person.isActive ? AnyButtonStyle(DestructiveButtonStyle()) : AnyButtonStyle(SecondaryButtonStyle()))
+                }
+
                 if canReset {
                     // Пароль забывают перед сменой — сбрасывать его надо там
                     // же, где стоит человек.
@@ -262,6 +280,16 @@ private struct OperatorDetail: View {
         }
         .sheet(isPresented: $resetting) {
             ResetPasswordSheet(person: person) { await store.loadTeam() }
+        }
+        .sheet(isPresented: $dismissing) {
+            DismissSheet(
+                kind: "operator",
+                personID: person.id,
+                personName: person.displayName,
+                isDismissed: !person.isActive
+            ) {
+                await store.loadTeam()
+            }
         }
         .alert(
             person.isActive ? "Закрыть доступ?" : "Открыть доступ?",
