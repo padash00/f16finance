@@ -229,6 +229,7 @@ struct ArticleReader: View {
     @Environment(CabinetStore.self) private var cabinet
     @State private var isConfirming = false
     @State private var error: String?
+    @State private var explaining = false
 
     private var blocks: [RichText.Block] {
         let parsed = RichText.blocks(from: article.body)
@@ -291,6 +292,21 @@ struct ArticleReader: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        // «Объясни проще» — в панели, а не в тексте: за ним тянутся, когда уже
+        // прочитали и не поняли, и искать кнопку в конце длинного регламента
+        // человек не станет.
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    explaining = true
+                } label: {
+                    Label("Проще", systemImage: "text.bubble")
+                }
+            }
+        }
+        .sheet(isPresented: $explaining) {
+            ArticleExplainSheet(article: article)
+        }
     }
 
     /// Полоса подтверждения над нижним краем.

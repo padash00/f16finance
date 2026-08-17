@@ -532,6 +532,18 @@ public struct ChecklistItem: Decodable, Sendable, Identifiable, Hashable {
 }
 
 /// Ответ `GET /api/operator/knowledge` — знания и чек-листы одним запросом.
+/// Ответ «объясни проще»: `{ ok: true, answer: "…" }`.
+public struct ExplainResponse: Decodable, Sendable {
+    public let answer: String
+
+    private enum CodingKeys: String, CodingKey { case answer }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        answer = try c.decodeFlexibleString(forKey: .answer) ?? ""
+    }
+}
+
 public struct KnowledgeCenter: Decodable, Sendable {
     public let articles: [KnowledgeArticle]
     public let pendingConfirmations: [KnowledgeArticle]

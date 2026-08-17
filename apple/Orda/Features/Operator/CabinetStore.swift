@@ -185,6 +185,24 @@ final class CabinetStore {
         schedule = (try? await service.schedule(weekStart: scheduleWeek)) ?? schedule
     }
 
+    /// Объяснение правила или текст ошибки — одним значением, чтобы экран не
+    /// гадал, что показывать при пустом ответе.
+    enum Explanation {
+        case answer(String)
+        case failure(String)
+    }
+
+    /// «Объясни проще».
+    func explainArticle(id: String, question: String?) async -> Explanation {
+        do {
+            return .answer(try await service.explainArticle(id: id, question: question))
+        } catch let error as APIError {
+            return .failure(error.operatorMessage)
+        } catch {
+            return .failure(error.localizedDescription)
+        }
+    }
+
     // ── Старший смены ────────────────────────────────────────────────────────
 
     /// Стол старшего. `nil` — человек не старший, и раздела для него нет.

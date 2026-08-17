@@ -383,6 +383,26 @@ public struct OperatorService: Sendable {
         )
     }
 
+    /// «Объясни проще» по статье регламента.
+    ///
+    /// Регламент пишет владелец, а читает оператор в свою первую смену:
+    /// «материальная ответственность за недостачу» ему ничего не говорит.
+    /// Сервер пересказывает тот же текст простыми словами и отвечает строго по
+    /// статье — придуманный порядок действий хуже непонятного.
+    public func explainArticle(id: String, question: String? = nil) async throws -> String {
+        var body: [String: Any] = ["article_id": id]
+        if let question, !question.isEmpty { body["question"] = question }
+
+        let response: ExplainResponse = try await api.send(
+            APIRequest(
+                path: "/api/operator/knowledge/explain",
+                method: .post,
+                body: try JSONSerialization.data(withJSONObject: body)
+            )
+        )
+        return response.answer
+    }
+
     // ── Старший смены ────────────────────────────────────────────────────────
 
     /// Стол старшего. 403 значит «этот человек не старший» — не ошибка, а факт,
