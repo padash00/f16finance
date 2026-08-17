@@ -54,7 +54,33 @@ export async function GET(request: Request) {
 
     if (operatorAssignmentsError) throw operatorAssignmentsError
 
-    const operatorCompanyIds = [...new Set((operatorAssignments || []).map((item: any) => String(item.company_id || '')).filter(Boolean))] as string[]
+    const assignedCompanyIds = [...new Set((operatorAssignments || []).map((item: any) => String(item.company_id || '')).filter(Boolean))] as string[]
+
+    // Точки, где у человека есть деньги этой недели, а не только те, куда он
+    // назначен: долг записан на точку, где взяли товар, и по одним назначениям
+    // расчёт его не видел — сводка расходилась с сайтом ровно на сумму долга.
+    const [{ data: weekDebtRows }, { data: weekIncomeRows }] = await Promise.all([
+      supabase
+        .from('debts')
+        .select('company_id')
+        .eq('operator_id', context.operator.id)
+        .eq('week_start', weekStart)
+        .eq('status', 'active'),
+      supabase
+        .from('incomes')
+        .select('company_id')
+        .eq('operator_id', context.operator.id)
+        .gte('date', weekStart)
+        .lte('date', weekEnd),
+    ])
+
+    const operatorCompanyIds = [
+      ...new Set([
+        ...assignedCompanyIds,
+        ...((weekDebtRows as any[]) || []).map((row) => String(row.company_id || '')).filter(Boolean),
+        ...((weekIncomeRows as any[]) || []).map((row) => String(row.company_id || '')).filter(Boolean),
+      ]),
+    ] as string[]
 
     const [
       tasksRes,
@@ -81,7 +107,7 @@ export async function GET(request: Request) {
       supabase
         .from('shifts')
         .select('id,company_id,date,shift_type,operator_name')
-        .in('company_id', operatorCompanyIds.length > 0 ? operatorCompanyIds : ['00000000-0000-0000-0000-000000000000'])
+        .in('company_id', assignedCompanyIds.length > 0 ? assignedCompanyIds : ['00000000-0000-0000-0000-000000000000'])
         .gte('date', weekStart)
         .lte('date', weekEnd)
         .order('date', { ascending: true }),

@@ -210,7 +210,39 @@ export async function GET(request: Request) {
 
     if (operatorAssignmentsError) throw operatorAssignmentsError
 
-    const operatorCompanyIds = [...new Set((operatorAssignments || []).map((item: any) => String(item.company_id || '')).filter(Boolean))] as string[]
+    const assignedCompanyIds = [...new Set((operatorAssignments || []).map((item: any) => String(item.company_id || '')).filter(Boolean))] as string[]
+
+    // Точки, где у человека есть деньги за эту неделю, — не только те, куда он
+    // назначен сейчас.
+    //
+    // Долг принадлежит человеку, а не точке: товар взят в магазине, а работает
+    // он в клубе — и расчёт, собранный по одним назначениям, этот долг просто
+    // не видел. Из-за этого «к выплате» в приложении было больше, чем на
+    // сайте, ровно на сумму долга: человек считал, что ему должны на 26 тысяч
+    // больше. То же и со сменами на точке, откуда его успели перевести.
+    const [{ data: weekDebtRows }, { data: weekIncomeRows }] = await Promise.all([
+      supabase
+        .from('debts')
+        .select('company_id')
+        .eq('operator_id', context.operator.id)
+        .eq('week_start', weekStart)
+        .eq('status', 'active'),
+      supabase
+        .from('incomes')
+        .select('company_id')
+        .eq('operator_id', context.operator.id)
+        .gte('date', weekStart)
+        .lte('date', weekEnd),
+    ])
+
+    const operatorCompanyIds = [
+      ...new Set([
+        ...assignedCompanyIds,
+        ...((weekDebtRows as any[]) || []).map((row) => String(row.company_id || '')).filter(Boolean),
+        ...((weekIncomeRows as any[]) || []).map((row) => String(row.company_id || '')).filter(Boolean),
+      ]),
+    ] as string[]
+
     const [references, shiftRules] = await Promise.all([
       listSalaryReferenceData(supabase, { companyIds: operatorCompanyIds }),
       listShiftPointRules(supabase, operatorCompanyIds),
