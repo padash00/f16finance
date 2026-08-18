@@ -132,6 +132,9 @@ export function buildProbabilisticLayer(args: {
   const receiptsIndex = emptyBaselineIndex()
   const avgTicketIndex = emptyBaselineIndex()
   const attachIndex = emptyBaselineIndex()
+  // Пары «поток — средний чек»: в людный вечер и корзины другие, и разыгрывать
+  // эти две величины независимо значит терять их связь.
+  const pairs: Array<{ receipts: number; avgTicket: number }> = []
 
   // Чеки по сменам: нужны, чтобы собрать выборку сумм для сопоставимых смен.
   const receiptsByShift = new Map<string, number[]>()
@@ -154,6 +157,9 @@ export function buildProbabilisticLayer(args: {
       receipts !== null && receipts > 0 && revenue !== null ? revenue / receipts : null,
       { summerMonths },
     )
+    if (receipts !== null && receipts > 0 && revenue !== null) {
+      pairs.push({ receipts, avgTicket: revenue / receipts })
+    }
     addFactToBaselineIndex(
       attachIndex,
       fact,
@@ -244,6 +250,7 @@ export function buildProbabilisticLayer(args: {
         demand,
         ticketSamples,
         shiftAvgTicketSamples: (avgTickets?.values || []).map((v) => v * prices),
+        shiftPairs: pairs.map((pair) => ({ receipts: pair.receipts, avgTicket: pair.avgTicket * prices })),
         fallbackAvgTicket: avgTicketHit ? avgTicketHit.value * prices : null,
         thresholds: plan,
         iterations: args.iterations ?? 10_000,

@@ -470,3 +470,41 @@ test('неизвестная длительность отдельной сме�
   assert.equal(forecast.sampleSize, history.length)
   assert.ok(Number.isFinite(forecast.expectedReceipts))
 })
+
+test('связь потока и чека сохраняется при розыгрыше', () => {
+  // Замерено: когда поток и средний чек связаны, независимый розыгрыш
+  // ошибается в вероятности уровня на десять пунктов. Парный — на один.
+  const rng = createRng(31337)
+  const history: Array<{ receipts: number; avgTicket: number }> = []
+  for (let i = 0; i < 40; i++) {
+    const z = rng() * 2 - 1
+    history.push({
+      receipts: Math.max(5, Math.round(40 + z * 14)),
+      // Средний чек растёт вместе с потоком: людный вечер — крупные корзины.
+      avgTicket: 1200 + z * 300,
+    })
+  }
+
+  const revenues = history.map((h) => h.receipts * h.avgTicket).sort((a, b) => a - b)
+  const b1 = revenues[Math.floor(revenues.length * 0.45)]
+  const truth = revenues.filter((r) => r >= b1).length / revenues.length
+
+  const common = {
+    demand: forecastDemand(history.map((h) => h.receipts))!,
+    ticketSamples: [],
+    shiftAvgTicketSamples: history.map((h) => h.avgTicket),
+    fallbackAvgTicket: 1200,
+    thresholds: { control: null, b1, b2: null, b3: null, record: null },
+    iterations: 20_000,
+    seed: 7,
+  }
+
+  const independent = simulateShift(common)!
+  const paired = simulateShift({ ...common, shiftPairs: history })!
+
+  const independentMiss = Math.abs(independent.probabilityB1! - truth)
+  const pairedMiss = Math.abs(paired.probabilityB1! - truth)
+
+  assert.ok(pairedMiss < independentMiss, `парный розыгрыш не помог: ${pairedMiss} против ${independentMiss}`)
+  assert.ok(pairedMiss < 0.05, `парный розыгрыш промахнулся на ${(pairedMiss * 100).toFixed(0)} п.п.`)
+})

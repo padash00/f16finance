@@ -37,6 +37,18 @@ export type SimulationInput = {
    */
   shiftAvgTicketSamples?: number[]
   /**
+   * Пары «сколько было чеков — какой был средний чек» из прошлых смен.
+   *
+   * Нужны, потому что эти две величины связаны: в людный вечер и корзины
+   * крупнее. Разыгрывая их независимо, мы теряем совпадение «много и дорого»
+   * — а именно оно и даёт лучшие смены. Верхний хвост выручки оказывается
+   * обрезанным, и вероятность взять высокий уровень выходит заниженной.
+   *
+   * Замерено на боевых данных: симуляция обещала B1 в 33% смен, а он брался в
+   * 45%. Независимый розыгрыш — главный подозреваемый.
+   */
+  shiftPairs?: Array<{ receipts: number; avgTicket: number }>
+  /**
    * Средний чек как последний запасной вариант. Помечается как empirical:
    * сказать «это распределение чеков» про поделённую на количество выручку
    * было бы обманом.
@@ -54,6 +66,12 @@ export function simulateShift(input: SimulationInput): MonteCarloForecast | null
 
   const tickets = (input.ticketSamples || []).filter((v) => Number.isFinite(v) && v > 0)
   const shiftAverages = (input.shiftAvgTicketSamples || []).filter((v) => Number.isFinite(v) && v > 0)
+
+  // Пары сортируем по числу чеков — так к любому разыгранному потоку можно
+  // быстро найти похожие по загруженности смены и взять чек из них.
+  const pairs = (input.shiftPairs || [])
+    .filter((p) => Number.isFinite(p.receipts) && Number.isFinite(p.avgTicket) && p.avgTicket > 0)
+    .sort((a, b) => a.receipts - b.receipts)
 
   // Спускаемся по качеству источника, а не по удобству: сначала настоящие
   // чеки, потом средние чеки смен, и только в крайнем случае одно число.
@@ -78,7 +96,11 @@ export function simulateShift(input: SimulationInput): MonteCarloForecast | null
     } else if (ticketModel === 'shift_average') {
       // Один средний чек на всю смену — так это и работает в жизни: в
       // «дорогой» вечер дорогими оказываются почти все чеки сразу.
-      revenue = receipts * shiftAverages[Math.floor(rng() * shiftAverages.length)]
+      //
+      // Если известны пары «поток — чек», берём чек не откуда попало, а из
+      // смен с похожей загруженностью. Это сохраняет связь между людностью и
+      // размером корзины, которую независимый розыгрыш стирает.
+      revenue = receipts * (pairs.length >= 8 ? ticketNear(pairs, receipts, rng) : shiftAverages[Math.floor(rng() * shiftAverages.length)])
     } else {
       revenue = receipts * (input.fallbackAvgTicket as number)
     }
@@ -155,6 +177,44 @@ function receiptSampler(demand: DemandForecast, rng: () => number): (() => numbe
     }
     return Math.round(ladder[ladder.length - 1][1])
   }
+}
+
+/**
+ * Средний чек из смен с похожим потоком.
+ *
+ * Берём окно ближайших по числу чеков смен и случайную из них. Окно, а не
+ * одна ближайшая: иначе модель просто повторяла бы историю и потеряла бы
+ * разброс, который в ней есть.
+ */
+const NEIGHBOURS = 5
+
+function ticketNear(
+  pairs: Array<{ receipts: number; avgTicket: number }>,
+  receipts: number,
+  rng: () => number,
+): number {
+  const position = lowerBoundBy(pairs, receipts)
+  const half = Math.floor(NEIGHBOURS / 2)
+  let from = position - half
+  if (from < 0) from = 0
+  let to = from + NEIGHBOURS
+  if (to > pairs.length) {
+    to = pairs.length
+    from = Math.max(0, to - NEIGHBOURS)
+  }
+  const pick = from + Math.floor(rng() * (to - from))
+  return pairs[Math.min(pick, pairs.length - 1)].avgTicket
+}
+
+function lowerBoundBy(pairs: Array<{ receipts: number }>, target: number): number {
+  let low = 0
+  let high = pairs.length
+  while (low < high) {
+    const mid = (low + high) >> 1
+    if (pairs[mid].receipts < target) low = mid + 1
+    else high = mid
+  }
+  return low
 }
 
 /** Индекс первого элемента, который не меньше порога. */

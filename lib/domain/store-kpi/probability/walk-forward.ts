@@ -112,6 +112,9 @@ export function walkForward(facts: ShiftFact[], options: WalkForwardOptions): Wa
   // гуляет ото дня ко дню сам по себе, и без этого разброса выручка в
   // симуляции получалась бы ровнее, чем в жизни.
   const avgTicketIndex = emptyBaselineIndex()
+  // Пары «поток — средний чек» прошлых смен: разыгрывать их независимо значит
+  // потерять связь между людностью и размером корзины.
+  const pairs: Array<{ receipts: number; avgTicket: number }> = []
 
   const demandPoints: BacktestPoint[] = []
   const revenuePoints: RevenuePoint[] = []
@@ -195,6 +198,7 @@ export function walkForward(facts: ShiftFact[], options: WalkForwardOptions): Wa
             demand: v2,
             ticketSamples: [],
             shiftAvgTicketSamples: (avgTickets?.values || []).map((v) => v * prices),
+            shiftPairs: pairs.map((pair) => ({ receipts: pair.receipts, avgTicket: pair.avgTicket * prices })),
             fallbackAvgTicket: avgTicket,
             thresholds: {
               control: thresholds.values[0] * prices,
@@ -233,6 +237,9 @@ export function walkForward(facts: ShiftFact[], options: WalkForwardOptions): Wa
     addFactToBaselineIndex(receiptsIndex, fact, actual, { summerMonths: options.summerMonths })
     // В базу — в ценах базового месяца, как это делает рабочий модуль.
     const deflated = deflatedRevenueOf(fact)
+    if (actual !== null && actual > 0 && deflated !== null) {
+      pairs.push({ receipts: actual, avgTicket: deflated / actual })
+    }
     addFactToBaselineIndex(revenueIndex, fact, deflated, { summerMonths: options.summerMonths })
     addFactToBaselineIndex(
       avgTicketIndex,
