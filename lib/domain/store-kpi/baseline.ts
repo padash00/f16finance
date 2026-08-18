@@ -193,6 +193,41 @@ export function lookupBaseline(
 }
 
 /**
+ * Сами наблюдения сегмента, а не одно число из них.
+ *
+ * Нужно вероятностным моделям: чтобы оценить разброс потока, недостаточно
+ * медианы — требуется вся выборка. Лестница fallback и правило исключения
+ * кассира здесь ровно те же, что и в lookupBaseline, и это принципиально:
+ * если новая модель начнёт брать другой сегмент, сравнение её со старой
+ * перестанет что-либо означать.
+ */
+export function lookupBaselineSamples(
+  index: BaselineIndex,
+  fact: ShiftFact,
+  opts: {
+    minSample: number
+    summerMonths: number[]
+    excludeCashierId?: string | null
+  },
+): { values: number[]; level: SegmentLevel; sample: number } | null {
+  for (const level of SEGMENT_LEVELS) {
+    const buckets = index.get(level)
+    if (!buckets) continue
+    const entries = buckets.get(segmentKey(level, fact, opts.summerMonths))
+    if (!entries || entries.length === 0) continue
+
+    const usable = opts.excludeCashierId
+      ? entries.filter((e) => e.cashier_id !== opts.excludeCashierId)
+      : entries
+    if (usable.length < opts.minSample) continue
+
+    return { values: usable.map((e) => e.value), level, sample: usable.length }
+  }
+
+  return null
+}
+
+/**
  * Пороги выручки по перцентилям сегмента — основа бонусных уровней.
  * Возвращает null, если наблюдений меньше минимума: назначать план по двум
  * сменам нельзя.

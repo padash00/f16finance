@@ -28,9 +28,18 @@ export type SimulationInput = {
    */
   ticketSamples: number[]
   /**
-   * Средний чек как запасной вариант, если отдельных чеков нет. Тогда модель
-   * честно помечается как empirical: сказать «это распределение чеков» про
-   * поделённую на количество выручку было бы обманом.
+   * Средние чеки прошлых сопоставимых СМЕН.
+   *
+   * Промежуточный по качеству вариант, когда отдельных чеков нет. Он важнее,
+   * чем кажется: если взять средний чек одним числом, вся изменчивость
+   * выручки сведётся к числу покупателей, интервал выйдет уже настоящего, а
+   * вероятности планов — самоувереннее, чем данные позволяют.
+   */
+  shiftAvgTicketSamples?: number[]
+  /**
+   * Средний чек как последний запасной вариант. Помечается как empirical:
+   * сказать «это распределение чеков» про поделённую на количество выручку
+   * было бы обманом.
    */
   fallbackAvgTicket: number | null
   thresholds: PlanThresholds
@@ -44,7 +53,12 @@ export function simulateShift(input: SimulationInput): MonteCarloForecast | null
   const rng = createRng(input.seed)
 
   const tickets = (input.ticketSamples || []).filter((v) => Number.isFinite(v) && v > 0)
-  const ticketModel: TicketModel = tickets.length >= 30 ? 'bootstrap' : 'empirical'
+  const shiftAverages = (input.shiftAvgTicketSamples || []).filter((v) => Number.isFinite(v) && v > 0)
+
+  // Спускаемся по качеству источника, а не по удобству: сначала настоящие
+  // чеки, потом средние чеки смен, и только в крайнем случае одно число.
+  const ticketModel: TicketModel =
+    tickets.length >= 30 ? 'bootstrap' : shiftAverages.length >= 8 ? 'shift_average' : 'empirical'
 
   if (ticketModel === 'empirical' && (!input.fallbackAvgTicket || input.fallbackAvgTicket <= 0)) {
     return null
@@ -61,6 +75,10 @@ export function simulateShift(input: SimulationInput): MonteCarloForecast | null
       for (let r = 0; r < receipts; r++) {
         revenue += tickets[Math.floor(rng() * tickets.length)]
       }
+    } else if (ticketModel === 'shift_average') {
+      // Один средний чек на всю смену — так это и работает в жизни: в
+      // «дорогой» вечер дорогими оказываются почти все чеки сразу.
+      revenue = receipts * shiftAverages[Math.floor(rng() * shiftAverages.length)]
     } else {
       revenue = receipts * (input.fallbackAvgTicket as number)
     }
@@ -97,9 +115,11 @@ export function simulateShift(input: SimulationInput): MonteCarloForecast | null
     probabilityBelowB1: probabilityB1 === null ? null : 1 - probabilityB1,
     demandModel: input.demand.model,
     ticketModel,
-    // Симуляция не может быть увереннее, чем модель спроса под ней, а на
-    // подменном среднем чеке — ещё осторожнее.
-    confidence: input.demand.confidence * (ticketModel === 'bootstrap' ? 1 : 0.7),
+    // Симуляция не может быть увереннее модели спроса под ней, а чем хуже
+    // источник чека, тем ниже доверие к результату.
+    confidence:
+      input.demand.confidence *
+      (ticketModel === 'bootstrap' ? 1 : ticketModel === 'shift_average' ? 0.85 : 0.7),
   }
 }
 
