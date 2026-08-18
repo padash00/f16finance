@@ -16,6 +16,8 @@ struct MyTasksCard: View {
 
     @State private var tasks: [TeamTask] = []
     @State private var didLoad = false
+    /// Поручение, на которое отвечаем.
+    @State private var answering: TeamTask?
 
     /// Открытые поручения, срочные и просроченные сверху.
     private var open: [TeamTask] {
@@ -44,7 +46,14 @@ struct MyTasksCard: View {
 
                         ForEach(Array(open.prefix(5).enumerated()), id: \.element.id) { index, task in
                             if index > 0 { RowDivider() }
-                            TeamTaskRowView(task: task)
+                            // Строка ведёт к ответу: увидеть поручение и не
+                            // мочь на него ответить — половина дела, а
+                            // «принял» и «сделал» ждут именно от исполнителя.
+                            Button { answering = task } label: {
+                                TeamTaskRowView(task: task)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.pressable)
                         }
 
                         if open.count > 5 {
@@ -62,6 +71,123 @@ struct MyTasksCard: View {
             // Ошибку не показываем: у того, кому ничего не поручают, карточки
             // просто нет, и красная строка в профиле пугала бы зря.
             tasks = (try? await BusinessService(api: api).myTasks()) ?? []
+        }
+        .sheet(item: $answering) { task in
+            MyTaskAnswerSheet(task: task) {
+                tasks = (try? await BusinessService(api: api).myTasks()) ?? []
+            }
+        }
+    }
+}
+
+/// Ответ по своему поручению.
+///
+/// Сервер принимает не статус, а ответ человека: принял, нужны уточнения, не
+/// могу, уже сделано, готово. Статус он выводит сам и пишет в историю задачи
+/// комментарий — потом видно, кто и когда что сказал. Поэтому здесь пять
+/// кнопок словами, а не выпадающий список состояний.
+struct MyTaskAnswerSheet: View {
+    let task: TeamTask
+    var onDone: () async -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.api) private var api
+
+    @State private var note = ""
+    @State private var sending: TaskResponse?
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            ScreenScroll {
+                Card {
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        FieldLabel("Задача")
+                        Text(task.title)
+                            .font(Typography.callout.weight(.medium))
+                            .foregroundStyle(Theme.text)
+                        if let details = task.details, !details.isEmpty {
+                            Text(details)
+                                .font(Typography.caption)
+                                .foregroundStyle(Theme.textMuted)
+                        }
+                    }
+                }
+
+                Card {
+                    VStack(alignment: .leading, spacing: Spacing.md) {
+                        FieldLabel("Комментарий")
+                        TextField("Необязательно", text: $note, axis: .vertical)
+                            .textFieldStyle(.plain)
+                            .font(Typography.callout)
+                            .lineLimit(1...4)
+                    }
+                }
+
+                VStack(spacing: Spacing.sm) {
+                    // «Готово» — главный ответ, остальные вторичны: чаще всего
+                    // человек открывает лист именно чтобы закрыть поручение.
+                    Button {
+                        Task { await send(.complete) }
+                    } label: {
+                        Label(TaskResponse.complete.title, systemImage: TaskResponse.complete.icon)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .disabled(sending != nil)
+
+                    ForEach(TaskResponse.allCases.filter { $0 != .complete }) { response in
+                        Button {
+                            Task { await send(response) }
+                        } label: {
+                            Label(response.title, systemImage: response.icon)
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(SecondaryButtonStyle())
+                        .disabled(sending != nil)
+                    }
+                }
+
+                if let error {
+                    Card {
+                        Text(error)
+                            .font(Typography.caption)
+                            .foregroundStyle(Theme.negative)
+                    }
+                }
+            }
+            .background(Theme.background)
+            .navigationTitle("Ответить")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Отмена") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private func send(_ response: TaskResponse) async {
+        sending = response
+        error = nil
+        defer { sending = nil }
+        do {
+            try await BusinessService(api: api).respondToTask(
+                id: task.id,
+                response: response,
+                note: note.trimmingCharacters(in: .whitespaces)
+            )
+            Haptics.success()
+            await onDone()
+            dismiss()
+        } catch let apiError as APIError {
+            Haptics.error()
+            error = apiError.userMessage
+        } catch {
+            Haptics.error()
+            self.error = error.localizedDescription
         }
     }
 }

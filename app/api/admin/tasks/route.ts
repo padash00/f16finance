@@ -1131,9 +1131,20 @@ export async function POST(req: Request) {
       // руководителю: «принял», «не смогу», «сделал». Право на это в каталоге
       // есть с самого начала, а маршрут не спрашивал ничего — отвечать за
       // чужую задачу мог любой, кто дошёл до админского контура.
-      const denied = await requireCapability(access, 'tasks.respond')
-      if (denied) return denied as any
+      //
+      // На свою задачу отвечают без права: поручение дали лично человеку, и
+      // «принял»/«сделал» — это его работа, а не управление чужой. Право
+      // остаётся про чужие задачи — там оно и нужно.
       const existingContext = await loadTaskContext(supabase, body.taskId)
+      const selfStaffId = staffMember?.id ? String(staffMember.id) : null
+      const selfOperatorId = (access as any).operatorAuth?.operator_id
+        ? String((access as any).operatorAuth.operator_id)
+        : null
+      const taskIsMine =
+        (!!selfStaffId && String((existingContext.task as any).staff_id || '') === selfStaffId) ||
+        (!!selfOperatorId && String(existingContext.task.operator_id || '') === selfOperatorId)
+      const denied = await requireCapability(access, 'tasks.respond')
+      if (denied && !taskIsMine) return denied as any
       await ensureTaskCompanyAccess(
         {
           activeOrganizationId: access.activeOrganization?.id || null,

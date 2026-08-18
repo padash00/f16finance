@@ -977,6 +977,24 @@ public struct BusinessService: Sendable {
         return response.items
     }
 
+    /// Ответить по задаче: принял, нужны уточнения, не могу, сделано.
+    ///
+    /// Сервер принимает не статус, а ответ человека — статус он выводит сам и
+    /// пишет комментарий в историю, чтобы потом было видно, кто и когда что
+    /// сказал. На свою задачу отвечают без права `tasks.respond`: поручение
+    /// дали лично, и «сделал» — это работа, а не управление чужой задачей.
+    public func respondToTask(id: String, response: TaskResponse, note: String? = nil) async throws {
+        var body: [String: Any] = ["action": "respondTask", "taskId": id, "response": response.rawValue]
+        if let note, !note.isEmpty { body["note"] = note }
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/tasks",
+                method: .post,
+                body: try JSONSerialization.data(withJSONObject: body)
+            )
+        )
+    }
+
     /// Поставить задачу. Требует `tasks.create`.
     public func createTask(_ draft: TaskDraft) async throws {
         let body = try JSONEncoder().encode(TaskCreateRequest(payload: draft.payload()))
