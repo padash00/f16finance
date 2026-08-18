@@ -94,6 +94,29 @@ function sampleKey(level: string, values: number[]): string {
   return `${level}|${values.length}|${sum}`
 }
 
+/**
+ * Пары «поток — средний чек» ИЗ ТОГО ЖЕ СЕГМЕНТА.
+ *
+ * Именно из того же: чек субботнего вечера ничего не говорит о вторнике, и
+ * собирать пары со всех смен подряд значит подменить чеки сегмента чеками
+ * откуда угодно. На боевых данных такая подмена заметно испортила калибровку.
+ */
+function pairsFromSegment(
+  samples: { values: number[]; receipts: Array<number | null> } | null,
+  prices: number,
+): Array<{ receipts: number; avgTicket: number }> {
+  if (!samples) return []
+  const out: Array<{ receipts: number; avgTicket: number }> = []
+  for (let i = 0; i < samples.values.length; i++) {
+    const receipts = samples.receipts[i]
+    const ticket = samples.values[i]
+    if (receipts === null || !Number.isFinite(receipts) || receipts <= 0) continue
+    if (!Number.isFinite(ticket) || ticket <= 0) continue
+    out.push({ receipts, avgTicket: ticket * prices })
+  }
+  return out
+}
+
 export function walkForward(facts: ShiftFact[], options: WalkForwardOptions): WalkForwardResult {
   const percentiles = options.planPercentiles || DEFAULT_PERCENTILES
   const iterations = options.iterations || 2000
@@ -112,9 +135,6 @@ export function walkForward(facts: ShiftFact[], options: WalkForwardOptions): Wa
   // гуляет ото дня ко дню сам по себе, и без этого разброса выручка в
   // симуляции получалась бы ровнее, чем в жизни.
   const avgTicketIndex = emptyBaselineIndex()
-  // Пары «поток — средний чек» прошлых смен: разыгрывать их независимо значит
-  // потерять связь между людностью и размером корзины.
-  const pairs: Array<{ receipts: number; avgTicket: number }> = []
 
   const demandPoints: BacktestPoint[] = []
   const revenuePoints: RevenuePoint[] = []
@@ -198,7 +218,7 @@ export function walkForward(facts: ShiftFact[], options: WalkForwardOptions): Wa
             demand: v2,
             ticketSamples: [],
             shiftAvgTicketSamples: (avgTickets?.values || []).map((v) => v * prices),
-            shiftPairs: pairs.map((pair) => ({ receipts: pair.receipts, avgTicket: pair.avgTicket * prices })),
+            shiftPairs: pairsFromSegment(avgTickets, prices),
             fallbackAvgTicket: avgTicket,
             thresholds: {
               control: thresholds.values[0] * prices,
@@ -237,9 +257,6 @@ export function walkForward(facts: ShiftFact[], options: WalkForwardOptions): Wa
     addFactToBaselineIndex(receiptsIndex, fact, actual, { summerMonths: options.summerMonths })
     // В базу — в ценах базового месяца, как это делает рабочий модуль.
     const deflated = deflatedRevenueOf(fact)
-    if (actual !== null && actual > 0 && deflated !== null) {
-      pairs.push({ receipts: actual, avgTicket: deflated / actual })
-    }
     addFactToBaselineIndex(revenueIndex, fact, deflated, { summerMonths: options.summerMonths })
     addFactToBaselineIndex(
       avgTicketIndex,

@@ -132,9 +132,6 @@ export function buildProbabilisticLayer(args: {
   const receiptsIndex = emptyBaselineIndex()
   const avgTicketIndex = emptyBaselineIndex()
   const attachIndex = emptyBaselineIndex()
-  // Пары «поток — средний чек»: в людный вечер и корзины другие, и разыгрывать
-  // эти две величины независимо значит терять их связь.
-  const pairs: Array<{ receipts: number; avgTicket: number }> = []
 
   // Чеки по сменам: нужны, чтобы собрать выборку сумм для сопоставимых смен.
   const receiptsByShift = new Map<string, number[]>()
@@ -157,9 +154,6 @@ export function buildProbabilisticLayer(args: {
       receipts !== null && receipts > 0 && revenue !== null ? revenue / receipts : null,
       { summerMonths },
     )
-    if (receipts !== null && receipts > 0 && revenue !== null) {
-      pairs.push({ receipts, avgTicket: revenue / receipts })
-    }
     addFactToBaselineIndex(
       attachIndex,
       fact,
@@ -250,7 +244,7 @@ export function buildProbabilisticLayer(args: {
         demand,
         ticketSamples,
         shiftAvgTicketSamples: (avgTickets?.values || []).map((v) => v * prices),
-        shiftPairs: pairs.map((pair) => ({ receipts: pair.receipts, avgTicket: pair.avgTicket * prices })),
+        shiftPairs: pairsFromSegment(avgTickets, prices),
         fallbackAvgTicket: avgTicketHit ? avgTicketHit.value * prices : null,
         thresholds: plan,
         iterations: args.iterations ?? 10_000,
@@ -302,6 +296,29 @@ function comparableReceiptAmounts(
   for (const other of comparable) {
     const list = receiptsByShift.get(other.date + '|' + other.shift)
     if (list) out.push(...list)
+  }
+  return out
+}
+
+/**
+ * Пары «поток — средний чек» ИЗ ТОГО ЖЕ СЕГМЕНТА.
+ *
+ * Именно из того же: чек субботнего вечера ничего не говорит о вторнике, и
+ * собирать пары со всех смен подряд значит подменить чеки сегмента чеками
+ * откуда угодно. На боевых данных такая подмена заметно испортила калибровку.
+ */
+function pairsFromSegment(
+  samples: { values: number[]; receipts: Array<number | null> } | null,
+  prices: number,
+): Array<{ receipts: number; avgTicket: number }> {
+  if (!samples) return []
+  const out: Array<{ receipts: number; avgTicket: number }> = []
+  for (let i = 0; i < samples.values.length; i++) {
+    const receipts = samples.receipts[i]
+    const ticket = samples.values[i]
+    if (receipts === null || !Number.isFinite(receipts) || receipts <= 0) continue
+    if (!Number.isFinite(ticket) || ticket <= 0) continue
+    out.push({ receipts, avgTicket: ticket * prices })
   }
   return out
 }
