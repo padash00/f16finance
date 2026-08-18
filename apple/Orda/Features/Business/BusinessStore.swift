@@ -616,6 +616,17 @@ final class BusinessStore {
         }
     }
 
+    /// Поручения, назначенные на меня.
+    ///
+    /// Отдельный запрос, а не фильтр по списку: на доске сотня чужих задач, и
+    /// «что на мне» — первый вопрос, с которым в неё заходят. Сервер отвечает
+    /// на него и без права видеть чужие.
+    private(set) var myTasks: [TeamTask] = []
+
+    func loadMyTasks() async {
+        myTasks = (try? await service.myTasks()) ?? myTasks
+    }
+
     func loadTasks() async {
         if tasks.isEmpty, let cached = await service.cachedTasks() {
             tasks = cached

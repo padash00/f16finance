@@ -16,6 +16,8 @@ struct TeamTasksScreen: View {
     @State private var selected: TeamTask?
     @State private var filter: Filter = .open
     @State private var isAdding = false
+    /// Фильтр уже выбран — первым заходом или человеком.
+    @State private var didChooseFilter = false
 
     /// Право `tasks.create` проверяет и сервер.
     private var canCreate: Bool { access?.can("tasks.create") ?? false }
@@ -29,10 +31,11 @@ struct TeamTasksScreen: View {
     private var canDelete: Bool { access?.can("tasks.delete") ?? false }
 
     private enum Filter: String, CaseIterable, Identifiable {
-        case open, done, all
+        case mine, open, done, all
         var id: String { rawValue }
         var label: String {
             switch self {
+            case .mine: "Мои"
             case .open: "Активные"
             case .done: "Готовые"
             case .all: "Все"
@@ -85,10 +88,8 @@ struct TeamTasksScreen: View {
                 } empty: {
                     WideEmptyState(
                         icon: "checkmark.circle",
-                        title: filter == .done ? "Готовых задач нет" : "Задач нет",
-                        message: filter == .open
-                            ? "Всё разобрано."
-                            : "Здесь появятся задачи команды."
+                        title: emptyTitle,
+                        message: emptyMessage
                     )
                 }
             }
@@ -103,14 +104,44 @@ struct TeamTasksScreen: View {
             }
             LogoutToolbarItem()
         }
-        .task { await store.loadTasks() }
-        .refreshable { await store.loadTasks() }
+        .task {
+            // Тому, кто задачи не ставит, доска нужна не целиком: он пришёл
+            // посмотреть, что на нём. Ставящему — наоборот, весь список.
+            if !canCreate, !didChooseFilter { filter = .mine }
+            didChooseFilter = true
+            await store.loadTasks()
+            await store.loadMyTasks()
+        }
+        .refreshable {
+            await store.loadTasks()
+            await store.loadMyTasks()
+        }
         .sheet(isPresented: $isAdding) { AddTaskSheet() }
+    }
+
+    private var emptyTitle: String {
+        switch filter {
+        case .mine: "На вас ничего не висит"
+        case .done: "Готовых задач нет"
+        default: "Задач нет"
+        }
+    }
+
+    private var emptyMessage: String {
+        switch filter {
+        case .mine: "Поручения, назначенные лично вам, появятся здесь."
+        case .open: "Всё разобрано."
+        default: "Здесь появятся задачи команды."
+        }
     }
 
     /// Просроченные наверх, дальше срочные, дальше по сроку.
     private var filtered: [TeamTask] {
         let tasks = switch filter {
+        // «Мои» приходят своим запросом: на длинной доске страница обрывается
+        // раньше, чем доходит до твоей задачи, и фильтр по загруженному
+        // куску показал бы пусто там, где работа есть.
+        case .mine: store.myTasks
         case .open: store.tasks.filter { !$0.isDone }
         case .done: store.tasks.filter(\.isDone)
         case .all: store.tasks
