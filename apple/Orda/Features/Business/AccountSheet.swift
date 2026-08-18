@@ -18,6 +18,7 @@ struct AccountSheet: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     #endif
     @State private var confirmingLogout = false
+    @State private var changingPassword = false
     @State private var confirmingDelete = false
     @State private var isDeleting = false
     @State private var deleteError: String?
@@ -50,6 +51,7 @@ struct AccountSheet: View {
                     AppearancePicker()
                     LargeTypeToggle()
                     BiometricLockToggle()
+                    passwordCard
                     quickEntryCard
                     logoutButton
                     legalCard
@@ -216,6 +218,29 @@ struct AccountSheet: View {
         } catch {
             deleteError = error.localizedDescription
         }
+    }
+
+    /// Смена своего пароля.
+    ///
+    /// Оператору её негде было сделать вовсе: временный пароль он получал от
+    /// владельца и менял на сайте, то есть «когда дойду до компьютера».
+    private var passwordCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                SectionHeader("Пароль")
+                Text("Меняется здесь же — текущий пароль спросим для подтверждения.")
+                    .font(Typography.caption)
+                    .foregroundStyle(Theme.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button {
+                    changingPassword = true
+                } label: {
+                    Label("Сменить пароль", systemImage: "key")
+                }
+                .buttonStyle(SecondaryButtonStyle())
+            }
+        }
+        .sheet(isPresented: $changingPassword) { ChangePasswordSheet() }
     }
 
     private var logoutButton: some View {

@@ -82,6 +82,24 @@ public struct MyProfileService: Sendable {
         return response.data
     }
 
+    /// Сменить свой пароль.
+    ///
+    /// Текущий пароль обязателен, и это не формальность: телефон бывает
+    /// разблокирован и лежит на стойке. Права здесь ни при чём — человек
+    /// меняет свой пароль, а не чужой.
+    public func changePassword(current: String, new: String) async throws {
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/auth/change-password",
+                method: .post,
+                body: try JSONSerialization.data(withJSONObject: [
+                    "current_password": current,
+                    "new_password": new,
+                ])
+            )
+        )
+    }
+
     /// Заменить свою фотографию. Возвращает адрес новой.
     ///
     /// Право здесь не нужно и не спрашивается: человек меняет своё фото, а

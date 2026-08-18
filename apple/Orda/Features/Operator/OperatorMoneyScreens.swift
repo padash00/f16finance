@@ -447,6 +447,7 @@ struct OperatorProfileScreen: View {
     @Environment(CabinetStore.self) private var cabinet
 
     @State private var confirmingLogout = false
+    @State private var changingPassword = false
 
     var body: some View {
         ScrollView {
@@ -724,6 +725,26 @@ struct OperatorProfileScreen: View {
                 // проверить это человек должен сам, а не через руководителя.
                 NotificationsCard()
 
+                // Пароль оператору выдаёт владелец, часто временный и вслух.
+                // Сменить его можно было только на сайте — то есть «когда
+                // дойду до компьютера», а выданный вслух пароль живёт ровно до
+                // первой смены рук.
+                Card {
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        SectionHeader("Пароль")
+                        Text("Меняется здесь же — текущий спросим для подтверждения.")
+                            .font(Typography.caption)
+                            .foregroundStyle(Theme.textMuted)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button {
+                            changingPassword = true
+                        } label: {
+                            Label("Сменить пароль", systemImage: "key")
+                        }
+                        .buttonStyle(SecondaryButtonStyle())
+                    }
+                }
+
                 Button("Выйти из аккаунта") { confirmingLogout = true }
                     .buttonStyle(DestructiveButtonStyle())
             }
@@ -756,6 +777,7 @@ struct OperatorProfileScreen: View {
         // Окно, а не всплывающая подсказка: подсказку система прижимает к
         // размеру якоря, и с крупным шрифтом текст переносился с дефисом, а
         // кнопка «Выйти» обрезалась. Окно центрируется и растёт под текст.
+        .sheet(isPresented: $changingPassword) { ChangePasswordSheet() }
         .alert("Выйти из аккаунта?", isPresented: $confirmingLogout) {
             Button("Выйти", role: .destructive) { Task { await auth.signOut() } }
             Button("Отмена", role: .cancel) {}
