@@ -209,3 +209,15 @@ test('в сводке уволенные идут после работающи�
   // Вторая половина месяца начинается после увольнения — начислять нечего.
   assert.equal(summary.rows[1].toPay, 0)
 })
+
+test('сводка называет выплаченные половины, чтобы не платить дважды', () => {
+  const summary = buildStaffSalarySummary({
+    staff: [staff()],
+    adjustments: [],
+    payments: [pay({ slot: 'first' })],
+    today: '2026-08-20',
+    meStaffId: null,
+  })
+  assert.deepEqual(summary.rows[0].paid_slots, ['first'])
+  assert.equal(summary.rows[0].month_closed, false)
+})

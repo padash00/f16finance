@@ -4,7 +4,11 @@ import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { requireAddon } from '@/lib/server/entitlements'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
-import { buildStaffSalarySummary } from '@/lib/domain/staff-salary-slot'
+import {
+  buildStaffSalarySummary,
+  getStaffPaymentAdjustmentPeriod,
+  slotAccrualBase,
+} from '@/lib/domain/staff-salary-slot'
 import {
   resolveCompanyScope,
   listOrganizationStaffIds,
@@ -944,7 +948,7 @@ export async function POST(req: Request) {
       // Get staff name for expense comment
       const { data: staffMember } = await supabase
         .from('staff')
-        .select('full_name, monthly_salary')
+        .select('full_name, monthly_salary, dismissed_at, dismissal_date')
         .eq('id', staff_id)
         .single()
       const { data: previousPayments, error: previousPaymentsError } = await supabase
@@ -1112,7 +1116,20 @@ export async function POST(req: Request) {
         }
       }
 
-      const halfSalary = Math.round(Number(staffMember?.monthly_salary || 0) / 2)
+      // Начисление за половину месяца, а не механическая половина оклада:
+      // уволенному платят по день ухода. Считаем тем же кодом, что и ведомость
+      // — иначе выплата по цифре из ведомости выглядела бы переплатой и
+      // заводила бы фантомный аванс на следующий месяц.
+      const halfSalary = slotAccrualBase(
+        {
+          id: String(staff_id),
+          full_name: String(staffMember?.full_name || ''),
+          monthly_salary: Number(staffMember?.monthly_salary || 0),
+          dismissed_at: (staffMember as any)?.dismissed_at || null,
+          dismissal_date: (staffMember as any)?.dismissal_date || null,
+        },
+        getStaffPaymentAdjustmentPeriod(String(pay_date), normalizedSlot),
+      )
       const adjustmentTotals = adjustmentsToClose.reduce(
         (acc, row: any) => {
           const kind = String(row?.kind || '')

@@ -195,6 +195,8 @@ export type StaffSalaryRow = StaffSlotCalc & {
   paid_this_month: number
   /** Обе выплаты месяца уже проведены: до следующего месяца платить нечем. */
   month_closed: boolean
+  /** Какие половины месяца уже выплачены: вторую выплату не проводят дважды. */
+  paid_slots: StaffSlot[]
   /** Строка самого просителя: сотрудник смотрит зарплату прежде всего свою. */
   is_me: boolean
 }
@@ -246,6 +248,7 @@ export function buildStaffSalarySummary(args: {
       dismissal_date: (s.dismissal_date || s.dismissed_at || null)?.slice(0, 10) || null,
       paid_this_month: paidThisMonth,
       month_closed: hasFirst && hasSecond,
+      paid_slots: [...(hasFirst ? ['first' as const] : []), ...(hasSecond ? ['second' as const] : [])],
       is_me: meStaffId ? String(s.id) === meStaffId : false,
     }
   })

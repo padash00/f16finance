@@ -340,6 +340,9 @@ public struct StaffSalaryRow: Decodable, Sendable, Identifiable, Hashable {
     public let paidThisMonth: Double
     /// Обе выплаты месяца проведены: до следующего месяца платить нечего.
     public let monthClosed: Bool
+    /// Какие половины месяца уже выплачены. Вторую выплату сервер не проведёт
+    /// дважды, и форма должна открываться сразу на свободной.
+    public let paidSlots: [String]
     public let isActive: Bool
     public let dismissalDate: String?
     /// Строка того, кто смотрит.
@@ -348,6 +351,13 @@ public struct StaffSalaryRow: Decodable, Sendable, Identifiable, Hashable {
     public let sourceType: String
 
     public var isFromOperator: Bool { sourceType == "operator" }
+
+    /// Половина месяца, за которую ещё не платили. `nil` — обе закрыты.
+    public var openSlot: String? {
+        if !paidSlots.contains("first") { return "first" }
+        if !paidSlots.contains("second") { return "second" }
+        return nil
+    }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -365,6 +375,7 @@ public struct StaffSalaryRow: Decodable, Sendable, Identifiable, Hashable {
         toPay = try c.decodeFlexibleDouble(forKey: .toPay) ?? 0
         paidThisMonth = try c.decodeFlexibleDouble(forKey: .paidThisMonth) ?? 0
         monthClosed = try c.decodeIfPresent(Bool.self, forKey: .monthClosed) ?? false
+        paidSlots = try c.decodeIfPresent([String].self, forKey: .paidSlots) ?? []
         isActive = try c.decodeIfPresent(Bool.self, forKey: .isActive) ?? true
         dismissalDate = try c.decodeFlexibleString(forKey: .dismissalDate)
         isMe = try c.decodeIfPresent(Bool.self, forKey: .isMe) ?? false
@@ -377,6 +388,7 @@ public struct StaffSalaryRow: Decodable, Sendable, Identifiable, Hashable {
         case monthlySalary = "monthly_salary"
         case paidThisMonth = "paid_this_month"
         case monthClosed = "month_closed"
+        case paidSlots = "paid_slots"
         case isActive = "is_active"
         case dismissalDate = "dismissal_date"
         case isMe = "is_me"

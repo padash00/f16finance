@@ -302,6 +302,77 @@ public struct BusinessService: Sendable {
         return response.data
     }
 
+    /// Выплатить зарплату административному сотруднику.
+    ///
+    /// Половина месяца — не произвольный период: сервер не проведёт две
+    /// выплаты за одну и ту же половину и не пустит третью в месяц. Поэтому
+    /// слот приходит из сводки, а не выбирается на глаз.
+    ///
+    /// Сумму считает сервер заново: `expectedAmount` уходит только в аудит,
+    /// чтобы было видно, из какой цифры исходил тот, кто платил. Если выдали
+    /// больше расчёта — разница станет авансом следующей половины.
+    public func payStaffSalary(
+        staffID: String,
+        companyID: String,
+        payDate: String,
+        slot: String,
+        cashAmount: Double,
+        kaspiAmount: Double,
+        expectedAmount: Double,
+        comment: String?
+    ) async throws {
+        var body: [String: Any] = [
+            "action": "createPayment",
+            "staff_id": staffID,
+            "company_id": companyID,
+            "pay_date": payDate,
+            "slot": slot,
+            "cash_amount": cashAmount,
+            "kaspi_amount": kaspiAmount,
+            "expected_amount": expectedAmount,
+        ]
+        if let comment, !comment.isEmpty { body["comment"] = comment }
+
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/staff-salary",
+                method: .post,
+                body: try JSONSerialization.data(withJSONObject: body)
+            )
+        )
+    }
+
+    /// Премия, штраф или аванс административному сотруднику.
+    ///
+    /// Точка обязательна только для аванса: он сразу ложится расходом на её
+    /// кассу. Премия и штраф — записи в расчёте, кассы они не трогают.
+    public func createStaffAdjustment(
+        staffID: String,
+        companyID: String?,
+        kind: String,
+        amount: Double,
+        date: String,
+        comment: String?
+    ) async throws {
+        var body: [String: Any] = [
+            "action": "addAdjustment",
+            "staff_id": staffID,
+            "kind": kind,
+            "amount": amount,
+            "date": date,
+        ]
+        if let companyID, !companyID.isEmpty { body["company_id"] = companyID }
+        if let comment, !comment.isEmpty { body["comment"] = comment }
+
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/staff-salary",
+                method: .post,
+                body: try JSONSerialization.data(withJSONObject: body)
+            )
+        )
+    }
+
     /// Выдать аванс оператору.
     ///
     /// Аванс просят у стойки, посреди смены, — это одно из немногих денежных

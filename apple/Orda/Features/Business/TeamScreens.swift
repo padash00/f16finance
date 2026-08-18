@@ -466,6 +466,8 @@ struct SalaryScreen: View {
 
     /// Кому выдаём аванс. Лист открывается по строке оператора.
     @State private var advanceRow: SalaryRow?
+    /// Кому из окладных сотрудников платим или начисляем.
+    @State private var staffRow: StaffSalaryRow?
 
     /// Деньги по оператору: аванс, премия, штраф, погашение долга. Строка
     /// открывается, если разрешено хотя бы одно из них.
@@ -474,6 +476,13 @@ struct SalaryScreen: View {
         return resolver.can("salary.create_advance")
             || resolver.can("salary.create_adjustment")
             || resolver.can("salary.mark_debt_paid")
+    }
+
+    /// Деньги по окладному сотруднику: выплата или корректировка. Строка
+    /// открывается, если разрешено хотя бы одно из них.
+    private var canPayStaff: Bool {
+        guard let resolver = auth.resolver else { return false }
+        return resolver.can("salary.create_payment") || resolver.can("salary.create_adjustment")
     }
 
     var body: some View {
@@ -505,6 +514,11 @@ struct SalaryScreen: View {
         .refreshable {
             await store.loadSalary()
             await store.loadStaffSalary()
+        }
+        .sheet(item: $staffRow) { row in
+            StaffSalarySheet(row: row) {
+                await store.loadStaffSalary()
+            }
         }
         .sheet(item: $advanceRow) { row in
             AdvanceSheet(
@@ -580,7 +594,19 @@ struct SalaryScreen: View {
 
                     ForEach(Array(summary.rows.enumerated()), id: \.element.id) { index, row in
                         if index > 0 { RowDivider() }
-                        StaffSalaryRowView(row: row)
+                        // Строка из списка операторов — витрина: у неё нет ни
+                        // оклада, ни своей записи в staff, и сервер откажет.
+                        if canPayStaff && !row.isFromOperator {
+                            Button {
+                                staffRow = row
+                            } label: {
+                                StaffSalaryRowView(row: row)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.pressable)
+                        } else {
+                            StaffSalaryRowView(row: row)
+                        }
                     }
 
                     if !summary.selfOnly && summary.rows.count > 1 {
