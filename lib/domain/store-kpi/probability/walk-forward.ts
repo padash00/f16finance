@@ -62,6 +62,26 @@ function revenueOf(fact: ShiftFact): number | null {
 }
 
 /**
+ * Множитель цен смены.
+ *
+ * База выручки хранится в ценах базового месяца, а сравнивается с фактом в
+ * сегодняшних. Без обратного пересчёта подорожание меню читалось бы как
+ * систематическое превышение плана — и модель выглядела бы вечно занижающей.
+ * Ровно так это уже сделано в рабочем модуле, и бэктест обязан повторять его
+ * поведение, иначе он мерит не ту модель, что работает.
+ */
+function priceOf(fact: ShiftFact): number {
+  const value = Number(fact.price_index)
+  return Number.isFinite(value) && value > 0 ? value : 1
+}
+
+/** Выручка в ценах базового месяца — в таком виде она и ложится в базу. */
+function deflatedRevenueOf(fact: ShiftFact): number | null {
+  const gross = revenueOf(fact)
+  return gross === null ? null : gross / priceOf(fact)
+}
+
+/**
  * Ключ кэша по составу выборки.
  *
  * Именно по составу, а не по имени сегмента: сегмент тот же, но с новой сменой
@@ -158,7 +178,11 @@ export function walkForward(facts: ShiftFact[], options: WalkForwardOptions): Wa
         // Чеков по отдельности в фактах смены нет, и притворяться, что есть,
         // нельзя. Зато есть средний чек каждой прошлой смены — из него и
         // берём разброс.
-        const avgTicket = avgTicketHit.value
+        //
+        // Всё, что пришло из базы, лежит в ценах базового месяца, а пороги
+        // плана объявлены в сегодняшних. Переводим базу в сегодняшние деньги.
+        const prices = priceOf(fact)
+        const avgTicket = avgTicketHit.value * prices
         const key = `${sampleKey(samples!.level, samples!.values)}|${Math.round(thresholds.values[1])}|${avgTickets ? sampleKey('t', avgTickets.values) : Math.round(avgTicket)}`
 
         let probability: number | null
@@ -170,14 +194,14 @@ export function walkForward(facts: ShiftFact[], options: WalkForwardOptions): Wa
           simulation = simulateShift({
             demand: v2,
             ticketSamples: [],
-            shiftAvgTicketSamples: avgTickets?.values || [],
+            shiftAvgTicketSamples: (avgTickets?.values || []).map((v) => v * prices),
             fallbackAvgTicket: avgTicket,
             thresholds: {
-              control: thresholds.values[0],
-              b1: thresholds.values[1],
-              b2: thresholds.values[2],
-              b3: thresholds.values[3],
-              record: thresholds.values[4],
+              control: thresholds.values[0] * prices,
+              b1: thresholds.values[1] * prices,
+              b2: thresholds.values[2] * prices,
+              b3: thresholds.values[3] * prices,
+              record: thresholds.values[4] * prices,
             },
             iterations,
             seed: seedFromString(key),
@@ -188,7 +212,7 @@ export function walkForward(facts: ShiftFact[], options: WalkForwardOptions): Wa
         }
 
         if (probability !== null) {
-          b1Calibration.push({ probability, happened: actualRevenue >= thresholds.values[1] })
+          b1Calibration.push({ probability, happened: actualRevenue >= thresholds.values[1] * prices })
         }
 
         // Прогноз выручки нынешней модели — медиана сопоставимых смен: ровно
@@ -196,7 +220,7 @@ export function walkForward(facts: ShiftFact[], options: WalkForwardOptions): Wa
         const v1Revenue = lookupBaseline(revenueIndex, fact, { ...lookupOpts, percentile: 0.5 })
         if (simulation && v1Revenue) {
           revenuePoints.push({
-            v1Expected: v1Revenue.value,
+            v1Expected: v1Revenue.value * prices,
             v2Expected: simulation.medianRevenue,
             v2Interval: simulation.interval80,
             actual: actualRevenue,
@@ -207,11 +231,13 @@ export function walkForward(facts: ShiftFact[], options: WalkForwardOptions): Wa
 
     // ── И только теперь смена становится историей ───────────────────────
     addFactToBaselineIndex(receiptsIndex, fact, actual, { summerMonths: options.summerMonths })
-    addFactToBaselineIndex(revenueIndex, fact, actualRevenue, { summerMonths: options.summerMonths })
+    // В базу — в ценах базового месяца, как это делает рабочий модуль.
+    const deflated = deflatedRevenueOf(fact)
+    addFactToBaselineIndex(revenueIndex, fact, deflated, { summerMonths: options.summerMonths })
     addFactToBaselineIndex(
       avgTicketIndex,
       fact,
-      actual !== null && actual > 0 && actualRevenue !== null ? actualRevenue / actual : null,
+      actual !== null && actual > 0 && deflated !== null ? deflated / actual : null,
       { summerMonths: options.summerMonths },
     )
   }

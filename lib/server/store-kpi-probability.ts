@@ -144,7 +144,9 @@ export function buildProbabilisticLayer(args: {
 
   const remember = (fact: ShiftFact) => {
     const receipts = Number.isFinite(fact.receipts) ? fact.receipts : null
-    const revenue = Number.isFinite(fact.revenue) ? fact.revenue : null
+    // В базу — в ценах базового месяца, ровно как это делает рабочий модуль.
+    // Иначе подорожание меню накапливалось бы в норме и выглядело ростом.
+    const revenue = Number.isFinite(fact.revenue) ? fact.revenue / priceOf(fact) : null
     addFactToBaselineIndex(receiptsIndex, fact, receipts, { summerMonths })
     addFactToBaselineIndex(
       avgTicketIndex,
@@ -227,15 +229,22 @@ export function buildProbabilisticLayer(args: {
     const plan = args.plans.get(fact.date + '|' + fact.shift) || null
     let simulation: MonteCarloForecast | null = null
     if (demand && plan) {
-      const ticketSamples = comparableReceiptAmounts(receiptsByShift, args.baselineFacts, fact)
+      // Всё, что пришло из истории, лежит в ценах базового месяца, а пороги
+      // плана объявлены в сегодняшних деньгах. Без обратного пересчёта
+      // симуляция сравнивала бы прошлогодние чеки с нынешними порогами и
+      // систематически занижала вероятность взять уровень.
+      const prices = priceOf(fact)
+      const ticketSamples = comparableReceiptAmounts(receiptsByShift, args.baselineFacts, fact).map(
+        (amount) => amount * prices,
+      )
       const avgTickets = lookupBaselineSamples(avgTicketIndex, fact, lookupOpts)
       const avgTicketHit = lookupBaseline(avgTicketIndex, fact, { ...lookupOpts, percentile: 0.5 })
 
       simulation = simulateShift({
         demand,
         ticketSamples,
-        shiftAvgTicketSamples: avgTickets?.values || [],
-        fallbackAvgTicket: avgTicketHit?.value ?? null,
+        shiftAvgTicketSamples: (avgTickets?.values || []).map((v) => v * prices),
+        fallbackAvgTicket: avgTicketHit ? avgTicketHit.value * prices : null,
         thresholds: plan,
         iterations: args.iterations ?? 10_000,
         seed: seedFromString(fact.company_id + '|' + fact.date + '|' + fact.shift),
@@ -288,6 +297,12 @@ function comparableReceiptAmounts(
     if (list) out.push(...list)
   }
   return out
+}
+
+/** Множитель цен смены: 1, если индекса нет. */
+function priceOf(fact: ShiftFact): number {
+  const value = Number(fact.price_index)
+  return Number.isFinite(value) && value > 0 ? value : 1
 }
 
 function sampleKey(level: string, values: number[]): string {

@@ -13,6 +13,8 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { forecastDemand, simulateShift } from '@/lib/domain/store-kpi/probability'
+import { compareRevenue } from '@/lib/domain/store-kpi/probability/backtest'
+import { walkForward } from '@/lib/domain/store-kpi/probability/walk-forward'
 import { buildBaselineIndex, lookupBaseline, lookupBaselineSamples } from '@/lib/domain/store-kpi/baseline'
 import { DEFAULT_STORE_KPI_SETTINGS } from '@/lib/domain/store-kpi/settings'
 import { resolveBonus } from '@/lib/domain/store-kpi'
@@ -208,4 +210,49 @@ test('возвраты и нулевые чеки не ломают распре
   assert.ok(Number.isFinite(result.medianRevenue))
   assert.ok(result.medianRevenue > 0)
   assert.ok(result.revenueP10 <= result.revenueP90)
+})
+
+test('подорожание не превращается в рост выручки', () => {
+  // Самая коварная ошибка в денежных сравнениях: цены выросли на 20%, касса
+  // выросла на 20%, а работали ровно так же. Если базу не дефлировать,
+  // прогноз будет вечно занижать, а каждая смена — выглядеть выдающейся.
+  //
+  // Проверяем прямо: два одинаковых по сути года, в одном цены стоят, в
+  // другом растут. Систематический сдвиг обязан остаться примерно одинаковым.
+  function series(withInflation: boolean): ShiftFact[] {
+    const out: ShiftFact[] = []
+    for (let i = 0; i < 120; i++) {
+      const date = new Date('2026-03-01T00:00:00Z')
+      date.setUTCDate(date.getUTCDate() + Math.floor(i / 2))
+      const iso = date.toISOString().slice(0, 10)
+      const receipts = 40 + (i % 7)
+      // Реальный средний чек один и тот же; в инфляционном ряду он и касса
+      // растут вместе с индексом цен, то есть в реальном выражении не меняются.
+      const priceIndex = withInflation ? 1 + (i / 120) * 0.2 : 1
+      const realTicket = 1200
+      out.push(
+        fact({
+          date: iso,
+          shift: i % 2 === 0 ? 'day' : 'night',
+          cashier_id: i % 3 === 0 ? 'op1' : 'op2',
+          receipts,
+          revenue: Math.round(receipts * realTicket * priceIndex),
+          gross_revenue: Math.round(receipts * realTicket * priceIndex),
+          price_index: priceIndex,
+        }),
+      )
+    }
+    return out
+  }
+
+  const opts = { minSample: 8, summerMonths: SETTINGS.summer_months, iterations: 300 }
+  const flat = compareRevenue(walkForward(series(false), opts).revenuePoints)
+  const rising = compareRevenue(walkForward(series(true), opts).revenuePoints)
+
+  assert.ok(flat.v1.bias !== null && rising.v1.bias !== null, 'нечего сравнивать')
+
+  // Без дефляции сдвиг при росте цен уехал бы на десятки тысяч тенге.
+  // С дефляцией разница между рядами обязана остаться небольшой.
+  const drift = Math.abs(rising.v1.bias! - flat.v1.bias!)
+  assert.ok(drift < 3000, `подорожание сдвинуло прогноз на ${Math.round(drift)} ₸ — индекс цен не работает`)
 })
