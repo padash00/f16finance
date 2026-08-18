@@ -4,6 +4,7 @@ import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -13,6 +14,11 @@ export async function GET(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+
+    // Главный экран — это выручка, долги и расходы точек одним ответом. Право
+    // на него в каталоге есть, а маршрут не спрашивал ничего: хватало входа.
+    const denied = await requireCapability(access, 'dashboard.view')
+    if (denied) return denied
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const url = new URL(request.url)

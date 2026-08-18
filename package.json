@@ -11,6 +11,7 @@
     "typecheck": "node scripts/typecheck.mjs",
     "capabilities:export": "node --import ./scripts/test-register.mjs scripts/export-capabilities.mjs",
     "capabilities:check": "node --import ./scripts/test-register.mjs scripts/export-capabilities.mjs --check",
+    "audit:reads": "node scripts/audit-read-guards.mjs",
     "audit:capabilities": "node scripts/audit-capability-routes.mjs",
     "audit:app": "node scripts/audit-api-paths.mjs && node scripts/audit-native-gates.mjs && node scripts/audit-action-contracts.mjs && node scripts/audit-db-links.mjs",
     "verify:release": "npm run typecheck && npm run capabilities:check && npm run audit:app && npm run lint && npm run build",

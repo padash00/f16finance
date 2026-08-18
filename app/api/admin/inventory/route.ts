@@ -306,6 +306,11 @@ export async function GET(request: Request) {
     if ('response' in access) return access.response
     if (!canManageInventory(access)) return json({ error: 'forbidden' }, 403)
 
+    // Каталог товаров с ценами закрывается своим правом: «любой сотрудник» —
+    // это про вход, а не про доступ к закупочным ценам и остаткам.
+    const denied = await requireCapability(access, 'store-catalog.view')
+    if (denied) return denied as any
+
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const companyScope = await resolveCompanyScope({
       activeOrganizationId: access.activeOrganization?.id || null,
