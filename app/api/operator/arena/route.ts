@@ -5,6 +5,7 @@ import { effectiveZoneExtensionHourly } from '@/lib/core/arena-zone-extension-ho
 import { computeTimeWindowEndsAt, isNowInTariffWindow, isTariffOfferedNow } from '@/lib/core/arena-tariff-window'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireOperator } from '@/lib/server/operator-context'
+import { getCurrentOpenShift } from '@/lib/server/point-shifts'
 import { escapeTelegramHtml } from '@/lib/telegram/message-kit'
 import { sendTelegramMessage } from '@/lib/telegram/send'
 import { broadcastKioskCommand } from '@/lib/server/kiosk-broadcast'
@@ -292,6 +293,39 @@ export async function POST(request: Request) {
 
     const body = await request.json().catch(() => null)
     if (!body?.action) return json({ error: 'action required' }, 400)
+
+    /**
+     * Зал — это деньги, а деньги живут в смене.
+     *
+     * Сессия за станцией попадает в кассу дня и в отчёт смены. Посаженный
+     * гость вне смены означает выручку, которой не в чем сойтись: смену потом
+     * закрывают с недостачей, а объяснить её некому.
+     *
+     * Проверка та же, что на кассе: смена должна быть открыта на точке, и —
+     * если хозяин у неё известен — открыта этим человеком. Продавать со своего
+     * телефона, пока на точке стоит сменщик, нельзя: деньги уйдут в его смену.
+     */
+    const openShift = await getCurrentOpenShift(supabase as any, companyId)
+    if (!openShift) {
+      return json(
+        {
+          error: 'point-shift-no-open',
+          message: 'Сначала откройте смену: без неё выручка зала не попадёт в кассу.',
+        },
+        409,
+      )
+    }
+
+    const shiftOwnerId = (openShift as any).operator_id ? String((openShift as any).operator_id) : null
+    if (shiftOwnerId && ctx.staffId && shiftOwnerId !== String(ctx.staffId)) {
+      return json(
+        {
+          error: 'point-shift-not-yours',
+          message: 'На точке открыта смена другого оператора — зал ведёт он.',
+        },
+        409,
+      )
+    }
 
     // ─── START SESSION ────────────────────────────────────────────────────────
     if (body.action === 'startSession') {

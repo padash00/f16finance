@@ -191,6 +191,7 @@ struct ArenaSessionSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(ArenaStore.self) private var arena
+    @Environment(OperatorStore.self) private var shiftStore
 
     @State private var extending = false
     @State private var confirmingEnd = false
@@ -254,17 +255,31 @@ struct ArenaSessionSheet: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
 
+                    // Продление, завершение и возврат двигают деньги смены —
+                    // значит требуют своей открытой смены. Сессию при этом
+                    // видно всегда: посмотреть остаток может любой.
+                    if !canSell {
+                        Card(accent: Theme.warning) {
+                            Text(shiftStore.isSomeoneElsesShift
+                                ? "Смену на точке ведёт другой оператор — продлевает и закрывает он."
+                                : "Смена не открыта: продлить и завершить нельзя, деньги некуда записать.")
+                                .font(Typography.callout)
+                                .foregroundStyle(Theme.textMuted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+
                     Button { extending = true } label: {
                         Label("Продлить", systemImage: "plus.circle")
                     }
                     .buttonStyle(PrimaryButtonStyle())
-                    .disabled(isSaving)
+                    .disabled(isSaving || !canSell)
 
                     Button { confirmingEnd = true } label: {
                         Label("Завершить", systemImage: "stop.circle")
                     }
                     .buttonStyle(SecondaryButtonStyle())
-                    .disabled(isSaving)
+                    .disabled(isSaving || !canSell)
 
                     // Возврат отдельной кнопкой и с подтверждением: он списывает
                     // деньги из кассы, и промахнуться по нему вместо «завершить»
@@ -274,7 +289,7 @@ struct ArenaSessionSheet: View {
                             Label("Завершить с возвратом", systemImage: "arrow.uturn.backward")
                         }
                         .buttonStyle(SecondaryButtonStyle())
-                        .disabled(isSaving)
+                        .disabled(isSaving || !canSell)
                     }
                 } else {
                     Card {
@@ -313,6 +328,8 @@ struct ArenaSessionSheet: View {
             }
         }
     }
+
+    private var canSell: Bool { shiftStore.isMyShift }
 
     private func timeText(_ date: Date) -> String {
         date.formatted(date: .omitted, time: .shortened)

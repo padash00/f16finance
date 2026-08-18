@@ -12,6 +12,7 @@ import SwiftUI
 /// на исходе: именно к ним нужно подойти и спросить, продлевают ли.
 struct ArenaScreen: View {
     @Environment(ArenaStore.self) private var arena
+    @Environment(OperatorStore.self) private var shiftStore
     @Environment(\.surface) private var surface
 
     @State private var starting: ArenaStation?
@@ -44,6 +45,7 @@ struct ArenaScreen: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             } else if let hall {
+                shiftWarning
                 summaryCard(hall)
 
                 let soon = endingSoon(hall)
@@ -158,7 +160,9 @@ struct ArenaScreen: View {
             ForEach(stations) { station in
                 let session = hall.session(stationID: station.id)
                 Button {
-                    if session != nil { opened = station } else { starting = station }
+                    // Открытая сессия — смотреть можно всегда: посмотреть, у
+                    // кого сколько осталось, не значит тронуть деньги.
+                    if session != nil { opened = station } else if canSell { starting = station }
                 } label: {
                     stationTile(station, session: session)
                 }
@@ -207,6 +211,36 @@ struct ArenaScreen: View {
                 .stroke(session == nil ? Color.clear : tint.opacity(0.35), lineWidth: 1)
         )
     }
+
+    /// Смена не открыта — сажать гостей нельзя.
+    ///
+    /// Сессия попадает в кассу дня и в отчёт смены. Гость, посаженный вне
+    /// смены, — это выручка, которой не в чем сойтись: смену потом закрывают с
+    /// недостачей. Сервер такое отклоняет, и предлагать это в приложении
+    /// значит обещать то, чего не будет.
+    @ViewBuilder
+    private var shiftWarning: some View {
+        if !canSell {
+            Card(accent: Theme.warning) {
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    Text(shiftStore.isSomeoneElsesShift ? "На точке смена другого оператора" : "Смена не открыта")
+                        .font(Typography.body.weight(.medium))
+                        .foregroundStyle(Theme.text)
+                    Text(
+                        shiftStore.isSomeoneElsesShift
+                            ? "Зал ведёт тот, кто открыл смену: выручка попадёт в его кассу."
+                            : "Зал виден, но посадить гостя нельзя — выручка не попадёт в кассу. Откройте смену на экране «Смена»."
+                    )
+                    .font(Typography.caption)
+                    .foregroundStyle(Theme.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    /// Можно ли трогать деньги зала: смена открыта и она своя.
+    private var canSell: Bool { shiftStore.isMyShift }
 
     private var techButton: some View {
         Button {
