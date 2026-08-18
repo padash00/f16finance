@@ -197,7 +197,7 @@ struct ArenaScreen: View {
                 Text("свободна")
                     .font(Typography.callout)
                     .foregroundStyle(Theme.textMuted)
-                Text("нажмите, чтобы посадить")
+                Text(canSell ? "нажмите, чтобы посадить" : "нужна своя смена")
                     .font(Typography.caption)
                     .foregroundStyle(Theme.textMuted)
                     .lineLimit(1)

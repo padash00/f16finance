@@ -37,6 +37,11 @@ public enum Theme {
 
     public static let brand = Color.adaptive(dark: 0x10B981, light: 0x059669)
     public static let brandBright = Color.adaptive(dark: 0x3DF0B6, light: 0x10B981)
+    /// Текст поверх фирменного цвета.
+    ///
+    /// Отдельным именем, а не `.white` по месту: на плотном зелёном чёрный
+    /// текст нечитаем, и однажды кто-нибудь поставит там `Theme.text`.
+    public static let onBrand = Color.white
     public static let positive = Color.adaptive(dark: 0x3DF0B6, light: 0x059669)
     public static let negative = Color.adaptive(dark: 0xFB7185, light: 0xE11D48)
     public static let warning = Color.adaptive(dark: 0xFBBF24, light: 0xD97706)

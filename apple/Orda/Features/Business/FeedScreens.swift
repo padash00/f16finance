@@ -146,6 +146,18 @@ private struct FeedBubble: View {
     /// Нажатие на уже стоящую реакцию — свой голос за неё или снятие своего.
     var react: (String) -> Void = { _ in }
 
+    /// Угол со стороны автора почти прямой — так реплика читается как
+    /// направленная, а не как ещё одна плитка в ленте.
+    private var bubbleShape: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(
+            topLeadingRadius: Radius.md,
+            bottomLeadingRadius: isMine ? Radius.md : Radius.sm / 2,
+            bottomTrailingRadius: isMine ? Radius.sm / 2 : Radius.md,
+            topTrailingRadius: Radius.md,
+            style: .continuous
+        )
+    }
+
     var body: some View {
         HStack(alignment: .bottom, spacing: Spacing.sm) {
             if isMine { Spacer(minLength: Spacing.xxl) }
@@ -194,11 +206,11 @@ private struct FeedBubble: View {
                 if let replyPreview, !replyPreview.isEmpty {
                     HStack(alignment: .top, spacing: Spacing.sm) {
                         RoundedRectangle(cornerRadius: 1.5)
-                            .fill(Theme.brand.opacity(0.6))
+                            .fill(isMine ? Theme.onBrand.opacity(0.7) : Theme.brand.opacity(0.6))
                             .frame(width: 3)
                         Text(replyPreview)
                             .font(Typography.caption)
-                            .foregroundStyle(Theme.textDim)
+                            .foregroundStyle(isMine ? Theme.onBrand.opacity(0.8) : Theme.textDim)
                             .lineLimit(2)
                     }
                 }
@@ -206,7 +218,9 @@ private struct FeedBubble: View {
                 if !text.isEmpty {
                     Text(text)
                         .font(Typography.callout)
-                        .foregroundStyle(isMine ? Theme.text : Theme.textMuted)
+                        // Чужой текст был серым — он читался как второстепенный,
+                        // хотя это и есть содержание сообщения.
+                        .foregroundStyle(isMine ? Theme.onBrand : Theme.text)
                         .multilineTextAlignment(.leading)
                         .textSelection(.enabled)
                 }
@@ -246,26 +260,23 @@ private struct FeedBubble: View {
                     if isEdited {
                         Text("изменено")
                             .font(Typography.caption)
-                            .foregroundStyle(Theme.textDim)
+                            .foregroundStyle(isMine ? Theme.onBrand.opacity(0.7) : Theme.textDim)
                     }
                     if let time {
                         Text(time.formatted(.dateTime.hour().minute()))
                             .font(Typography.caption)
                             .monospacedDigit()
-                            .foregroundStyle(Theme.textDim)
+                            .foregroundStyle(isMine ? Theme.onBrand.opacity(0.7) : Theme.textDim)
                     }
                 }
             }
             .padding(.horizontal, Spacing.md)
             .padding(.vertical, Spacing.sm)
-            .background(
-                isMine ? Theme.brand.opacity(0.14) : Theme.surface,
-                in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
-                    .strokeBorder(isMine ? Theme.brand.opacity(0.25) : Theme.border, lineWidth: 1)
-            )
+            // Свой пузырь — плотный цвет, чужой — светлый. Раньше оба были
+            // почти одинаковыми (свой — та же подложка с прозрачностью 14% и
+            // рамкой), и понять, где чья реплика, можно было только по краю.
+            // Рамок нет намеренно: они превращают реплику в карточку.
+            .background(isMine ? Theme.brand : Theme.surface, in: bubbleShape)
             .frame(maxWidth: 520, alignment: isMine ? .trailing : .leading)
 
             if !isMine { Spacer(minLength: Spacing.xxl) }
@@ -609,15 +620,6 @@ struct NewsScreen: View {
                         }
                     }
                 }
-
-                // Чат живёт сутки — и человек должен знать об этом заранее.
-                // Иначе исчезнувшая переписка читается как потеря данных, а
-                // важное продолжают писать сюда вместо задач и объявлений.
-                Text("Сообщения старше суток удаляются. Закреплённые и объявления остаются.")
-                    .font(Typography.caption)
-                    .foregroundStyle(Theme.textMuted)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .fixedSize(horizontal: false, vertical: true)
 
                 if !feed.pinned.isEmpty {
                     VStack(alignment: .leading, spacing: Spacing.md) {
@@ -1157,7 +1159,16 @@ struct TeamChatScreen: View {
     private func messages(_ feed: TeamChatFeed, store: TeamChatStore) -> some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: Spacing.md) {
+                LazyVStack(alignment: .leading, spacing: Spacing.xs) {
+                    // Чат живёт сутки — человек должен знать заранее. Иначе
+                    // исчезнувшая переписка читается как потеря данных, а
+                    // важное продолжают писать сюда вместо задач.
+                    Text("Сообщения старше суток удаляются. Закреплённые и объявления остаются.")
+                        .font(Typography.caption)
+                        .foregroundStyle(Theme.textDim)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.bottom, Spacing.xs)
+
                     if !feed.pinned.isEmpty {
                         pinnedCard(feed.pinned)
                     }
@@ -1171,7 +1182,7 @@ struct TeamChatScreen: View {
                     ForEach(FeedDay.group(store.visible, date: { $0.createdAt })) { section in
                         FeedDayDivider(label: section.label)
 
-                        ForEach(section.items) { message in
+                        ForEach(Array(section.items.enumerated()), id: \.element.id) { index, message in
                             if message.isAnnouncement {
                                 announcement(message)
                             } else {
@@ -1182,6 +1193,7 @@ struct TeamChatScreen: View {
                                     time: message.createdAt,
                                     isMine: isMine(message),
                                     isEdited: message.isEdited,
+                                    showsSender: startsGroup(at: index, in: section.items),
                                     avatarURL: message.senderAvatarURL,
                                     attachments: message.attachments,
                                     replyPreview: replyPreview(for: message, in: feed),
@@ -1205,6 +1217,7 @@ struct TeamChatScreen: View {
                                     }
                                 )
                                 .id(message.id)
+                                .padding(.top, startsGroup(at: index, in: section.items) ? Spacing.sm : 0)
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
                                 .onLongPressGesture {
                                     Haptics.tap()
@@ -1227,6 +1240,22 @@ struct TeamChatScreen: View {
                 withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(id, anchor: .bottom) }
             }
         }
+    }
+
+    /// Начинается ли новая реплика — или это продолжение той же.
+    ///
+    /// Человек в чате пишет очередями: три строки подряд за полминуты. Аватар
+    /// и имя над каждой из них превращают ленту в перечень карточек — в
+    /// мессенджерах их показывают только у первой. Пять минут — обычный
+    /// порог: после паузы это уже другая реплика, даже если автор тот же.
+    private func startsGroup(at index: Int, in items: [TeamChatMessage]) -> Bool {
+        guard index > 0 else { return true }
+        let current = items[index]
+        let previous = items[index - 1]
+        if previous.isAnnouncement { return true }
+        if previous.senderName != current.senderName { return true }
+        guard let left = previous.createdAt, let right = current.createdAt else { return true }
+        return right.timeIntervalSince(left) > 5 * 60
     }
 
     private func isMine(_ message: TeamChatMessage) -> Bool {
