@@ -117,6 +117,45 @@ export function filterStaffAdjustmentsForSlot<A extends SlotAdjustment, P extend
   })
 }
 
+function isoToDays(iso: string): number {
+  const [y, m, d] = String(iso || '').split('-').map(Number)
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return Number.NaN
+  return Math.floor(Date.UTC(y, m - 1, d) / 86_400_000)
+}
+
+function daysInMonthOf(iso: string): number {
+  const [y, m] = String(iso || '').split('-').map(Number)
+  if (!Number.isFinite(y) || !Number.isFinite(m)) return 30
+  return new Date(Date.UTC(y, m, 0)).getUTCDate() || 30
+}
+
+/**
+ * Оклад, начисленный за эту половину месяца.
+ *
+ * Работающему — половина оклада, как и было. Уволенному — только за дни до
+ * увольнения включительно: иначе человек, ушедший второго числа, каждый месяц
+ * висел бы в ведомости с полным пол-окладом, и владелец либо переплатил бы,
+ * либо перестал верить цифре. День увольнения оплачивается — так же считает
+ * `calculateStaffAccrualForMonth` для налогов.
+ */
+export function slotAccrualBase(s: SlotStaffMember, period?: SlotRange | null): number {
+  const salary = Number(s.monthly_salary || 0)
+  const half = Math.round(salary / 2)
+  const dismissed = String(s.dismissal_date || s.dismissed_at || '').slice(0, 10)
+  if (!dismissed || !period) return half
+
+  const dismissedDays = isoToDays(dismissed)
+  const fromDays = isoToDays(period.from)
+  const toDays = isoToDays(period.to)
+  if (!Number.isFinite(dismissedDays) || !Number.isFinite(fromDays) || !Number.isFinite(toDays)) return half
+  // Ушёл до начала половины — начислять не за что, но долги и бонусы остаются.
+  if (dismissedDays < fromDays) return 0
+  if (dismissedDays >= toDays) return half
+
+  const worked = dismissedDays - fromDays + 1
+  return Math.round((salary * worked) / daysInMonthOf(period.from))
+}
+
 export type StaffSlotCalc = {
   half: number
   bonuses: number
@@ -133,7 +172,7 @@ export function calcStaffToPay(
   period?: SlotRange | null,
 ): StaffSlotCalc {
   const active = filterStaffAdjustmentsForSlot(adjs, s.id, payments, period)
-  const half = Math.round(Number(s.monthly_salary || 0) / 2)
+  const half = slotAccrualBase(s, period)
   const sumOf = (kind: string) =>
     active.filter((a) => a.kind === kind).reduce((sum, a) => sum + Number(a.amount || 0), 0)
   const bonuses = sumOf('bonus')
@@ -211,15 +250,19 @@ export function buildStaffSalarySummary(args: {
     }
   })
 
+  // Работающие сверху, уволенные внизу: их держат в списке ради незакрытого
+  // расчёта, но ежедневный вопрос — про тех, кто в штате.
+  const ordered = [...rows.filter((r) => r.is_active), ...rows.filter((r) => !r.is_active)]
+
   return {
     today,
     slot,
     period,
-    rows,
+    rows: ordered,
     totals: {
-      toPay: rows.reduce((sum, r) => sum + r.toPay, 0),
-      paidThisMonth: rows.reduce((sum, r) => sum + r.paid_this_month, 0),
-      people: rows.length,
+      toPay: ordered.reduce((sum, r) => sum + r.toPay, 0),
+      paidThisMonth: ordered.reduce((sum, r) => sum + r.paid_this_month, 0),
+      people: ordered.length,
     },
   }
 }

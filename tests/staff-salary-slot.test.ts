@@ -149,3 +149,63 @@ test('уволенный остаётся в сводке: с ним и оста
   assert.equal(summary.rows[0].is_active, false)
   assert.equal(summary.rows[0].dismissal_date, '2026-08-04')
 })
+
+// ─── Уволенный не начисляет себе половину оклада вечно ───────────────────────
+
+test('уволенный до начала половины месяца ничего не начисляет', () => {
+  const calc = calcStaffToPay(
+    staff({ dismissal_date: '2026-07-20' }),
+    [],
+    [],
+    getSalarySlotRange('2026-08-10', 'first'),
+  )
+  assert.equal(calc.half, 0)
+  assert.equal(calc.toPay, 0)
+})
+
+test('уволенный посреди половины получает за отработанные дни', () => {
+  // Ушёл 5-го: отработал 1–5 августа, пять дней из 31 при окладе 300 000.
+  const calc = calcStaffToPay(
+    staff({ dismissal_date: '2026-08-05' }),
+    [],
+    [],
+    getSalarySlotRange('2026-08-12', 'first'),
+  )
+  assert.equal(calc.half, Math.round((300_000 * 5) / 31))
+})
+
+test('уволенный последним днём половины получает её целиком', () => {
+  const calc = calcStaffToPay(
+    staff({ dismissal_date: '2026-08-15' }),
+    [],
+    [],
+    getSalarySlotRange('2026-08-12', 'first'),
+  )
+  assert.equal(calc.half, 150_000)
+})
+
+test('за уволенным остаётся долг, даже когда начислять нечего', () => {
+  const calc = calcStaffToPay(
+    staff({ dismissal_date: '2026-07-20' }),
+    [adj({ kind: 'debt', amount: 12_000, date: '2026-07-18' })],
+    [],
+    getSalarySlotRange('2026-08-10', 'first'),
+  )
+  assert.equal(calc.toPay, -12_000)
+})
+
+test('в сводке уволенные идут после работающих', () => {
+  const summary = buildStaffSalarySummary({
+    staff: [
+      staff({ id: 'gone', full_name: 'Ушедший', is_active: false, dismissal_date: '2026-08-02' }),
+      staff({ id: 'here', full_name: 'Работающий' }),
+    ],
+    adjustments: [],
+    payments: [],
+    today: '2026-08-20',
+    meStaffId: null,
+  })
+  assert.deepEqual(summary.rows.map((r) => r.id), ['here', 'gone'])
+  // Вторая половина месяца начинается после увольнения — начислять нечего.
+  assert.equal(summary.rows[1].toPay, 0)
+})

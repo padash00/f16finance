@@ -288,9 +288,16 @@ public struct BusinessService: Sendable {
     /// ведомость на сайте, — иначе телефон и сайт разошлись бы в суммах.
     ///
     /// Без права «Смотреть зарплату» ответ приходит из одной строки — своей.
+    ///
+    /// Уволенных просим вместе со всеми: именно с ними чаще всего и остаётся
+    /// незакрытый расчёт, ради которого в зарплату заходят. Оклад им сервер
+    /// считает по день увольнения, а не половиной вперёд.
     public func staffSalary() async throws -> StaffSalarySummary {
         let response: Envelope<StaffSalarySummary> = try await api.send(
-            APIRequest(path: "/api/admin/staff-salary", query: ["view": "summary"])
+            APIRequest(
+                path: "/api/admin/staff-salary",
+                query: ["view": "summary", "include_archived": "1"]
+            )
         )
         return response.data
     }
