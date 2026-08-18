@@ -321,6 +321,23 @@ struct KnowledgeAdminScreen: View {
     @State private var busyArticleID: String?
     @State private var publishError: String?
 
+    /// Обязательные чек-листы открытых смен.
+    @State private var board: ShiftChecklistBoard?
+    @State private var busyChecklistID: String?
+    @State private var checklistError: String?
+    /// Чек-лист, который прощаем: лист спрашивает причину.
+    @State private var skipping: SkipTarget?
+
+    struct SkipTarget: Identifiable {
+        let companyID: String
+        let companyName: String
+        let item: ShiftChecklistStatus.Item
+        var id: String { item.templateID + companyID }
+    }
+
+    private var canRunChecklist: Bool { access?.can("knowledge-admin.run_checklist") ?? false }
+    private var canSkipChecklist: Bool { access?.can("knowledge-admin.skip_checklist") ?? false }
+
     /// Публикация — своё право, отдельное от правки текста: опубликованное
     /// правило команда обязана прочитать и подтвердить, а за нарушение по нему
     /// выписывают штраф.
@@ -328,6 +345,9 @@ struct KnowledgeAdminScreen: View {
 
     var body: some View {
         ScreenScroll {
+            // Смены сверху: это то, что происходит сейчас, а статьи лежат.
+            shiftChecklists
+
             if let error = store.knowledgeError, store.knowledge == nil {
                 ErrorStateView(error: error) { Task { await store.loadKnowledge() } }
             } else if let base = store.knowledge {
@@ -340,8 +360,139 @@ struct KnowledgeAdminScreen: View {
         .navigationTitle("База знаний")
         .searchable(text: $search, prompt: "Заголовок или метка")
         .toolbar { LogoutToolbarItem() }
-        .task { await store.loadKnowledge() }
-        .refreshable { await store.loadKnowledge() }
+        .task {
+            await store.loadKnowledge()
+            await loadBoard()
+        }
+        .refreshable {
+            await store.loadKnowledge()
+            await loadBoard()
+        }
+        .sheet(item: $skipping) { target in
+            SkipChecklistSheet(
+                companyName: target.companyName,
+                title: target.item.title
+            ) { reason in
+                await skip(target, reason: reason)
+            }
+        }
+    }
+
+    /// Что мешает закрыть смену прямо сейчас.
+    ///
+    /// Звонок «не могу закрыть смену» раньше означал разговор вслепую: какой
+    /// именно чек-лист висит, из телефона было не узнать. Оставалось верить на
+    /// слово и либо гнать проходить, либо выключить чек-лист совсем — то есть
+    /// навсегда и для всех.
+    @ViewBuilder
+    private var shiftChecklists: some View {
+        if let board, !board.shifts.isEmpty {
+            ForEach(board.shifts) { shift in
+                Card(accent: shift.blocking.isEmpty ? Theme.positive : Theme.warning) {
+                    VStack(alignment: .leading, spacing: Spacing.md) {
+                        SectionHeader(
+                            shift.companyName,
+                            subtitle: shift.blocking.isEmpty
+                                ? "смену закрыть можно"
+                                : "\(shift.blocking.count) \(pluralize(shift.blocking.count, "чек-лист держит", "чек-листа держат", "чек-листов держат")) смену"
+                        )
+
+                        if let checklistError {
+                            Text(checklistError)
+                                .font(Typography.caption)
+                                .foregroundStyle(Theme.negative)
+                        }
+
+                        ForEach(Array(shift.checklists.enumerated()), id: \.element.id) { index, item in
+                            if index > 0 { RowDivider() }
+                            VStack(alignment: .leading, spacing: Spacing.xs) {
+                                HStack(spacing: Spacing.md) {
+                                    Text(item.title)
+                                        .font(Typography.callout)
+                                        .foregroundStyle(item.isMissing ? Theme.text : Theme.textDim)
+                                    Spacer(minLength: Spacing.sm)
+                                    StatusChip(
+                                        item.statusLabel,
+                                        kind: item.isDone ? .good : item.isSkipped ? .info : item.isMissing ? .warning : .neutral
+                                    )
+                                }
+
+                                if let reason = item.skipReason, !reason.isEmpty {
+                                    Text("причина: \(reason)")
+                                        .font(Typography.caption)
+                                        .foregroundStyle(Theme.textDim)
+                                }
+
+                                if item.isMissing {
+                                    HStack(spacing: Spacing.sm) {
+                                        if canRunChecklist {
+                                            Button(busyChecklistID == item.templateID ? "Запускаем…" : "Запустить сейчас") {
+                                                Task { await start(item, companyID: shift.companyID) }
+                                            }
+                                            .buttonStyle(SecondaryButtonStyle())
+                                            .disabled(busyChecklistID != nil)
+                                        }
+                                        if canSkipChecklist {
+                                            Button("Простить") {
+                                                skipping = SkipTarget(
+                                                    companyID: shift.companyID,
+                                                    companyName: shift.companyName,
+                                                    item: item
+                                                )
+                                            }
+                                            .buttonStyle(SecondaryButtonStyle())
+                                            .disabled(busyChecklistID != nil)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func loadBoard() async {
+        board = (try? await BusinessService(api: api).shiftChecklists()) ?? board
+    }
+
+    private func start(_ item: ShiftChecklistStatus.Item, companyID: String) async {
+        busyChecklistID = item.templateID
+        checklistError = nil
+        defer { busyChecklistID = nil }
+        do {
+            try await BusinessService(api: api).startChecklistRun(templateID: item.templateID, companyID: companyID)
+            Haptics.success()
+            await loadBoard()
+        } catch let error as APIError {
+            Haptics.error()
+            checklistError = error.userMessage
+        } catch {
+            Haptics.error()
+            checklistError = error.localizedDescription
+        }
+    }
+
+    private func skip(_ target: SkipTarget, reason: String) async {
+        busyChecklistID = target.item.templateID
+        checklistError = nil
+        defer { busyChecklistID = nil }
+        do {
+            try await BusinessService(api: api).skipChecklistRun(
+                templateID: target.item.templateID,
+                companyID: target.companyID,
+                reason: reason
+            )
+            Haptics.success()
+            await loadBoard()
+        } catch let error as APIError {
+            Haptics.error()
+            checklistError = error.userMessage
+        } catch {
+            Haptics.error()
+            checklistError = error.localizedDescription
+        }
     }
 
     @ViewBuilder
@@ -489,6 +640,76 @@ private struct AdminArticleRow: View {
                 StatusChip("−\(Money.format(article.fineAmount))", kind: .danger)
             } else if article.bonusAmount > 0 {
                 StatusChip("+\(Money.format(article.bonusAmount))", kind: .good)
+            }
+        }
+    }
+}
+
+/// Простить обязательный чек-лист — с причиной.
+///
+/// Прощённый чек-лист это невыполненная работа: касса не пересчитана, зал не
+/// осмотрен. Через месяц вопрос «почему смену закрыли без этого» должен иметь
+/// письменный ответ, поэтому причина обязательна и уходит в историю смены
+/// вместе с именем того, кто простил.
+struct SkipChecklistSheet: View {
+    let companyName: String
+    let title: String
+    var onConfirm: (String) async -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var reason = ""
+    @State private var isBusy = false
+
+    var body: some View {
+        NavigationStack {
+            ScreenScroll {
+                Card {
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        FieldLabel("Что прощаем")
+                        Text(title)
+                            .font(Typography.callout.weight(.medium))
+                            .foregroundStyle(Theme.text)
+                        Text(companyName)
+                            .font(Typography.caption)
+                            .foregroundStyle(Theme.textMuted)
+                    }
+                }
+
+                Card {
+                    VStack(alignment: .leading, spacing: Spacing.md) {
+                        FieldLabel("Причина")
+                        TextField("Например: касса пересчитана при мне", text: $reason, axis: .vertical)
+                            .textFieldStyle(.plain)
+                            .font(Typography.callout)
+                            .lineLimit(2...4)
+
+                        Text("Останется в истории смены — по ней потом и разбираются.")
+                            .font(Typography.caption)
+                            .foregroundStyle(Theme.textMuted)
+
+                        Button(isBusy ? "Сохраняем…" : "Простить чек-лист") {
+                            Task {
+                                isBusy = true
+                                await onConfirm(reason.trimmingCharacters(in: .whitespaces))
+                                isBusy = false
+                                dismiss()
+                            }
+                        }
+                        .buttonStyle(PrimaryButtonStyle())
+                        .disabled(isBusy || reason.trimmingCharacters(in: .whitespaces).count < 3)
+                    }
+                }
+            }
+            .background(Theme.background)
+            .navigationTitle("Пропуск чек-листа")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Отмена") { dismiss() }
+                }
             }
         }
     }

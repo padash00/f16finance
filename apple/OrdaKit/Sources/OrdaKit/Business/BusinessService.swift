@@ -1211,6 +1211,52 @@ public struct BusinessService: Sendable {
         )
     }
 
+    /// Обязательные чек-листы открытых смен.
+    ///
+    /// Отвечает на вопрос «почему не закрывается смена» без звонка оператору.
+    public func shiftChecklists() async throws -> ShiftChecklistBoard {
+        let response: Envelope<ShiftChecklistBoard> = try await api.send(
+            APIRequest(path: "/api/admin/knowledge", query: ["view": "shift-status"])
+        )
+        return response.data
+    }
+
+    /// Запустить чек-лист в текущую смену точки.
+    ///
+    /// Обычно он появляется у оператора сам, по расписанию. Это другой случай:
+    /// внеплановая проверка, когда пройти список надо сейчас.
+    /// Требует `knowledge-admin.run_checklist`.
+    public func startChecklistRun(templateID: String, companyID: String) async throws {
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/knowledge",
+                method: .post,
+                body: try JSONSerialization.data(withJSONObject: [
+                    "action": "startChecklistRun",
+                    "payload": ["template_id": templateID, "company_id": companyID],
+                ])
+            )
+        )
+    }
+
+    /// Простить обязательный чек-лист в текущей смене.
+    ///
+    /// Причина обязательна: прощённый чек-лист — это невыполненная работа, и
+    /// через месяц вопрос «почему смену закрыли без пересчёта кассы» должен
+    /// иметь письменный ответ. Требует `knowledge-admin.skip_checklist`.
+    public func skipChecklistRun(templateID: String, companyID: String, reason: String) async throws {
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/knowledge",
+                method: .post,
+                body: try JSONSerialization.data(withJSONObject: [
+                    "action": "skipChecklistRun",
+                    "payload": ["template_id": templateID, "company_id": companyID, "reason": reason],
+                ])
+            )
+        )
+    }
+
     /// База знаний: разделы и статьи. Требует `knowledge-admin.view`.
     public func knowledge() async throws -> KnowledgeBase {
         let response: Envelope<KnowledgeBase> = try await api.send(

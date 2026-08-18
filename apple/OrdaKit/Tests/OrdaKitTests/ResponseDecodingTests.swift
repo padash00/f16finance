@@ -18,6 +18,33 @@ struct ResponseDecodingTests {
         try JSONDecoder().decode(type, from: Data(json.utf8))
     }
 
+    // ── Чек-листы открытых смен ──────────────────────────────────────────────
+
+    @Test("Что держит смену незакрытой")
+    func shiftChecklistBoard() throws {
+        let board = try decode(
+            Envelope<ShiftChecklistBoard>.self,
+            """
+            {"ok":true,"data":{"shifts":[{"company_id":"c1","company_name":"Абая",
+            "shift_id":"s1","shift_type":"night","opened_at":"2026-08-18T20:00:00Z",
+            "checklists":[
+            {"template_id":"t1","title":"Приём смены","schedule_type":"opening","status":"completed","skip_reason":null},
+            {"template_id":"t2","title":"Пересчёт кассы","schedule_type":"closing","status":"missing","skip_reason":null},
+            {"template_id":"t3","title":"Обход зала","schedule_type":"closing","status":"skipped","skip_reason":"проверил лично"}]}]}}
+            """
+        ).data
+
+        let shift = try #require(board.shifts.first)
+        #expect(shift.companyName == "Абая")
+        #expect(shift.checklists.count == 3)
+        // Держит смену только непройденный: прощённый и пройденный — нет.
+        #expect(shift.blocking.map(\.title) == ["Пересчёт кассы"])
+        #expect(shift.checklists[0].isDone)
+        #expect(shift.checklists[2].isSkipped)
+        #expect(shift.checklists[2].skipReason == "проверил лично")
+        #expect(shift.checklists[1].statusLabel == "не пройден")
+    }
+
     // ── Зарплата админ-состава ───────────────────────────────────────────────
 
     @Test("Сводка по окладным сотрудникам")

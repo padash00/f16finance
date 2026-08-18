@@ -120,7 +120,10 @@ async function getMissingBlockingChecklists(supabase: any, companyId: string, or
       'template_id',
       templatesArr.map((template) => template.id),
     )
-    .eq('status', 'completed')
+    // Прощённый руководителем считается закрытым — там же, где и при закрытии
+    // смены: иначе отчёт не уходит по чек-листу, который уже разрешили не
+    // проходить.
+    .in('status', ['completed', 'skipped'])
     .order('completed_at', { ascending: false })
 
   if (runsError) {

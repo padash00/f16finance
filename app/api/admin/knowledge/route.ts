@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
 import { listOrganizationCompanyIds, resolveCompanyScope } from '@/lib/server/organizations'
+import { getCurrentOpenShift } from '@/lib/server/point-shifts'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
 
@@ -104,6 +105,8 @@ type Body =
   | { action: 'upsertArticle'; payload: ArticlePayload }
   | { action: 'deleteArticle'; id: string }
   | { action: 'setArticlePublished'; payload: { id: string; is_published: boolean } }
+  | { action: 'startChecklistRun'; payload: { template_id: string; company_id: string } }
+  | { action: 'skipChecklistRun'; payload: { template_id: string; company_id: string; reason: string } }
   | { action: 'upsertTemplate'; payload: TemplatePayload }
   | { action: 'deleteTemplate'; id: string }
   | { action: 'upsertItem'; payload: ItemPayload }
@@ -894,6 +897,75 @@ async function applyImport(
   return { createdArticles, updatedArticles, createdChecklists, createdItems, skippedArticles, skippedChecklists }
 }
 
+/**
+ * Блокирующие чек-листы открытых смен.
+ *
+ * Отвечает на вопрос «почему не закрывается смена» без звонка оператору: по
+ * каждой точке с открытой сменой — какие обязательные чек-листы пройдены,
+ * какие прощены и какие ещё висят.
+ */
+async function loadShiftChecklistStatus(access: any) {
+  const supabase = createAdminSupabaseClient()
+  const organizationId = access.activeOrganization?.id || null
+  const companyIds = await listOrganizationCompanyIds({
+    activeOrganizationId: organizationId,
+    isSuperAdmin: access.isSuperAdmin,
+  })
+
+  let companiesQuery = supabase.from('companies').select('id, name, code').order('name')
+  if (companyIds) companiesQuery = companiesQuery.in('id', companyIds)
+  const { data: companies } = await companiesQuery
+
+  const rows: any[] = []
+  for (const company of ((companies || []) as any[])) {
+    const shift = await getCurrentOpenShift(supabase, String(company.id))
+    if (!shift) continue
+
+    let templatesQuery = supabase
+      .from('checklist_templates')
+      .select('id, title, schedule_type, blocks_shift, is_active, company_id')
+      .eq('is_active', true)
+      .eq('blocks_shift', true)
+      .or(`company_id.is.null,company_id.eq.${company.id}`)
+    if (organizationId) templatesQuery = templatesQuery.eq('organization_id', organizationId)
+    const { data: templates } = await templatesQuery
+
+    // Разовые чек-листы приёма новичка к смене не относятся.
+    const list = ((templates || []) as any[]).filter((t) => t.schedule_type !== 'onboarding')
+    if (list.length === 0) continue
+
+    const { data: runs } = await supabase
+      .from('checklist_runs')
+      .select('id, template_id, status, completed_at, responses')
+      .eq('shift_id', shift.id)
+      .in('template_id', list.map((t) => t.id))
+
+    rows.push({
+      company_id: String(company.id),
+      company_name: company.name || company.code || String(company.id),
+      shift_id: String(shift.id),
+      shift_type: (shift as any).shift_type || null,
+      opened_at: (shift as any).opened_at || (shift as any).created_at || null,
+      checklists: list.map((template) => {
+        const templateRuns = ((runs || []) as any[]).filter((run) => run.template_id === template.id)
+        const done = templateRuns.find((run) => run.status === 'completed')
+        const skipped = templateRuns.find((run) => run.status === 'skipped')
+        const running = templateRuns.find((run) => run.status === 'in_progress')
+        return {
+          template_id: String(template.id),
+          title: template.title,
+          schedule_type: template.schedule_type,
+          status: done ? 'completed' : skipped ? 'skipped' : running ? 'in_progress' : 'missing',
+          skip_reason: skipped ? String((skipped.responses as any)?.skip_reason || '') || null : null,
+          completed_at: done?.completed_at || null,
+        }
+      }),
+    })
+  }
+
+  return { shifts: rows }
+}
+
 export async function GET(req: Request) {
   try {
     const guard = await requireStaffCapabilityRequest(req, 'staff')
@@ -916,6 +988,16 @@ export async function GET(req: Request) {
         access.isSuperAdmin,
       )
       return json({ ok: true, data })
+    }
+
+    // Что происходит с чек-листами прямо сейчас: ?view=shift-status
+    //
+    // Владельцу звонят ночью со словами «не могу закрыть смену»: блокирующий
+    // чек-лист не пройден. До сих пор он мог только сказать «проходи» или
+    // выключить чек-лист совсем — в системе не было ни способа посмотреть, что
+    // именно висит, ни способа простить это разово.
+    if (url.searchParams.get('view') === 'shift-status') {
+      return json({ ok: true, data: await loadShiftChecklistStatus(access) })
     }
 
     const data = await loadKnowledgeData({
@@ -1127,6 +1209,95 @@ export async function POST(req: Request) {
       })
 
       return json({ ok: true, data })
+    }
+
+    // Запустить чек-лист в текущую смену.
+    //
+    // Обычно чек-лист появляется у оператора сам, по расписанию. Руководителю
+    // нужен другой случай: внеплановая проверка — приехала комиссия, был
+    // инцидент, — и попросить пройти список надо сейчас, а не завтра.
+    if (body.action === 'startChecklistRun' || body.action === 'skipChecklistRun') {
+      const isSkip = body.action === 'skipChecklistRun'
+      const denied = await requireCapability(
+        access,
+        isSkip ? 'knowledge-admin.skip_checklist' : 'knowledge-admin.run_checklist',
+      )
+      if (denied) return denied as any
+
+      const templateId = String((body as any).payload?.template_id || '').trim()
+      const companyId = String((body as any).payload?.company_id || '').trim()
+      const reason = String((body as any).payload?.reason || '').trim()
+      if (!templateId || !companyId) return json({ error: 'template_id и company_id обязательны' }, 400)
+      // Причина обязательна: прощённый чек-лист — это невыполненная работа, и
+      // через месяц вопрос «почему смену закрыли без пересчёта кассы» должен
+      // иметь письменный ответ.
+      if (isSkip && reason.length < 3) return json({ error: 'Нужна причина: её увидят в истории смены.' }, 400)
+
+      await resolveCompanyScope({
+        activeOrganizationId: organizationId,
+        isSuperAdmin: access.isSuperAdmin,
+        requestedCompanyId: companyId,
+      })
+
+      const admin = createAdminSupabaseClient()
+      let templateQuery = admin
+        .from('checklist_templates')
+        .select('id, title, organization_id, company_id')
+        .eq('id', templateId)
+        .or(`company_id.is.null,company_id.eq.${companyId}`)
+      if (organizationId) templateQuery = templateQuery.eq('organization_id', organizationId)
+      const { data: template, error: templateError } = await templateQuery.maybeSingle()
+      if (templateError) throw templateError
+      if (!template) return json({ error: 'Чек-лист не найден' }, 404)
+
+      const shift = await getCurrentOpenShift(admin, companyId)
+      if (!shift) return json({ error: 'На точке нет открытой смены' }, 409)
+
+      const { data: existing } = await admin
+        .from('checklist_runs')
+        .select('id, status')
+        .eq('shift_id', shift.id)
+        .eq('template_id', templateId)
+        .in('status', isSkip ? ['completed', 'skipped'] : ['in_progress', 'completed', 'skipped'])
+        .maybeSingle()
+      if (existing?.id) {
+        return json(
+          {
+            error:
+              existing.status === 'completed'
+                ? 'Этот чек-лист в смене уже пройден.'
+                : existing.status === 'skipped'
+                  ? 'Этот чек-лист в смене уже прощён.'
+                  : 'Этот чек-лист уже запущен в смене.',
+          },
+          409,
+        )
+      }
+
+      const nowIso = new Date().toISOString()
+      const { data: run, error: runError } = await admin
+        .from('checklist_runs')
+        .insert({
+          shift_id: shift.id,
+          template_id: templateId,
+          run_by: access.staffMember?.id || null,
+          status: isSkip ? 'skipped' : 'in_progress',
+          completed_at: isSkip ? nowIso : null,
+          responses: isSkip ? { skip_reason: reason } : {},
+        })
+        .select('id')
+        .single()
+      if (runError) throw runError
+
+      await writeAuditLog(admin, {
+        actorUserId: user?.id || null,
+        entityType: 'checklist_run',
+        entityId: String(run.id),
+        action: isSkip ? 'checklist_run.skip' : 'checklist_run.start_by_manager',
+        payload: { template: template.title, company_id: companyId, shift_id: shift.id, reason: reason || null },
+      })
+
+      return json({ ok: true })
     }
 
     if (body.action === 'upsertTemplate') {

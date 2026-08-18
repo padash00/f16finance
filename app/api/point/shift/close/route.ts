@@ -71,7 +71,10 @@ async function getMissingBlockingChecklists(supabase: any, companyId: string, or
       'template_id',
       templatesArr.map((template) => template.id),
     )
-    .eq('status', 'completed')
+    // Прощённый руководителем считается закрытым: иначе разовое исключение
+    // ничего не меняет и смена всё равно не закрывается. Причина прощения
+    // лежит в самом прогоне и видна в истории.
+    .in('status', ['completed', 'skipped'])
     .order('completed_at', { ascending: false })
 
   if (runsError) {

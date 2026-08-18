@@ -279,3 +279,90 @@ public struct KnowledgeBase: Decodable, Sendable {
         return articles.filter { $0.categoryID == nil || !known.contains($0.categoryID!) }
     }
 }
+
+// ── Чек-листы открытых смен ──────────────────────────────────────────────────
+//
+// Владельцу звонят ночью: «не могу закрыть смену». Причина всегда одна —
+// блокирующий чек-лист не пройден, — но какой именно, из телефона было не
+// узнать. Оставалось верить на слово и либо гнать проходить, либо выключать
+// чек-лист совсем, то есть навсегда и для всех.
+
+/// Состояние обязательных чек-листов в открытой смене точки.
+public struct ShiftChecklistStatus: Decodable, Sendable, Identifiable, Hashable {
+    public let companyID: String
+    public let companyName: String
+    public let shiftID: String
+    public let openedAt: Date?
+    public let checklists: [Item]
+
+    public var id: String { shiftID }
+
+    /// Что мешает закрыть смену прямо сейчас.
+    public var blocking: [Item] { checklists.filter { $0.status == "missing" } }
+
+    public struct Item: Decodable, Sendable, Identifiable, Hashable {
+        public let templateID: String
+        public let title: String
+        /// `completed` — пройден, `skipped` — прощён руководителем,
+        /// `in_progress` — начат, `missing` — не начат.
+        public let status: String
+        public let skipReason: String?
+
+        public var id: String { templateID }
+        public var isDone: Bool { status == "completed" }
+        public var isSkipped: Bool { status == "skipped" }
+        public var isMissing: Bool { status == "missing" }
+
+        public var statusLabel: String {
+            switch status {
+            case "completed": "пройден"
+            case "skipped": "прощён"
+            case "in_progress": "проходят"
+            default: "не пройден"
+            }
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            templateID = try c.decodeFlexibleString(forKey: .templateID) ?? UUID().uuidString
+            title = try c.decodeFlexibleString(forKey: .title) ?? "Чек-лист"
+            status = try c.decodeFlexibleString(forKey: .status) ?? "missing"
+            skipReason = try c.decodeFlexibleString(forKey: .skipReason)
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case title, status
+            case templateID = "template_id"
+            case skipReason = "skip_reason"
+        }
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        companyID = try c.decodeFlexibleString(forKey: .companyID) ?? ""
+        companyName = try c.decodeFlexibleString(forKey: .companyName) ?? "Точка"
+        shiftID = try c.decodeFlexibleString(forKey: .shiftID) ?? UUID().uuidString
+        openedAt = DateParsing.parse(try c.decodeFlexibleString(forKey: .openedAt) ?? "")
+        checklists = try c.decodeIfPresent([Item].self, forKey: .checklists) ?? []
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case checklists
+        case companyID = "company_id"
+        case companyName = "company_name"
+        case shiftID = "shift_id"
+        case openedAt = "opened_at"
+    }
+}
+
+/// Ответ `GET /api/admin/knowledge?view=shift-status`.
+public struct ShiftChecklistBoard: Decodable, Sendable {
+    public let shifts: [ShiftChecklistStatus]
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        shifts = try c.decodeIfPresent([ShiftChecklistStatus].self, forKey: .shifts) ?? []
+    }
+
+    private enum CodingKeys: String, CodingKey { case shifts }
+}
