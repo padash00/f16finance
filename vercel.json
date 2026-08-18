@@ -1,5 +1,7 @@
 {
-  "regions": ["hnd1"],
+  "regions": [
+    "hnd1"
+  ],
   "crons": [
     {
       "path": "/api/cron/subscription-lifecycle",
@@ -8,6 +10,10 @@
     {
       "path": "/api/cron/cleanup-operator-chat",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/cleanup-team-chat",
+      "schedule": "10 3 * * *"
     },
     {
       "path": "/api/cron/send-weekly",

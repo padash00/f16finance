@@ -610,6 +610,15 @@ struct NewsScreen: View {
                     }
                 }
 
+                // Чат живёт сутки — и человек должен знать об этом заранее.
+                // Иначе исчезнувшая переписка читается как потеря данных, а
+                // важное продолжают писать сюда вместо задач и объявлений.
+                Text("Сообщения старше суток удаляются. Закреплённые и объявления остаются.")
+                    .font(Typography.caption)
+                    .foregroundStyle(Theme.textMuted)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+
                 if !feed.pinned.isEmpty {
                     VStack(alignment: .leading, spacing: Spacing.md) {
                         SectionHeader("Закреплено")
