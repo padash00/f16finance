@@ -679,6 +679,11 @@ struct OperatorProfileScreen: View {
                     }
                 }
 
+                // Уведомления — рядом с выходом, но выше него: «мне не пишут
+                // про задачи» чаще всего означает выключённое разрешение, и
+                // проверить это человек должен сам, а не через руководителя.
+                NotificationsCard()
+
                 Button("Выйти из аккаунта") { confirmingLogout = true }
                     .buttonStyle(DestructiveButtonStyle())
             }

@@ -504,6 +504,9 @@ struct NotificationsCard: View {
     @State private var status: PushManager.Status = .unknown
     @Environment(\.openURL) private var openURL
 
+    @State private var isTesting = false
+    @State private var testResult: String?
+
     var body: some View {
         Card(accent: accent) {
             VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -537,6 +540,35 @@ struct NotificationsCard: View {
                         }
                     }
                     .buttonStyle(SecondaryButtonStyle())
+                }
+
+                // Проверка на себе. «Не приходит» — это три разные поломки:
+                // не спросили разрешение, устройство не зарегистрировалось,
+                // сервер не настроен. Кнопка отвечает, какая именно.
+                if case .denied = status {} else {
+                    Button {
+                        Task {
+                            isTesting = true
+                            testResult = await PushManager.shared.sendTest()
+                            isTesting = false
+                            await refresh()
+                        }
+                    } label: {
+                        if isTesting {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Text("Проверить уведомления")
+                        }
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .disabled(isTesting)
+                }
+
+                if let testResult {
+                    Text(testResult)
+                        .font(Typography.caption)
+                        .foregroundStyle(Theme.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 #endif
             }

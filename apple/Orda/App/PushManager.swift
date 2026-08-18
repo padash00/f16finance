@@ -44,6 +44,7 @@ final class PushManager {
         case staff
         case birthdays
         case approvals
+        case tasks
 
         /// Идентификатор страницы каталога — по нему строится и меню.
         var pageID: String {
@@ -54,6 +55,7 @@ final class PushManager {
             case .staff: "staff"
             case .birthdays: "birthdays"
             case .approvals: "expenses-pending"
+            case .tasks: "tasks"
             }
         }
 
@@ -66,6 +68,7 @@ final class PushManager {
             case "staff-account-deleted": self = .staff
             case "birthday": self = .birthdays
             case "expense-approval": self = .approvals
+            case "task": self = .tasks
             default: return nil
             }
         }
@@ -230,6 +233,49 @@ final class PushManager {
         _ = try? await api.send(
             APIRequest(path: "/api/mobile/register-push", method: .post, body: data)
         )
+    }
+
+    // ── Проверка ─────────────────────────────────────────────────────────────
+
+    /// Отправить уведомление самому себе и вернуть, что ответил сервер.
+    ///
+    /// «Не приходит» — это три разные поломки: не спросили разрешение, не
+    /// зарегистрировали устройство, не настроен канал у сервера. Снаружи они
+    /// неотличимы, и человек остаётся один на один с тишиной. Здесь он нажимает
+    /// одну кнопку и читает прямой ответ.
+    func sendTest() async -> String {
+        guard let api else { return "Приложение ещё не готово, попробуйте через секунду." }
+
+        // Сначала разрешение: без него уведомление уйдёт и не покажется, а
+        // человек решит, что сломан сервер.
+        await refreshStatus()
+        if case .notRequested = status { _ = await request() }
+        if case .denied = status {
+            return "Уведомления запрещены в настройках телефона. Откройте «Настройки» → Orda → «Уведомления»."
+        }
+
+        // Токен приходит от системы не мгновенно после первого разрешения.
+        if deviceToken == nil {
+            registerForRemoteNotifications()
+            try? await Task.sleep(for: .seconds(2))
+            await sendTokenIfPossible()
+        }
+
+        struct Result: Decodable {
+            let ok: Bool?
+            let message: String?
+        }
+
+        do {
+            let result: Result = try await api.send(
+                APIRequest(path: "/api/me/push-test", method: .post)
+            )
+            return result.message ?? (result.ok == true ? "Отправлено." : "Не удалось отправить.")
+        } catch let error as APIError {
+            return error.userMessage
+        } catch {
+            return error.localizedDescription
+        }
     }
 
     private var platformName: String {

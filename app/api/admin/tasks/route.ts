@@ -9,6 +9,7 @@ import {
   ensureOrganizationStaffAccess,
   resolveCompanyScope,
 } from '@/lib/server/organizations'
+import { pushToOperators, pushToUsers } from '@/lib/server/push'
 import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { spawnTaskFromTemplate } from '@/lib/server/task-templates'
@@ -443,6 +444,66 @@ async function addTaskComment(
   return fallbackInsert.data
 }
 
+/**
+ * Уведомление на телефон исполнителя.
+ *
+ * Задача, о которой человек не узнал, — не задача. Telegram есть не у всех и
+ * привязан не у каждого, а приложение стоит у всех, кому эти задачи и ставят.
+ * Поэтому шлём на устройства всегда, а Telegram остаётся вторым каналом.
+ *
+ * Best-effort: задача уже создана, и падать из-за уведомления нельзя.
+ */
+async function pushTaskAssignee(
+  supabase: ClientLike,
+  params: {
+    task: LoadedTask
+    assignee: TaskAssignee | null
+    company: LoadedCompany | null
+    type: 'assigned' | 'status'
+    statusLabel?: string
+  },
+) {
+  const assignee = params.assignee
+  if (!assignee) return
+
+  const title =
+    params.type === 'assigned'
+      ? 'Новая задача'
+      : `Задача ${params.statusLabel ? params.statusLabel.toLowerCase() : 'обновлена'}`
+
+  const where = params.company?.name ? ` · ${params.company.name}` : ''
+  const body = `${params.task.title}${where}`
+  const payload = {
+    title,
+    body,
+    // `kind` читает приложение, чтобы открыть нужный раздел, а не сводку.
+    data: { kind: 'task', taskId: String(params.task.id) },
+    // Одна задача — одно уведомление: смена статуса не должна плодить их стопку.
+    collapseId: `task-${params.task.id}`,
+  }
+
+  try {
+    if (assignee.kind === 'operator') {
+      await pushToOperators(supabase as any, [assignee.id], payload)
+      return
+    }
+
+    // Сотруднику офиса шлём по учётной записи: устройство регистрируется
+    // именно на неё, а `staff` — это карточка, а не вход.
+    const { data } = await (supabase as any)
+      .from('organization_members')
+      .select('user_id')
+      .eq('staff_id', assignee.id)
+      .eq('status', 'active')
+      .not('user_id', 'is', null)
+
+    const userIds = ((data as any[]) || []).map((row) => String(row.user_id)).filter(Boolean)
+    if (userIds.length > 0) await pushToUsers(supabase as any, userIds, payload)
+  } catch {
+    /* best-effort */
+  }
+}
+
 async function notifyTaskAssignee(
   supabase: ClientLike,
   params: {
@@ -454,6 +515,10 @@ async function notifyTaskAssignee(
     note?: string | null
   },
 ) {
+  // Устройства — первым каналом и независимо от Telegram: раньше человек без
+  // привязанного Telegram не узнавал о задаче вовсе.
+  await pushTaskAssignee(supabase, params)
+
   if (!params.assignee?.telegram_chat_id) {
     return { sent: false as const, reason: 'telegram-missing' }
   }

@@ -156,6 +156,24 @@ struct OperatorRootView: View {
             applyQuickAction()
             #endif
         }
+        // Нажали на уведомление — открыть то, о чём оно было.
+        //
+        // У оператора этого не было вовсе: разбор нажатия жил только в
+        // кабинете владельца, и человек с телефона попадал туда, где закрыл
+        // приложение, и сам искал сообщение или задачу.
+        .onChange(of: PushManager.shared.pendingRoute) { _, route in
+            guard let route else { return }
+            PushManager.shared.pendingRoute = nil
+            switch route {
+            case .directMessages: selection = .messages
+            case .teamChat: selection = .chat
+            case .tasks: selection = .tasks
+            case .news, .staff, .birthdays, .approvals:
+                // Разделы владельца: у оператора их нет, и подменять их
+                // случайным экраном хуже, чем оставить как есть.
+                break
+            }
+        }
         #if os(iOS)
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
