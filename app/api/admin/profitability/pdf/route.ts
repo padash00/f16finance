@@ -26,7 +26,13 @@ export async function GET(req: Request) {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
     const denied = await requireCapability(access, 'profitability.view')
-    if (denied) return denied as any
+    if (denied) return denied
+
+    // Файл уносит из системы полную картину денег точки за месяц. Смотреть её
+    // на экране и уносить документом — решения разного веса, и в каталоге они
+    // разведены. Право у сотрудника есть, пока владелец его не снял.
+    const exportDenied = await requireCapability(access, 'profitability.export_pdf')
+    if (exportDenied) return exportDenied as any
 
     const url = new URL(req.url)
     const companyId = (url.searchParams.get('company_id') || '').trim()

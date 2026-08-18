@@ -48,6 +48,12 @@ export async function POST(request: Request) {
   if (!access.isSuperAdmin && access.staffRole !== 'owner' && access.staffRole !== 'manager') {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 })
   }
+
+  // Право поверх роли. Роль отвечает на «кто он вообще», а право — на «можно ли
+  // ему уносить налоговую форму»; в настройках доступа владелец управляет
+  // именно вторым, и до сих пор эта ручка ничего не меняла.
+  const exportDenied = await requireCapability(access, 'tax.export_910')
+  if (exportDenied) return exportDenied
   const denied = await requireCapability(access, 'tax.view')
   if (denied) return denied
 
