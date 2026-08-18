@@ -113,6 +113,12 @@ export async function GET(request: Request) {
     const denied = await requireAnyCapability(access, ['store-warehouse.view', 'store-catalog.view'])
     if (denied) return denied
     if (!canViewWarehouse(access)) return json({ error: 'forbidden' }, 403)
+
+    // Право на раздел, а не просто «вошёл»: выдача — это остатки склада: что есть, сколько и почём. Комментарий
+    // «capability checks выше уже отсеивают» был неверен: выше отсеивал только
+    // вход, и раздел, закрытый в настройках, отдавался запросом.
+    const viewDenied = await requireCapability(access, 'store-warehouse.view')
+    if (viewDenied) return viewDenied as any
     const entitlementGuard = await requireOrgFeature(access, 'shop.catalog')
     if (entitlementGuard) return entitlementGuard
 

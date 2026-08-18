@@ -9,6 +9,7 @@ import { requireOrgFeature } from '@/lib/server/entitlements'
 import { createInventoryRequest } from '@/lib/server/repositories/inventory'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { notifyInventoryRequestCreated } from '@/lib/server/telegram'
+import { requireCapability } from '@/lib/server/capabilities'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -102,6 +103,12 @@ export async function GET(request: Request) {
     const denied = await requireAnyCapability(access, ['store-showcase.view', 'store-catalog.view'])
     if (denied) return denied
     if (!canView(access)) return json({ error: 'forbidden' }, 403)
+
+    // Право на раздел, а не просто «вошёл»: выдача — это остатки витрины и цены. Комментарий
+    // «capability checks выше уже отсеивают» был неверен: выше отсеивал только
+    // вход, и раздел, закрытый в настройках, отдавался запросом.
+    const viewDenied = await requireCapability(access, 'store-showcase.view')
+    if (viewDenied) return viewDenied as any
     const entitlementGuard = await requireOrgFeature(access, 'shop.catalog')
     if (entitlementGuard) return entitlementGuard
 

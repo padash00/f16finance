@@ -139,6 +139,13 @@ export async function GET(request: Request) {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
     if (!canManageStore(access)) return json({ error: 'forbidden' }, 403)
+
+    // Право на раздел, а не просто «вошёл». Приёмки — это накладные
+    // поставщиков: закупочные цены, отсрочки, суммы долга. Кому раздел закрыли
+    // в настройках, тот не должен получать их запросом.
+    const denied = await requireCapability(access, 'store-receipts.view')
+    if (denied) return denied as any
+
     const entitlementGuard = await requireOrgFeature(access, 'shop.catalog')
     if (entitlementGuard) return entitlementGuard
 
