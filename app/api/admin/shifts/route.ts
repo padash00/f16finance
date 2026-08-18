@@ -701,7 +701,13 @@ export async function POST(req: Request) {
       : requestClient
 
     if (body.action === 'saveShift') {
-      const denied = await requireCapability(access, 'shifts.create')
+      // Пустое имя означает «в этот день никого» — то есть снять человека со
+      // смены. Это не то же, что поставить: снять могут в отместку, и в
+      // каталоге для этого есть отдельное право. Раньше и постановка, и снятие
+      // шли под одним «shifts.create», и выключатель «Удалить смену» ничего не
+      // выключал.
+      const isRemoval = !body.payload.operatorName?.trim()
+      const denied = await requireCapability(access, isRemoval ? 'shifts.delete' : 'shifts.create')
       if (denied) return denied as any
       await ensureShiftCompanyAccess(supabase, access, body.payload.companyId)
       const result = await upsertShift(supabase, body.payload)

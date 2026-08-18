@@ -654,7 +654,6 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
           ...crud('point-devices'),
           { id: 'point-devices.toggle_active', label: 'Включить/отключить устройство', severity: 'high' },
           { id: 'point-devices.rotate_token', label: 'Сбросить токен устройства', severity: 'high' },
-          { id: 'point-devices.manage_feature_flags', label: 'Управление флагами функций', severity: 'high' },
           { id: 'point-devices.reveal_token', label: 'Просмотр токена устройства', severity: 'high' },
           { id: 'point-devices.copy_token', label: 'Копирование токена в буфер', severity: 'medium' },
         ],
@@ -774,8 +773,6 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
           { id: 'tasks.respond', label: 'Ответить на задачу', severity: 'low' },
           { id: 'tasks.assign', label: 'Назначить оператору', severity: 'medium', deps: ['operators.view'] },
           { id: 'tasks.notify', label: 'Отправить уведомление по задаче', severity: 'medium' },
-          { id: 'tasks.bulk_complete', label: 'Массовое завершение задач', severity: 'medium' },
-          { id: 'tasks.bulk_delete', label: 'Массовое удаление задач', severity: 'high' },
         ],
       },
       {

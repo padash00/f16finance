@@ -1230,7 +1230,7 @@ function TasksContent() {
                         На проверку
                       </Button>
                     )}
-                    {can('tasks.bulk_complete') && (
+                    {can('tasks.change_status') && (
                       <Button
                         size="sm"
                         variant="outline"

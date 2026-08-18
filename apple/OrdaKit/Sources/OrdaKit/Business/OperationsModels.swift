@@ -375,12 +375,20 @@ public struct RevisionAct: Decodable, Sendable, Identifiable, Hashable {
 public struct StoreMovementList: Decodable, Sendable {
     public let movements: [StockMovement]
 
+    /// Разбираем через вложенный тип, а не через `nestedContainer`.
+    ///
+    /// На `nestedContainer` с последующим `decodeIfPresent([StockMovement])`
+    /// тест падал с обращением к чужой памяти — воспроизводилось стабильно и
+    /// только на этой паре. Обычный вложенный `Decodable` делает то же самое и
+    /// работает; спорить с компилятором дороже, чем описать данные прямо.
+    private struct Payload: Decodable {
+        let movements: [StockMovement]?
+    }
+
     private enum RootKeys: String, CodingKey { case data }
-    private enum DataKeys: String, CodingKey { case movements }
 
     public init(from decoder: any Decoder) throws {
         let root = try decoder.container(keyedBy: RootKeys.self)
-        let data = try root.nestedContainer(keyedBy: DataKeys.self, forKey: .data)
-        movements = try data.decodeIfPresent([StockMovement].self, forKey: .movements) ?? []
+        movements = (try root.decodeIfPresent(Payload.self, forKey: .data))?.movements ?? []
     }
 }

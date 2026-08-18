@@ -284,7 +284,9 @@ export async function POST(request: Request) {
     const actionCapMap: Record<string, string> = {
       createProject: 'point-devices.create',
       updateProject: 'point-devices.edit',
-      toggleProjectActive: 'point-devices.edit',
+      // Отключение устройства останавливает работу целой точки — это не
+      // «правка настроек», и в каталоге у него своё право.
+      toggleProjectActive: 'point-devices.toggle_active',
       rotateProjectToken: 'point-devices.edit',
       deleteProject: 'point-devices.delete',
     }

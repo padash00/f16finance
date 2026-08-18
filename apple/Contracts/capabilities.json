@@ -3,7 +3,7 @@
   "summary": {
     "groups": 9,
     "pages": 85,
-    "capabilities": 406
+    "capabilities": 403
   },
   "groups": [
     {
@@ -2120,13 +2120,6 @@
               "deps": []
             },
             {
-              "id": "point-devices.manage_feature_flags",
-              "label": "Управление флагами функций",
-              "description": null,
-              "severity": "high",
-              "deps": []
-            },
-            {
               "id": "point-devices.reveal_token",
               "label": "Просмотр токена устройства",
               "description": null,
@@ -2623,20 +2616,6 @@
               "label": "Отправить уведомление по задаче",
               "description": null,
               "severity": "medium",
-              "deps": []
-            },
-            {
-              "id": "tasks.bulk_complete",
-              "label": "Массовое завершение задач",
-              "description": null,
-              "severity": "medium",
-              "deps": []
-            },
-            {
-              "id": "tasks.bulk_delete",
-              "label": "Массовое удаление задач",
-              "description": null,
-              "severity": "high",
               "deps": []
             }
           ]

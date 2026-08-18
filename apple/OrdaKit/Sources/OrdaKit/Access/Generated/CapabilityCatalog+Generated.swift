@@ -667,7 +667,6 @@ extension CapabilityCatalog {
                         Capability(id: "point-devices.delete", label: "Удаление", description: nil, severity: .high, deps: []),
                         Capability(id: "point-devices.toggle_active", label: "Включить/отключить устройство", description: nil, severity: .high, deps: []),
                         Capability(id: "point-devices.rotate_token", label: "Сбросить токен устройства", description: nil, severity: .high, deps: []),
-                        Capability(id: "point-devices.manage_feature_flags", label: "Управление флагами функций", description: nil, severity: .high, deps: []),
                         Capability(id: "point-devices.reveal_token", label: "Просмотр токена устройства", description: nil, severity: .high, deps: []),
                         Capability(id: "point-devices.copy_token", label: "Копирование токена в буфер", description: nil, severity: .medium, deps: []),
                     ]
@@ -797,8 +796,6 @@ extension CapabilityCatalog {
                         Capability(id: "tasks.respond", label: "Ответить на задачу", description: nil, severity: .low, deps: []),
                         Capability(id: "tasks.assign", label: "Назначить оператору", description: nil, severity: .medium, deps: ["operators.view"]),
                         Capability(id: "tasks.notify", label: "Отправить уведомление по задаче", description: nil, severity: .medium, deps: []),
-                        Capability(id: "tasks.bulk_complete", label: "Массовое завершение задач", description: nil, severity: .medium, deps: []),
-                        Capability(id: "tasks.bulk_delete", label: "Массовое удаление задач", description: nil, severity: .high, deps: []),
                     ]
                 ),
                 CapabilityPage(
