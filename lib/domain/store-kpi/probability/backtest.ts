@@ -69,6 +69,58 @@ export type BacktestComparison = {
   }
 }
 
+/**
+ * Прогноз выручки против факта.
+ *
+ * Отдельно от спроса, потому что это разные вещи: можно точно угадать число
+ * покупателей и промахнуться по деньгам, если чек оказался не тот. Владельца
+ * интересуют обе цифры, и смешивать их в одну нельзя.
+ */
+export type RevenuePoint = {
+  /** Прогноз нынешней модели — медиана выручки сопоставимых смен. */
+  v1Expected: number | null
+  /** Прогноз вероятностной модели. */
+  v2Expected: number | null
+  v2Interval: { low: number; high: number } | null
+  actual: number
+}
+
+/**
+ * Метрики по выручке.
+ *
+ * Считаются той же функцией, что и по спросу: одинаковые правила для разных
+ * величин — единственный способ читать их рядом и не путаться.
+ */
+export function compareRevenue(points: RevenuePoint[]): { v1: ModelMetrics; v2: ModelMetrics } {
+  const usable = points.filter(
+    (p) => p.v1Expected !== null && p.v2Expected !== null && Number.isFinite(p.actual),
+  )
+
+  const v1 = metricsFor(
+    usable.map((p) => ({
+      expected: p.v1Expected as number,
+      low: null,
+      high: null,
+      p25: null,
+      p75: null,
+      actual: p.actual,
+    })),
+  )
+
+  const v2 = metricsFor(
+    usable.map((p) => ({
+      expected: p.v2Expected as number,
+      low: p.v2Interval?.low ?? null,
+      high: p.v2Interval?.high ?? null,
+      p25: null,
+      p75: null,
+      actual: p.actual,
+    })),
+  )
+
+  return { v1, v2 }
+}
+
 /** Одно предсказание вероятности и то, случилось ли событие. */
 export type CalibrationPoint = { probability: number; happened: boolean }
 

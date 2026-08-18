@@ -70,6 +70,7 @@ type AccuracyData = {
     model_version: string
     v1: ModelMetrics
     v2: ModelMetrics
+    revenue?: { v1: ModelMetrics; v2: ModelMetrics }
     verdict: { winner: 'v1' | 'v2' | 'tie'; wapeDelta: number | null; summary: string }
     b1_calibration: {
       brierScore: number | null
@@ -149,7 +150,7 @@ function pctPrecise(value: number | null | undefined): string {
 }
 
 function ModelComparison(props: { data: NonNullable<AccuracyData['model_comparison']> }) {
-  const { v1, v2, verdict, b1_calibration } = props.data
+  const { v1, v2, verdict, b1_calibration, revenue } = props.data
 
   const rows: Array<{ label: string; hint: string; v1: string; v2: string }> = [
     {
@@ -187,6 +188,29 @@ function ModelComparison(props: { data: NonNullable<AccuracyData['model_comparis
     },
   ]
 
+  const revenueRows: Array<{ label: string; hint: string; v1: string; v2: string }> = revenue
+    ? [
+        {
+          label: 'Промах по деньгам',
+          hint: 'На сколько процентов от кассы ошибается прогноз выручки',
+          v1: pctPrecise(revenue.v1.wape),
+          v2: pctPrecise(revenue.v2.wape),
+        },
+        {
+          label: 'Сдвиг по деньгам',
+          hint: 'Плюс — прогноз завышает кассу, минус — занижает',
+          v1: revenue.v1.bias == null ? '—' : formatMoney(revenue.v1.bias),
+          v2: revenue.v2.bias == null ? '—' : formatMoney(revenue.v2.bias),
+        },
+        {
+          label: 'Диапазон кассы накрыл факт',
+          hint: 'У нынешней модели диапазона кассы нет вовсе — только одно число',
+          v1: revenue.v1.coverage80 == null ? 'нет диапазона' : pct(revenue.v1.coverage80),
+          v2: pct(revenue.v2.coverage80),
+        },
+      ]
+    : []
+
   return (
     <Card className="p-4">
       <div className="mb-1 text-sm font-semibold text-foreground">Нынешняя модель против вероятностной</div>
@@ -205,7 +229,7 @@ function ModelComparison(props: { data: NonNullable<AccuracyData['model_comparis
             </tr>
           </thead>
           <tbody className="divide-y divide-border/60">
-            {rows.map((row) => (
+            {[...rows, ...revenueRows].map((row) => (
               <tr key={row.label}>
                 <td className="py-2 pr-2">
                   <div className="text-xs text-foreground">{row.label}</div>

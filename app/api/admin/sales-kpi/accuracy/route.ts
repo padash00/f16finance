@@ -24,7 +24,7 @@ import {
   resolveStoreKpiContext,
   todayISO,
 } from '@/lib/server/store-kpi'
-import { calibration, compareModels } from '@/lib/domain/store-kpi/probability/backtest'
+import { calibration, compareModels, compareRevenue } from '@/lib/domain/store-kpi/probability/backtest'
 import { walkForward } from '@/lib/domain/store-kpi/probability/walk-forward'
 import {
   analyzeStoreKpi,
@@ -73,6 +73,9 @@ export async function GET(request: Request) {
       iterations: 2000,
     })
     const modelComparison = compareModels(walk.demandPoints)
+    // Выручка отдельно от спроса: можно угадать число покупателей и
+    // промахнуться по деньгам. Владельцу нужны обе цифры.
+    const revenueComparison = compareRevenue(walk.revenuePoints)
     const b1Calibration = calibration(walk.b1Calibration)
 
     // Отдельно — точность уже объявленных планов. Бэктест показывает, как
@@ -181,6 +184,7 @@ export async function GET(request: Request) {
           model_version: 'probabilistic-v1',
           v1: modelComparison.v1,
           v2: modelComparison.v2,
+          revenue: revenueComparison,
           verdict: modelComparison.verdict,
           b1_calibration: b1Calibration,
         },

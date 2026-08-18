@@ -24,7 +24,7 @@ import type { ShiftFact } from '../types'
 import { forecastDemand } from './demand'
 import { simulateShift } from './monte-carlo'
 import { seedFromString } from './math'
-import type { BacktestPoint, CalibrationPoint } from './backtest'
+import type { BacktestPoint, CalibrationPoint, RevenuePoint } from './backtest'
 import type { DemandForecast } from './types'
 
 export type WalkForwardOptions = {
@@ -38,6 +38,8 @@ export type WalkForwardOptions = {
 
 export type WalkForwardResult = {
   demandPoints: BacktestPoint[]
+  /** Прогноз выручки против факта — вторая половина ответа, рядом со спросом. */
+  revenuePoints: RevenuePoint[]
   /** Вероятность B1 против того, взяли его или нет. */
   b1Calibration: CalibrationPoint[]
   /** Сколько раз распределение подгонялось заново — мера работы кэша. */
@@ -92,6 +94,7 @@ export function walkForward(facts: ShiftFact[], options: WalkForwardOptions): Wa
   const avgTicketIndex = emptyBaselineIndex()
 
   const demandPoints: BacktestPoint[] = []
+  const revenuePoints: RevenuePoint[] = []
   const b1Calibration: CalibrationPoint[] = []
 
   const demandCache = new Map<string, DemandForecast | null>()
@@ -159,11 +162,12 @@ export function walkForward(facts: ShiftFact[], options: WalkForwardOptions): Wa
         const key = `${sampleKey(samples!.level, samples!.values)}|${Math.round(thresholds.values[1])}|${avgTickets ? sampleKey('t', avgTickets.values) : Math.round(avgTicket)}`
 
         let probability: number | null
+        let simulation: ReturnType<typeof simulateShift> = null
         if (probabilityCache.has(key)) {
           probability = probabilityCache.get(key) ?? null
           cacheHits += 1
         } else {
-          const simulation = simulateShift({
+          simulation = simulateShift({
             demand: v2,
             ticketSamples: [],
             shiftAvgTicketSamples: avgTickets?.values || [],
@@ -186,6 +190,18 @@ export function walkForward(facts: ShiftFact[], options: WalkForwardOptions): Wa
         if (probability !== null) {
           b1Calibration.push({ probability, happened: actualRevenue >= thresholds.values[1] })
         }
+
+        // Прогноз выручки нынешней модели — медиана сопоставимых смен: ровно
+        // то, что модуль показывает как «обычная касса».
+        const v1Revenue = lookupBaseline(revenueIndex, fact, { ...lookupOpts, percentile: 0.5 })
+        if (simulation && v1Revenue) {
+          revenuePoints.push({
+            v1Expected: v1Revenue.value,
+            v2Expected: simulation.medianRevenue,
+            v2Interval: simulation.interval80,
+            actual: actualRevenue,
+          })
+        }
       }
     }
 
@@ -200,5 +216,5 @@ export function walkForward(facts: ShiftFact[], options: WalkForwardOptions): Wa
     )
   }
 
-  return { demandPoints, b1Calibration, fits, cacheHits }
+  return { demandPoints, revenuePoints, b1Calibration, fits, cacheHits }
 }
