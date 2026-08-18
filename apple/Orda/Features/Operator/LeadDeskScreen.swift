@@ -80,6 +80,10 @@ struct LeadDeskScreen: View {
     /// человек, который в пятницу скажет «я не знал».
     @ViewBuilder
     private func readinessCard(_ desk: LeadDesk) -> some View {
+        // На широком экране точки встают рядом: у старшего их бывает три, и
+        // столбик из трёх одинаковых карточек на iPad — это полэкрана пустоты
+        // справа и прокрутка там, где всё помещается.
+        DashboardGrid {
         ForEach(desk.companies) { company in
             Card {
                 VStack(alignment: .leading, spacing: Spacing.md) {
@@ -119,6 +123,7 @@ struct LeadDeskScreen: View {
                     }
                 }
             }
+        }
         }
     }
 

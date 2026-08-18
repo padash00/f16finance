@@ -777,6 +777,10 @@ struct ArenaHistorySheet: View {
                     }
                 }
 
+                // Оплаты и поломки — два независимых списка: на широком
+                // экране им незачем стоять друг под другом.
+                DashboardGrid {
+                VStack(alignment: .leading, spacing: Spacing.md) {
                 if hall.todayRows.isEmpty {
                     Card {
                         Text("Оплат сегодня ещё не было.")
@@ -823,6 +827,9 @@ struct ArenaHistorySheet: View {
                     }
                 }
 
+                }
+
+                VStack(alignment: .leading, spacing: Spacing.md) {
                 if !hall.techLogs.isEmpty {
                     SectionHeader("Поломки", subtitle: "\(hall.techLogs.count)")
                     Card(accent: Theme.warning) {
@@ -852,6 +859,8 @@ struct ArenaHistorySheet: View {
                             }
                         }
                     }
+                }
+                }
                 }
             }
             .background(Theme.background)

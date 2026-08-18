@@ -25,8 +25,16 @@ struct SalesQualityScreen: View {
 
             if let report, report.available {
                 statusCard(report)
-                if let bonus = report.bonus { bonusCard(bonus, status: report.status) }
-                if !report.strengths.isEmpty || !report.weaknesses.isEmpty { sidesCard(report) }
+
+                // Доплата и разбор сильных/слабых сторон — два независимых
+                // блока одинаковой важности. На широком экране они встают
+                // рядом: столбик из карточек на iPad означает прокрутку там,
+                // где всё помещается на один экран.
+                DashboardGrid {
+                    if let bonus = report.bonus { bonusCard(bonus, status: report.status) }
+                    if !report.strengths.isEmpty || !report.weaknesses.isEmpty { sidesCard(report) }
+                }
+
                 explanation
             } else if let loadError {
                 ErrorStateView(error: loadError) { Task { await load() } }
