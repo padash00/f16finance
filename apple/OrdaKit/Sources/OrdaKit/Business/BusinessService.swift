@@ -153,6 +153,32 @@ public struct BusinessService: Sendable {
         return response.items
     }
 
+    /// Письмо сотруднику: приглашение или смена пароля.
+    ///
+    /// Один маршрут на оба случая — так же это работает на сайте: если входа
+    /// ещё нет, сервер шлёт приглашение, если есть — ссылку на смену пароля.
+    /// Различать их на клиенте нечем: состояние учётной записи знает только он.
+    ///
+    /// Возвращает текст сервера: он точнее любого нашего — там и адрес, на
+    /// который ушло письмо.
+    public func sendStaffAccessEmail(staffID: String, invite: Bool) async throws -> String {
+        struct Result: Decodable { let message: String? }
+
+        let result: Result = try await api.send(
+            APIRequest(
+                path: "/api/admin/staff-accounts",
+                method: .post,
+                body: try JSONSerialization.data(
+                    withJSONObject: [
+                        "action": invite ? "inviteStaffAccount" : "sendPasswordReset",
+                        "staffId": staffID,
+                    ]
+                )
+            )
+        )
+        return result.message ?? "Письмо отправлено."
+    }
+
     /// Завести оператору карточку сотрудника и связать с ней.
     ///
     /// Не повышение: оклад и роль не трогаем — это отдельный разговор с

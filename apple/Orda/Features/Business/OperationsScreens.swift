@@ -530,6 +530,17 @@ private struct StaffDetail: View {
     let member: StaffMember
     let list: StaffList?
 
+    @Environment(\.api) private var api
+    @Environment(\.access) private var access
+
+    @State private var isSending = false
+    @State private var accessResult: String?
+    @State private var accessError: String?
+    @State private var confirmingReset = false
+
+    /// Право то же, что проверяет сервер на этом маршруте.
+    private var canSendAccess: Bool { access?.can("access.invite_staff") ?? false }
+
     private var payments: [StaffPayment] {
         (list?.payments ?? [])
             .filter { $0.staffID == member.id }
@@ -561,6 +572,8 @@ private struct StaffDetail: View {
                         Spacer()
                     }
                 }
+
+                accessCard
 
                 Card {
                     VStack(spacing: Spacing.md) {
@@ -627,5 +640,92 @@ private struct StaffDetail: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+    }
+
+    /// Доступ сотрудника: пригласить или отправить смену пароля.
+    ///
+    /// Сотрудник звонит со смены, а не пишет заявку: «не могу войти» случается
+    /// в момент, когда владелец не за компьютером. Раньше письмо отправлялось
+    /// только с сайта, и человек ждал вечера.
+    ///
+    /// Кнопка одна на оба случая — вход либо есть, либо нет, и знает об этом
+    /// только сервер. Смена пароля спрашивает подтверждение: старый перестанет
+    /// работать сразу, а человек может стоять на кассе.
+    @ViewBuilder
+    private var accessCard: some View {
+        if canSendAccess {
+            Card {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    SectionHeader("Доступ")
+
+                    if let email = member.email, !email.isEmpty {
+                        Text(email)
+                            .font(Typography.callout)
+                            .foregroundStyle(Theme.textDim)
+                    } else {
+                        Text("У сотрудника не заполнена почта — письмо отправить некуда.")
+                            .font(Typography.caption)
+                            .foregroundStyle(Theme.textMuted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    if let accessResult {
+                        Text(accessResult)
+                            .font(Typography.caption)
+                            .foregroundStyle(Theme.positive)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    if let accessError {
+                        Text(accessError)
+                            .font(Typography.caption)
+                            .foregroundStyle(Theme.negative)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Button {
+                        confirmingReset = true
+                    } label: {
+                        if isSending {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Label("Отправить доступ на почту", systemImage: "envelope.badge")
+                        }
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .disabled(isSending || (member.email ?? "").isEmpty || !member.isActive)
+
+                    if !member.isActive {
+                        Text("Уволенному сотруднику доступ не отправляется.")
+                            .font(Typography.caption)
+                            .foregroundStyle(Theme.textMuted)
+                    }
+                }
+            }
+            .alert("Отправить письмо?", isPresented: $confirmingReset) {
+                Button("Отправить") { Task { await sendAccess() } }
+                Button("Отмена", role: .cancel) {}
+            } message: {
+                Text("Если вход уже есть, сотрудник задаст новый пароль по ссылке — старый перестанет работать.")
+            }
+        }
+    }
+
+    private func sendAccess() async {
+        isSending = true
+        accessError = nil
+        accessResult = nil
+        defer { isSending = false }
+
+        do {
+            // Сервер сам решит, приглашение это или смена пароля: состояние
+            // учётной записи знает только он.
+            accessResult = try await BusinessService(api: api)
+                .sendStaffAccessEmail(staffID: member.id, invite: false)
+        } catch let error as APIError {
+            accessError = error.userMessage
+        } catch {
+            accessError = error.localizedDescription
+        }
     }
 }
