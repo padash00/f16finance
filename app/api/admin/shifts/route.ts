@@ -5,6 +5,7 @@ import { writeAuditLog, writeNotificationLog, writeSystemErrorLogSafe } from '@/
 import { requireAnyCapability, requireCapability } from '@/lib/server/capabilities'
 import { requiredEnv } from '@/lib/server/env'
 import { listOrganizationOperatorIds, resolveCompanyScope } from '@/lib/server/organizations'
+import { pushToOperators } from '@/lib/server/push'
 import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
 import { loadShiftWeekWorkflow, publishShiftWeekForCompany, resolveShiftChangeRequest } from '@/lib/server/shift-workflow'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -548,6 +549,20 @@ async function applyShiftIssueResolution(
   })
 
   const shiftLabel = `${formatShiftDate(requestRow.shift_date)} (${requestRow.shift_type === 'day' ? 'день' : 'ночь'})`
+
+  // На телефон — всегда, Telegram остаётся вторым каналом.
+  //
+  // Человек ждёт ответа про свою смену: выходить ему в четверг или нет. Пока
+  // решение доходило только через Telegram, тот, у кого он не привязан, узнавал
+  // о нём случайно — или не узнавал вовсе и выходил, хотя его уже заменили.
+  if (requester?.id) {
+    await pushToOperators(supabase as any, [String(requester.id)], {
+      title: params.status === 'resolved' ? 'Решение по смене' : 'Заявка закрыта',
+      body: `${shiftLabel} · ${companyName}${effectiveNote ? ` — ${effectiveNote}` : ''}`,
+      data: { kind: 'shift-request', requestId: String(params.requestId) },
+      collapseId: `shift-request-${params.requestId}`,
+    })
+  }
 
   if (requester?.telegram_chat_id && process.env.TELEGRAM_BOT_TOKEN) {
     const cn = escapeTelegramHtml(companyName)

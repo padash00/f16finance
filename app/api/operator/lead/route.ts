@@ -5,6 +5,7 @@ import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { getRequestOperatorLeadContext } from '@/lib/server/request-auth'
 import { submitShiftLeadReview } from '@/lib/server/shift-workflow'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { pushToUsers } from '@/lib/server/push'
 
 type Body =
   | {
@@ -345,6 +346,40 @@ export async function POST(req: Request) {
           replacement_operator_id: body.replacementOperatorId || null,
         },
       })
+
+      // Руководителю — на телефон.
+      //
+      // Предложение старшего ничего не меняет само по себе: расписание правит
+      // решение руководителя. Пока о предложении узнавали, открыв график,
+      // замена согласовывалась голосом, а система об этом узнавала последней.
+      try {
+        // Организацию берём через точку заявки: у операторского контекста
+        // активной организации нет — оператор не переключает их, как владелец.
+        const { data: company } = await supabase
+          .from('companies')
+          .select('organization_id')
+          .eq('id', requestRow.company_id)
+          .maybeSingle()
+
+        const { data: members } = await supabase
+          .from('organization_members')
+          .select('user_id')
+          .eq('organization_id', (company as any)?.organization_id || '')
+          .eq('status', 'active')
+          .not('user_id', 'is', null)
+
+        const userIds = ((members as any[]) || []).map((row) => String(row.user_id)).filter(Boolean)
+        if (userIds.length > 0) {
+          await pushToUsers(supabase as any, userIds, {
+            title: 'Предложение по замене',
+            body: `${getOperatorDisplayName(context.operator, 'Старший')} предложил решение по смене — нужно утвердить.`,
+            data: { kind: 'shift-request' },
+            collapseId: `lead-proposal-${body.requestId}`,
+          })
+        }
+      } catch {
+        /* best-effort */
+      }
 
       return json({ ok: true, data: result })
     }

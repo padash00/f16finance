@@ -45,6 +45,7 @@ final class PushManager {
         case birthdays
         case approvals
         case tasks
+        case shifts
 
         /// Идентификатор страницы каталога — по нему строится и меню.
         var pageID: String {
@@ -56,6 +57,7 @@ final class PushManager {
             case .birthdays: "birthdays"
             case .approvals: "expenses-pending"
             case .tasks: "tasks"
+            case .shifts: "shifts"
             }
         }
 
@@ -69,6 +71,7 @@ final class PushManager {
             case "birthday": self = .birthdays
             case "expense-approval": self = .approvals
             case "task": self = .tasks
+            case "shift-request": self = .shifts
             default: return nil
             }
         }

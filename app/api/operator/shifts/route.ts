@@ -9,6 +9,7 @@ import {
   shiftIsoDate,
 } from '@/lib/server/shift-workflow'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { pushToOperators } from '@/lib/server/push'
 
 type ShiftType = 'day' | 'night'
 
@@ -231,6 +232,35 @@ export async function POST(req: Request) {
         reason: body.reason.trim(),
         source: 'cabinet',
       })
+
+      // Старшие этой точки — те, кто ищет замену.
+      //
+      // Без уведомления заявка лежит до тех пор, пока старший сам не откроет
+      // приложение: человек написал «не смогу выйти» и ждёт ответа, а его
+      // никто не видел. Отправка best-effort — заявка уже записана.
+      try {
+        const { data: leads } = await supabase
+          .from('operator_company_assignments')
+          .select('operator_id')
+          .eq('company_id', result.companyId)
+          .eq('is_active', true)
+          .in('role_in_company', ['senior_operator', 'senior_cashier'])
+
+        const leadIds = ((leads as any[]) || [])
+          .map((row) => String(row.operator_id || ''))
+          .filter((id) => id && id !== String(context.operator.id))
+
+        if (leadIds.length > 0) {
+          await pushToOperators(supabase as any, leadIds, {
+            title: 'Не смогут выйти на смену',
+            body: `${getOperatorDisplayName(context.operator, 'Оператор')} · ${body.shiftDate} — ${body.reason.trim()}`,
+            data: { kind: 'shift-request' },
+            collapseId: `shift-issue-${result.companyId}`,
+          })
+        }
+      } catch {
+        /* best-effort */
+      }
 
       await writeAuditLog(supabase, {
         actorUserId: context.user?.id || null,

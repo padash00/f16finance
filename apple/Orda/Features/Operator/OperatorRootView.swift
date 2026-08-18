@@ -168,6 +168,7 @@ struct OperatorRootView: View {
             case .directMessages: selection = .messages
             case .teamChat: selection = .chat
             case .tasks: selection = .tasks
+            case .shifts: selection = .schedule
             case .news, .staff, .birthdays, .approvals:
                 // Разделы владельца: у оператора их нет, и подменять их
                 // случайным экраном хуже, чем оставить как есть.
