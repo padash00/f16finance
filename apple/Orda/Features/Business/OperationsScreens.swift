@@ -596,8 +596,10 @@ private struct StaffDetail: View {
     @State private var accessError: String?
     @State private var confirmingReset = false
 
-    /// Право то же, что проверяет сервер на этом маршруте.
-    private var canSendAccess: Bool { access?.can("access.invite_staff") ?? false }
+    /// Право то же, что проверяет сервер. Приложение шлёт сброс пароля —
+    /// значит спрашивать надо право сброса, а не приглашения: у сервера это
+    /// теперь разные решения.
+    private var canSendAccess: Bool { access?.can("staff.reset_password") ?? false }
 
     private var payments: [StaffPayment] {
         (list?.payments ?? [])

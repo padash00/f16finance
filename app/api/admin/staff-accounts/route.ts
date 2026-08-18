@@ -242,9 +242,6 @@ export async function POST(req: Request) {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
 
-    const denied = await requireCapability(access, 'access.invite_staff')
-    if (denied) return denied
-
     if (!hasAdminSupabaseCredentials()) {
       return json(
         { error: 'Для отправки приглашения нужен SUPABASE_SERVICE_ROLE_KEY', code: 'missing_service_role' },
@@ -257,6 +254,16 @@ export async function POST(req: Request) {
     if (!body?.staffId || !['inviteStaffAccount', 'sendPasswordReset', 'changeEmail'].includes(body.action)) {
       return json({ error: 'Неверный формат запроса' }, 400)
     }
+
+    // Пригласить и сбросить пароль — разные решения. Приглашение даёт доступ
+    // тому, у кого его не было; сброс отбирает рабочий пароль у того, кто им
+    // пользуется, — человек в этот момент может стоять на кассе. В каталоге
+    // права разведены, и сервер должен спрашивать то, которое подходит.
+    const denied = await requireCapability(
+      access,
+      body.action === 'sendPasswordReset' ? 'staff.reset_password' : 'access.invite_staff',
+    )
+    if (denied) return denied
 
     const supabase = createAdminSupabaseClient()
     const requestClient = createRequestSupabaseClient(req)

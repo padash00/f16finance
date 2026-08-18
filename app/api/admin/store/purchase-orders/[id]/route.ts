@@ -62,7 +62,20 @@ export async function PATCH(
     const { id } = await params
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
-    const denied = await requireCapability(access, 'store-purchase-orders.edit')
+    // Правка заявки и её отмена — разные решения: отменённую поставщик не
+    // повезёт, и товар не приедет. В каталоге для отмены есть своё право, и
+    // до сих пор оно ничего не решало.
+    // Тело читаем один раз: поток запроса второй раз не прочитать, и вторая
+    // попытка вернула бы пустоту — заявка «без статуса».
+    const body = (await request.json().catch(() => null)) as {
+      status?: string
+      cancel_reason?: string | null
+    } | null
+    const requested = String(body?.status || '').trim()
+    const denied = await requireCapability(
+      access,
+      requested === 'cancelled' ? 'store-purchase-orders.cancel' : 'store-purchase-orders.edit',
+    )
     if (denied) return denied
     if (!canManageStore(access)) return json({ error: 'forbidden' }, 403)
     const entitlementGuard = await requireOrgFeature(access, 'shop.catalog')
@@ -70,10 +83,6 @@ export async function PATCH(
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const actorUserId = access.user?.id || null
-    const body = (await request.json().catch(() => null)) as {
-      status?: string
-      cancel_reason?: string | null
-    } | null
     if (!body?.status) return json({ error: 'status-required' }, 400)
     const nextStatus = String(body.status).trim() as Status
     if (!VALID_STATUSES.includes(nextStatus)) return json({ error: 'invalid-status' }, 400)
