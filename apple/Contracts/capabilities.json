@@ -3,7 +3,7 @@
   "summary": {
     "groups": 9,
     "pages": 85,
-    "capabilities": 408
+    "capabilities": 406
   },
   "groups": [
     {
@@ -1376,13 +1376,6 @@
               "description": null,
               "severity": "low",
               "deps": []
-            },
-            {
-              "id": "store-billing.delete_debt",
-              "label": "Удалить запись долга",
-              "description": null,
-              "severity": "high",
-              "deps": []
             }
           ]
         }
@@ -1697,13 +1690,6 @@
             {
               "id": "staff.toggle_status",
               "label": "Активировать/деактивировать",
-              "description": null,
-              "severity": "high",
-              "deps": []
-            },
-            {
-              "id": "staff.create_payment",
-              "label": "Записать выплату",
               "description": null,
               "severity": "high",
               "deps": []

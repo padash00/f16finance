@@ -365,7 +365,7 @@ export default function SalaryPage() {
   const canUpdateChatId = can('salary.update_chat_id')
   // Доступ к вкладкам/действиям административных сотрудников
   const canViewStaffSalary = can('staff.view')
-  const canStaffCreatePayment = can('staff.create_payment')
+  const canStaffCreatePayment = can('salary.create_payment')
   const canStaffAddAdjustment = can('staff.add_adjustment')
   const canStaffAddExtraDay = can('staff.add_extra_day')
 

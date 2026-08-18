@@ -444,7 +444,6 @@ extension CapabilityCatalog {
                         Capability(id: "store-billing.reschedule_debt", label: "Перенести срок оплаты долга", description: nil, severity: .medium, deps: []),
                         Capability(id: "store-billing.parse_receipt", label: "AI-распознавание чека/счёта", description: nil, severity: .medium, deps: []),
                         Capability(id: "store-billing.export", label: "Выгрузка долгов в Excel", description: nil, severity: .low, deps: []),
-                        Capability(id: "store-billing.delete_debt", label: "Удалить запись долга", description: nil, severity: .high, deps: []),
                     ]
                 ),
             ]
@@ -527,7 +526,6 @@ extension CapabilityCatalog {
                         Capability(id: "staff.delete", label: "Удаление", description: nil, severity: .high, deps: []),
                         Capability(id: "staff.invite", label: "Пригласить сотрудника", description: nil, severity: .high, deps: []),
                         Capability(id: "staff.toggle_status", label: "Активировать/деактивировать", description: nil, severity: .high, deps: []),
-                        Capability(id: "staff.create_payment", label: "Записать выплату", description: nil, severity: .high, deps: []),
                         Capability(id: "staff.add_adjustment", label: "Сделать корректировку зарплаты", description: nil, severity: .high, deps: []),
                         Capability(id: "staff.add_extra_day", label: "Добавить доп. рабочий день", description: nil, severity: .medium, deps: []),
                         Capability(id: "staff.reset_password", label: "Сбросить пароль сотрудника", description: nil, severity: .high, deps: []),

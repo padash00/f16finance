@@ -211,7 +211,7 @@ export default function StaffPageSmart() {
   const canInvite = can('staff.invite')
   const canResetPassword = can('staff.reset_password')
   const canToggleStatus = can('staff.toggle_status')
-  const canCreatePayment = can('staff.create_payment')
+  const canCreatePayment = can('salary.create_payment')
 
   const today = new Date()
   const initialYM = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`

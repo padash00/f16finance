@@ -764,7 +764,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
                             )}
                           </>
                         )}
-                        {can('store-billing.delete_debt') && (
+                        {can('store-billing.write_off_debt') && (
                           <Button
                             variant="outline"
                             size="sm"
