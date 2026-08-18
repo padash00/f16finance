@@ -144,19 +144,48 @@ public struct OperatorService: Sendable {
 
     /// Сохранить подсчёты. Отправляем пачкой: по одному запросу на позицию
     /// ревизия на 800 наименований превратилась бы в 800 запросов.
+    ///
+    /// `nil` в ответе значит «легло в очередь»: связи нет, но пересчёт уже
+    /// сделан. Ревизию считают на складе, где сети не бывает, и терять час
+    /// работы из-за этого нельзя.
+    ///
+    /// Пачка всегда полная — всё, что посчитано в этом заходе, — поэтому в
+    /// очереди она заменяет предыдущую по тому же акту: последняя версия
+    /// вернее прежней, а не дополняет её.
     @discardableResult
-    public func saveAuditCounts(actID: String, counts: [AuditCount]) async throws -> AuditSaveResult {
+    public func saveAuditCounts(actID: String, counts: [AuditCount]) async throws -> AuditSaveResult? {
         let body: [String: Any] = [
             "act_id": actID,
             "counts": counts.map { ["item_id": $0.itemID, "counted_qty": $0.countedQuantity] },
         ]
-        return try await api.send(
-            APIRequest(
-                path: "/api/operator/audit",
-                method: .post,
-                body: try JSONSerialization.data(withJSONObject: body)
+        let data = try JSONSerialization.data(withJSONObject: body)
+
+        guard let outbox else {
+            return try await api.send(
+                APIRequest(path: "/api/operator/audit", method: .post, body: data)
             )
-        )
+        }
+
+        do {
+            return try await api.send(
+                APIRequest(path: "/api/operator/audit", method: .post, body: data)
+            )
+        } catch let error as APIError {
+            // Только связь. Отказ по существу — закрытый акт, чужая секция —
+            // повторять бессмысленно, и очередь его не спасёт.
+            guard case .transport = error else { throw error }
+
+            _ = try await outbox.perform(
+                ActionOutbox.Item(
+                    path: "/api/operator/audit",
+                    method: HTTPMethod.post.rawValue,
+                    body: data,
+                    title: "Подсчёты ревизии",
+                    mergeKey: "audit:\(actID)"
+                )
+            )
+            return nil
+        }
     }
 
     // ── Кабинет ──────────────────────────────────────────────────────────────

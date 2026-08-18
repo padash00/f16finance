@@ -100,6 +100,9 @@ struct AuditCountScreen: View {
     let act: AuditAct
 
     @Environment(\.api) private var api
+    /// Через хранилище идёт сохранение: там сервис с очередью отложенных
+    /// действий, без которой пересчёт без связи пропадает.
+    @Environment(OperatorStore.self) private var store
 
     @State private var sheet: AuditSheet?
     @State private var counts: [String: Double] = [:]
@@ -349,8 +352,11 @@ struct AuditCountScreen: View {
 
         let payload = counts.map { AuditCount(itemID: $0.key, countedQuantity: $0.value) }
         do {
-            let result = try await OperatorService(api: api).saveAuditCounts(actID: act.actID, counts: payload)
-            savedMessage = "Сохранено \(result.saved)"
+            // Очередь берёт на себя только обрыв связи — об этом и говорим
+            // прямо: обещать «сохранено», когда данные лежат на телефоне,
+            // нельзя, а терять пересчёт из-за подвала нельзя тем более.
+            let result = try await store.saveAuditCounts(actID: act.actID, counts: payload)
+            savedMessage = result.map { "Сохранено \($0.saved)" } ?? "Связи нет — уйдёт само"
             Haptics.success()
         } catch let apiError as APIError {
             toast(text: apiError.operatorMessage, isError: true)

@@ -166,6 +166,17 @@ final class OperatorStore {
         return nil
     }
 
+    /// Сохранить подсчёты ревизии.
+    ///
+    /// Через хранилище, а не напрямую из экрана: здесь живёт сервис с очередью
+    /// отложенных действий, и без неё пересчёт на складе без связи просто
+    /// пропал бы. `nil` — легло в очередь.
+    func saveAuditCounts(actID: String, counts: [AuditCount]) async throws -> AuditSaveResult? {
+        let result = try await service.saveAuditCounts(actID: actID, counts: counts)
+        await refreshQueuedCounts()
+        return result
+    }
+
     func loadCatalog() async {
         isLoadingCatalog = true
         catalogError = nil
