@@ -75,6 +75,12 @@ export async function GET(req: Request) {
     // организации — оператор и клиент гостевого контура в том числе.
     if (!access.isSuperAdmin && !access.staffMember) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
 
+    // И своё право сверху: выдача — это ФИО, телефоны и почта всей команды.
+    // «Любой сотрудник» тут слишком широко, а право у сотрудника есть, пока
+    // владелец его не снял.
+    const denied = await requireStaffCapability(access, 'settings.view')
+    if (denied) return denied
+
     const supabase = getSupabase(req)
 
     // Изоляция: не-супер-админ видит только компании/команду/категории своей орг.

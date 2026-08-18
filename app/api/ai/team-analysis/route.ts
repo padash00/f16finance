@@ -7,6 +7,7 @@ import { requireAddon } from '@/lib/server/entitlements'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { resolveCompanyScope, listOrganizationOperatorIds } from '@/lib/server/organizations'
+import { requireStaffCapability } from '@/lib/server/capabilities'
 
 // AI Разбор команды — HR-аналитик клуба.
 // Точные цифры по каждому оператору (смены, начислено/к выплате, бонусы, штрафы, долги, выручка/час)
@@ -72,6 +73,13 @@ export async function GET(request: Request) {
     if (addonDenied) return addonDenied
     // canView: суперадмин ИЛИ сотрудник админ-команды
     if (!access.isSuperAdmin && !access.staffMember) return json({ error: 'forbidden' }, 403)
+
+    // Раздел закрыт своим правом, а не просто «любой сотрудник»: разбор
+    // уносит наружу то, что видят не все, — деньги и людей поимённо. Права у
+    // сотрудника есть все, пока владелец их не отнял, поэтому проверка ничего
+    // не ломает у тех, кому раздел и предназначен.
+    const denied = await requireStaffCapability(access, 'team-analysis.view')
+    if (denied) return denied
 
     const ip = getClientIp(request)
     const rl = checkRateLimit(`ai-team:${access.user?.id || ip}`, 15, 60_000)

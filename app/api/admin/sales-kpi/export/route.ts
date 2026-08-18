@@ -25,6 +25,7 @@ import { buildShiftEfficiencyPdf } from '@/lib/server/shift-efficiency-pdf'
 import { buildSalesKpiWorkbook } from '@/lib/server/sales-kpi-xlsx'
 import { buildStoreKpiReport, coverageWarnings } from '@/lib/server/store-kpi-report'
 import { inScope, listStorePoints, resolveStoreKpiContext } from '@/lib/server/store-kpi'
+import { requireStaffCapability } from '@/lib/server/capabilities'
 
 export const runtime = 'nodejs'
 export const maxDuration = 120
@@ -83,9 +84,16 @@ export async function POST(request: Request) {
   let browser: Awaited<ReturnType<typeof import('puppeteer-core').default.launch>> | null = null
 
   try {
+    // Просмотр и выгрузка — разные вещи, и в каталоге они разведены. Отчёт
+    // уносит из системы пофамильные суммы за период: кто сколько заработал,
+    // кому какая доплата. Смотреть их на экране и уносить файлом наружу —
+    // решения разного веса, и второе владелец вправе выдать не всем.
     const ctx = await resolveStoreKpiContext(request, 'sales-kpi.view', json)
     if ('response' in ctx) return ctx.response
     const { supabase, scope, access } = ctx
+
+    const exportDenied = await requireStaffCapability(access, 'sales-kpi.export')
+    if (exportDenied) return exportDenied
 
     const body = (await request.json().catch(() => ({}))) as Record<string, any>
     const companyId = String(body.company_id || '')

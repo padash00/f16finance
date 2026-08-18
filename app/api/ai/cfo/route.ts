@@ -8,6 +8,7 @@ import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { resolveFinancialGroup } from '@/lib/core/financial-groups'
+import { requireStaffCapability } from '@/lib/server/capabilities'
 
 // AI CFO — виртуальный финансовый директор.
 // Точные цифры (выручка/расходы/прибыль/маржа по компаниям + дельты к прошлому периоду) считаются КОДОМ.
@@ -63,6 +64,13 @@ export async function POST(request: Request) {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
     if (!access.isSuperAdmin && !access.staffMember) return json({ error: 'forbidden' }, 403)
+
+    // Раздел закрыт своим правом, а не просто «любой сотрудник»: разбор
+    // уносит наружу то, что видят не все, — деньги и людей поимённо. Права у
+    // сотрудника есть все, пока владелец их не отнял, поэтому проверка ничего
+    // не ломает у тех, кому раздел и предназначен.
+    const denied = await requireStaffCapability(access, 'ai-cfo.view')
+    if (denied) return denied
 
     // Платная фича AI CFO: при ENTITLEMENTS_ENFORCE=true вернёт 402, если не куплена.
     const gate = await requireOrgFeature(access, 'ai.cfo')

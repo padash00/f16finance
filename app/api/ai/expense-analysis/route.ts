@@ -6,6 +6,7 @@ import { requireAddon } from '@/lib/server/entitlements'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { resolveCompanyScope } from '@/lib/server/organizations'
+import { requireStaffCapability } from '@/lib/server/capabilities'
 
 // AI Разбор расходов: код считает точные цифры по категориям (текущий vs предыдущий
 // период), а AI даёт разбор — где утекают деньги, что выросло аномально, что урезать.
@@ -47,6 +48,12 @@ export async function GET(request: Request) {
     const addonDenied = await requireAddon(access, 'addon.ai')
     if (addonDenied) return addonDenied
     if (!canView(access)) return json({ error: 'forbidden' }, 403)
+
+    // Своё право поверх «любого сотрудника»: разбор расходов показывает, куда
+    // уходят деньги точки. Права даются сотруднику полностью и отнимаются
+    // владельцем — так что проверка бьёт только по тем, у кого их сняли.
+    const denied = await requireStaffCapability(access, 'expense-analysis.view')
+    if (denied) return denied
 
     const ip = getClientIp(request)
     const rl = checkRateLimit(`ai-expense-analysis:${access.user?.id || ip}`, 15, 60_000)
