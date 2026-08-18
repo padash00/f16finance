@@ -388,6 +388,23 @@ export async function POST(request: Request) {
     if (body.action === 'updateStationKioskTheme') {
       const { stationId, kiosk_bg_type, kiosk_bg_value, kiosk_accent, kiosk_logo_url, kiosk_announcement } = body
       if (!stationId) return json({ error: 'stationId required' }, 400)
+      // Оформление киоска и объявление на нём — разные решения, и в каталоге
+      // у них разные права. Оформление видит гость краем глаза; объявление он
+      // читает — им сообщают о ценах, акциях и правилах зала. Оба права до сих
+      // пор не значили ничего: действие одно, и в карте прав его не было.
+      const touchesTheme =
+        kiosk_bg_type !== undefined ||
+        kiosk_bg_value !== undefined ||
+        kiosk_accent !== undefined ||
+        kiosk_logo_url !== undefined
+      if (touchesTheme) {
+        const denied = await requireCapability(access, 'stations.edit_theme')
+        if (denied) return denied as any
+      }
+      if (kiosk_announcement !== undefined) {
+        const denied = await requireCapability(access, 'stations.edit_kiosk_announcement')
+        if (denied) return denied as any
+      }
       await ensureArenaEntityAccess(supabase, 'arena_stations', stationId, companyScope.allowedCompanyIds)
       const validBgTypes = ['color', 'gradient', 'image', 'video']
       const update: any = {}

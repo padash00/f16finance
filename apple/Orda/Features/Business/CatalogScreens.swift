@@ -312,8 +312,19 @@ struct StoreAnalyticsScreen: View {
 /// команде не видна — а автор обычно считает, что видна.
 struct KnowledgeAdminScreen: View {
     @Environment(BusinessStore.self) private var store
+    @Environment(\.access) private var access
+    @Environment(\.api) private var api
 
     @State private var search = ""
+    /// Что публикуем или снимаем прямо сейчас — чтобы строка не отвечала
+    /// молчанием на нажатие.
+    @State private var busyArticleID: String?
+    @State private var publishError: String?
+
+    /// Публикация — своё право, отдельное от правки текста: опубликованное
+    /// правило команда обязана прочитать и подтвердить, а за нарушение по нему
+    /// выписывают штраф.
+    private var canPublish: Bool { access?.can("knowledge-admin.publish") ?? false }
 
     var body: some View {
         ScreenScroll {
@@ -352,9 +363,24 @@ struct KnowledgeAdminScreen: View {
                     Card(accent: Theme.warning) {
                         VStack(alignment: .leading, spacing: Spacing.md) {
                             SectionHeader("Черновики", subtitle: "команда их не видит")
+                            if let publishError {
+                                Text(publishError)
+                                    .font(Typography.caption)
+                                    .foregroundStyle(Theme.negative)
+                            }
                             ForEach(Array(drafts.enumerated()), id: \.element.id) { index, article in
                                 if index > 0 { RowDivider() }
                                 AdminArticleRow(article: article)
+                                // Черновик лежит, пока кто-нибудь не дойдёт до
+                                // сайта. С телефона его теперь можно выпустить
+                                // сразу — текст уже написан, решение осталось.
+                                if canPublish {
+                                    Button(busyArticleID == article.id ? "Публикуем…" : "Опубликовать") {
+                                        Task { await setPublished(article, to: true) }
+                                    }
+                                    .buttonStyle(SecondaryButtonStyle())
+                                    .disabled(busyArticleID != nil)
+                                }
                             }
                         }
                     }
@@ -369,6 +395,13 @@ struct KnowledgeAdminScreen: View {
                                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, article in
                                     if index > 0 { RowDivider() }
                                     AdminArticleRow(article: article)
+                                        .contextMenu {
+                                            if canPublish {
+                                                Button("Снять с публикации", systemImage: "eye.slash") {
+                                                    Task { await setPublished(article, to: false) }
+                                                }
+                                            }
+                                        }
                                 }
                             }
                         }
@@ -391,6 +424,23 @@ struct KnowledgeAdminScreen: View {
                     }
                 }
             }
+        }
+    }
+
+    private func setPublished(_ article: AdminArticle, to state: Bool) async {
+        busyArticleID = article.id
+        publishError = nil
+        defer { busyArticleID = nil }
+        do {
+            try await BusinessService(api: api).setArticlePublished(id: article.id, isPublished: state)
+            Haptics.success()
+            await store.loadKnowledge()
+        } catch let error as APIError {
+            Haptics.error()
+            publishError = error.userMessage
+        } catch {
+            Haptics.error()
+            publishError = error.localizedDescription
         }
     }
 

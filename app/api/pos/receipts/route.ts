@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { resolveCompanyScope } from '@/lib/server/organizations'
+import { requireAnyCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
@@ -12,6 +13,15 @@ export async function GET(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+    // Список чеков — это вся выручка точки поимённо: что продано, кому, с
+    // какой скидкой и сколько списано баллов. До сих пор его отдавали любому,
+    // кто вошёл, — при том что в настройках раздел «Чеки» закрывается правом,
+    // и владелец справедливо считал, что закрыл.
+    //
+    // Тот же список нужен и на возвратах — там ищут чек, по которому вернуть.
+    // Поэтому пускаем по любому из двух прав, а не только по «Чекам».
+    const denied = await requireAnyCapability(access, ['pos-receipts.view', 'pos-returns.view'])
+    if (denied) return denied
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const url = new URL(request.url)

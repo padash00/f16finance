@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { humanizeDbError } from '@/lib/server/db-error-humanize'
 import { resolveCompanyScope } from '@/lib/server/organizations'
+import { requireCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createPointInventoryReturn } from '@/lib/server/repositories/inventory'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -76,6 +77,9 @@ export async function GET(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+    // Поиск чека — то же, что и список: суммы, состав и скидки.
+    const denied = await requireCapability(access, 'pos-returns.view')
+    if (denied) return denied
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const url = new URL(request.url)
@@ -132,6 +136,11 @@ export async function POST(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+    // Возврат — это деньги из кассы обратно покупателю и товар назад на
+    // остаток. В каталоге право на это есть с самого начала, а маршрут не
+    // спрашивал ничего: оформить возврат мог любой вошедший.
+    const denied = await requireCapability(access, 'pos-returns.return')
+    if (denied) return denied
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const companyScope = await resolveCompanyScope({

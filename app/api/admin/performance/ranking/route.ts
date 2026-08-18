@@ -13,7 +13,7 @@
  */
 import { NextResponse } from 'next/server'
 
-import { requireCapability } from '@/lib/server/capabilities'
+import { requireAnyCapability } from '@/lib/server/capabilities'
 import { listOrganizationOperatorIds, resolveCompanyScope } from '@/lib/server/organizations'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
@@ -82,7 +82,10 @@ export async function GET(req: Request) {
     if (!access.isSuperAdmin && !access.staffRole) {
       return json({ error: 'forbidden' }, 403)
     }
-    const denied = await requireCapability(access, 'performance.view')
+    // Тот же рейтинг живёт на двух страницах — «Эффективность» и «Рейтинги», —
+    // и в каталоге у каждой своё право. Спрашивать только одно значит показать
+    // человеку раздел, который сервер ему не отдаст.
+    const denied = await requireAnyCapability(access, ['performance.view', 'ratings.view'])
     if (denied) return denied
 
     if (!hasAdminSupabaseCredentials()) {

@@ -1189,6 +1189,28 @@ public struct BusinessService: Sendable {
         return response.data
     }
 
+    /// Опубликовать статью или снять с публикации.
+    ///
+    /// Отдельное действие, а не сохранение статьи целиком: телефон текста не
+    /// грузит, и «сохранение» отправило бы пустое содержимое — стерев ровно
+    /// тот регламент, который собирались показать команде.
+    ///
+    /// Требует `knowledge-admin.publish`: опубликованное правило команда
+    /// обязана прочитать и подтвердить, а за нарушение по нему выписывают
+    /// штраф — это решение весомее правки текста.
+    public func setArticlePublished(id: String, isPublished: Bool) async throws {
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/knowledge",
+                method: .post,
+                body: try JSONSerialization.data(withJSONObject: [
+                    "action": "setArticlePublished",
+                    "payload": ["id": id, "is_published": isPublished],
+                ])
+            )
+        )
+    }
+
     /// База знаний: разделы и статьи. Требует `knowledge-admin.view`.
     public func knowledge() async throws -> KnowledgeBase {
         let response: Envelope<KnowledgeBase> = try await api.send(

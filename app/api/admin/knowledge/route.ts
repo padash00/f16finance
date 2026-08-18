@@ -103,6 +103,7 @@ type Body =
   | { action: 'deleteCategory'; id: string }
   | { action: 'upsertArticle'; payload: ArticlePayload }
   | { action: 'deleteArticle'; id: string }
+  | { action: 'setArticlePublished'; payload: { id: string; is_published: boolean } }
   | { action: 'upsertTemplate'; payload: TemplatePayload }
   | { action: 'deleteTemplate'; id: string }
   | { action: 'upsertItem'; payload: ItemPayload }
@@ -1054,20 +1055,77 @@ export async function POST(req: Request) {
       if (body.payload.id) {
         const { data: current, error: currentError } = await supabase
           .from('knowledge_articles')
-          .select('id, organization_id')
+          .select('id, organization_id, is_published')
           .eq('id', body.payload.id)
           .maybeSingle()
         if (currentError) throw currentError
         if (!current) return json({ error: 'Статья не найдена' }, 404)
         ensureEditableOrganization(current.organization_id, organizationId, access.isSuperAdmin)
+        // Публикация — не правка.
+        //
+        // Опубликованный регламент команда обязана прочитать и подтвердить, а
+        // за нарушение по нему выписывают штраф — суммы лежат в самой статье.
+        // Снятие с публикации не мягче: правило исчезает у всех разом. Право
+        // «Публикация» в каталоге было с самого начала и не значило ничего:
+        // состояние переключалось вместе с текстом, под правом на правку.
+        if (Boolean(current.is_published) !== payload.is_published) {
+          const publishDenied = await requireCapability(access, 'knowledge-admin.publish')
+          if (publishDenied) return publishDenied as any
+        }
         const { data, error } = await supabase.from('knowledge_articles').update(payload).eq('id', body.payload.id).select('*').single()
         if (error) throw error
         return json({ ok: true, data })
       }
 
+      // Новая статья сразу опубликованной — то же решение, только в один шаг.
+      if (payload.is_published) {
+        const publishDenied = await requireCapability(access, 'knowledge-admin.publish')
+        if (publishDenied) return publishDenied as any
+      }
+
       const { data, error } = await supabase.from('knowledge_articles').insert([payload]).select('*').single()
       if (error) throw error
       await writeAuditLog(supabase, { actorUserId: user?.id || null, entityType: 'knowledge-article', entityId: data.id, action: 'create', payload: data })
+      return json({ ok: true, data })
+    }
+
+    // Публикация отдельным действием, а не сохранением статьи целиком.
+    //
+    // Телефон текста статьи не грузит — в списке только заголовки. Если бы он
+    // публиковал через `upsertArticle`, он отправил бы пустое содержимое и
+    // стёр регламент, который как раз собирался показать команде.
+    if (body.action === 'setArticlePublished') {
+      const denied = await requireCapability(access, 'knowledge-admin.publish')
+      if (denied) return denied as any
+      const articleId = String((body as any).payload?.id || (body as any).id || '').trim()
+      const nextState = ((body as any).payload?.is_published ?? (body as any).is_published) === true
+      if (!articleId) return json({ error: 'id обязателен' }, 400)
+
+      const { data: current, error: currentError } = await supabase
+        .from('knowledge_articles')
+        .select('id, organization_id, is_published, title')
+        .eq('id', articleId)
+        .maybeSingle()
+      if (currentError) throw currentError
+      if (!current) return json({ error: 'Статья не найдена' }, 404)
+      ensureEditableOrganization(current.organization_id, organizationId, access.isSuperAdmin)
+
+      const { data, error } = await supabase
+        .from('knowledge_articles')
+        .update({ is_published: nextState })
+        .eq('id', articleId)
+        .select('*')
+        .single()
+      if (error) throw error
+
+      await writeAuditLog(supabase, {
+        actorUserId: user?.id || null,
+        entityType: 'knowledge-article',
+        entityId: articleId,
+        action: nextState ? 'publish' : 'unpublish',
+        payload: { title: current.title },
+      })
+
       return json({ ok: true, data })
     }
 
