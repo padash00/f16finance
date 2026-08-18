@@ -124,6 +124,12 @@ export async function GET(req: Request) {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
 
+    // Право на раздел, а не просто «вошёл». Выдача — это все доходы точки за
+    // период: суммы, назначения, комментарии. Раздел закрывают в настройках
+    // доступа не для красоты, и до сих пор эта настройка не работала.
+    const denied = await requireCapability(access, 'income.view')
+    if (denied) return denied
+
     const url = new URL(req.url)
     const from = url.searchParams.get('from')
     const to = url.searchParams.get('to')
