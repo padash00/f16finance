@@ -28,10 +28,18 @@ struct ShiftLiveActivity: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    label("Выручка", value: money(context.state.revenue))
+                    label(
+                        context.state.hasHall ? "Занято" : "Выручка",
+                        value: headline(context.state)
+                    )
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    label("Чеков", value: "\(context.state.receipts)")
+                    label(
+                        context.state.hasHall ? "Касса зала" : "Чеков",
+                        value: context.state.hasHall
+                            ? money(context.state.revenue)
+                            : "\(context.state.receipts)"
+                    )
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     HStack(spacing: 12) {
@@ -48,8 +56,12 @@ struct ShiftLiveActivity: Widget {
                 Image(systemName: "cube.transparent.fill")
                     .foregroundStyle(brand)
             } compactTrailing: {
-                Text(shortMoney(context.state.revenue))
-                    .font(.caption2.monospacedDigit())
+                Text(
+                    context.state.hasHall
+                        ? "\(context.state.busyStations ?? 0)/\(context.state.totalStations ?? 0)"
+                        : shortMoney(context.state.revenue)
+                )
+                .font(.caption2.monospacedDigit())
             } minimal: {
                 Image(systemName: "cube.transparent.fill")
                     .foregroundStyle(brand)
@@ -73,7 +85,10 @@ struct ShiftLiveActivity: Widget {
             }
 
             HStack(alignment: .firstTextBaseline) {
-                Text(money(context.state.revenue))
+                // Главная цифра разная. В магазине это выручка, в клубе —
+                // занятые станции: чеков там нет вовсе, и «0 ₸» на весь экран
+                // блокировки означало бы, что карточка сломана.
+                Text(headline(context.state))
                     .font(.system(size: 30, weight: .bold, design: .rounded))
                     .minimumScaleFactor(0.6)
                     .lineLimit(1)
@@ -88,9 +103,27 @@ struct ShiftLiveActivity: Widget {
             }
 
             HStack(spacing: 14) {
-                chip("Чеков", "\(context.state.receipts)")
-                chip("Наличные", money(context.state.cash))
-                chip("Kaspi", money(context.state.kaspi))
+                if context.state.hasHall {
+                    // Ближайшее окончание — то, ради чего оператор клуба и
+                    // смотрит на телефон: подойти и спросить, продлевают ли.
+                    if let ends = context.state.nextSessionEndsAt {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(ends > Date() ? "Освободится через" : "Сидит сверх")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            Text(ends, style: .timer)
+                                .font(.callout.weight(.semibold).monospacedDigit())
+                                .foregroundStyle(ends > Date() ? Color.primary : Color.orange)
+                        }
+                    } else {
+                        chip("Свободно", "весь зал")
+                    }
+                    chip("Касса зала", money(context.state.revenue))
+                } else {
+                    chip("Чеков", "\(context.state.receipts)")
+                    chip("Наличные", money(context.state.cash))
+                    chip("Kaspi", money(context.state.kaspi))
+                }
             }
 
             if let attention = context.state.attention, !attention.isEmpty {
@@ -106,6 +139,12 @@ struct ShiftLiveActivity: Widget {
     // ── Мелочи ───────────────────────────────────────────────────────────────
 
     private var brand: Color { Color(red: 0.13, green: 0.77, blue: 0.53) }
+
+    /// Главная цифра карточки: у магазина деньги, у клуба занятость зала.
+    private func headline(_ state: ShiftActivityAttributes.ContentState) -> String {
+        guard state.hasHall else { return money(state.revenue) }
+        return "\(state.busyStations ?? 0) из \(state.totalStations ?? 0)"
+    }
 
     private func label(_ title: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {

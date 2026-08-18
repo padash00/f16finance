@@ -26,6 +26,10 @@ final class ArenaStore {
     private var lastLoadedAt: Date?
     private var isRefreshing = false
 
+    /// Кого известить о новом состоянии зала. Ставится снаружи, чтобы зал не
+    /// знал ни про смену, ни про экран блокировки.
+    var onHallChanged: ((ArenaHall?) -> Void)?
+
     init(service: OperatorService) {
         self.service = service
     }
@@ -38,6 +42,10 @@ final class ArenaStore {
             hall = try await service.arena()
             now = Date()
             lastLoadedAt = now
+            // Карточку смены на экране блокировки ведёт хранилище смены — оно
+            // знает, своя ли смена и открыта ли она вообще. Зал только
+            // сообщает свои цифры.
+            onHallChanged?(hall)
             error = nil
             isAvailable = true
         } catch let apiError as APIError {

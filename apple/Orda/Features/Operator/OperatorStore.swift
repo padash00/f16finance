@@ -116,11 +116,14 @@ final class OperatorStore {
         }
 
         let state = ShiftActivityAttributes.ContentState(
-            revenue: totals.netTotal,
+            revenue: hall == nil ? totals.netTotal : (hall?.todayTotal ?? 0),
             receipts: totals.salesCount,
             cash: totals.expectedCash,
             kaspi: totals.expectedKaspi,
-            attention: liveActivityAttention
+            attention: liveActivityAttention,
+            busyStations: hall?.busyCount,
+            totalStations: hall.map { $0.stations.count },
+            nextSessionEndsAt: nextSessionEnd
         )
         ShiftLiveActivityController.start(
             pointName: companyName,
@@ -129,6 +132,27 @@ final class OperatorStore {
             state: state
         )
         #endif
+    }
+
+    /// Состояние зала, если точка с залом. Приносит `ArenaStore`: считать зал
+    /// здесь значило бы завести второй источник тех же цифр.
+    private(set) var hall: ArenaHall?
+
+    func updateHall(_ hall: ArenaHall?) {
+        self.hall = hall
+        syncLiveActivity()
+    }
+
+    /// Когда освободится ближайшая занятая станция.
+    ///
+    /// Именно за этим оператор клуба и смотрит в телефон: подойти до того, как
+    /// время кончится, а не после.
+    private var nextSessionEnd: Date? {
+        guard let hall else { return nil }
+        return hall.sessions
+            .filter(\.isActive)
+            .compactMap(\.endsAt)
+            .min()
     }
 
     /// Что показать строкой предупреждения. Пусто — всё в порядке.

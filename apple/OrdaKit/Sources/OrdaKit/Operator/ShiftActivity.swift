@@ -24,18 +24,39 @@ public struct ShiftActivityAttributes: ActivityAttributes, Sendable {
         /// неотправленные чеки. Пусто — всё в порядке.
         public var attention: String?
 
+        // ── Зал клуба ────────────────────────────────────────────────────────
+        //
+        // У клуба нет чеков, и карточка «выручка и чеки» показывала бы там два
+        // нуля. Оператор клуба смотрит в телефон ради другого: сколько станций
+        // занято и у кого вот-вот кончится время.
+
+        /// Занято станций из скольких. `nil` — точка без зала.
+        public var busyStations: Int?
+        public var totalStations: Int?
+        /// Когда закончится ближайшая сессия. Прошедшее время значит, что
+        /// гость сидит сверх оплаченного.
+        public var nextSessionEndsAt: Date?
+
+        public var hasHall: Bool { totalStations != nil }
+
         public init(
             revenue: Double,
             receipts: Int,
             cash: Double,
             kaspi: Double,
-            attention: String? = nil
+            attention: String? = nil,
+            busyStations: Int? = nil,
+            totalStations: Int? = nil,
+            nextSessionEndsAt: Date? = nil
         ) {
             self.revenue = revenue
             self.receipts = receipts
             self.cash = cash
             self.kaspi = kaspi
             self.attention = attention
+            self.busyStations = busyStations
+            self.totalStations = totalStations
+            self.nextSessionEndsAt = nextSessionEndsAt
         }
     }
 

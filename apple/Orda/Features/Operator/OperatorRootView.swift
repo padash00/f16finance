@@ -143,7 +143,13 @@ struct OperatorRootView: View {
             let cabinetStore = CabinetStore(api: api, outbox: outbox)
             store = operatorStore
             cabinet = cabinetStore
-            arena = ArenaStore(service: OperatorService(api: api))
+            let arenaStore = ArenaStore(service: OperatorService(api: api))
+            // Зал сообщает свои цифры смене: карточку на экране блокировки
+            // ведёт она, потому что знает, открыта ли смена и своя ли она.
+            arenaStore.onHallChanged = { [weak operatorStore] hall in
+                operatorStore?.updateHall(hall)
+            }
+            arena = arenaStore
 
             async let shift: Void = operatorStore.bootstrap()
             async let overview: Void = cabinetStore.bootstrap()
