@@ -195,6 +195,47 @@ struct ResponseDecodingTests {
         #expect(unmatched.invoiceName == "Салфетки")
     }
 
+    // ── Команда ──────────────────────────────────────────────────────────────
+
+    @Test("Оператор без карточки сотрудника виден по флагу")
+    func operatorWithoutStaffLink() throws {
+        let list = try decode(
+            DataListWrapper<TeamOperator>.self,
+            """
+            {"data":[
+            {"id":"op-1","name":"Алима","short_name":"Алима","is_active":true,
+            "role":"operator","telegram_chat_id":null,"has_staff_link":false,
+            "operator_profiles":{"full_name":"Алима Кадырова","phone":"+77776054856",
+            "position":"Оператор","photo_url":null,"hire_date":"2025-08-16"},
+            "auth":{"username":"alima","last_login":null,"user_id":"u-1"},
+            "stats":{"totalShifts":12,"totalTurnover":840000,"avgPerShift":70000,
+            "totalDebts":0,"totalBonuses":0}},
+            {"id":"op-2","name":"Данияр","is_active":true,"role":"operator",
+            "has_staff_link":true,"stats":{"totalShifts":0,"totalTurnover":0,
+            "avgPerShift":0,"totalDebts":0,"totalBonuses":0}}]}
+            """
+        ).data
+
+        #expect(list.count == 2)
+        #expect(list.first?.hasStaffLink == false)
+        #expect(list.last?.hasStaffLink == true)
+    }
+
+    @Test("Старый сервер без флага не помечает всех сломанными")
+    func staffLinkDefaultsToPresent() throws {
+        let list = try decode(
+            DataListWrapper<TeamOperator>.self,
+            #"{"data":[{"id":"op-3","name":"Ержан","is_active":true,"role":"operator","stats":{"totalShifts":0,"totalTurnover":0,"avgPerShift":0,"totalDebts":0,"totalBonuses":0}}]}"#
+        ).data
+
+        #expect(list.first?.hasStaffLink == true)
+    }
+
+    /// Списочный ответ `{ "data": [...] }`.
+    private struct DataListWrapper<Item: Decodable & Sendable>: Decodable, Sendable {
+        let data: [Item]
+    }
+
     // ── Тексты ошибок ────────────────────────────────────────────────────────
 
     @Test("Адрес маршрута не показывается человеку")

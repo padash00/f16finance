@@ -47,6 +47,10 @@ type Body =
       action: 'bulkDeleteOperators'
       operatorIds: string[]
     }
+  | {
+      action: 'linkStaff'
+      operatorId: string
+    }
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -116,7 +120,7 @@ export async function GET(req: Request) {
       debtsQuery = debtsQuery.in('company_id', operatorCompanyScope.allowedCompanyIds)
     }
 
-    const [authResult, incomesResult, debtsResult, bonusesResult] = await Promise.all([
+    const [authResult, incomesResult, debtsResult, bonusesResult, staffLinksResult] = await Promise.all([
       supabase
         .from('operator_auth')
         .select('operator_id, user_id, username, role, is_active, last_login')
@@ -129,6 +133,9 @@ export async function GET(req: Request) {
         .in('operator_id', operatorIds)
         .eq('kind', 'bonus')
         .gte('date', dateStr),
+      // Карточка сотрудника: без неё смена открывается без хозяина, а
+      // подтверждения регламентов не пишутся вовсе — они привязаны к карточке.
+      supabase.from('operator_staff_links').select('operator_id, staff_id').in('operator_id', operatorIds),
     ])
 
     if (authResult.error) throw authResult.error
@@ -191,10 +198,18 @@ export async function GET(req: Request) {
       stats.avgPerShift = stats.totalShifts > 0 ? stats.totalTurnover / stats.totalShifts : 0
     }
 
+    const staffIdByOperator = new Map(
+      (((staffLinksResult as any).data as any[]) || [])
+        .filter((row) => row?.operator_id && row?.staff_id)
+        .map((row) => [String(row.operator_id), String(row.staff_id)]),
+    )
+
     const merged = operators.map((operator) => {
       const operatorId = String(operator.id || '')
       return {
         ...operator,
+        staff_id: staffIdByOperator.get(operatorId) || null,
+        has_staff_link: staffIdByOperator.has(operatorId),
         auth: authByOperatorId.get(operatorId) || {
           user_id: null,
           username: null,
@@ -287,6 +302,93 @@ export async function POST(req: Request) {
       })
 
       return json({ ok: true, data: createdOperator })
+    }
+
+    /**
+     * Завести оператору карточку сотрудника и связать с ней.
+     *
+     * Без карточки система теряет человека в трёх местах сразу: смена
+     * открывается без хозяина, подтверждения регламентов не пишутся (они
+     * привязаны к карточке), и в дисциплине его нет. Со стороны это выглядит
+     * как «кнопка не работает» — так и всплыло, на подтверждении статьи.
+     *
+     * Карточка заводится минимальная: имя, должность и точка. Оклад и роль —
+     * это уже повышение, для него есть отдельный маршрут, и подмешивать его
+     * сюда значит менять человеку условия одним нажатием.
+     */
+    if (body.action === 'linkStaff') {
+      const denied = await requireCapability(access, 'operators.edit')
+      if (denied) return denied as any
+
+      const operatorId = String(body.operatorId || '').trim()
+      if (!operatorId) return json({ error: 'operatorId обязателен' }, 400)
+
+      try {
+        await ensureOrganizationOperatorAccess({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+          operatorId,
+        })
+      } catch {
+        return json({ error: 'forbidden' }, 403)
+      }
+
+      const { data: existing } = await supabase
+        .from('operator_staff_links')
+        .select('staff_id')
+        .eq('operator_id', operatorId)
+        .maybeSingle()
+
+      if (existing?.staff_id) {
+        return json({ ok: true, data: { staff_id: existing.staff_id, created: false } })
+      }
+
+      const [{ data: operator }, { data: profile }] = await Promise.all([
+        supabase.from('operators').select('id, name, short_name, is_active, role').eq('id', operatorId).maybeSingle(),
+        supabase.from('operator_profiles').select('full_name, phone, email, position').eq('operator_id', operatorId).maybeSingle(),
+      ])
+
+      if (!operator) return json({ error: 'Оператор не найден' }, 404)
+
+      const { data: staffRow, error: staffError } = await supabase
+        .from('staff')
+        .insert([
+          {
+            full_name: (profile as any)?.full_name?.trim() || (operator as any).name,
+            short_name: (operator as any).short_name?.trim() || null,
+            role: 'other',
+            position: (profile as any)?.position?.trim() || 'Оператор',
+            phone: (profile as any)?.phone?.trim() || null,
+            email: (profile as any)?.email?.trim() || null,
+            is_active: (operator as any).is_active !== false,
+            organization_id: access.activeOrganization?.id || null,
+          },
+        ])
+        .select('id')
+        .single()
+
+      if (staffError) throw staffError
+
+      const { error: linkError } = await supabase.from('operator_staff_links').insert([
+        {
+          operator_id: operatorId,
+          staff_id: (staffRow as any).id,
+          assigned_role: 'other',
+          assigned_by: access.user?.id || null,
+        },
+      ])
+
+      if (linkError) throw linkError
+
+      await writeAuditLog(supabase, {
+        actorUserId: access.user?.id || null,
+        entityType: 'operator',
+        entityId: operatorId,
+        action: 'staff-link.create',
+        payload: { staff_id: (staffRow as any).id },
+      })
+
+      return json({ ok: true, data: { staff_id: (staffRow as any).id, created: true } })
     }
 
     if (body.action === 'updateOperator') {

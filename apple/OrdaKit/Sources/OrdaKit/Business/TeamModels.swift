@@ -22,6 +22,13 @@ public struct TeamOperator: Decodable, Sendable, Identifiable, Hashable {
     public let authUserID: String?
     /// Куда слать логин и пароль. Пусто — Telegram не привязан.
     public let telegramChatID: String?
+    /// Есть ли у оператора карточка сотрудника.
+    ///
+    /// Без неё система теряет человека сразу в трёх местах: смена открывается
+    /// без хозяина, подтверждения регламентов не пишутся (они привязаны к
+    /// карточке), и в дисциплине его нет. Снаружи это выглядит как «кнопка не
+    /// работает», а не как отсутствующая связка.
+    public let hasStaffLink: Bool
     public let stats: Stats
 
     /// Показываем полное имя из профиля, если оно есть: в `name` часто
@@ -79,6 +86,7 @@ public struct TeamOperator: Decodable, Sendable, Identifiable, Hashable {
         case telegramChatID = "telegram_chat_id"
         case profiles = "operator_profiles"
         case auth, stats
+        case hasStaffLink = "has_staff_link"
     }
 
     private struct Profile: Decodable {
@@ -118,6 +126,9 @@ public struct TeamOperator: Decodable, Sendable, Identifiable, Hashable {
         role = try c.decodeFlexibleString(forKey: .role) ?? "operator"
         telegramChatID = try c.decodeFlexibleString(forKey: .telegramChatID)
         hasTelegram = telegramChatID?.isEmpty == false
+        // Старые сборки сервера флага не присылают: считаем, что связка есть.
+        // Пугать значком там, где всё в порядке, хуже, чем промолчать.
+        hasStaffLink = (try? c.decodeIfPresent(Bool.self, forKey: .hasStaffLink)) as? Bool ?? true
 
         // `operator_profiles` приходит объектом при связи один-к-одному и
         // массивом при один-ко-многим — Supabase решает это по схеме, а не по

@@ -168,11 +168,17 @@ private struct OperatorDetail: View {
     private var canDismiss: Bool { access?.can("hr.dismiss") ?? false }
 
     @State private var dismissing = false
+    @State private var isLinking = false
+    @State private var linkError: String?
+
+    private var canLink: Bool { access?.can("operators.edit") ?? false }
 
     var body: some View {
         ScreenScroll {
             VStack(spacing: Spacing.lg) {
                 header
+
+                staffLinkCard
 
                 if canToggle || canReset { accessCard }
 
@@ -211,6 +217,75 @@ private struct OperatorDetail: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+    }
+
+    /// Нет карточки сотрудника — и человек выпадает из системы.
+    ///
+    /// Смена открывается без хозяина, подтверждения регламентов не пишутся,
+    /// в дисциплине его нет. Со стороны это выглядит как «у него кнопка не
+    /// работает», и починить это без подсказки нельзя: в интерфейсе связки не
+    /// видно вовсе.
+    @ViewBuilder
+    private var staffLinkCard: some View {
+        if !person.hasStaffLink {
+            Card(accent: Theme.warning) {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    HStack(spacing: Spacing.sm) {
+                        Image(systemName: "person.crop.circle.badge.exclamationmark")
+                            .foregroundStyle(Theme.warning)
+                        Text("Нет карточки сотрудника")
+                            .font(Typography.callout.weight(.medium))
+                            .foregroundStyle(Theme.text)
+                    }
+
+                    Text("Смены этого человека открываются без хозяина, а подтверждения регламентов не сохраняются — они привязаны к карточке.")
+                        .font(Typography.caption)
+                        .foregroundStyle(Theme.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    if let linkError {
+                        Text(linkError)
+                            .font(Typography.caption)
+                            .foregroundStyle(Theme.negative)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    if canLink {
+                        Button {
+                            Task { await link() }
+                        } label: {
+                            if isLinking {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Text("Завести карточку")
+                            }
+                        }
+                        .buttonStyle(SecondaryButtonStyle())
+                        .disabled(isLinking)
+
+                        Text("Заведём минимальную: имя и должность. Оклад и роль — это уже повышение, оно отдельно.")
+                            .font(Typography.caption)
+                            .foregroundStyle(Theme.textDim)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+        }
+    }
+
+    private func link() async {
+        isLinking = true
+        linkError = nil
+        defer { isLinking = false }
+
+        do {
+            try await BusinessService(api: api).linkOperatorToStaff(operatorID: person.id)
+            await store.loadTeam()
+        } catch let error as APIError {
+            linkError = error.userMessage
+        } catch {
+            linkError = error.localizedDescription
+        }
     }
 
     /// Доступ оператора.

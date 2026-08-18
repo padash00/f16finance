@@ -153,6 +153,22 @@ public struct BusinessService: Sendable {
         return response.items
     }
 
+    /// Завести оператору карточку сотрудника и связать с ней.
+    ///
+    /// Не повышение: оклад и роль не трогаем — это отдельный разговор с
+    /// человеком. Здесь только то, без чего система его теряет.
+    public func linkOperatorToStaff(operatorID: String) async throws {
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/operators",
+                method: .post,
+                body: try JSONSerialization.data(
+                    withJSONObject: ["action": "linkStaff", "operatorId": operatorID]
+                )
+            )
+        )
+    }
+
     /// Зарплата за неделю. `weekStart` — понедельник в формате `YYYY-MM-DD`;
     /// сервер отвергает произвольные даты, поэтому выравнивание на клиенте
     /// обязательно (см. `DateRange.weekStart`).
