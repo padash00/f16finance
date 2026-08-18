@@ -1040,7 +1040,17 @@ struct TeamChatScreen: View {
                 } else if let feed = store.feed {
                     messages(feed, store: store)
                 } else {
-                    LoadingRows(count: 6)
+                    // Загрузку видно словами, а не только серыми полосами: на
+                    // светлой теме скелет почти не отличается от фона, и
+                    // застрявший экран выглядит просто пустым — не понять,
+                    // сломалось что-то или сообщений нет.
+                    VStack(spacing: Spacing.md) {
+                        ProgressView()
+                        Text("Загружаем переписку…")
+                            .font(Typography.callout)
+                            .foregroundStyle(Theme.textMuted)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
 
                 if let reply = store.replyTo {
