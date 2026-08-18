@@ -21,7 +21,10 @@ export async function GET(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
-    const denied = await requireCapability(access, 'customers.view')
+    // История покупок — не то же, что карточка клиента: она показывает, что
+    // человек берёт и как часто. В каталоге для неё заведено своё право, и
+    // интерфейс спрашивает именно его — сервер должен делать так же.
+    const denied = await requireCapability(access, 'customers.view_sale_history')
     if (denied) return denied as any
     if (!canViewHistory(access)) return json({ error: 'forbidden' }, 403)
 

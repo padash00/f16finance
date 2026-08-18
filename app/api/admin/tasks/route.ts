@@ -1093,6 +1093,12 @@ export async function POST(req: Request) {
       if (!body.taskId || !RESPONSE_CONFIG[body.response]) {
         return json({ error: 'taskId и response обязательны' }, 400)
       }
+      // Ответ по задаче меняет её состояние и уходит уведомлением
+      // руководителю: «принял», «не смогу», «сделал». Право на это в каталоге
+      // есть с самого начала, а маршрут не спрашивал ничего — отвечать за
+      // чужую задачу мог любой, кто дошёл до админского контура.
+      const denied = await requireCapability(access, 'tasks.respond')
+      if (denied) return denied as any
       const existingContext = await loadTaskContext(supabase, body.taskId)
       await ensureTaskCompanyAccess(
         {
