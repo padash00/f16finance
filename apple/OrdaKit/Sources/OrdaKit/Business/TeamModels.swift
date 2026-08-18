@@ -313,3 +313,124 @@ public struct SalaryWeekReport: Decodable, Sendable {
         case weekStart, weekEnd, operators, totals
     }
 }
+
+// ── Зарплата административных сотрудников ────────────────────────────────────
+//
+// Админ-состав — бухгалтер, техник, управляющий — получает не по сменам, а
+// оклад двумя выплатами в месяц. В недельной ведомости операторов их нет
+// намеренно (`is_admin_staff = false` в запросе), и до сих пор это значило,
+// что в телефоне их зарплаты не было вовсе: владелец видел половину команды.
+
+/// Строка сводки `GET /api/admin/staff-salary?view=summary`.
+public struct StaffSalaryRow: Decodable, Sendable, Identifiable, Hashable {
+    public let id: String
+    public let name: String
+    public let role: String?
+    /// Оклад в месяц. У строк, собранных из операторов, оклада нет — 0.
+    public let monthlySalary: Double
+    /// Половина оклада — база текущей выплаты.
+    public let half: Double
+    public let bonuses: Double
+    public let debts: Double
+    public let fines: Double
+    public let advances: Double
+    /// Сколько получит на руки за эту половину месяца.
+    public let toPay: Double
+    /// Выплачено за календарный месяц — обе половины вместе.
+    public let paidThisMonth: Double
+    /// Обе выплаты месяца проведены: до следующего месяца платить нечего.
+    public let monthClosed: Bool
+    public let isActive: Bool
+    public let dismissalDate: String?
+    /// Строка того, кто смотрит.
+    public let isMe: Bool
+    /// `operator` — строка собрана из админ-оператора, оклада у неё нет.
+    public let sourceType: String
+
+    public var isFromOperator: Bool { sourceType == "operator" }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeFlexibleString(forKey: .id) ?? UUID().uuidString
+        let full = try c.decodeFlexibleString(forKey: .name)?.trimmingCharacters(in: .whitespaces)
+        let short = try c.decodeFlexibleString(forKey: .shortName)?.trimmingCharacters(in: .whitespaces)
+        name = [full, short].compactMap { $0 }.first(where: { !$0.isEmpty }) ?? "Сотрудник"
+        role = try c.decodeFlexibleString(forKey: .role)
+        monthlySalary = try c.decodeFlexibleDouble(forKey: .monthlySalary) ?? 0
+        half = try c.decodeFlexibleDouble(forKey: .half) ?? 0
+        bonuses = try c.decodeFlexibleDouble(forKey: .bonuses) ?? 0
+        debts = try c.decodeFlexibleDouble(forKey: .debts) ?? 0
+        fines = try c.decodeFlexibleDouble(forKey: .fines) ?? 0
+        advances = try c.decodeFlexibleDouble(forKey: .advances) ?? 0
+        toPay = try c.decodeFlexibleDouble(forKey: .toPay) ?? 0
+        paidThisMonth = try c.decodeFlexibleDouble(forKey: .paidThisMonth) ?? 0
+        monthClosed = try c.decodeIfPresent(Bool.self, forKey: .monthClosed) ?? false
+        isActive = try c.decodeIfPresent(Bool.self, forKey: .isActive) ?? true
+        dismissalDate = try c.decodeFlexibleString(forKey: .dismissalDate)
+        isMe = try c.decodeIfPresent(Bool.self, forKey: .isMe) ?? false
+        sourceType = try c.decodeFlexibleString(forKey: .sourceType) ?? "staff"
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, role, half, bonuses, debts, fines, advances, toPay
+        case shortName = "short_name"
+        case monthlySalary = "monthly_salary"
+        case paidThisMonth = "paid_this_month"
+        case monthClosed = "month_closed"
+        case isActive = "is_active"
+        case dismissalDate = "dismissal_date"
+        case isMe = "is_me"
+        case sourceType = "source_type"
+    }
+}
+
+/// Сводка по админ-составу на текущую половину месяца.
+public struct StaffSalarySummary: Decodable, Sendable {
+    public let rows: [StaffSalaryRow]
+    public let toPayTotal: Double
+    public let paidThisMonthTotal: Double
+    /// `first` — выплата до 15-го, `second` — после.
+    public let slot: String
+    public let periodFrom: String?
+    public let periodTo: String?
+    /// Ответ урезан до собственной строки: права смотреть чужие зарплаты нет.
+    public let selfOnly: Bool
+
+    public var isFirstHalf: Bool { slot == "first" }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        rows = try c.decodeIfPresent([StaffSalaryRow].self, forKey: .rows) ?? []
+        let totals = try c.decodeIfPresent(Totals.self, forKey: .totals)
+        toPayTotal = totals?.toPay ?? 0
+        paidThisMonthTotal = totals?.paidThisMonth ?? 0
+        slot = try c.decodeFlexibleString(forKey: .slot) ?? "first"
+        let period = try c.decodeIfPresent(Period.self, forKey: .period)
+        periodFrom = period?.from
+        periodTo = period?.to
+        selfOnly = try c.decodeIfPresent(Bool.self, forKey: .selfOnly) ?? false
+    }
+
+    private struct Totals: Decodable {
+        let toPay: Double
+        let paidThisMonth: Double
+
+        init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: Keys.self)
+            toPay = try c.decodeFlexibleDouble(forKey: .toPay) ?? 0
+            paidThisMonth = try c.decodeFlexibleDouble(forKey: .paidThisMonth) ?? 0
+        }
+
+        private enum Keys: String, CodingKey { case toPay, paidThisMonth }
+    }
+
+    private struct Period: Decodable {
+        let from: String?
+        let to: String?
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case rows, totals, slot, period
+        case selfOnly = "self_only"
+    }
+}

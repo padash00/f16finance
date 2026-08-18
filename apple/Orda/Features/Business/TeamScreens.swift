@@ -498,8 +498,14 @@ struct SalaryScreen: View {
         .background(Theme.background)
         .navigationTitle("Зарплата")
         .toolbar { LogoutToolbarItem() }
-        .task { await store.loadSalary() }
-        .refreshable { await store.loadSalary() }
+        .task {
+            await store.loadSalary()
+            await store.loadStaffSalary()
+        }
+        .refreshable {
+            await store.loadSalary()
+            await store.loadStaffSalary()
+        }
         .sheet(item: $advanceRow) { row in
             AdvanceSheet(
                 row: row,
@@ -551,6 +557,46 @@ struct SalaryScreen: View {
                 breakdown(totals)
                 progress(totals)
             }
+
+            adminStaff
+        }
+    }
+
+    /// Админ-состав: бухгалтер, техник, управляющий.
+    ///
+    /// Их в недельной ведомости нет и быть не может — они получают оклад, а не
+    /// по сменам, и сервер отдаёт их отдельным запросом. Но в вопросе «сколько
+    /// я должен людям в этом месяце» они такая же половина ответа, поэтому
+    /// стоят на том же экране, а не спрятаны в другом разделе.
+    @ViewBuilder
+    private var adminStaff: some View {
+        if let summary = store.staffSalary, !summary.rows.isEmpty {
+            Card {
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    SectionHeader(
+                        summary.selfOnly ? "Моя зарплата" : "Административный состав",
+                        subtitle: summary.isFirstHalf ? "выплата до 15-го" : "выплата после 15-го"
+                    )
+
+                    ForEach(Array(summary.rows.enumerated()), id: \.element.id) { index, row in
+                        if index > 0 { RowDivider() }
+                        StaffSalaryRowView(row: row)
+                    }
+
+                    if !summary.selfOnly && summary.rows.count > 1 {
+                        RowDivider()
+                        StatRow(
+                            "Итого к выплате",
+                            value: Money.format(summary.toPayTotal),
+                            emphasized: true
+                        )
+                    }
+                }
+            }
+        } else if store.staffSalaryError != nil, store.staffSalary == nil {
+            // Молча: недельная ведомость на экране уже есть, и ронять её из-за
+            // второго запроса незачем. Потянем снова при следующем обновлении.
+            EmptyView()
         }
     }
 
@@ -626,6 +672,83 @@ struct SalaryScreen: View {
                 .frame(maxWidth: .infinity)
             }
         }
+    }
+}
+
+/// Строка админ-сотрудника: оклад пополам, что прибавили и что удержали.
+///
+/// У оператора в строке смены — у окладного сотрудника их нет, и вместо них
+/// показываем, из чего вышла сумма: половина оклада, бонусы, штрафы, долги,
+/// авансы. Иначе цифра «к выплате» ничем не объяснена, а спорят именно о ней.
+struct StaffSalaryRowView: View {
+    let row: StaffSalaryRow
+
+    /// Что изменило половину оклада. Пустые строки не показываем: ноль
+    /// штрафов — не новость.
+    private var deltas: [(String, Double, Color)] {
+        var result: [(String, Double, Color)] = []
+        if row.bonuses > 0.01 { result.append(("бонусы", row.bonuses, Theme.positive)) }
+        if row.fines > 0.01 { result.append(("штрафы", -row.fines, Theme.negative)) }
+        if row.debts > 0.01 { result.append(("долги", -row.debts, Theme.negative)) }
+        if row.advances > 0.01 { result.append(("авансы", -row.advances, Theme.warning)) }
+        return result
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            HStack(spacing: Spacing.md) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(row.name)
+                        .font(Typography.callout)
+                        .foregroundStyle(row.isActive ? Theme.text : Theme.textDim)
+                        .lineLimit(1)
+                    Text(subtitle)
+                        .font(Typography.caption)
+                        .foregroundStyle(Theme.textDim)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: Spacing.sm)
+
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(Money.format(row.toPay))
+                        .font(Typography.callout.weight(.medium))
+                        .monospacedDigit()
+                        .foregroundStyle(Theme.text)
+                    if row.paidThisMonth > 0.01 {
+                        Text("выплачено \(Money.format(row.paidThisMonth))")
+                            .font(Typography.caption)
+                            .monospacedDigit()
+                            .foregroundStyle(Theme.textDim)
+                    }
+                }
+
+                if !row.isActive {
+                    StatusChip("Уволен", kind: .warning)
+                } else if row.monthClosed {
+                    StatusChip("Месяц закрыт", kind: .good)
+                }
+            }
+
+            if !deltas.isEmpty {
+                HStack(spacing: Spacing.sm) {
+                    ForEach(deltas, id: \.0) { label, amount, color in
+                        Text("\(label) \(Money.signed(amount))")
+                            .font(Typography.caption)
+                            .monospacedDigit()
+                            .foregroundStyle(color)
+                    }
+                }
+            }
+        }
+    }
+
+    private var subtitle: String {
+        // Строка, собранная из оператора-админа, оклада не имеет: показывать
+        // «0 ₸/мес» значило бы соврать, что человек работает бесплатно.
+        if row.isFromOperator { return "из списка операторов" }
+        if let date = row.dismissalDate, !row.isActive { return "уволен \(date)" }
+        return "оклад \(Money.format(row.monthlySalary))/мес"
     }
 }
 

@@ -18,6 +18,89 @@ struct ResponseDecodingTests {
         try JSONDecoder().decode(type, from: Data(json.utf8))
     }
 
+    // ── Зарплата админ-состава ───────────────────────────────────────────────
+
+    @Test("Сводка по окладным сотрудникам")
+    func staffSalarySummary() throws {
+        let summary = try decode(
+            Envelope<StaffSalarySummary>.self,
+            """
+            {"ok":true,"data":{"today":"2026-08-20","slot":"second",
+            "period":{"from":"2026-08-16","to":"2026-08-31"},
+            "rows":[{"id":"s1","name":"Айгуль","short_name":"Айгуль К.","role":"accountant",
+            "monthly_salary":300000,"source_type":"staff","is_active":true,"dismissal_date":null,
+            "half":150000,"bonuses":20000,"debts":3000,"fines":5000,"advances":30000,"toPay":132000,
+            "paid_this_month":150000,"month_closed":false,"is_me":true}],
+            "totals":{"toPay":132000,"paidThisMonth":150000,"people":1},
+            "self_only":false,"can_edit":true}}
+            """
+        ).data
+
+        #expect(summary.slot == "second")
+        #expect(!summary.isFirstHalf)
+        #expect(summary.periodFrom == "2026-08-16")
+        #expect(!summary.selfOnly)
+        #expect(summary.toPayTotal == 132_000)
+        #expect(summary.paidThisMonthTotal == 150_000)
+
+        let row = try #require(summary.rows.first)
+        #expect(row.name == "Айгуль")
+        #expect(row.monthlySalary == 300_000)
+        #expect(row.half == 150_000)
+        #expect(row.toPay == 132_000)
+        #expect(row.advances == 30_000)
+        #expect(row.paidThisMonth == 150_000)
+        #expect(row.isMe)
+        #expect(!row.isFromOperator)
+        #expect(!row.monthClosed)
+    }
+
+    /// Без права «Смотреть зарплату» сервер отдаёт одну строку — свою. Экран
+    /// должен понять это по флагу, а не по числу строк: у организации из
+    /// одного сотрудника строка тоже одна.
+    @Test("Своя зарплата без права смотреть чужие")
+    func staffSalarySelfOnly() throws {
+        let summary = try decode(
+            Envelope<StaffSalarySummary>.self,
+            """
+            {"ok":true,"data":{"today":"2026-08-04","slot":"first",
+            "period":{"from":"2026-08-01","to":"2026-08-15"},
+            "rows":[{"id":"s7","name":"Данияр","role":"tech","monthly_salary":0,
+            "source_type":"operator","is_active":false,"dismissal_date":"2026-08-02",
+            "half":0,"bonuses":0,"debts":0,"fines":0,"advances":0,"toPay":0,
+            "paid_this_month":0,"month_closed":true,"is_me":true}],
+            "totals":{"toPay":0,"paidThisMonth":0,"people":1},
+            "self_only":true,"can_edit":false}}
+            """
+        ).data
+
+        #expect(summary.selfOnly)
+        #expect(summary.isFirstHalf)
+        let row = try #require(summary.rows.first)
+        #expect(row.isFromOperator)
+        #expect(!row.isActive)
+        #expect(row.dismissalDate == "2026-08-02")
+        #expect(row.monthClosed)
+    }
+
+    /// Имя может прийти пустым — строка, собранная из оператора без имени.
+    /// Пустая строка в списке зарплат читается как сбой загрузки.
+    @Test("Сотрудник без имени не оставляет пустую строку")
+    func staffSalaryFallbackName() throws {
+        let summary = try decode(
+            Envelope<StaffSalarySummary>.self,
+            """
+            {"ok":true,"data":{"today":"2026-08-04","slot":"first","rows":[
+            {"id":"s9","name":"","short_name":"Марат","toPay":1000},
+            {"id":"s10","name":"","short_name":null,"toPay":2000}],
+            "totals":{"toPay":3000,"paidThisMonth":0,"people":2}}}
+            """
+        ).data
+
+        #expect(summary.rows.map(\.name) == ["Марат", "Сотрудник"])
+        #expect(summary.rows[0].isActive)
+    }
+
     // ── Личный экран продавца ────────────────────────────────────────────────
 
     @Test("Оценка продавца за месяц")

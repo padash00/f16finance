@@ -4,6 +4,7 @@ import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { requireAddon } from '@/lib/server/entitlements'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { buildStaffSalarySummary } from '@/lib/domain/staff-salary-slot'
 import {
   resolveCompanyScope,
   listOrganizationStaffIds,
@@ -240,8 +241,17 @@ export async function GET(req: Request) {
     if ('response' in access) return access.response
     const addonDenied = await requireAddon(access, 'addon.salary')
     if (addonDenied) return addonDenied
+    // Своя зарплата — не то же самое, что чужая.
+    //
+    // Право «Смотреть зарплату» открывает ведомость всей организации, и
+    // владелец справедливо снимает его с обычного сотрудника. Но человек без
+    // этого права остаётся с вопросом «сколько мне придёт 15-го» и идёт за
+    // ответом к владельцу. Оператор свою неделю видит сам — админ-сотрудник
+    // теперь тоже видит свою половину месяца, и только свою.
     const denied = await requireCapability(access, 'salary.view')
-    if (denied) return denied as any
+    const selfStaffId = (access as any).staffMember?.id ? String((access as any).staffMember.id) : null
+    const selfOnly = !!denied
+    if (denied && !selfStaffId) return denied as any
     // Capability checks выше уже отсеивают; здесь — любой staff
     const canView = access.isSuperAdmin || !!access.staffRole
     if (!canView) return json({ error: 'forbidden' }, 403)
@@ -498,6 +508,39 @@ export async function GET(req: Request) {
     // Изоляция: платежи только по сотрудникам своей орг (staff_debt_payments.staff_id).
     if (allowedStaffIds) debtPaymentsQuery.in('staff_id', allowedStaffIds)
     const { data: debtPaymentsData } = await debtPaymentsQuery
+
+    // Сводка для телефона: те же деньги, но уже посчитанные.
+    //
+    // Полный ответ — это пять сырых массивов, из которых сумму «к выплате»
+    // собирает страница /salary. Повторять эту сборку в Swift значило бы
+    // получить вторую правду: на сайте одна цифра, в телефоне другая. Поэтому
+    // считаем здесь, тем же кодом, что и web.
+    if (selfOnly || url.searchParams.get('view') === 'summary') {
+      const summary = buildStaffSalarySummary({
+        staff: [...baseStaff, ...virtualStaffFromOperators] as any,
+        adjustments: [...(adjRes.data ?? []), ...syntheticDebtAdjustments] as any,
+        payments: (paymentsRes.data ?? []) as any,
+        today: new Date().toISOString().slice(0, 10),
+        meStaffId: selfStaffId,
+      })
+      // Без права видно ровно одну строку — свою. Полный ответ здесь не
+      // возвращаем никогда: в нём сырые ведомости по всем людям.
+      const rows = selfOnly ? summary.rows.filter((row) => row.is_me) : summary.rows
+      return json({
+        ok: true,
+        data: {
+          ...summary,
+          rows,
+          totals: {
+            toPay: rows.reduce((sum, row) => sum + row.toPay, 0),
+            paidThisMonth: rows.reduce((sum, row) => sum + row.paid_this_month, 0),
+            people: rows.length,
+          },
+          self_only: selfOnly,
+          can_edit: !selfOnly && (access.isSuperAdmin || !!access.staffRole),
+        },
+      })
+    }
 
     return json({
       ...(debugMode

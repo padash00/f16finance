@@ -21,6 +21,12 @@ import { addDaysISO, formatRuDate, mondayOfDate, toISODateLocal, todayISO } from
 import { formatMoney } from '@/lib/core/format'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { getStaffRoleLabel } from '@/lib/core/access'
+import {
+  calcStaffToPay,
+  filterStaffAdjustmentsForSlot,
+  getSalarySlotRange,
+  getStaffPaymentAdjustmentPeriod,
+} from '@/lib/domain/staff-salary-slot'
 
 type CompanyOption = { id: string; code: string | null; name: string | null }
 type Allocation = { companyId: string; companyCode: string | null; companyName: string | null; accruedAmount: number; bonusAmount: number; fineAmount: number; debtAmount: number; advanceAmount: number; netAmount: number; shareRatio: number }
@@ -88,25 +94,6 @@ type StaffSalaryData = {
     missing_advance_expense_count: number
     orphan_advance_expense_count: number
   }
-}
-
-function getSalarySlotRange(payDate: string, slot: 'first' | 'second') {
-  const [yearRaw, monthRaw] = String(payDate || '').split('-')
-  const year = Number(yearRaw)
-  const month = Number(monthRaw)
-  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) return null
-  const mm = String(month).padStart(2, '0')
-  if (slot === 'first') return { from: `${year}-${mm}-01`, to: `${year}-${mm}-15` }
-  const endDay = new Date(Date.UTC(year, month, 0)).getUTCDate()
-  return { from: `${year}-${mm}-16`, to: `${year}-${mm}-${String(endDay).padStart(2, '0')}` }
-}
-
-function getStaffPaymentAdjustmentPeriod(payDate: string, slot: 'first' | 'second') {
-  const slotRange = getSalarySlotRange(payDate, slot)
-  if (!slotRange) return null
-  const payDateValue = String(payDate || '')
-  const cutoff = /^\d{4}-\d{2}-\d{2}$/.test(payDateValue) ? payDateValue : slotRange.to
-  return { from: slotRange.from, to: cutoff }
 }
 
 function monthPrefixFromIsoDate(isoDate: string) {
@@ -215,54 +202,6 @@ function getStaffPaymentGeneratedAdjustments(params: {
       String(adj.comment || '').includes(`Переплата по выплате ${paymentDate}`)
     )
   })
-}
-
-function filterStaffAdjustmentsForSlot(
-  adjs: StaffAdjustment[],
-  staffId: string,
-  payments: StaffPayment[],
-  period?: { from: string; to: string } | null,
-) {
-  const periodEnd = period?.to || '9999-12-31'
-  const lastPayment =
-    payments
-      .filter((p) => p.staff_id === staffId && String(p.pay_date || '') <= periodEnd)
-      .sort((a, b) => {
-        const byDate = String(b.pay_date || '').localeCompare(String(a.pay_date || ''))
-        if (byDate !== 0) return byDate
-        return String(b.created_at || '').localeCompare(String(a.created_at || ''))
-      })[0] || null
-
-  return adjs.filter((a) => {
-    if (a.staff_id !== staffId || a.status !== 'active') return false
-    if (!period) return true
-    if (a.date > periodEnd) return false
-    if (!lastPayment) return true
-    const lastPayDate = String(lastPayment.pay_date || '')
-    if (a.date < lastPayDate) return false
-    if (a.date > lastPayDate) return true
-    if (a.created_at && lastPayment.created_at) {
-      return String(a.created_at) > String(lastPayment.created_at)
-    }
-    if (a.created_at && !lastPayment.created_at) return true
-    if (!a.created_at && lastPayment.created_at) return false
-    return true
-  })
-}
-
-function calcStaffToPay(
-  s: StaffMember,
-  adjs: StaffAdjustment[],
-  payments: StaffPayment[],
-  period?: { from: string; to: string } | null,
-) {
-  const active = filterStaffAdjustmentsForSlot(adjs, s.id, payments, period)
-  const half = Math.round(s.monthly_salary / 2)
-  const bonuses = active.filter(a => a.kind === 'bonus').reduce((sum, a) => sum + a.amount, 0)
-  const debts = active.filter(a => a.kind === 'debt').reduce((sum, a) => sum + a.amount, 0)
-  const fines = active.filter(a => a.kind === 'fine').reduce((sum, a) => sum + a.amount, 0)
-  const advances = active.filter(a => a.kind === 'advance').reduce((sum, a) => sum + a.amount, 0)
-  return { half, bonuses, debts, fines, advances, toPay: half + bonuses - debts - fines - advances }
 }
 
 function staffAdjustmentKindLabel(kind: StaffAdjustment['kind']) {
@@ -1811,11 +1750,11 @@ export default function SalaryPage() {
                   </div>
                 ))}
               </div>
-            ) : !staffSalary || staffSalary.staff.length === 0 ? (
+            ) : !staffSalary || (staffSalary.staff || []).length === 0 ? (
               <div className="p-10 text-center text-sm text-slate-500">Нет административных сотрудников. Добавьте записи в таблицу <code className="rounded bg-surface-hover px-1">staff</code>.</div>
             ) : (
               <div className="divide-y divide-slate-200 dark:divide-white/5">
-                {staffSalary.staff.map((s) => {
+                {(staffSalary.staff || []).map((s) => {
                   const calc = calcStaffToPay(s, staffSalary.adjustments, staffSalary.payments, currentStaffSalaryPeriod)
                   const activeAdjs = filterStaffAdjustmentsForSlot(
                     staffSalary.adjustments,

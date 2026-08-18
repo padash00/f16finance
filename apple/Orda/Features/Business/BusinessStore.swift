@@ -54,6 +54,15 @@ final class BusinessStore {
         }
     }
 
+    /// Админ-состав: оклад пополам за текущую половину месяца.
+    ///
+    /// Живёт рядом с недельной ведомостью, но грузится отдельно: без права
+    /// «Смотреть зарплату» сервер вернёт одну строку — свою, и экран покажет
+    /// её вместо ведомости.
+    private(set) var staffSalary: StaffSalarySummary?
+    private(set) var isLoadingStaffSalary = false
+    private(set) var staffSalaryError: APIError?
+
     private(set) var report: ReportAggregate?
     private(set) var isLoadingReport = false
     private(set) var reportError: APIError?
@@ -577,6 +586,19 @@ final class BusinessStore {
             salaryError = error
         } catch {
             salaryError = .transport(message: error.localizedDescription)
+        }
+    }
+
+    func loadStaffSalary() async {
+        isLoadingStaffSalary = true
+        defer { isLoadingStaffSalary = false }
+        do {
+            staffSalary = try await service.staffSalary()
+            staffSalaryError = nil
+        } catch let error as APIError {
+            staffSalaryError = error
+        } catch {
+            staffSalaryError = .transport(message: error.localizedDescription)
         }
     }
 

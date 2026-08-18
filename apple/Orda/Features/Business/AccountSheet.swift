@@ -25,6 +25,7 @@ struct AccountSheet: View {
             ScreenScroll {
                 VStack(spacing: Spacing.lg) {
                     identityCard
+                    MySalaryCard()
                     MyContactsCard()
                     NotificationsCard()
                     AppearancePicker()
@@ -219,6 +220,87 @@ struct AccountSheet: View {
 ///
 /// Имя, должность и ставка показаны, но не правятся: на них считается зарплата
 /// и строится подчинение, и менять их о себе — значит ломать учёт.
+/// Своя зарплата — в своём аккаунте.
+///
+/// Право «Смотреть зарплату» открывает ведомость всей организации, и владелец
+/// справедливо снимает его с обычного сотрудника. Но человек остаётся с
+/// вопросом «сколько мне придёт 15-го» и идёт с ним к владельцу. Оператор
+/// свою неделю видит сам — окладный сотрудник теперь тоже видит свою половину
+/// месяца, и только свою: сервер отдаёт ему одну строку.
+///
+/// Карточка молча исчезает, когда показывать нечего: у оператора и у
+/// суперадмина строки в `staff` нет вовсе.
+struct MySalaryCard: View {
+    @Environment(\.api) private var api
+
+    @State private var row: StaffSalaryRow?
+    @State private var slot: String = "first"
+    @State private var didLoad = false
+
+    var body: some View {
+        Group {
+            if let row {
+                Card {
+                    VStack(alignment: .leading, spacing: Spacing.md) {
+                        SectionHeader(
+                            "Моя зарплата",
+                            subtitle: slot == "first" ? "выплата до 15-го" : "выплата после 15-го"
+                        )
+
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(Money.format(row.toPay))
+                                .font(Typography.title)
+                                .monospacedDigit()
+                                .foregroundStyle(Theme.text)
+                            Text("к выплате")
+                                .font(Typography.caption)
+                                .foregroundStyle(Theme.textMuted)
+                        }
+
+                        // Из чего вышла сумма. Спорят обычно не о полутора
+                        // окладах, а о вычетах, — их и показываем поимённо.
+                        StatRow("Половина оклада", value: Money.format(row.half), icon: "banknote")
+                        if row.bonuses > 0.01 {
+                            StatRow("Бонусы", value: Money.signed(row.bonuses), valueColor: Theme.positive, icon: "gift")
+                        }
+                        if row.fines > 0.01 {
+                            StatRow("Штрафы", value: Money.signed(-row.fines), valueColor: Theme.negative, icon: "exclamationmark.triangle")
+                        }
+                        if row.debts > 0.01 {
+                            StatRow("Долги", value: Money.signed(-row.debts), valueColor: Theme.negative, icon: "creditcard")
+                        }
+                        if row.advances > 0.01 {
+                            StatRow("Авансы", value: Money.signed(-row.advances), valueColor: Theme.warning, icon: "arrow.down.circle")
+                        }
+                        if row.paidThisMonth > 0.01 {
+                            RowDivider()
+                            StatRow("Выплачено в этом месяце", value: Money.format(row.paidThisMonth), icon: "checkmark.circle")
+                        }
+                        if row.monthClosed {
+                            Text("Обе выплаты месяца проведены — следующая в следующем месяце.")
+                                .font(Typography.caption)
+                                .foregroundStyle(Theme.textDim)
+                        }
+                    }
+                }
+            }
+        }
+        .task {
+            guard !didLoad else { return }
+            didLoad = true
+            await load()
+        }
+    }
+
+    private func load() async {
+        // Ошибку не показываем: у оператора и суперадмина ответа тут и не
+        // должно быть, а лишняя красная строка в аккаунте пугает зря.
+        guard let summary = try? await BusinessService(api: api).staffSalary() else { return }
+        slot = summary.slot
+        row = summary.rows.first(where: \.isMe) ?? (summary.selfOnly ? summary.rows.first : nil)
+    }
+}
+
 struct MyContactsCard: View {
     @Environment(\.api) private var api
 
