@@ -9,10 +9,17 @@ import SwiftUI
 /// пароль выдаёт владелец — сбросить его самому нельзя, и делать вид, что
 /// можно, значит гонять человека по кругу.
 struct LoginHelpSheet: View {
+    /// Что человек уже набрал на экране входа: почту подставим в сброс, чтобы
+    /// не набирать её второй раз с телефона.
+    var enteredLogin: String = ""
+
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
 
     private let configuration = AppConfiguration.current
+
+    /// Открыт лист смены пароля.
+    @State private var resetting = false
 
     var body: some View {
         NavigationStack {
@@ -21,19 +28,27 @@ struct LoginHelpSheet: View {
                     VStack(alignment: .leading, spacing: Spacing.md) {
                         SectionHeader("Сотрудник офиса", subtitle: "Вход по рабочей почте")
 
-                        Text("Пароль восстанавливается на сайте: откройте вход и нажмите «Восстановить пароль» — письмо придёт на рабочую почту.")
+                        Text("Пришлём код на рабочую почту — и пароль сменится прямо здесь, без браузера.")
                             .font(Typography.callout)
                             .foregroundStyle(Theme.textDim)
                             .fixedSize(horizontal: false, vertical: true)
 
-                        // Прямо на страницу восстановления, а не на главную:
-                        // человек и так не может войти, а искать нужную кнопку
-                        // на сайте с телефона — лишний шаг там, где он уже
-                        // раздражён.
+                        // Сброс идёт здесь же, а не в браузере: человек уже не
+                        // может войти, и отправлять его на сайт — четыре
+                        // перехода там, где он и так раздражён.
+                        Button {
+                            resetting = true
+                        } label: {
+                            Label("Сменить пароль", systemImage: "key")
+                        }
+                        .buttonStyle(PrimaryButtonStyle())
+
+                        // Сайт оставляем запасным путём: если письмо пришло со
+                        // ссылкой вместо кода, она работает.
                         Button {
                             openURL(configuration.apiBaseURL.appending(path: "forgot-password"))
                         } label: {
-                            Label("Восстановить пароль", systemImage: "key")
+                            Label("Открыть на сайте", systemImage: "safari")
                         }
                         .buttonStyle(SecondaryButtonStyle())
                     }
@@ -88,6 +103,9 @@ struct LoginHelpSheet: View {
                 }
             }
             .navigationTitle("Не получается войти")
+            .sheet(isPresented: $resetting) {
+                PasswordResetSheet(initialEmail: enteredLogin.contains("@") ? enteredLogin : "")
+            }
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif

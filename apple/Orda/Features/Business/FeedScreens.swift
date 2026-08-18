@@ -1085,6 +1085,8 @@ struct TeamChatScreen: View {
 
     /// Кого открыли по имени в чате.
     @State private var person: ChatPerson?
+    /// Ленту уже довели до последнего сообщения при открытии.
+    @State private var didPinToBottom = false
 
     @Environment(\.access) private var access
 
@@ -1354,6 +1356,18 @@ struct TeamChatScreen: View {
             .onChange(of: store.lastMessageID) { _, id in
                 guard let id else { return }
                 withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(id, anchor: .bottom) }
+            }
+            // Одного якоря ленивой ленте мало: на первом кадревысота ячеек
+            // ещё неизвестна, и чат открывался пустотой — сообщения лежали
+            // ниже экрана, и их находили, только листая вниз.
+            .task(id: store.visible.last?.id) {
+                guard !didPinToBottom, let id = store.visible.last?.id else { return }
+                proxy.scrollTo(id, anchor: .bottom)
+                // Второй проход — когда ленивые ячейки уложились и высота
+                // ленты стала настоящей.
+                try? await Task.sleep(for: .milliseconds(150))
+                proxy.scrollTo(id, anchor: .bottom)
+                didPinToBottom = true
             }
         }
     }
@@ -1875,6 +1889,8 @@ private struct ThreadRow: View {
 
 struct ConversationPane: View {
     /// Открыта ли карточка собеседника.
+    /// Переписку уже довели до последнего сообщения при открытии.
+    @State private var didPinToBottom = false
     @State private var showingPerson = false
 
     let thread: DirectThread
@@ -1949,6 +1965,15 @@ struct ConversationPane: View {
                     .onChange(of: store.lastMessageID) { _, id in
                         guard let id else { return }
                         withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(id, anchor: .bottom) }
+                    }
+                    // Тот же довод, что и в командном чате: ленивая лента на
+                    // первом кадре не знает своей высоты, и якоря не хватает.
+                    .task(id: store.conversation.last?.id) {
+                        guard !didPinToBottom, let id = store.conversation.last?.id else { return }
+                        proxy.scrollTo(id, anchor: .bottom)
+                        try? await Task.sleep(for: .milliseconds(150))
+                        proxy.scrollTo(id, anchor: .bottom)
+                        didPinToBottom = true
                     }
                 }
             }

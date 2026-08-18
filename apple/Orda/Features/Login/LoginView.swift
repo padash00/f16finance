@@ -164,7 +164,7 @@ struct LoginView: View {
         // вырезанной из другого приложения.
         .environment(\.colorScheme, .dark)
         .animation(Motion.value, value: auth.signInError)
-        .sheet(isPresented: $showingHelp) { LoginHelpSheet() }
+        .sheet(isPresented: $showingHelp) { LoginHelpSheet(enteredLogin: login) }
     }
 
     /// Широкий экран — две колонки, узкий — одна.

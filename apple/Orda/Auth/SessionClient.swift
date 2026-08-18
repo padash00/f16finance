@@ -98,6 +98,65 @@ struct SessionClient: Sendable {
         try await post(body: ["action": "refresh", "refresh_token": refreshToken])
     }
 
+    // ── Сброс пароля ─────────────────────────────────────────────────────────
+    //
+    // Целиком здесь, без ухода на сайт: пароль просят тогда, когда он нужен
+    // прямо сейчас, а четыре перехода в браузер и обратно теряют половину
+    // людей на середине.
+
+    /// Попросить письмо с кодом. Ответ одинаковый и для заведённой почты, и
+    /// для незаведённой — сервер намеренно не говорит, кто есть в компании.
+    func requestPasswordReset(email: String) async throws {
+        try await postWithoutSession(body: [
+            "action": "request",
+            "email": email.trimmingCharacters(in: .whitespacesAndNewlines),
+        ])
+    }
+
+    /// Поставить новый пароль по коду из письма.
+    func confirmPasswordReset(email: String, code: String, password: String) async throws {
+        try await postWithoutSession(body: [
+            "action": "confirm",
+            "email": email.trimmingCharacters(in: .whitespacesAndNewlines),
+            "code": code.trimmingCharacters(in: .whitespacesAndNewlines),
+            "password": password,
+        ])
+    }
+
+    /// Запрос без сессии в ответе: важен только исход и текст ошибки.
+    private func postWithoutSession(body: [String: String]) async throws {
+        var request = URLRequest(url: baseURL.appending(path: "api/auth/password-reset"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await urlSession.data(for: request)
+        } catch {
+            throw AuthError.network(error.localizedDescription)
+        }
+
+        guard let http = response as? HTTPURLResponse else {
+            throw AuthError.server("Некорректный ответ сервера")
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            let payload = try? JSONDecoder().decode(ErrorResponse.self, from: data)
+            switch http.statusCode {
+            case 404:
+                throw AuthError.endpointMissing
+            case 429:
+                throw AuthError.rateLimited
+            case 503:
+                throw AuthError.notConfigured
+            default:
+                throw AuthError.server(payload?.message ?? payload?.error ?? "Не удалось сбросить пароль")
+            }
+        }
+    }
+
     private func post(body: [String: String]) async throws -> Session {
         var request = URLRequest(url: baseURL.appending(path: "api/auth/mobile-session"))
         request.httpMethod = "POST"
