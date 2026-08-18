@@ -246,6 +246,13 @@ final class PushManager {
     func sendTest() async -> String {
         guard let api else { return "Приложение ещё не готово, попробуйте через секунду." }
 
+        // Симулятору Apple адрес для уведомлений не выдаёт вовсе — сколько ни
+        // разрешай. Без этой оговорки честный ответ сервера «устройств нет»
+        // читается как поломка, и её начинают чинить там, где всё исправно.
+        #if targetEnvironment(simulator)
+        return "Это симулятор — Apple не выдаёт ему адрес для уведомлений. Проверьте на настоящем телефоне со сборкой из TestFlight."
+        #else
+
         // Сначала разрешение: без него уведомление уйдёт и не покажется, а
         // человек решит, что сломан сервер.
         await refreshStatus()
@@ -276,6 +283,7 @@ final class PushManager {
         } catch {
             return error.localizedDescription
         }
+        #endif
     }
 
     private var platformName: String {
