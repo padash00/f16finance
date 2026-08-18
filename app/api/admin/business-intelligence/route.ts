@@ -6,6 +6,7 @@ import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { requireAddon } from '@/lib/server/entitlements'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { requireCapability } from '@/lib/server/capabilities'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -22,6 +23,13 @@ export async function GET(request: Request) {
     const addonDenied = await requireAddon(access, 'addon.ai')
     if (addonDenied) return addonDenied
     if (!canView(access)) return json({ error: 'forbidden' }, 403)
+
+    // Разбор бизнеса — это выручка, расходы и поведение точек в одном ответе.
+    // Своей страницы в каталоге прав у раздела нет, поэтому берём право
+    // аналитики: заводить новое имя ради одного маршрута — плодить каталог,
+    // а показывать разбор любому вошедшему сотруднику нельзя.
+    const denied = await requireCapability(access, 'analytics.view')
+    if (denied) return denied as any
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
 

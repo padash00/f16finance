@@ -47,6 +47,10 @@ const CHECKS = new RegExp(
     'resolveStoreKpiContext\\(',
     'requirePlatformAccess\\(',
     'isOwnerActor\\(',
+    // Выдача может не закрываться целиком, а собираться по кускам: каждый блок
+    // добавляется, только если право есть. Так сделаны уведомления, и это
+    // лучше общей проверки — человек видит свою часть, а не отказ целиком.
+    'hasCapability\\(',
   ].join('|'),
 )
 const openReads = []
