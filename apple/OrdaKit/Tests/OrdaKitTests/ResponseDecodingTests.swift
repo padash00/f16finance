@@ -711,3 +711,72 @@ struct ChecklistOutboxTests {
         #expect(await outbox.pending().isEmpty)
     }
 }
+
+/// Очередь файлов, не ушедших из-за связи.
+///
+/// Фото поломки снимают в подсобке, где сети нет. Файл весит мегабайты и
+/// живёт на диске — значит за ним надо убирать, иначе память телефона молча
+/// заканчивается.
+@Suite("Файлы без связи")
+struct AttachmentOutboxTests {
+    private func makeOutbox() -> AttachmentOutbox {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("orda-attachments-\(UUID().uuidString)", isDirectory: true)
+        return AttachmentOutbox(directory: directory)
+    }
+
+    private func item(scope: AttachmentOutbox.Item.Scope = .teamChat, to userID: String? = nil) -> AttachmentOutbox.Item {
+        AttachmentOutbox.Item(
+            scope: scope,
+            recipientUserID: userID,
+            fileName: "photo.jpg",
+            mimeType: "image/jpeg",
+            kind: "photo",
+            caption: "Сломан монитор 803"
+        )
+    }
+
+    @Test("Файл и подпись переживают выгрузку приложения")
+    func survivesRestart() async {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("orda-attachments-\(UUID().uuidString)", isDirectory: true)
+
+        let first = AttachmentOutbox(directory: directory)
+        let entry = item()
+        await first.add(entry, data: Data([0x01, 0x02, 0x03]))
+
+        let second = AttachmentOutbox(directory: directory)
+        let pending = await second.pending()
+
+        #expect(pending.count == 1)
+        #expect(pending.first?.caption == "Сломан монитор 803")
+        #expect(await second.data(for: entry.id)?.count == 3)
+    }
+
+    @Test("Отправленный файл удаляется с диска")
+    func removesFile() async {
+        let outbox = makeOutbox()
+        let entry = item()
+
+        await outbox.add(entry, data: Data([0x09]))
+        await outbox.remove(id: entry.id)
+
+        #expect(await outbox.pending().isEmpty)
+        // Иначе снимки копятся в памяти телефона и никто об этом не узнает.
+        #expect(await outbox.data(for: entry.id) == nil)
+    }
+
+    @Test("Чат и личная переписка не путаются")
+    func separatesScopes() async {
+        let outbox = makeOutbox()
+
+        await outbox.add(item(scope: .teamChat), data: Data([0x01]))
+        await outbox.add(item(scope: .direct, to: "u-1"), data: Data([0x02]))
+
+        let pending = await outbox.pending()
+        #expect(pending.filter { $0.scope == .teamChat }.count == 1)
+        // У личного файла обязателен адресат: без него отправлять некуда.
+        let direct = try? #require(pending.first { $0.scope == .direct })
+        #expect(direct?.recipientUserID == "u-1")
+    }
+}

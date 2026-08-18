@@ -949,8 +949,27 @@ final class TeamChatStore {
             )
             try await service.sendTeamMessage(caption, attachments: [uploaded])
             await load()
+            await flushAttachments()
             return nil
         } catch let e as APIError {
+            if case .transport = e {
+                // Снимают ровно там, где связи нет: подсобка, склад. Файл
+                // кладём на диск и отправим сами — потерять фото поломки
+                // хуже, чем потерять текст.
+                await attachments.add(
+                    AttachmentOutbox.Item(
+                        scope: .teamChat,
+                        fileName: fileName,
+                        mimeType: mimeType,
+                        kind: kind,
+                        caption: caption
+                    ),
+                    data: data
+                )
+                await refreshUndeliveredAttachments()
+                sendError = "Нет связи. Файл сохранён и уйдёт сам."
+                return nil
+            }
             sendError = e.userMessage
             return e.userMessage
         } catch {
@@ -961,6 +980,45 @@ final class TeamChatStore {
 
     /// Что не ушло из-за связи. Ждёт своей очереди, а не теряется.
     private(set) var undelivered: [String] = []
+
+    /// Файлы, не ушедшие из-за связи.
+    private let attachments = AttachmentOutbox()
+    private(set) var undeliveredAttachments: [AttachmentOutbox.Item] = []
+
+    func refreshUndeliveredAttachments() async {
+        undeliveredAttachments = await attachments.pending().filter { $0.scope == .teamChat }
+    }
+
+    /// Дослать файлы. Порядок тот же, что у текста: сначала старые.
+    func flushAttachments() async {
+        let queue = await attachments.pending().filter { $0.scope == .teamChat }
+        guard !queue.isEmpty else { return }
+
+        for item in queue {
+            guard let data = await attachments.data(for: item.id) else {
+                // Файла нет — запись бессмысленна, иначе она будет вечно
+                // пытаться отправить пустоту.
+                await attachments.remove(id: item.id)
+                continue
+            }
+
+            do {
+                let uploaded = try await service.upload(
+                    data: data,
+                    fileName: item.fileName,
+                    mimeType: item.mimeType,
+                    kind: item.kind
+                )
+                try await service.sendTeamMessage(item.caption, attachments: [uploaded])
+                await attachments.remove(id: item.id)
+            } catch {
+                break
+            }
+        }
+
+        await refreshUndeliveredAttachments()
+        await load()
+    }
 
     /// Отправка без ожидания.
     ///
@@ -1086,6 +1144,18 @@ struct TeamChatScreen: View {
                             .foregroundStyle(Theme.textMuted)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+
+                if !store.undeliveredAttachments.isEmpty {
+                    Label(
+                        "\(store.undeliveredAttachments.count) \(pluralize(store.undeliveredAttachments.count, "файл ждёт", "файла ждут", "файлов ждут")) связи",
+                        systemImage: "photo.badge.arrow.down"
+                    )
+                    .font(Typography.caption)
+                    .foregroundStyle(Theme.warning)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, Spacing.lg)
+                    .padding(.vertical, Spacing.xs)
                 }
 
                 if !store.undelivered.isEmpty {
@@ -1217,8 +1287,9 @@ struct TeamChatScreen: View {
                 if Task.isCancelled { return }
                 await store?.refresh()
                 // Связь есть, раз лента обновилась: самое время дослать то,
-                // что не ушло.
+                // что не ушло, — и текст, и файлы.
                 await store?.flushUndelivered()
+                await store?.flushAttachments()
             }
         }
     }
@@ -1513,8 +1584,25 @@ final class MessagesStore {
             try await service.sendDirect(to: userID, text: "", attachments: [uploaded])
             await open(userID)
             await load()
+            await flushAttachments()
             return nil
         } catch let e as APIError {
+            if case .transport = e {
+                await attachments.add(
+                    AttachmentOutbox.Item(
+                        scope: .direct,
+                        recipientUserID: userID,
+                        fileName: fileName,
+                        mimeType: mimeType,
+                        kind: kind,
+                        caption: ""
+                    ),
+                    data: data
+                )
+                await refreshUndeliveredAttachments()
+                sendError = "Нет связи. Файл сохранён и уйдёт сам."
+                return nil
+            }
             sendError = e.userMessage
             return e.userMessage
         } catch {
@@ -1525,6 +1613,43 @@ final class MessagesStore {
 
     /// Что не ушло из-за связи: кому и что. Ждёт своей очереди.
     private(set) var undelivered: [(userID: String, text: String)] = []
+
+    /// Файлы, не ушедшие из-за связи.
+    private let attachments = AttachmentOutbox()
+    private(set) var undeliveredAttachments: [AttachmentOutbox.Item] = []
+
+    func refreshUndeliveredAttachments() async {
+        undeliveredAttachments = await attachments.pending().filter { $0.scope == .direct }
+    }
+
+    func flushAttachments() async {
+        let queue = await attachments.pending().filter { $0.scope == .direct }
+        guard !queue.isEmpty else { return }
+
+        for item in queue {
+            guard let userID = item.recipientUserID, let data = await attachments.data(for: item.id) else {
+                await attachments.remove(id: item.id)
+                continue
+            }
+
+            do {
+                let uploaded = try await service.upload(
+                    data: data,
+                    fileName: item.fileName,
+                    mimeType: item.mimeType,
+                    kind: item.kind
+                )
+                try await service.sendDirect(to: userID, text: "", attachments: [uploaded])
+                await attachments.remove(id: item.id)
+            } catch {
+                break
+            }
+        }
+
+        await refreshUndeliveredAttachments()
+        if let openedUserID { await open(openedUserID) }
+        await load()
+    }
 
     /// Дослать застрявшее — по порядку, чтобы разговор не рассыпался.
     func flushUndelivered() async {
@@ -2000,6 +2125,7 @@ struct ConversationPane: View {
                 if Task.isCancelled { return }
                 await store.refreshConversation(thread.otherUserID)
                 await store.flushUndelivered()
+                await store.flushAttachments()
             }
         }
     }
