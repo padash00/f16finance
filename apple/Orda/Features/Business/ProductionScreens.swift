@@ -1116,15 +1116,37 @@ private struct PurchaseOrderDetailView: View {
     let order: PurchaseOrder
     let store: PurchaseOrdersStore
 
+    @Environment(\.api) private var api
+    @Environment(\.access) private var access
+
+    @State private var isBusy = false
+    @State private var error: String?
+    @State private var cancelling = false
+    @State private var cancelReason = ""
+
+    /// Права те же, что проверяет сервер: отмена отдельно от правки.
+    private var canEdit: Bool { access?.can("store-purchase-orders.edit") ?? false }
+    private var canCancel: Bool { access?.can("store-purchase-orders.cancel") ?? false }
+
     var body: some View {
         let full = store.details[order.id] ?? order
 
         ScreenScroll {
             VStack(spacing: Spacing.lg) {
                 header(full)
+                actions(full)
                 contacts(full)
                 composition(full)
             }
+        }
+        .alert("Отменить заявку?", isPresented: $cancelling) {
+            TextField("Причина", text: $cancelReason)
+            Button("Отменить заявку", role: .destructive) {
+                Task { await change(to: "cancelled", reason: cancelReason) }
+            }
+            Button("Не надо", role: .cancel) {}
+        } message: {
+            Text("Поставщик её не повезёт. Причина попадёт в карточку — по ней потом разбираются, почему товара нет.")
         }
         .background(Theme.background)
         .navigationTitle("Заявка")
@@ -1132,6 +1154,89 @@ private struct PurchaseOrderDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .task(id: order.id) { await store.loadDetail(order.id) }
+    }
+
+    /// Что можно сделать с заявкой сейчас.
+    ///
+    /// Показываем только переходы, которые сервер примет: отправить можно
+    /// черновик, отметить полученной — отправленную. Кнопка, отвечающая
+    /// отказом, хуже отсутствующей.
+    @ViewBuilder
+    private func actions(_ order: PurchaseOrder) -> some View {
+        if order.isDraft || order.isInTransit {
+            Card {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    if let error {
+                        Text(error)
+                            .font(Typography.caption)
+                            .foregroundStyle(Theme.negative)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    if order.isDraft, canEdit {
+                        Button {
+                            Task { await change(to: "sent") }
+                        } label: {
+                            if isBusy {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Label("Отправить поставщику", systemImage: "paperplane")
+                            }
+                        }
+                        .buttonStyle(PrimaryButtonStyle())
+                        .disabled(isBusy)
+                    }
+
+                    if order.isInTransit, canEdit {
+                        Button {
+                            Task { await change(to: "received") }
+                        } label: {
+                            if isBusy {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Label("Товар приехал", systemImage: "checkmark.circle")
+                            }
+                        }
+                        .buttonStyle(PrimaryButtonStyle())
+                        .disabled(isBusy)
+
+                        Text("Отметка «приехал» закрывает заявку. Саму приёмку с ценами оформляют документом.")
+                            .font(Typography.caption)
+                            .foregroundStyle(Theme.textMuted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    if canCancel {
+                        Button { cancelling = true } label: {
+                            Label("Отменить заявку", systemImage: "xmark.circle")
+                        }
+                        .buttonStyle(SecondaryButtonStyle())
+                        .disabled(isBusy)
+                    }
+                }
+            }
+        }
+    }
+
+    private func change(to status: String, reason: String? = nil) async {
+        isBusy = true
+        error = nil
+        defer { isBusy = false }
+
+        do {
+            try await PurchaseOrdersService(api: api).changeStatus(
+                id: order.id,
+                status: status,
+                cancelReason: reason?.trimmingCharacters(in: .whitespaces)
+            )
+            cancelReason = ""
+            await store.load()
+            await store.loadDetail(order.id)
+        } catch let apiError as APIError {
+            error = apiError.userMessage
+        } catch {
+            self.error = error.localizedDescription
+        }
     }
 
     private func header(_ full: PurchaseOrder) -> some View {

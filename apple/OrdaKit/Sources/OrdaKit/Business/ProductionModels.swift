@@ -1259,6 +1259,25 @@ public struct PurchaseOrdersService: Sendable {
         )
     }
 
+    /// Перевести заявку в другое состояние.
+    ///
+    /// Три перехода: отправить поставщику, отметить полученной, отменить. Это
+    /// не «правка статуса», а разные события: отправленную ждут, полученная
+    /// закрывает потребность, отменённую поставщик не повезёт. Причина нужна
+    /// только отмене — по ней потом и разбираются, почему товара нет.
+    public func changeStatus(id: String, status: String, cancelReason: String? = nil) async throws {
+        var body: [String: Any] = ["status": status]
+        if let cancelReason, !cancelReason.isEmpty { body["cancel_reason"] = cancelReason }
+
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/store/purchase-orders/\(id)",
+                method: .patch,
+                body: try JSONSerialization.data(withJSONObject: body)
+            )
+        )
+    }
+
     /// Карточка заявки: состав и контакты поставщика. В списке их нет.
     public func order(id: String) async throws -> PurchaseOrder {
         let response: Envelope<PurchaseOrderPayload> = try await api.send(
