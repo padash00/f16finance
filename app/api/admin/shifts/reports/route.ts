@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
@@ -200,5 +201,120 @@ export async function GET(request: Request) {
       { error: 'admin-shifts-reports-failed', detail: (error as any)?.message || String(error) },
       500,
     )
+  }
+}
+
+/**
+ * Переоткрыть закрытую смену.
+ *
+ * Смену закрывают в конце суток, уставшими, и ошибаются: не та сумма в кассе,
+ * забытый чек, перепутанный Kaspi. Сейчас исправить это нечем — закрытая смена
+ * не редактируется, и точка живёт с неверными цифрами, пока владелец не
+ * перебьёт их вручную мимо системы.
+ *
+ * Три ограничения, без которых переоткрытие опаснее ошибки:
+ *
+ * 1. Только последняя закрытая смена точки. Открыть позавчерашнюю значит
+ *    разъехаться с уже посчитанной зарплатой и сданной выручкой.
+ * 2. Только в течение суток после закрытия. Дальше цифры ушли в отчёты, и
+ *    правка должна идти через них, а не тайком.
+ * 3. Только если на точке нет другой открытой смены: две открытые смены — это
+ *    касса, в которой продажи попадут неизвестно куда.
+ *
+ * Причина обязательна и уходит в журнал: переоткрытие меняет деньги, и через
+ * месяц должно быть видно, кто и зачем это сделал.
+ */
+export async function POST(request: Request) {
+  try {
+    const access = await getRequestAccessContext(request)
+    if ('response' in access) return access.response
+
+    const denied = await requireCapability(access, 'shifts-reports.reopen')
+    if (denied) return denied
+
+    const body = (await request.json().catch(() => null)) as { shiftId?: string; reason?: string } | null
+    const shiftId = String(body?.shiftId || '').trim()
+    const reason = String(body?.reason || '').trim()
+
+    if (!shiftId) return json({ error: 'shiftId обязателен' }, 400)
+    if (reason.length < 3) return json({ error: 'Укажите причину переоткрытия' }, 400)
+
+    const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
+
+    const { data: shift, error: shiftError } = await supabase
+      .from('point_shifts')
+      .select('id, company_id, status, closed_at')
+      .eq('id', shiftId)
+      .maybeSingle()
+
+    if (shiftError) throw shiftError
+    if (!shift) return json({ error: 'Смена не найдена' }, 404)
+
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+    if (companyScope.allowedCompanyIds && !companyScope.allowedCompanyIds.includes(String((shift as any).company_id))) {
+      return json({ error: 'forbidden' }, 403)
+    }
+
+    if ((shift as any).status !== 'closed') {
+      return json({ error: 'Смена не закрыта', code: 'shift-not-closed' }, 409)
+    }
+
+    const closedAt = (shift as any).closed_at ? new Date((shift as any).closed_at) : null
+    if (!closedAt || Date.now() - closedAt.getTime() > 24 * 60 * 60 * 1000) {
+      return json(
+        {
+          error: 'Прошло больше суток с закрытия — правьте через отчёты, а не переоткрытием',
+          code: 'shift-too-old',
+        },
+        409,
+      )
+    }
+
+    const { data: newer } = await supabase
+      .from('point_shifts')
+      .select('id, status, closed_at')
+      .eq('company_id', (shift as any).company_id)
+      .neq('id', shiftId)
+      .order('opened_at', { ascending: false })
+      .limit(1)
+
+    const latest = ((newer as any[]) || [])[0]
+    if (latest?.status === 'open') {
+      return json({ error: 'На точке уже открыта смена', code: 'point-shift-already-open' }, 409)
+    }
+    if (latest?.closed_at && new Date(latest.closed_at).getTime() > closedAt.getTime()) {
+      return json(
+        { error: 'Это не последняя смена точки — переоткрывать можно только её', code: 'shift-not-latest' },
+        409,
+      )
+    }
+
+    const { error: updateError } = await supabase
+      .from('point_shifts')
+      .update({ status: 'open', closed_at: null })
+      .eq('id', shiftId)
+      .eq('status', 'closed')
+
+    if (updateError) throw updateError
+
+    await writeAuditLog(supabase, {
+      actorUserId: access.user?.id || null,
+      entityType: 'point-shift',
+      entityId: shiftId,
+      action: 'reopen',
+      payload: { company_id: (shift as any).company_id, reason, closed_at: (shift as any).closed_at },
+    })
+
+    return json({ ok: true })
+  } catch (error: any) {
+    await writeSystemErrorLogSafe({
+      scope: 'server',
+      area: 'api/admin/shifts/reports POST',
+      message: error?.message || 'reopen error',
+    })
+    return json({ error: 'reopen-failed' }, 500)
   }
 }

@@ -1121,6 +1121,23 @@ public struct BusinessService: Sendable {
         return response?.movements
     }
 
+    /// Переоткрыть закрытую смену.
+    ///
+    /// Сервер пускает только последнюю смену точки и только в течение суток
+    /// после закрытия: дальше цифры ушли в отчёты, и править их надо через
+    /// отчёты, а не тайком. Причина обязательна — переоткрытие меняет деньги.
+    public func reopenShift(id: String, reason: String) async throws {
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/shifts/reports",
+                method: .post,
+                body: try JSONSerialization.data(
+                    withJSONObject: ["shiftId": id, "reason": reason]
+                )
+            )
+        )
+    }
+
     /// Акты пересчёта: что считают сейчас и что уже провели.
     public func auditActs() async throws -> [RevisionAct] {
         let response: DataList<RevisionAct> = try await api.send(

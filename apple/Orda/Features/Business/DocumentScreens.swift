@@ -671,6 +671,25 @@ private struct ShiftReportRow: View {
 private struct ShiftReportDetail: View {
     let shift: ShiftReport
 
+    @Environment(\.api) private var api
+    @Environment(\.access) private var access
+    @Environment(BusinessStore.self) private var store
+
+    @State private var reopening = false
+    @State private var reason = ""
+    @State private var isBusy = false
+    @State private var error: String?
+
+    /// Право то же, что проверяет сервер.
+    private var canReopen: Bool { access?.can("shifts-reports.reopen") ?? false }
+
+    /// Переоткрыть можно только свежую закрытую смену. Правило то же, что на
+    /// сервере: показывать кнопку там, где придёт отказ, — обманывать.
+    private var isReopenable: Bool {
+        guard !shift.isOpen, let closed = shift.closedAt else { return false }
+        return Date().timeIntervalSince(closed) < 24 * 60 * 60
+    }
+
     var body: some View {
         ScreenScroll {
             VStack(spacing: Spacing.lg) {
@@ -701,6 +720,8 @@ private struct ShiftReportDetail: View {
                         }
                     }
                 }
+
+                reopenCard
 
                 DashboardGrid {
                     MetricTile(
@@ -754,12 +775,80 @@ private struct ShiftReportDetail: View {
                 }
             }
         }
+
+        .alert("Переоткрыть смену?", isPresented: $reopening) {
+            TextField("Причина", text: $reason)
+            Button("Переоткрыть") { Task { await reopen() } }
+            Button("Отмена", role: .cancel) {}
+        } message: {
+            Text("Смена снова станет открытой: в неё можно будет добавить чек и поправить кассу. Причина уйдёт в журнал.")
+        }
         .background(Theme.background)
         .navigationTitle("Смена")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
     }
+    /// Кнопка стоит внизу карточки смены, а не в панели: переоткрытие —
+    /// исключение, а не обычное действие, и место у него соответствующее.
+    @ViewBuilder
+    private var reopenCard: some View {
+        if canReopen, isReopenable {
+            Card(accent: Theme.warning) {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    Text("Ошиблись при закрытии?")
+                        .font(Typography.callout.weight(.medium))
+                        .foregroundStyle(Theme.text)
+                    Text("Смену можно переоткрыть в течение суток после закрытия — добавить забытый чек или поправить кассу. Дальше правки идут через отчёты.")
+                        .font(Typography.caption)
+                        .foregroundStyle(Theme.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    if let error {
+                        Text(error)
+                            .font(Typography.caption)
+                            .foregroundStyle(Theme.negative)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Button {
+                        reopening = true
+                    } label: {
+                        if isBusy {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Label("Переоткрыть смену", systemImage: "lock.open")
+                        }
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .disabled(isBusy)
+                }
+            }
+        }
+    }
+
+    private func reopen() async {
+        let trimmed = reason.trimmingCharacters(in: .whitespaces)
+        guard trimmed.count >= 3 else {
+            error = "Причина обязательна: через месяц по журналу должно быть понятно, зачем смену открыли заново."
+            return
+        }
+
+        isBusy = true
+        error = nil
+        defer { isBusy = false }
+
+        do {
+            try await BusinessService(api: api).reopenShift(id: shift.id, reason: trimmed)
+            reason = ""
+            await store.loadShiftReports()
+        } catch let apiError as APIError {
+            error = apiError.userMessage
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
 }
 
 // ── Дни рождения ─────────────────────────────────────────────────────────────
@@ -849,6 +938,8 @@ struct BirthdaysScreen: View {
             }
         }
     }
+
+
 }
 
 private struct BirthdayRow: View {
