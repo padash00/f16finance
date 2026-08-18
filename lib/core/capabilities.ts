@@ -274,6 +274,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         label: 'Витрина',
         capabilities: [
           { id: 'store-showcase.view', label: 'Просмотр витрины', severity: 'low' },
+          { id: 'store-showcase.edit', label: 'Корректировка остатков витрины', severity: 'high' },
           { id: 'store-showcase.move', label: 'Перенос со склада на витрину', severity: 'medium' },
           { id: 'store-showcase.return_to_warehouse', label: 'Возврат с витрины на склад', severity: 'medium' },
         ],

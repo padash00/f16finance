@@ -286,9 +286,11 @@ export async function POST(request: Request) {
 
     // ── setShowcase: установить точный остаток витрины (карандашик, как на складе) ──
     if (body.action === 'setShowcase') {
-      // Отдельного кода права на витрину нет — правка остатков закрыта тем же
-      // store-warehouse.edit, что и карандашик подсобки на складе.
-      const capDenied = await requireStaffCapability(access, 'store-warehouse.edit')
+      // Витрина и склад — разные люди и разная ответственность. Пересчитать
+      // витрину может старший кассир, стоя у полки; лезть в остатки склада ему
+      // незачем. Раньше оба действия закрывались одним складским правом, и
+      // выдать одно без другого было нельзя.
+      const capDenied = await requireStaffCapability(access, 'store-showcase.edit')
       if (capDenied) return capDenied
       const companyId = String(body.company_id || '').trim()
       if (!companyId) return json({ error: 'company-id-required' }, 400)

@@ -658,7 +658,7 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
                                 if (e.key === 'Escape') { setEditingSc(null); setEditScVal('') }
                               }}
                             />
-                            {can('store-warehouse.edit') && (
+                            {can('store-showcase.edit') && (
                             <button
                               onClick={() => void handleSetShowcase(b.item_id)}
                               disabled={savingSc}
@@ -771,7 +771,7 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
                                 if (e.key === 'Escape') { setEditingSc(null); setEditScVal('') }
                               }}
                             />
-                            {can('store-warehouse.edit') && (
+                            {can('store-showcase.edit') && (
                             <button
                               onClick={() => void handleSetShowcase(b.item_id)}
                               disabled={savingSc}

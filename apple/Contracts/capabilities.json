@@ -3,7 +3,7 @@
   "summary": {
     "groups": 9,
     "pages": 85,
-    "capabilities": 402
+    "capabilities": 403
   },
   "groups": [
     {
@@ -628,6 +628,13 @@
               "label": "Просмотр витрины",
               "description": null,
               "severity": "low",
+              "deps": []
+            },
+            {
+              "id": "store-showcase.edit",
+              "label": "Корректировка остатков витрины",
+              "description": null,
+              "severity": "high",
               "deps": []
             },
             {

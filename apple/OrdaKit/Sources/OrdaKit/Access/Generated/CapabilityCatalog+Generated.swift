@@ -235,6 +235,7 @@ extension CapabilityCatalog {
                     label: "Витрина",
                     capabilities: [
                         Capability(id: "store-showcase.view", label: "Просмотр витрины", description: nil, severity: .low, deps: []),
+                        Capability(id: "store-showcase.edit", label: "Корректировка остатков витрины", description: nil, severity: .high, deps: []),
                         Capability(id: "store-showcase.move", label: "Перенос со склада на витрину", description: nil, severity: .medium, deps: []),
                         Capability(id: "store-showcase.return_to_warehouse", label: "Возврат с витрины на склад", description: nil, severity: .medium, deps: []),
                     ]
