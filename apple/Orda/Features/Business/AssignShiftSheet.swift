@@ -24,6 +24,12 @@ struct AssignShiftSheet: View {
 
     @State private var shiftType = "day"
     @State private var operatorName = ""
+    @Environment(\.access) private var access
+
+    /// Освобождение смены закрыто отдельным правом — так же теперь считает и
+    /// сервер: снять человека со смены и поставить его туда это разные
+    /// решения. Показывать кнопку, которая ответит отказом, — обманывать.
+    private var canClear: Bool { access?.can("shifts.delete") ?? false }
     @State private var isSaving = false
     @State private var error: String?
 
@@ -117,7 +123,14 @@ struct AssignShiftSheet: View {
                     }
                 }
                 .buttonStyle(PrimaryButtonStyle())
-                .disabled(isSaving)
+                .disabled(isSaving || (operatorName.isEmpty && !canClear))
+
+                if operatorName.isEmpty, !canClear {
+                    Text("Снимать людей со смены может тот, кому выдано это право. Впишите имя, чтобы поставить человека.")
+                        .font(Typography.caption)
+                        .foregroundStyle(Theme.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
                 Text("График виден оператору после публикации недели — её делают на сайте.")
                     .font(Typography.caption)
