@@ -318,11 +318,19 @@ struct MySalaryCard: View {
                         }
                     }
                 }
-            } else if let missing {
+            } else {
+                // Пока не загрузили — карточка с заглушкой, а не пустота.
+                //
+                // Дело не в красоте: `Group`, у которого не отрисовалась ни
+                // одна ветка, схлопывается в `EmptyView`, а `.task` на
+                // `EmptyView` не выполняется вовсе. Карточка не показывалась,
+                // потому что запрос за зарплатой никогда не уходил, — и
+                // «объясняющая» строка про причину не спасала: её ветка тоже
+                // была пуста.
                 Card {
                     VStack(alignment: .leading, spacing: Spacing.sm) {
                         SectionHeader("Моя зарплата")
-                        Text(missing.text)
+                        Text(missing?.text ?? "Загружаем расчёт…")
                             .font(Typography.caption)
                             .foregroundStyle(Theme.textMuted)
                     }

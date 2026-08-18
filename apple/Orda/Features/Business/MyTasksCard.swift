@@ -63,14 +63,32 @@ struct MyTasksCard: View {
                         }
                     }
                 }
+            } else if !didLoad {
+                // Заглушка до первого ответа сервера — и она же держит
+                // загрузку: у `Group`, где не отрисовалась ни одна ветка,
+                // выходит `EmptyView`, а `.task` на нём не выполняется. Без
+                // этой ветки поручения не загружались никогда, и карточка
+                // «Мои задачи» не появлялась даже когда работа была.
+                Card {
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        SectionHeader("Мои задачи")
+                        Text("Загружаем поручения…")
+                            .font(Typography.caption)
+                            .foregroundStyle(Theme.textMuted)
+                    }
+                }
             }
         }
         .task {
             guard !didLoad else { return }
-            didLoad = true
             // Ошибку не показываем: у того, кому ничего не поручают, карточки
             // просто нет, и красная строка в профиле пугала бы зря.
+            //
+            // Отметку ставим после ответа, а не до: заглушка держит карточку в
+            // дереве, пока ответ идёт. Убери её раньше — SwiftUI выкинет вид и
+            // отменит сам запрос.
             tasks = (try? await BusinessService(api: api).myTasks()) ?? []
+            didLoad = true
         }
         .sheet(item: $answering) { task in
             MyTaskAnswerSheet(task: task) {
