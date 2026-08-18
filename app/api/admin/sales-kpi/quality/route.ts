@@ -21,6 +21,8 @@ import {
   resolveStoreKpiContext,
   todayISO,
 } from '@/lib/server/store-kpi'
+import { dispersionSummary, probabilityDiagnostics } from '@/lib/domain/store-kpi/probability'
+import { buildProbabilisticLayer } from '@/lib/server/store-kpi-probability'
 import {
   analyzeStoreKpi,
   cashierMixDeviations,
@@ -69,6 +71,25 @@ export async function GET(request: Request) {
       settings,
     })
     const diagnostics = retailDiagnostics(analysis.shifts)
+
+    // Диагностика вероятностной модели: на чём стоят её числа.
+    //
+    // Считается без чеков и без планов: здесь нужен не прогноз выручки, а
+    // ответ на вопрос «хватает ли данных модели» — а он виден и по спросу.
+    // Тянуть ради вкладки качества тысячи строк чеков было бы расточительно.
+    const probabilityLayer = buildProbabilisticLayer({
+      baselineFacts: facts.filter((f) => f.date < from),
+      targetFacts: periodFacts,
+      settings,
+      receipts: [],
+      plans: new Map(),
+    })
+    const modelDiagnostics = {
+      ...probabilityDiagnostics({ shifts: probabilityLayer.shifts }),
+      dispersion: dispersionSummary(probabilityLayer.shifts),
+      model_version: probabilityLayer.model_version,
+      performance: probabilityLayer.performance,
+    }
 
     // Структура продаж по категориям: в балл не входит, но часто объясняет
     // его. Считается за выбранный период, а не за всю историю.
@@ -132,6 +153,7 @@ export async function GET(request: Request) {
         flags: flags || [],
         events: events || [],
         diagnostics,
+        model_diagnostics: modelDiagnostics,
         category_mix: categoryShares(mix),
         cashier_mix: cashierMixDeviations(mix),
         monthly,

@@ -32,6 +32,7 @@ import {
   verdictsRu,
 } from '@/lib/server/store-kpi-ai'
 import { contextForShift, loadContextSources } from '@/lib/server/store-kpi-context'
+import { buildProbabilisticLayer } from '@/lib/server/store-kpi-probability'
 import { buildStoreKpiReport } from '@/lib/server/store-kpi-report'
 import {
   analyzeStoreKpi,
@@ -268,6 +269,45 @@ export async function POST(request: Request) {
     )
     const context = contextForShift(shiftAnalysis.fact, sources)
 
+    // Вероятностный прогноз, посчитанный детерминированно. Модель получает
+    // готовые числа и только пересказывает их человеческим языком: считать
+    // вероятности сама она не имеет права, и в промпте это прямо запрещено.
+    let probability: { спрос: string; допродажи: string } | null = null
+    try {
+      const layer = buildProbabilisticLayer({
+        baselineFacts,
+        targetFacts,
+        settings,
+        receipts: [],
+        plans: new Map(),
+      })
+      const row = layer.shifts[0]
+      if (row?.demand) {
+        const percent = row.fact_percentile === null ? null : Math.round(row.fact_percentile * 100)
+        probability = {
+          спрос:
+            `ожидалось ${Math.round(row.demand.expectedReceipts)} чеков, обычные границы ` +
+            `${Math.round(row.demand.interval80.low)}–${Math.round(row.demand.interval80.high)}` +
+            (percent === null
+              ? ''
+              : percent <= 15
+                ? `; фактический поток в нижних ${percent}% ожидаемого`
+                : percent >= 85
+                  ? `; фактический поток в верхних ${100 - percent}% ожидаемого`
+                  : '; фактический поток в обычных границах'),
+          допродажи:
+            row.attach && row.attach.observedRate !== null
+              ? row.attach.opportunities < 15
+                ? `чеков за смену всего ${row.attach.opportunities} — отличить работу продавца от везения нельзя`
+                : `вероятность, что продавец действительно выше нормы, ${Math.round(row.attach.probabilityAboveBaseline * 100)}%`
+              : 'нет данных',
+        }
+      }
+    } catch {
+      // Теневая модель молчит, если не посчиталась: разбор важнее её.
+      probability = null
+    }
+
     let cashierName: string | null = null
     if (shiftAnalysis.fact.cashier_id) {
       const { data: op } = await supabase
@@ -298,6 +338,9 @@ export async function POST(request: Request) {
         вывод: verdictRu(shiftAnalysis.verdict),
         сезон: shiftAnalysis.season === 'summer' ? 'лето' : 'учебный сезон',
         длительность_минут: shiftAnalysis.fact.duration_minutes,
+        ...(probability
+          ? { прогноз_спроса: probability.спрос, уверенность_в_допродажах: probability.допродажи }
+          : {}),
       },
       // Контекст отдельно от фактов смены: он объясняет спрос, но не входит
       // в оценку продавца, и модель не должна их смешивать.

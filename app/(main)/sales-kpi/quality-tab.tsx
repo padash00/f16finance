@@ -79,11 +79,31 @@ type CashierMix = {
   }[]
 }
 
+/** Человеческие названия моделей: на экране не место латинским терминам. */
+const DEMAND_MODEL_RU: Record<string, string> = {
+  negative_binomial: 'поток с большим разбросом',
+  poisson: 'ровный поток',
+  empirical: 'по прошлым сменам',
+}
+
 type QualityData = {
   period: { from: string; to: string }
   category_mix: CategoryShare[]
   cashier_mix: CashierMix[]
   quality: { score: number; checks: QualityCheck[]; worst: QualityCheck | null }
+  /**
+   * На чём стоят числа вероятностной модели. Отдельно от качества данных:
+   * данные могут быть безупречны, а истории всё равно не хватать.
+   */
+  model_diagnostics?: {
+    score: number
+    checks: QualityCheck[]
+    worst: QualityCheck | null
+    model_version: string
+    models: { demand: Record<string, number>; ticket: Record<string, number> }
+    dispersion: { median: number | null; max: number | null }
+    performance: { fits: number; cache_hits: number; ms: number }
+  } | null
   anomalies: Anomaly[]
   flags: { shift_date: string; shift: string; reason: string; exclude_from_baseline: boolean }[]
   events: BusinessEvent[]
@@ -238,6 +258,55 @@ export function QualityTab(props: { companyId: string; canManage: boolean; cashi
           ))}
         </div>
       </Card>
+
+      {payload?.model_diagnostics ? (
+        <Card className="p-4">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-sm font-semibold text-foreground">Можно ли верить прогнозу</h2>
+            <span className="text-lg font-semibold text-foreground">
+              {Math.round(payload.model_diagnostics.score * 100)}%
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Качество данных и надёжность прогноза — разные вещи. Чеки могут быть заполнены безупречно, а
+            истории для оценки разброса всё равно не хватать: точка работает три месяца, и зимы модель
+            ещё не видела.
+          </p>
+
+          <div className="mt-3 grid gap-2 lg:grid-cols-2">
+            {payload.model_diagnostics.checks.map((c) => (
+              <div key={c.key} className="rounded-lg border border-border p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium text-foreground">{c.label}</span>
+                  <span
+                    className={`text-sm tabular-nums ${
+                      c.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'
+                    }`}
+                  >
+                    {pct(c.value)}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">{c.hint}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+            <span>Модель: {payload.model_diagnostics.model_version}</span>
+            {Object.entries(payload.model_diagnostics.models.demand).map(([model, count]) => (
+              <span key={model}>
+                {DEMAND_MODEL_RU[model] || model}: {count} смен
+              </span>
+            ))}
+            {payload.model_diagnostics.dispersion.median !== null ? (
+              <span>
+                Разброс потока: в {payload.model_diagnostics.dispersion.median}× выше ровного
+              </span>
+            ) : null}
+          </div>
+        </Card>
+      ) : null}
 
       {/* Подозрительные смены */}
       <Card className="overflow-hidden">
