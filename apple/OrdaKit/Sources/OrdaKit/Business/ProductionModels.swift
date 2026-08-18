@@ -1228,6 +1228,37 @@ public struct PurchaseOrdersService: Sendable {
         return response.data.orders
     }
 
+    /// Отправить заявку поставщику.
+    ///
+    /// Позиции берём из плана закупа: он уже посчитал спрос за месяц, целевой
+    /// запас и округление до упаковок. Заявка, набранная на глаз с телефона,
+    /// разошлась бы с этим расчётом — и завтра на витрине снова не хватило бы
+    /// того же товара.
+    public func createOrder(
+        supplierID: String,
+        comment: String?,
+        lines: [(itemID: String, quantity: Double, stock: Double)]
+    ) async throws {
+        let items = lines.map { line in
+            [
+                "item_id": line.itemID,
+                "suggested_qty": line.quantity,
+                "current_qty": line.stock,
+            ] as [String: Any]
+        }
+
+        var body: [String: Any] = ["supplier_id": supplierID, "items": items]
+        if let comment, !comment.isEmpty { body["comment"] = comment }
+
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/store/purchase-orders",
+                method: .post,
+                body: try JSONSerialization.data(withJSONObject: body)
+            )
+        )
+    }
+
     /// Карточка заявки: состав и контакты поставщика. В списке их нет.
     public func order(id: String) async throws -> PurchaseOrder {
         let response: Envelope<PurchaseOrderPayload> = try await api.send(

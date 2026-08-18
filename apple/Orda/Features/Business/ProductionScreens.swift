@@ -909,7 +909,12 @@ final class PurchaseOrdersStore {
 /// которые уже пообещали, и товар, которого ещё нет на полке.
 struct PurchaseOrdersScreen: View {
     @Environment(\.api) private var api
+    @Environment(\.access) private var access
     @State private var store: PurchaseOrdersStore?
+    @State private var isCreating = false
+
+    /// Право то же, что проверяет сервер.
+    private var canCreate: Bool { access?.can("store-purchase-orders.create") ?? false }
     @State private var filter: OrderFilter = .open
     @State private var selected: PurchaseOrder?
 
@@ -951,7 +956,17 @@ struct PurchaseOrdersScreen: View {
         }
         .background(Theme.background)
         .navigationTitle("Заказы поставщикам")
-        .toolbar { LogoutToolbarItem() }
+        .toolbar {
+            if canCreate {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { isCreating = true } label: { Image(systemName: "plus") }
+                }
+            }
+            LogoutToolbarItem()
+        }
+        .sheet(isPresented: $isCreating) {
+            NewPurchaseOrderSheet { await store?.load() }
+        }
         .task {
             if store == nil {
                 let created = PurchaseOrdersStore(api: api)
