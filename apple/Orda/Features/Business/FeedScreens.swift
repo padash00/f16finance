@@ -989,35 +989,12 @@ final class TeamChatStore {
         undeliveredAttachments = await attachments.pending().filter { $0.scope == .teamChat }
     }
 
-    /// Дослать файлы. Порядок тот же, что у текста: сначала старые.
+    /// Дослать файлы. Саму отправку делает очередь: чат и личная переписка
+    /// иначе держали бы две копии одного и того же.
     func flushAttachments() async {
-        let queue = await attachments.pending().filter { $0.scope == .teamChat }
-        guard !queue.isEmpty else { return }
-
-        for item in queue {
-            guard let data = await attachments.data(for: item.id) else {
-                // Файла нет — запись бессмысленна, иначе она будет вечно
-                // пытаться отправить пустоту.
-                await attachments.remove(id: item.id)
-                continue
-            }
-
-            do {
-                let uploaded = try await service.upload(
-                    data: data,
-                    fileName: item.fileName,
-                    mimeType: item.mimeType,
-                    kind: item.kind
-                )
-                try await service.sendTeamMessage(item.caption, attachments: [uploaded])
-                await attachments.remove(id: item.id)
-            } catch {
-                break
-            }
-        }
-
+        let sent = await attachments.flush(using: service)
         await refreshUndeliveredAttachments()
-        await load()
+        if sent > 0 { await load() }
     }
 
     /// Отправка без ожидания.
@@ -1623,30 +1600,9 @@ final class MessagesStore {
     }
 
     func flushAttachments() async {
-        let queue = await attachments.pending().filter { $0.scope == .direct }
-        guard !queue.isEmpty else { return }
-
-        for item in queue {
-            guard let userID = item.recipientUserID, let data = await attachments.data(for: item.id) else {
-                await attachments.remove(id: item.id)
-                continue
-            }
-
-            do {
-                let uploaded = try await service.upload(
-                    data: data,
-                    fileName: item.fileName,
-                    mimeType: item.mimeType,
-                    kind: item.kind
-                )
-                try await service.sendDirect(to: userID, text: "", attachments: [uploaded])
-                await attachments.remove(id: item.id)
-            } catch {
-                break
-            }
-        }
-
+        let sent = await attachments.flush(using: service)
         await refreshUndeliveredAttachments()
+        guard sent > 0 else { return }
         if let openedUserID { await open(openedUserID) }
         await load()
     }

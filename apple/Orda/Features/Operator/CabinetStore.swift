@@ -345,11 +345,33 @@ final class CabinetStore {
 
     /// Чек-листы, пройденные без связи.
     private let checklistOutbox = ChecklistOutbox()
+    /// Файлы, не ушедшие из-за связи. Та же очередь, что у чатов: файл на
+    /// диске один, и профиль должен показывать именно его, а не свою копию.
+    private let attachmentOutbox = AttachmentOutbox()
 
-    /// Кто вошёл: чужой чек-лист не должен уйти под его именем.
+    private(set) var undeliveredFiles: [AttachmentOutbox.Item] = []
+
+    /// Кто вошёл: чужая работа не должна уйти под его именем.
     func setQueueOwner(_ userID: String?) async {
         await checklistOutbox.setOwner(userID)
+        await attachmentOutbox.setOwner(userID)
         await refreshUndeliveredChecklists()
+        await refreshUndeliveredFiles()
+    }
+
+    func refreshUndeliveredFiles() async {
+        undeliveredFiles = await attachmentOutbox.pending()
+    }
+
+    /// Отправить всё отложенное этим человеком: чек-листы и файлы.
+    ///
+    /// Чеки и действия смены живут в хранилище смены — их шлёт оно.
+    @discardableResult
+    func flushEverything() async -> Int {
+        var sent = await flushChecklists()
+        sent += await attachmentOutbox.flush(using: feed)
+        await refreshUndeliveredFiles()
+        return sent
     }
 
     /// Пройденные, но не отправленные: строка «ждёт связи» на экране.

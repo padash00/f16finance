@@ -643,6 +643,46 @@ struct OperatorProfileScreen: View {
                     }
                 }
                 .task { await cabinet.refreshUnreadMessages() }
+                .task {
+                    await cabinet.refreshUndeliveredChecklists()
+                    await cabinet.refreshUndeliveredFiles()
+                }
+
+                if !cabinet.undeliveredChecklists.isEmpty || !cabinet.undeliveredFiles.isEmpty {
+                    // Чек-листы и файлы ждут связи наравне с чеками, а видно
+                    // их было только на своих экранах: человек уходил со
+                    // смены, не зная, что часть работы ещё на телефоне.
+                    Card(accent: Theme.warning) {
+                        VStack(alignment: .leading, spacing: Spacing.sm) {
+                            if !cabinet.undeliveredChecklists.isEmpty {
+                                Label(
+                                    "\(cabinet.undeliveredChecklists.count) \(pluralize(cabinet.undeliveredChecklists.count, "чек-лист ждёт", "чек-листа ждут", "чек-листов ждут")) связи",
+                                    systemImage: "checklist"
+                                )
+                                .font(Typography.callout.weight(.medium))
+                                .foregroundStyle(Theme.text)
+                            }
+
+                            if !cabinet.undeliveredFiles.isEmpty {
+                                Label(
+                                    "\(cabinet.undeliveredFiles.count) \(pluralize(cabinet.undeliveredFiles.count, "файл ждёт", "файла ждут", "файлов ждут")) связи",
+                                    systemImage: "photo"
+                                )
+                                .font(Typography.callout.weight(.medium))
+                                .foregroundStyle(Theme.text)
+                            }
+
+                            Text("Всё сохранено на устройстве и уйдёт при связи.")
+                                .font(Typography.caption)
+                                .foregroundStyle(Theme.textMuted)
+
+                            Button("Отправить сейчас") {
+                                Task { await cabinet.flushEverything() }
+                            }
+                            .buttonStyle(SecondaryButtonStyle())
+                        }
+                    }
+                }
 
                 if store.queuedSalesCount > 0 || store.queuedActionsCount > 0 {
                     Card(accent: Theme.warning) {

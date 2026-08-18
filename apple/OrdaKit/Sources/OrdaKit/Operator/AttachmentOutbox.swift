@@ -120,6 +120,55 @@ public actor AttachmentOutbox {
         persist()
     }
 
+    /// Отправить всё своё: загрузить файл и отослать сообщение.
+    ///
+    /// Отправка живёт здесь, а не в экранах: чат и личная переписка делали
+    /// одно и то же двумя копиями, и профиль оператора завёл бы третью.
+    /// Возвращает, сколько ушло.
+    @discardableResult
+    public func flush(using feed: FeedService) async -> Int {
+        loadIfNeeded()
+        var sent = 0
+
+        for item in pending() {
+            guard let data = data(for: item.id) else {
+                // Файла нет — запись бессмысленна: вечная попытка отправить
+                // пустоту, о которой никто не узнает.
+                remove(id: item.id)
+                continue
+            }
+
+            do {
+                let uploaded = try await feed.upload(
+                    data: data,
+                    fileName: item.fileName,
+                    mimeType: item.mimeType,
+                    kind: item.kind
+                )
+
+                switch item.scope {
+                case .teamChat:
+                    try await feed.sendTeamMessage(item.caption, attachments: [uploaded])
+                case .direct:
+                    guard let userID = item.recipientUserID else {
+                        // Личный файл без адресата отправлять некуда.
+                        remove(id: item.id)
+                        continue
+                    }
+                    try await feed.sendDirect(to: userID, text: item.caption, attachments: [uploaded])
+                }
+
+                remove(id: item.id)
+                sent += 1
+            } catch {
+                // Связь снова пропала — остальное подождёт своей очереди.
+                break
+            }
+        }
+
+        return sent
+    }
+
     public func clear() {
         loadIfNeeded()
         for item in items { try? FileManager.default.removeItem(at: fileURL(for: item.id)) }
