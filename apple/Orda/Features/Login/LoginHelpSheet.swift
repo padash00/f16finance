@@ -26,10 +26,14 @@ struct LoginHelpSheet: View {
                             .foregroundStyle(Theme.textDim)
                             .fixedSize(horizontal: false, vertical: true)
 
+                        // Прямо на страницу восстановления, а не на главную:
+                        // человек и так не может войти, а искать нужную кнопку
+                        // на сайте с телефона — лишний шаг там, где он уже
+                        // раздражён.
                         Button {
-                            openURL(configuration.apiBaseURL)
+                            openURL(configuration.apiBaseURL.appending(path: "forgot-password"))
                         } label: {
-                            Label("Открыть сайт", systemImage: "safari")
+                            Label("Восстановить пароль", systemImage: "key")
                         }
                         .buttonStyle(SecondaryButtonStyle())
                     }

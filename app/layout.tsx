@@ -5,6 +5,7 @@ import { Analytics } from '@vercel/analytics/next'
 import { ClientErrorReporter } from '@/components/client-error-reporter'
 import { GlobalAssistant } from '@/components/ai/global-assistant'
 import { AutoTheme } from '@/components/auto-theme'
+import { RecoveryHashCatcher } from '@/components/auth/recovery-hash-catcher'
 import { ThemeProvider } from '@/components/theme-provider'
 import { Toaster } from '@/components/ui/toaster'
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from '@/lib/core/site'
@@ -112,6 +113,10 @@ export default function RootLayout({
           {/* Следит за временем и переключает тему, если человек это включил
               в профиле. Ничего не рисует. */}
           <AutoTheme />
+          {/* Ссылка из письма о смене пароля может прийти на корень сайта:
+              так бывает, когда адрес возврата не в списке разрешённых у
+              Supabase. Токен виден только браузеру — перехватываем здесь. */}
+          <RecoveryHashCatcher />
           {children}
           <GlobalAssistant />
           <ClientErrorReporter />
