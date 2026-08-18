@@ -171,6 +171,11 @@ struct BusinessRootView: View {
             (.approvals, "expenses-pending.view"),
             (.tasks, "tasks.view"),
             (.chat, "team-chat.view"),
+            // Дальше — то, во что заходят через день, а не каждый час:
+            // график смен и база знаний. Они добираются до нижней панели
+            // только у тех, кому не выдали ничего из первых четырёх.
+            (.shifts, "shifts.view"),
+            (.knowledge, "knowledge-admin.view"),
         ]
         return candidates
             .filter { resolver.can($0.1) }
@@ -186,6 +191,8 @@ struct BusinessRootView: View {
         case .approvals: ApprovalsScreen()
         case .tasks: TeamTasksScreen()
         case .chat: TeamChatScreen()
+        case .shifts: ScheduleWeekScreen()
+        case .knowledge: KnowledgeAdminScreen()
         case .sections, .profile: EmptyView()
         }
     }
@@ -276,6 +283,8 @@ struct BusinessRootView: View {
         case "home.dashboard": .home
         case "tasks": .tasks
         case "team-chat": .chat
+        case "shifts": .shifts
+        case "knowledge": .knowledge
         default: nil
         }
         if let tabForPage, contentTabs.contains(tabForPage) || tabForPage == .home {
@@ -440,7 +449,7 @@ struct BusinessRootView: View {
 #if os(iOS)
 /// Вкладки телефона.
 enum PhoneTab: Hashable {
-    case home, approvals, tasks, chat, sections, profile
+    case home, approvals, tasks, chat, shifts, knowledge, sections, profile
 
     var title: String {
         switch self {
@@ -448,6 +457,8 @@ enum PhoneTab: Hashable {
         case .approvals: "Решения"
         case .tasks: "Задачи"
         case .chat: "Чат"
+        case .shifts: "Смены"
+        case .knowledge: "База"
         case .sections: "Разделы"
         case .profile: "Профиль"
         }
@@ -459,6 +470,8 @@ enum PhoneTab: Hashable {
         case .approvals: "checkmark.circle"
         case .tasks: "checklist"
         case .chat: "bubble.left.and.bubble.right"
+        case .shifts: "calendar"
+        case .knowledge: "book"
         case .sections: "list.bullet"
         case .profile: "person.crop.circle"
         }

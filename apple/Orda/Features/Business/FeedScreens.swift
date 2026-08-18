@@ -1277,7 +1277,17 @@ struct TeamChatScreen: View {
     private func messages(_ feed: TeamChatFeed, store: TeamChatStore) -> some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: Spacing.xs) {
+                // Обычный VStack, а не ленивый.
+                //
+                // Ленивая лента на первом кадре не знает высоты своих ячеек:
+                // «низ» для неё — не там, где он окажется через мгновение, и
+                // чат открывался пустотой, а сообщения находили, листая вниз.
+                // Ни якорь, ни явная прокрутка этого не лечат — они целятся в
+                // ещё не измеренную ленту.
+                //
+                // Здесь это дёшево: переписка живёт сутки и чистится по ночам,
+                // поэтому сообщений десятки, а не десятки тысяч.
+                VStack(alignment: .leading, spacing: Spacing.xs) {
                     // Чат живёт сутки — человек должен знать заранее. Иначе
                     // исчезнувшая переписка читается как потеря данных, а
                     // важное продолжают писать сюда вместо задач.
@@ -1924,7 +1934,9 @@ struct ConversationPane: View {
             } else {
                 ScrollViewReader { proxy in
                     ScrollView {
-                        LazyVStack(alignment: .leading, spacing: Spacing.md) {
+                        // Не ленивый — по той же причине, что и в командном
+                        // чате: иначе переписка открывается пустым экраном.
+                        VStack(alignment: .leading, spacing: Spacing.md) {
                             ForEach(FeedDay.group(store.conversation, date: { $0.createdAt })) { section in
                                 FeedDayDivider(label: section.label)
                                 ForEach(section.items) { message in
