@@ -246,6 +246,19 @@ public actor APIClient {
         throw makeError(status: http.statusCode, data: data, path: request.path)
     }
 
+    /// Запрос для долго живущего потока событий.
+    ///
+    /// Собирается тем же способом, что обычный, — те же заголовки и та же
+    /// авторизация. Отдельный метод нужен потому, что поток читает не наш
+    /// `send`, а `URLSession.bytes`, и ему нужен готовый `URLRequest`.
+    public func streamingURLRequest(_ request: APIRequest) async throws -> URLRequest {
+        var urlRequest = try await buildURLRequest(request)
+        urlRequest.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        // Поток живёт минутами: обычный таймаут оборвал бы его на полуслове.
+        urlRequest.timeoutInterval = 600
+        return urlRequest
+    }
+
     private func buildURLRequest(_ request: APIRequest) async throws -> URLRequest {
         guard var components = URLComponents(
             url: baseURL.appendingPathComponent(request.path.hasPrefix("/") ? String(request.path.dropFirst()) : request.path),

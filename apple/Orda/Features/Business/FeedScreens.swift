@@ -1124,12 +1124,29 @@ struct TeamChatScreen: View {
         .task { if store == nil { let s = TeamChatStore(api: api); store = s; await s.load() } }
         // Чат без самообновления — это не чат: сообщение сменщика видно только
         // после того, как экран закроют и откроют заново.
-        // Три секунды, а не восемь: в разговоре восемь секунд — это пауза, в
-        // которую человек успевает решить, что сообщение не дошло. Опрос идёт
-        // только пока экран открыт, и лента приходит без вложений.
+        // Живой поток: сервер сам говорит, когда появилось новое, и лента
+        // обновляется в тот же миг. Соединение он закрывает через несколько
+        // минут — открываем следующее.
         .task {
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(3))
+                for await event in EventStream(api: api).events(
+                    path: "/api/realtime/messages",
+                    query: ["scope": "team"]
+                ) {
+                    if Task.isCancelled { return }
+                    if event == .message { await store?.refresh() }
+                }
+                if Task.isCancelled { return }
+                // Пауза перед новым соединением: если сервер недоступен,
+                // долбиться в него без остановки — худшее, что можно сделать.
+                try? await Task.sleep(for: .seconds(2))
+            }
+        }
+        // Страховка на случай, когда поток не дошёл: сеть в подвале клуба
+        // рвётся, а сообщение всё равно должно появиться.
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(15))
                 if Task.isCancelled { return }
                 await store?.refresh()
             }
@@ -1654,6 +1671,8 @@ struct ConversationPane: View {
     let thread: DirectThread
     let store: MessagesStore
 
+    @Environment(\.api) private var api
+
     @State private var draft = ""
     @State private var confirmingBlock = false
 
@@ -1831,7 +1850,20 @@ struct ConversationPane: View {
         // человек смотрит в экран, ему ответили, а он тянет список вниз.
         .task(id: thread.otherUserID) {
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(3))
+                for await event in EventStream(api: api).events(
+                    path: "/api/realtime/messages",
+                    query: ["scope": "direct", "peer": thread.otherUserID]
+                ) {
+                    if Task.isCancelled { return }
+                    if event == .message { await store.refreshConversation(thread.otherUserID) }
+                }
+                if Task.isCancelled { return }
+                try? await Task.sleep(for: .seconds(2))
+            }
+        }
+        .task(id: thread.otherUserID) {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(15))
                 if Task.isCancelled { return }
                 await store.refreshConversation(thread.otherUserID)
             }
