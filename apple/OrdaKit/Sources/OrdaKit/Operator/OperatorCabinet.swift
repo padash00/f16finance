@@ -632,7 +632,7 @@ public struct ChecklistRunResult: Decodable, Sendable {
 }
 
 /// Ответ на пункт чек-листа.
-public struct ChecklistAnswer: Sendable, Hashable {
+public struct ChecklistAnswer: Codable, Sendable, Hashable {
     public let itemID: String
     public var answer: String
     public var comment: String?

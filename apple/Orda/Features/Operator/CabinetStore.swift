@@ -343,12 +343,75 @@ final class CabinetStore {
 
     // ── Чек-листы ────────────────────────────────────────────────────────────
 
+    /// Чек-листы, пройденные без связи.
+    private let checklistOutbox = ChecklistOutbox()
+
+    /// Пройденные, но не отправленные: строка «ждёт связи» на экране.
+    ///
+    /// Имя не `pendingChecklists` намеренно — так называются ещё не
+    /// пройденные шаблоны, и спутать «не сделан» с «сделан, но не ушёл» значит
+    /// показать человеку ровно наоборот.
+    private(set) var undeliveredChecklists: [ChecklistOutbox.Item] = []
+
+    func refreshUndeliveredChecklists() async {
+        undeliveredChecklists = await checklistOutbox.pending()
+    }
+
+    /// Отложить пройденный чек-лист до связи.
+    ///
+    /// Кладём целиком — шаблон и ответы: без связи нет запуска, а значит и
+    /// идентификатора, к которому ответы можно привязать. Сыграем всю тройку
+    /// (запуск, ответы, завершение), когда сеть вернётся.
+    func deferChecklist(template: ChecklistTemplate, answers: [ChecklistAnswer]) async {
+        await checklistOutbox.add(
+            ChecklistOutbox.Item(
+                templateID: template.id,
+                title: template.title,
+                answers: answers
+            )
+        )
+        await refreshUndeliveredChecklists()
+        deferredNotice = "Чек-лист сохранён на устройстве и уйдёт при связи."
+    }
+
+    /// Проиграть отложенное. Возвращает, сколько ушло.
+    ///
+    /// Порядок внутри одного чек-листа обязателен: запуск даёт идентификатор,
+    /// без него ответы принять некуда. Если сорвалось на середине — оставляем
+    /// запись и пробуем в следующий раз: повторный запуск того же шаблона
+    /// сервер отдаёт тем же запуском смены, дублей не будет.
+    @discardableResult
+    func flushChecklists() async -> Int {
+        let queue = await checklistOutbox.pending()
+        guard !queue.isEmpty else { return 0 }
+
+        var sent = 0
+        for item in queue {
+            do {
+                let started = try await service.startChecklist(templateID: item.templateID)
+                _ = try await service.saveChecklistAnswers(runID: started.runID, answers: item.answers)
+                _ = try await service.completeChecklist(runID: started.runID)
+                await checklistOutbox.remove(id: item.id)
+                sent += 1
+            } catch {
+                // Связь снова пропала — остальное подождёт своей очереди.
+                break
+            }
+        }
+
+        await refreshUndeliveredChecklists()
+        if sent > 0 { await loadKnowledge() }
+        return sent
+    }
+
     func startChecklist(_ template: ChecklistTemplate) async -> Result<String, OperationFailure> {
         do {
             let started = try await service.startChecklist(templateID: template.id)
             return .success(started.runID)
         } catch let apiError as APIError {
-            return .failure(OperationFailure(message: apiError.operatorMessage))
+            var offline = false
+            if case .transport = apiError { offline = true }
+            return .failure(OperationFailure(message: apiError.operatorMessage, isOffline: offline))
         } catch {
             return .failure(OperationFailure(message: error.localizedDescription))
         }
@@ -386,4 +449,9 @@ final class CabinetStore {
 /// в человеческий вид.
 struct OperationFailure: Error, Equatable {
     let message: String
+    /// Отказ из-за связи, а не по существу.
+    ///
+    /// Различие важное: «нет сети» значит «подожди и повторим сами», а «нет
+    /// права» или «смена закрыта» — что повторять бессмысленно.
+    var isOffline: Bool = false
 }

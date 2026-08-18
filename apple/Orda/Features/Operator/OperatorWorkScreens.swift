@@ -238,6 +238,29 @@ struct ChecklistsScreen: View {
                     }
                 }
 
+                if !cabinet.undeliveredChecklists.isEmpty {
+                    Card(accent: Theme.warning) {
+                        VStack(alignment: .leading, spacing: Spacing.xs) {
+                            Label(
+                                "\(cabinet.undeliveredChecklists.count) \(pluralize(cabinet.undeliveredChecklists.count, "чек-лист ждёт", "чек-листа ждут", "чек-листов ждут")) связи",
+                                systemImage: "tray.and.arrow.up"
+                            )
+                            .font(Typography.callout.weight(.medium))
+                            .foregroundStyle(Theme.text)
+
+                            Text(cabinet.undeliveredChecklists.map(\.title).joined(separator: ", "))
+                                .font(Typography.caption)
+                                .foregroundStyle(Theme.textMuted)
+                                .fixedSize(horizontal: false, vertical: true)
+
+                            Button("Отправить сейчас") {
+                                Task { await cabinet.flushChecklists() }
+                            }
+                            .buttonStyle(SecondaryButtonStyle())
+                        }
+                    }
+                }
+
                 if cabinet.isLoadingKnowledge && cabinet.knowledge == nil {
                     ForEach(0..<3, id: \.self) { _ in Skeleton(height: 92, cornerRadius: Radius.lg) }
                 } else if let knowledge = cabinet.knowledge {
@@ -268,6 +291,12 @@ struct ChecklistsScreen: View {
             }
         }
         .navigationTitle("Чек-листы")
+        .task {
+            await cabinet.refreshUndeliveredChecklists()
+            // Экран открыли — самое время попробовать дослать: связь могла
+            // вернуться, пока человек ходил по точке.
+            await cabinet.flushChecklists()
+        }
         .navigationDestination(for: ChecklistRoute.self) { route in
             ChecklistRunScreen(template: route.template)
         }
@@ -351,6 +380,10 @@ struct ChecklistRunScreen: View {
     @State private var answers: [String: ChecklistAnswer] = [:]
     @State private var isStarting = true
     @State private var isSubmitting = false
+    /// Начали без связи: ответы уйдут одной пачкой позже.
+    @State private var isOffline = false
+    /// Чек-лист сложен в очередь — показываем это вместо начислений.
+    @State private var isDeferred = false
     @State private var error: String?
     @State private var result: ChecklistRunResult?
 
@@ -371,9 +404,34 @@ struct ChecklistRunScreen: View {
             VStack(spacing: Spacing.lg) {
                 if isStarting {
                     Skeleton(height: 120, cornerRadius: Radius.lg)
+                } else if isDeferred {
+                    // Начислений сейчас не будет: их считает сервер, когда
+                    // примет ответы. Обещать премию, которой ещё нет, нельзя.
+                    Card(accent: Theme.warning) {
+                        VStack(alignment: .leading, spacing: Spacing.sm) {
+                            Label("Сохранено на устройстве", systemImage: "tray.and.arrow.down")
+                                .font(Typography.body.weight(.medium))
+                                .foregroundStyle(Theme.text)
+                            Text("Чек-лист уйдёт сам, как только появится связь. Штрафы и премии по нему посчитает сервер — они появятся вместе с отправкой.")
+                                .font(Typography.callout)
+                                .foregroundStyle(Theme.textMuted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
                 } else if let result {
                     resultCard(result)
                 } else {
+                    if isOffline {
+                        Card(accent: Theme.warning) {
+                            Label(
+                                "Связи нет — проходите как обычно. Ответы сохранятся на устройстве и уйдут потом.",
+                                systemImage: "wifi.slash"
+                            )
+                            .font(Typography.callout)
+                            .foregroundStyle(Theme.textMuted)
+                        }
+                    }
+
                     progressCard
 
                     ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
@@ -481,14 +539,31 @@ struct ChecklistRunScreen: View {
         case let .success(id):
             runID = id
         case let .failure(failure):
-            error = failure.message
+            // Без связи чек-лист всё равно проходят: обход делают там, где
+            // сети нет — подсобка, склад, дальний зал. Ответы соберём и
+            // отправим целиком, когда связь появится.
+            if failure.isOffline {
+                isOffline = true
+            } else {
+                error = failure.message
+            }
         }
     }
 
     private func submit() {
-        guard let runID else { return }
         isSubmitting = true
         error = nil
+
+        // Запуска нет — значит начинали без связи. Складываем целиком.
+        guard let runID else {
+            Task {
+                await cabinet.deferChecklist(template: template, answers: Array(answers.values))
+                isSubmitting = false
+                isDeferred = true
+                Haptics.success()
+            }
+            return
+        }
 
         Task {
             let payload = Array(answers.values)

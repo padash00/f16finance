@@ -647,3 +647,67 @@ struct ResponseCacheTests {
         #expect(await cache.data(for: request, scope: nil) == nil)
     }
 }
+
+/// Очередь чек-листов, пройденных без связи.
+///
+/// Обход точки — двадцать минут работы, и терять её нельзя: телефон может
+/// выключиться, приложение — выгрузиться. Поэтому очередь на диске, и на неё
+/// есть тесты.
+@Suite("Чек-листы без связи")
+struct ChecklistOutboxTests {
+    private func makeOutbox() -> ChecklistOutbox {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("orda-checklists-\(UUID().uuidString)", isDirectory: true)
+        return ChecklistOutbox(directory: directory)
+    }
+
+    private func answer(_ id: String) -> ChecklistAnswer {
+        ChecklistAnswer(itemID: id, answer: "yes")
+    }
+
+    @Test("Пройденное переживает выгрузку приложения")
+    func survivesRestart() async {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("orda-checklists-\(UUID().uuidString)", isDirectory: true)
+
+        let first = ChecklistOutbox(directory: directory)
+        await first.add(
+            ChecklistOutbox.Item(templateID: "t-1", title: "Приём смены", answers: [answer("i-1")])
+        )
+
+        // Второй экземпляр — как после перезапуска: память пуста, диск нет.
+        let second = ChecklistOutbox(directory: directory)
+        let pending = await second.pending()
+
+        #expect(pending.count == 1)
+        #expect(pending.first?.title == "Приём смены")
+        #expect(pending.first?.answers.count == 1)
+    }
+
+    @Test("Повторный проход заменяет прежний, а не копится")
+    func replacesSameTemplate() async {
+        let outbox = makeOutbox()
+
+        await outbox.add(ChecklistOutbox.Item(templateID: "t-1", title: "Обход", answers: [answer("i-1")]))
+        await outbox.add(
+            ChecklistOutbox.Item(templateID: "t-1", title: "Обход", answers: [answer("i-1"), answer("i-2")])
+        )
+
+        let pending = await outbox.pending()
+        #expect(pending.count == 1)
+        // Осталась последняя версия: человек прошёл заново, значит первая
+        // неверна.
+        #expect(pending.first?.answers.count == 2)
+    }
+
+    @Test("Отправленное уходит из очереди")
+    func removesSent() async {
+        let outbox = makeOutbox()
+        let item = ChecklistOutbox.Item(templateID: "t-2", title: "Закрытие", answers: [answer("i-9")])
+
+        await outbox.add(item)
+        await outbox.remove(id: item.id)
+
+        #expect(await outbox.pending().isEmpty)
+    }
+}
