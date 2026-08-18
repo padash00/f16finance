@@ -10,8 +10,13 @@ final class SalaryRulesStore {
     private(set) var error: APIError?
 
     private let service: TeamAdminService
+    /// Восстановление живёт в кадровом маршруте — он в общем сервисе.
+    private let business: BusinessService
 
-    init(api: APIClient) { service = TeamAdminService(api: api) }
+    init(api: APIClient) {
+        service = TeamAdminService(api: api)
+        business = BusinessService(api: api)
+    }
 
     func load() async {
         do {
@@ -292,8 +297,13 @@ final class HRStore {
     private(set) var error: APIError?
 
     private let service: TeamAdminService
+    /// Восстановление живёт в кадровом маршруте — он в общем сервисе.
+    private let business: BusinessService
 
-    init(api: APIClient) { service = TeamAdminService(api: api) }
+    init(api: APIClient) {
+        service = TeamAdminService(api: api)
+        business = BusinessService(api: api)
+    }
 
     func load() async {
         do {
@@ -303,6 +313,23 @@ final class HRStore {
             error = e
         } catch {
             self.error = .transport(message: error.localizedDescription)
+        }
+    }
+
+    /// Вернуть уволенного. Возвращает текст ошибки или `nil`.
+    ///
+    /// Человек уходит и возвращается — обычное дело в клубе, особенно у
+    /// студентов. Заводить его заново значит потерять стаж, историю смен и
+    /// долги, а они за ним числятся.
+    func restore(_ person: HRPerson) async -> String? {
+        do {
+            try await business.restorePerson(kind: person.kind, id: person.id)
+            await load()
+            return nil
+        } catch let apiError as APIError {
+            return apiError.userMessage
+        } catch {
+            return error.localizedDescription
         }
     }
 }
@@ -370,7 +397,7 @@ struct HRScreen: View {
                     ) { person in
                         HRPersonRow(person: person)
                     } detail: { person in
-                        HRPersonDetail(person: person)
+                        HRPersonDetail(person: person, store: store)
                     } empty: {
                         WideEmptyState(
                             icon: "person.2.badge.gearshape",
@@ -479,6 +506,17 @@ private struct HRPersonRow: View {
 
 private struct HRPersonDetail: View {
     let person: HRPerson
+    /// Хранилище кадров: восстановление обновляет тот же список.
+    let store: HRStore
+
+    @Environment(\.access) private var access
+
+    @State private var confirming = false
+    @State private var isBusy = false
+    @State private var error: String?
+
+    /// Право то же, что проверяет сервер.
+    private var canRestore: Bool { access?.can("hr.restore") ?? false }
 
     var body: some View {
         ScreenScroll {
@@ -510,6 +548,48 @@ private struct HRPersonDetail: View {
                         }
                     }
                     Spacer()
+                }
+            }
+
+            if person.isDismissed, canRestore {
+                // Вернуть — рядом с фактом увольнения, а не в конце карточки:
+                // человек звонит и говорит «выхожу с понедельника», и решение
+                // принимается прямо здесь.
+                Card(accent: Theme.positive) {
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        Text("Человек вернулся?")
+                            .font(Typography.callout.weight(.medium))
+                            .foregroundStyle(Theme.text)
+                        Text("Восстановление вернёт доступ и сохранит стаж, историю смен и долги. Заводить заново — значит всё это потерять.")
+                            .font(Typography.caption)
+                            .foregroundStyle(Theme.textMuted)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        if let error {
+                            Text(error)
+                                .font(Typography.caption)
+                                .foregroundStyle(Theme.negative)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        Button {
+                            confirming = true
+                        } label: {
+                            if isBusy {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Label("Восстановить", systemImage: "arrow.uturn.backward.circle")
+                            }
+                        }
+                        .buttonStyle(SecondaryButtonStyle())
+                        .disabled(isBusy)
+                    }
+                }
+                .alert("Восстановить \(person.fullName)?", isPresented: $confirming) {
+                    Button("Восстановить") { Task { await restore() } }
+                    Button("Отмена", role: .cancel) {}
+                } message: {
+                    Text("Вернутся вход в систему и назначения на точки. Долги и история останутся за человеком.")
                 }
             }
 
@@ -607,6 +687,13 @@ private struct HRPersonDetail: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+    }
+
+    private func restore() async {
+        isBusy = true
+        error = nil
+        defer { isBusy = false }
+        error = await store.restore(person)
     }
 }
 
