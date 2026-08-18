@@ -14,9 +14,12 @@ struct RevisionsScreen: View {
     @Environment(\.access) private var access
     @State private var selected: Stocktake?
     @State private var isCounting = false
+    @State private var showingActs = false
 
     /// Право `store-revisions.commit` проверяет и сервер.
     private var canCount: Bool { access?.can("store-revisions.commit") ?? false }
+    /// Отмена и откат закрыты одним правом — тем же, что на сервере.
+    private var canCancel: Bool { access?.can("store-revisions.cancel") ?? false }
 
     var body: some View {
         Group {
@@ -39,6 +42,32 @@ struct RevisionsScreen: View {
                         title: "Ревизий нет",
                         message: "Здесь появятся пересчёты склада и витрин."
                     )
+                } header: {
+                    // Идущий пересчёт — выше готовых: он ещё живой, и именно с
+                    // ним что-то делают. Готовые ревизии только читают.
+                    if !store.revisionActs.filter(\.isOpen).isEmpty || canCancel {
+                        Button { showingActs = true } label: {
+                            HStack(spacing: Spacing.md) {
+                                Image(systemName: "clock.badge.checkmark")
+                                    .foregroundStyle(Theme.info)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text("Акты пересчёта")
+                                        .font(Typography.callout.weight(.medium))
+                                        .foregroundStyle(Theme.text)
+                                    Text(actsSubtitle)
+                                        .font(Typography.caption)
+                                        .foregroundStyle(Theme.textMuted)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(Typography.caption)
+                                    .foregroundStyle(Theme.textMuted)
+                            }
+                            .padding(Spacing.md)
+                            .background(Theme.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                        }
+                        .buttonStyle(.pressable)
+                    }
                 }
             }
         }
@@ -52,9 +81,24 @@ struct RevisionsScreen: View {
             }
             LogoutToolbarItem()
         }
-        .task { await store.loadRevisions() }
-        .refreshable { await store.loadRevisions() }
+        .task {
+            await store.loadRevisions()
+            await store.loadRevisionActs()
+        }
+        .refreshable {
+            await store.loadRevisions()
+            await store.loadRevisionActs()
+        }
         .sheet(isPresented: $isCounting) { StocktakeSheet() }
+        .sheet(isPresented: $showingActs) { RevisionActsSheet() }
+    }
+
+    private var actsSubtitle: String {
+        let open = store.revisionActs.filter(\.isOpen).count
+        if open > 0 {
+            return "\(open) \(pluralize(open, "идёт", "идут", "идут")) — можно отменить"
+        }
+        return "Отменить лишний, откатить проведённый"
     }
 
     private var sorted: [Stocktake] {
@@ -727,5 +771,138 @@ private struct StaffDetail: View {
         } catch {
             accessError = error.localizedDescription
         }
+    }
+}
+
+/// Акты пересчёта: отменить лишний, откатить проведённый.
+///
+/// Ревизию заводят и бросают: открыли не ту точку, посчитали половину, ушли на
+/// смену. Такой акт висит и мешает завести правильный — а закрыть его можно
+/// было только на сайте.
+///
+/// Отмена и откат — разные вещи, и здесь они разведены намеренно. Отмена
+/// выбрасывает недосчитанный акт, остатки не трогая. Откат разворачивает уже
+/// проведённую ревизию: остатки возвращаются к тому, что было, а созданные
+/// актом долги удаляются. Второе тяжелее и спрашивает подтверждение отдельно.
+struct RevisionActsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(BusinessStore.self) private var store
+    @Environment(\.access) private var access
+
+    @State private var cancelling: RevisionAct?
+    @State private var reverting: RevisionAct?
+    @State private var isBusy = false
+    @State private var error: String?
+
+    private var canCancel: Bool { access?.can("store-revisions.cancel") ?? false }
+
+    var body: some View {
+        NavigationStack {
+            ScreenScroll {
+                if store.revisionActs.isEmpty {
+                    Card {
+                        Text("Актов пересчёта нет.")
+                            .font(Typography.callout)
+                            .foregroundStyle(Theme.textMuted)
+                    }
+                }
+
+                if let error {
+                    Text(error)
+                        .font(Typography.callout)
+                        .foregroundStyle(Theme.negative)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                ForEach(store.revisionActs) { act in
+                    Card(accent: act.isOpen ? Theme.info : nil) {
+                        VStack(alignment: .leading, spacing: Spacing.sm) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(act.locationName)
+                                    .font(Typography.body.weight(.medium))
+                                    .foregroundStyle(Theme.text)
+                                Spacer()
+                                StatusChip(
+                                    act.statusLabel,
+                                    kind: act.isOpen ? .info : (act.isCancelled ? .neutral : .good)
+                                )
+                            }
+
+                            if let opened = act.openedAt {
+                                Text("открыт \(opened.formatted(.dateTime.day().month(.abbreviated).hour().minute()))")
+                                    .font(Typography.caption)
+                                    .foregroundStyle(Theme.textDim)
+                            }
+
+                            if act.isOpen, let progress = act.progress {
+                                ProgressView(value: progress)
+                                    .tint(Theme.info)
+                                Text("посчитано \(act.countedItems) из \(act.totalItems)")
+                                    .font(Typography.caption)
+                                    .foregroundStyle(Theme.textMuted)
+                            }
+
+                            if let comment = act.comment, !comment.isEmpty {
+                                Text(comment)
+                                    .font(Typography.caption)
+                                    .foregroundStyle(Theme.textMuted)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+
+                            if canCancel {
+                                if act.isOpen {
+                                    Button { cancelling = act } label: {
+                                        Label("Отменить акт", systemImage: "xmark.circle")
+                                    }
+                                    .buttonStyle(SecondaryButtonStyle())
+                                    .disabled(isBusy)
+                                } else if act.isClosed {
+                                    Button { reverting = act } label: {
+                                        Label("Откатить ревизию", systemImage: "arrow.uturn.backward")
+                                    }
+                                    .buttonStyle(SecondaryButtonStyle())
+                                    .disabled(isBusy)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .background(Theme.background)
+            .navigationTitle("Акты пересчёта")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Готово") { dismiss() }
+                }
+            }
+            .alert("Отменить акт?", isPresented: Binding(get: { cancelling != nil }, set: { if !$0 { cancelling = nil } })) {
+                Button("Отменить акт", role: .destructive) {
+                    if let act = cancelling { Task { await run { await store.cancelRevisionAct(id: act.id) } } }
+                }
+                Button("Не надо", role: .cancel) {}
+            } message: {
+                Text("Подсчёты будут отброшены. Остатки не изменятся — так отменяют ревизию, открытую по ошибке.")
+            }
+            .alert("Откатить проведённую ревизию?", isPresented: Binding(get: { reverting != nil }, set: { if !$0 { reverting = nil } })) {
+                Button("Откатить", role: .destructive) {
+                    if let act = reverting { Task { await run { await store.revertRevisionAct(id: act.id) } } }
+                }
+                Button("Не надо", role: .cancel) {}
+            } message: {
+                Text("Остатки вернутся к состоянию до ревизии, а созданные ею долги удалятся. Продажи после ревизии сохранятся.")
+            }
+            .task { await store.loadRevisionActs() }
+        }
+    }
+
+    private func run(_ action: () async -> String?) async {
+        isBusy = true
+        error = nil
+        defer { isBusy = false }
+        error = await action()
     }
 }

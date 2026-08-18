@@ -301,3 +301,63 @@ public struct SupplierList: Decodable, Sendable {
         suppliers.reduce(0) { $0 + $1.openDebtsAmount }
     }
 }
+
+// ── Акты ревизии: /api/admin/store/audit ─────────────────────────────────────
+
+/// Акт пересчёта глазами владельца: то, что считают сейчас или уже посчитали.
+///
+/// Отличается от `Stocktake`: тот — результат, уже проведённый и попавший в
+/// остатки. Акт — процесс, и с ним можно что-то сделать: отменить открытый по
+/// ошибке или откатить проведённый.
+///
+/// Имя не `AuditAct` намеренно: так называется акт в операторском контуре, где
+/// у него другой состав полей — оператору не нужны ни статус проведения, ни
+/// доля посчитанного по всей точке.
+public struct RevisionAct: Decodable, Sendable, Identifiable, Hashable {
+    public let id: String
+    public let status: String
+    public let comment: String?
+    public let locationName: String
+    public let openedAt: Date?
+    public let closedAt: Date?
+    /// Сколько позиций в снимке и сколько уже посчитано.
+    public let totalItems: Int
+    public let countedItems: Int
+
+    public var isOpen: Bool { status == "open" }
+    public var isClosed: Bool { status == "closed" }
+    public var isCancelled: Bool { status == "cancelled" }
+
+    public var statusLabel: String {
+        switch status {
+        case "open": "Идёт пересчёт"
+        case "closed": "Проведён"
+        case "cancelled": "Отменён"
+        default: status
+        }
+    }
+
+    /// Доля посчитанного. `nil` — снимок пуст, делить не на что.
+    public var progress: Double? {
+        guard totalItems > 0 else { return nil }
+        return Double(countedItems) / Double(totalItems)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, status, comment, locationName, totalItems, countedItems
+        case openedAt = "opened_at"
+        case closedAt = "closed_at"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeFlexibleString(forKey: .id) ?? ""
+        status = try c.decodeFlexibleString(forKey: .status) ?? "open"
+        comment = try c.decodeFlexibleString(forKey: .comment)
+        locationName = try c.decodeFlexibleString(forKey: .locationName) ?? "—"
+        openedAt = DateParsing.date(from: try c.decodeFlexibleString(forKey: .openedAt))
+        closedAt = DateParsing.date(from: try c.decodeFlexibleString(forKey: .closedAt))
+        totalItems = Int(try c.decodeFlexibleDouble(forKey: .totalItems) ?? 0)
+        countedItems = Int(try c.decodeFlexibleDouble(forKey: .countedItems) ?? 0)
+    }
+}

@@ -132,6 +132,38 @@ struct ResponseDecodingTests {
         #expect(overview.operators.first?.hasTelegram == false)
     }
 
+    // ── Ревизии ──────────────────────────────────────────────────────────────
+
+    @Test("Акты пересчёта: статус и доля посчитанного")
+    func revisionActs() throws {
+        let acts = try decode(
+            DataListWrapper<RevisionAct>.self,
+            """
+            {"data":[
+            {"id":"a-1","status":"open","comment":"Ночная","opened_at":"2026-08-18T02:00:00.000Z",
+            "closed_at":null,"locationName":"F16 Arena · Витрина","totalItems":40,"countedItems":10},
+            {"id":"a-2","status":"closed","comment":null,"opened_at":"2026-08-17T02:00:00.000Z",
+            "closed_at":"2026-08-17T05:00:00.000Z","locationName":"F16 Arena · Склад",
+            "totalItems":40,"countedItems":40},
+            {"id":"a-3","status":"cancelled","opened_at":"2026-08-16T02:00:00.000Z",
+            "locationName":"Склад","totalItems":0,"countedItems":0}]}
+            """
+        ).data
+
+        #expect(acts.count == 3)
+
+        let open = try #require(acts.first)
+        #expect(open.isOpen)
+        #expect(open.statusLabel == "Идёт пересчёт")
+        #expect(open.progress == 0.25)
+
+        #expect(acts[1].isClosed)
+        #expect(acts[1].statusLabel == "Проведён")
+        #expect(acts[2].isCancelled)
+        // Пустой снимок: доли нет, а не ноль — делить не на что.
+        #expect(acts[2].progress == nil)
+    }
+
     // ── Команда ──────────────────────────────────────────────────────────────
 
     @Test("Состав команды собирается из плоских списков")

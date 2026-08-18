@@ -713,6 +713,42 @@ final class BusinessStore {
         }
     }
 
+    /// Акты пересчёта: идущие и проведённые.
+    private(set) var revisionActs: [RevisionAct] = []
+
+    func loadRevisionActs() async {
+        // Молча: акты — дополнение к списку ревизий, и их отказ не должен
+        // прятать сам список.
+        revisionActs = (try? await service.auditActs()) ?? revisionActs
+    }
+
+    /// Отменить открытый акт. Возвращает текст ошибки или `nil`.
+    func cancelRevisionAct(id: String) async -> String? {
+        do {
+            try await service.cancelAuditAct(id: id)
+            await loadRevisionActs()
+            return nil
+        } catch let error as APIError {
+            return error.userMessage
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    /// Откатить проведённый акт: остатки вернутся к состоянию до него.
+    func revertRevisionAct(id: String) async -> String? {
+        do {
+            try await service.revertAuditAct(id: id)
+            await loadRevisionActs()
+            await loadRevisions()
+            return nil
+        } catch let error as APIError {
+            return error.userMessage
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
     func loadRevisions() async {
         isLoadingRevisions = true
         defer { isLoadingRevisions = false }

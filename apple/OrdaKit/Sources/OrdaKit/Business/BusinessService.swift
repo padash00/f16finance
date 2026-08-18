@@ -1035,6 +1035,42 @@ public struct BusinessService: Sendable {
         return response.data
     }
 
+    /// Акты пересчёта: что считают сейчас и что уже провели.
+    public func auditActs() async throws -> [RevisionAct] {
+        let response: DataList<RevisionAct> = try await api.send(
+            APIRequest(path: "/api/admin/store/audit")
+        )
+        return response.items
+    }
+
+    /// Отменить открытый акт — ревизию завели по ошибке.
+    ///
+    /// Остатки не трогаются: снимок и подсчёты отбрасываются. Это не откат
+    /// проведённой ревизии, и путать их нельзя.
+    public func cancelAuditAct(id: String) async throws {
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/store/audit",
+                method: .post,
+                body: try JSONSerialization.data(withJSONObject: ["action": "cancel", "act_id": id])
+            )
+        )
+    }
+
+    /// Откатить проведённый акт: вернуть остатки к тому, что было до него.
+    ///
+    /// Тяжёлое действие: разворачивает изменения остатков и удаляет созданные
+    /// актом долги. Сервер пускает сюда только владельца.
+    public func revertAuditAct(id: String) async throws {
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/store/audit",
+                method: .post,
+                body: try JSONSerialization.data(withJSONObject: ["action": "revert", "act_id": id])
+            )
+        )
+    }
+
     /// Ревизии склада и витрин. Требует `store-revisions.view`.
     public func revisions() async throws -> [Stocktake] {
         let response: Envelope<RevisionList> = try await api.send(
