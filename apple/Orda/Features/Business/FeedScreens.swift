@@ -959,6 +959,9 @@ final class TeamChatStore {
         }
     }
 
+    /// Что не ушло из-за связи. Ждёт своей очереди, а не теряется.
+    private(set) var undelivered: [String] = []
+
     /// Отправка без ожидания.
     ///
     /// Сообщение появляется в переписке сразу и помечается как летящее, поле
@@ -984,17 +987,49 @@ final class TeamChatStore {
                 replyTo = nil
                 await load()
                 pending.removeAll { $0.id == draft.id }
+                // Связь появилась — дошлём то, что застряло раньше.
+                await flushUndelivered()
             } catch let e as APIError {
-                // Фильтр мата отвечает 422: сообщение не ушло, и текст нужно
-                // вернуть человеку, а не потерять молча.
                 pending.removeAll { $0.id == draft.id }
-                sendError = "\(e.userMessage)\n\n\(trimmed)"
+                if case .transport = e {
+                    // Связи нет: текст не теряем и человека не заставляем
+                    // набирать заново. В клубе интернет рвётся по несколько раз
+                    // за смену, и «отправьте ещё раз» — плохой ответ.
+                    undelivered.append(trimmed)
+                    sendError = "Нет связи. Сообщение отправится само, когда появится интернет."
+                } else {
+                    // Фильтр мата отвечает 422: сообщение не ушло по существу,
+                    // и текст нужно вернуть человеку, а не досылать молча.
+                    sendError = "\(e.userMessage)\n\n\(trimmed)"
+                }
             } catch {
                 pending.removeAll { $0.id == draft.id }
                 sendError = "\(error.localizedDescription)\n\n\(trimmed)"
             }
         }
         return true
+    }
+
+    /// Дослать застрявшее. Порядок сохраняем: разговор без него рассыпается.
+    func flushUndelivered() async {
+        guard !undelivered.isEmpty else { return }
+        let queue = undelivered
+        undelivered = []
+
+        for text in queue {
+            do {
+                try await service.sendTeamMessage(text)
+            } catch {
+                // Связь всё ещё не вернулась: кладём остаток обратно и ждём
+                // следующего повода.
+                undelivered.append(text)
+            }
+        }
+
+        if undelivered.isEmpty {
+            sendError = nil
+            await load()
+        }
     }
 }
 
@@ -1051,6 +1086,20 @@ struct TeamChatScreen: View {
                             .foregroundStyle(Theme.textMuted)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+
+                if !store.undelivered.isEmpty {
+                    // Молчаливая очередь пугает сильнее ошибки: человек не
+                    // понимает, ушло сообщение или нет.
+                    Label(
+                        "\(store.undelivered.count) \(pluralize(store.undelivered.count, "сообщение ждёт", "сообщения ждут", "сообщений ждут")) связи",
+                        systemImage: "arrow.clockwise"
+                    )
+                    .font(Typography.caption)
+                    .foregroundStyle(Theme.warning)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, Spacing.lg)
+                    .padding(.vertical, Spacing.xs)
                 }
 
                 if let reply = store.replyTo {
@@ -1167,6 +1216,9 @@ struct TeamChatScreen: View {
                 try? await Task.sleep(for: .seconds(15))
                 if Task.isCancelled { return }
                 await store?.refresh()
+                // Связь есть, раз лента обновилась: самое время дослать то,
+                // что не ушло.
+                await store?.flushUndelivered()
             }
         }
     }
@@ -1471,6 +1523,30 @@ final class MessagesStore {
         }
     }
 
+    /// Что не ушло из-за связи: кому и что. Ждёт своей очереди.
+    private(set) var undelivered: [(userID: String, text: String)] = []
+
+    /// Дослать застрявшее — по порядку, чтобы разговор не рассыпался.
+    func flushUndelivered() async {
+        guard !undelivered.isEmpty else { return }
+        let queue = undelivered
+        undelivered = []
+
+        for item in queue {
+            do {
+                try await service.sendDirect(to: item.userID, text: item.text)
+            } catch {
+                undelivered.append(item)
+            }
+        }
+
+        if undelivered.isEmpty {
+            sendError = nil
+            if let openedUserID { await open(openedUserID) }
+            await load()
+        }
+    }
+
     /// Отправка без ожидания: письмо появляется в переписке сразу, на сервер
     /// уходит фоном. Раньше между нажатием и появлением текста проходила
     /// секунда с лишним — её съедала проверка текста через ИИ на сервере.
@@ -1489,8 +1565,15 @@ final class MessagesStore {
                 try await service.sendDirect(to: userID, text: trimmed)
                 await open(userID)
                 await load()
+                await flushUndelivered()
             } catch let e as APIError {
                 conversation.removeAll { $0.id == draft.id }
+                if case .transport = e {
+                    // Связи нет — письмо не теряем: дошлём, когда появится.
+                    undelivered.append((userID, trimmed))
+                    sendError = "Нет связи. Сообщение отправится само, когда появится интернет."
+                    return
+                }
                 sendError = "\(e.userMessage)\n\n\(trimmed)"
             } catch {
                 conversation.removeAll { $0.id == draft.id }
@@ -1916,6 +1999,7 @@ struct ConversationPane: View {
                 try? await Task.sleep(for: .seconds(15))
                 if Task.isCancelled { return }
                 await store.refreshConversation(thread.otherUserID)
+                await store.flushUndelivered()
             }
         }
     }
