@@ -18,6 +18,7 @@ struct ArenaScreen: View {
     @State private var starting: ArenaStation?
     @State private var opened: ArenaStation?
     @State private var techLogging = false
+    @State private var showingHistory = false
 
     /// Обратный отсчёт идёт каждую секунду, а к серверу ходим раз в полминуты:
     /// станции меняются не так часто, а трафик у людей свой.
@@ -56,6 +57,7 @@ struct ArenaScreen: View {
                     stationGrid(group.stations, hall: hall)
                 }
 
+                historyButton
                 techButton
             } else if arena.isLoading {
                 LoadingRows(count: 4)
@@ -85,6 +87,9 @@ struct ArenaScreen: View {
         }
         .sheet(isPresented: $techLogging) {
             ArenaTechSheet(stations: hall?.stations ?? [])
+        }
+        .sheet(isPresented: $showingHistory) {
+            if let hall { ArenaHistorySheet(hall: hall) }
         }
     }
 
@@ -241,6 +246,20 @@ struct ArenaScreen: View {
 
     /// Можно ли трогать деньги зала: смена открыта и она своя.
     private var canSell: Bool { shiftStore.isMyShift }
+
+    /// Что уже было сегодня.
+    ///
+    /// Оператор заступает в середине дня: сколько сдали до него, какую станцию
+    /// чинили — он не знает, а спрашивают с него. Отдельным листом, а не в
+    /// ленте зала: во время смены важнее свободные станции.
+    private var historyButton: some View {
+        Button {
+            showingHistory = true
+        } label: {
+            Label("Что было сегодня", systemImage: "clock.arrow.circlepath")
+        }
+        .buttonStyle(SecondaryButtonStyle())
+    }
 
     private var techButton: some View {
         Button {

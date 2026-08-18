@@ -350,6 +350,35 @@ struct ResponseDecodingTests {
         #expect(hall.tariffs(for: console).map(\.id) == ["t-2"])
     }
 
+    @Test("Что было сегодня: оплаты и поломки")
+    func arenaToday() throws {
+        let hall = try decode(
+            DataEnvelope<ArenaHall>.self,
+            """
+            {"data":{"zones":[],"stations":[],"tariffs":[],"sessions":[],
+            "today_income":{"cash":12500,"kaspi":8000,"rows":[
+            {"cash_amount":2800,"kaspi_amount":0,"comment":"Арена: 801 — Час",
+            "created_at":"2026-08-18T09:10:00.000Z"},
+            {"cash_amount":0,"kaspi_amount":5600,"comment":"Арена: 705 — 2+1",
+            "created_at":"2026-08-18T11:30:00.000Z"}]},
+            "today_tech_logs":[{"id":"t-1","station_name":"803","reason":"Не работает мышь",
+            "amount":3500,"created_at":"2026-08-18T10:00:00.000Z"}]}}
+            """
+        ).data
+
+        #expect(hall.todayRows.count == 2)
+        #expect(hall.todayTotal == 20_500)
+
+        let first = try #require(hall.todayRows.first)
+        #expect(first.comment == "Арена: 801 — Час")
+        #expect(first.total == 2_800)
+
+        let log = try #require(hall.techLogs.first)
+        #expect(log.stationName == "803")
+        #expect(log.reason == "Не работает мышь")
+        #expect(log.amount == 3_500)
+    }
+
     @Test("Остаток времени и просрочка считаются от конца сессии")
     func arenaCountdown() throws {
         let hall = try decode(

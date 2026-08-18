@@ -741,3 +741,133 @@ struct ArenaPaymentCard: View {
         }
     }
 }
+
+/// Что было в зале сегодня: оплаты и поломки.
+///
+/// Смена начинается не с чистого листа: до тебя кто-то сидел, кто-то платил,
+/// какую-то станцию чинили. Раньше это знал только тот, кто стоял утром, —
+/// сервер отдавал и то, и другое, а приложение не показывало.
+struct ArenaHistorySheet: View {
+    let hall: ArenaHall
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScreenScroll {
+                Card {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Касса зала за сегодня")
+                                .font(Typography.caption)
+                                .foregroundStyle(Theme.textMuted)
+                            Text(Money.format(hall.todayTotal))
+                                .font(Typography.metric)
+                                .foregroundStyle(Theme.text)
+                        }
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("нал \(Money.format(hall.todayCash))")
+                                .font(Typography.caption)
+                                .foregroundStyle(Theme.textDim)
+                            Text("Kaspi \(Money.format(hall.todayKaspi))")
+                                .font(Typography.caption)
+                                .foregroundStyle(Theme.textDim)
+                        }
+                    }
+                }
+
+                if hall.todayRows.isEmpty {
+                    Card {
+                        Text("Оплат сегодня ещё не было.")
+                            .font(Typography.callout)
+                            .foregroundStyle(Theme.textMuted)
+                    }
+                } else {
+                    SectionHeader("Оплаты", subtitle: "\(hall.todayRows.count)")
+                    Card {
+                        VStack(spacing: Spacing.sm) {
+                            // Свежие сверху: спрашивают почти всегда про
+                            // последние — «кто только что сел за 705».
+                            ForEach(Array(sortedRows.enumerated()), id: \.element.id) { index, row in
+                                if index > 0 { RowDivider() }
+                                HStack(alignment: .firstTextBaseline) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(row.comment)
+                                            .font(Typography.callout)
+                                            .foregroundStyle(Theme.text)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                        if let at = row.at {
+                                            Text(at.formatted(date: .omitted, time: .shortened))
+                                                .font(Typography.caption)
+                                                .foregroundStyle(Theme.textDim)
+                                        }
+                                    }
+                                    Spacer(minLength: Spacing.sm)
+                                    VStack(alignment: .trailing, spacing: 2) {
+                                        Text(Money.format(row.total))
+                                            .font(Typography.callout.weight(.medium))
+                                            .monospacedDigit()
+                                            .foregroundStyle(Theme.text)
+                                        // Чем платили — видно только когда
+                                        // делили: иначе строка шумит.
+                                        if row.cash > 0, row.kaspi > 0 {
+                                            Text("нал \(Money.format(row.cash)) · Kaspi \(Money.format(row.kaspi))")
+                                                .font(Typography.caption)
+                                                .foregroundStyle(Theme.textDim)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if !hall.techLogs.isEmpty {
+                    SectionHeader("Поломки", subtitle: "\(hall.techLogs.count)")
+                    Card(accent: Theme.warning) {
+                        VStack(spacing: Spacing.sm) {
+                            ForEach(Array(hall.techLogs.enumerated()), id: \.element.id) { index, log in
+                                if index > 0 { RowDivider() }
+                                HStack(alignment: .firstTextBaseline) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(log.reason)
+                                            .font(Typography.callout)
+                                            .foregroundStyle(Theme.text)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                        Text([log.stationName, log.at.map { $0.formatted(date: .omitted, time: .shortened) }]
+                                            .compactMap { $0 }
+                                            .joined(separator: " · "))
+                                            .font(Typography.caption)
+                                            .foregroundStyle(Theme.textDim)
+                                    }
+                                    Spacer(minLength: Spacing.sm)
+                                    if log.amount > 0 {
+                                        Text(Money.format(log.amount))
+                                            .font(Typography.callout.weight(.medium))
+                                            .monospacedDigit()
+                                            .foregroundStyle(Theme.warning)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .background(Theme.background)
+            .navigationTitle("Сегодня в зале")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Готово") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private var sortedRows: [ArenaIncomeRow] {
+        hall.todayRows.sorted { ($0.at ?? .distantPast) > ($1.at ?? .distantPast) }
+    }
+}

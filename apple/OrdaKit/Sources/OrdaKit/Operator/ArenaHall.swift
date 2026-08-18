@@ -17,6 +17,13 @@ public struct ArenaHall: Decodable, Sendable {
     public let sessions: [ArenaSession]
     public let todayCash: Double
     public let todayKaspi: Double
+    /// Что уже прошло за сегодня: оплаты и технические заметки.
+    ///
+    /// Оператор заступает на смену в середине дня и не знает, что было до
+    /// него: сколько сдали, какую станцию чинили. Сервер это отдаёт с самого
+    /// начала — приложение просто не читало.
+    public let todayRows: [ArenaIncomeRow]
+    public let techLogs: [ArenaTechLog]
 
     public var todayTotal: Double { todayCash + todayKaspi }
 
@@ -54,11 +61,13 @@ public struct ArenaHall: Decodable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case zones, stations, tariffs, sessions
         case todayIncome = "today_income"
+        case techLogs = "today_tech_logs"
     }
 
     private struct TodayIncome: Decodable {
         let cash: Double?
         let kaspi: Double?
+        let rows: [ArenaIncomeRow]?
     }
 
     public init(from decoder: any Decoder) throws {
@@ -71,6 +80,8 @@ public struct ArenaHall: Decodable, Sendable {
         let income = try c.decodeIfPresent(TodayIncome.self, forKey: .todayIncome)
         todayCash = income?.cash ?? 0
         todayKaspi = income?.kaspi ?? 0
+        todayRows = income?.rows ?? []
+        techLogs = (try? c.decodeIfPresent([ArenaTechLog].self, forKey: .techLogs)) as? [ArenaTechLog] ?? []
     }
 }
 
@@ -141,5 +152,56 @@ public enum ArenaPayment: String, Sendable, CaseIterable {
         case .kaspi: "Kaspi"
         case .mixed: "Смешанно"
         }
+    }
+}
+
+/// Одна оплата зала за сегодня.
+public struct ArenaIncomeRow: Decodable, Sendable, Identifiable, Hashable {
+    public let comment: String
+    public let cash: Double
+    public let kaspi: Double
+    public let at: Date?
+
+    public var total: Double { cash + kaspi }
+    /// Строки приходят без своих идентификаторов — собираем из времени и текста.
+    public var id: String { "\(at?.timeIntervalSince1970 ?? 0)-\(comment)" }
+
+    private enum CodingKeys: String, CodingKey {
+        case comment
+        case cash = "cash_amount"
+        case kaspi = "kaspi_amount"
+        case at = "created_at"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        comment = try c.decodeFlexibleString(forKey: .comment) ?? "Арена"
+        cash = try c.decodeIfPresent(Double.self, forKey: .cash) ?? 0
+        kaspi = try c.decodeIfPresent(Double.self, forKey: .kaspi) ?? 0
+        at = DateParsing.date(from: try c.decodeFlexibleString(forKey: .at))
+    }
+}
+
+/// Техническая заметка по станции за сегодня.
+public struct ArenaTechLog: Decodable, Sendable, Identifiable, Hashable {
+    public let id: String
+    public let stationName: String?
+    public let reason: String
+    public let amount: Double
+    public let at: Date?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, reason, amount
+        case stationName = "station_name"
+        case at = "created_at"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeFlexibleString(forKey: .id) ?? UUID().uuidString
+        stationName = try c.decodeFlexibleString(forKey: .stationName)
+        reason = try c.decodeFlexibleString(forKey: .reason) ?? "Поломка"
+        amount = try c.decodeIfPresent(Double.self, forKey: .amount) ?? 0
+        at = DateParsing.date(from: try c.decodeFlexibleString(forKey: .at))
     }
 }
