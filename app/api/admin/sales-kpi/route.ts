@@ -58,6 +58,9 @@ export async function GET(request: Request) {
       organizationId: company.organization_id ?? null,
       from,
       to,
+      // Вероятностный прогноз считается рядом с рабочим разбором и ничего в
+      // нём не меняет. Экрану он нужен, поэтому здесь включён.
+      withProbability: true,
     })
 
     const { settings } = report
@@ -81,6 +84,9 @@ export async function GET(request: Request) {
         shifts: report.shifts,
         cashiers: report.cashiers,
         model_version: report.model_version,
+        // Новое поле, старые не тронуты: страница и выгрузки, которые о нём
+        // не знают, продолжают работать ровно как раньше.
+        probabilistic_forecast: report.probabilistic,
       },
     })
   } catch (error) {

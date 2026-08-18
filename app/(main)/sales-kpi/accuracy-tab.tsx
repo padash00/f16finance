@@ -61,6 +61,32 @@ type AccuracyData = {
   }
   settings: { b1_amount: number; b2_amount: number; b3_amount: number; min_sample_size: number }
   model_version: string
+  /**
+   * Теневое сравнение: нынешняя модель против вероятностной. Обе прогоняются
+   * по одной истории, прогноз на смену делается до того, как смена попала в
+   * базу. Ни на план, ни на выплату это не влияет — это измерение.
+   */
+  model_comparison?: {
+    model_version: string
+    v1: ModelMetrics
+    v2: ModelMetrics
+    verdict: { winner: 'v1' | 'v2' | 'tie'; wapeDelta: number | null; summary: string }
+    b1_calibration: {
+      brierScore: number | null
+      observations: number
+      buckets: Array<{ from: number; to: number; predicted: number; observed: number; count: number }>
+    }
+  }
+}
+
+type ModelMetrics = {
+  mae: number | null
+  wape: number | null
+  bias: number | null
+  coverage50: number | null
+  coverage80: number | null
+  intervalWidth: number | null
+  observations: number
 }
 
 const LEVEL_LABELS: Record<string, string> = { b1: 'B1', b2: 'B2', b3: 'B3' }
@@ -106,6 +132,127 @@ function biasText(value: number | null | undefined): string {
   if (Math.abs(p) < 3) return 'без перекоса'
   const size = Math.abs(p) >= 10 ? 'заметно' : 'немного'
   return p > 0 ? `${size} завышает ожидание` : `${size} занижает ожидание`
+}
+
+/**
+ * Сравнение моделей — самая честная часть вкладки.
+ *
+ * Здесь видно не «какая формула красивее», а попадает ли обещанный диапазон
+ * туда, куда обещал. Модель, чей «диапазон 80%» накрывает факт в половине
+ * случаев, вводит в заблуждение — и это должно быть видно владельцу, а не
+ * только в тестах.
+ */
+function ModelComparison(props: { data: NonNullable<AccuracyData['model_comparison']> }) {
+  const { v1, v2, verdict, b1_calibration } = props.data
+
+  const rows: Array<{ label: string; hint: string; v1: string; v2: string }> = [
+    {
+      label: 'Средний промах',
+      hint: 'На сколько чеков в среднем ошибается прогноз',
+      v1: v1.mae == null ? '—' : `${v1.mae} чек.`,
+      v2: v2.mae == null ? '—' : `${v2.mae} чек.`,
+    },
+    {
+      label: 'Промах в процентах',
+      hint: 'Тот же промах относительно потока — позволяет сравнивать разные точки',
+      v1: pct(v1.wape),
+      v2: pct(v2.wape),
+    },
+    {
+      label: 'Систематический сдвиг',
+      hint: 'Плюс — прогноз стабильно завышает, минус — занижает. Ноль лучше всего',
+      v1: v1.bias == null ? '—' : v1.bias > 0 ? `+${v1.bias}` : String(v1.bias),
+      v2: v2.bias == null ? '—' : v2.bias > 0 ? `+${v2.bias}` : String(v2.bias),
+    },
+    {
+      label: 'Диапазон накрыл факт',
+      hint: 'Обещали 80% — значит, факт обязан попадать в диапазон примерно в 80% смен',
+      v1: pct(v1.coverage80),
+      v2: pct(v2.coverage80),
+    },
+    {
+      label: 'Ширина диапазона',
+      hint: 'Цена этого попадания: слишком широкий диапазон накроет что угодно и ничего не скажет',
+      v1: v1.intervalWidth == null ? '—' : `${v1.intervalWidth} чек.`,
+      v2: v2.intervalWidth == null ? '—' : `${v2.intervalWidth} чек.`,
+    },
+  ]
+
+  return (
+    <Card className="p-4">
+      <div className="mb-1 text-sm font-semibold text-foreground">Нынешняя модель против вероятностной</div>
+      <p className="mb-3 text-xs text-muted-foreground">
+        Обе прогоняются по одной истории: прогноз на смену делается до того, как смена попала в базу.
+        Вероятностная пока ни на что не влияет — ни на балл продавца, ни на планы, ни на выплаты.
+      </p>
+
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[520px] text-sm">
+          <thead>
+            <tr className="border-b border-border text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+              <th className="py-2 pr-2 font-normal">Показатель</th>
+              <th className="w-28 py-2 px-2 text-right font-normal">Нынешняя</th>
+              <th className="w-28 py-2 pl-2 text-right font-normal">Вероятностная</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border/60">
+            {rows.map((row) => (
+              <tr key={row.label}>
+                <td className="py-2 pr-2">
+                  <div className="text-xs text-foreground">{row.label}</div>
+                  <div className="text-[11px] text-muted-foreground">{row.hint}</div>
+                </td>
+                <td className="py-2 px-2 text-right text-sm tabular-nums">{row.v1}</td>
+                <td className="py-2 pl-2 text-right text-sm font-semibold tabular-nums">{row.v2}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div
+        className={`mt-3 rounded-lg px-3 py-2 text-xs ${
+          verdict.winner === 'v2'
+            ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+            : verdict.winner === 'v1'
+              ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300'
+              : 'bg-surface-muted text-muted-foreground'
+        }`}
+      >
+        {verdict.summary}
+      </div>
+
+      {b1_calibration.buckets.length > 0 ? (
+        <div className="mt-4">
+          <div className="text-xs font-semibold text-foreground">Сбываются ли обещанные вероятности</div>
+          <p className="mb-2 text-[11px] text-muted-foreground">
+            Если модель обещает «B1 возьмут в 70% смен», то в реальности он должен браться примерно в 70%.
+            Расхождение важнее средней ошибки: обещание, которому нельзя верить, хуже отсутствия обещания.
+          </p>
+          <div className="space-y-1">
+            {b1_calibration.buckets.map((bucket) => {
+              const gap = Math.abs(bucket.predicted - bucket.observed)
+              return (
+                <div key={`${bucket.from}-${bucket.to}`} className="flex items-center gap-2 text-xs">
+                  <span className="w-24 text-muted-foreground">обещали ~{Math.round(bucket.predicted * 100)}%</span>
+                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-muted">
+                    <div
+                      className={gap > 0.12 ? 'h-full bg-rose-500/70' : 'h-full bg-emerald-500/70'}
+                      style={{ width: `${Math.round(bucket.observed * 100)}%` }}
+                    />
+                  </div>
+                  <span className="w-24 text-right tabular-nums">
+                    сбылось {Math.round(bucket.observed * 100)}%
+                  </span>
+                  <span className="w-14 text-right text-[11px] text-muted-foreground">{bucket.count} см.</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ) : null}
+    </Card>
+  )
 }
 
 export function AccuracyTab(props: { companyId: string }) {
@@ -338,6 +485,8 @@ export function AccuracyTab(props: { companyId: string }) {
           </ul>
         </Card>
       ) : null}
+
+      {payload?.model_comparison ? <ModelComparison data={payload.model_comparison} /> : null}
 
       <p className="px-1 text-xs text-muted-foreground">
         История: {payload?.history.from || '—'} — {payload?.history.to || '—'}, всего{' '}

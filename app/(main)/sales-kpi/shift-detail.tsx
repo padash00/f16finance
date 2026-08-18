@@ -182,12 +182,124 @@ function ContextBlock(props: { context: ShiftContext }) {
   )
 }
 
+/**
+ * Что ожидалось от смены и что случилось.
+ *
+ * Показываем деловой смысл, а не устройство модели: человеку нужно знать,
+ * попал ли поток в обычные границы и насколько уверенно продавец обошёл норму.
+ * Названия распределений, параметры разброса и размеры выборки живут во
+ * вкладке качества — здесь они только мешали бы.
+ */
+function ForecastBlock(props: { probability: ShiftProbabilityView }) {
+  const { demand, fact_percentile, attach, simulation } = props.probability
+  if (!demand && !attach && !simulation) return null
+
+  const percent = (value: number) => Math.round(value * 100)
+
+  return (
+    <Block title="Чего ждали от смены">
+      <div className="space-y-2.5 text-xs leading-relaxed text-body">
+        {demand ? (
+          <div>
+            <div>
+              Ожидалось <span className="font-semibold text-foreground">{Math.round(demand.expectedReceipts)} чеков</span>,
+              обычные границы для такой смены — от {Math.round(demand.interval80.low)} до{' '}
+              {Math.round(demand.interval80.high)}.
+            </div>
+            {fact_percentile !== null ? (
+              <div className="text-muted-foreground">
+                {fact_percentile <= 0.15
+                  ? `Поток был в нижних ${percent(fact_percentile)}% ожидаемого — покупателей пришло заметно меньше обычного.`
+                  : fact_percentile >= 0.85
+                    ? `Поток был в верхних ${100 - percent(fact_percentile)}% ожидаемого — покупателей пришло заметно больше обычного.`
+                    : 'Поток остался в обычных границах — спрос был как всегда.'}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {simulation ? (
+          <div>
+            <div>
+              Прогноз выручки был{' '}
+              <span className="font-semibold text-foreground">
+                {simulation.medianRevenue.toLocaleString('ru-RU')} ₸
+              </span>
+              , вероятные границы — от {simulation.interval80.low.toLocaleString('ru-RU')} до{' '}
+              {simulation.interval80.high.toLocaleString('ru-RU')} ₸.
+            </div>
+            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground">
+              {simulation.probabilityB1 !== null ? <span>B1 — {percent(simulation.probabilityB1)}%</span> : null}
+              {simulation.probabilityB2 !== null ? <span>B2 — {percent(simulation.probabilityB2)}%</span> : null}
+              {simulation.probabilityB3 !== null ? <span>B3 — {percent(simulation.probabilityB3)}%</span> : null}
+              {simulation.probabilityRecord !== null ? (
+                <span>рекорд — {percent(simulation.probabilityRecord)}%</span>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
+        {attach && attach.observedRate !== null ? (
+          <div>
+            <div>
+              Допродажи: <span className="font-semibold text-foreground">{percent(attach.observedRate)}%</span> чеков с
+              двумя и более позициями.
+            </div>
+            {attach.probabilityAboveBaseline > 0 ? (
+              <div className="text-muted-foreground">
+                {attach.probabilityAboveBaseline >= 0.85
+                  ? `Вероятность, что продавец действительно работает лучше нормы, — ${percent(attach.probabilityAboveBaseline)}%.`
+                  : attach.probabilityAboveBaseline <= 0.15
+                    ? `Вероятность, что он действительно слабее нормы, — ${percent(attach.probabilityBelowBaseline)}%.`
+                    : `Отличить от нормы нельзя: за смену было всего ${attach.opportunities} чеков, на таком объёме разница ещё не значит ничего.`}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="text-[11px] text-muted-foreground">
+          Это прогноз, посчитанный до смены. На балл продавца и на план он не влияет.
+        </div>
+      </div>
+    </Block>
+  )
+}
+
+/**
+ * Вероятностный прогноз в том виде, в каком он нужен экрану.
+ *
+ * Отдельный тип, а не импорт серверного: страница не должна тянуть за собой
+ * серверный модуль ради формы объекта.
+ */
+export type ShiftProbabilityView = {
+  demand: {
+    expectedReceipts: number
+    interval80: { low: number; high: number }
+  } | null
+  fact_percentile: number | null
+  attach: {
+    observedRate: number | null
+    opportunities: number
+    probabilityAboveBaseline: number
+    probabilityBelowBaseline: number
+  } | null
+  simulation: {
+    medianRevenue: number
+    interval80: { low: number; high: number }
+    probabilityB1: number | null
+    probabilityB2: number | null
+    probabilityB3: number | null
+    probabilityRecord: number | null
+  } | null
+}
+
 export function ShiftDetail(props: {
   companyId: string
   date: string
   shift: 'day' | 'night'
   explanation: ShiftExplanation | null
   context?: ShiftContext | null
+  probability?: ShiftProbabilityView | null
   canAskAi: boolean
 }) {
   const [ai, setAi] = useState<AiResult | null>(null)
@@ -235,6 +347,8 @@ export function ShiftDetail(props: {
           <Block title="Что это значит">
             <p className="text-xs leading-relaxed text-body">{explanation.conclusion}</p>
           </Block>
+
+          {props.probability ? <ForecastBlock probability={props.probability} /> : null}
 
           {props.context ? <ContextBlock context={props.context} /> : null}
 

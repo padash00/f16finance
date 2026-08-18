@@ -24,6 +24,8 @@ import {
   resolveStoreKpiContext,
   todayISO,
 } from '@/lib/server/store-kpi'
+import { calibration, compareModels } from '@/lib/domain/store-kpi/probability/backtest'
+import { walkForward } from '@/lib/domain/store-kpi/probability/walk-forward'
 import {
   analyzeStoreKpi,
   backtestPlans,
@@ -58,6 +60,20 @@ export async function GET(request: Request) {
     const facts = await loadShiftFacts(supabase, { companyId, from: historyFrom, to: today })
 
     const backtest = backtestPlans(facts, settings)
+
+    // ── Нынешняя модель против вероятностной ─────────────────────────────
+    // Обе гоняются по одной истории и по одним правилам: прогноз на смену
+    // делается до того, как смена попала в базу. Иначе новая модель выглядела
+    // бы точнее просто потому, что подглядывает.
+    const walk = walkForward(facts, {
+      minSample: settings.min_sample_size,
+      summerMonths: settings.summer_months,
+      // В бэктесте симуляций меньше: их тут сотни, а точность вероятности до
+      // третьего знака в сравнении моделей ничего не решает.
+      iterations: 2000,
+    })
+    const modelComparison = compareModels(walk.demandPoints)
+    const b1Calibration = calibration(walk.b1Calibration)
 
     // Отдельно — точность уже объявленных планов. Бэктест показывает, как
     // модель вела бы себя на всей истории, а это — как она реально сработала
@@ -158,6 +174,15 @@ export async function GET(request: Request) {
           bonus_share: backtest.revenue > 0 ? Math.round((backtest.bonus_cost / backtest.revenue) * 10000) / 10000 : null,
           accuracy: backtest.accuracy,
           calibration: backtest.calibration,
+        },
+        // Теневое сравнение моделей. Ни на план, ни на выплату не влияет:
+        // это измерение, а не решение.
+        model_comparison: {
+          model_version: 'probabilistic-v1',
+          v1: modelComparison.v1,
+          v2: modelComparison.v2,
+          verdict: modelComparison.verdict,
+          b1_calibration: b1Calibration,
         },
         live: {
           shifts: liveShifts,

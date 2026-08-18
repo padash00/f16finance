@@ -65,7 +65,12 @@ import { MoneyMapTab } from './money-map-tab'
 import { PayoutTab } from './payout-tab'
 import { PlansTab } from './plans-tab'
 import { QualityTab } from './quality-tab'
-import { ShiftDetail, type ShiftContext, type ShiftExplanation } from './shift-detail'
+import {
+  ShiftDetail,
+  type ShiftContext,
+  type ShiftExplanation,
+  type ShiftProbabilityView,
+} from './shift-detail'
 
 // ─── Типы ответа API ────────────────────────────────────────────────────────
 
@@ -152,6 +157,14 @@ type ApiData = {
   shifts?: ShiftRow[]
   cashiers?: CashierRow[]
   model_version?: string
+  /**
+   * Вероятностный прогноз. Считается рядом с рабочим разбором и ни на балл,
+   * ни на план, ни на выплату не влияет: пока это измерение, а не решение.
+   */
+  probabilistic_forecast?: {
+    model_version: string
+    shifts: Array<{ date: string; shift: string } & ShiftProbabilityView>
+  } | null
 }
 
 // ─── Словарь ────────────────────────────────────────────────────────────────
@@ -1749,6 +1762,11 @@ export default function SalesKpiPage() {
                                   shift={s.shift}
                                   explanation={s.explanation}
                                   context={s.context}
+                                  probability={
+                                    payload?.probabilistic_forecast?.shifts.find(
+                                      (p) => p.date === s.date && p.shift === s.shift,
+                                    ) ?? null
+                                  }
                                   canAskAi
                                 />
                               </td>

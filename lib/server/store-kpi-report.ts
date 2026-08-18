@@ -15,10 +15,17 @@ import { analyzeStoreKpi, explainShift, trainingFlag } from '@/lib/domain/store-
 import {
   addDaysISO,
   earliestSaleDate,
+  loadPriceIndex,
   loadShiftFacts,
   loadStoreKpiSettings,
 } from '@/lib/server/store-kpi'
 import { contextForShift, loadContextSources, type ShiftContext } from '@/lib/server/store-kpi-context'
+import {
+  buildProbabilisticLayer,
+  loadReceiptSamples,
+  type PlanThresholdMap,
+  type ProbabilisticLayer,
+} from '@/lib/server/store-kpi-probability'
 
 type AnyClient = any
 
@@ -31,6 +38,11 @@ export async function buildStoreKpiReport(
     organizationId: string | null
     from: string
     to: string
+    /**
+     * Считать ли вероятностный слой. По умолчанию нет: он нужен экрану смен и
+     * вкладке точности, а выгрузкам и кронам — лишняя работа.
+     */
+    withProbability?: boolean
   },
 ) {
   const { companyId, from, to } = args
@@ -114,6 +126,27 @@ export async function buildStoreKpiReport(
     }
   })
 
+  // ── Вероятностный слой (теневой режим) ───────────────────────────────────
+  // Считается рядом и ничего здесь не меняет: ни балла продавца, ни планов,
+  // ни выплат. Если он упадёт, отчёт обязан выжить — поэтому в try.
+  let probabilistic: ProbabilisticLayer | null = null
+  if (args.withProbability && targetFacts.length > 0) {
+    try {
+      probabilistic = await buildProbabilisticShadow(supabase, {
+        companyId,
+        baselineFrom,
+        from,
+        to,
+        baselineFacts,
+        targetFacts,
+        settings,
+      })
+    } catch {
+      // Теневая модель не имеет права ронять рабочий отчёт.
+      probabilistic = null
+    }
+  }
+
   return {
     period: { from, to },
     settings,
@@ -123,7 +156,69 @@ export async function buildStoreKpiReport(
     shifts,
     cashiers,
     model_version: result.model_version,
+    probabilistic,
   }
+}
+
+/**
+ * Сбор вероятностного слоя: чеки, опубликованные планы, расчёт.
+ *
+ * Планы читаются как есть и в модель только подставляются. Прогноз не имеет
+ * права их двигать: план — это обещание, объявленное заранее, и если вечером
+ * он меняется вслед за прогнозом, обещания не было.
+ */
+async function buildProbabilisticShadow(
+  supabase: AnyClient,
+  args: {
+    companyId: string
+    baselineFrom: string
+    from: string
+    to: string
+    baselineFacts: any[]
+    targetFacts: any[]
+    settings: any
+  },
+): Promise<ProbabilisticLayer> {
+  const priceIndex = await loadPriceIndex(supabase, args.companyId, args.baselineFrom, args.to)
+
+  const [receipts, planRows] = await Promise.all([
+    loadReceiptSamples(supabase, {
+      companyId: args.companyId,
+      from: args.baselineFrom,
+      to: args.to,
+      priceIndex,
+    }),
+    supabase
+      .from('store_kpi_shift_plans')
+      .select('plan_date, shift, control_amount, b1_amount, b2_amount, b3_amount, record_threshold')
+      .eq('company_id', args.companyId)
+      .gte('plan_date', args.from)
+      .lte('plan_date', args.to),
+  ])
+
+  const plans: PlanThresholdMap = new Map()
+  for (const row of (planRows as any)?.data || []) {
+    plans.set(String(row.plan_date) + '|' + String(row.shift), {
+      control: numberOrNull(row.control_amount),
+      b1: numberOrNull(row.b1_amount),
+      b2: numberOrNull(row.b2_amount),
+      b3: numberOrNull(row.b3_amount),
+      record: numberOrNull(row.record_threshold),
+    })
+  }
+
+  return buildProbabilisticLayer({
+    baselineFacts: args.baselineFacts,
+    targetFacts: args.targetFacts,
+    settings: args.settings,
+    receipts,
+    plans,
+  })
+}
+
+function numberOrNull(value: unknown): number | null {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
 }
 
 /**
