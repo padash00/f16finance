@@ -412,7 +412,6 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         label: 'Движения товара',
         capabilities: [
           { id: 'store-movements.view', label: 'Просмотр истории', severity: 'low' },
-          { id: 'store-movements.create', label: 'Создать перемещение', severity: 'medium' },
         ],
       },
       {

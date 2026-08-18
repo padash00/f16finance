@@ -409,7 +409,6 @@ extension CapabilityCatalog {
                     label: "Движения товара",
                     capabilities: [
                         Capability(id: "store-movements.view", label: "Просмотр истории", description: nil, severity: .low, deps: []),
-                        Capability(id: "store-movements.create", label: "Создать перемещение", description: nil, severity: .medium, deps: []),
                     ]
                 ),
                 CapabilityPage(

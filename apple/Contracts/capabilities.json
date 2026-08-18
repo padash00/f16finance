@@ -3,7 +3,7 @@
   "summary": {
     "groups": 9,
     "pages": 85,
-    "capabilities": 409
+    "capabilities": 408
   },
   "groups": [
     {
@@ -1272,13 +1272,6 @@
               "label": "Просмотр истории",
               "description": null,
               "severity": "low",
-              "deps": []
-            },
-            {
-              "id": "store-movements.create",
-              "label": "Создать перемещение",
-              "description": null,
-              "severity": "medium",
               "deps": []
             }
           ]

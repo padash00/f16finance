@@ -41,7 +41,10 @@ struct AccessResolverTests {
         let summary = CapabilityCatalog.summary
         #expect(summary.groups == 9)
         #expect(summary.pages == 85)
-        #expect(summary.capabilities == 409)
+        // Было 409: из каталога убрано «Создать перемещение» — право-фантом,
+        // которого не проверял ни один маршрут, а само перемещение работает
+        // под правом переноса на витрину.
+        #expect(summary.capabilities == 408)
     }
 
     @Test("Права разбираются на страницу и действие")
