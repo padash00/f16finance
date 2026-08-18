@@ -126,6 +126,8 @@ public actor APIClient {
 
     private let baseURL: URL
     private let session: URLSession
+    /// Последние ответы на диске. Нужен, чтобы экран рисовался сразу.
+    private let cache = ResponseCache()
     private let tokenProvider: any TokenProvider
     private let decoder: JSONDecoder
 
@@ -189,7 +191,28 @@ public actor APIClient {
         try await sendRaw(request)
     }
 
+    /// Последний удачный ответ на этот же запрос, если он есть.
+    ///
+    /// Экран показывает его сразу и уходит за свежим — вместо скелета на
+    /// пол-экрана при каждом открытии. Возвращает `nil`, если ответа нет или
+    /// он старше суток.
+    public func cached<Response: Decodable>(
+        _ request: APIRequest,
+        as type: Response.Type = Response.self
+    ) async -> Response? {
+        guard let data = await cache.data(for: request) else { return nil }
+        return try? decoder.decode(Response.self, from: data)
+    }
+
+    /// Забыть всё сохранённое. При выходе из аккаунта — обязательно.
+    public func clearCache() async {
+        await cache.clear()
+    }
+
     private func sendRaw(_ request: APIRequest, isRetry: Bool = false) async throws -> Data {
+        // Ответ кладём в кэш только удачный и только для GET — это делается
+        // ниже, там, где известен код ответа.
+
         let urlRequest = try await buildURLRequest(request)
 
         let data: Data
@@ -207,6 +230,7 @@ public actor APIClient {
         }
 
         if (200..<300).contains(http.statusCode) {
+            await cache.store(data, for: request)
             return data
         }
 

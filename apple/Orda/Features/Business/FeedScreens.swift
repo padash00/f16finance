@@ -797,7 +797,13 @@ final class TeamChatStore {
     var lastMessageID: String? { visible.last?.id }
 
     func load() async {
-        isLoading = true
+        // Прошлая лента — сразу. Поиск не кэшируем: там ждут именно ответа на
+        // запрос, а не вчерашних сообщений.
+        if feed == nil, search.isEmpty, let cached = await service.cachedTeamChat() {
+            feed = cached
+        }
+
+        isLoading = feed == nil
         defer { isLoading = false }
         do {
             feed = try await service.teamChat(search: search)
@@ -1109,9 +1115,12 @@ struct TeamChatScreen: View {
         .task { if store == nil { let s = TeamChatStore(api: api); store = s; await s.load() } }
         // Чат без самообновления — это не чат: сообщение сменщика видно только
         // после того, как экран закроют и откроют заново.
+        // Три секунды, а не восемь: в разговоре восемь секунд — это пауза, в
+        // которую человек успевает решить, что сообщение не дошло. Опрос идёт
+        // только пока экран открыт, и лента приходит без вложений.
         .task {
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(8))
+                try? await Task.sleep(for: .seconds(3))
                 if Task.isCancelled { return }
                 await store?.refresh()
             }
@@ -1278,7 +1287,14 @@ final class MessagesStore {
     var lastMessageID: String? { conversation.last?.id }
 
     func load() async {
-        isLoading = true
+        // Сначала то, что видели в прошлый раз: список появляется сразу, а
+        // скелет на пол-экрана при каждом входе — главная причина ощущения,
+        // что приложение «думает».
+        if threads.isEmpty, let cached = await service.cachedThreads() {
+            threads = cached.threads
+        }
+
+        isLoading = threads.isEmpty
         defer { isLoading = false }
         do {
             threads = try await service.threads().threads
@@ -1299,7 +1315,13 @@ final class MessagesStore {
         }
         openedUserID = userID
 
-        isLoadingConversation = true
+        // Прошлая переписка — сразу, свежая — следом. Разговор, который
+        // открывается пустым экраном с крутилкой, читается как сломанный.
+        if conversation.isEmpty, let cached = await service.cachedConversation(with: userID) {
+            conversation = cached.visible
+        }
+
+        isLoadingConversation = conversation.isEmpty
         defer { isLoadingConversation = false }
         do {
             conversation = try await service.conversation(with: userID).visible
@@ -1800,7 +1822,7 @@ struct ConversationPane: View {
         // человек смотрит в экран, ему ответили, а он тянет список вниз.
         .task(id: thread.otherUserID) {
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(8))
+                try? await Task.sleep(for: .seconds(3))
                 if Task.isCancelled { return }
                 await store.refreshConversation(thread.otherUserID)
             }

@@ -215,6 +215,9 @@ final class AuthStore {
         // человека — с выручкой точки.
         ShiftLiveActivityController.stop()
         #endif
+        // Сохранённые ответы — тоже данные точки: следующий вошедший не
+        // должен увидеть чужую выручку, пока грузится своя.
+        await api.clearCache()
         suppressAutoQuickEntry = true
         session = nil
         role = nil

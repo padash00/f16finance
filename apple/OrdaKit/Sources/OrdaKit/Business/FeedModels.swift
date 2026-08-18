@@ -1040,6 +1040,11 @@ public struct FeedService: Sendable {
         return try await api.send(APIRequest(path: "/api/team-chat", query: query))
     }
 
+    /// Лента чата из кэша.
+    public func cachedTeamChat(limit: Int = 80) async -> TeamChatFeed? {
+        await api.cached(APIRequest(path: "/api/team-chat", query: ["limit": String(limit)]))
+    }
+
     public func sendTeamMessage(
         _ text: String,
         replyToID: String? = nil,
@@ -1225,6 +1230,11 @@ public struct FeedService: Sendable {
         try await api.send(APIRequest(path: "/api/direct-messages/threads"))
     }
 
+    /// Список переписок из кэша: рисуется сразу, обновляется следом.
+    public func cachedThreads() async -> DirectThreadList? {
+        await api.cached(APIRequest(path: "/api/direct-messages/threads"))
+    }
+
     /// Кому можно написать. Пустой запрос — все, кто доступен.
     public func contacts(search: String = "") async throws -> [DirectContact] {
         var query: [String: String] = [:]
@@ -1237,6 +1247,14 @@ public struct FeedService: Sendable {
 
     public func conversation(with userID: String, limit: Int = 100) async throws -> DirectConversation {
         try await api.send(
+            APIRequest(path: "/api/direct-messages/\(userID)", query: ["limit": String(limit)])
+        )
+    }
+
+    /// Прошлая переписка с этим человеком — чтобы разговор открывался сразу,
+    /// а не пустым экраном с крутилкой.
+    public func cachedConversation(with userID: String, limit: Int = 100) async -> DirectConversation? {
+        await api.cached(
             APIRequest(path: "/api/direct-messages/\(userID)", query: ["limit": String(limit)])
         )
     }

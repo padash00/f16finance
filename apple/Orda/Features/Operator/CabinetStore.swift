@@ -111,7 +111,14 @@ final class CabinetStore {
     }
 
     func loadOverview() async {
-        isLoadingOverview = true
+        // Экран смены открывается на вчерашних цифрах и обновляется через
+        // мгновение. Пустой экран со скелетом при каждом запуске — то, из-за
+        // чего приложение кажется медленнее, чем оно есть.
+        if overview == nil, let cached = await service.cachedOverview() {
+            overview = cached
+        }
+
+        isLoadingOverview = overview == nil
         defer { isLoadingOverview = false }
         do {
             overview = try await service.overview()

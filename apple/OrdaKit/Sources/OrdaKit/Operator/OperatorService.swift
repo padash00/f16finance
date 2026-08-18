@@ -162,8 +162,21 @@ public struct OperatorService: Sendable {
     // ── Кабинет ──────────────────────────────────────────────────────────────
 
     /// Сводка дня: неделя по зарплате, счётчики, ближайшая смена, задачи, долги.
+    /// Сводка из кэша — то, что человек видел в прошлый раз.
+    ///
+    /// Экран показывает её мгновенно и тут же обновляется. Ждать сеть, чтобы
+    /// нарисовать вчерашние цифры, незачем: они те же самые.
+    public func cachedOverview() async -> OperatorOverview? {
+        await api.cached(APIRequest(path: "/api/operator/overview"))
+    }
+
     public func overview() async throws -> OperatorOverview {
         try await api.send(APIRequest(path: "/api/operator/overview"))
+    }
+
+    public func cachedTasks() async -> [OperatorTask]? {
+        let response: OperatorTaskList? = await api.cached(APIRequest(path: "/api/operator/tasks"))
+        return response?.tasks
     }
 
     public func tasks() async throws -> [OperatorTask] {
