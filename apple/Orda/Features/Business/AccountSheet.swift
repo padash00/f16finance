@@ -257,6 +257,8 @@ struct MySalaryCard: View {
         case notLinked
         /// Связан, но в ведомости строки нет — оклад не заведён.
         case noRow
+        /// Сервер отказал или не ответил.
+        case failed(String)
 
         var text: String {
             switch self {
@@ -264,6 +266,8 @@ struct MySalaryCard: View {
                 "Аккаунт не связан с карточкой сотрудника — попросите владельца привязать её, тогда здесь появится ваш расчёт."
             case .noRow:
                 "Оклад по вам не заведён. Если он должен быть — скажите владельцу."
+            case let .failed(reason):
+                "Не удалось загрузить: \(reason)"
             }
         }
     }
@@ -333,16 +337,26 @@ struct MySalaryCard: View {
     }
 
     private func load() async {
-        // Отказ сервера не показываем: у оператора и суперадмина ответа тут и
-        // не должно быть, а красная строка в аккаунте пугала бы зря. А вот
-        // «ответ пришёл, а меня в нём нет» — это уже про человека, и об этом
-        // надо сказать: иначе экран просто пуст и объяснить его нечем.
-        guard let summary = try? await BusinessService(api: api).staffSalary() else { return }
-        slot = summary.slot
-        row = summary.rows.first(where: \.isMe) ?? (summary.selfOnly ? summary.rows.first : nil)
-        // Старый сервер сводки не знает и про связь аккаунта не отвечает —
-        // тогда молчим: причина не в человеке, а в недоехавшем обновлении.
-        missing = row == nil ? summary.meLinked.map { $0 ? .noRow : .notLinked } : nil
+        // Отказ сервера тоже называем. Молчание уже стоило двух заходов: на
+        // экране не было ни зарплаты, ни причины, и отличить «не заведено» от
+        // «не доехало обновление сайта» было нечем.
+        do {
+            let summary = try await BusinessService(api: api).staffSalary()
+            slot = summary.slot
+            row = summary.rows.first(where: \.isMe) ?? (summary.selfOnly ? summary.rows.first : nil)
+            // Старый сервер сводки не знает и про связь аккаунта не отвечает —
+            // тогда говорим прямо про обновление, а не про человека.
+            missing = row == nil
+                ? (summary.meLinked.map { $0 ? Missing.noRow : Missing.notLinked }
+                    ?? .failed("на сайте ещё старая версия расчёта"))
+                : nil
+        } catch let error as APIError {
+            row = nil
+            missing = .failed(error.userMessage)
+        } catch {
+            row = nil
+            missing = .failed(error.localizedDescription)
+        }
     }
 }
 
