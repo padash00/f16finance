@@ -528,19 +528,19 @@ extension APIError {
             case "act-not-open":
                 return "Акт ревизии уже закрыт."
             default:
-                return message.isEmpty ? "Действие сейчас невозможно." : message
+                return message.isEmpty ? "Действие сейчас невозможно." : APIError.withoutRoute(message)
             }
 
         case let .forbidden(_, _, message):
             // Отказы графика и чужой смены приходят с 403 и уже содержат
             // человеческий текст от сервера — он точнее общей формулировки.
-            return message.isEmpty ? userMessage : message
+            return message.isEmpty ? userMessage : APIError.withoutRoute(message)
 
         case let .badRequest(code, message):
             if code == "opening-cash-required" {
                 return "Перед открытием смены укажите, сколько денег в кассе."
             }
-            return message.isEmpty ? userMessage : message
+            return message.isEmpty ? userMessage : APIError.withoutRoute(message)
 
         default:
             return userMessage

@@ -269,9 +269,6 @@ struct ArticleReader: View {
                     }
                 }
 
-                if let error {
-                    Text(error).font(Typography.callout).foregroundStyle(Theme.negative)
-                }
             }
             // Ширина строки ограничена намеренно: текст на 1400 точек читать
             // невозможно, глаз теряет начало следующей строки.
@@ -309,8 +306,37 @@ struct ArticleReader: View {
         }
     }
 
+    /// Можно ли подтвердить прочтение.
+    ///
+    /// Подтверждение пишется на карточку сотрудника, и если аккаунт оператора
+    /// с ней не связан, сервер откажет — сколько ни нажимай. Показывать в этом
+    /// случае кнопку значит обещать то, чего не будет.
+    private var canConfirm: Bool { cabinet.knowledge?.canConfirm ?? true }
+
     /// Полоса подтверждения над нижним краем.
+    @ViewBuilder
     private var confirmBar: some View {
+        if canConfirm {
+            confirmControls
+        } else {
+            VStack(spacing: Spacing.xs) {
+                Text("Подтвердить прочтение пока нельзя")
+                    .font(Typography.callout.weight(.medium))
+                    .foregroundStyle(Theme.text)
+                Text("Ваш аккаунт не связан с карточкой сотрудника. Скажите руководителю — он свяжет её в разделе «Команда», и подтверждение заработает.")
+                    .font(Typography.caption)
+                    .foregroundStyle(Theme.textMuted)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: 680)
+            .frame(maxWidth: .infinity)
+            .padding(Spacing.lg)
+            .background(.bar)
+        }
+    }
+
+    private var confirmControls: some View {
         VStack(spacing: Spacing.sm) {
             if let error {
                 Text(error)

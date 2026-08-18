@@ -195,6 +195,19 @@ struct ResponseDecodingTests {
         #expect(unmatched.invoiceName == "Салфетки")
     }
 
+    // ── Тексты ошибок ────────────────────────────────────────────────────────
+
+    @Test("Адрес маршрута не показывается человеку")
+    func errorTextWithoutRoute() {
+        let error = APIError.badRequest(
+            code: "no-staff-link",
+            message: "Ваш профиль оператора не связан с профилем сотрудника. · /api/operator/knowledge/confirm"
+        )
+
+        #expect(error.operatorMessage == "Ваш профиль оператора не связан с профилем сотрудника.")
+        #expect(!error.userMessage.contains("/api/"))
+    }
+
     // ── График владельца ─────────────────────────────────────────────────────
 
     @Test("Заявки на замену приходят вместе с сеткой смен")

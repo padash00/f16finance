@@ -37,6 +37,17 @@ public enum APIError: Error, Sendable, Equatable {
         case unknown
     }
 
+    /// Адрес маршрута в конце сообщения — для журнала, не для человека.
+    ///
+    /// Клиент дописывает к тексту сервера ` · /api/…`, и это спасает при
+    /// разборе полётов. Но оператору в красной строке достаётся «Обратитесь к
+    /// администратору · /api/operator/knowledge/confirm», и половина фразы для
+    /// него шум.
+    static func withoutRoute(_ message: String) -> String {
+        guard let range = message.range(of: " · /api") else { return message }
+        return String(message[..<range.lowerBound])
+    }
+
     /// Текст для пользователя. Без кодов и технических терминов.
     public var userMessage: String {
         switch self {
@@ -56,12 +67,12 @@ public enum APIError: Error, Sendable, Equatable {
                 if let capability, let known = CapabilityCatalog.capability(id: capability) {
                     return "Нет доступа: «\(known.label)». Попросите владельца выдать это право."
                 }
-                return message.isEmpty ? "У вас нет доступа к этому действию." : message
+                return message.isEmpty ? "У вас нет доступа к этому действию." : APIError.withoutRoute(message)
             }
         case let .conflict(_, message):
-            return message.isEmpty ? "Действие сейчас невозможно." : message
+            return message.isEmpty ? "Действие сейчас невозможно." : APIError.withoutRoute(message)
         case let .badRequest(_, message):
-            return message.isEmpty ? "Проверьте введённые данные." : message
+            return message.isEmpty ? "Проверьте введённые данные." : APIError.withoutRoute(message)
         case .notFound:
             return "Не найдено."
         case .server:

@@ -117,6 +117,10 @@ export async function GET(request: Request) {
     ok: true,
     data: {
       company_id: companyId,
+      // Подтверждение прочтения пишется на карточку сотрудника. Без связки
+      // оператора с ней подтвердить нельзя — и приложение должно знать об этом
+      // заранее, а не показывать кнопку, которая всегда отвечает отказом.
+      can_confirm: Boolean(staffId),
       articles: articlesArr,
       pending_confirmations: pending,
       checklist_templates: templatesArr,

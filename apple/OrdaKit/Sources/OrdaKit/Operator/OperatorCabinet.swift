@@ -551,10 +551,18 @@ public struct KnowledgeCenter: Decodable, Sendable {
     public let items: [ChecklistItem]
     public let runs: [ChecklistRun]
     public let hasOpenShift: Bool
+    /// Можно ли вообще подтверждать прочтение.
+    ///
+    /// Подтверждение пишется на карточку сотрудника, а у оператора её может не
+    /// быть — тогда кнопка «Прочитал и понял» отвечала бы отказом при каждом
+    /// нажатии. Старые сборки сервера флага не присылают: считаем, что можно,
+    /// иначе кнопка исчезла бы у всех.
+    public let canConfirm: Bool
 
     private enum RootKeys: String, CodingKey { case data }
     private enum DataKeys: String, CodingKey {
         case articles, pending_confirmations, checklist_templates, checklist_items, checklist_runs, open_shift
+        case can_confirm
     }
     private struct OpenShift: Decodable { let id: String? }
 
@@ -567,6 +575,7 @@ public struct KnowledgeCenter: Decodable, Sendable {
         items = try data.decodeIfPresent([ChecklistItem].self, forKey: .checklist_items) ?? []
         runs = try data.decodeIfPresent([ChecklistRun].self, forKey: .checklist_runs) ?? []
         hasOpenShift = (try? data.decodeIfPresent(OpenShift.self, forKey: .open_shift))??.id != nil
+        canConfirm = (try? data.decodeIfPresent(Bool.self, forKey: .can_confirm)) as? Bool ?? true
     }
 
     /// Пункты конкретного чек-листа, по порядку.

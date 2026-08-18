@@ -103,17 +103,24 @@ public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: Vie
                 // Заодно снимается спор за адрес: `navigationDestination(for:)`
                 // с одинаковым типом идентификатора в одном стеке объявляли
                 // разные экраны, и SwiftUI открывал не тот.
-                .navigationDestination(item: $selection) { item in
-                    FreshDetail(
-                        id: item.id,
-                        fallback: item,
-                        items: items,
-                        detail: detail
-                    )
-                }
             }
         }
         .background(Theme.background)
+        // Переход объявлен и при пустом списке — намеренно.
+        //
+        // Раньше он висел внутри ветки «список не пуст», и выбор со стороны —
+        // «плюс» → «кому написать» — не открывал ничего: первая переписка
+        // всегда начинается с пустого списка, потому что переписки без единого
+        // сообщения на сервере ещё нет. Человек выбирал собеседника и
+        // возвращался в тот же пустой раздел.
+        .navigationDestination(item: $selection) { item in
+            FreshDetail(
+                id: item.id,
+                fallback: item,
+                items: items,
+                detail: detail
+            )
+        }
     }
 
     // ── iPad и Mac ───────────────────────────────────────────────────────────
@@ -123,7 +130,10 @@ public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: Vie
         // Делить нечего — не делим. Раньше разделитель и вторая колонка
         // рисовались даже при пустом списке: экран выглядел разрезанным
         // пополам без причины.
-        if items.isEmpty {
+        // Пусто и выбирать нечего — не делим экран. Но если запись уже выбрана
+        // со стороны, показать её важнее: первая переписка открывается именно
+        // так, когда списка ещё нет.
+        if items.isEmpty, selection == nil {
             empty()
         } else {
             splitPanes
@@ -190,10 +200,11 @@ public struct MasterDetail<Item: Identifiable & Hashable, Row: View, Detail: Vie
         .onAppear {
             if selection == nil { selection = items.first }
         }
+        // Только когда не выбрано ничего. Раньше сюда попадала и запись,
+        // которой ещё нет в списке, — новую переписку сбивало на первую
+        // попавшуюся, стоило списку обновиться.
         .onChange(of: items.count) { _, _ in
-            if selection == nil || !items.contains(where: { $0.id == selection?.id }) {
-                selection = items.first
-            }
+            if selection == nil { selection = items.first }
         }
     }
 }
