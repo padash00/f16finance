@@ -547,7 +547,7 @@ extension CapabilityCatalog {
                     id: "salary",
                     path: "/salary",
                     extraPaths: ["/salary/[operatorId]"],
-                    label: "Зарплата операторов",
+                    label: "Зарплата команды",
                     capabilities: [
                         Capability(id: "salary.view", label: "Просмотр зарплат", description: nil, severity: .low, deps: []),
                         Capability(id: "salary.create_advance", label: "Выдать аванс", description: nil, severity: .high, deps: []),

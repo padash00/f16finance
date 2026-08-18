@@ -1759,7 +1759,7 @@
           "extraPaths": [
             "/salary/[operatorId]"
           ],
-          "label": "Зарплата операторов",
+          "label": "Зарплата команды",
           "capabilities": [
             {
               "id": "salary.view",

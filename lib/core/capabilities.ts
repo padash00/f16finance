@@ -544,7 +544,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         id: 'salary',
         path: '/salary',
         extraPaths: ['/salary/[operatorId]'],
-        label: 'Зарплата операторов',
+        label: 'Зарплата команды',
         capabilities: [
           { id: 'salary.view', label: 'Просмотр зарплат', severity: 'low' },
           { id: 'salary.create_advance', label: 'Выдать аванс', severity: 'high' },

@@ -578,7 +578,15 @@ struct BusinessSectionsScreen: View {
     }
 }
 
-/// Профиль владельца или сотрудника.
+/// Личный кабинет владельца или сотрудника.
+///
+/// Раньше здесь были имя, счётчик выданных разделов и кнопка выхода. Для
+/// владельца это терпимо — у него весь каталог под рукой. Для сотрудника это
+/// был единственный «свой» экран, и на нём не было ничего своего: ни зарплаты,
+/// ни поручений. Всё личное человек узнавал голосом или из телеграма.
+///
+/// Теперь порядок обратный: сначала своё — зарплата и задачи, — а служебная
+/// справка о доступе ушла вниз, где ей и место.
 struct BusinessProfileScreen: View {
     let resolver: AccessResolver
 
@@ -608,6 +616,12 @@ struct BusinessProfileScreen: View {
                     }
                 }
 
+                MySalaryCard()
+                MyTasksCard()
+
+                AppearancePicker()
+                BiometricLockToggle()
+
                 Card {
                     VStack(spacing: Spacing.md) {
                         Text("Доступ")
@@ -624,9 +638,6 @@ struct BusinessProfileScreen: View {
                         }
                     }
                 }
-
-                AppearancePicker()
-                BiometricLockToggle()
 
                 Button("Выйти из аккаунта") { confirmingLogout = true }
                     .buttonStyle(DestructiveButtonStyle())

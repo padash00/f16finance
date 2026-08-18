@@ -14,18 +14,37 @@ struct AccountSheet: View {
     @Environment(AuthStore.self) private var auth
     @Environment(\.dismiss) private var dismiss
 
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    #endif
     @State private var confirmingLogout = false
     @State private var confirmingDelete = false
     @State private var isDeleting = false
     @State private var deleteError: String?
     @Environment(\.api) private var api
 
+    /// Личные карточки — там, где нет вкладки «Профиль».
+    private var showsPersonalCards: Bool {
+        #if os(iOS)
+        sizeClass != .compact
+        #else
+        true
+        #endif
+    }
+
     var body: some View {
         NavigationStack {
             ScreenScroll {
                 VStack(spacing: Spacing.lg) {
                     identityCard
-                    MySalaryCard()
+                    // На телефоне своё — зарплата и поручения — живёт во
+                    // вкладке «Профиль»; дублировать карточки в двух местах,
+                    // до которых два касания, незачем. На айпаде и Mac вкладок
+                    // нет, и этот лист — единственный личный экран.
+                    if showsPersonalCards {
+                        MySalaryCard()
+                        MyTasksCard()
+                    }
                     MyContactsCard()
                     NotificationsCard()
                     AppearancePicker()

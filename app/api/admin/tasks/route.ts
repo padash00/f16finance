@@ -598,10 +598,33 @@ export async function GET(req: Request) {
     if (guard) return guard
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
-    const denied = await requireCapability(access, 'tasks.view')
-    if (denied) return denied
-
     const url = new URL(req.url)
+    // Свои задачи — не то же самое, что чужие.
+    //
+    // Право «Задачи» открывает доску всей организации, и владелец справедливо
+    // снимает его с рядового сотрудника. Но поручение-то дают именно ему, и
+    // без права он узнаёт о нём голосом или из телеграма. Поэтому `mine=1`
+    // отдаёт только назначенное на просителя, и для него право не спрашиваем.
+    const selfStaffId = (access as any).staffMember?.id ? String((access as any).staffMember.id) : null
+    const selfOperatorId = (access as any).operatorAuth?.operator_id
+      ? String((access as any).operatorAuth.operator_id)
+      : null
+    const wantsMine = url.searchParams.get('mine') === '1'
+    const denied = await requireCapability(access, 'tasks.view')
+    // Без права доступен ровно один режим — «мои»: остальные ветки ниже
+    // отдают чужие задачи, счётчики и справочники людей.
+    if (denied && !(wantsMine && (selfStaffId || selfOperatorId))) return denied
+    // Режим «мои» без права — только сам список. Счётчик просрочки считает по
+    // всей организации, комментарии и справочники тянут чужих людей.
+    if (
+      denied &&
+      (url.searchParams.get('overdue_count') === '1' ||
+        url.searchParams.get('comments') === '1' ||
+        url.searchParams.get('templates') === '1' ||
+        url.searchParams.get('includeLookups') === '1')
+    ) {
+      return denied
+    }
     const supabase = hasAdminSupabaseCredentials()
       ? createAdminSupabaseClient()
       : createRequestSupabaseClient(req)
@@ -702,6 +725,17 @@ export async function GET(req: Request) {
 
       if (status) query = query.eq('status', status)
       if (operatorId) query = query.eq('operator_id', operatorId)
+      if (wantsMine) {
+        // Человек бывает и сотрудником, и оператором — задача может прийти по
+        // любой из двух записей.
+        const selfFilters = [
+          withStaffId && selfStaffId ? `staff_id.eq.${selfStaffId}` : null,
+          selfOperatorId ? `operator_id.eq.${selfOperatorId}` : null,
+        ].filter(Boolean)
+        // Ни одной записи — показывать нечего; пустой `or` вернул бы всё.
+        if (selfFilters.length === 0) return query.eq('id', '00000000-0000-0000-0000-000000000000')
+        query = query.or(selfFilters.join(','))
+      }
       if (companyScope.allowedCompanyIds !== null) {
         query = query.in('company_id', companyScope.allowedCompanyIds)
       }

@@ -954,10 +954,25 @@ public struct BusinessService: Sendable {
 
     /// Задачи команды. Требует `tasks.view`.
     public func tasks(status: String? = nil) async throws -> [TeamTask] {
-        var query: [String: String] = ["pageSize": "200"]
+        // Имя параметра читает роут: `pageSize` он не видит и молча отдаёт
+        // свою сотню — на длинной доске задачи просто пропадали.
+        var query: [String: String] = ["page_size": "200"]
         if let status { query["status"] = status }
         let response: DataList<TeamTask> = try await api.send(
             APIRequest(path: "/api/admin/tasks", query: query)
+        )
+        return response.items
+    }
+
+    /// Задачи, назначенные на меня.
+    ///
+    /// Отдельный режим, а не фильтр поверх общей доски: право «Задачи»
+    /// открывает поручения всей организации, и владелец справедливо снимает
+    /// его с рядового сотрудника. Своё поручение человек должен видеть в любом
+    /// случае — иначе он узнаёт о нём голосом.
+    public func myTasks() async throws -> [TeamTask] {
+        let response: DataList<TeamTask> = try await api.send(
+            APIRequest(path: "/api/admin/tasks", query: ["mine": "1", "page_size": "100"])
         )
         return response.items
     }
