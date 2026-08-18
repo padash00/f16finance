@@ -114,12 +114,18 @@ export function walkForward(facts: ShiftFact[], options: WalkForwardOptions): Wa
 
     let v2: DemandForecast | null = null
     if (samples) {
-      const key = sampleKey(samples.level, samples.values)
+      // Длительность целевой смены — часть ключа: тот же сегмент, но смена
+      // вдвое короче, даёт другой прогноз, и отдать ей кэш полной смены
+      // значило бы вернуть заведомо завышенное ожидание.
+      const key = sampleKey(samples.level, samples.values) + '|' + (fact.duration_minutes ?? 'x')
       if (demandCache.has(key)) {
         v2 = demandCache.get(key) ?? null
         cacheHits += 1
       } else {
-        v2 = forecastDemand(samples.values)
+        v2 = forecastDemand(samples.values, {
+          exposures: samples.durations,
+          targetExposure: fact.duration_minutes ?? null,
+        })
         demandCache.set(key, v2)
         fits += 1
       }

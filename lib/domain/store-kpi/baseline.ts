@@ -77,8 +77,18 @@ export function median(values: number[]): number | null {
   return percentile(values, 0.5)
 }
 
-/** Одно наблюдение в сегменте. Кассир нужен, чтобы исключать его же смены. */
-export type BaselineEntry = { cashier_id: string | null; value: number }
+/**
+ * Одно наблюдение в сегменте.
+ *
+ * Кассир нужен, чтобы исключать его же смены. Длительность — чтобы шестичасовая
+ * смена не читалась как провал спроса: покупателей в ней меньше не потому, что
+ * поток слабый, а потому, что она вдвое короче.
+ */
+export type BaselineEntry = {
+  cashier_id: string | null
+  value: number
+  duration_minutes?: number | null
+}
 
 export type BaselineIndex = Map<SegmentLevel, Map<string, BaselineEntry[]>>
 
@@ -136,7 +146,11 @@ export function addFactToBaselineIndex(
   opts: { summerMonths: number[] },
 ): void {
   if (value == null || !Number.isFinite(value)) return
-  const entry: BaselineEntry = { cashier_id: fact.cashier_id, value }
+  const entry: BaselineEntry = {
+    cashier_id: fact.cashier_id,
+    value,
+    duration_minutes: fact.duration_minutes ?? null,
+  }
   for (const level of SEGMENT_LEVELS) {
     const buckets = index.get(level)!
     const key = segmentKey(level, fact, opts.summerMonths)
@@ -209,7 +223,7 @@ export function lookupBaselineSamples(
     summerMonths: number[]
     excludeCashierId?: string | null
   },
-): { values: number[]; level: SegmentLevel; sample: number } | null {
+): { values: number[]; durations: Array<number | null>; level: SegmentLevel; sample: number } | null {
   for (const level of SEGMENT_LEVELS) {
     const buckets = index.get(level)
     if (!buckets) continue
@@ -221,7 +235,12 @@ export function lookupBaselineSamples(
       : entries
     if (usable.length < opts.minSample) continue
 
-    return { values: usable.map((e) => e.value), level, sample: usable.length }
+    return {
+      values: usable.map((e) => e.value),
+      durations: usable.map((e) => e.duration_minutes ?? null),
+      level,
+      sample: usable.length,
+    }
   }
 
   return null

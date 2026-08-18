@@ -431,3 +431,42 @@ function gammaSample(rng: () => number, shape: number, scale: number): number {
   }
   return shape * scale
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Длительность смены
+// ─────────────────────────────────────────────────────────────────────────────
+
+test('короткая смена не выдаётся за провал спроса', () => {
+  // Двенадцать смен по 12 часов с ~40 чеками. Оцениваем смену на 6 часов:
+  // ждать от неё сорока чеков — значит записать её в провал ни за что.
+  const history = [38, 42, 40, 45, 36, 41, 39, 44, 37, 43, 40, 42]
+  const durations = history.map(() => 720)
+
+  const full = forecastDemand(history, { exposures: durations, targetExposure: 720 })!
+  const half = forecastDemand(history, { exposures: durations, targetExposure: 360 })!
+
+  assert.ok(half.expectedReceipts < full.expectedReceipts, 'короткая смена должна ждать меньше чеков')
+  // Поправка ограничена половиной: пересчитывать вчетверо короткую смену в
+  // полную нечестно — за четыре часа в обед поток идёт иначе.
+  assert.ok(half.expectedReceipts >= full.expectedReceipts * 0.45)
+})
+
+test('без длительностей поправки не будет', () => {
+  const history = [38, 42, 40, 45, 36, 41, 39, 44, 37, 43, 40, 42]
+  const plain = forecastDemand(history)!
+  const noDurations = forecastDemand(history, {
+    exposures: history.map(() => null),
+    targetExposure: 720,
+  })!
+  assert.equal(plain.expectedReceipts, noDurations.expectedReceipts)
+})
+
+test('неизвестная длительность отдельной смены её не искажает', () => {
+  // Часть истории без длительности — она обязана войти как есть, а не
+  // выпасть и не получить выдуманную поправку.
+  const history = [38, 42, 40, 45, 36, 41, 39, 44, 37, 43, 40, 42]
+  const durations = history.map((_, i) => (i % 2 === 0 ? 720 : null))
+  const forecast = forecastDemand(history, { exposures: durations, targetExposure: 720 })!
+  assert.equal(forecast.sampleSize, history.length)
+  assert.ok(Number.isFinite(forecast.expectedReceipts))
+})

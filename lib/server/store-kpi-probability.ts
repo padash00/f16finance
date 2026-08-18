@@ -180,12 +180,20 @@ export function buildProbabilisticLayer(args: {
 
     let demand: DemandForecast | null = null
     if (samples) {
-      const key = sampleKey(samples.level, samples.values)
+      // Длительность целевой смены — часть ключа: тот же сегмент, но смена
+      // вдвое короче, даёт другой прогноз, и отдать ей кэш полной смены
+      // значило бы вернуть заведомо завышенное ожидание.
+      const key = sampleKey(samples.level, samples.values) + '|' + (fact.duration_minutes ?? 'x')
       if (demandCache.has(key)) {
         demand = demandCache.get(key) ?? null
         cacheHits += 1
       } else {
-        demand = forecastDemand(samples.values)
+        demand = forecastDemand(samples.values, {
+          // Поправка на длительность: сравнивать полную смену с укороченной
+          // как равные — значит записать короткую в провал спроса.
+          exposures: samples.durations,
+          targetExposure: fact.duration_minutes ?? null,
+        })
         demandCache.set(key, demand)
         fits += 1
       }
