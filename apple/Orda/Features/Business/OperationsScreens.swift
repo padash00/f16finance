@@ -479,6 +479,12 @@ struct StaffScreen: View {
 
     @State private var selected: StaffMember?
     @State private var showInactive = false
+    @State private var isAdding = false
+
+    @Environment(\.access) private var access
+
+    /// Право то же, что проверяет сервер.
+    private var canAdd: Bool { access?.can("staff.create") ?? false }
 
     var body: some View {
         Group {
@@ -507,6 +513,11 @@ struct StaffScreen: View {
         .background(Theme.background)
         .navigationTitle("Сотрудники")
         .toolbar {
+            if canAdd {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { isAdding = true } label: { Image(systemName: "person.badge.plus") }
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 Toggle(isOn: $showInactive) {
                     Label("С уволенными", systemImage: "person.slash")
@@ -514,6 +525,9 @@ struct StaffScreen: View {
                 .toggleStyle(.button)
             }
             LogoutToolbarItem()
+        }
+        .sheet(isPresented: $isAdding) {
+            AddStaffSheet { await store.loadStaff() }
         }
         .task { await store.loadStaff() }
         .refreshable { await store.loadStaff() }

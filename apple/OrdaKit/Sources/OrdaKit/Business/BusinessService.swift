@@ -188,6 +188,39 @@ public struct BusinessService: Sendable {
         return response.items
     }
 
+    /// Завести сотрудника.
+    ///
+    /// Оклад обязателен и больше нуля — так решает сервер, и спорить с ним на
+    /// клиенте нечем: сотрудник без оклада не попадёт ни в одну ведомость.
+    ///
+    /// Административную должность (владелец, управляющий, бухгалтер) назначает
+    /// только владелец — это тоже проверка сервера.
+    public func createStaff(
+        fullName: String,
+        role: String,
+        monthlySalary: Double,
+        phone: String?,
+        email: String?
+    ) async throws {
+        var payload: [String: Any] = [
+            "full_name": fullName,
+            "role": role,
+            "monthly_salary": monthlySalary,
+        ]
+        if let phone, !phone.isEmpty { payload["phone"] = phone }
+        if let email, !email.isEmpty { payload["email"] = email }
+
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/staff",
+                method: .post,
+                body: try JSONSerialization.data(
+                    withJSONObject: ["action": "createStaff", "payload": payload]
+                )
+            )
+        )
+    }
+
     /// Письмо сотруднику: приглашение или смена пароля.
     ///
     /// Один маршрут на оба случая — так же это работает на сайте: если входа
