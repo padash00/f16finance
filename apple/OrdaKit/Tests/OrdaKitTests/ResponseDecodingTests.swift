@@ -195,6 +195,59 @@ struct ResponseDecodingTests {
         #expect(unmatched.invoiceName == "Салфетки")
     }
 
+    // ── График владельца ─────────────────────────────────────────────────────
+
+    @Test("Заявки на замену приходят вместе с сеткой смен")
+    func scheduleWithIssues() throws {
+        let schedule = try decode(
+            ShiftSchedule.self,
+            """
+            {"ok":true,
+            "publications":[{"id":"p-1","company_id":"c-1","week_start":"2026-08-17",
+            "status":"published","pending_count":1,"confirmed_count":4,"issue_count":1}],
+            "responses":[],
+            "requests":[{"id":"r-1","publication_id":"p-1","company_id":"c-1",
+            "operator_id":"op-2","operator_name":"Алима","shift_date":"2026-08-20",
+            "shift_type":"night","status":"open","source":"operator","reason":"Заболела",
+            "lead_status":"proposed","lead_action":"replace","lead_note":"Данияр свободен",
+            "lead_operator_name":"Сержан","lead_replacement_operator_name":"Данияр",
+            "resolution_note":null,"created_at":"2026-08-17T09:00:00.000Z"},
+            {"id":"r-0","publication_id":"p-1","company_id":"c-1","operator_id":"op-3",
+            "operator_name":"Ержан","shift_date":"2026-08-18","shift_type":"day",
+            "status":"resolved","reason":"Учёба","lead_status":null,"lead_action":null,
+            "created_at":"2026-08-16T09:00:00.000Z"}],
+            "schedule":{"companies":[{"id":"c-1","name":"F16 Arena","code":"ARN"}],
+            "shifts":[{"id":"s-1","date":"2026-08-20","operator_name":"Алима",
+            "shift_type":"night","company_id":"c-1"}]}}
+            """
+        )
+
+        #expect(schedule.companies.count == 1)
+        #expect(schedule.shifts.count == 1)
+        #expect(schedule.requests.count == 2)
+
+        // Решённая заявка не должна попадать в «ждут решения».
+        #expect(schedule.openRequests.map(\.id) == ["r-1"])
+
+        let issue = try #require(schedule.openRequests.first)
+        #expect(issue.operatorName == "Алима")
+        #expect(issue.isNight)
+        #expect(issue.hasProposal)
+        #expect(issue.proposalLabel == "Старший: заменить на Данияр")
+        #expect(issue.statusLabel == "Есть предложение")
+        #expect(issue.leadOperatorName == "Сержан")
+    }
+
+    @Test("Неделя без заявок не ломает разбор графика")
+    func scheduleWithoutIssues() throws {
+        let schedule = try decode(
+            ShiftSchedule.self,
+            #"{"ok":true,"schedule":{"companies":[],"shifts":[]}}"#
+        )
+        #expect(schedule.requests.isEmpty)
+        #expect(schedule.openRequests.isEmpty)
+    }
+
     // ── Зал клуба ────────────────────────────────────────────────────────────
 
     @Test("Зал: станции, тарифы и активные сессии")

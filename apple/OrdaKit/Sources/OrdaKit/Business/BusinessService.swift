@@ -658,6 +658,40 @@ public struct BusinessService: Sendable {
         )
     }
 
+    /// Решение руководителя по заявке «не смогу выйти».
+    ///
+    /// `keep` оставляет смену за человеком, `remove` снимает её, `replace`
+    /// ставит другого — сервер сам правит расписание и уведомляет обе стороны.
+    /// Замену передаём именем: расписание хранит именно имя, а не ссылку на
+    /// карточку оператора.
+    public func resolveShiftIssue(
+        requestID: String,
+        status: String,
+        action: String,
+        replacementOperatorName: String? = nil,
+        note: String? = nil
+    ) async throws {
+        var payload: [String: Any] = [
+            "requestId": requestID,
+            "status": status,
+            "resolutionAction": action,
+        ]
+        if let replacementOperatorName, !replacementOperatorName.isEmpty {
+            payload["replacementOperatorName"] = replacementOperatorName
+        }
+        if let note, !note.isEmpty { payload["resolutionNote"] = note }
+
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/shifts",
+                method: .post,
+                body: try JSONSerialization.data(
+                    withJSONObject: ["action": "resolveIssue", "payload": payload]
+                )
+            )
+        )
+    }
+
     // ── Отчёты ───────────────────────────────────────────────────────────────
 
     /// Сводный отчёт за период: итоги, сравнение с прошлым периодом, разрезы.

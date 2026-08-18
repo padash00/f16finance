@@ -299,15 +299,26 @@ public struct RosterShift: Decodable, Sendable, Identifiable, Hashable {
 public struct ShiftSchedule: Decodable, Sendable {
     public let companies: [Company]
     public let shifts: [RosterShift]
+    /// Заявки «не смогу выйти» по этой неделе.
+    ///
+    /// Приходят тем же ответом, что и сетка смен, но раньше отбрасывались:
+    /// решение по ним принимали только на сайте, а руководитель за неделю в
+    /// кабинет заходит не каждый день.
+    public let requests: [ShiftIssue]
+
+    /// Заявки, которые ждут решения руководителя.
+    public var openRequests: [ShiftIssue] { requests.filter(\.isOpen) }
 
     public init(from decoder: any Decoder) throws {
         let root = try decoder.container(keyedBy: RootKeys.self)
         let nested = try? root.nestedContainer(keyedBy: ScheduleKeys.self, forKey: .schedule)
         companies = (try? nested?.decodeIfPresent([Company].self, forKey: .companies)) as? [Company] ?? []
         shifts = (try? nested?.decodeIfPresent([RosterShift].self, forKey: .shifts)) as? [RosterShift] ?? []
+        // Заявки лежат в корне ответа, рядом со `schedule`, а не внутри него.
+        requests = (try? root.decodeIfPresent([ShiftIssue].self, forKey: .requests)) as? [ShiftIssue] ?? []
     }
 
-    private enum RootKeys: String, CodingKey { case schedule }
+    private enum RootKeys: String, CodingKey { case schedule, requests }
     private enum ScheduleKeys: String, CodingKey { case companies, shifts, operators }
 
     /// Смены за конкретный день указанной точки.
@@ -315,6 +326,87 @@ public struct ShiftSchedule: Decodable, Sendable {
         shifts.filter { shift in
             shift.date == day && (companyID == nil || shift.companyID == companyID)
         }
+    }
+}
+
+/// Заявка оператора «не смогу выйти» глазами руководителя.
+///
+/// Путь заявки: оператор её подал, старший на точке предложил, кем закрыть, —
+/// решение принимает руководитель. Предложение старшего видно здесь же, иначе
+/// решать пришлось бы вслепую.
+public struct ShiftIssue: Decodable, Sendable, Identifiable, Hashable {
+    public let id: String
+    public let companyID: String
+    public let operatorName: String
+    /// `YYYY-MM-DD`.
+    public let shiftDate: String
+    public let shiftType: String
+    public let status: String
+    public let reason: String?
+    public let createdAt: Date?
+
+    /// Что предложил старший: `keep` / `remove` / `replace`.
+    public let leadAction: String?
+    public let leadStatus: String?
+    public let leadNote: String?
+    public let leadOperatorName: String?
+    public let replacementName: String?
+    public let resolutionNote: String?
+
+    public var isOpen: Bool { status == "open" || status == "awaiting_reason" }
+    public var isNight: Bool { shiftType == "night" }
+    public var hasProposal: Bool { (leadStatus ?? "") == "proposed" }
+
+    public var proposalLabel: String? {
+        switch leadAction {
+        case "keep": "Старший: оставить смену"
+        case "remove": "Старший: снять со смены"
+        case "replace": replacementName.map { "Старший: заменить на \($0)" } ?? "Старший: заменить"
+        default: nil
+        }
+    }
+
+    public var statusLabel: String {
+        switch status {
+        case "open", "awaiting_reason": hasProposal ? "Есть предложение" : "Ждёт решения"
+        case "resolved": "Решено"
+        case "dismissed", "rejected": "Отклонено"
+        case "closed": "Закрыто"
+        default: status
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, status, reason
+        case companyID = "company_id"
+        case operatorName = "operator_name"
+        case shiftDate = "shift_date"
+        case shiftType = "shift_type"
+        case createdAt = "created_at"
+        case leadAction = "lead_action"
+        case leadStatus = "lead_status"
+        case leadNote = "lead_note"
+        case leadOperatorName = "lead_operator_name"
+        case replacementName = "lead_replacement_operator_name"
+        case resolutionNote = "resolution_note"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeFlexibleString(forKey: .id) ?? ""
+        companyID = try c.decodeFlexibleString(forKey: .companyID) ?? ""
+        operatorName = try c.decodeFlexibleString(forKey: .operatorName) ?? "Оператор"
+        shiftDate = try c.decodeFlexibleString(forKey: .shiftDate) ?? ""
+        shiftType = try c.decodeFlexibleString(forKey: .shiftType) ?? "day"
+        status = try c.decodeFlexibleString(forKey: .status) ?? "open"
+        reason = try c.decodeFlexibleString(forKey: .reason)
+        createdAt = DateParsing.date(from: try c.decodeFlexibleString(forKey: .createdAt))
+        leadAction = try c.decodeFlexibleString(forKey: .leadAction)
+        leadStatus = try c.decodeFlexibleString(forKey: .leadStatus)
+        leadNote = try c.decodeFlexibleString(forKey: .leadNote)
+        leadOperatorName = try c.decodeFlexibleString(forKey: .leadOperatorName)
+        replacementName = try c.decodeFlexibleString(forKey: .replacementName)
+        resolutionNote = try c.decodeFlexibleString(forKey: .resolutionNote)
     }
 }
 

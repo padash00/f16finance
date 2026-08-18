@@ -594,6 +594,31 @@ final class BusinessStore {
         }
     }
 
+    /// Решение по заявке «не смогу выйти». Возвращает текст ошибки или `nil`.
+    func resolveShiftIssue(
+        requestID: String,
+        status: String,
+        action: String,
+        replacementOperatorName: String?,
+        note: String?
+    ) async -> String? {
+        do {
+            try await service.resolveShiftIssue(
+                requestID: requestID,
+                status: status,
+                action: action,
+                replacementOperatorName: replacementOperatorName,
+                note: note
+            )
+            await loadSchedule()
+            return nil
+        } catch let error as APIError {
+            return error.userMessage
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
     func loadSchedule() async {
         isLoadingSchedule = true
         defer { isLoadingSchedule = false }

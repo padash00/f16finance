@@ -407,6 +407,8 @@ struct ScheduleWeekScreen: View {
 
     /// Какую клетку правим. Открывается нажатием на день.
     @State private var editing: ShiftSlot?
+    /// По какой заявке принимаем решение.
+    @State private var deciding: ShiftIssue?
 
     private var canEdit: Bool { access?.can("shifts.create") ?? false }
 
@@ -429,6 +431,10 @@ struct ScheduleWeekScreen: View {
                 if let error = store.scheduleError, store.schedule == nil {
                     ErrorStateView(error: error) { Task { await store.loadSchedule() } }
                 } else if let schedule = store.schedule {
+                    // Заявки — выше сетки: если кто-то не выйдет в четверг,
+                    // это важнее, чем как расставлены остальные дни.
+                    issuesCard(schedule)
+
                     if schedule.companies.isEmpty {
                         Card {
                             InlineEmpty(icon: "building.2", text: "Точек не заведено", tint: Theme.textDim)
@@ -447,6 +453,12 @@ struct ScheduleWeekScreen: View {
             }
         }
         .background(Theme.background)
+        .sheet(item: $deciding) { issue in
+            ResolveShiftIssueSheet(
+                issue: issue,
+                operatorNames: operatorNames(for: issue)
+            )
+        }
         .sheet(item: $editing) { slot in
             AssignShiftSheet(
                 companyID: slot.companyID,
@@ -460,6 +472,100 @@ struct ScheduleWeekScreen: View {
         .toolbar { LogoutToolbarItem() }
         .task { await store.loadSchedule() }
         .refreshable { await store.loadSchedule() }
+    }
+
+    /// Заявки «не смогу выйти» по этой неделе.
+    ///
+    /// Раньше решение принимали только на сайте, а руководитель за неделю
+    /// заходит в кабинет не каждый день — заявка висела, человек ждал ответа,
+    /// и в итоге всё решалось звонком мимо системы.
+    @ViewBuilder
+    private func issuesCard(_ schedule: ShiftSchedule) -> some View {
+        let open = schedule.openRequests
+        if !open.isEmpty {
+            Card(accent: Theme.warning) {
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    Text(open.count == 1 ? "Заявка на замену" : "Заявок на замену: \(open.count)")
+                        .font(Typography.body.weight(.medium))
+                        .foregroundStyle(Theme.text)
+
+                    ForEach(Array(open.enumerated()), id: \.element.id) { index, issue in
+                        if index > 0 { RowDivider() }
+                        Button {
+                            deciding = issue
+                        } label: {
+                            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                                HStack {
+                                    Text(issue.operatorName)
+                                        .font(Typography.body)
+                                        .foregroundStyle(Theme.text)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(Typography.caption)
+                                        .foregroundStyle(Theme.textMuted)
+                                }
+
+                                Text(
+                                    ScheduleWeekScreen.dayTitle(issue.shiftDate)
+                                        + (issue.isNight ? ", ночная" : ", дневная")
+                                        + " · " + (companyName(issue.companyID, schedule: schedule))
+                                )
+                                .font(Typography.caption)
+                                .foregroundStyle(Theme.textDim)
+
+                                if let reason = issue.reason, !reason.isEmpty {
+                                    Text(reason)
+                                        .font(Typography.caption)
+                                        .foregroundStyle(Theme.textMuted)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+
+                                if let proposal = issue.proposalLabel {
+                                    StatusChip(proposal, kind: .info)
+                                        .padding(.top, Spacing.xxs)
+                                }
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.pressable)
+                        .disabled(!canEdit)
+                    }
+
+                    if !canEdit {
+                        Text("Решение по заявке принимает тот, кто ведёт график.")
+                            .font(Typography.caption)
+                            .foregroundStyle(Theme.textMuted)
+                    }
+                }
+            }
+        }
+    }
+
+    private func companyName(_ id: String, schedule: ShiftSchedule) -> String {
+        schedule.companies.first { $0.id == id }?.name ?? "Точка"
+    }
+
+    /// Кого можно поставить вместо: те, кто уже стоит в графике этой точки на
+    /// этой неделе. Расписание хранит имена, и придумывать новое здесь нечего —
+    /// сервер всё равно ищет оператора по имени.
+    private func operatorNames(for issue: ShiftIssue) -> [String] {
+        guard let schedule = store.schedule else { return [] }
+        var names: [String] = []
+        for shift in schedule.shifts where shift.companyID == issue.companyID {
+            let name = shift.operatorName
+            guard !name.isEmpty, name != issue.operatorName, !names.contains(name) else { continue }
+            names.append(name)
+        }
+        if let replacement = issue.replacementName, !names.contains(replacement) {
+            names.insert(replacement, at: 0)
+        }
+        return names
+    }
+
+    /// «Чт, 20 августа» — дата заявки словами.
+    static func dayTitle(_ isoDate: String) -> String {
+        guard let date = DateParsing.parseDateOnly(isoDate) else { return isoDate }
+        return date.formatted(.dateTime.weekday(.abbreviated).day().month(.wide).locale(Locale(identifier: "ru_RU")))
     }
 
     private var weekDays: [Date] {
