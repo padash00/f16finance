@@ -11,6 +11,7 @@ import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { writeAuditLog } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 
 export const runtime = 'nodejs'
 
@@ -31,6 +32,12 @@ export async function GET(request: Request) {
   // оператор, и клиент гостевого контура, а выдача содержит имена устройств,
   // версии и обрезанный project_token. Ставим тот же гейт, что и у POST.
   if (!canManageDevices(access)) return json({ error: 'forbidden' }, 403)
+
+  // И право раздела: выдача показывает, кто сейчас за какой кассой и когда
+  // последний раз выходил на связь. Роль отвечает на «кто он вообще», право —
+  // на «положено ли ему это видеть».
+  const denied = await requireCapability(access, 'point-devices.view')
+  if (denied) return denied
 
   const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
   const scope = await resolveCompanyScope({
