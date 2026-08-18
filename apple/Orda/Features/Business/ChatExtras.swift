@@ -76,9 +76,12 @@ struct VoiceAttachmentView: View {
             player.toggle(url: attachment.url)
         } label: {
             HStack(spacing: Spacing.sm) {
+                // На своём пузыре всё поверх фирменного цвета: зелёная кнопка
+                // на зелёном фоне не видна вовсе — от голосового оставалось
+                // только имя файла.
                 Image(systemName: isPlaying ? "pause.circle.fill" : "play.circle.fill")
                     .font(.system(size: 26))
-                    .foregroundStyle(Theme.brand)
+                    .foregroundStyle(isMine ? Theme.onBrand : Theme.brand)
 
                 // Волна нарисованная, а не настоящая: считать амплитуды на
                 // каждое сообщение в списке — это секунды прокрутки, а смысла
@@ -86,14 +89,19 @@ struct VoiceAttachmentView: View {
                 HStack(spacing: 2) {
                     ForEach(0..<18, id: \.self) { index in
                         Capsule()
-                            .fill(Theme.brand.opacity(isPlaying ? 0.8 : 0.35))
+                            .fill(
+                                (isMine ? Theme.onBrand : Theme.brand)
+                                    .opacity(isPlaying ? 0.9 : (isMine ? 0.55 : 0.35))
+                            )
                             .frame(width: 2, height: waveHeight(index))
                     }
                 }
 
-                Text(attachment.name?.isEmpty == false ? attachment.name! : "Голосовое")
+                // Имя файла человеку не говорит ничего: «voice-0-08.m4a» — это
+                // то, как его назвал телефон, а не то, что он услышит.
+                Text("Голосовое")
                     .font(Typography.caption)
-                    .foregroundStyle(Theme.textDim)
+                    .foregroundStyle(isMine ? Theme.onBrand.opacity(0.8) : Theme.textDim)
             }
             .padding(.vertical, Spacing.xs)
         }

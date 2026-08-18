@@ -235,7 +235,7 @@ private struct FeedBubble: View {
                         // служебное, и «📊 Опрос» второй строкой только шумит.
                         Label(attachment.label, systemImage: "paperclip")
                             .font(Typography.caption)
-                            .foregroundStyle(Theme.textDim)
+                            .foregroundStyle(isMine ? Theme.onBrand.opacity(0.85) : Theme.textDim)
                     }
                 }
 
@@ -1087,6 +1087,12 @@ struct TeamChatScreen: View {
             )
         }
         .navigationTitle("Командный чат")
+        #if os(iOS)
+        // Непрозрачная шапка: под прозрачной проезжали пузыри, и заголовок
+        // читался поверх чужого сообщения вперемешку с кнопкой профиля.
+        .toolbarBackground(.visible, for: .navigationBar)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
         // Поиск по чату: сервер ищет и по тексту, и по имени отправителя.
         // «Кто говорил про поставщика» иначе листают руками за неделю.
         .searchable(
@@ -1873,6 +1879,11 @@ struct ConversationPane: View {
                 ? "Сообщения снова будут доходить."
                 : "Его сообщения перестанут доходить. Он об этом не узнает.")
         }
+        #if os(iOS)
+        // Непрозрачная шапка: иначе под ней проезжают пузыри и имя собеседника
+        // читается поверх чужого сообщения.
+        .toolbarBackground(.visible, for: .navigationBar)
+        #endif
         .task(id: thread.otherUserID) { await store.open(thread.otherUserID) }
         .task { await store.loadBlocked() }
         // Ответ должен появляться сам. Иначе переписка выглядит сломанной:
