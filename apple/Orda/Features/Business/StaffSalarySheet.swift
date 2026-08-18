@@ -17,6 +17,7 @@ struct StaffSalarySheet: View {
         case bonus
         case fine
         case advance
+        case extraDay
 
         var id: String { rawValue }
 
@@ -26,6 +27,7 @@ struct StaffSalarySheet: View {
             case .bonus: "Премия"
             case .fine: "Штраф"
             case .advance: "Аванс"
+            case .extraDay: "Доп. выход"
             }
         }
 
@@ -35,6 +37,7 @@ struct StaffSalarySheet: View {
             case .bonus: "Начислить премию"
             case .fine: "Удержать штраф"
             case .advance: "Выдать аванс"
+            case .extraDay: "Записать доп. выход"
             }
         }
 
@@ -44,6 +47,7 @@ struct StaffSalarySheet: View {
             case .bonus: "Премия прибавится к расчёту половины месяца."
             case .fine: "Штраф вычтется из расчёта половины месяца."
             case .advance: "Аванс сразу станет расходом точки и уменьшит остаток к выплате."
+            case .extraDay: "Оклад платят за месяц, а выход сверх нормы — отдельные деньги. Сумму возьмём из ставки смены на его точке; своя нужна редко."
             }
         }
     }
@@ -58,11 +62,15 @@ struct StaffSalarySheet: View {
 
     private var canPay: Bool { auth.resolver?.can("salary.create_payment") ?? false }
     private var canAdjust: Bool { auth.resolver?.can("salary.create_adjustment") ?? false }
+    /// Доп. выход — своё право: это не корректировка «по факту смены», а
+    /// признание отработанного дня, и владелец выдаёт его отдельно.
+    private var canExtraDay: Bool { auth.resolver?.can("staff.add_extra_day") ?? false }
 
     private var kinds: [Kind] {
         var result: [Kind] = []
         if canPay { result.append(.payment) }
         if canAdjust { result.append(contentsOf: [.bonus, .fine, .advance]) }
+        if canExtraDay { result.append(.extraDay) }
         return result
     }
 
@@ -217,6 +225,12 @@ struct StaffSalarySheet: View {
                             .font(Typography.caption)
                             .foregroundStyle(Theme.warning)
                     }
+                } else if kind == .extraDay {
+                    FieldLabel("Сумма")
+                    amountField("По ставке смены", text: $amountText)
+                    Text("Оставьте пустым — сервер посчитает по ставке точки.")
+                        .font(Typography.caption)
+                        .foregroundStyle(Theme.textDim)
                 } else {
                     FieldLabel("Сумма")
                     amountField(kind.title, text: $amountText)
@@ -269,7 +283,8 @@ struct StaffSalarySheet: View {
     private func submit() async {
         let amount = kind == .payment ? total : StaffSalarySheet.parse(amountText)
 
-        guard amount > 0 else {
+        // У доп. выхода сумма необязательна: её знает сервер по ставке точки.
+        guard amount > 0 || kind == .extraDay else {
             error = "Сумма должна быть больше нуля."
             Haptics.error()
             return
@@ -298,6 +313,12 @@ struct StaffSalarySheet: View {
                     kaspiAmount: kaspi,
                     expectedAmount: row.toPay,
                     comment: comment.trimmingCharacters(in: .whitespaces)
+                )
+            case .extraDay:
+                try await service.addStaffExtraDay(
+                    staffID: row.id,
+                    date: StaffSalarySheet.isoDay(date),
+                    amount: amount > 0 ? amount : nil
                 )
             case .bonus, .fine, .advance:
                 try await service.createStaffAdjustment(

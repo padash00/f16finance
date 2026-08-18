@@ -197,6 +197,15 @@ export type StaffSalaryRow = StaffSlotCalc & {
   month_closed: boolean
   /** Какие половины месяца уже выплачены: вторую выплату не проводят дважды. */
   paid_slots: StaffSlot[]
+  /**
+   * Доп. выходы этого месяца — даты и суммы.
+   *
+   * У окладного сотрудника нет графика смен: он работает месяц. Единственное,
+   * что в его месяце «график», — выходы сверх нормы, и человек их считает: за
+   * них платят отдельно. Раньше он узнавал о них только по итоговой сумме и
+   * шёл сверять её голосом.
+   */
+  extra_days: Array<{ date: string; amount: number }>
   /** Строка самого просителя: сотрудник смотрит зарплату прежде всего свою. */
   is_me: boolean
 }
@@ -234,6 +243,19 @@ export function buildStaffSalarySummary(args: {
       (p) => p.staff_id === s.id && String(p.pay_date || '').slice(0, 7) === monthPrefix,
     )
     const paidThisMonth = monthPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0)
+    // Доп. выход заводится премией с этой подписью — так его ставит сервер,
+    // и по ней же он узнаётся обратно.
+    const extraDays = adjustments
+      .filter(
+        (a) =>
+          a.staff_id === s.id &&
+          a.kind === 'bonus' &&
+          String(a.status || '') === 'active' &&
+          String(a.comment || '').startsWith('Доп. выход') &&
+          String(a.date || '').slice(0, 7) === monthPrefix,
+      )
+      .map((a) => ({ date: String(a.date || ''), amount: Number(a.amount || 0) }))
+      .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
     const hasFirst = monthPayments.some((p) => p.slot === 'first')
     const hasSecond = monthPayments.some((p) => p.slot === 'second')
     return {
@@ -249,6 +271,7 @@ export function buildStaffSalarySummary(args: {
       paid_this_month: paidThisMonth,
       month_closed: hasFirst && hasSecond,
       paid_slots: [...(hasFirst ? ['first' as const] : []), ...(hasSecond ? ['second' as const] : [])],
+      extra_days: extraDays,
       is_me: meStaffId ? String(s.id) === meStaffId : false,
     }
   })

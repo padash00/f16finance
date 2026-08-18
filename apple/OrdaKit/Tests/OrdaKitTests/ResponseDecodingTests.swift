@@ -57,7 +57,9 @@ struct ResponseDecodingTests {
             "rows":[{"id":"s1","name":"Айгуль","short_name":"Айгуль К.","role":"accountant",
             "monthly_salary":300000,"source_type":"staff","is_active":true,"dismissal_date":null,
             "half":150000,"bonuses":20000,"debts":3000,"fines":5000,"advances":30000,"toPay":132000,
-            "paid_this_month":150000,"month_closed":false,"is_me":true}],
+            "paid_this_month":150000,"month_closed":false,"is_me":true,
+            "paid_slots":["first"],
+            "extra_days":[{"date":"2026-08-12","amount":9000},{"date":"2026-08-19","amount":9000}]}],
             "totals":{"toPay":132000,"paidThisMonth":150000,"people":1},
             "self_only":false,"can_edit":true}}
             """
@@ -80,6 +82,10 @@ struct ResponseDecodingTests {
         #expect(row.isMe)
         #expect(!row.isFromOperator)
         #expect(!row.monthClosed)
+        // Первая половина месяца выплачена — форма должна открыться на второй.
+        #expect(row.openSlot == "second")
+        #expect(row.extraDays.count == 2)
+        #expect(row.extraDays.first?.amount == 9_000)
     }
 
     /// Без права «Смотреть зарплату» сервер отдаёт одну строку — свою. Экран

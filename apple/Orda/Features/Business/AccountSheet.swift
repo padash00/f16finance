@@ -336,6 +336,24 @@ struct MySalaryCard: View {
                             RowDivider()
                             StatRow("Выплачено в этом месяце", value: Money.format(row.paidThisMonth), icon: "checkmark.circle")
                         }
+
+                        // Доп. выходы — единственный «график» окладного
+                        // сотрудника: месяц он и так работает, а выход сверх
+                        // нормы считает отдельно, потому что за него платят.
+                        // Раньше он узнавал о них только по итоговой сумме и
+                        // шёл сверять её голосом.
+                        if !row.extraDays.isEmpty {
+                            RowDivider()
+                            StatRow(
+                                "Доп. выходы",
+                                value: "\(row.extraDays.count) \(pluralize(row.extraDays.count, "день", "дня", "дней"))",
+                                icon: "calendar.badge.plus"
+                            )
+                            Text(row.extraDays.map(\.shortLabel).joined(separator: " · "))
+                                .font(Typography.caption)
+                                .monospacedDigit()
+                                .foregroundStyle(Theme.textDim)
+                        }
                         if row.monthClosed {
                             Text("Обе выплаты месяца проведены — следующая в следующем месяце.")
                                 .font(Typography.caption)

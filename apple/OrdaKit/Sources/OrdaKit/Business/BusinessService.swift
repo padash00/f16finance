@@ -342,6 +342,27 @@ public struct BusinessService: Sendable {
         )
     }
 
+    /// Доп. выход окладному сотруднику.
+    ///
+    /// Оклад платят за месяц, а вышел человек сверх нормы — это отдельные
+    /// деньги. Сумму сервер берёт из ставки смены на его точке; передать свою
+    /// можно, но обычно не нужно. Требует `staff.add_extra_day`.
+    public func addStaffExtraDay(staffID: String, date: String, amount: Double? = nil) async throws {
+        var body: [String: Any] = [
+            "action": "addExtraDay",
+            "staff_id": staffID,
+            "date": date,
+        ]
+        if let amount, amount > 0 { body["custom_amount"] = amount }
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/staff-salary",
+                method: .post,
+                body: try JSONSerialization.data(withJSONObject: body)
+            )
+        )
+    }
+
     /// Премия, штраф или аванс административному сотруднику.
     ///
     /// Точка обязательна только для аванса: он сразу ложится расходом на её

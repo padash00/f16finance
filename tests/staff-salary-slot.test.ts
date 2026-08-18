@@ -221,3 +221,37 @@ test('сводка называет выплаченные половины, ч�
   assert.deepEqual(summary.rows[0].paid_slots, ['first'])
   assert.equal(summary.rows[0].month_closed, false)
 })
+
+// ─── Доп. выходы: единственный «график» окладного сотрудника ─────────────────
+
+test('доп. выходы месяца собираются по подписи и попадают в строку', () => {
+  const summary = buildStaffSalarySummary({
+    staff: [staff()],
+    adjustments: [
+      adj({ id: 'e1', kind: 'bonus', amount: 9_000, date: '2026-08-19', comment: 'Доп. выход' }),
+      adj({ id: 'e2', kind: 'bonus', amount: 9_000, date: '2026-08-12', comment: 'Доп. выход' }),
+      // Обычная премия — не выход, и в список попадать не должна.
+      adj({ id: 'b1', kind: 'bonus', amount: 5_000, date: '2026-08-14', comment: 'За выручку' }),
+      // Прошлый месяц — свой счёт.
+      adj({ id: 'e0', kind: 'bonus', amount: 9_000, date: '2026-07-30', comment: 'Доп. выход' }),
+    ],
+    payments: [],
+    today: '2026-08-20',
+    meStaffId: null,
+  })
+  assert.deepEqual(
+    summary.rows[0].extra_days.map((d) => d.date),
+    ['2026-08-12', '2026-08-19'],
+  )
+})
+
+test('снятая корректировка не считается выходом', () => {
+  const summary = buildStaffSalarySummary({
+    staff: [staff()],
+    adjustments: [adj({ kind: 'bonus', date: '2026-08-19', comment: 'Доп. выход', status: 'closed' })],
+    payments: [],
+    today: '2026-08-20',
+    meStaffId: null,
+  })
+  assert.equal(summary.rows[0].extra_days.length, 0)
+})

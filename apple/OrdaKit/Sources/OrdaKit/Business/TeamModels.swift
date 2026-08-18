@@ -343,6 +343,33 @@ public struct StaffSalaryRow: Decodable, Sendable, Identifiable, Hashable {
     /// Какие половины месяца уже выплачены. Вторую выплату сервер не проведёт
     /// дважды, и форма должна открываться сразу на свободной.
     public let paidSlots: [String]
+    /// Доп. выходы этого месяца.
+    ///
+    /// У окладного сотрудника нет графика смен — он работает месяц.
+    /// Единственное, что в его месяце «график», это выходы сверх нормы: за них
+    /// платят отдельно, и человек их считает.
+    public let extraDays: [ExtraDay]
+
+    public struct ExtraDay: Decodable, Sendable, Identifiable, Hashable {
+        public let date: String
+        public let amount: Double
+
+        public var id: String { date + String(amount) }
+
+        /// «12 авг» — в списке из пяти дат год только мешает.
+        public var shortLabel: String {
+            guard let parsed = DateParsing.parseDateOnly(date) else { return date }
+            return parsed.formatted(.dateTime.day().month(.abbreviated))
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            date = try c.decodeFlexibleString(forKey: .date) ?? ""
+            amount = try c.decodeFlexibleDouble(forKey: .amount) ?? 0
+        }
+
+        private enum CodingKeys: String, CodingKey { case date, amount }
+    }
     public let isActive: Bool
     public let dismissalDate: String?
     /// Строка того, кто смотрит.
@@ -376,6 +403,7 @@ public struct StaffSalaryRow: Decodable, Sendable, Identifiable, Hashable {
         paidThisMonth = try c.decodeFlexibleDouble(forKey: .paidThisMonth) ?? 0
         monthClosed = try c.decodeIfPresent(Bool.self, forKey: .monthClosed) ?? false
         paidSlots = try c.decodeIfPresent([String].self, forKey: .paidSlots) ?? []
+        extraDays = try c.decodeIfPresent([ExtraDay].self, forKey: .extraDays) ?? []
         isActive = try c.decodeIfPresent(Bool.self, forKey: .isActive) ?? true
         dismissalDate = try c.decodeFlexibleString(forKey: .dismissalDate)
         isMe = try c.decodeIfPresent(Bool.self, forKey: .isMe) ?? false
@@ -389,6 +417,7 @@ public struct StaffSalaryRow: Decodable, Sendable, Identifiable, Hashable {
         case paidThisMonth = "paid_this_month"
         case monthClosed = "month_closed"
         case paidSlots = "paid_slots"
+        case extraDays = "extra_days"
         case isActive = "is_active"
         case dismissalDate = "dismissal_date"
         case isMe = "is_me"

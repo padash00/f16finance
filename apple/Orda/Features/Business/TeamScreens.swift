@@ -774,7 +774,11 @@ struct StaffSalaryRowView: View {
         // «0 ₸/мес» значило бы соврать, что человек работает бесплатно.
         if row.isFromOperator { return "из списка операторов" }
         if let date = row.dismissalDate, !row.isActive { return "уволен \(date)" }
-        return "оклад \(Money.format(row.monthlySalary))/мес"
+        let salary = "оклад \(Money.format(row.monthlySalary))/мес"
+        // Доп. выходы — то, чем месяц одного окладника отличается от месяца
+        // другого. В ведомости это первое, о чём спрашивают.
+        guard !row.extraDays.isEmpty else { return salary }
+        return "\(salary) · \(row.extraDays.count) \(pluralize(row.extraDays.count, "доп. выход", "доп. выхода", "доп. выходов"))"
     }
 }
 
