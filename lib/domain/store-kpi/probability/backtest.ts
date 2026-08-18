@@ -189,7 +189,11 @@ function verdictOf(v1: ModelMetrics, v2: ModelMetrics): BacktestComparison['verd
     return {
       winner: 'tie',
       wapeDelta: delta,
-      summary: `Модели предсказывают одинаково точно (разница ${Math.abs(delta).toFixed(1)} п.п.). Менять рабочую незачем.`,
+      summary:
+        `Модели предсказывают одинаково точно (разница ${Math.abs(delta).toFixed(1)} п.п.).` +
+        (v2.coverage80 !== null && v1.coverage80 !== null && v2.coverage80 - v1.coverage80 > 0.1
+          ? ` Разница в другом: диапазон вероятностной накрывает факт в ${(v2.coverage80 * 100).toFixed(0)}% смен против ${(v1.coverage80 * 100).toFixed(0)}%.`
+          : ' Менять рабочую незачем.'),
     }
   }
 
@@ -205,10 +209,19 @@ function verdictOf(v1: ModelMetrics, v2: ModelMetrics): BacktestComparison['verd
     }
   }
 
+  // Проигрыш в точке ещё не делает вероятностную модель бесполезной: её
+  // ценность в диапазоне. Умолчать об этом значило бы дать половину ответа —
+  // человек прочтёт «переходить не на что» и не узнает, что интервал у неё
+  // втрое честнее.
+  const intervalNote =
+    v2.coverage80 !== null && v1.coverage80 !== null && v2.coverage80 - v1.coverage80 > 0.1
+      ? ` Но её диапазон честнее: накрывает факт в ${(v2.coverage80 * 100).toFixed(0)}% смен против ${(v1.coverage80 * 100).toFixed(0)}%.`
+      : ''
+
   return {
     winner: 'v1',
     wapeDelta: delta,
-    summary: `Нынешняя модель точнее на ${Math.abs(delta).toFixed(1)} п.п. Переходить не на что.`,
+    summary: `Нынешняя модель точнее на ${Math.abs(delta).toFixed(1)} п.п. — как точечный прогноз менять её не на что.${intervalNote}`,
   }
 }
 

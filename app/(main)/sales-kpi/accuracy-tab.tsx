@@ -142,6 +142,12 @@ function biasText(value: number | null | undefined): string {
  * случаев, вводит в заблуждение — и это должно быть видно владельцу, а не
  * только в тестах.
  */
+/** Процент с десятой долей: для сравнения моделей целых не хватает. */
+function pctPrecise(value: number | null | undefined): string {
+  if (value == null) return '—'
+  return `${(value * 100).toFixed(1)}%`
+}
+
 function ModelComparison(props: { data: NonNullable<AccuracyData['model_comparison']> }) {
   const { v1, v2, verdict, b1_calibration } = props.data
 
@@ -155,8 +161,11 @@ function ModelComparison(props: { data: NonNullable<AccuracyData['model_comparis
     {
       label: 'Промах в процентах',
       hint: 'Тот же промах относительно потока — позволяет сравнивать разные точки',
-      v1: pct(v1.wape),
-      v2: pct(v2.wape),
+      // С десятой долей, а не целыми: округление до целых показывало «23% и
+      // 23%» рядом с вердиктом «точнее на 0.9 п.п.» — читается как ошибка,
+      // хотя разница настоящая.
+      v1: pctPrecise(v1.wape),
+      v2: pctPrecise(v2.wape),
     },
     {
       label: 'Систематический сдвиг',
