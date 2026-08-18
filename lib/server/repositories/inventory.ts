@@ -536,7 +536,35 @@ export async function fetchStoreWriteoffs(supabase: AnySupabase, scope?: Invento
   }
 }
 
-export async function fetchStoreRevisions(supabase: AnySupabase, scope?: InventoryScope): Promise<StoreRevisionsData> {
+/**
+ * Что показывать из архива ревизий.
+ *
+ * `active` — обычный список (всё, кроме убранного в архив).
+ * `archived` — только архив.
+ * `all` — и то и другое.
+ *
+ * Архив разрешён только суперадминистратору, и решается это в роуте: сюда
+ * приходит уже готовый режим.
+ */
+export type RevisionArchiveMode = 'active' | 'archived' | 'all'
+
+/**
+ * Убран ли акт в архив.
+ *
+ * Проверка живёт в одном месте, потому что до применения миграции колонки
+ * archived_at в базе ещё нет: тогда поле приходит как undefined, и акт
+ * считается живым. Так страница «Документы» не падает в промежутке между
+ * выкладкой кода и накатом миграции.
+ */
+function isArchivedRevision(row: any): boolean {
+  return Boolean(row?.archived_at)
+}
+
+export async function fetchStoreRevisions(
+  supabase: AnySupabase,
+  scope?: InventoryScope,
+  options?: { archive?: RevisionArchiveMode },
+): Promise<StoreRevisionsData> {
   const [
     { data: items, error: itemsError },
     { data: locations, error: locationsError },
@@ -575,9 +603,11 @@ export async function fetchStoreRevisions(supabase: AnySupabase, scope?: Invento
     ),
     supabase
       .from('inventory_stocktakes')
-      .select('id, location_id, counted_at, comment, created_by, created_at, location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code)), items:inventory_stocktake_items(id, item_id, expected_qty, actual_qty, delta_qty, comment, item:item_id(id, name, barcode, unit, sale_price, default_purchase_price))')
+      // Звёздочка, а не список колонок: поля архива появляются только после
+      // миграции, и явное перечисление уронило бы запрос до её наката.
+      .select('*, location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code)), items:inventory_stocktake_items(id, item_id, expected_qty, actual_qty, delta_qty, comment, item:item_id(id, name, barcode, unit, sale_price, default_purchase_price))')
       .order('created_at', { ascending: false })
-      .limit(80),
+      .limit(120),
   ])
 
   if (itemsError) throw itemsError
@@ -589,7 +619,13 @@ export async function fetchStoreRevisions(supabase: AnySupabase, scope?: Invento
     items: filterByCompanyScope(mapNestedRows(items || []), scope, (row: any) => [row.company_id]),
     locations: filterByCompanyScope(mapNestedRows(locations || []), scope, (row: any) => [row.company_id]),
     balances: filterByLocationScope(mapNestedRows(balances || []), scope, (row: any) => row.location),
-    stocktakes: filterByLocationScope(mapNestedRows(stocktakes || []), scope, (row: any) => row.location),
+    stocktakes: filterByLocationScope(mapNestedRows(stocktakes || []), scope, (row: any) => row.location).filter(
+      (row: any) => {
+        const archive = options?.archive || 'active'
+        if (archive === 'all') return true
+        return archive === 'archived' ? isArchivedRevision(row) : !isArchivedRevision(row)
+      },
+    ),
   }
 }
 
@@ -653,7 +689,7 @@ export async function fetchInventoryOverview(supabase: AnySupabase, scope?: Inve
       .limit(20),
     supabase
       .from('inventory_stocktakes')
-      .select('id, location_id, counted_at, comment, created_by, created_at, location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code)), items:inventory_stocktake_items(id, item_id, expected_qty, actual_qty, delta_qty, comment, item:item_id(id, name, barcode))')
+      .select('*, location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code)), items:inventory_stocktake_items(id, item_id, expected_qty, actual_qty, delta_qty, comment, item:item_id(id, name, barcode))')
       .order('created_at', { ascending: false })
       .limit(20),
     supabase
@@ -689,7 +725,11 @@ export async function fetchInventoryOverview(supabase: AnySupabase, scope?: Inve
     receipts: filterByLocationScope(mapNestedRows(receipts || []), scope, (row: any) => row.location),
     requests: filterByCompanyScope(mapNestedRows(requests || []), scope, (row: any) => [row.requesting_company_id, row.company?.id]),
     writeoffs: filterByLocationScope(mapNestedRows(writeoffs || []), scope, (row: any) => row.location),
-    stocktakes: filterByLocationScope(mapNestedRows(stocktakes || []), scope, (row: any) => row.location),
+    // В общем обзоре архива нет вовсе: там смотрят, что происходит на складе,
+    // а не разбирают убранные акты. Архив живёт только на своей странице.
+    stocktakes: filterByLocationScope(mapNestedRows(stocktakes || []), scope, (row: any) => row.location).filter(
+      (row: any) => !isArchivedRevision(row),
+    ),
     movements: filterByMovementScope(mapNestedRows(movements || []), scope),
     companies: Array.isArray(companies) ? [...companies] : [],
   }

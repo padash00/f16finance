@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ClipboardCheck, ClipboardList, Loader2, Package, RefreshCw, ScanLine, ScanSearch, Search, Smartphone, Trash2 } from 'lucide-react'
+import { Archive, ArchiveRestore, ClipboardCheck, ClipboardList, Loader2, Package, RefreshCw, ScanLine, ScanSearch, Search, Smartphone, Trash2 } from 'lucide-react'
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
@@ -51,6 +51,9 @@ type InventoryRevision = {
   comment: string | null
   created_by?: string | null
   created_by_staff?: { id: string; full_name: string | null; role: string | null } | null
+  /** Заполнено, если акт убран в архив. Приходит только суперадминистратору. */
+  archived_at?: string | null
+  archive_reason?: string | null
   location?: InventoryLocation | null
   items?: Array<{
     id: string
@@ -70,6 +73,8 @@ type RevisionsResponse = {
     balances: InventoryBalance[]
     stocktakes: InventoryRevision[]
   }
+  /** Разрешён ли этому человеку архив. Решает сервер, не клиент. */
+  canArchive?: boolean
   error?: string
 }
 
@@ -144,6 +149,13 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
   const audioCtxRef = useRef<AudioContext | null>(null)
   const [linesFilter, setLinesFilter] = useState<'all' | 'mismatch'>('all')
   const [hasDraft, setHasDraft] = useState(false)
+  // Архив ревизий. Виден только суперадминистратору и только когда он сам его
+  // включит: по умолчанию страница показывает живые акты, как и раньше.
+  const [canArchive, setCanArchive] = useState(false)
+  const [archiveView, setArchiveView] = useState(false)
+  const [archiveTarget, setArchiveTarget] = useState<InventoryRevision | null>(null)
+  const [archiveReason, setArchiveReason] = useState('')
+  const [archiveBusy, setArchiveBusy] = useState(false)
   const [liveActive, setLiveActive] = useState(false)
   const [liveLog, setLiveLog] = useState<{ id: string; name: string; delta: number }[]>([])
   const liveSinceRef = useRef<string | null>(null)
@@ -158,10 +170,11 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
     }
     setError(null)
     try {
-      const response = await fetch(`/api/admin/store/revisions?scope=${scope}${storeCompanyId ? `&company_id=${encodeURIComponent(storeCompanyId)}` : ''}`, { cache: 'no-store', signal })
+      const response = await fetch(`/api/admin/store/revisions?scope=${scope}&archive=${archiveView ? 'archived' : 'active'}${storeCompanyId ? `&company_id=${encodeURIComponent(storeCompanyId)}` : ''}`, { cache: 'no-store', signal })
       const json = (await response.json().catch(() => null)) as RevisionsResponse | null
       if (signal?.aborted) return
       if (!response.ok || !json?.ok || !json.data) throw new Error(json?.error || 'Не удалось загрузить ревизии')
+      setCanArchive(Boolean(json.canArchive))
       setData(json.data)
       setLocationId((current) => (current && (json.data?.locations || []).some((l: any) => l.id === current)) ? current : (json.data?.locations?.[0]?.id || ''))
     } catch (err: any) {
@@ -181,7 +194,7 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
     void load(ac.signal)
     return () => ac.abort()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scope, storeCompanyId])
+  }, [scope, storeCompanyId, archiveView])
 
   const activeLocations = data?.locations || []
   const selectedLocation = activeLocations.find((location) => location.id === locationId) || null
@@ -698,6 +711,35 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
     }
   }
 
+  /**
+   * Убрать акт в архив или вернуть обратно.
+   *
+   * Возврат делается сразу, без вопросов: вернуть акт в список — действие
+   * безобидное. А вот на «убрать» спрашиваем причину, чтобы через полгода
+   * можно было понять, почему ревизии за тот месяц нет на месте.
+   */
+  const toggleArchive = async (revision: InventoryRevision, archived: boolean, reason?: string) => {
+    setArchiveBusy(true)
+    setError(null)
+    try {
+      const response = await fetch('/api/admin/store/revisions/archive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: revision.id, archived, reason: reason || null }),
+      })
+      const json = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null
+      if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось изменить акт')
+      setArchiveTarget(null)
+      setArchiveReason('')
+      setSuccess(archived ? 'Акт убран в архив' : 'Акт возвращён в список')
+      await load(undefined, { soft: true })
+    } catch (err: any) {
+      setError(err?.message || 'Не удалось изменить акт')
+    } finally {
+      setArchiveBusy(false)
+    }
+  }
+
   const filteredRevisions = useMemo(() => {
     const q = revisionSearch.trim().toLowerCase()
     const list = data?.stocktakes || []
@@ -740,6 +782,17 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
                 </button>
               ))}
             </div>
+            {canArchive ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setArchiveView((v) => !v)}
+                className={`h-9 gap-1.5 ${archiveView ? 'border-amber-400/60 bg-amber-400/10 text-amber-700 dark:text-amber-200' : ''}`}
+              >
+                <Archive className="h-3.5 w-3.5" />
+                {archiveView ? 'Показать рабочие' : 'Архив'}
+              </Button>
+            ) : null}
             <Button variant="outline" size="sm" onClick={() => void load(undefined, { soft: true })} disabled={loading || refreshing} className="h-9 gap-1.5">
               <RefreshCw className={`h-3.5 w-3.5 ${loading || refreshing ? 'animate-spin' : ''}`} />
               Обновить
@@ -812,6 +865,17 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
         </div>
       </div>
 
+      {archiveView ? (
+        <div className="flex items-start gap-2.5 rounded-lg border border-amber-400/40 bg-amber-400/10 px-3.5 py-2.5 text-xs text-amber-800 dark:text-amber-200">
+          <Archive className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <p>
+            Архив ревизий. Эти акты не видит никто, кроме вас: они убраны из списка, из обзора склада
+            и из отчётов по документам. Сами данные и движения по остаткам не тронуты — акт можно
+            вернуть в любой момент.
+          </p>
+        </div>
+      ) : null}
+
       {/* Main table */}
       <Card className="overflow-hidden border-border bg-card/70 p-0">
         {loading && filteredRevisions.length === 0 ? (
@@ -819,7 +883,11 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
         ) : filteredRevisions.length === 0 ? (
           <div className="flex h-60 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
             <Package className="h-8 w-8 opacity-50" />
-            {revisionSearch ? 'Ничего не найдено' : 'Ревизий пока нет — нажмите «Новый акт»'}
+            {revisionSearch
+              ? 'Ничего не найдено'
+              : archiveView
+                ? 'В архиве пусто — сюда попадают акты, которые вы убрали из списка'
+                : 'Ревизий пока нет — нажмите «Новый акт»'}
           </div>
         ) : (
           <div className="relative max-h-[calc(100vh-380px)] overflow-auto">
@@ -882,6 +950,12 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
                             <p className="truncate text-sm">{revision.comment || <span className="text-muted-foreground">Без комментария</span>}</p>
                           </TooltipTrigger>
                           <TooltipContent side="top" align="start" className="max-w-md">
+                            {revision.archived_at ? (
+                              <div className="mb-1 text-xs text-amber-600 dark:text-amber-300">
+                                В архиве с {formatDate(revision.archived_at)}
+                                {revision.archive_reason ? ` · ${revision.archive_reason}` : ''}
+                              </div>
+                            ) : null}
                             {revision.comment || 'Без комментария'}
                             {mismatches.length ? (
                               <div className="mt-1 text-xs text-muted-foreground">
@@ -915,17 +989,49 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
                         </span>
                       </td>
                       <td className="w-28 py-2.5 px-2 pr-4 text-right align-middle">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedRevision(revision)
-                            setRevisionDetailsOpen(true)
-                          }}
-                        >
-                          Открыть
-                        </Button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedRevision(revision)
+                              setRevisionDetailsOpen(true)
+                            }}
+                          >
+                            Открыть
+                          </Button>
+                          {canArchive ? (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                                  disabled={archiveBusy}
+                                  onClick={() => {
+                                    if (revision.archived_at) {
+                                      void toggleArchive(revision, false)
+                                    } else {
+                                      setArchiveReason('')
+                                      setArchiveTarget(revision)
+                                    }
+                                  }}
+                                >
+                                  {revision.archived_at ? (
+                                    <ArchiveRestore className="h-3.5 w-3.5" />
+                                  ) : (
+                                    <Archive className="h-3.5 w-3.5" />
+                                  )}
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="left">
+                                {revision.archived_at ? 'Вернуть в список' : 'Убрать в архив'}
+                              </TooltipContent>
+                            </Tooltip>
+                          ) : null}
+                        </div>
                       </td>
                     </tr>
                   )
@@ -1370,6 +1476,53 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
                 </div>
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Убрать акт в архив */}
+      <Dialog open={Boolean(archiveTarget)} onOpenChange={(open) => { if (!open) setArchiveTarget(null) }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Убрать акт в архив</DialogTitle>
+            <DialogDescription>
+              {archiveTarget
+                ? `Ревизия от ${formatDate(archiveTarget.counted_at)}, ${archiveTarget.location?.company?.name || archiveTarget.location?.name || 'точка не указана'}`
+                : ''}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Акт пропадёт из списка ревизий и из обзора склада. Остатки и движения по нему
+              останутся как есть — ревизия уже изменила склад, и отменить это архив не может.
+              Видеть акт будете только вы.
+            </p>
+            <div className="space-y-1.5">
+              <Label htmlFor="archive-reason">Зачем убираете</Label>
+              <Textarea
+                id="archive-reason"
+                value={archiveReason}
+                onChange={(event) => setArchiveReason(event.target.value)}
+                placeholder="Например: пересчитали заново, этот акт ошибочный"
+                rows={3}
+              />
+              <p className="text-xs text-muted-foreground">
+                Необязательно, но через полгода это единственное, что объяснит пропажу акта.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setArchiveTarget(null)} disabled={archiveBusy}>
+                Отмена
+              </Button>
+              <Button
+                onClick={() => { if (archiveTarget) void toggleArchive(archiveTarget, true, archiveReason) }}
+                disabled={archiveBusy}
+                className="gap-1.5 bg-amber-600 hover:bg-amber-700"
+              >
+                {archiveBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Archive className="h-3.5 w-3.5" />}
+                Убрать в архив
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

@@ -82,7 +82,17 @@ export async function GET(request: Request) {
       allowedCompanyIds: companyScope.allowedCompanyIds,
       isSuperAdmin: access.isSuperAdmin,
     }
-    const data = await fetchStoreRevisions(supabase as any, inventoryScope)
+    // Архив ревизий — только для суперадминистратора. Проверка именно здесь,
+    // а не на клиенте: кнопку можно не показать, а ссылку с ?archive=archived
+    // подобрать руками, и тогда «спрятанный» акт увидел бы кто угодно.
+    const archiveParam = String(url.searchParams.get('archive') || 'active')
+    const archive: 'active' | 'archived' | 'all' = access.isSuperAdmin
+      ? archiveParam === 'archived' || archiveParam === 'all'
+        ? archiveParam
+        : 'active'
+      : 'active'
+
+    const data = await fetchStoreRevisions(supabase as any, inventoryScope, { archive })
     const actorIds = Array.from(
       new Set(
         (data.stocktakes || [])
@@ -175,7 +185,9 @@ export async function GET(request: Request) {
       data.balances = (data.balances || []).filter((b: any) => b?.location?.location_type === locationType)
       data.stocktakes = (data.stocktakes || []).filter((s: any) => s?.location?.location_type === locationType)
     }
-    return json({ ok: true, data })
+    // Клиенту говорим прямо, можно ли ему архив: иначе страница гадала бы по
+    // косвенным признакам и рисовала кнопку тем, кому она всё равно не сработает.
+    return json({ ok: true, data, canArchive: access.isSuperAdmin, archive })
   } catch (error: any) {
     await writeSystemErrorLogSafe({
       scope: 'server',
