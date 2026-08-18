@@ -177,6 +177,15 @@ final class OperatorStore {
         return result
     }
 
+    /// Кто вошёл. Очереди на диске общие для устройства, а телефон на точке
+    /// общий тоже: без хозяина неотправленный чек сменщика ушёл бы в смену
+    /// того, кто сейчас в приложении.
+    func setQueueOwner(_ userID: String?) async {
+        await queue.setOwner(userID)
+        await outbox.setOwner(userID)
+        await refreshQueuedCounts()
+    }
+
     func loadCatalog() async {
         isLoadingCatalog = true
         catalogError = nil

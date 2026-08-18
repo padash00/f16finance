@@ -16,6 +16,9 @@ import Foundation
 public actor ChecklistOutbox {
     public struct Item: Codable, Sendable, Identifiable, Hashable {
         public let id: String
+        /// Чьё это. Телефон на точке общий, и работа сменщика не должна уйти
+        /// под именем того, кто сейчас вошёл.
+        public var owner: String?
         public let templateID: String
         /// Название — для строки «ждёт связи»: показывать идентификатор
         /// человеку нечестно.
@@ -25,12 +28,14 @@ public actor ChecklistOutbox {
 
         public init(
             id: String = UUID().uuidString,
+            owner: String? = nil,
             templateID: String,
             title: String,
             answers: [ChecklistAnswer],
             passedAt: Date = Date()
         ) {
             self.id = id
+            self.owner = owner
             self.templateID = templateID
             self.title = title
             self.answers = answers
@@ -41,6 +46,12 @@ public actor ChecklistOutbox {
     private let fileURL: URL
     private var items: [Item] = []
     private var isLoaded = false
+    private var owner: String?
+
+    /// Кто вошёл. Чужое остаётся ждать своего хозяина.
+    public func setOwner(_ owner: String?) {
+        self.owner = owner
+    }
 
     public init(directory: URL? = nil) {
         let base = directory ?? FileManager.default
@@ -63,16 +74,19 @@ public actor ChecklistOutbox {
 
     public func add(_ item: Item) {
         loadIfNeeded()
-        // Один шаблон — одна запись: повторный проход того же чек-листа
-        // заменяет прежний, а не копится второй строкой.
-        items.removeAll { $0.templateID == item.templateID }
-        items.append(item)
+        var stamped = item
+        stamped.owner = item.owner ?? owner
+        // Один шаблон — одна запись, но только у одного человека: сменщик мог
+        // пройти тот же чек-лист в свою смену, и затирать его нельзя.
+        items.removeAll { $0.templateID == stamped.templateID && $0.owner == stamped.owner }
+        items.append(stamped)
         persist()
     }
 
+    /// Только своё: чужой чек-лист уйдёт, когда его хозяин снова войдёт.
     public func pending() -> [Item] {
         loadIfNeeded()
-        return items
+        return items.filter { $0.owner == nil || $0.owner == owner }
     }
 
     public func remove(id: String) {

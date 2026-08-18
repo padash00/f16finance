@@ -346,6 +346,12 @@ final class CabinetStore {
     /// Чек-листы, пройденные без связи.
     private let checklistOutbox = ChecklistOutbox()
 
+    /// Кто вошёл: чужой чек-лист не должен уйти под его именем.
+    func setQueueOwner(_ userID: String?) async {
+        await checklistOutbox.setOwner(userID)
+        await refreshUndeliveredChecklists()
+    }
+
     /// Пройденные, но не отправленные: строка «ждёт связи» на экране.
     ///
     /// Имя не `pendingChecklists` намеренно — так называются ещё не

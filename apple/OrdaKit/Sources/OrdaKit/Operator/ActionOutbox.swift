@@ -31,6 +31,14 @@ public actor ActionOutbox {
         /// предыдущее: три раза изменённый ответ на задачу должен уйти один раз
         /// и последним значением.
         public let mergeKey: String
+        /// Чьё это действие.
+        ///
+        /// Телефон на точке общий: сменщик входит под собой, и без хозяина
+        /// отложенное действие ушло бы под его именем — в его смену, с его
+        /// штрафами и премиями. Старые записи без хозяина отправляем как
+        /// раньше: они появились до этой правки и принадлежат тому, кто их
+        /// сделал, — другого владельца у них не было.
+        public var owner: String?
 
         public init(
             id: String = UUID().uuidString,
@@ -39,7 +47,8 @@ public actor ActionOutbox {
             method: String,
             body: Data?,
             title: String,
-            mergeKey: String
+            mergeKey: String,
+            owner: String? = nil
         ) {
             self.id = id
             self.createdAt = createdAt
@@ -48,17 +57,31 @@ public actor ActionOutbox {
             self.body = body
             self.title = title
             self.mergeKey = mergeKey
+            self.owner = owner
         }
     }
 
     private let fileURL: URL
     private let api: APIClient
+    /// Кто сейчас в приложении. Ставится при входе.
+    private var owner: String?
 
     private var pending: [Item] = []
     private var isFlushing = false
 
-    public var pendingCount: Int { pending.count }
-    public var pendingItems: [Item] { pending }
+    /// Счётчик — только своё: чужие записи человека не касаются, и показывать
+    /// их ему значит пугать работой, которой он не делал.
+    public var pendingCount: Int { mine.count }
+    public var pendingItems: [Item] { mine }
+
+    private var mine: [Item] {
+        pending.filter { $0.owner == nil || $0.owner == owner }
+    }
+
+    /// Сообщить, кто вошёл. Чужие записи останутся ждать своего хозяина.
+    public func setOwner(_ owner: String?) {
+        self.owner = owner
+    }
 
     public init(api: APIClient, directory: URL? = nil) {
         self.api = api
@@ -104,15 +127,21 @@ public actor ActionOutbox {
     }
 
     private func enqueue(_ item: Item) {
-        pending.removeAll { $0.mergeKey == item.mergeKey }
-        pending.append(item)
+        var stamped = item
+        // Хозяин ставится здесь, а не вызывающим: забыть его на одном из
+        // десятка мест — значит однажды записать работу на чужого человека.
+        stamped.owner = item.owner ?? owner
+        // Склейка — только со своими: у сменщика может ждать своё действие над
+        // тем же объектом, и затирать его нельзя.
+        pending.removeAll { $0.mergeKey == stamped.mergeKey && $0.owner == stamped.owner }
+        pending.append(stamped)
         persist()
     }
 
     @discardableResult
     public func flush() async -> FlushResult {
-        guard !isFlushing, !pending.isEmpty else {
-            return FlushResult(sent: 0, remaining: pending.count, failed: 0)
+        guard !isFlushing, !mine.isEmpty else {
+            return FlushResult(sent: 0, remaining: mine.count, failed: 0)
         }
         isFlushing = true
         defer { isFlushing = false }
@@ -122,6 +151,13 @@ public actor ActionOutbox {
         var stillPending: [Item] = []
 
         for item in pending {
+            // Чужое не отправляем: оно уйдёт, когда его хозяин снова войдёт.
+            // Иначе работа сменщика запишется на того, кто сейчас в телефоне.
+            guard item.owner == nil || item.owner == owner else {
+                stillPending.append(item)
+                continue
+            }
+
             do {
                 _ = try await api.send(
                     APIRequest(path: item.path, method: httpMethod(item.method), body: item.body)
@@ -136,7 +172,8 @@ public actor ActionOutbox {
 
         pending = stillPending
         persist()
-        return FlushResult(sent: sent, remaining: pending.count, failed: failed)
+        // Остаток — свой: чужие записи ждут хозяина и человека не касаются.
+        return FlushResult(sent: sent, remaining: mine.count, failed: failed)
     }
 
     public func drop(id: String) {

@@ -16,13 +16,34 @@ public actor SaleQueue {
     private let fileURL: URL
     private let service: OperatorService
 
-    private var pending: [SaleDraft] = []
+    /// Чек вместе с тем, кто его пробил.
+    ///
+    /// Телефон на точке общий. Неотправленный чек, ушедший под другим входом,
+    /// попадёт в чужую смену — то есть в чужую кассу и чужой отчёт. Поэтому у
+    /// каждого чека есть хозяин, и отправляем мы только своё.
+    private struct Entry: Codable, Sendable {
+        var draft: SaleDraft
+        var owner: String?
+    }
+
+    private var pending: [Entry] = []
     private var isFlushing = false
+    private var owner: String?
 
     /// Сколько чеков ждёт отправки. Показываем кассиру — он должен видеть,
-    /// что деньги ещё не ушли на сервер.
-    public var pendingCount: Int { pending.count }
-    public var pendingDrafts: [SaleDraft] { pending }
+    /// что деньги ещё не ушли на сервер. Чужие сюда не попадают: он их не
+    /// пробивал и отвечать за них не должен.
+    public var pendingCount: Int { mine.count }
+    public var pendingDrafts: [SaleDraft] { mine.map(\.draft) }
+
+    private var mine: [Entry] {
+        pending.filter { $0.owner == nil || $0.owner == owner }
+    }
+
+    /// Кто вошёл. Чужие чеки останутся ждать своего кассира.
+    public func setOwner(_ owner: String?) {
+        self.owner = owner
+    }
 
     public init(service: OperatorService, directory: URL? = nil) {
         self.service = service
@@ -34,11 +55,20 @@ public actor SaleQueue {
 
     /// Загрузить очередь с диска при старте.
     public func load() {
-        guard
-            let data = try? Data(contentsOf: fileURL),
-            let decoded = try? JSONDecoder().decode([SaleDraft].self, from: data)
-        else { return }
-        pending = decoded.sorted { $0.createdAt < $1.createdAt }
+        guard let data = try? Data(contentsOf: fileURL) else { return }
+
+        if let decoded = try? JSONDecoder().decode([Entry].self, from: data) {
+            pending = decoded.sorted { $0.draft.createdAt < $1.draft.createdAt }
+            return
+        }
+
+        // Очередь, записанная прошлой версией: чеки без хозяина. Отправляем их
+        // как раньше — других владельцев у них не было.
+        if let legacy = try? JSONDecoder().decode([SaleDraft].self, from: data) {
+            pending = legacy
+                .sorted { $0.createdAt < $1.createdAt }
+                .map { Entry(draft: $0, owner: nil) }
+        }
     }
 
     private func persist() {
@@ -62,7 +92,7 @@ public actor SaleQueue {
             return .sent(result)
         } catch let error as APIError where error.isRetryable {
             enqueue(draft)
-            return .queued(pendingCount: pending.count)
+            return .queued(pendingCount: mine.count)
         } catch let error as APIError {
             // Отказ по существу — нет открытой смены, нет товара на витрине.
             // Складывать такой чек в очередь бессмысленно: повтор даст тот же
@@ -70,13 +100,13 @@ public actor SaleQueue {
             return .failed(error)
         } catch {
             enqueue(draft)
-            return .queued(pendingCount: pending.count)
+            return .queued(pendingCount: mine.count)
         }
     }
 
     private func enqueue(_ draft: SaleDraft) {
-        guard !pending.contains(where: { $0.localRef == draft.localRef }) else { return }
-        pending.append(draft)
+        guard !pending.contains(where: { $0.draft.localRef == draft.localRef }) else { return }
+        pending.append(Entry(draft: draft, owner: owner))
         persist()
     }
 
@@ -84,23 +114,30 @@ public actor SaleQueue {
     /// открытии экрана продажи.
     @discardableResult
     public func flush() async -> FlushResult {
-        guard !isFlushing, !pending.isEmpty else {
-            return FlushResult(sent: 0, remaining: pending.count, failed: 0)
+        guard !isFlushing, !mine.isEmpty else {
+            return FlushResult(sent: 0, remaining: mine.count, failed: 0)
         }
         isFlushing = true
         defer { isFlushing = false }
 
         var sent = 0
         var failed = 0
-        var stillPending: [SaleDraft] = []
+        var stillPending: [Entry] = []
 
-        for draft in pending {
+        for entry in pending {
+            // Чужой чек не отправляем: он попал бы в смену того, кто сейчас
+            // вошёл, — в чужую кассу и чужой отчёт. Дождётся своего кассира.
+            guard entry.owner == nil || entry.owner == owner else {
+                stillPending.append(entry)
+                continue
+            }
+
             do {
-                _ = try await service.createSale(draft)
+                _ = try await service.createSale(entry.draft)
                 sent += 1
             } catch let error as APIError where error.isRetryable {
                 // Сеть снова пропала — остаток оставляем на следующий раз.
-                stillPending.append(draft)
+                stillPending.append(entry)
             } catch {
                 // Сервер отверг чек по существу. Держать его в очереди вечно
                 // нельзя: он будет отвергаться при каждой попытке. Убираем и
@@ -111,12 +148,12 @@ public actor SaleQueue {
 
         pending = stillPending
         persist()
-        return FlushResult(sent: sent, remaining: pending.count, failed: failed)
+        return FlushResult(sent: sent, remaining: mine.count, failed: failed)
     }
 
     /// Убрать чек из очереди вручную (после разбора).
     public func drop(localRef: String) {
-        pending.removeAll { $0.localRef == localRef }
+        pending.removeAll { $0.draft.localRef == localRef }
         persist()
     }
 

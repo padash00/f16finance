@@ -780,3 +780,76 @@ struct AttachmentOutboxTests {
         #expect(direct?.recipientUserID == "u-1")
     }
 }
+
+/// Очереди на общем телефоне.
+///
+/// Устройство на точке одно, а операторов несколько: смена сдаётся вместе с
+/// телефоном. Неотправленная работа одного не должна уйти под именем другого —
+/// это чужая смена, чужая касса и чужие штрафы.
+@Suite("Очереди и смена человека")
+struct QueueOwnershipTests {
+    private func makeChecklists() -> ChecklistOutbox {
+        ChecklistOutbox(
+            directory: FileManager.default.temporaryDirectory
+                .appendingPathComponent("orda-owner-\(UUID().uuidString)", isDirectory: true)
+        )
+    }
+
+    @Test("Сменщик не видит и не отправляет чужое")
+    func hidesForeignWork() async {
+        let outbox = makeChecklists()
+
+        await outbox.setOwner("op-1")
+        await outbox.add(
+            ChecklistOutbox.Item(
+                templateID: "t-1",
+                title: "Приём смены",
+                answers: [ChecklistAnswer(itemID: "i-1", answer: "yes")]
+            )
+        )
+
+        // Пришёл сменщик и вошёл под собой.
+        await outbox.setOwner("op-2")
+        #expect(await outbox.pending().isEmpty)
+
+        // Первый вернулся — его работа на месте и ждёт отправки.
+        await outbox.setOwner("op-1")
+        #expect(await outbox.pending().count == 1)
+    }
+
+    @Test("Один шаблон у разных людей не затирается")
+    func keepsBothOperators() async {
+        let outbox = makeChecklists()
+        let answers = [ChecklistAnswer(itemID: "i-1", answer: "yes")]
+
+        await outbox.setOwner("op-1")
+        await outbox.add(ChecklistOutbox.Item(templateID: "t-1", title: "Обход", answers: answers))
+
+        await outbox.setOwner("op-2")
+        await outbox.add(ChecklistOutbox.Item(templateID: "t-1", title: "Обход", answers: answers))
+
+        // У каждого свой обход в свою смену: замена по шаблону работает только
+        // внутри одного человека.
+        #expect(await outbox.pending().count == 1)
+        await outbox.setOwner("op-1")
+        #expect(await outbox.pending().count == 1)
+    }
+
+    @Test("Записи прошлой версии без хозяина отправляются как раньше")
+    func legacyItemsStillSend() async {
+        let outbox = makeChecklists()
+
+        // Такие записи появились до правки: у них не было и не могло быть
+        // хозяина, и придержать их значило бы потерять работу насовсем.
+        await outbox.add(
+            ChecklistOutbox.Item(
+                templateID: "t-0",
+                title: "Старый обход",
+                answers: [ChecklistAnswer(itemID: "i-1", answer: "yes")]
+            )
+        )
+
+        await outbox.setOwner("op-7")
+        #expect(await outbox.pending().count == 1)
+    }
+}

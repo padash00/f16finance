@@ -151,6 +151,15 @@ struct OperatorRootView: View {
             }
             arena = arenaStore
 
+            // Хозяин очередей — до первой отправки: иначе накопленное
+            // сменщиком уйдёт под именем того, кто вошёл сейчас.
+            //
+            // Берём идентификатор оператора: у него он и есть «кто это»,
+            // а учётная запись на общем телефоне меняется вместе с человеком.
+            let ownerID = resolver.session.operatorID
+            await operatorStore.setQueueOwner(ownerID)
+            await cabinetStore.setQueueOwner(ownerID)
+
             async let shift: Void = operatorStore.bootstrap()
             async let overview: Void = cabinetStore.bootstrap()
             _ = await (shift, overview)

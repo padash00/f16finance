@@ -12,6 +12,9 @@ import Foundation
 public actor AttachmentOutbox {
     public struct Item: Codable, Sendable, Identifiable, Hashable {
         public let id: String
+        /// Чьё это. Телефон на точке общий, и работа сменщика не должна уйти
+        /// под именем того, кто сейчас вошёл.
+        public var owner: String?
         /// Куда отправлять: общий чат или личная переписка.
         public let scope: Scope
         /// Собеседник для личной переписки. Для чата пусто.
@@ -30,6 +33,7 @@ public actor AttachmentOutbox {
 
         public init(
             id: String = UUID().uuidString,
+            owner: String? = nil,
             scope: Scope,
             recipientUserID: String? = nil,
             fileName: String,
@@ -39,6 +43,7 @@ public actor AttachmentOutbox {
             createdAt: Date = Date()
         ) {
             self.id = id
+            self.owner = owner
             self.scope = scope
             self.recipientUserID = recipientUserID
             self.fileName = fileName
@@ -52,6 +57,11 @@ public actor AttachmentOutbox {
     private let directory: URL
     private var items: [Item] = []
     private var isLoaded = false
+    private var owner: String?
+
+    public func setOwner(_ owner: String?) {
+        self.owner = owner
+    }
 
     public init(directory: URL? = nil) {
         let base = directory ?? FileManager.default
@@ -85,13 +95,17 @@ public actor AttachmentOutbox {
         } catch {
             return
         }
-        items.append(item)
+
+        var stamped = item
+        stamped.owner = item.owner ?? owner
+        items.append(stamped)
         persist()
     }
 
+    /// Только свои файлы: чужие ждут хозяина.
     public func pending() -> [Item] {
         loadIfNeeded()
-        return items
+        return items.filter { $0.owner == nil || $0.owner == owner }
     }
 
     public func data(for id: String) -> Data? {
