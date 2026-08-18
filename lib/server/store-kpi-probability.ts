@@ -244,7 +244,6 @@ export function buildProbabilisticLayer(args: {
         demand,
         ticketSamples,
         shiftAvgTicketSamples: (avgTickets?.values || []).map((v) => v * prices),
-        shiftPairs: pairsFromSegment(avgTickets, prices),
         fallbackAvgTicket: avgTicketHit ? avgTicketHit.value * prices : null,
         thresholds: plan,
         iterations: args.iterations ?? 10_000,
@@ -296,29 +295,6 @@ function comparableReceiptAmounts(
   for (const other of comparable) {
     const list = receiptsByShift.get(other.date + '|' + other.shift)
     if (list) out.push(...list)
-  }
-  return out
-}
-
-/**
- * Пары «поток — средний чек» ИЗ ТОГО ЖЕ СЕГМЕНТА.
- *
- * Именно из того же: чек субботнего вечера ничего не говорит о вторнике, и
- * собирать пары со всех смен подряд значит подменить чеки сегмента чеками
- * откуда угодно. На боевых данных такая подмена заметно испортила калибровку.
- */
-function pairsFromSegment(
-  samples: { values: number[]; receipts: Array<number | null> } | null,
-  prices: number,
-): Array<{ receipts: number; avgTicket: number }> {
-  if (!samples) return []
-  const out: Array<{ receipts: number; avgTicket: number }> = []
-  for (let i = 0; i < samples.values.length; i++) {
-    const receipts = samples.receipts[i]
-    const ticket = samples.values[i]
-    if (receipts === null || !Number.isFinite(receipts) || receipts <= 0) continue
-    if (!Number.isFinite(ticket) || ticket <= 0) continue
-    out.push({ receipts, avgTicket: ticket * prices })
   }
   return out
 }

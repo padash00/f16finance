@@ -88,15 +88,6 @@ export type BaselineEntry = {
   cashier_id: string | null
   value: number
   duration_minutes?: number | null
-  /**
-   * Сколько чеков было в этой смене.
-   *
-   * Нужно, чтобы разыгрывать средний чек в паре с потоком: в людный вечер
-   * корзины другие, и брать чек от смены с вдвое меньшим потоком — значит
-   * стирать эту связь. Хранится рядом со значением, потому что пара обязана
-   * жить в одном сегменте: чек субботнего вечера ничего не говорит о вторнике.
-   */
-  receipts?: number | null
 }
 
 export type BaselineIndex = Map<SegmentLevel, Map<string, BaselineEntry[]>>
@@ -159,7 +150,6 @@ export function addFactToBaselineIndex(
     cashier_id: fact.cashier_id,
     value,
     duration_minutes: fact.duration_minutes ?? null,
-    receipts: Number.isFinite(fact.receipts) ? fact.receipts : null,
   }
   for (const level of SEGMENT_LEVELS) {
     const buckets = index.get(level)!
@@ -233,13 +223,7 @@ export function lookupBaselineSamples(
     summerMonths: number[]
     excludeCashierId?: string | null
   },
-): {
-  values: number[]
-  durations: Array<number | null>
-  receipts: Array<number | null>
-  level: SegmentLevel
-  sample: number
-} | null {
+): { values: number[]; durations: Array<number | null>; level: SegmentLevel; sample: number } | null {
   for (const level of SEGMENT_LEVELS) {
     const buckets = index.get(level)
     if (!buckets) continue
@@ -254,7 +238,6 @@ export function lookupBaselineSamples(
     return {
       values: usable.map((e) => e.value),
       durations: usable.map((e) => e.duration_minutes ?? null),
-      receipts: usable.map((e) => e.receipts ?? null),
       level,
       sample: usable.length,
     }
