@@ -1692,6 +1692,12 @@ export default function SalesKpiPage() {
                       const key = `${s.date}|${s.shift}|${s.cashier_id ?? 'none'}`
                       const revenueRatio = ratioOf(s.revenue, s.expected_revenue)
                       const demandRatio = ratioOf(s.receipts, s.expected_receipts)
+                      // Диапазон обычного спроса. Без него «−18% к ожиданию»
+                      // читается как провал, хотя такой разброс для этой
+                      // смены — рядовое дело: поток гуляет сам по себе.
+                      const demandRange = payload?.probabilistic_forecast?.shifts.find(
+                        (p) => p.date === s.date && p.shift === s.shift,
+                      )?.demand?.interval80
                       const isOpen = openShift === key
                       return (
                         <Fragment key={key}>
@@ -1728,11 +1734,24 @@ export default function SalesKpiPage() {
                             </td>
                             <td className="px-4 py-2 text-right tabular-nums">
                               <div>{s.receipts}</div>
-                              <div className={`whitespace-nowrap text-xs ${toneFor(demandRatio)}`}>
-                                {demandRatio == null
-                                  ? 'нет ожидания'
-                                  : `${deltaPct(demandRatio)} к ожиданию`}
-                              </div>
+                              {demandRange ? (
+                                <div
+                                  className={`whitespace-nowrap text-xs ${
+                                    s.receipts >= demandRange.low && s.receipts <= demandRange.high
+                                      ? 'text-muted-foreground'
+                                      : toneFor(demandRatio)
+                                  }`}
+                                  title="Границы, в которые поток укладывается в 8 сменах из 10"
+                                >
+                                  обычно {Math.round(demandRange.low)}–{Math.round(demandRange.high)}
+                                </div>
+                              ) : (
+                                <div className={`whitespace-nowrap text-xs ${toneFor(demandRatio)}`}>
+                                  {demandRatio == null
+                                    ? 'нет ожидания'
+                                    : `${deltaPct(demandRatio)} к ожиданию`}
+                                </div>
+                              )}
                             </td>
                             <td
                               className={`whitespace-nowrap px-4 py-2 text-right font-medium ${toneFor(s.score)}`}
