@@ -27,10 +27,19 @@ function json(data: unknown, status = 200) {
 
 type Body = {
   id?: string
+  /**
+   * Пачка актов. Ревизии убирают в архив обычно не по одной, а месяцем сразу,
+   * и пятнадцать отдельных запросов — это пятнадцать шансов, что половина
+   * уйдёт, а половина нет.
+   */
+  ids?: string[]
   /** true — убрать в архив, false — вернуть в список. */
   archived?: boolean
   reason?: string | null
 }
+
+/** Разумный потолок на одну пачку: список на странице всё равно короче. */
+const MAX_BATCH = 200
 
 export async function POST(request: Request) {
   try {
@@ -41,21 +50,28 @@ export async function POST(request: Request) {
 
     const supabase = createAdminSupabaseClient()
     const body = (await request.json().catch(() => null)) as Body | null
-    const id = String(body?.id || '').trim()
-    if (!id) return json({ error: 'Не указан акт' }, 400)
+    const ids = Array.from(
+      new Set(
+        [...(Array.isArray(body?.ids) ? body.ids : []), body?.id]
+          .map((value) => String(value || '').trim())
+          .filter(Boolean),
+      ),
+    )
+    if (ids.length === 0) return json({ error: 'Не указан акт' }, 400)
+    if (ids.length > MAX_BATCH) return json({ error: `За раз можно убрать не больше ${MAX_BATCH} актов` }, 400)
 
     const archived = body?.archived !== false
     const reason = typeof body?.reason === 'string' ? body.reason.trim().slice(0, 500) : ''
 
-    // Сначала читаем акт: и чтобы убедиться, что он есть, и чтобы в журнале
+    // Сначала читаем акты: и чтобы убедиться, что они есть, и чтобы в журнале
     // осталось, что именно убрали — по одному id через год не разобраться.
-    const { data: existing, error: readError } = await supabase
+    const { data: existingRows, error: readError } = await supabase
       .from('inventory_stocktakes')
       .select('id, counted_at, comment, location_id, location:location_id(id, name, company_id)')
-      .eq('id', id)
-      .maybeSingle()
+      .in('id', ids)
     if (readError) throw readError
-    if (!existing) return json({ error: 'Акт не найден' }, 404)
+    const existing = (existingRows || []) as any[]
+    if (existing.length === 0) return json({ error: 'Акт не найден' }, 404)
 
     const { error } = await supabase
       .from('inventory_stocktakes')
@@ -64,7 +80,10 @@ export async function POST(request: Request) {
         archived_by: archived ? access.user?.id || null : null,
         archive_reason: archived ? reason || null : null,
       })
-      .eq('id', id)
+      .in(
+        'id',
+        existing.map((row) => String(row.id)),
+      )
 
     if (error) {
       // Типовой случай: код выложен, миграция ещё не накатана. Человеку нужен
@@ -79,21 +98,27 @@ export async function POST(request: Request) {
       throw error
     }
 
-    await writeAuditLog(supabase as any, {
-      actorUserId: access.user?.id || null,
-      entityType: 'inventory-stocktake',
-      entityId: id,
-      action: archived ? 'archive' : 'restore',
-      organizationId: access.activeOrganization?.id || null,
-      payload: {
-        counted_at: (existing as any)?.counted_at || null,
-        comment: (existing as any)?.comment || null,
-        location: (existing as any)?.location?.name || null,
-        reason: reason || null,
-      },
-    })
+    // Запись в журнал на каждый акт, а не одна на пачку: искать в журнале
+    // будут по конкретной ревизии («куда делась вот эта»), и общая запись
+    // «убрано 15 актов» на такой вопрос не отвечает.
+    for (const row of existing) {
+      await writeAuditLog(supabase as any, {
+        actorUserId: access.user?.id || null,
+        entityType: 'inventory-stocktake',
+        entityId: String(row.id),
+        action: archived ? 'archive' : 'restore',
+        organizationId: access.activeOrganization?.id || null,
+        payload: {
+          counted_at: row?.counted_at || null,
+          comment: row?.comment || null,
+          location: row?.location?.name || null,
+          reason: reason || null,
+          batch: existing.length > 1 ? existing.length : undefined,
+        },
+      })
+    }
 
-    return json({ ok: true, archived })
+    return json({ ok: true, archived, count: existing.length })
   } catch (error: any) {
     await writeSystemErrorLogSafe({
       scope: 'server',

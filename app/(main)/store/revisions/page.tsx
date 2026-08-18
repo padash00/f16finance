@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useStoreScope } from '@/components/store/store-scope'
 import { Card } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { DatePicker } from '@/components/ui/date-picker'
@@ -111,6 +112,16 @@ function formatDate(value: string | null | undefined) {
   }).format(parsed)
 }
 
+/** «1 акт», «2 акта», «5 актов» — иначе интерфейс говорит на ломаном русском. */
+function plural(count: number, one: string, few: string, many: string) {
+  const mod100 = Math.abs(count) % 100
+  const mod10 = mod100 % 10
+  if (mod100 >= 11 && mod100 <= 14) return many
+  if (mod10 === 1) return one
+  if (mod10 >= 2 && mod10 <= 4) return few
+  return many
+}
+
 function actorLabel(staff: { full_name: string | null } | null | undefined, fallbackId: string | null | undefined) {
   if (staff?.full_name) return staff.full_name
   if (fallbackId) return `ID ${String(fallbackId).slice(0, 8)}`
@@ -156,6 +167,10 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
   const [archiveTarget, setArchiveTarget] = useState<InventoryRevision | null>(null)
   const [archiveReason, setArchiveReason] = useState('')
   const [archiveBusy, setArchiveBusy] = useState(false)
+  // Выделенные акты. Держим id, а не сами строки: список перезагружается после
+  // каждого действия, и объекты были бы уже не те.
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [bulkOpen, setBulkOpen] = useState(false)
   const [liveActive, setLiveActive] = useState(false)
   const [liveLog, setLiveLog] = useState<{ id: string; name: string; delta: number }[]>([])
   const liveSinceRef = useRef<string | null>(null)
@@ -718,20 +733,30 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
    * безобидное. А вот на «убрать» спрашиваем причину, чтобы через полгода
    * можно было понять, почему ревизии за тот месяц нет на месте.
    */
-  const toggleArchive = async (revision: InventoryRevision, archived: boolean, reason?: string) => {
+  const toggleArchive = async (ids: string[], archived: boolean, reason?: string) => {
+    if (ids.length === 0) return
     setArchiveBusy(true)
     setError(null)
     try {
       const response = await fetch('/api/admin/store/revisions/archive', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: revision.id, archived, reason: reason || null }),
+        body: JSON.stringify({ ids, archived, reason: reason || null }),
       })
-      const json = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null
+      const json = (await response.json().catch(() => null)) as { ok?: boolean; count?: number; error?: string } | null
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось изменить акт')
+      const count = Number(json.count || ids.length)
       setArchiveTarget(null)
+      setBulkOpen(false)
       setArchiveReason('')
-      setSuccess(archived ? 'Акт убран в архив' : 'Акт возвращён в список')
+      setSelectedIds([])
+      setSuccess(
+        count > 1
+          ? `${count} ${plural(count, 'акт', 'акта', 'актов')} ${archived ? 'убрано в архив' : 'возвращено в список'}`
+          : archived
+            ? 'Акт убран в архив'
+            : 'Акт возвращён в список',
+      )
       await load(undefined, { soft: true })
     } catch (err: any) {
       setError(err?.message || 'Не удалось изменить акт')
@@ -754,6 +779,36 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
       return parts.filter(Boolean).join(' ').toLowerCase().includes(q)
     })
   }, [data?.stocktakes, revisionSearch])
+
+  /**
+   * Выделять можно только то, что сейчас на экране.
+   *
+   * Если человек отфильтровал список поиском, «выделить все» должно означать
+   * «все найденные», а не «все вообще» — иначе в архив уедет то, чего он в
+   * этот момент даже не видит.
+   */
+  const selectableIds = useMemo(() => filteredRevisions.map((r) => r.id), [filteredRevisions])
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds])
+  const visibleSelected = useMemo(
+    () => selectableIds.filter((id) => selectedSet.has(id)),
+    [selectableIds, selectedSet],
+  )
+  const allVisibleSelected = selectableIds.length > 0 && visibleSelected.length === selectableIds.length
+
+  const toggleSelectAll = () => {
+    setSelectedIds(allVisibleSelected ? [] : selectableIds)
+  }
+
+  const toggleSelectOne = (id: string) => {
+    setSelectedIds((current) => (current.includes(id) ? current.filter((x) => x !== id) : [...current, id]))
+  }
+
+  // Смена точки, фильтра или вида сбрасывает выделение: держать в памяти
+  // галочки на актах, которых больше нет на экране, — прямой путь убрать в
+  // архив не то, что собирался.
+  useEffect(() => {
+    setSelectedIds([])
+  }, [scope, storeCompanyId, archiveView])
 
   const revisionsStats = useMemo(() => {
     const list = data?.stocktakes || []
@@ -876,10 +931,50 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
         </div>
       ) : null}
 
+      {canArchive && visibleSelected.length > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-400/40 bg-amber-400/10 px-3.5 py-2.5">
+          <div className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-200">
+            <span className="font-semibold">
+              Выбрано {visibleSelected.length} {plural(visibleSelected.length, 'акт', 'акта', 'актов')}
+            </span>
+            <button
+              type="button"
+              onClick={() => setSelectedIds([])}
+              className="text-xs underline underline-offset-2 opacity-80 hover:opacity-100"
+            >
+              снять выделение
+            </button>
+          </div>
+          <Button
+            size="sm"
+            disabled={archiveBusy}
+            onClick={() => {
+              if (archiveView) {
+                void toggleArchive(visibleSelected, false)
+              } else {
+                setArchiveReason('')
+                setBulkOpen(true)
+              }
+            }}
+            className={`h-9 gap-1.5 ${archiveView ? '' : 'bg-amber-600 hover:bg-amber-700'}`}
+            variant={archiveView ? 'outline' : 'default'}
+          >
+            {archiveBusy ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : archiveView ? (
+              <ArchiveRestore className="h-3.5 w-3.5" />
+            ) : (
+              <Archive className="h-3.5 w-3.5" />
+            )}
+            {archiveView ? 'Вернуть в список' : 'Убрать в архив'}
+          </Button>
+        </div>
+      ) : null}
+
       {/* Main table */}
       <Card className="overflow-hidden border-border bg-card/70 p-0">
         {loading && filteredRevisions.length === 0 ? (
-          <StoreDataTableSkeleton columns={10} />
+          <StoreDataTableSkeleton columns={canArchive ? 11 : 10} />
         ) : filteredRevisions.length === 0 ? (
           <div className="flex h-60 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
             <Package className="h-8 w-8 opacity-50" />
@@ -903,7 +998,16 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
             <table className="w-full min-w-[900px] text-sm">
               <thead className="sticky top-0 z-10 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur">
                 <tr className="border-b border-slate-200 dark:border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
-                  <th className="w-24 py-2.5 pl-4 pr-2 font-normal">Дата</th>
+                  {canArchive ? (
+                    <th className="w-10 py-2.5 pl-4 pr-0 font-normal">
+                      <Checkbox
+                        checked={allVisibleSelected}
+                        onCheckedChange={toggleSelectAll}
+                        aria-label="Выделить все акты"
+                      />
+                    </th>
+                  ) : null}
+                  <th className={`w-24 py-2.5 pr-2 font-normal ${canArchive ? 'pl-3' : 'pl-4'}`}>Дата</th>
                   <th className="w-40 py-2.5 px-2 font-normal">Провел</th>
                   <th className="w-48 py-2.5 px-2 font-normal">Локация</th>
                   <th className="py-2.5 px-2 font-normal">Комментарий</th>
@@ -932,8 +1036,20 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
                   }, 0)
                   const mismatches = items.filter((i) => Number(i.delta_qty || 0) !== 0)
                   return (
-                    <tr key={revision.id} className="transition hover:bg-slate-50 dark:hover:bg-white/[0.02]">
-                      <td className="w-24 py-2.5 pl-4 pr-2 align-middle">
+                    <tr
+                      key={revision.id}
+                      className={`transition hover:bg-slate-50 dark:hover:bg-white/[0.02] ${selectedSet.has(revision.id) ? 'bg-amber-400/[0.07]' : ''}`}
+                    >
+                      {canArchive ? (
+                        <td className="w-10 py-2.5 pl-4 pr-0 align-middle">
+                          <Checkbox
+                            checked={selectedSet.has(revision.id)}
+                            onCheckedChange={() => toggleSelectOne(revision.id)}
+                            aria-label="Выделить акт"
+                          />
+                        </td>
+                      ) : null}
+                      <td className={`w-24 py-2.5 pr-2 align-middle ${canArchive ? 'pl-3' : 'pl-4'}`}>
                         <span className="text-xs text-muted-foreground">{formatDate(revision.counted_at)}</span>
                       </td>
                       <td className="w-40 py-2.5 px-2 align-middle">
@@ -1012,7 +1128,7 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
                                   disabled={archiveBusy}
                                   onClick={() => {
                                     if (revision.archived_at) {
-                                      void toggleArchive(revision, false)
+                                      void toggleArchive([revision.id], false)
                                     } else {
                                       setArchiveReason('')
                                       setArchiveTarget(revision)
@@ -1480,6 +1596,59 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
         </DialogContent>
       </Dialog>
 
+      {/* Убрать пачку актов в архив */}
+      <Dialog open={bulkOpen} onOpenChange={(open) => { if (!open) setBulkOpen(false) }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Убрать в архив {visibleSelected.length} {plural(visibleSelected.length, 'акт', 'акта', 'актов')}
+            </DialogTitle>
+            <DialogDescription>Причина будет записана ко всем выбранным актам сразу.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="max-h-40 space-y-1 overflow-auto rounded-lg border border-border bg-surface-muted p-2.5 text-xs text-muted-foreground">
+              {filteredRevisions
+                .filter((r) => selectedSet.has(r.id))
+                .map((r) => (
+                  <div key={r.id} className="flex items-center justify-between gap-2">
+                    <span className="truncate">
+                      {formatDate(r.counted_at)} · {r.location?.company?.name || r.location?.name || '—'}
+                    </span>
+                    <span className="shrink-0">{(r.items || []).length} поз.</span>
+                  </div>
+                ))}
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Акты пропадут из списка и из обзора склада. Остатки и движения по ним останутся как
+              есть — ревизии уже изменили склад, и архив этого не отменяет.
+            </p>
+            <div className="space-y-1.5">
+              <Label htmlFor="bulk-archive-reason">Зачем убираете</Label>
+              <Textarea
+                id="bulk-archive-reason"
+                value={archiveReason}
+                onChange={(event) => setArchiveReason(event.target.value)}
+                placeholder="Например: старые акты за прошлый год, мешают в списке"
+                rows={3}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setBulkOpen(false)} disabled={archiveBusy}>
+                Отмена
+              </Button>
+              <Button
+                onClick={() => void toggleArchive(visibleSelected, true, archiveReason)}
+                disabled={archiveBusy}
+                className="gap-1.5 bg-amber-600 hover:bg-amber-700"
+              >
+                {archiveBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Archive className="h-3.5 w-3.5" />}
+                Убрать в архив
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Убрать акт в архив */}
       <Dialog open={Boolean(archiveTarget)} onOpenChange={(open) => { if (!open) setArchiveTarget(null) }}>
         <DialogContent className="max-w-md">
@@ -1515,7 +1684,7 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
                 Отмена
               </Button>
               <Button
-                onClick={() => { if (archiveTarget) void toggleArchive(archiveTarget, true, archiveReason) }}
+                onClick={() => { if (archiveTarget) void toggleArchive([archiveTarget.id], true, archiveReason) }}
                 disabled={archiveBusy}
                 className="gap-1.5 bg-amber-600 hover:bg-amber-700"
               >
