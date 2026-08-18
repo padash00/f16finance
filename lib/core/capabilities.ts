@@ -553,7 +553,6 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
           { id: 'salary.void_adjustment', label: 'Отменить корректировку', severity: 'high' },
           { id: 'salary.unlock_week', label: 'Разблокировать закрытую неделю', severity: 'high' },
           { id: 'salary.update_chat_id', label: 'Изменить Telegram ID', severity: 'medium' },
-          { id: 'salary.add_extra_day', label: 'Добавить доп. рабочий день', severity: 'medium' },
           { id: 'salary.export', label: 'Экспорт PDF', severity: 'low' },
           { id: 'salary.mark_debt_paid', label: 'Отметить долг оператора оплаченным', severity: 'high' },
           { id: 'salary.send_telegram', label: 'Отправить расчёт ЗП в Telegram', severity: 'medium' },

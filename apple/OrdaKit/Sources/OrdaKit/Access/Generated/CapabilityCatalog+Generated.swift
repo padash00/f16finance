@@ -556,7 +556,6 @@ extension CapabilityCatalog {
                         Capability(id: "salary.void_adjustment", label: "Отменить корректировку", description: nil, severity: .high, deps: []),
                         Capability(id: "salary.unlock_week", label: "Разблокировать закрытую неделю", description: nil, severity: .high, deps: []),
                         Capability(id: "salary.update_chat_id", label: "Изменить Telegram ID", description: nil, severity: .medium, deps: []),
-                        Capability(id: "salary.add_extra_day", label: "Добавить доп. рабочий день", description: nil, severity: .medium, deps: []),
                         Capability(id: "salary.export", label: "Экспорт PDF", description: nil, severity: .low, deps: []),
                         Capability(id: "salary.mark_debt_paid", label: "Отметить долг оператора оплаченным", description: nil, severity: .high, deps: []),
                         Capability(id: "salary.send_telegram", label: "Отправить расчёт ЗП в Telegram", description: nil, severity: .medium, deps: []),

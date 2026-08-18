@@ -543,14 +543,36 @@ export async function POST(req: Request) {
     if ('response' in access) return access.response
     const addonDenied = await requireAddon(access, 'addon.salary')
     if (addonDenied) return addonDenied
-    const denied = await requireCapability(access, 'salary.create_payment')
-    if (denied) return denied as any
-    // Capability checks выше уже отсеивают; здесь — любой staff
+    // Право спрашиваем ниже, когда известно действие: у каждого своё.
     if (!access.isSuperAdmin && !access.staffRole) return json({ error: 'forbidden' }, 403)
 
     const supabase = createAdminSupabaseClient()
     const body = await req.json().catch(() => null)
     const action = body?.action
+
+    // Каждое действие — своим правом. Раньше весь маршрут закрывался правом
+    // «Выплатить зарплату», и всё остальное ехало под ним: доп. выход,
+    // корректировка, погашение долга, правка оклада. Владелец снимал в
+    // настройках «Добавить доп. рабочий день» — и ничего не менялось, потому
+    // что сервер про это право не знал.
+    //
+    // Права даются сотруднику полностью и снимаются владельцем, поэтому
+    // разведение никого не заперло: заперт ровно тот, у кого право отняли.
+    const capabilityByAction: Record<string, string> = {
+      addAdjustment: 'salary.create_adjustment',
+      removeAdjustment: 'salary.void_adjustment',
+      payStaffDebt: 'salary.create_payment',
+      voidStaffDebtPayment: 'salary.void_payment',
+      addExtraDay: 'staff.add_extra_day',
+      createPayment: 'salary.create_payment',
+      deletePayment: 'salary.void_payment',
+      updateStaffSalary: 'staff.edit',
+    }
+    const denied = await requireCapability(
+      access,
+      capabilityByAction[String(action || '')] || 'salary.create_payment',
+    )
+    if (denied) return denied as any
 
     // Multi-tenant scoping for mutations. While LEGACY_SINGLE_TENANT_MODE is true,
     // scope.allowedCompanyIds is null, allowedStaffIds stays null, and the guard

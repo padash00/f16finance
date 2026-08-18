@@ -3,7 +3,7 @@
   "summary": {
     "groups": 9,
     "pages": 85,
-    "capabilities": 403
+    "capabilities": 402
   },
   "groups": [
     {
@@ -1806,13 +1806,6 @@
             {
               "id": "salary.update_chat_id",
               "label": "Изменить Telegram ID",
-              "description": null,
-              "severity": "medium",
-              "deps": []
-            },
-            {
-              "id": "salary.add_extra_day",
-              "label": "Добавить доп. рабочий день",
               "description": null,
               "severity": "medium",
               "deps": []
