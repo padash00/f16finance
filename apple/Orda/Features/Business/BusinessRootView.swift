@@ -129,17 +129,11 @@ struct BusinessRootView: View {
     /// правами они не закрываются ни на сайте, ни здесь.
     private var phoneTabs: some View {
         TabView(selection: $phoneTab) {
-            if resolver.can("dashboard.view") {
-                NavigationStack { BusinessDashboardScreen(resolver: resolver) }
-                    .tabItem { Label("Обзор", systemImage: "square.grid.2x2.fill") }
-                    .tag(PhoneTab.home)
-            }
-
-            if resolver.can("expenses-pending.view") {
-                NavigationStack { ApprovalsScreen() }
-                    .tabItem { Label("Решения", systemImage: "checkmark.circle") }
-                    .badge(store?.pending.count ?? 0)
-                    .tag(PhoneTab.approvals)
+            ForEach(contentTabs, id: \.self) { tab in
+                NavigationStack { contentTab(tab) }
+                    .tabItem { Label(tab.title, systemImage: tab.icon) }
+                    .badge(tab == .approvals ? (store?.pending.count ?? 0) : 0)
+                    .tag(tab)
             }
 
             NavigationStack(path: $sectionsPath) {
@@ -153,6 +147,47 @@ struct BusinessRootView: View {
                 .tag(PhoneTab.profile)
         }
         .tint(accent)
+        .onAppear {
+            // Вкладка по умолчанию — «Обзор», но у сотрудника его может не
+            // быть, и приложение открывалось на пустоте до первого касания.
+            if !contentTabs.contains(phoneTab), phoneTab != .sections, phoneTab != .profile {
+                phoneTab = contentTabs.first ?? .sections
+            }
+        }
+    }
+
+    /// Рабочие вкладки — то, куда человек заходит каждый день.
+    ///
+    /// Раньше их было ровно две и обе владельческие: сводка и решения по
+    /// расходам. У сотрудника без этих прав внизу оставались «Разделы» и
+    /// «Профиль» — то есть каталог и он сам, а работы в приложении будто и нет.
+    ///
+    /// Теперь список собирается по правам: сводка, решения, поручения, чат
+    /// команды. Берём не больше трёх — с «Разделами» и «Профилем» это пять,
+    /// предел, после которого iOS прячет лишнее в «Ещё».
+    private var contentTabs: [PhoneTab] {
+        let candidates: [(PhoneTab, String)] = [
+            (.home, "dashboard.view"),
+            (.approvals, "expenses-pending.view"),
+            (.tasks, "tasks.view"),
+            (.chat, "team-chat.view"),
+        ]
+        return candidates
+            .filter { resolver.can($0.1) }
+            .map(\.0)
+            .prefix(3)
+            .map { $0 }
+    }
+
+    @ViewBuilder
+    private func contentTab(_ tab: PhoneTab) -> some View {
+        switch tab {
+        case .home: BusinessDashboardScreen(resolver: resolver)
+        case .approvals: ApprovalsScreen()
+        case .tasks: TeamTasksScreen()
+        case .chat: TeamChatScreen()
+        case .sections, .profile: EmptyView()
+        }
     }
 
     // ── iPad и Mac ───────────────────────────────────────────────────────────
@@ -234,7 +269,19 @@ struct BusinessRootView: View {
         selection = item
 
         #if os(iOS)
-        if item.id == "home.dashboard" {
+        // Раздел, у которого есть своя вкладка, открываем во вкладке: иначе
+        // уведомление о задаче уводило в стопку внутри «Разделов», а рядом
+        // внизу горела вкладка «Задачи» — два одинаковых экрана в двух местах.
+        let tabForPage: PhoneTab? = switch item.id {
+        case "home.dashboard": .home
+        case "tasks": .tasks
+        case "team-chat": .chat
+        default: nil
+        }
+        if let tabForPage, contentTabs.contains(tabForPage) || tabForPage == .home {
+            phoneTab = tabForPage
+            sectionsPath = []
+        } else if item.id == "home.dashboard" {
             phoneTab = .home
             sectionsPath = []
         } else {
@@ -393,7 +440,29 @@ struct BusinessRootView: View {
 #if os(iOS)
 /// Вкладки телефона.
 enum PhoneTab: Hashable {
-    case home, approvals, sections, profile
+    case home, approvals, tasks, chat, sections, profile
+
+    var title: String {
+        switch self {
+        case .home: "Обзор"
+        case .approvals: "Решения"
+        case .tasks: "Задачи"
+        case .chat: "Чат"
+        case .sections: "Разделы"
+        case .profile: "Профиль"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .home: "square.grid.2x2.fill"
+        case .approvals: "checkmark.circle"
+        case .tasks: "checklist"
+        case .chat: "bubble.left.and.bubble.right"
+        case .sections: "list.bullet"
+        case .profile: "person.crop.circle"
+        }
+    }
 }
 #endif
 

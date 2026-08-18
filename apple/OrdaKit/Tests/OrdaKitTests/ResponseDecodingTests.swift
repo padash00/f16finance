@@ -70,12 +70,13 @@ struct ResponseDecodingTests {
             "half":0,"bonuses":0,"debts":0,"fines":0,"advances":0,"toPay":0,
             "paid_this_month":0,"month_closed":true,"is_me":true}],
             "totals":{"toPay":0,"paidThisMonth":0,"people":1},
-            "self_only":true,"can_edit":false}}
+            "self_only":true,"me_linked":true,"can_edit":false}}
             """
         ).data
 
         #expect(summary.selfOnly)
         #expect(summary.isFirstHalf)
+        #expect(summary.meLinked == true)
         let row = try #require(summary.rows.first)
         #expect(row.isFromOperator)
         #expect(!row.isActive)
@@ -99,6 +100,9 @@ struct ResponseDecodingTests {
 
         #expect(summary.rows.map(\.name) == ["Марат", "Сотрудник"])
         #expect(summary.rows[0].isActive)
+        // Старый сервер про связь аккаунта молчит — и приложение не должно
+        // выдумывать за него ответ «оклад не заведён».
+        #expect(summary.meLinked == nil)
     }
 
     // ── Личный экран продавца ────────────────────────────────────────────────

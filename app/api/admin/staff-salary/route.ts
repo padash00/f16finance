@@ -253,9 +253,16 @@ export async function GET(req: Request) {
     // ответом к владельцу. Оператор свою неделю видит сам — админ-сотрудник
     // теперь тоже видит свою половину месяца, и только свою.
     const denied = await requireCapability(access, 'salary.view')
+    // Кто спрашивает. Человек бывает заведён и как сотрудник, и как оператор
+    // с признаком админ-состава — своя строка приходит по любой из двух
+    // записей, и по обеим её надо узнать.
     const selfStaffId = (access as any).staffMember?.id ? String((access as any).staffMember.id) : null
+    const selfOperatorId = (access as any).operatorAuth?.operator_id
+      ? String((access as any).operatorAuth.operator_id)
+      : null
+    const selfRowId = selfStaffId || selfOperatorId
     const selfOnly = !!denied
-    if (denied && !selfStaffId) return denied as any
+    if (denied && !selfRowId) return denied as any
     // Capability checks выше уже отсеивают; здесь — любой staff
     const canView = access.isSuperAdmin || !!access.staffRole
     if (!canView) return json({ error: 'forbidden' }, 403)
@@ -525,7 +532,7 @@ export async function GET(req: Request) {
         adjustments: [...(adjRes.data ?? []), ...syntheticDebtAdjustments] as any,
         payments: (paymentsRes.data ?? []) as any,
         today: new Date().toISOString().slice(0, 10),
-        meStaffId: selfStaffId,
+        meStaffId: selfRowId,
       })
       // Без права видно ровно одну строку — свою. Полный ответ здесь не
       // возвращаем никогда: в нём сырые ведомости по всем людям.
@@ -541,6 +548,11 @@ export async function GET(req: Request) {
             people: rows.length,
           },
           self_only: selfOnly,
+          // Нашлась ли карточка спрашивающего. Без этого приложение не могло
+          // отличить «зарплата не заведена» от «аккаунт не связан с карточкой
+          // сотрудника» и молча не показывало ничего — а человек оставался с
+          // пустым экраном и без объяснения.
+          me_linked: !!selfRowId,
           can_edit: !selfOnly && (access.isSuperAdmin || !!access.staffRole),
         },
       })

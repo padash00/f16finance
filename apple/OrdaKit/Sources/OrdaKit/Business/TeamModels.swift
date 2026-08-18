@@ -407,6 +407,13 @@ public struct StaffSalarySummary: Decodable, Sendable {
     public let periodTo: String?
     /// Ответ урезан до собственной строки: права смотреть чужие зарплаты нет.
     public let selfOnly: Bool
+    /// Нашлась ли карточка спрашивающего. `false` — аккаунт не связан ни с
+    /// сотрудником, ни с оператором, и своей зарплаты у него быть не может.
+    ///
+    /// `nil` — сервер ещё старой версии и про сводку не знает. Объяснять
+    /// человеку, что «оклад не заведён», в этот момент нельзя: правда в том,
+    /// что не доехало обновление сайта.
+    public let meLinked: Bool?
 
     public var isFirstHalf: Bool { slot == "first" }
 
@@ -421,6 +428,7 @@ public struct StaffSalarySummary: Decodable, Sendable {
         periodFrom = period?.from
         periodTo = period?.to
         selfOnly = try c.decodeIfPresent(Bool.self, forKey: .selfOnly) ?? false
+        meLinked = try c.decodeIfPresent(Bool.self, forKey: .meLinked)
     }
 
     private struct Totals: Decodable {
@@ -444,5 +452,6 @@ public struct StaffSalarySummary: Decodable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case rows, totals, slot, period
         case selfOnly = "self_only"
+        case meLinked = "me_linked"
     }
 }
