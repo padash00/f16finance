@@ -203,7 +203,6 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         label: 'Аналитика',
         capabilities: [
           { id: 'analytics.view', label: 'Просмотр аналитики', severity: 'low' },
-          { id: 'analytics.export', label: 'Выгрузка в Excel', severity: 'low' },
         ],
       },
       {
@@ -213,7 +212,6 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         capabilities: [
           { id: 'analysis.view', label: 'Просмотр анализа', severity: 'low' },
           { id: 'analysis.refresh', label: 'Запустить новый анализ AI', severity: 'medium' },
-          { id: 'analysis.export', label: 'Выгрузка результатов', severity: 'low' },
         ],
       },
       {
@@ -249,7 +247,6 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         label: 'Главная склада',
         capabilities: [
           { id: 'store.view', label: 'Просмотр обзора', severity: 'low' },
-          { id: 'store.export', label: 'Выгрузка', severity: 'low' },
           { id: 'store.global_search', label: 'Глобальный поиск по складу', severity: 'low' },
         ],
       },
@@ -470,7 +467,6 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
           { id: 'shifts.bulk_assign_week', label: 'Массовое назначение на неделю', severity: 'medium' },
           { id: 'shifts.publish_week', label: 'Опубликовать график', severity: 'medium' },
           { id: 'shifts.resolve_issue', label: 'Решить конфликт смен', severity: 'medium' },
-          { id: 'shifts.export', label: 'Выгрузка', severity: 'low' },
         ],
       },
       {
@@ -480,7 +476,6 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         label: 'Отчёты смен',
         capabilities: [
           { id: 'shifts-reports.view', label: 'Просмотр отчётов', severity: 'low' },
-          { id: 'shifts-reports.export', label: 'Выгрузка', severity: 'low' },
           { id: 'shifts-reports.close_force', label: 'Принудительно закрыть смену', severity: 'high' },
           { id: 'shifts-reports.purge', label: 'Полная очистка данных смены', severity: 'high' },
           { id: 'shifts-reports.reopen', label: 'Переоткрыть смену', severity: 'high' },

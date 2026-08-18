@@ -3,7 +3,7 @@
   "summary": {
     "groups": 9,
     "pages": 85,
-    "capabilities": 403
+    "capabilities": 398
   },
   "groups": [
     {
@@ -428,13 +428,6 @@
               "description": null,
               "severity": "low",
               "deps": []
-            },
-            {
-              "id": "analytics.export",
-              "label": "Выгрузка в Excel",
-              "description": null,
-              "severity": "low",
-              "deps": []
             }
           ]
         },
@@ -456,13 +449,6 @@
               "label": "Запустить новый анализ AI",
               "description": null,
               "severity": "medium",
-              "deps": []
-            },
-            {
-              "id": "analysis.export",
-              "label": "Выгрузка результатов",
-              "description": null,
-              "severity": "low",
               "deps": []
             }
           ]
@@ -533,13 +519,6 @@
             {
               "id": "store.view",
               "label": "Просмотр обзора",
-              "description": null,
-              "severity": "low",
-              "deps": []
-            },
-            {
-              "id": "store.export",
-              "label": "Выгрузка",
               "description": null,
               "severity": "low",
               "deps": []
@@ -1456,13 +1435,6 @@
               "description": null,
               "severity": "medium",
               "deps": []
-            },
-            {
-              "id": "shifts.export",
-              "label": "Выгрузка",
-              "description": null,
-              "severity": "low",
-              "deps": []
             }
           ]
         },
@@ -1477,13 +1449,6 @@
             {
               "id": "shifts-reports.view",
               "label": "Просмотр отчётов",
-              "description": null,
-              "severity": "low",
-              "deps": []
-            },
-            {
-              "id": "shifts-reports.export",
-              "label": "Выгрузка",
               "description": null,
               "severity": "low",
               "deps": []

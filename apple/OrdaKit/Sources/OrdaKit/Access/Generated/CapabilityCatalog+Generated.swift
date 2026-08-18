@@ -160,7 +160,6 @@ extension CapabilityCatalog {
                     label: "Аналитика",
                     capabilities: [
                         Capability(id: "analytics.view", label: "Просмотр аналитики", description: nil, severity: .low, deps: []),
-                        Capability(id: "analytics.export", label: "Выгрузка в Excel", description: nil, severity: .low, deps: []),
                     ]
                 ),
                 CapabilityPage(
@@ -171,7 +170,6 @@ extension CapabilityCatalog {
                     capabilities: [
                         Capability(id: "analysis.view", label: "Просмотр анализа", description: nil, severity: .low, deps: []),
                         Capability(id: "analysis.refresh", label: "Запустить новый анализ AI", description: nil, severity: .medium, deps: []),
-                        Capability(id: "analysis.export", label: "Выгрузка результатов", description: nil, severity: .low, deps: []),
                     ]
                 ),
                 CapabilityPage(
@@ -208,7 +206,6 @@ extension CapabilityCatalog {
                     label: "Главная склада",
                     capabilities: [
                         Capability(id: "store.view", label: "Просмотр обзора", description: nil, severity: .low, deps: []),
-                        Capability(id: "store.export", label: "Выгрузка", description: nil, severity: .low, deps: []),
                         Capability(id: "store.global_search", label: "Глобальный поиск по складу", description: nil, severity: .low, deps: []),
                     ]
                 ),
@@ -467,7 +464,6 @@ extension CapabilityCatalog {
                         Capability(id: "shifts.bulk_assign_week", label: "Массовое назначение на неделю", description: nil, severity: .medium, deps: []),
                         Capability(id: "shifts.publish_week", label: "Опубликовать график", description: nil, severity: .medium, deps: []),
                         Capability(id: "shifts.resolve_issue", label: "Решить конфликт смен", description: nil, severity: .medium, deps: []),
-                        Capability(id: "shifts.export", label: "Выгрузка", description: nil, severity: .low, deps: []),
                     ]
                 ),
                 CapabilityPage(
@@ -477,7 +473,6 @@ extension CapabilityCatalog {
                     label: "Отчёты смен",
                     capabilities: [
                         Capability(id: "shifts-reports.view", label: "Просмотр отчётов", description: nil, severity: .low, deps: []),
-                        Capability(id: "shifts-reports.export", label: "Выгрузка", description: nil, severity: .low, deps: []),
                         Capability(id: "shifts-reports.close_force", label: "Принудительно закрыть смену", description: nil, severity: .high, deps: []),
                         Capability(id: "shifts-reports.purge", label: "Полная очистка данных смены", description: nil, severity: .high, deps: []),
                         Capability(id: "shifts-reports.reopen", label: "Переоткрыть смену", description: nil, severity: .high, deps: []),
