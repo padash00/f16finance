@@ -132,6 +132,43 @@ struct ResponseDecodingTests {
         #expect(overview.operators.first?.hasTelegram == false)
     }
 
+    @Test("История движений товара")
+    func storeMovements() throws {
+        let list = try decode(
+            StoreMovementList.self,
+            """
+            {"ok":true,"data":{"movements":[
+            {"id":"m-1","movement_type":"transfer","quantity":20,"total_amount":0,
+            "created_at":"2026-08-18T09:00:00.000Z",
+            "item":{"id":"i-1","name":"Coca-Cola 0.5","unit":"шт"},
+            "from_location":{"id":"l-1","name":"Основной склад","location_type":"warehouse",
+            "company":{"id":"c-1","name":"F16 Arena"}},
+            "to_location":{"id":"l-2","name":"Витрина","location_type":"point_display",
+            "company":{"id":"c-1","name":"F16 Arena"}}},
+            {"id":"m-2","movement_type":"sale","quantity":2,"total_amount":1200,
+            "created_at":"2026-08-18T10:00:00.000Z",
+            "item":{"id":"i-1","name":"Coca-Cola 0.5","unit":"шт"},
+            "from_location":{"id":"l-2","name":"Витрина","location_type":"point_display"},
+            "to_location":null}],
+            "locations":[]}}
+            """
+        )
+
+        #expect(list.movements.count == 2)
+
+        let transfer = try #require(list.movements.first)
+        #expect(transfer.itemName == "Coca-Cola 0.5")
+        #expect(transfer.quantity == 20)
+        #expect(transfer.kindLabel == "Перемещение")
+        // Перенос не меняет запас: товар остаётся в системе, меняя место.
+        #expect(transfer.direction == 0)
+
+        let sale = try #require(list.movements.last)
+        #expect(sale.kindLabel == "Продажа")
+        #expect(sale.direction == -1)
+        #expect(sale.toName == nil)
+    }
+
     // ── Ревизии ──────────────────────────────────────────────────────────────
 
     @Test("Акты пересчёта: статус и доля посчитанного")

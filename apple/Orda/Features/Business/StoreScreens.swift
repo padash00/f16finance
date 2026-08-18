@@ -656,11 +656,32 @@ struct MovementsScreen: View {
         }
         .background(Theme.background)
         .navigationTitle("Движения")
-        .task { await store.loadStore() }
-        .refreshable { await store.loadStore() }
+        .task { await store.loadMovements() }
+        .refreshable { await store.loadMovements() }
     }
 
     private var filterBar: some View {
+        @Bindable var bindable = store
+
+        return VStack(spacing: 0) {
+            // Место — отдельной строкой: спрашивают почти всегда про витрину
+            // («куда делись двадцать кол»), и мешать его с видом движения в
+            // один ряд значит прятать оба.
+            Picker("", selection: $bindable.movementsScope) {
+                Text("Везде").tag("all")
+                Text("Склад").tag("warehouse")
+                Text("Витрина").tag("showcase")
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(.horizontal, Spacing.lg)
+            .padding(.top, Spacing.md)
+
+            kindBar
+        }
+    }
+
+    private var kindBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Spacing.sm) {
                 FilterChip(title: "Все", isOn: kind == nil) { kind = nil }
@@ -676,17 +697,16 @@ struct MovementsScreen: View {
     }
 
     private var kinds: [String] {
-        Array(Set((store.store?.movements ?? []).map(\.kind))).sorted()
+        Array(Set(store.movements.map(\.kind))).sorted()
     }
 
     private func label(for value: String) -> String {
-        (store.store?.movements ?? []).first { $0.kind == value }?.kindLabel ?? value
+        store.movements.first { $0.kind == value }?.kindLabel ?? value
     }
 
     private var filtered: [StockMovement] {
-        let all = store.store?.movements ?? []
-        guard let kind else { return all }
-        return all.filter { $0.kind == kind }
+        guard let kind else { return store.movements }
+        return store.movements.filter { $0.kind == kind }
     }
 }
 

@@ -361,3 +361,26 @@ public struct RevisionAct: Decodable, Sendable, Identifiable, Hashable {
         countedItems = Int(try c.decodeFlexibleDouble(forKey: .countedItems) ?? 0)
     }
 }
+
+// ── Движения товара: /api/admin/store/movements ──────────────────────────────
+
+/// Полная история движений: `{ data: { movements: [...] } }`.
+///
+/// Сводка склада отдаёт только шестнадцать последних движений — этого хватает
+/// на «что было сейчас», но не на «куда делись двадцать кол». Отдельный
+/// маршрут отдаёт сто шестьдесят и умеет фильтр по складу или витрине.
+///
+/// Модель строки — та же `StockMovement`, что и в сводке: поля у ответов
+/// одинаковые, и второе описание разошлось бы с первым на первой же правке.
+public struct StoreMovementList: Decodable, Sendable {
+    public let movements: [StockMovement]
+
+    private enum RootKeys: String, CodingKey { case data }
+    private enum DataKeys: String, CodingKey { case movements }
+
+    public init(from decoder: any Decoder) throws {
+        let root = try decoder.container(keyedBy: RootKeys.self)
+        let data = try root.nestedContainer(keyedBy: DataKeys.self, forKey: .data)
+        movements = try data.decodeIfPresent([StockMovement].self, forKey: .movements) ?? []
+    }
+}

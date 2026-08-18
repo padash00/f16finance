@@ -1070,6 +1070,24 @@ public struct BusinessService: Sendable {
         return response.data
     }
 
+    /// История движений товара. Требует `store-movements.view`.
+    ///
+    /// `scope`: `all`, `warehouse` или `showcase` — сервер понимает только эти
+    /// три, остальное считает за «все».
+    public func storeMovements(scope: String = "all") async throws -> [StockMovement] {
+        let response: StoreMovementList = try await api.send(
+            APIRequest(path: "/api/admin/store/movements", query: ["scope": scope])
+        )
+        return response.movements
+    }
+
+    public func cachedStoreMovements(scope: String = "all") async -> [StockMovement]? {
+        let response: StoreMovementList? = await api.cached(
+            APIRequest(path: "/api/admin/store/movements", query: ["scope": scope])
+        )
+        return response?.movements
+    }
+
     /// Акты пересчёта: что считают сейчас и что уже провели.
     public func auditActs() async throws -> [RevisionAct] {
         let response: DataList<RevisionAct> = try await api.send(

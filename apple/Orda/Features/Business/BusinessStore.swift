@@ -767,6 +767,31 @@ final class BusinessStore {
         }
     }
 
+    /// Полная история движений товара.
+    ///
+    /// Отдельно от сводки: та отдаёт шестнадцать последних записей — «что было
+    /// только что», — а на вопрос «куда делись двадцать кол» этого не хватает.
+    private(set) var movements: [StockMovement] = []
+    private(set) var isLoadingMovements = false
+
+    /// Что показываем: всё, только склад или только витрину.
+    var movementsScope = "all" {
+        didSet {
+            guard oldValue != movementsScope else { return }
+            Task { await loadMovements() }
+        }
+    }
+
+    func loadMovements() async {
+        if movements.isEmpty, let cached = await service.cachedStoreMovements(scope: movementsScope) {
+            movements = cached
+        }
+
+        isLoadingMovements = movements.isEmpty
+        defer { isLoadingMovements = false }
+        movements = (try? await service.storeMovements(scope: movementsScope)) ?? movements
+    }
+
     func loadRevisions() async {
         isLoadingRevisions = true
         defer { isLoadingRevisions = false }
