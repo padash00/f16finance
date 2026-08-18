@@ -549,3 +549,64 @@ struct MyProfileChangeTests {
         #expect(body["phone"] == nil)
     }
 }
+
+/// Кэш ответов.
+///
+/// Он показывает данные до того, как придёт свежий ответ, — значит промах в
+/// ключе означает чужие цифры на экране. Такое не должно зависеть от удачи.
+@Suite("Кэш ответов")
+struct ResponseCacheTests {
+    private func makeCache() -> ResponseCache {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("orda-cache-test-\(UUID().uuidString)", isDirectory: true)
+        return ResponseCache(directory: directory)
+    }
+
+    @Test("Ответ возвращается по тому же запросу")
+    func storesAndReads() async {
+        let cache = makeCache()
+        let request = APIRequest(path: "/api/admin/dashboard")
+
+        await cache.store(Data("{\"ok\":true}".utf8), for: request, scope: "org-1")
+        let data = await cache.data(for: request, scope: "org-1")
+
+        #expect(data != nil)
+    }
+
+    @Test("Чужая организация не видит сохранённое")
+    func isolatesOrganizations() async {
+        let cache = makeCache()
+        let request = APIRequest(path: "/api/admin/dashboard")
+
+        await cache.store(Data("{\"revenue\":1000000}".utf8), for: request, scope: "org-1")
+
+        // Владелец переключил организацию: заголовок другой, адрес тот же.
+        // Без организации в ключе он увидел бы выручку соседней.
+        let foreign = await cache.data(for: request, scope: "org-2")
+        #expect(foreign == nil)
+    }
+
+    @Test("Параметры запроса входят в ключ")
+    func separatesQueries() async {
+        let cache = makeCache()
+        let first = APIRequest(path: "/api/operator/salary", query: ["weekStart": "2026-08-10"])
+        let second = APIRequest(path: "/api/operator/salary", query: ["weekStart": "2026-08-17"])
+
+        await cache.store(Data("{\"week\":1}".utf8), for: first, scope: nil)
+
+        #expect(await cache.data(for: first, scope: nil) != nil)
+        #expect(await cache.data(for: second, scope: nil) == nil)
+    }
+
+    @Test("Ответы на POST не сохраняются")
+    func ignoresWrites() async {
+        let cache = makeCache()
+        let request = APIRequest(path: "/api/admin/tasks", method: .post)
+
+        await cache.store(Data("{\"ok\":true}".utf8), for: request, scope: nil)
+
+        // Иначе повторное открытие экрана показывало бы результат чужого
+        // действия как состояние системы.
+        #expect(await cache.data(for: request, scope: nil) == nil)
+    }
+}

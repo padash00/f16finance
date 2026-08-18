@@ -197,7 +197,13 @@ final class BusinessStore {
     }
 
     func loadDashboard() async {
-        isLoadingDashboard = true
+        // Сначала прошлая сводка: экран открывается сразу и обновляется на
+        // ходу. Дашборд собирается из десятка запросов и приходит не мгновенно.
+        if dashboard == nil, let cached = await service.cachedDashboard() {
+            dashboard = cached
+        }
+
+        isLoadingDashboard = dashboard == nil
         defer { isLoadingDashboard = false }
         do {
             dashboard = try await service.dashboard()
@@ -527,7 +533,11 @@ final class BusinessStore {
     }
 
     func loadStore() async {
-        isLoadingStore = true
+        if store == nil, let cached = await service.cachedStoreOverview() {
+            store = cached
+        }
+
+        isLoadingStore = store == nil
         defer { isLoadingStore = false }
         do {
             store = try await service.storeOverview()
@@ -540,7 +550,11 @@ final class BusinessStore {
     }
 
     func loadTeam() async {
-        isLoadingTeam = true
+        if operators.isEmpty, let cached = await service.cachedOperators() {
+            operators = cached
+        }
+
+        isLoadingTeam = operators.isEmpty
         defer { isLoadingTeam = false }
         do {
             operators = try await service.operators()
@@ -581,7 +595,11 @@ final class BusinessStore {
     }
 
     func loadTasks() async {
-        isLoadingTasks = true
+        if tasks.isEmpty, let cached = await service.cachedTasks() {
+            tasks = cached
+        }
+
+        isLoadingTasks = tasks.isEmpty
         defer { isLoadingTasks = false }
         do {
             tasks = try await service.tasks()

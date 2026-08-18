@@ -18,6 +18,41 @@ public struct BusinessService: Sendable {
         try await api.send(APIRequest(path: "/api/admin/dashboard"))
     }
 
+    /// Сводка из кэша — то, что владелец видел в прошлый раз.
+    ///
+    /// Экран рисуется сразу и обновляется на ходу. Дашборд собирается из
+    /// десятка запросов на сервере и приходит не мгновенно; пустой экран со
+    /// скелетом при каждом входе — то, из-за чего приложение кажется
+    /// медленнее, чем оно есть.
+    public func cachedDashboard() async -> BusinessDashboard? {
+        await api.cached(APIRequest(path: "/api/admin/dashboard"))
+    }
+
+    /// Склад из кэша: остатки, витрины, заявки.
+    public func cachedStoreOverview() async -> StoreOverview? {
+        let response: Envelope<StoreOverview>? = await api.cached(
+            APIRequest(path: "/api/admin/store/overview")
+        )
+        return response?.data
+    }
+
+    /// Команда из кэша.
+    public func cachedOperators() async -> [TeamOperator]? {
+        let response: DataList<TeamOperator>? = await api.cached(
+            APIRequest(path: "/api/admin/operators")
+        )
+        return response?.items
+    }
+
+    /// Задачи из кэша. Только общий список: у отфильтрованного по статусу ждут
+    /// именно ответа сервера.
+    public func cachedTasks() async -> [TeamTask]? {
+        let response: DataList<TeamTask>? = await api.cached(
+            APIRequest(path: "/api/admin/tasks", query: ["pageSize": "200"])
+        )
+        return response?.items
+    }
+
     public func companies() async throws -> [Company] {
         let response: DataList<Company> = try await api.send(APIRequest(path: "/api/admin/companies"))
         return response.items

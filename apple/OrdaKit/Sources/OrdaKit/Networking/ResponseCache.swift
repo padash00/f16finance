@@ -28,14 +28,23 @@ public actor ResponseCache {
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
     }
 
-    /// Ключ — путь и параметры: один и тот же экран с другой неделей это
-    /// другой ответ, и путать их нельзя.
-    private func fileName(for request: APIRequest) -> String {
+    /// Ключ — организация, путь и параметры.
+    ///
+    /// Организация в ключе обязательна: она передаётся заголовком, а не в
+    /// адресе, и без неё владелец двух точек, переключившись, увидел бы на
+    /// секунду чужую выручку — свою, но не той организации.
+    ///
+    /// Неделя и прочие параметры тоже в ключе: один и тот же экран с другой
+    /// неделей это другой ответ.
+    private func fileName(for request: APIRequest, scope: String?) -> String {
         let query = request.query
             .sorted { $0.key < $1.key }
             .map { "\($0.key)=\($0.value)" }
             .joined(separator: "&")
-        let raw = query.isEmpty ? request.path : "\(request.path)?\(query)"
+        let organization = scope ?? "-"
+        let raw = query.isEmpty
+            ? "\(organization)\(request.path)"
+            : "\(organization)\(request.path)?\(query)"
         // Имя файла из пути: слэши и знаки вопроса в нём жить не могут.
         let safe = raw.unicodeScalars.map { scalar -> String in
             CharacterSet.alphanumerics.contains(scalar) ? String(scalar) : "-"
@@ -43,17 +52,17 @@ public actor ResponseCache {
         return String(safe.suffix(180))
     }
 
-    private func url(for request: APIRequest) -> URL {
-        directory.appendingPathComponent(fileName(for: request))
+    private func url(for request: APIRequest, scope: String?) -> URL {
+        directory.appendingPathComponent(fileName(for: request, scope: scope))
     }
 
-    public func store(_ data: Data, for request: APIRequest) {
+    public func store(_ data: Data, for request: APIRequest, scope: String?) {
         guard request.method == .get, !data.isEmpty else { return }
-        try? data.write(to: url(for: request), options: .atomic)
+        try? data.write(to: url(for: request, scope: scope), options: .atomic)
     }
 
-    public func data(for request: APIRequest) -> Data? {
-        let file = url(for: request)
+    public func data(for request: APIRequest, scope: String?) -> Data? {
+        let file = url(for: request, scope: scope)
         guard let attributes = try? FileManager.default.attributesOfItem(atPath: file.path),
               let modified = attributes[.modificationDate] as? Date,
               Date().timeIntervalSince(modified) < maximumAge

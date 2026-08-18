@@ -200,7 +200,7 @@ public actor APIClient {
         _ request: APIRequest,
         as type: Response.Type = Response.self
     ) async -> Response? {
-        guard let data = await cache.data(for: request) else { return nil }
+        guard let data = await cache.data(for: request, scope: organizationID) else { return nil }
         return try? decoder.decode(Response.self, from: data)
     }
 
@@ -230,7 +230,7 @@ public actor APIClient {
         }
 
         if (200..<300).contains(http.statusCode) {
-            await cache.store(data, for: request)
+            await cache.store(data, for: request, scope: organizationID)
             return data
         }
 
