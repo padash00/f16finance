@@ -403,7 +403,7 @@ public struct SupplierDebt: Decodable, Sendable, Identifiable, Hashable {
         case "open": "Не оплачен"
         case "paid": "Оплачен"
         case "written_off": "Списан"
-        default: status
+        default: StatusText.humanize(status)
         }
     }
 

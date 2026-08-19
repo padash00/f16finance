@@ -166,7 +166,9 @@ public struct StockMovement: Decodable, Sendable, Identifiable, Hashable {
         case "writeoff": "Списание"
         case "sale": "Продажа"
         case "revision", "audit": "Ревизия"
-        default: kind
+        // Незнакомый вид движения показываем нейтрально: английское слово из
+        // базы в журнале склада ничего не объясняет.
+        default: "Движение"
         }
     }
 
@@ -264,7 +266,7 @@ public struct StockRequest: Decodable, Sendable, Identifiable, Hashable {
         case "approved": "Одобрена"
         case "rejected", "declined": "Отклонена"
         case "fulfilled", "completed": "Выполнена"
-        default: status
+        default: StatusText.humanize(status)
         }
     }
 

@@ -83,7 +83,7 @@ public struct Receipt: Decodable, Sendable, Identifiable, Hashable {
         case "draft": "Черновик"
         case "posted", "completed", "done": "Проведена"
         case "cancelled", "canceled": "Отменена"
-        default: status
+        default: StatusText.humanize(status)
         }
     }
 
@@ -232,7 +232,7 @@ public struct ShiftReport: Decodable, Sendable, Identifiable, Hashable {
         switch status {
         case "open": "Открыта"
         case "closed": "Закрыта"
-        default: status
+        default: StatusText.humanize(status)
         }
     }
 

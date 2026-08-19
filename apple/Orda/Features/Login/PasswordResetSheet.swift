@@ -109,16 +109,23 @@ struct PasswordResetSheet: View {
     private var codeStep: some View {
         Card {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader("Код из письма", subtitle: email)
+                SectionHeader("Код или ссылка из письма", subtitle: email)
 
-                TextField("123456", text: $code)
+                // Принимаем и ссылку: в стандартном письме Supabase кода нет,
+                // и пока владелец не добавил его в шаблон, вставить ссылку —
+                // единственный способ сменить пароль не выходя отсюда.
+                TextField("123456 или ссылка из письма", text: $code, axis: .vertical)
                     .textFieldStyle(.plain)
-                    .font(Typography.title.monospacedDigit())
+                    .font(Typography.callout)
+                    .lineLimit(1...3)
                     .padding(Spacing.md)
                     .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
                     #if os(iOS)
-                    .keyboardType(.numberPad)
+                    // Не цифровая клавиатура: сюда вставляют и ссылку.
+                    .keyboardType(.default)
                     .textContentType(.oneTimeCode)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
                     #endif
 
                 FieldLabel("Новый пароль")
@@ -164,7 +171,7 @@ struct PasswordResetSheet: View {
                 .buttonStyle(SecondaryButtonStyle())
                 .disabled(isBusy)
 
-                Text("Код одноразовый и живёт несколько минут. Если в письме только ссылка — откройте её: она ведёт на сайт и тоже меняет пароль.")
+                Text("Код одноразовый и живёт несколько минут. Если кода в письме нет — скопируйте ссылку целиком и вставьте сюда: она подойдёт вместо кода.")
                     .font(Typography.caption)
                     .foregroundStyle(Theme.textMuted)
                     .fixedSize(horizontal: false, vertical: true)

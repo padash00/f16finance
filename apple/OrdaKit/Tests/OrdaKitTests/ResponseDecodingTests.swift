@@ -1009,3 +1009,26 @@ struct QueueOwnershipTests {
         #expect(await outbox.pending().count == 1)
     }
 }
+
+/// Состояния, которых приложение не знает.
+///
+/// Незнакомое состояние приходит ровно тогда, когда на сервере завели новое, а
+/// приложение ещё старое. Раньше в этот момент на экран попадало слово из базы
+/// — «finished» заголовком карточки экзамена.
+@Suite("Подписи состояний")
+struct StatusTextTests {
+    @Test("Известные состояния переводятся")
+    func known() {
+        #expect(StatusText.humanize("finished") == "Завершён")
+        #expect(StatusText.humanize("past_due") == "Просрочен")
+        #expect(StatusText.humanize("written_off") == "Списан")
+        // Регистр приходит по-разному — из базы и из чужих ответов.
+        #expect(StatusText.humanize("ACTIVE") == "Активен")
+    }
+
+    @Test("Незнакомое состояние не показывается английским словом")
+    func unknown() {
+        #expect(StatusText.humanize("half_baked") == "")
+        #expect(StatusText.humanize("") == "")
+    }
+}

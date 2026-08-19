@@ -157,7 +157,7 @@ public struct LeadShiftRequest: Decodable, Sendable, Identifiable, Hashable {
         case "open", "awaiting_reason": hasProposal ? "Ждёт руководителя" : "Ждёт вашего решения"
         case "resolved", "closed": "Решено"
         case "rejected": "Отклонено"
-        default: status
+        default: StatusText.humanize(status)
         }
     }
 

@@ -142,7 +142,7 @@ public struct FeedAttachment: Decodable, Sendable, Identifiable, Hashable {
         case "image", "gif", "sticker": "Изображение"
         case "poll": "Опрос"
         case "file": "Файл"
-        default: kind
+        default: "Файл"
         }
     }
 

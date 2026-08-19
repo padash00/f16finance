@@ -333,7 +333,7 @@ public struct RevisionAct: Decodable, Sendable, Identifiable, Hashable {
         case "open": "Идёт пересчёт"
         case "closed": "Проведён"
         case "cancelled": "Отменён"
-        default: status
+        default: StatusText.humanize(status)
         }
     }
 

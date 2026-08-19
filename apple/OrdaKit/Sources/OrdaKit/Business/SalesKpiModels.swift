@@ -186,7 +186,7 @@ public struct SalesKpiReport: Decodable, Sendable {
             case "OK", "NORMAL": "Норма"
             case "WEAK": "Слабее нормы"
             case "LOW_SAMPLE", "FEW_SHIFTS": "Мало смен"
-            default: status
+            default: StatusText.humanize(status)
             }
         }
 

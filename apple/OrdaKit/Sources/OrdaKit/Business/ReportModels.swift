@@ -198,7 +198,7 @@ public struct TeamTask: Decodable, Sendable, Identifiable, Hashable {
         case "in_progress", "doing": "В работе"
         case "done", "completed": "Готово"
         case "cancelled", "canceled": "Отменена"
-        default: status
+        default: StatusText.humanize(status)
         }
     }
 
@@ -372,7 +372,7 @@ public struct ShiftIssue: Decodable, Sendable, Identifiable, Hashable {
         case "resolved": "Решено"
         case "dismissed", "rejected": "Отклонено"
         case "closed": "Закрыто"
-        default: status
+        default: StatusText.humanize(status)
         }
     }
 

@@ -89,7 +89,7 @@ public struct OrgSubscription: Decodable, Sendable, Hashable {
         case "trialing": "триал"
         case "past_due": "просрочена"
         case "canceled": "отменена"
-        default: status
+        default: StatusText.humanize(status)
         }
     }
 
@@ -175,7 +175,7 @@ public struct Organization: Decodable, Sendable, Identifiable, Hashable {
         case "active": "активна"
         case "suspended": "заморожена"
         case "archived": "в архиве"
-        default: status
+        default: StatusText.humanize(status)
         }
     }
 

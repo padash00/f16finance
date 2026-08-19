@@ -27,7 +27,7 @@ public struct OrganizationBilling: Decodable, Sendable {
             case "trialing": "Пробный период"
             case "past_due": "Просрочена"
             case "canceled", "cancelled": "Отменена"
-            default: status
+            default: StatusText.humanize(status)
             }
         }
 
@@ -195,7 +195,7 @@ public struct Incident: Decodable, Sendable, Identifiable, Hashable {
         case "bonus", "reward": "Бонус"
         case "note", "remark": "Заметка"
         case "violation": "Нарушение"
-        default: kind
+        default: "Запись"
         }
     }
 
@@ -205,7 +205,7 @@ public struct Incident: Decodable, Sendable, Identifiable, Hashable {
         case "approved", "confirmed": "Подтверждён"
         case "rejected", "declined": "Отклонён"
         case "closed": "Закрыт"
-        default: status
+        default: StatusText.humanize(status)
         }
     }
 
@@ -284,7 +284,7 @@ public struct PointDebt: Decodable, Sendable, Identifiable, Hashable {
         case "open", "active", "pending": "Не погашен"
         case "paid", "closed": "Погашен"
         case "written_off": "Списан"
-        default: status
+        default: StatusText.humanize(status)
         }
     }
 

@@ -418,7 +418,7 @@ public struct ShiftChangeRequest: Decodable, Sendable, Identifiable, Hashable {
         case "open", "awaiting_reason": "На рассмотрении"
         case "resolved", "closed": "Решено"
         case "rejected": "Отклонено"
-        default: status
+        default: StatusText.humanize(status)
         }
     }
 

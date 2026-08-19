@@ -47,6 +47,30 @@ const CONFIRM_WINDOW_MS = 15 * 60 * 1000
 
 const MIN_PASSWORD_LENGTH = 8
 
+/**
+ * Одноразовый ключ из ссылки письма.
+ *
+ * Ссылка выглядит как `.../verify?token=pkce_…&type=recovery` или несёт
+ * `token_hash` — берём и то и другое. Шестизначный код ссылкой не является и
+ * сюда не попадает.
+ */
+function extractTokenHash(input: string): string | null {
+  const value = input.trim()
+  if (/^\d{4,8}$/.test(value)) return null
+
+  if (/^https?:\/\//i.test(value)) {
+    try {
+      const url = new URL(value)
+      return url.searchParams.get('token_hash') || url.searchParams.get('token') || null
+    } catch {
+      return null
+    }
+  }
+
+  // Из письма иногда копируют не ссылку, а сам ключ.
+  return value.startsWith('pkce_') || value.length > 20 ? value : null
+}
+
 function authEnv() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, '')
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -102,7 +126,7 @@ export async function POST(request: Request) {
 
     const code = String(body?.code || '').trim()
     const password = String(body?.password || '')
-    if (!code) return json({ error: 'code-required', message: 'Введите код из письма.' }, 400)
+    if (!code) return json({ error: 'code-required', message: 'Введите код или вставьте ссылку из письма.' }, 400)
     if (password.length < MIN_PASSWORD_LENGTH) {
       return json(
         { error: 'password-too-short', message: `Пароль должен быть не короче ${MIN_PASSWORD_LENGTH} символов.` },
@@ -112,12 +136,24 @@ export async function POST(request: Request) {
 
     // Шаг 1: код из письма меняем на сессию. Проверку срока и числа попыток
     // делает сам GoTrue — свой счётчик здесь был бы второй правдой.
+    //
+    // Принимаем и ссылку целиком. В стандартном шаблоне Supabase кода нет —
+    // только ссылка, и пока владелец не добавил в шаблон `{{ .Token }}`,
+    // вводить человеку нечего. Но внутри ссылки лежит тот же одноразовый
+    // ключ (`token_hash`), и по нему проверка проходит так же. Пусть вставит
+    // ссылку — это честнее, чем отвечать «код не подошёл» на письмо, в
+    // котором кода не было.
+    const tokenHash = extractTokenHash(code)
+    const verifyBody = tokenHash
+      ? { type: 'recovery', token_hash: tokenHash }
+      : { type: 'recovery', email, token: code }
+
     let verifyResponse: Response
     try {
       verifyResponse = await fetch(`${env.url}/auth/v1/verify`, {
         method: 'POST',
         headers: { apikey: env.anonKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'recovery', email, token: code }),
+        body: JSON.stringify(verifyBody),
       })
     } catch {
       return json({ error: 'auth-upstream-unavailable', message: 'Сброс временно недоступен. Попробуйте позже.' }, 502)
@@ -126,7 +162,12 @@ export async function POST(request: Request) {
     const verified = (await verifyResponse.json().catch(() => null)) as { access_token?: string } | null
     if (!verifyResponse.ok || !verified?.access_token) {
       return json(
-        { error: 'invalid-code', message: 'Код не подошёл или устарел. Запросите новый.' },
+        {
+          error: 'invalid-code',
+          message: tokenHash
+            ? 'Ссылка не подошла или устарела. Запросите письмо заново.'
+            : 'Код не подошёл или устарел. Если в письме только ссылка — вставьте её целиком.',
+        },
         400,
       )
     }

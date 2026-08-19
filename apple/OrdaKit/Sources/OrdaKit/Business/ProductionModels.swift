@@ -607,7 +607,7 @@ public struct PurchaseOrder: Decodable, Sendable, Identifiable, Hashable {
         case "sent": "Отправлена"
         case "received": "Получена"
         case "cancelled": "Отменена"
-        default: status
+        default: StatusText.humanize(status)
         }
     }
 
@@ -965,7 +965,7 @@ public struct ConsumableIssue: Decodable, Sendable, Identifiable, Hashable {
         case "received": "Получено"
         case "disputed": "Расхождение"
         case "approved_full", "approved_partial": "Одобрено"
-        default: status
+        default: StatusText.humanize(status)
         }
     }
 
