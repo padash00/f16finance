@@ -11,7 +11,6 @@ import { Button } from '@/components/ui/button'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { PageSkeleton, TableSkeleton } from '@/components/skeleton'
-import { supabase } from '@/lib/supabaseClient'
 import {
   CalendarDays,
   Search,
@@ -1144,53 +1143,30 @@ function OperatorAnalyticsContent() {
       setLoading(true)
       setError(null)
 
-      const wsFrom = mondayISOOf(dateFrom)
-      const wsTo = mondayISOOf(dateTo)
+      // Данные периода приходят с сервера, а не из браузера.
+      //
+      // Раньше эта страница ходила в Supabase напрямую: доходы, корректировки
+      // и долги. Из-за этого право «Аналитика операторов» на цифры не
+      // действовало (их отдавала база, а не роут), фильтр по организации жил
+      // в браузере, а в приложении этих цифр не было вовсе — сервер их не
+      // считал. Теперь строки выдаёт роут: под правом, со скоупом и одинаково
+      // для сайта и телефона.
+      let incRes: { data: IncomeRow[] | null; error: unknown } = { data: [], error: null }
+      let adjRes: { data: AdjustmentRow[] | null; error: unknown } = { data: [], error: null }
+      let debtsRes: { data: DebtRow[] | null; error: unknown } = { data: [], error: null }
 
-      const shouldFetchIncomes = selectedCompanyIds.length > 0 && activeOperatorIds.length > 0
-
-      const incomesQ = shouldFetchIncomes
-        ? supabase
-            .from('incomes')
-            .select('id,date,company_id,shift,cash_amount,kaspi_amount,online_amount,card_amount,operator_id,is_virtual')
-            .gte('date', dateFrom)
-            .lte('date', dateTo)
-            .in('company_id', selectedCompanyIds)
-        : null
-
-      const adjQ = activeOperatorIds.length > 0
-        ? supabase
-            .from('operator_salary_adjustments')
-            .select('id,operator_id,date,amount,kind,comment')
-            .gte('date', dateFrom)
-            .lte('date', dateTo)
-            .in('operator_id', activeOperatorIds)
-        : supabase
-            .from('operator_salary_adjustments')
-            .select('id,operator_id,date,amount,kind,comment')
-            .gte('date', dateFrom)
-            .lte('date', dateTo)
-
-      const debtsQ = activeOperatorIds.length > 0
-        ? supabase
-            .from('debts')
-            .select('id,operator_id,amount,week_start,status')
-            .gte('week_start', wsFrom)
-            .lte('week_start', wsTo)
-            .eq('status', 'active')
-            .in('operator_id', activeOperatorIds)
-        : supabase
-            .from('debts')
-            .select('id,operator_id,amount,week_start,status')
-            .gte('week_start', wsFrom)
-            .lte('week_start', wsTo)
-            .eq('status', 'active')
-
-      const [incRes, adjRes, debtsRes] = await Promise.all([
-        incomesQ ? incomesQ : Promise.resolve({ data: [], error: null }),
-        adjQ,
-        debtsQ,
-      ])
+      try {
+        const params = new URLSearchParams({ from: dateFrom, to: dateTo, raw: '1' })
+        const resp = await fetch(`/api/admin/operator-analytics?${params}`, { cache: 'no-store' })
+        const payload = await resp.json().catch(() => null)
+        if (!resp.ok) throw new Error(payload?.error || 'Ошибка загрузки данных периода')
+        const raw = payload?.data?.raw || {}
+        incRes = { data: (raw.incomes || []) as IncomeRow[], error: null }
+        adjRes = { data: (raw.adjustments || []) as AdjustmentRow[], error: null }
+        debtsRes = { data: (raw.debts || []) as DebtRow[], error: null }
+      } catch (e: any) {
+        incRes = { data: [], error: e }
+      }
 
       if (myId !== reqIdRef.current) return
 
@@ -1568,53 +1544,24 @@ function OperatorAnalyticsContent() {
     setRefreshing(true)
     const myId = ++reqIdRef.current
 
-    const wsFrom = mondayISOOf(dateFrom)
-    const wsTo = mondayISOOf(dateTo)
+    // Обновление идёт тем же путём, что и первая загрузка: через роут.
+    let incRes: { data: IncomeRow[] | null } = { data: [] }
+    let adjRes: { data: AdjustmentRow[] | null } = { data: [] }
+    let debtsRes: { data: DebtRow[] | null } = { data: [] }
 
-    const shouldFetchIncomes = selectedCompanyIds.length > 0 && activeOperatorIds.length > 0
-
-    const incomesQ = shouldFetchIncomes
-      ? supabase
-          .from('incomes')
-          .select('id,date,company_id,shift,cash_amount,kaspi_amount,online_amount,card_amount,operator_id,is_virtual')
-          .gte('date', dateFrom)
-          .lte('date', dateTo)
-          .in('company_id', selectedCompanyIds)
-      : null
-
-    const adjQ = activeOperatorIds.length > 0
-      ? supabase
-          .from('operator_salary_adjustments')
-          .select('id,operator_id,date,amount,kind,comment')
-          .gte('date', dateFrom)
-          .lte('date', dateTo)
-          .in('operator_id', activeOperatorIds)
-      : supabase
-          .from('operator_salary_adjustments')
-          .select('id,operator_id,date,amount,kind,comment')
-          .gte('date', dateFrom)
-          .lte('date', dateTo)
-
-    const debtsQ = activeOperatorIds.length > 0
-      ? supabase
-          .from('debts')
-          .select('id,operator_id,amount,week_start,status')
-          .gte('week_start', wsFrom)
-          .lte('week_start', wsTo)
-          .eq('status', 'active')
-          .in('operator_id', activeOperatorIds)
-      : supabase
-          .from('debts')
-          .select('id,operator_id,amount,week_start,status')
-          .gte('week_start', wsFrom)
-          .lte('week_start', wsTo)
-          .eq('status', 'active')
-
-    const [incRes, adjRes, debtsRes] = await Promise.all([
-      incomesQ ? incomesQ : Promise.resolve({ data: [], error: null }),
-      adjQ,
-      debtsQ,
-    ])
+    try {
+      const params = new URLSearchParams({ from: dateFrom, to: dateTo, raw: '1' })
+      const resp = await fetch(`/api/admin/operator-analytics?${params}`, { cache: 'no-store' })
+      const payload = await resp.json().catch(() => null)
+      if (resp.ok) {
+        const raw = payload?.data?.raw || {}
+        incRes = { data: (raw.incomes || []) as IncomeRow[] }
+        adjRes = { data: (raw.adjustments || []) as AdjustmentRow[] }
+        debtsRes = { data: (raw.debts || []) as DebtRow[] }
+      }
+    } catch {
+      /* оставляем прежние данные на экране: пустой экран хуже устаревшего */
+    }
 
     if (myId === reqIdRef.current) {
       setIncomes((incRes.data || []) as IncomeRow[])

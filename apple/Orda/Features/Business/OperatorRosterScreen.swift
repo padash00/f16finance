@@ -20,6 +20,9 @@ struct OperatorRosterScreen: View {
     @State private var showInactive = false
     @State private var query = ""
     @State private var selected: OperatorRoster.Person?
+    /// Месяц, за который показываем деньги. Раньше денег в разделе не было
+    /// вовсе: их считал сайт у себя в браузере.
+    @State private var month = OperatorRosterScreen.currentMonth
 
     private var people: [OperatorRoster.Person] {
         let all = (roster?.people ?? []).filter { showInactive || $0.isActive }
@@ -127,7 +130,61 @@ struct OperatorRosterScreen: View {
                         .foregroundStyle(Theme.textMuted)
                 }
 
-                if let expiry = expiryLabel(person) {
+                // Деньги за месяц: оборот, средняя смена, удержания. Первым идёт
+            // средняя смена, а не оборот: оборот зависит от того, сколько смен
+            // человек отработал, и сравнивать по нему людей нечестно.
+            if let money = roster?.money[person.id] {
+                Card {
+                    VStack(alignment: .leading, spacing: Spacing.md) {
+                        SectionHeader(
+                            "Деньги за месяц",
+                            subtitle: "\(money.shifts) \(pluralize(money.shifts, "смена", "смены", "смен"))"
+                        )
+
+                        DashboardGrid {
+                            MetricTile(
+                                label: "Средняя смена",
+                                value: Money.format(money.averagePerShift),
+                                icon: "chart.bar",
+                                accent: Theme.brand
+                            )
+                            MetricTile(
+                                label: "Оборот",
+                                value: Money.format(money.turnover),
+                                icon: "banknote",
+                                accent: Theme.info
+                            )
+                        }
+
+                        if money.share > 0 {
+                            StatRow("Доля в обороте", value: Percent.format(money.share * 100), icon: "percent")
+                        }
+                        if money.manualPlus > 0.01 {
+                            StatRow("Премии", value: Money.signed(money.manualPlus), valueColor: Theme.positive, icon: "gift")
+                        }
+                        if money.manualMinus > 0.01 {
+                            StatRow("Штрафы", value: Money.signed(-money.manualMinus), valueColor: Theme.negative, icon: "exclamationmark.triangle")
+                        }
+                        if money.autoDebts > 0.01 {
+                            StatRow("Долги", value: Money.signed(-money.autoDebts), valueColor: Theme.negative, icon: "creditcard")
+                        }
+                        if money.advances > 0.01 {
+                            StatRow("Авансы", value: Money.format(money.advances), icon: "arrow.down.circle")
+                        }
+                        if money.hasDeductions || money.manualPlus > 0.01 {
+                            RowDivider()
+                            StatRow(
+                                "Итог премий и удержаний",
+                                value: Money.signed(money.netEffect),
+                                valueColor: money.netEffect < 0 ? Theme.negative : Theme.positive,
+                                emphasized: true
+                            )
+                        }
+                    }
+                }
+            }
+
+            if let expiry = expiryLabel(person) {
                     Text(expiry)
                         .font(Typography.caption.weight(.medium))
                         .foregroundStyle(person.documentNeedsAttention ? Theme.warning : Theme.textMuted)
@@ -230,6 +287,28 @@ struct OperatorRosterScreen: View {
         }
     }
 
+    /// Текущий месяц «2026-08».
+    private static var currentMonth: String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM"
+        return formatter.string(from: Date())
+    }
+
+    private static func monthBounds(_ month: String) -> (from: String, to: String) {
+        let parts = month.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 2 else { return (month, month) }
+        var components = DateComponents()
+        components.year = parts[0]
+        components.month = parts[1]
+        components.day = 1
+        let calendar = Calendar(identifier: .gregorian)
+        guard let start = calendar.date(from: components),
+              let range = calendar.range(of: .day, in: .month, for: start)
+        else { return ("\(month)-01", "\(month)-28") }
+        return ("\(month)-01", String(format: "%@-%02d", month, range.count))
+    }
+
     private func call(_ phone: String) {
         #if os(iOS)
         let digits = phone.filter { $0.isNumber || $0 == "+" }
@@ -267,7 +346,8 @@ struct OperatorRosterScreen: View {
         isLoading = roster == nil
         loadError = nil
         do {
-            roster = try await OperatorRosterService(api: api).roster()
+            let bounds = OperatorRosterScreen.monthBounds(month)
+            roster = try await OperatorRosterService(api: api).roster(from: bounds.from, to: bounds.to)
         } catch let error as APIError {
             loadError = error
         } catch {

@@ -9,6 +9,73 @@ import Foundation
 public struct OperatorRoster: Decodable, Sendable {
     public let companies: [Company]
     public let people: [Person]
+    /// Деньги по операторам за период. Пусто — период не запрашивали.
+    ///
+    /// Раньше этих цифр в приложении не было вовсе: сайт считал их в браузере,
+    /// ходя в базу напрямую. Теперь считает сервер, и телефон видит то же
+    /// самое — оборот, среднюю смену, удержания.
+    public let money: [String: Money]
+    public let moneyTotals: MoneyTotals?
+
+    public struct Money: Decodable, Sendable, Hashable {
+        public let turnover: Double
+        public let shifts: Int
+        public let days: Int
+        /// Средняя смена — то, о чём спрашивают об операторе, а не общий оборот:
+        /// оборот зависит от того, сколько смен человек отработал.
+        public let averagePerShift: Double
+        /// Доля в обороте всех операторов за период.
+        public let share: Double
+        public let autoDebts: Double
+        public let manualMinus: Double
+        public let manualPlus: Double
+        public let advances: Double
+        /// Что премии и удержания сделали с расчётом.
+        public let netEffect: Double
+
+        public var hasDeductions: Bool { autoDebts > 0.01 || manualMinus > 0.01 }
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            turnover = try c.decodeFlexibleDouble(forKey: .turnover) ?? 0
+            shifts = Int(try c.decodeFlexibleDouble(forKey: .shifts) ?? 0)
+            days = Int(try c.decodeFlexibleDouble(forKey: .days) ?? 0)
+            averagePerShift = try c.decodeFlexibleDouble(forKey: .averagePerShift) ?? 0
+            share = try c.decodeFlexibleDouble(forKey: .share) ?? 0
+            autoDebts = try c.decodeFlexibleDouble(forKey: .autoDebts) ?? 0
+            manualMinus = try c.decodeFlexibleDouble(forKey: .manualMinus) ?? 0
+            manualPlus = try c.decodeFlexibleDouble(forKey: .manualPlus) ?? 0
+            advances = try c.decodeFlexibleDouble(forKey: .advances) ?? 0
+            netEffect = try c.decodeFlexibleDouble(forKey: .netEffect) ?? 0
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case turnover, shifts, days, share, advances
+            case averagePerShift = "avg_per_shift"
+            case autoDebts = "auto_debts"
+            case manualMinus = "manual_minus"
+            case manualPlus = "manual_plus"
+            case netEffect = "net_effect"
+        }
+    }
+
+    public struct MoneyTotals: Decodable, Sendable, Hashable {
+        public let turnover: Double
+        /// Выручка смен, у которых не указан оператор. Её нельзя приписать
+        /// никому, но и прятать нельзя: иначе доли не сходятся.
+        public let unattributed: Double
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            turnover = try c.decodeFlexibleDouble(forKey: .turnover) ?? 0
+            unattributed = try c.decodeFlexibleDouble(forKey: .unattributed) ?? 0
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case turnover
+            case unattributed = "unattributed_turnover"
+        }
+    }
 
     /// Оператор с профилем и документами, собранный из плоских списков ответа.
     public struct Person: Sendable, Identifiable, Hashable {
@@ -54,7 +121,26 @@ public struct OperatorRoster: Decodable, Sendable {
     // ── Разбор ───────────────────────────────────────────────────────────────
 
     private enum CodingKeys: String, CodingKey {
-        case companies, operators, profiles, documents
+        case companies, operators, profiles, documents, money
+    }
+
+    private struct RawMoney: Decodable {
+        struct Row: Decodable {
+            let operatorID: String
+            private enum CodingKeys: String, CodingKey { case operatorID = "operator_id" }
+        }
+        let rows: [Money]
+        let ids: [Row]
+        let totals: MoneyTotals?
+
+        private enum CodingKeys: String, CodingKey { case rows, totals }
+
+        init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            rows = try c.decodeIfPresent([Money].self, forKey: .rows) ?? []
+            ids = try c.decodeIfPresent([Row].self, forKey: .rows) ?? []
+            totals = try c.decodeIfPresent(MoneyTotals.self, forKey: .totals)
+        }
     }
 
     private struct RawOperator: Decodable {
@@ -117,6 +203,15 @@ public struct OperatorRoster: Decodable, Sendable {
             soonest[document.operatorID] = date
         }
 
+        let rawMoney = try c.decodeIfPresent(RawMoney.self, forKey: .money)
+        var byOperator: [String: Money] = [:]
+        for (index, row) in (rawMoney?.rows ?? []).enumerated() {
+            guard index < (rawMoney?.ids.count ?? 0) else { break }
+            byOperator[rawMoney!.ids[index].operatorID] = row
+        }
+        money = byOperator
+        moneyTotals = rawMoney?.totals
+
         people = rawOperators.map { row in
             let profile = profileByOperator[row.id]
             return Person(
@@ -138,9 +233,12 @@ public struct OperatorRosterService: Sendable {
 
     public init(api: APIClient) { self.api = api }
 
-    public func roster() async throws -> OperatorRoster {
+    /// Состав и, если задан период, деньги по каждому за этот период.
+    public func roster(from: String? = nil, to: String? = nil) async throws -> OperatorRoster {
+        var query: [String: String] = [:]
+        if let from, let to { query = ["from": from, "to": to] }
         let response: Envelope = try await api.send(
-            APIRequest(path: "/api/admin/operator-analytics")
+            APIRequest(path: "/api/admin/operator-analytics", query: query)
         )
         return response.data
     }
