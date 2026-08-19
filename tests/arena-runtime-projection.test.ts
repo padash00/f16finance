@@ -153,6 +153,14 @@ test('служебное SENET отделено от игр', () => {
   assert.equal(classifyProcess('ServiceApp.exe'), 'infrastructure')
 })
 
+test('служба бездисковой загрузки — не игра', () => {
+  // Найдено на боевой станции 21: clubnetsvc.exe крутится на каждом клиенте
+  // всегда. Не зная его, система сообщала бы, что весь клуб играет в одно и
+  // то же — и эта ошибка выглядела бы правдоподобно.
+  assert.equal(classifyProcess('clubnetsvc.exe'), 'infrastructure')
+  assert.equal(classifyProcess('CCBootClient.exe'), 'infrastructure')
+})
+
 test('неизвестное — кандидат, а НЕ игра', () => {
   // Главное правило файла. Если сюда попадёт «игра», в аналитику приедут
   // антивирус, драйвер и обновление Windows.

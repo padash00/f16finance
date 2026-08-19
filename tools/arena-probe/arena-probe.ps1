@@ -115,10 +115,22 @@ if ($DeviceToken -and $ClientSecret -and
 $script:SourceInstanceId = [guid]::NewGuid().ToString()
 $script:Seq = 0
 
-function Write-Step($text) { Write-Host "  $text" -ForegroundColor DarkGray }
-function Write-Ok($text)   { Write-Host "  $text" -ForegroundColor Green }
-function Write-Warn($text) { Write-Host "  $text" -ForegroundColor Yellow }
-function Write-Err($text)  { Write-Host "  $text" -ForegroundColor Red }
+# Запущенный от системы probe не имеет окна: писать в консоль некому.
+# Поэтому всё дублируется в файл рядом со скриптом — иначе после смены
+# пользователя вы бы не узнали, что вообще происходило.
+$LogPath = Join-Path $PSScriptRoot 'arena-probe.log'
+
+function Write-Log($text) {
+    try {
+        $stamp = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
+        Add-Content -Path $LogPath -Value "$stamp  $text" -Encoding UTF8 -ErrorAction SilentlyContinue
+    } catch { }
+}
+
+function Write-Step($text) { Write-Host "  $text" -ForegroundColor DarkGray; Write-Log $text }
+function Write-Ok($text)   { Write-Host "  $text" -ForegroundColor Green;    Write-Log $text }
+function Write-Warn($text) { Write-Host "  $text" -ForegroundColor Yellow;   Write-Log "! $text" }
+function Write-Err($text)  { Write-Host "  $text" -ForegroundColor Red;      Write-Log "ОШИБКА: $text" }
 
 # ─────────────────────────────────────────────────────────────────────────────
 # НАБЛЮДЕНИЯ
@@ -428,6 +440,7 @@ function Invoke-Loop {
             $result = Send-Heartbeat
             $stamp = (Get-Date).ToString('HH:mm:ss')
             Write-Host "  $stamp  пользователь: $userKind  расхождение часов: $($result.clockSkewSeconds) сек" -ForegroundColor DarkGray
+            Write-Log "пользователь: $userKind, расхождение часов: $($result.clockSkewSeconds) сек" 
             if ($result.warning) { Write-Warn "предупреждение сервера: $($result.warning)" }
         } catch {
             Write-Err "$((Get-Date).ToString('HH:mm:ss'))  $($_.Exception.Message)"

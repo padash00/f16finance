@@ -57,13 +57,27 @@ const BACKGROUND = new Set([
   'rtss.exe',
 ])
 
-/** Часть SENET и обвязки клуба. */
+/**
+ * Часть SENET и обвязки клуба.
+ *
+ * Сюда же попала бездисковая загрузка: на боевой станции 21 первым кандидатом
+ * в игры оказался clubnetsvc.exe — служба CCBoot, которая крутится на каждом
+ * клиенте всегда. Без неё в списке система бодро сообщала бы, что все
+ * семьдесят семь компьютеров играют в одно и то же.
+ */
 const INFRASTRUCTURE = new Set([
   'dashboard.exe',
   'serviceapp.exe',
   'senetshell.exe',
   'shell.exe',
   'senet.exe',
+  // CCBoot: бездисковая загрузка клиентов
+  'clubnetsvc.exe',
+  'ccbootclient.exe',
+  'ccboot.exe',
+  'clubnet.exe',
+  'gcafe.exe',
+  'gcafeclient.exe',
 ])
 
 /** Системные процессы Windows, которые заведомо не игры. */
