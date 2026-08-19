@@ -22,6 +22,22 @@ struct SalesKpiScreen: View {
     @State private var isLoading = false
     @State private var noStore = false
     @State private var expanded: Set<String> = []
+    /// Разбор по продавцам — вторая половина раздела. На сайте это отдельная
+    /// вкладка, и данные приходят тем же запросом, что и список магазинов:
+    /// показывать одну доплату значило показывать сумму без объяснения.
+    @State private var report: SalesKpiReport?
+    @State private var section: Section = .payout
+
+    private enum Section: String, CaseIterable, Identifiable {
+        case payout, people
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .payout: "Кому доплатить"
+            case .people: "По продавцам"
+            }
+        }
+    }
 
     var body: some View {
         ScreenScroll {
@@ -38,6 +54,14 @@ struct SalesKpiScreen: View {
             } else if isLoading && payout == nil {
                 LoadingRows(count: 4)
             } else if let payout {
+                Picker("Раздел", selection: $section) {
+                    ForEach(Section.allCases) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.segmented)
+
+                if section == .people {
+                    people
+                } else {
                 totalsCard(payout)
                 if payout.rows.isEmpty {
                     WideEmptyState(
@@ -50,6 +74,7 @@ struct SalesKpiScreen: View {
                         sellerCard(row, settings: payout.settings)
                     }
                     footnote(payout)
+                }
                 }
             }
         }
@@ -278,6 +303,110 @@ struct SalesKpiScreen: View {
 
     // ── Данные ───────────────────────────────────────────────────────────────
 
+    /// Как работают за прилавком — не про деньги к доплате, а про работу.
+    ///
+    /// Выручка здесь справка, а не заслуга: она зависит от того, сколько людей
+    /// зашло. Поэтому первым идёт балл относительно нормы и средний чек, а
+    /// выручка — мелким шрифтом.
+    @ViewBuilder
+    private var people: some View {
+        if let report, !report.cashiers.isEmpty {
+            Card {
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    SectionHeader(
+                        "Итого за месяц",
+                        subtitle: "\(report.totals.shifts) \(pluralShifts(report.totals.shifts))"
+                    )
+                    DashboardGrid {
+                        MetricTile(
+                            label: "Средний чек",
+                            value: Money.format(report.totals.averageReceipt),
+                            icon: "cart",
+                            accent: Theme.brand
+                        )
+                        MetricTile(
+                            label: "Чеков",
+                            value: "\(report.totals.receipts)",
+                            icon: "doc.text",
+                            accent: Theme.info
+                        )
+                    }
+                }
+            }
+
+            ForEach(report.cashiers) { cashier in
+                Card {
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        HStack(spacing: Spacing.md) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(cashier.name)
+                                    .font(Typography.callout.weight(.medium))
+                                    .foregroundStyle(Theme.text)
+                                Text(cashier.scoreText)
+                                    .font(Typography.caption)
+                                    .foregroundStyle(scoreColor(cashier.score))
+                            }
+                            Spacer(minLength: Spacing.sm)
+                            StatusChip(cashier.statusLabel, kind: chip(for: cashier.status))
+                        }
+
+                        StatRow("Средний чек", value: Money.format(cashier.averageReceipt), icon: "cart")
+                        StatRow(
+                            "Смены и чеки",
+                            value: "\(cashier.shifts) · \(cashier.receipts)",
+                            icon: "calendar"
+                        )
+
+                        // Сильные и слабые стороны — то, ради чего этот раздел
+                        // вообще открывают: с ними идут к человеку разговаривать.
+                        if !cashier.strengths.isEmpty {
+                            Text("Лучше нормы: " + cashier.strengths.map(SalesKpiMetric.label).joined(separator: ", "))
+                                .font(Typography.caption)
+                                .foregroundStyle(Theme.positive)
+                        }
+                        if !cashier.weaknesses.isEmpty {
+                            Text("Ниже нормы: " + cashier.weaknesses.map(SalesKpiMetric.label).joined(separator: ", "))
+                                .font(Typography.caption)
+                                .foregroundStyle(Theme.warning)
+                        }
+                        if cashier.trainingFlag, let reason = cashier.trainingReason {
+                            Text(reason)
+                                .font(Typography.caption)
+                                .foregroundStyle(Theme.textMuted)
+                        }
+                    }
+                }
+            }
+
+            Text("Статус ставится от \(report.minQualifyingShifts) смен: по паре смен человека не оценивают. Выручка зависит от потока, а не только от продавца, — поэтому она здесь справка.")
+                .font(Typography.caption)
+                .foregroundStyle(Theme.textDim)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            WideEmptyState(
+                icon: "person.2",
+                title: "Разбора пока нет",
+                message: "Он появится, когда за прилавком наберутся смены с чеками."
+            )
+        }
+    }
+
+    private func scoreColor(_ score: Double?) -> Color {
+        guard let score else { return Theme.textDim }
+        if score >= 1.05 { return Theme.positive }
+        if score <= 0.95 { return Theme.warning }
+        return Theme.textMuted
+    }
+
+    private func chip(for status: String) -> StatusChip.Kind {
+        switch status {
+        case "TOP", "STRONG": .good
+        case "WEAK": .warning
+        case "LOW_SAMPLE", "FEW_SHIFTS": .neutral
+        default: .info
+        }
+    }
+
     private func loadStores() async {
         guard stores.isEmpty else { return }
         do {
@@ -297,7 +426,11 @@ struct SalesKpiScreen: View {
         isLoading = payout == nil
         loadError = nil
         do {
-            payout = try await SalesKpiService(api: api).payout(companyID: store.id, month: month)
+            let service = SalesKpiService(api: api)
+            payout = try await service.payout(companyID: store.id, month: month)
+            // Отчёт по продавцам — тем же месяцем: раздел один, и переключение
+            // между «кому доплатить» и «по продавцам» не должно ничего ждать.
+            report = try? await service.report(month: month)
         } catch let error as APIError {
             loadError = error
         } catch {

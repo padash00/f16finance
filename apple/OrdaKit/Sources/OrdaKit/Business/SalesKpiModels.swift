@@ -139,6 +139,121 @@ public struct SalesKpiStores: Decodable, Sendable {
     }
 }
 
+/// Разбор смен по продавцам — вкладка «По продавцам» с сайта.
+///
+/// Приходит тем же запросом, что и список магазинов: сервер отдаёт весь отчёт
+/// разом. В приложении показывалась только доплата, хотя ответ уже лежал в
+/// памяти — человек видел «кому доплатить» и не видел, за что.
+public struct SalesKpiReport: Decodable, Sendable {
+    public let companyName: String?
+    public let cashiers: [Cashier]
+    public let totals: Totals
+    /// Со скольких смен ставится статус: по паре смен человека не оценивают.
+    public let minQualifyingShifts: Int
+
+    public struct Cashier: Decodable, Sendable, Identifiable, Hashable {
+        public let cashierID: String
+        public let name: String
+        public let shifts: Int
+        public let revenue: Double
+        public let receipts: Int
+        /// Балл относительно нормы: 1,0 — норма. `nil` — смен слишком мало.
+        public let score: Double?
+        public let status: String
+        /// Что получается лучше нормы и что хуже — ключами метрик.
+        public let strengths: [String]
+        public let weaknesses: [String]
+        public let trainingFlag: Bool
+        public let trainingReason: String?
+
+        public var id: String { cashierID }
+
+        /// Средний чек — то, о чём спрашивают первым.
+        public var averageReceipt: Double { receipts > 0 ? revenue / Double(receipts) : 0 }
+
+        /// «на 6% лучше нормы» — балл сам по себе никому ничего не говорит.
+        public var scoreText: String {
+            guard let score else { return "нет оценки" }
+            let delta = Int(((score - 1) * 100).rounded())
+            if delta == 0 { return "как норма" }
+            return delta > 0 ? "на \(delta)% лучше нормы" : "на \(abs(delta))% ниже нормы"
+        }
+
+        public var statusLabel: String {
+            switch status {
+            case "TOP": "Топ"
+            case "STRONG": "Сильный"
+            case "OK", "NORMAL": "Норма"
+            case "WEAK": "Слабее нормы"
+            case "LOW_SAMPLE", "FEW_SHIFTS": "Мало смен"
+            default: status
+            }
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            cashierID = try c.decodeFlexibleString(forKey: .cashierID) ?? UUID().uuidString
+            name = try c.decodeFlexibleString(forKey: .name) ?? "Продавец"
+            shifts = Int(try c.decodeFlexibleDouble(forKey: .shifts) ?? 0)
+            revenue = try c.decodeFlexibleDouble(forKey: .revenue) ?? 0
+            receipts = Int(try c.decodeFlexibleDouble(forKey: .receipts) ?? 0)
+            score = try c.decodeFlexibleDouble(forKey: .score)
+            status = try c.decodeFlexibleString(forKey: .status) ?? "OK"
+            strengths = try c.decodeIfPresent([String].self, forKey: .strengths) ?? []
+            weaknesses = try c.decodeIfPresent([String].self, forKey: .weaknesses) ?? []
+            trainingFlag = try c.decodeIfPresent(Bool.self, forKey: .trainingFlag) ?? false
+            trainingReason = try c.decodeFlexibleString(forKey: .trainingReason)
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case name, shifts, revenue, receipts, score, status, strengths, weaknesses
+            case cashierID = "cashier_id"
+            case trainingFlag = "training_flag"
+            case trainingReason = "training_reason"
+        }
+    }
+
+    public struct Totals: Decodable, Sendable, Hashable {
+        public let revenue: Double
+        public let receipts: Int
+        public let shifts: Int
+
+        public var averageReceipt: Double { receipts > 0 ? revenue / Double(receipts) : 0 }
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            revenue = try c.decodeFlexibleDouble(forKey: .revenue) ?? 0
+            receipts = Int(try c.decodeFlexibleDouble(forKey: .receipts) ?? 0)
+            shifts = Int(try c.decodeFlexibleDouble(forKey: .shifts) ?? 0)
+        }
+
+        private enum CodingKeys: String, CodingKey { case revenue, receipts, shifts }
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        companyName = try c.decodeIfPresent(CompanyRef.self, forKey: .company)?.name
+        cashiers = try c.decodeIfPresent([Cashier].self, forKey: .cashiers) ?? []
+        totals = try c.decodeIfPresent(Totals.self, forKey: .totals) ?? Totals.empty
+        minQualifyingShifts = try c.decodeIfPresent(SettingsRef.self, forKey: .settings)?.minQualifyingShifts ?? 6
+    }
+
+    private struct CompanyRef: Decodable { let name: String? }
+    private struct SettingsRef: Decodable {
+        let minQualifyingShifts: Int?
+        private enum CodingKeys: String, CodingKey { case minQualifyingShifts = "min_qualifying_shifts" }
+    }
+
+    private enum CodingKeys: String, CodingKey { case company, cashiers, totals, settings }
+}
+
+extension SalesKpiReport.Totals {
+    static let empty: Self = {
+        let json = Data("{}".utf8)
+        return try! JSONDecoder().decode(Self.self, from: json)
+    }()
+}
+
 public struct SalesKpiService: Sendable {
     private let api: APIClient
 
@@ -148,6 +263,15 @@ public struct SalesKpiService: Sendable {
     public func stores(month: String) async throws -> SalesKpiStores {
         let bounds = SalesKpiService.monthBounds(month)
         let response: DataEnvelope<SalesKpiStores> = try await api.send(
+            APIRequest(path: "/api/admin/sales-kpi", query: ["from": bounds.from, "to": bounds.to])
+        )
+        return response.data
+    }
+
+    /// Полный отчёт за месяц: продавцы, смены, итоги.
+    public func report(month: String) async throws -> SalesKpiReport {
+        let bounds = SalesKpiService.monthBounds(month)
+        let response: DataEnvelope<SalesKpiReport> = try await api.send(
             APIRequest(path: "/api/admin/sales-kpi", query: ["from": bounds.from, "to": bounds.to])
         )
         return response.data

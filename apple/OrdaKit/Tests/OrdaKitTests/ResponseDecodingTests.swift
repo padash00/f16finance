@@ -18,6 +18,42 @@ struct ResponseDecodingTests {
         try JSONDecoder().decode(type, from: Data(json.utf8))
     }
 
+    // ── Эффективность продавцов ──────────────────────────────────────────────
+
+    @Test("Разбор по продавцам")
+    func salesKpiReport() throws {
+        let report = try decode(
+            DataEnvelope<SalesKpiReport>.self,
+            """
+            {"data":{"company":{"id":"c1","name":"Абая"},
+            "settings":{"min_qualifying_shifts":6},
+            "totals":{"revenue":4200000,"receipts":8400,"shifts":54},
+            "cashiers":[
+            {"cashier_id":"k1","name":"Камила","shifts":9,"revenue":700000,"receipts":368,
+             "score":1.08,"status":"STRONG","strengths":["avg_ticket"],"weaknesses":[],
+             "training_flag":false,"training_reason":null},
+            {"cashier_id":"k2","name":"Руслана","shifts":5,"revenue":300000,"receipts":261,
+             "score":null,"status":"LOW_SAMPLE","strengths":[],"weaknesses":["attach_rate"],
+             "training_flag":true,"training_reason":"Мало смен для оценки"}]}}
+            """
+        ).data
+
+        #expect(report.companyName == "Абая")
+        #expect(report.minQualifyingShifts == 6)
+        #expect(report.totals.averageReceipt == 500)
+
+        let strong = try #require(report.cashiers.first)
+        #expect(strong.scoreText == "на 8% лучше нормы")
+        #expect(strong.statusLabel == "Сильный")
+        // Метрика превращается в человеческое название, а не в ключ.
+        #expect(SalesKpiMetric.label(strong.strengths[0]) == "Средний чек")
+
+        let weak = report.cashiers[1]
+        // Без балла оценки нет — и врать про неё нельзя.
+        #expect(weak.scoreText == "нет оценки")
+        #expect(weak.trainingFlag)
+    }
+
     // ── Чек-листы открытых смен ──────────────────────────────────────────────
 
     @Test("Что держит смену незакрытой")
