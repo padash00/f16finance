@@ -31,6 +31,7 @@ const Body = z.discriminatedUnion('action', [
   z.object({ action: z.literal('approve'), deviceId: z.string().uuid(), stationId: z.string().uuid() }),
   z.object({ action: z.literal('revoke'), deviceId: z.string().uuid(), reason: z.string().max(300).optional() }),
   z.object({ action: z.literal('reopen'), deviceId: z.string().uuid() }),
+  z.object({ action: z.literal('reissue'), deviceId: z.string().uuid() }),
 ])
 
 export async function POST(request: Request) {
@@ -114,6 +115,56 @@ export async function POST(request: Request) {
       })
 
       return json({ ok: true, status: 'pending' })
+    }
+
+    // ── Перевыпуск доступа ────────────────────────────────────────────────
+    // Бездисковые клиенты теряют локальные файлы при каждой перезагрузке, а
+    // секрет по устройству показывается один раз и не восстанавливается.
+    // Без этого действия после каждой перезагрузки пришлось бы отзывать
+    // устройство, возвращать в заявки и подтверждать заново — три шага там,
+    // где нужен один. Привязка к станции при этом сохраняется.
+    if (body.action === 'reissue') {
+      if (device.status !== 'active' || !device.station_id) {
+        return json({ error: 'device-not-active' }, 409)
+      }
+
+      const deviceToken = generateSecret()
+      const clientSecret = generateSecret()
+      const now = new Date().toISOString()
+
+      const { error } = await supabase
+        .from('arena_station_devices')
+        .update({
+          device_token_hash: sha256(deviceToken),
+          client_secret_hash: sha256(clientSecret),
+          updated_at: now,
+        })
+        .eq('id', device.id)
+      if (error) throw error
+
+      const { data: boundStation } = await supabase
+        .from('arena_stations')
+        .select('name')
+        .eq('id', device.station_id)
+        .maybeSingle()
+
+      await writeAuditLog(supabase as any, {
+        actorUserId: access.user?.id || null,
+        action: 'arena_agent.reissue',
+        entityType: 'arena-station-device',
+        entityId: String(device.id),
+        organizationId: access.activeOrganization?.id || null,
+        payload: { station_id: device.station_id },
+      })
+
+      return json({
+        ok: true,
+        status: 'active',
+        stationId: String(device.station_id),
+        stationName: boundStation?.name ? String(boundStation.name) : '—',
+        credentials: { deviceToken, clientSecret },
+        warning: 'Прежние токен и секрет больше не работают.',
+      })
     }
 
     // ── Подтверждение ─────────────────────────────────────────────────────

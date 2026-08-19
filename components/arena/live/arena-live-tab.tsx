@@ -183,7 +183,7 @@ export function ArenaLiveTab(props: {
     return () => clearInterval(timer)
   }, [load])
 
-  async function decide(deviceId: string, action: 'approve' | 'revoke' | 'reopen') {
+  async function decide(deviceId: string, action: 'approve' | 'revoke' | 'reopen' | 'reissue') {
     setBusyDevice(deviceId)
     try {
       const body: Record<string, unknown> = { action, deviceId }
@@ -203,7 +203,7 @@ export function ArenaLiveTab(props: {
       const json = await res.json().catch(() => null)
       if (!res.ok) throw new Error(json?.message || json?.error || `HTTP ${res.status}`)
 
-      if (action === 'approve' && json?.credentials) {
+      if ((action === 'approve' || action === 'reissue') && json?.credentials) {
         setIssued({
           deviceToken: json.credentials.deviceToken,
           clientSecret: json.credentials.clientSecret,
@@ -389,14 +389,25 @@ export function ArenaLiveTab(props: {
                   {device.mac ? ` · ${device.mac}` : ''}
                   {device.lastSeenAt ? ` · сигнал ${new Date(device.lastSeenAt).toLocaleString('ru-RU')}` : ' · сигнала не было'}
                 </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={busyDevice === device.id}
-                  onClick={() => void decide(device.id, 'revoke')}
-                >
-                  Отозвать
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busyDevice === device.id}
+                    onClick={() => void decide(device.id, 'reissue')}
+                    title="Выдать новые токен и секрет, не меняя привязку к станции"
+                  >
+                    Новый доступ
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busyDevice === device.id}
+                    onClick={() => void decide(device.id, 'revoke')}
+                  >
+                    Отозвать
+                  </Button>
+                </div>
               </div>
             ))}
           </div>
