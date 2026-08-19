@@ -130,59 +130,15 @@ struct OperatorRosterScreen: View {
                         .foregroundStyle(Theme.textMuted)
                 }
 
-                // Деньги за месяц: оборот, средняя смена, удержания. Первым идёт
-            // средняя смена, а не оборот: оборот зависит от того, сколько смен
-            // человек отработал, и сравнивать по нему людей нечестно.
-            if let money = roster?.money[person.id] {
-                Card {
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        SectionHeader(
-                            "Деньги за месяц",
-                            subtitle: "\(money.shifts) \(pluralize(money.shifts, "смена", "смены", "смен"))"
-                        )
-
-                        DashboardGrid {
-                            MetricTile(
-                                label: "Средняя смена",
-                                value: Money.format(money.averagePerShift),
-                                icon: "chart.bar",
-                                accent: Theme.brand
-                            )
-                            MetricTile(
-                                label: "Оборот",
-                                value: Money.format(money.turnover),
-                                icon: "banknote",
-                                accent: Theme.info
-                            )
-                        }
-
-                        if money.share > 0 {
-                            StatRow("Доля в обороте", value: Percent.format(money.share * 100), icon: "percent")
-                        }
-                        if money.manualPlus > 0.01 {
-                            StatRow("Премии", value: Money.signed(money.manualPlus), valueColor: Theme.positive, icon: "gift")
-                        }
-                        if money.manualMinus > 0.01 {
-                            StatRow("Штрафы", value: Money.signed(-money.manualMinus), valueColor: Theme.negative, icon: "exclamationmark.triangle")
-                        }
-                        if money.autoDebts > 0.01 {
-                            StatRow("Долги", value: Money.signed(-money.autoDebts), valueColor: Theme.negative, icon: "creditcard")
-                        }
-                        if money.advances > 0.01 {
-                            StatRow("Авансы", value: Money.format(money.advances), icon: "arrow.down.circle")
-                        }
-                        if money.hasDeductions || money.manualPlus > 0.01 {
-                            RowDivider()
-                            StatRow(
-                                "Итог премий и удержаний",
-                                value: Money.signed(money.netEffect),
-                                valueColor: money.netEffect < 0 ? Theme.negative : Theme.positive,
-                                emphasized: true
-                            )
-                        }
-                    }
+                // В списке — одна цифра, по которой людей и сравнивают: средняя
+                // смена. Карточка с разбором живёт в карточке человека: в
+                // колонке списка она не помещается и переносит слова по слогам.
+                if let money = roster?.money[person.id], money.shifts > 0 {
+                    Text("ср. смена \(Money.format(money.averagePerShift)) · \(money.shifts) \(pluralize(money.shifts, "смена", "смены", "смен"))")
+                        .font(Typography.caption)
+                        .foregroundStyle(Theme.textDim)
+                        .lineLimit(1)
                 }
-            }
 
             if let expiry = expiryLabel(person) {
                     Text(expiry)
@@ -254,6 +210,49 @@ struct OperatorRosterScreen: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.pressable)
+                    }
+                }
+            }
+
+            // Деньги за месяц. Плитками не рисуем: в карточке колонка узкая, и
+            // сетка складывалась в столбик, а подписи переносились по слогам.
+            // Строки читаются в любой ширине.
+            if let money = roster?.money[person.id] {
+                Card {
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        SectionHeader(
+                            "Деньги за месяц",
+                            subtitle: "\(money.shifts) \(pluralize(money.shifts, "смена", "смены", "смен"))"
+                        )
+
+                        // Средняя смена первой: оборот зависит от того, сколько
+                        // смен человек отработал, и сравнивать по нему нечестно.
+                        StatRow("Средняя смена", value: Money.format(money.averagePerShift), emphasized: true)
+                        StatRow("Оборот", value: Money.format(money.turnover))
+                        if money.share > 0 {
+                            StatRow("Доля в обороте", value: Percent.format(money.share * 100))
+                        }
+                        if money.manualPlus > 0.01 {
+                            StatRow("Премии", value: Money.signed(money.manualPlus), valueColor: Theme.positive)
+                        }
+                        if money.manualMinus > 0.01 {
+                            StatRow("Штрафы", value: Money.signed(-money.manualMinus), valueColor: Theme.negative)
+                        }
+                        if money.autoDebts > 0.01 {
+                            StatRow("Долги", value: Money.signed(-money.autoDebts), valueColor: Theme.negative)
+                        }
+                        if money.advances > 0.01 {
+                            StatRow("Авансы", value: Money.format(money.advances))
+                        }
+                        if money.hasDeductions || money.manualPlus > 0.01 {
+                            RowDivider()
+                            StatRow(
+                                "Итого",
+                                value: Money.signed(money.netEffect),
+                                valueColor: money.netEffect < 0 ? Theme.negative : Theme.positive,
+                                emphasized: true
+                            )
+                        }
                     }
                 }
             }

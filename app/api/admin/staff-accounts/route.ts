@@ -3,7 +3,11 @@ import { NextResponse } from 'next/server'
 import { getPublicAppUrl } from '@/lib/core/app-url'
 import { writeAuditLog, writeNotificationLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
-import { ensureOrganizationStaffAccess, listOrganizationStaffIds } from '@/lib/server/organizations'
+import {
+  ensureOrganizationStaffAccess,
+  listOrganizationStaffIds,
+  resolveCompanyScope,
+} from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -163,13 +167,39 @@ export async function GET(req: Request) {
       .map((value) => value.trim())
       .filter(Boolean)
 
-    if (staffIds.length === 0) {
-      return json({ ok: true, items: [] })
+    // Без списка id отдаём весь состав своей организации.
+    //
+    // Так спрашивает страница выдачи прав: ей нужен список сотрудников, и
+    // раньше она брала его из базы сама, из браузера. Список приходит вместе с
+    // учётками — иначе страница делала бы два запроса подряд ради одного
+    // экрана, а скоуп считался бы дважды.
+    let requestedIds = staffIds
+    if (requestedIds.length === 0) {
+      const scope = await resolveCompanyScope({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+      })
+      const admin = createAdminSupabaseClient()
+      let allQuery = admin.from('staff').select('id').order('full_name')
+      if (scope.allowedCompanyIds) {
+        const allowed = await listOrganizationStaffIds({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+        })
+        if (allowed) {
+          if (allowed.length === 0) return json({ ok: true, items: [], staff: [] })
+          allQuery = allQuery.in('id', allowed)
+        }
+      }
+      const { data: allStaff, error: allStaffError } = await allQuery
+      if (allStaffError) throw allStaffError
+      requestedIds = (allStaff || []).map((row: any) => String(row.id))
+      if (requestedIds.length === 0) return json({ ok: true, items: [], staff: [] })
     }
 
     // Tenant scoping: restrict to staff within the active organization.
     // In LEGACY_SINGLE_TENANT_MODE this returns all staff ids (no-op filter).
-    let scopedStaffIds = staffIds
+    let scopedStaffIds = requestedIds
     if (!access.isSuperAdmin) {
       // Не-супер без активной орг → пустой скоуп (fail-closed), не все staff
       if (!access.activeOrganization?.id) {
@@ -181,7 +211,7 @@ export async function GET(req: Request) {
         })
         if (allowedStaffIds) {
           const allowedSet = new Set(allowedStaffIds)
-          scopedStaffIds = staffIds.filter((id) => allowedSet.has(id))
+          scopedStaffIds = requestedIds.filter((id) => allowedSet.has(id))
         }
       }
     }
@@ -221,7 +251,15 @@ export async function GET(req: Request) {
       }),
     )
 
-    return json({ ok: true, items: items.filter(Boolean) })
+    // Состав отдаём рядом с учётками: страница выдачи прав рисует список
+    // людей и их состояние входа на одном экране.
+    const { data: staffRows } = await supabase
+      .from('staff')
+      .select('id, full_name, email, role, is_active')
+      .in('id', scopedStaffIds)
+      .order('full_name')
+
+    return json({ ok: true, items: items.filter(Boolean), staff: staffRows || [] })
   } catch (error: any) {
     console.error('Admin staff accounts GET route error', error)
     await writeSystemErrorLogSafe({

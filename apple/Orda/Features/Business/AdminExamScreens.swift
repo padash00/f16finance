@@ -237,10 +237,20 @@ struct AdminExamDetailScreen: View {
     private func actionsCard(_ exam: AdminExam) -> some View {
         Card {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                SectionHeader(
-                    exam.statusLabel,
-                    subtitle: "\(exam.questionCount) вопросов, порог \(exam.passScore)%"
-                )
+                // Заголовком — что это за карточка, а не состояние экзамена:
+                // раньше здесь стояло состояние, и на экране крупными буквами
+                // висело слово из базы вроде «finished». Состояние — отметкой
+                // справа, где ему и место.
+                HStack(alignment: .firstTextBaseline) {
+                    SectionHeader(
+                        "Экзамен",
+                        subtitle: "\(exam.questionCount) вопросов, порог \(exam.passScore)%"
+                    )
+                    Spacer(minLength: Spacing.sm)
+                    if !exam.statusLabel.isEmpty {
+                        StatusChip(exam.statusLabel, kind: exam.isSent ? .good : .neutral)
+                    }
+                }
 
                 if !exam.isSent, canSend {
                     // Черновик существует, чтобы посмотреть вопросы до

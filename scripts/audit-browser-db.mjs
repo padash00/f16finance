@@ -23,7 +23,6 @@ const ROOTS = ['app', 'components']
 
 /** Известные и ещё не разобранные. Список может только уменьшаться. */
 const KNOWN = new Set([
-  'app/(main)/access/page.tsx',
   'app/(main)/shifts/add/page.tsx',
   'app/(main)/shifts/report/page.tsx',
 ])

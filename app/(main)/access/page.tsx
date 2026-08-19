@@ -170,16 +170,13 @@ export default function AccessPage() {
   const loadAccounts = useCallback(async () => {
     setAccountsLoading(true)
     try {
-      const { data: staffList } = await supabase
-        .from('staff')
-        .select('id, full_name, email, role, is_active')
-        .order('full_name')
-      setStaff(staffList ?? [])
-
-      if (!staffList || staffList.length === 0) return
-
-      const ids = staffList.map((s: StaffRow) => s.id).join(',')
-      const accountRes = await fetch(`/api/admin/staff-accounts?staffIds=${ids}`).then(r => r.json())
+      // Список людей и состояние их входа приходят одним ответом сервера.
+      //
+      // Раньше страница брала состав из базы сама, из браузера: право
+      // «Сотрудники» на этот список не действовало, а скоуп организации
+      // проверялся на стороне клиента.
+      const accountRes = await fetch('/api/admin/staff-accounts', { cache: 'no-store' }).then(r => r.json())
+      setStaff((accountRes.staff ?? []) as StaffRow[])
       setAccounts(accountRes.items ?? [])
     } catch {}
     setAccountsLoading(false)

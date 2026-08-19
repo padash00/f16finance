@@ -72,9 +72,13 @@ public struct AdminExam: Decodable, Sendable, Identifiable, Hashable {
     public var statusLabel: String {
         switch status {
         case "draft": "Черновик"
-        case "sent": "Разослан"
-        case "closed": "Закрыт"
-        default: status
+        case "sent", "active": "Идёт"
+        case "closed", "finished": "Завершён"
+        case "cancelled": "Отменён"
+        // Незнакомый статус лучше показать пустым, чем английским словом из
+        // базы: «finished» на экране — это утечка внутреннего словаря, а не
+        // сообщение человеку.
+        default: ""
         }
     }
 
@@ -125,10 +129,11 @@ public struct AdminExamAttempt: Decodable, Sendable, Identifiable, Hashable {
         switch status {
         case "pending": "Ждёт"
         case "in_progress": "Сдаёт"
-        case "completed": passed == true ? "Сдал" : "Не сдал"
+        case "completed", "finished": passed == true ? "Сдал" : "Не сдал"
         case "expired": "Просрочен"
         case "undeliverable": "Не доставлен"
-        default: status
+        case "cancelled": "Отменён"
+        default: ""
         }
     }
 
