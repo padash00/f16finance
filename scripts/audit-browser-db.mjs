@@ -21,11 +21,11 @@ import { join } from 'node:path'
 
 const ROOTS = ['app', 'components']
 
-/** Известные и ещё не разобранные. Список может только уменьшаться. */
-const KNOWN = new Set([
-  'app/(main)/shifts/add/page.tsx',
-  'app/(main)/shifts/report/page.tsx',
-])
+/**
+ * Известные и ещё не разобранные. Список пуст: все страницы переведены на
+ * роуты. Любая новая запись здесь — шаг назад, и её быть не должно.
+ */
+const KNOWN = new Set([])
 
 function files(dir) {
   const out = []

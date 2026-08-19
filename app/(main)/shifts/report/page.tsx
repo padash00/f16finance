@@ -4,7 +4,6 @@ import React, { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { supabase } from '@/lib/supabaseClient'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { PageSkeleton } from '@/components/skeleton'
 import { DatePicker } from '@/components/ui/date-picker'
@@ -93,16 +92,24 @@ export default function ShiftReportPage() {
   const [error, setError] = useState<string | null>(null)
   const [salesExpanded, setSalesExpanded] = useState(false)
 
-  // Load locations
+  // Витрины точек берём у сервера: список принадлежит организации, и отбирать
+  // из него должен роут — в браузере этот фильтр можно просто не применить.
   useEffect(() => {
-    supabase
-      .from('inventory_locations')
-      .select('id, name, company_id')
-      .eq('location_type', 'point_display')
-      .order('name')
-      .then(({ data }: { data: Location[] | null }) => {
-        if (data) setLocations(data)
-      })
+    let cancelled = false
+    const load = async () => {
+      try {
+        const resp = await fetch('/api/admin/inventory/locations?type=point_display', { cache: 'no-store' })
+        const payload = await resp.json().catch(() => null)
+        if (!resp.ok || cancelled) return
+        setLocations((payload?.data || []) as Location[])
+      } catch {
+        /* молчим: экран живёт и без списка витрин */
+      }
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const loadReport = useCallback(async () => {

@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { DatePicker } from '@/components/ui/date-picker'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
-import { supabase } from '@/lib/supabaseClient'
 import { useRouter } from 'next/navigation'
 
 type Company = {
@@ -54,27 +53,26 @@ export default function AddShiftPage() {
   useEffect(() => {
     const loadCompanies = async () => {
       setLoadingCompanies(true)
-      const [companiesRes, operatorsRes] = await Promise.all([
-        supabase
-          .from('companies')
-          .select('id, name, code')
-          .order('name', { ascending: true }),
-        supabase
-          .from('operators')
-          .select('id, name, short_name, is_active, operator_profiles(*)')
-          .eq('is_active', true)
-          .order('name', { ascending: true }),
+      // Справочники берём у сервера, а не из базы напрямую: список точек и
+      // операторов принадлежит организации, и решать, что из него показать,
+      // должен роут — в браузере этот фильтр можно просто не применить.
+      const [companiesResp, operatorsResp] = await Promise.all([
+        fetch('/api/admin/companies', { cache: 'no-store' }),
+        fetch('/api/admin/operators?active_only=true', { cache: 'no-store' }),
       ])
 
-      if (companiesRes.error || operatorsRes.error) {
-        console.error('Error loading shift references:', companiesRes.error, operatorsRes.error)
+      const companiesJson = await companiesResp.json().catch(() => null)
+      const operatorsJson = await operatorsResp.json().catch(() => null)
+
+      if (!companiesResp.ok || !operatorsResp.ok) {
+        console.error('Error loading shift references:', companiesJson?.error, operatorsJson?.error)
         setError('Не удалось загрузить список компаний и операторов')
         setLoadingCompanies(false)
         return
       }
 
-      const companiesData = (companiesRes.data || []) as Company[]
-      const operatorsData = (operatorsRes.data || []) as Operator[]
+      const companiesData = (companiesJson?.data || []) as Company[]
+      const operatorsData = (operatorsJson?.data || []) as Operator[]
 
       setCompanies(companiesData)
       setOperators(operatorsData)

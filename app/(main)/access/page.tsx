@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { CapabilitiesPanel } from '@/components/admin/capabilities-panel'
 import { UserOverridesPanel } from '@/components/admin/user-overrides-panel'
-import { supabase } from '@/lib/supabaseClient'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { CardSkeleton } from '@/components/skeleton'
 import {
