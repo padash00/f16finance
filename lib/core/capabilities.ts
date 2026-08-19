@@ -673,6 +673,9 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
           { id: 'stations.delete_game_catalog', label: 'Удалить игру', severity: 'high' },
           { id: 'stations.bulk_upsert_games', label: 'Массовое обновление игр', severity: 'high' },
           { id: 'stations.edit_station_game', label: 'Изменить игру на станции', severity: 'medium' },
+          // Мониторинг: наблюдение за фактическим состоянием компьютеров.
+          { id: 'stations.view_live', label: 'Мониторинг станций', severity: 'low' },
+          { id: 'stations.manage_agent_binding', label: 'Подтверждение наблюдающих устройств', severity: 'high' },
           { id: 'stations.delete_station_game', label: 'Удалить игру со станции', severity: 'medium' },
           { id: 'stations.create_tariff', label: 'Создать тариф', severity: 'high' },
           { id: 'stations.edit_tariff', label: 'Изменить тариф', severity: 'high' },
