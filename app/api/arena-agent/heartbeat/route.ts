@@ -22,6 +22,7 @@ import {
   CLOCK_SKEW_FUTURE_TOLERANCE_SEC,
   HEARTBEAT_INTERVAL_SEC,
 } from '@/lib/domain/arena-runtime/config'
+import { classifyProcess } from '@/lib/domain/arena-runtime/process-classification'
 import { applyObservation } from '@/lib/domain/arena-runtime/projection'
 import { authenticateDevice } from '@/lib/server/arena-runtime/auth'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
@@ -38,8 +39,14 @@ const Body = z.object({
   /** Когда устройство сделало эти наблюдения, по своим часам. */
   observedAt: z.string().datetime({ offset: true }),
   windowsUserKind: z.enum(['logonui', 'senet_user', 'support', 'unknown']).optional().nullable(),
-  gameProcess: z.string().max(260).optional().nullable(),
-  gamePath: z.string().max(1024).optional().nullable(),
+  /**
+   * Что сейчас запущено — списком, без выводов.
+   *
+   * Именно списком, а не одним «текущая игра»: выбирать игру должен сервер.
+   * Если бы выбирал probe, правило отбора пришлось бы менять пересборкой
+   * образа на семидесяти семи машинах.
+   */
+  processes: z.array(z.string().max(260)).max(60).optional().nullable(),
   bootAt: z.string().datetime({ offset: true }).optional().nullable(),
   agentVersion: z.string().max(60).optional().nullable(),
   /** Что устройство само думает о состоянии. Только сверка, в проекцию не идёт. */
@@ -72,6 +79,13 @@ export async function POST(request: Request) {
 
     const clockRejected = skewSeconds !== null && skewSeconds > CLOCK_SKEW_FUTURE_TOLERANCE_SEC
 
+    // Кандидата в игры выбирает сервер, а не устройство. Берём первый процесс,
+    // который не опознан как лаунчер, фон, система или служебное SENET. Это
+    // ещё не значит «игра» — это значит «единственное, что не объясняется
+    // известным».
+    const candidate =
+      (body.processes || []).find((name) => classifyProcess(name) === 'unknown_candidate') ?? null
+
     // Снимок мог ещё не существовать: первое подтверждение после привязки.
     const { data: current } = await supabase
       .from('arena_station_runtime')
@@ -96,7 +110,7 @@ export async function POST(request: Request) {
       ? {}
       : applyObservation(base as any, {
           userKind: { value: body.windowsUserKind ?? null, observedAt: body.observedAt },
-          game: { process: body.gameProcess ?? null, path: body.gamePath ?? null, observedAt: body.observedAt },
+          game: { process: candidate, path: null, observedAt: body.observedAt },
           stateHint: { value: body.stateHint ?? null, observedAt: body.observedAt },
           bootAt: body.bootAt ?? null,
         })
