@@ -324,6 +324,18 @@ function Invoke-Register {
 
     Write-Ok "Заявка принята. Устройство: $($result.deviceId)"
     Write-Ok "Статус: $($result.status)"
+
+    # Учётные данные прошлой машины стираем. Иначе, скопировав папку на другой
+    # компьютер, вы бы наблюдали за станцией под чужой личностью: заявка новая,
+    # а токен старый, и данные ушли бы не на ту станцию.
+    if ($Settings.deviceToken -or $Settings.clientSecret) {
+        $Settings.Remove('deviceToken') | Out-Null
+        $Settings.Remove('clientSecret') | Out-Null
+        $Settings.projectId = $ProjectId
+        $Settings.bootstrapKey = $BootstrapKey
+        Save-Settings $Settings
+        Write-Step 'Учётные данные прошлого устройства стёрты.'
+    }
     Write-Host ''
     Write-Warn 'Дальше: откройте Orda, вкладка «Мониторинг», подтвердите заявку.'
     Write-Warn 'После подтверждения скопируйте токен и секрет — они показываются один раз.'
