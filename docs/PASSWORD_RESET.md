@@ -4,6 +4,52 @@
 
 Два шага: рабочая почта → код из письма и новый пароль.
 
+## Готовый шаблон письма
+
+Supabase Dashboard → **Authentication → Emails → Reset Password**.
+
+**Subject:**
+
+```text
+Смена пароля в Orda Point
+```
+
+**Body** (вкладка Source, заменить целиком):
+
+```html
+<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#0F1415">
+  <h2 style="margin:0 0 16px;font-size:20px;font-weight:600">Смена пароля в Orda Point</h2>
+
+  <p style="margin:0 0 12px;font-size:15px;line-height:1.5">Здравствуйте! Вы запросили смену пароля.</p>
+
+  <p style="margin:0 0 8px;font-size:15px;line-height:1.5">Код для приложения:</p>
+  <p style="margin:0 0 20px;font-size:32px;font-weight:700;letter-spacing:4px;color:#0F7F6E">{{ .Token }}</p>
+
+  <p style="margin:0 0 20px;font-size:14px;line-height:1.5;color:#5A6673">
+    Введите его в приложении: «Не получается войти» → «Сменить пароль».
+  </p>
+
+  <p style="margin:0 0 8px;font-size:14px;line-height:1.5;color:#5A6673">Или смените пароль на сайте:</p>
+  <p style="margin:0 0 20px">
+    <a href="{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=recovery&next=%2Freset-password%3Fmode%3Drecovery"
+       style="display:inline-block;padding:12px 20px;background:#0F7F6E;color:#ffffff;text-decoration:none;border-radius:10px;font-size:15px;font-weight:600">
+      Сменить пароль
+    </a>
+  </p>
+
+  <p style="margin:0;font-size:13px;line-height:1.5;color:#8A94A1">
+    Код и ссылка действуют час и срабатывают один раз. Если вы не запрашивали смену пароля — просто удалите это письмо, пароль останется прежним.
+  </p>
+</div>
+```
+
+Что здесь важно:
+
+- **`{{ .Token }}` — тот самый код**, которого в стандартном шаблоне нет. Без него в приложении вводить нечего.
+- **Ссылка осталась** и ведёт туда же, куда вела: через `/auth/callback` на страницу смены пароля. Кто привык менять на сайте — продолжит.
+- **Название продукта.** В прежнем шаблоне стояло «F16 Finance» — старое имя, которое человек нигде больше не видит.
+- Последняя строка — про «если это были не вы». Без неё письмо о смене пароля пугает.
+
 ## Что нужно один раз настроить
 
 Код в письмо добавляет Supabase, и по умолчанию его там нет — в стандартном
