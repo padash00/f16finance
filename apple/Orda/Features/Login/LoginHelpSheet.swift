@@ -43,14 +43,10 @@ struct LoginHelpSheet: View {
                         }
                         .buttonStyle(PrimaryButtonStyle())
 
-                        // Сайт оставляем запасным путём: если письмо пришло со
-                        // ссылкой вместо кода, она работает.
-                        Button {
-                            openURL(configuration.apiBaseURL.appending(path: "forgot-password"))
-                        } label: {
-                            Label("Открыть на сайте", systemImage: "safari")
-                        }
-                        .buttonStyle(SecondaryButtonStyle())
+                        Text("Если в письме окажется только ссылка, а не код, — откройте её: она ведёт на тот же сброс на сайте.")
+                            .font(Typography.caption)
+                            .foregroundStyle(Theme.textDim)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
 

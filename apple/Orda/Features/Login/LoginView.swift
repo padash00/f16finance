@@ -60,7 +60,7 @@ struct LoginView: View {
                     // сайта. На телефоне порядок прежний, сверху вниз.
                     VStack(spacing: 0) {
                     layout(width: proxy.size.width) {
-                        header
+                        header(width: proxy.size.width)
 
                         VStack(spacing: Spacing.xl) {
                             VStack(spacing: Spacing.md) {
@@ -183,93 +183,48 @@ struct LoginView: View {
         .sheet(isPresented: $showingHelp) { LoginHelpSheet(enteredLogin: login) }
     }
 
-    /// Широкий экран — две колонки, узкий — одна.
-    private func isWide(_ width: CGFloat) -> Bool { width >= 820 }
-
+    /// Одна колонка по центру — на телефоне, планшете и Mac.
+    ///
+    /// Раньше широкий экран раскладывался в две колонки: слева фирменный
+    /// текст, справа форма. На айпаде это разъезжалось — знак с названием
+    /// оставались болтаться у левого края огромного пустого поля, а форма
+    /// уезжала из виду. Вход — это одно короткое действие, и разносить его по
+    /// экрану незачем: колонка по центру одинаково честно смотрится и на
+    /// пятидюймовом телефоне, и на тринадцатидюймовом планшете.
     @ViewBuilder
     private func layout<Content: View>(
         width: CGFloat,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        if isWide(width) {
-            // Выравниваем по верхнему краю, а не по середине. Колонки разной
-            // высоты: слева текст, справа карточка с полями. При центровке их
-            // верхние края расходились, и глаз читал это как перекос — даже
-            // когда середины совпадали.
-            HStack(alignment: .top, spacing: Spacing.xxl) {
-                content()
-            }
-            .frame(maxWidth: 940)
-            .frame(maxWidth: .infinity)
-        } else {
-            VStack(spacing: Spacing.xl) {
-                content()
-            }
-            .frame(maxWidth: 420)
-            .frame(maxWidth: .infinity)
+        VStack(spacing: Spacing.xl) {
+            content()
         }
+        .frame(maxWidth: isWide(width) ? 460 : 420)
+        .frame(maxWidth: .infinity)
     }
 
-    private var header: some View {
-        // На широком экране шапка становится левой колонкой: выравнивание по
-        // левому краю и строки о том, что внутри. На телефоне это была бы
-        // лишняя простыня перед полем логина, поэтому список только здесь.
-        ViewThatFits(in: .horizontal) {
-            wideHeader
-            compactHeader
-        }
-    }
+    /// Широкий экран — тот, где знак можно показать крупнее.
+    private func isWide(_ width: CGFloat) -> Bool { width >= 820 }
 
-    private var compactHeader: some View {
-        VStack(spacing: Spacing.md) {
-            mark(size: 72)
+    private func header(width: CGFloat) -> some View {
+        // Расстояния считаются от размера знака, а не берутся из шкалы
+        // отступов: у знака и у названия своя оптика, и на планшете, где знак
+        // крупнее, тот же отступ в 16 точек выглядит прижатым.
+        let size: CGFloat = isWide(width) ? 96 : 76
+
+        return VStack(spacing: 0) {
+            mark(size: size)
 
             Text("Orda Point")
-                .font(.system(size: 34, weight: .semibold, design: .rounded))
+                .font(.system(size: size * 0.46, weight: .semibold, design: .rounded))
                 .foregroundStyle(Theme.text)
+                .padding(.top, size * 0.20)
 
             Text("Управление клубом и точками продаж")
                 .font(Typography.callout)
                 .foregroundStyle(Theme.textDim)
                 .multilineTextAlignment(.center)
-        }
-    }
-
-    private var wideHeader: some View {
-        VStack(alignment: .leading, spacing: Spacing.lg) {
-            mark(size: 82)
-
-            VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text("Orda Point")
-                    .font(.system(size: 52, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Theme.text)
-
-                Text("Управление клубом и точками продаж")
-                    .font(Typography.title)
-                    .foregroundStyle(Theme.textDim)
-            }
-
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                headerLine("banknote", "Деньги точки: выручка, расходы, ОПиУ")
-                headerLine("clock.arrow.circlepath", "Смены и касса — от открытия до сменного отчёта")
-                headerLine("shippingbox", "Склад, ревизии и заявки на витрину")
-                headerLine("person.2", "Команда: график, зарплата, задачи, аттестация")
-            }
-            .padding(.top, Spacing.xs)
-        }
-        .frame(maxWidth: 440, alignment: .leading)
-        .fixedSize(horizontal: false, vertical: true)
-    }
-
-    private func headerLine(_ icon: String, _ text: String) -> some View {
-        HStack(spacing: Spacing.sm) {
-            Image(systemName: icon)
-                .font(.callout)
-                .foregroundStyle(Theme.brand)
-                .frame(width: 24)
-            Text(text)
-                .font(Typography.callout)
-                .foregroundStyle(Theme.textDim)
+                .padding(.top, size * 0.10)
         }
     }
 

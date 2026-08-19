@@ -79,14 +79,23 @@ struct OrdaPointIntroView: View {
             ZStack {
                 background
 
-                VStack(spacing: Spacing.lg) {
-                    symbol(size: symbolSize(for: proxy.size.width))
+                // Знак стоит ровно в середине экрана, а название висит под
+                // ним на постоянном расстоянии.
+                //
+                // Не `VStack`: в нём по центру оказывается пара «знак плюс
+                // название», то есть сам знак уезжает выше середины, а текст
+                // ниже — на глаз это читается как отсутствие выравнивания. К
+                // тому же при появлении названия знак не должен шевелиться:
+                // он в этот момент уже стоит на своём месте.
+                let size = symbolSize(for: proxy.size.width)
+                ZStack {
+                    symbol(size: size)
 
                     Text("Orda Point")
-                        .font(.system(size: 34, weight: .semibold, design: .rounded))
+                        .font(.system(size: size * 0.30, weight: .semibold, design: .rounded))
                         .foregroundStyle(.white)
                         .opacity(wordmarkShown ? 1 : 0)
-                        .offset(y: wordmarkShown ? 0 : 7)
+                        .offset(y: wordmarkShown ? size * 0.86 : size * 0.86 + 7)
                         .blur(radius: wordmarkShown ? 0 : 3)
                         .opacity(symbolFlewOut ? 0 : 1)
                 }
