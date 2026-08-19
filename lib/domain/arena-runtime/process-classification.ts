@@ -78,6 +78,7 @@ const INFRASTRUCTURE = new Set([
   'clubnet.exe',
   'gcafe.exe',
   'gcafeclient.exe',
+  'appnotify.exe',
 ])
 
 /** Системные процессы Windows, которые заведомо не игры. */

@@ -216,13 +216,24 @@ function Get-WindowsUserKind {
 #>
 function Get-RunningProcesses {
     try {
-        return @(
-            Get-Process -ErrorAction SilentlyContinue |
-            Where-Object { $_.Path -or $_.MainWindowHandle -ne 0 } |
-            Select-Object -ExpandProperty ProcessName -Unique |
-            ForEach-Object { "$_.exe" } |
-            Select-Object -First 60
-        )
+        # Отдаём не только имя, но и вес с признаком окна. Без них сервер не
+        # может отличить игру от служебной программы: на станции 21 при
+        # запущенной CS2 первым по алфавиту оказался AppNotify.exe.
+        #
+        # Решение по-прежнему принимает сервер — probe просто перестаёт
+        # скрывать от него половину картины.
+        $list = Get-Process -ErrorAction SilentlyContinue |
+            Where-Object { $_.Path } |
+            Sort-Object WorkingSet64 -Descending |
+            Select-Object -First 40
+
+        return @($list | ForEach-Object {
+            [pscustomobject]@{
+                name      = "$($_.ProcessName).exe"
+                memoryMb  = [int]($_.WorkingSet64 / 1MB)
+                hasWindow = ($_.MainWindowHandle -ne 0)
+            }
+        })
     } catch {
         return @()
     }

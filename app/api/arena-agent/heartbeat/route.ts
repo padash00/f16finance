@@ -46,7 +46,19 @@ const Body = z.object({
    * Если бы выбирал probe, правило отбора пришлось бы менять пересборкой
    * образа на семидесяти семи машинах.
    */
-  processes: z.array(z.string().max(260)).max(60).optional().nullable(),
+  processes: z
+    .array(
+      z.object({
+        name: z.string().max(260),
+        /** Сколько памяти занимает. Игра берёт сотни мегабайт, служба — единицы. */
+        memoryMb: z.number().int().min(0).max(1_000_000).optional().nullable(),
+        /** Есть ли окно. У игры оно есть, у фоновой службы нет. */
+        hasWindow: z.boolean().optional().nullable(),
+      }),
+    )
+    .max(60)
+    .optional()
+    .nullable(),
   bootAt: z.string().datetime({ offset: true }).optional().nullable(),
   agentVersion: z.string().max(60).optional().nullable(),
   /** Что устройство само думает о состоянии. Только сверка, в проекцию не идёт. */
@@ -79,12 +91,23 @@ export async function POST(request: Request) {
 
     const clockRejected = skewSeconds !== null && skewSeconds > CLOCK_SKEW_FUTURE_TOLERANCE_SEC
 
-    // Кандидата в игры выбирает сервер, а не устройство. Берём первый процесс,
-    // который не опознан как лаунчер, фон, система или служебное SENET. Это
-    // ещё не значит «игра» — это значит «единственное, что не объясняется
-    // известным».
+    // Кандидата в игры выбирает сервер, а не устройство.
+    //
+    // Раньше брался первый неопознанный из списка — и это оказалось никуда не
+    // годным правилом: список приходит по алфавиту, и на боевой станции 21 при
+    // запущенной CS2 победил AppNotify.exe.
+    //
+    // Теперь смотрим на вес и окно. Игра занимает сотни мегабайт и имеет окно;
+    // служебная программа — единицы мегабайт и без окна. Это по-прежнему
+    // догадка, а не знание: пометка так и останется «возможно игра», пока
+    // процесс не привязан к каталогу клуба.
+    const candidates = (body.processes || []).filter(
+      (process) => classifyProcess(process.name) === 'unknown_candidate',
+    )
+    const withWindow = candidates.filter((process) => process.hasWindow)
+    const pool = withWindow.length > 0 ? withWindow : candidates
     const candidate =
-      (body.processes || []).find((name) => classifyProcess(name) === 'unknown_candidate') ?? null
+      pool.slice().sort((a, b) => (b.memoryMb ?? 0) - (a.memoryMb ?? 0))[0]?.name ?? null
 
     // Снимок мог ещё не существовать: первое подтверждение после привязки.
     const { data: current } = await supabase
