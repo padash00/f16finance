@@ -289,8 +289,11 @@ public struct OrdaPointLockup: View {
                     .foregroundStyle(wordmarkColor)
 
                 if let descriptor {
+                    // Подпись растёт вместе со знаком, но не ниже обычного
+                    // размера: на планшете знак вдвое крупнее, и подпись
+                    // прежнего кегля выглядела приписанной сбоку.
                     Text(descriptor)
-                        .font(Typography.callout)
+                        .font(.system(size: max(15, symbolSize * 0.135)))
                         .foregroundStyle(Theme.textDim)
                         .multilineTextAlignment(.center)
                 }
