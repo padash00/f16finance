@@ -43,6 +43,7 @@ param(
 
     [switch]$Register,
     [switch]$SelfTest,
+    [switch]$Discover,
 
     [string]$DeviceToken = '',
     [string]$ClientSecret = '',
@@ -315,6 +316,122 @@ function New-Event {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# ПОИСК ДАННЫХ SENET
+# ─────────────────────────────────────────────────────────────────────────────
+# Ничего никуда не отправляет. Только смотрит, где на машине лежат файлы SENET
+# и в каком из них встречается имя вошедшего пользователя.
+#
+# Нужно, потому что в задании были перечислены поля (user_session_id,
+# account_type, seconds_left), но не пути к ним. Угадывать пути — верный способ
+# построить разбор под файл, которого нет.
+#
+# Содержимое файлов НЕ печатается и никуда не уходит: там могут быть токены.
+# Печатаются только имена файлов, размеры и факт совпадения.
+
+function Invoke-Discover {
+    Write-Host ''
+    Write-Host 'ПОИСК ДАННЫХ SENET' -ForegroundColor Cyan
+    Write-Host '  Ничего не отправляется. Только смотрим, что где лежит.' -ForegroundColor DarkGray
+    Write-Host ''
+
+    $user = $null
+    try {
+        $cs = Get-CimInstance Win32_ComputerSystem -ErrorAction Stop
+        if ($cs.UserName) { $user = ($cs.UserName -split '\')[-1] }
+    } catch { }
+
+    Write-Host "1. Кто сейчас в системе: $(if ($user) { $user } else { 'никого' })" -ForegroundColor White
+    Write-Host ''
+
+    Write-Host '2. Процессы SENET и клубной обвязки' -ForegroundColor White
+    # Шаблон узкий намеренно: слово «shell» ловит системные ShellHost и
+    # ShellExperienceHost, и поиск уходит в System32, где искать нечего.
+    # Заодно отбрасываем всё, что лежит внутри каталога Windows.
+    $senetProcs = Get-Process -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.Path -and
+            $_.Path -notlike "$env:SystemRoot*" -and
+            ($_.ProcessName -match 'senet|clubnet|ccboot|appnotify|gcafe' -or
+             $_.ProcessName -match '^(dashboard|serviceapp|shell)$')
+        }
+    if ($senetProcs) {
+        foreach ($proc in $senetProcs) {
+            Write-Step "$($proc.ProcessName).exe  ->  $($proc.Path)"
+        }
+    } else {
+        Write-Warn 'не найдено — возможно, запущены под другим пользователем'
+    }
+    Write-Host ''
+
+    Write-Host '3. Каталоги, где может лежать SENET' -ForegroundColor White
+    $roots = @()
+    foreach ($proc in $senetProcs) {
+        $dir = Split-Path $proc.Path -Parent
+        if ($dir -and $dir -notlike "$env:SystemRoot*" -and $roots -notcontains $dir) { $roots += $dir }
+    }
+    foreach ($guess in @(
+        "$env:ProgramFiles\SENET", "${env:ProgramFiles(x86)}\SENET",
+        "$env:ProgramData\SENET", "$env:LOCALAPPDATA\SENET",
+        "$env:ProgramData\Senet", "C:\SENET", "C:\Senet", "C:\Games\SENET"
+    )) {
+        if ((Test-Path $guess) -and $roots -notcontains $guess) { $roots += $guess }
+    }
+
+    if (-not $roots) {
+        Write-Warn 'каталоги не найдены'
+        Write-Host ''
+        return
+    }
+
+    foreach ($root in $roots) { Write-Step $root }
+    Write-Host ''
+
+    Write-Host '4. Файлы настроек и журналов в этих каталогах' -ForegroundColor White
+    $files = @()
+    foreach ($root in $roots) {
+        try {
+            $files += Get-ChildItem -Path $root -Recurse -File -ErrorAction SilentlyContinue |
+                Where-Object { $_.Extension -match '^\.(json|xml|ini|cfg|conf|log|txt|dat)$' -and $_.Length -lt 5MB } |
+                Select-Object -First 60
+        } catch { }
+    }
+
+    if (-not $files) {
+        Write-Warn 'подходящих файлов не найдено'
+        Write-Host ''
+        return
+    }
+
+    foreach ($file in ($files | Sort-Object LastWriteTime -Descending | Select-Object -First 25)) {
+        Write-Step "$($file.FullName)  ($([int]($file.Length / 1KB)) КБ, изменён $($file.LastWriteTime.ToString('HH:mm:ss')))"
+    }
+    Write-Host ''
+
+    if (-not $user) {
+        Write-Warn 'Пользователь не определён — искать его имя в файлах не по чему.'
+        Write-Host ''
+        return
+    }
+
+    Write-Host "5. В каких файлах встречается имя '$user'" -ForegroundColor White
+    Write-Host '   (показываются только имена файлов, содержимое не печатается)' -ForegroundColor DarkGray
+    $found = $false
+    foreach ($file in $files) {
+        try {
+            if (Select-String -Path $file.FullName -Pattern ([regex]::Escape($user)) -SimpleMatch -Quiet -ErrorAction SilentlyContinue) {
+                Write-Ok $file.FullName
+                $found = $true
+            }
+        } catch { }
+    }
+    if (-not $found) { Write-Warn 'имя пользователя в файлах не встречается' }
+
+    Write-Host ''
+    Write-Warn 'Пришлите этот вывод — по нему будет видно, откуда читать данные сессии.'
+    Write-Host ''
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # РЕЖИМЫ
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -470,8 +587,8 @@ Write-Host '  Временный наблюдатель для проверки 
 Write-Host ''
 
 try {
-    if ($Register) {
-        Invoke-Register
+    if ($Discover) {
+        Invoke-Discover
     } else {
         # Учётных данных нет — спрашиваем один раз и запоминаем. Вводить
         # шестидесятисимвольную строку при каждом запуске никто не станет.
