@@ -65,6 +65,17 @@ type LiveData = {
   }
   stations: StationRow[]
   pendingDevices: PendingDevice[]
+  activeDevices: ActiveDevice[]
+}
+
+type ActiveDevice = {
+  id: string
+  stationId: string | null
+  stationName: string | null
+  hostname: string | null
+  mac: string | null
+  agentVersion: string | null
+  lastSeenAt: string | null
 }
 
 /**
@@ -308,6 +319,43 @@ export function ArenaLiveTab(props: {
                 ) : (
                   <p className="mt-2 text-xs text-muted-foreground">Подтверждать устройства может владелец.</p>
                 )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : null}
+
+      {/* Подключённые устройства */}
+      {data && data.activeDevices.length > 0 && props.canManageDevices ? (
+        <Card className="p-4">
+          <div className="text-sm font-semibold text-foreground">Подключённые устройства</div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Отзыв нужен, когда наблюдатель меняется: у станции может быть только одно активное
+            устройство, и новое не подтвердится, пока старое не отозвано.
+          </p>
+          <div className="mt-3 space-y-2">
+            {data.activeDevices.map((device) => (
+              <div
+                key={device.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border p-3 text-xs"
+              >
+                <div className="text-muted-foreground">
+                  <span className="font-medium text-foreground">
+                    {device.stationName ? `Станция ${device.stationName}` : 'Без станции'}
+                  </span>
+                  {' · '}
+                  {device.hostname || 'без имени'}
+                  {device.mac ? ` · ${device.mac}` : ''}
+                  {device.lastSeenAt ? ` · сигнал ${new Date(device.lastSeenAt).toLocaleString('ru-RU')}` : ' · сигнала не было'}
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busyDevice === device.id}
+                  onClick={() => void decide(device.id, 'revoke')}
+                >
+                  Отозвать
+                </Button>
               </div>
             ))}
           </div>

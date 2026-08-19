@@ -150,6 +150,23 @@ export async function GET(request: Request) {
         requestedAt: d.requested_at ?? null,
       }))
 
+    // Активные устройства нужны, чтобы их можно было отозвать. Без этого
+    // привязка становится односторонней: подключить можно, отключить нельзя.
+    const active = (devices || [])
+      .filter((d: any) => d.status === 'active')
+      .map((d: any) => {
+        const station = (stations || []).find((s: any) => String(s.id) === String(d.station_id))
+        return {
+          id: String(d.id),
+          stationId: d.station_id ? String(d.station_id) : null,
+          stationName: station ? String(station.name) : null,
+          hostname: d.reported_hostname ?? null,
+          mac: d.reported_mac ?? null,
+          agentVersion: d.agent_version ?? null,
+          lastSeenAt: d.last_seen_at ?? null,
+        }
+      })
+
     const observedCount = rows.filter((r) => isObserved(r.state)).length
     const clientCount = rows.filter((r) => isCommerciallyOccupied(r.state)).length
 
@@ -183,6 +200,7 @@ export async function GET(request: Request) {
         },
         stations: rows,
         pendingDevices: pending,
+        activeDevices: active,
       },
     })
   } catch (error) {
