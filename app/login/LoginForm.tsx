@@ -212,29 +212,28 @@ export default function LoginForm({
         throw new Error('Не удалось получить сессию')
       }
 
-      const { data: authByUser, error: authByUserError } = await supabase
-        .from('operator_auth')
-        .select('id, username, operator_id')
-        .eq('user_id', operatorUserId)
-        .eq('is_active', true)
-        .maybeSingle()
+      // Пускать или нет — решает сервер.
+      //
+      // Раньше форма выясняла это сама: читала из базы запись входа и карточку
+      // оператора и смотрела, активны ли они. Решение о доступе, принятое в
+      // браузере, решением не является: изменённый клиент этих вопросов себе
+      // не задаёт, а сессия к тому моменту уже выдана.
+      const gateResp = await fetch('/api/auth/operator-gate', { cache: 'no-store' })
+      const gate = await gateResp.json().catch(() => null)
 
-      if (authByUserError) throw authByUserError
-      if (!authByUser?.id || !authByUser.operator_id) {
+      if (!gateResp.ok || !gate?.operatorId) {
         await supabase.auth.signOut().catch(() => null)
-        throw new Error('Неверный логин или пароль')
+        throw new Error(
+          gate?.error === 'operator-inactive'
+            ? 'Учётная запись оператора отключена. Обратитесь к руководителю.'
+            : 'Неверный логин или пароль',
+        )
       }
 
-      const { data: operatorRow, error: operatorActiveError } = await supabase
-        .from('operators')
-        .select('is_active')
-        .eq('id', authByUser.operator_id)
-        .maybeSingle()
-
-      if (operatorActiveError) throw operatorActiveError
-      if (!operatorRow || operatorRow.is_active === false) {
-        await supabase.auth.signOut().catch(() => null)
-        throw new Error('Учётная запись оператора отключена. Обратитесь к руководителю.')
+      const authByUser = {
+        id: String(gate.authId || ''),
+        username: (gate.username as string | null) ?? null,
+        operator_id: String(gate.operatorId),
       }
 
       await fetch('/api/auth/login-attempt', {

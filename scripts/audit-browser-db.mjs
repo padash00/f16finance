@@ -26,7 +26,6 @@ const KNOWN = new Set([
   'app/(main)/access/page.tsx',
   'app/(main)/shifts/add/page.tsx',
   'app/(main)/shifts/report/page.tsx',
-  'app/login/LoginForm.tsx',
 ])
 
 function files(dir) {
