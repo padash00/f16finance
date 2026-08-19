@@ -9,7 +9,14 @@ import SwiftUI
 /// определит роль по учётной записи, а лишний выбор на первом экране —
 /// повод ошибиться.
 struct LoginView: View {
+    /// Пространство геометрии заставки: по нему знак приезжает сюда из
+    /// центра экрана. Своё — когда экран открыт не после заставки.
+    var brandNamespace: Namespace.ID?
+    /// Заставка ещё идёт: знак в шапке пока не рисуем — он в пути.
+    var waitsForIntro: Bool = false
+
     @Environment(AuthStore.self) private var auth
+    @Namespace private var ownNamespace
 
     @State private var login = ""
     @State private var password = ""
@@ -26,6 +33,15 @@ struct LoginView: View {
     private enum Field { case login, password }
 
     private var configuration = AppConfiguration.current
+
+    /// Инициализатор явный, а не выведенный: у экрана есть приватное поле, и
+    /// автоматический memberwise-init из-за него становится приватным — снаружи
+    /// вызвать его нельзя, а вызов без аргументов работал бы по умолчанию и
+    /// молча ронял связь с заставкой.
+    init(brandNamespace: Namespace.ID? = nil, waitsForIntro: Bool = false) {
+        self.brandNamespace = brandNamespace
+        self.waitsForIntro = waitsForIntro
+    }
 
     var body: some View {
         ZStack {
@@ -206,10 +222,10 @@ struct LoginView: View {
 
     private var compactHeader: some View {
         VStack(spacing: Spacing.md) {
-            mark(size: 52)
+            mark(size: 72)
 
-            Text("Orda")
-                .font(.system(size: 34, weight: .bold, design: .rounded))
+            Text("Orda Point")
+                .font(.system(size: 34, weight: .semibold, design: .rounded))
                 .foregroundStyle(Theme.text)
 
             Text("Управление клубом и точками продаж")
@@ -221,11 +237,11 @@ struct LoginView: View {
 
     private var wideHeader: some View {
         VStack(alignment: .leading, spacing: Spacing.lg) {
-            mark(size: 76)
+            mark(size: 82)
 
             VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text("Orda")
-                    .font(.system(size: 52, weight: .bold, design: .rounded))
+                Text("Orda Point")
+                    .font(.system(size: 52, weight: .semibold, design: .rounded))
                     .foregroundStyle(Theme.text)
 
                 Text("Управление клубом и точками продаж")
@@ -257,11 +273,23 @@ struct LoginView: View {
         }
     }
 
+    /// Знак в шапке.
+    ///
+    /// Тот же объект, что летел в заставке: `matchedGeometryEffect` с общим
+    /// пространством связывает их, и знак не исчезает в центре, чтобы
+    /// появиться здесь, — он сюда приезжает. Пока заставка идёт, здесь стоит
+    /// невидимая цель перехода: место знака уже занято, а рисует его пока
+    /// заставка.
     private func mark(size: CGFloat) -> some View {
-        Image(systemName: "cube.transparent.fill")
-            .font(.system(size: size, weight: .light))
-            .foregroundStyle(Theme.brand)
-            .shadow(color: Theme.brand.opacity(0.45), radius: 22)
+        OrdaPointSymbol()
+            .frame(width: size, height: size)
+            .matchedGeometryEffect(
+                id: BrandTransition.symbolID,
+                in: brandNamespace ?? ownNamespace,
+                isSource: waitsForIntro
+            )
+            .opacity(waitsForIntro ? 0 : 1)
+            .animation(.easeIn(duration: 0.16), value: waitsForIntro)
     }
 
     private func field(
@@ -410,37 +438,49 @@ struct AuroraBackground: View {
         }
     }
 
-    /// Решётка из фирменных кубов — тот же знак, что на заставке: экран входа
-    /// и заставка должны выглядеть одним приложением.
+    /// Решётка из фирменных знаков — тот же знак, что на заставке: экран
+    /// входа и заставка должны выглядеть одним приложением.
     ///
     /// Рисуется в `Canvas`, а не полусотней вложенных `Shape`: столько фигур в
     /// иерархии видов заметно тормозят, а один слой рисуется за проход.
     private var lattice: some View {
         GeometryReader { proxy in
             Canvas { context, size in
-                let cell: CGFloat = 104
-                let markWidth = cell * 0.58
-                let markHeight = markWidth * 1.14
-                let rowStep = markHeight * 0.76
+                let cell: CGFloat = 108
+                let mark = cell * 0.56
 
                 var row = 0
-                var y = -markHeight
-                while y < size.height + markHeight {
+                var y = -mark
+                while y < size.height + mark {
                     let shift = row.isMultiple(of: 2) ? 0 : cell / 2
-                    var x = -markWidth + shift
-                    while x < size.width + markWidth {
-                        let rect = CGRect(x: x, y: y, width: markWidth, height: markHeight)
-                        for index in 0..<3 {
-                            let path = RhombusFacet(index: index).path(in: rect)
-                            context.fill(
-                                path,
-                                with: .color(Color.white.opacity(index == 0 ? 0.030 : 0.016))
-                            )
-                            context.stroke(path, with: .color(Color.white.opacity(0.045)), lineWidth: 0.6)
+                    var x = -mark + shift
+                    while x < size.width + mark {
+                        let rect = CGRect(x: x, y: y, width: mark, height: mark)
+                        // Четыре дуги и точка — тот же разбор знака, что и в
+                        // заставке: обои не «похожи на логотип», а сделаны из
+                        // него.
+                        for quadrant in 0..<4 {
+                            let path = ArcSegment(
+                                centerDegrees: Double(quadrant) * 90 + 45,
+                                spanDegrees: 70,
+                                radius: 0.355,
+                                width: 0.155
+                            ).path(in: rect)
+                            context.fill(path, with: .color(Color.white.opacity(0.026)))
                         }
+                        let dot = mark * 0.196
+                        context.fill(
+                            Path(ellipseIn: CGRect(
+                                x: rect.midX - dot / 2,
+                                y: rect.midY - dot / 2,
+                                width: dot,
+                                height: dot
+                            )),
+                            with: .color(Color.white.opacity(0.05))
+                        )
                         x += cell
                     }
-                    y += rowStep
+                    y += rowStep(cell)
                     row += 1
                 }
             }
@@ -457,6 +497,8 @@ struct AuroraBackground: View {
         .ignoresSafeArea()
         .allowsHitTesting(false)
     }
+
+    private func rowStep(_ cell: CGFloat) -> CGFloat { cell * 0.86 }
 
     /// Затемнение по краям: собирает взгляд к центру, где форма.
     private var vignette: some View {

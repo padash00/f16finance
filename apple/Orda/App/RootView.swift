@@ -15,30 +15,55 @@ struct RootView: View {
 
     /// Доиграла ли заставка запуска. Пока нет — показываем её поверх всего,
     /// но восстановление сессии при этом уже идёт в фоне.
+    ///
+    /// Состояние живёт столько же, сколько процесс: возвращение из фона
+    /// заставку не повторяет — она проигрывается один раз за запуск.
     @State private var introFinished = false
+    /// Общее пространство геометрии заставки и шапки входа: по нему знак
+    /// переезжает из центра экрана в шапку, оставаясь тем же объектом.
+    @Namespace private var brand
 
     var body: some View {
-        content
-            // Нижняя граница размера текста, а не фиксированный размер: более
-            // крупный системный шрифт настройка не отменяет.
-            //
-            // Два шага вверх, а не один: обычный системный размер — «Large», и
-            // граница в «xLarge» давала прибавку, которой не видно. Ради
-            // незаметного человек настройку не включает.
-            .largeTypeIfEnabled()
+        // Заставка — сосед интерфейса в `ZStack`, а не наложение поверх него.
+        //
+        // Разница не косметическая: интерфейс под ней меняет ветку, когда
+        // сессия разбирается (`restoring` → `signedOut`), и наложение,
+        // прикреплённое к меняющейся ветке, пересоздавалось вместе с ней. Со
+        // сцены это выглядело как заставка, которая крутится по кругу и
+        // никогда не заканчивается: её сценарий отменялся на середине и
+        // начинался заново.
+        ZStack {
+            content
+                // Нижняя граница размера текста, а не фиксированный размер:
+                // более крупный системный шрифт настройка не отменяет.
+                //
+                // Два шага вверх, а не один: обычный системный размер —
+                // «Large», и граница в «xLarge» давала прибавку, которой не
+                // видно. Ради незаметного человек настройку не включает.
+                .largeTypeIfEnabled()
+
             // Заставка лежит поверх готового интерфейса, а не вместо него:
             // экран под ней уже собран и уже тянет данные, поэтому к моменту
             // ухода заставки показывать нечего — всё на месте.
-            .overlay {
-                if !introFinished {
-                    LaunchAnimationView(
-                        onFinish: { introFinished = true },
-                        isReady: { auth.phase != .restoring && auth.phase != .loadingRole }
-                    )
-                    .transition(.opacity)
+            if !introFinished {
+                OrdaPointIntroView(
+                    namespace: brand,
+                    onFinish: { introFinished = true },
+                    isReady: { auth.phase != .restoring && auth.phase != .loadingRole },
+                    // Вошедшего не задерживаем ради бренда: он открыл
+                    // программу работать, а не смотреть на знак.
+                    goesToWorkspace: { auth.phase == .signedIn || auth.phase == .locked }
+                )
+                .transition(.opacity)
+                // Страховка от застревания: что бы ни случилось со сценарием,
+                // человек не должен остаться наедине с логотипом.
+                .task {
+                    try? await Task.sleep(for: .seconds(5))
+                    introFinished = true
                 }
             }
-            .animation(Motion.transition, value: introFinished)
+        }
+        .animation(Motion.transition, value: introFinished)
     }
 
     @ViewBuilder
@@ -49,7 +74,7 @@ struct RootView: View {
                 Color.clear
 
             case .signedOut:
-                LoginView()
+                LoginView(brandNamespace: brand, waitsForIntro: !introFinished)
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
 
             case .loadingRole:
@@ -163,12 +188,10 @@ struct LaunchView: View {
             Theme.background.ignoresSafeArea()
 
             VStack(spacing: Spacing.xl) {
-                Image(systemName: "cube.transparent.fill")
-                    .font(.system(size: 56, weight: .light))
-                    .foregroundStyle(Theme.brand)
+                OrdaPointSymbol()
+                    .frame(width: 64, height: 64)
                     .scaleEffect(appeared ? 1 : 0.85)
                     .opacity(appeared ? 1 : 0)
-                    .shadow(color: Theme.brand.opacity(0.4), radius: appeared ? 24 : 0)
 
                 if let message {
                     Text(message)

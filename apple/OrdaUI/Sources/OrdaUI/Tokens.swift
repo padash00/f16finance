@@ -37,6 +37,20 @@ public enum Theme {
 
     public static let brand = Color.adaptive(dark: 0x10B981, light: 0x059669)
     public static let brandBright = Color.adaptive(dark: 0x3DF0B6, light: 0x10B981)
+
+    // ── Знак Orda Point ──────────────────────────────────────────────────────
+    //
+    // Цвета знака не адаптивные, в отличие от остальной палитры: логотип
+    // должен читаться одинаково в приложении, в App Store и на визитке.
+    // Адаптивный бренд-цвет остаётся для интерфейса — кнопок, акцентов.
+
+    /// Основная мята знака.
+    public static let brandMint = Color(hex: 0x20C997)
+    /// Глубокая мята: нижние сегменты, центральная точка.
+    public static let brandDeep = Color(hex: 0x0F7F6E)
+    /// Фон заставки. Тот же цвет стоит у системного экрана запуска, поэтому
+    /// между ними нет вспышки.
+    public static let launchBackground = Color(hex: 0x071214)
     /// Текст поверх фирменного цвета.
     ///
     /// Отдельным именем, а не `.white` по месту: на плотном зелёном чёрный
