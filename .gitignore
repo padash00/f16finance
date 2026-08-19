@@ -31,3 +31,8 @@ apple/Config.local.xcconfig
 
 # Служебные файлы Finder.
 .DS_Store
+
+
+# Настройки probe: ключ регистрации и учётные данные устройства.
+# В репозиторий не попадают — там секреты остаются навсегда.
+tools/arena-probe/probe-settings.local.json

@@ -59,6 +59,57 @@ param(
 $ErrorActionPreference = 'Stop'
 $AgentVersion = 'probe-1'
 
+# ─────────────────────────────────────────────────────────────────────────────
+# МЕСТНЫЕ НАСТРОЙКИ
+# ─────────────────────────────────────────────────────────────────────────────
+# Ключ и учётные данные лежат в файле рядом со скриптом, а не в самом скрипте.
+# Причина простая: скрипт живёт в репозитории и уезжает на GitHub, а секреты
+# туда попадать не должны. Файл настроек добавлен в .gitignore.
+#
+# Заодно это избавляет от необходимости вводить длинные строки руками при
+# каждом запуске.
+
+$SettingsPath = Join-Path $PSScriptRoot 'probe-settings.local.json'
+
+function Read-Settings {
+    if (-not (Test-Path $SettingsPath)) { return @{} }
+    try {
+        $raw = Get-Content $SettingsPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $result = @{}
+        foreach ($prop in $raw.PSObject.Properties) { $result[$prop.Name] = $prop.Value }
+        return $result
+    } catch {
+        Write-Host "  Файл настроек повреждён, игнорирую: $($_.Exception.Message)" -ForegroundColor Yellow
+        return @{}
+    }
+}
+
+function Save-Settings($settings) {
+    $settings | ConvertTo-Json -Depth 4 | Set-Content -Path $SettingsPath -Encoding UTF8
+}
+
+$Settings = Read-Settings
+
+# Параметр из командной строки всегда важнее сохранённого: так можно
+# переопределить что угодно, ничего не редактируя.
+if (-not $ProjectId    -and $Settings.projectId)    { $ProjectId    = $Settings.projectId }
+if (-not $BootstrapKey -and $Settings.bootstrapKey) { $BootstrapKey = $Settings.bootstrapKey }
+if (-not $DeviceToken  -and $Settings.deviceToken)  { $DeviceToken  = $Settings.deviceToken }
+if (-not $ClientSecret -and $Settings.clientSecret) { $ClientSecret = $Settings.clientSecret }
+if ($Settings.serverUrl -and $ServerUrl -eq 'https://www.ordaops.kz') { $ServerUrl = $Settings.serverUrl }
+
+# Учётные данные, введённые руками, запоминаем — чтобы длинные строки
+# вводить ровно один раз.
+if ($DeviceToken -and $ClientSecret -and
+    ($Settings.deviceToken -ne $DeviceToken -or $Settings.clientSecret -ne $ClientSecret)) {
+    $Settings.deviceToken = $DeviceToken
+    $Settings.clientSecret = $ClientSecret
+    if ($ProjectId)    { $Settings.projectId = $ProjectId }
+    if ($BootstrapKey) { $Settings.bootstrapKey = $BootstrapKey }
+    Save-Settings $Settings
+    Write-Host '  Учётные данные сохранены рядом со скриптом.' -ForegroundColor DarkGray
+}
+
 # Идентификатор этого запуска. По нему сервер видит, что probe перезапускался,
 # и может отличить пропуск в нумерации от потери события.
 $script:SourceInstanceId = [guid]::NewGuid().ToString()
