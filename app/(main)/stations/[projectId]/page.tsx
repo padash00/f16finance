@@ -799,7 +799,11 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
                 draggable
                 onDragStart={e => { e.stopPropagation(); handleDragStart(e, 'station', station.id, x, y) }}
                 onDragOver={e => e.preventDefault()}
-                className="relative flex flex-col items-center justify-center rounded border text-center select-none"
+                // absolute, а не relative: при relative свойства left/top работают
+                // как смещение от места в обычном потоке, а не как позиция в
+                // сетке. Станции выстраивались друг под другом и разъезжались
+                // лесенкой, хотя координаты в базе были верные.
+                className="absolute flex flex-col items-center justify-center rounded border text-center select-none"
                 style={{
                   left: x * CELL + 2,
                   top: y * CELL + 2,
