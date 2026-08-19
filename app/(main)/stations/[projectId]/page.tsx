@@ -8,8 +8,9 @@ import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigat
 import {
   Plus, Pencil, Trash2, Save, X, Monitor, Clock, Banknote,
   BarChart3, Settings, Loader2, CheckCircle2, ChevronDown, ChevronRight,
-  AlertTriangle, RefreshCw, TrendingUp, Calendar, Map, Search, Download, Paintbrush, Gamepad2, Layers, LayoutGrid,
+  AlertTriangle, RefreshCw, TrendingUp, Calendar, Map, Search, Download, Paintbrush, Gamepad2, Layers, LayoutGrid, Activity,
 } from 'lucide-react'
+import { ArenaLiveTab } from '@/components/arena/live/arena-live-tab'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { PageSkeleton } from '@/components/skeleton'
 import {
@@ -1031,10 +1032,10 @@ function StationsPageContent() {
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'manage' | 'map' | 'analytics' | 'catalog' | 'settings'>(() => {
+  const [activeTab, setActiveTab] = useState<'manage' | 'map' | 'analytics' | 'catalog' | 'settings' | 'live'>(() => {
     if (typeof window === 'undefined') return 'manage'
     const t = new URLSearchParams(window.location.search).get('tab')
-    return t === 'map' || t === 'analytics' || t === 'catalog' || t === 'settings' ? t : 'manage'
+    return t === 'map' || t === 'analytics' || t === 'catalog' || t === 'settings' || t === 'live' ? t : 'manage'
   })
 
   const cellSize = 70
@@ -1207,7 +1208,7 @@ function StationsPageContent() {
 
   useEffect(() => {
     const t = searchParams.get('tab')
-    if (t === 'map' || t === 'analytics' || t === 'manage' || t === 'catalog' || t === 'settings') setActiveTab(t)
+    if (t === 'map' || t === 'analytics' || t === 'manage' || t === 'catalog' || t === 'settings' || t === 'live') setActiveTab(t)
     const af = searchParams.get('afrom')
     const at = searchParams.get('ato')
     if (af && isISODate(af)) setAnalyticsFrom(af)
@@ -1978,6 +1979,7 @@ function StationsPageContent() {
             {/* Tabs */}
             <div className="flex gap-0 overflow-x-auto border-b border-border">
               {[
+                { id: 'live', label: 'Мониторинг', icon: Activity },
                 { id: 'manage', label: 'Управление', icon: Settings },
                 { id: 'catalog', label: 'Каталог игр', icon: Gamepad2 },
                 { id: 'map', label: 'Карта', icon: Map },
@@ -2716,6 +2718,21 @@ function StationsPageContent() {
               </div>
             )}
           </div>
+        )}
+
+        {/*
+          Мониторинг — новый и пока экспериментальный контур. Он получает свои
+          данные отдельным запросом и ничего не берёт из состояния этой
+          страницы: если он упадёт, карта, киоск, тарифы и управление
+          продолжат работать.
+        */}
+        {activeTab === 'live' && (
+          <ArenaLiveTab
+            projectId={projectId}
+            companyId={companyId}
+            stations={stations.map(s => ({ id: s.id, name: s.name }))}
+            canManageDevices={can('stations.manage_agent_binding')}
+          />
         )}
 
         {activeTab === 'catalog' && (
