@@ -3,7 +3,7 @@ import { requireStaffCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { createRequestSupabaseClient } from '@/lib/server/request-auth'
-import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { resolveCompanyScope, listOrganizationOperatorIds } from '@/lib/server/organizations'
 
 function json(data: unknown, status = 200) {
@@ -280,6 +280,214 @@ export async function PATCH(req: Request) {
     return json({ ok: true })
   } catch (error: any) {
     await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/operators/profile PATCH', message: error?.message || 'error' })
+    return json({ error: error?.message || 'Ошибка сервера' }, 500)
+  }
+}
+
+/**
+ * Записи в карточке оператора: документы, заметки, история работы.
+ *
+ * Всё это страница делала сама, запросами в Supabase из браузера: заводила
+ * документ, отмечала его проверенным, удаляла, писала заметку о человеке,
+ * добавляла период работы. Право на такие действия не спрашивалось — их
+ * пропускала база, а не роут; принадлежность оператора организации проверялась
+ * там же, то есть на стороне, которой нельзя доверять.
+ *
+ * Здесь одно место на все записи: право на каждое действие своё, оператор
+ * обязан принадлежать организации, каждое действие пишется в журнал.
+ */
+export async function POST(req: Request) {
+  try {
+    const access = await getRequestAccessContext(req)
+    if ('response' in access) return access.response
+
+    const body = (await req.json().catch(() => null)) as Record<string, any> | null
+    const action = String(body?.action || '')
+    const operatorId = String(body?.operator_id || '').trim()
+
+    // Право спрашиваем по действию: завести документ, удалить его и написать
+    // заметку о человеке — решения разного веса.
+    const capabilityByAction: Record<string, string> = {
+      addDocument: 'operators.document_upload',
+      verifyDocument: 'operators.edit',
+      deleteDocument: 'operators.delete',
+      addNote: 'operators.edit',
+      addWorkHistory: 'operators.edit',
+      endWorkHistory: 'operators.edit',
+    }
+    const capability = capabilityByAction[action]
+    if (!capability) return json({ error: 'Неизвестное действие' }, 400)
+    const denied = await requireStaffCapability(access, capability as any)
+    if (denied) return denied
+
+    if (!operatorId) return json({ error: 'operator_id required' }, 400)
+
+    const scope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+    if (scope.allowedCompanyIds) {
+      const allowedOperatorIds = await listOrganizationOperatorIds({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+        includeInactive: true,
+      })
+      if (allowedOperatorIds && !allowedOperatorIds.includes(operatorId)) {
+        return json({ error: 'forbidden' }, 403)
+      }
+    }
+
+    const supabase = hasAdminSupabaseCredentials()
+      ? createAdminSupabaseClient()
+      : createRequestSupabaseClient(req)
+    const actorUserId = access.user?.id || null
+
+    /** Документ или запись должны принадлежать этому же оператору. */
+    const belongsToOperator = async (table: string, id: string) => {
+      const { data } = await supabase.from(table).select('operator_id').eq('id', id).maybeSingle()
+      return String((data as any)?.operator_id || '') === operatorId
+    }
+
+    if (action === 'addDocument') {
+      const { data, error } = await supabase
+        .from('operator_documents')
+        .insert({
+          operator_id: operatorId,
+          document_type: body?.document_type || null,
+          document_name: body?.document_name || null,
+          document_url: body?.document_url || null,
+          document_number: body?.document_number || null,
+          issue_date: body?.issue_date || null,
+          expiry_date: body?.expiry_date || null,
+          is_verified: false,
+        })
+        .select()
+        .single()
+      if (error) throw error
+      await writeAuditLog(supabase as any, {
+        actorUserId,
+        entityType: 'operator-document',
+        entityId: String(data.id),
+        action: 'create',
+        payload: { operator_id: operatorId, document_type: body?.document_type || null },
+      })
+      return json({ ok: true, data })
+    }
+
+    if (action === 'verifyDocument' || action === 'deleteDocument') {
+      const documentId = String(body?.document_id || '').trim()
+      if (!documentId) return json({ error: 'document_id required' }, 400)
+      // Чужой документ по своему оператору не проведёшь: id приходит из тела.
+      if (!(await belongsToOperator('operator_documents', documentId))) {
+        return json({ error: 'Документ не найден' }, 404)
+      }
+
+      if (action === 'verifyDocument') {
+        const { error } = await supabase
+          .from('operator_documents')
+          .update({ is_verified: true, verified_at: new Date().toISOString() })
+          .eq('id', documentId)
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('operator_documents').delete().eq('id', documentId)
+        if (error) throw error
+      }
+
+      await writeAuditLog(supabase as any, {
+        actorUserId,
+        entityType: 'operator-document',
+        entityId: documentId,
+        action: action === 'verifyDocument' ? 'verify' : 'delete',
+        payload: { operator_id: operatorId },
+      })
+      return json({ ok: true })
+    }
+
+    if (action === 'addNote') {
+      const note = String(body?.note || '').trim()
+      if (!note) return json({ error: 'Заметка пустая' }, 400)
+      const { data, error } = await supabase
+        .from('operator_notes')
+        .insert({
+          operator_id: operatorId,
+          note,
+          note_type: body?.note_type || 'general',
+          // Автора ставит сервер: раньше браузер присылал его сам, то есть
+          // подписаться можно было кем угодно.
+          created_by: actorUserId,
+        })
+        .select()
+        .single()
+      if (error) throw error
+      await writeAuditLog(supabase as any, {
+        actorUserId,
+        entityType: 'operator-note',
+        entityId: String(data.id),
+        action: 'create',
+        payload: { operator_id: operatorId, note_type: body?.note_type || 'general' },
+      })
+      return json({ ok: true, data })
+    }
+
+    if (action === 'addWorkHistory') {
+      const payload: Record<string, unknown> = {
+        operator_id: operatorId,
+        company_id: body?.company_id || null,
+        position: body?.position || null,
+        start_date: body?.start_date || null,
+        is_current: body?.is_current === true,
+        salary: body?.salary ?? null,
+        salary_type: body?.salary_type || null,
+        responsibilities: body?.responsibilities || null,
+        achievements: body?.achievements || null,
+      }
+      if (body?.is_current !== true && body?.end_date) payload.end_date = body.end_date
+
+      const { data, error } = await supabase
+        .from('operator_work_history')
+        .insert(payload)
+        .select('*, companies:company_id(name, code)')
+        .single()
+      if (error) throw error
+      await writeAuditLog(supabase as any, {
+        actorUserId,
+        entityType: 'operator-work-history',
+        entityId: String(data.id),
+        action: 'create',
+        payload: { operator_id: operatorId },
+      })
+      return json({ ok: true, data })
+    }
+
+    if (action === 'endWorkHistory') {
+      const workId = String(body?.work_id || '').trim()
+      if (!workId) return json({ error: 'work_id required' }, 400)
+      if (!(await belongsToOperator('operator_work_history', workId))) {
+        return json({ error: 'Запись не найдена' }, 404)
+      }
+      const endDate = new Date().toISOString().slice(0, 10)
+      const { error } = await supabase
+        .from('operator_work_history')
+        .update({ is_current: false, end_date: endDate })
+        .eq('id', workId)
+      if (error) throw error
+      await writeAuditLog(supabase as any, {
+        actorUserId,
+        entityType: 'operator-work-history',
+        entityId: workId,
+        action: 'end',
+        payload: { operator_id: operatorId, end_date: endDate },
+      })
+      return json({ ok: true, end_date: endDate })
+    }
+
+    return json({ error: 'Неизвестное действие' }, 400)
+  } catch (error: any) {
+    await writeSystemErrorLogSafe({
+      scope: 'server',
+      area: 'api/admin/operators/profile POST',
+      message: error?.message || 'error',
+    })
     return json({ error: error?.message || 'Ошибка сервера' }, 500)
   }
 }

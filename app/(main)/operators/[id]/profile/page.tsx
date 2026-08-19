@@ -526,9 +526,13 @@ function DocumentUpload({
         .from('operator-files')
         .getPublicUrl(filePath)
 
-      const { data, error: dbError } = await supabase
-        .from('operator_documents')
-        .insert({
+      // Запись заводит сервер: здесь только файл и поля формы. Раньше строку
+      // вставлял браузер, минуя право «Загрузить документы оператора».
+      const insertResp = await fetch('/api/admin/operators/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'addDocument',
           operator_id: operatorId,
           document_type: documentType,
           document_name: documentName || selectedFile.name,
@@ -536,12 +540,11 @@ function DocumentUpload({
           document_number: documentNumber || null,
           issue_date: issueDate || null,
           expiry_date: expiryDate || null,
-          is_verified: false
-        })
-        .select()
-        .single()
-
-      if (dbError) throw dbError
+        }),
+      })
+      const insertPayload = await insertResp.json().catch(() => null)
+      if (!insertResp.ok) throw new Error(insertPayload?.error || 'Не удалось сохранить документ')
+      const data = insertPayload?.data
 
       onUploadComplete(data)
       
@@ -674,11 +677,13 @@ function DocumentUpload({
 
 // Компонент списка документов
 function DocumentList({ 
+  operatorId,
   documents, 
   onVerify, 
   onDelete, 
   formatDate 
 }: { 
+  operatorId: string
   documents: Document[]
   onVerify?: (documentId: string) => void
   onDelete?: (documentId: string) => void
@@ -691,15 +696,12 @@ function DocumentList({
     try {
       setVerifying(documentId)
       
-      const { error } = await supabase
-        .from('operator_documents')
-        .update({
-          is_verified: true,
-          verified_at: new Date().toISOString()
-        })
-        .eq('id', documentId)
-
-      if (error) throw error
+      const resp = await fetch('/api/admin/operators/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'verifyDocument', operator_id: operatorId, document_id: documentId }),
+      })
+      if (!resp.ok) throw new Error((await resp.json().catch(() => null))?.error || 'Не удалось подтвердить')
 
       if (onVerify) onVerify(documentId)
     } catch (error) {
@@ -721,12 +723,12 @@ function DocumentList({
     try {
       setDeleting(documentId)
 
-      const { error } = await supabase
-        .from('operator_documents')
-        .delete()
-        .eq('id', documentId)
-
-      if (error) throw error
+      const resp = await fetch('/api/admin/operators/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'deleteDocument', operator_id: operatorId, document_id: documentId }),
+      })
+      if (!resp.ok) throw new Error((await resp.json().catch(() => null))?.error || 'Не удалось удалить')
 
       if (onDelete) onDelete(documentId)
     } catch (error) {
@@ -1170,12 +1172,14 @@ export default function OperatorProfilePage() {
       // Перезагружаем данные, чтобы показать, что аккаунт создан
       setTimeout(async () => {
         try {
-          const { data: accountData } = await supabase
-            .from('operator_auth')
-            .select('*')
-            .eq('operator_id', operatorId)
-            .maybeSingle()
-
+          // Учётку перечитываем тем же роутом, что и всю карточку: отдельный
+          // запрос в базу из браузера показывал логины мимо прав.
+          const accountResp = await fetch(
+            `/api/admin/operators/profile?operator_id=${encodeURIComponent(operatorId)}`,
+            { cache: 'no-store' },
+          )
+          const accountJson = await accountResp.json().catch(() => null)
+          const accountData = accountJson?.data?.account
           if (accountData) {
             setOperatorAccount(accountData)
           }
@@ -1395,26 +1399,21 @@ export default function OperatorProfilePage() {
       setSaving(true)
       setError(null)
 
-      const insertData: any = {
-        operator_id: operatorId,
-        note: newNote.trim(),
-        note_type: newNoteType
-      }
-
-      if (currentUser?.id) {
-        insertData.created_by = currentUser.id
-      }
-
-      const { data, error } = await supabase
-        .from('operator_notes')
-        .insert(insertData)
-        .select()
-        .single()
-
-      if (error) {
-        console.error('Supabase error:', error)
-        throw error
-      }
+      // Автора ставит сервер по сессии: раньше его присылал браузер, то есть
+      // подписаться под заметкой о человеке можно было кем угодно.
+      const resp = await fetch('/api/admin/operators/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'addNote',
+          operator_id: operatorId,
+          note: newNote.trim(),
+          note_type: newNoteType,
+        }),
+      })
+      const payload = await resp.json().catch(() => null)
+      if (!resp.ok) throw new Error(payload?.error || 'Не удалось сохранить заметку')
+      const data = payload?.data
 
       if (!data) {
         throw new Error('No data returned after insert')
@@ -1469,19 +1468,14 @@ export default function OperatorProfilePage() {
         workData.end_date = newWork.end_date
       }
 
-      const { data, error } = await supabase
-        .from('operator_work_history')
-        .insert(workData)
-        .select(`
-          *,
-          companies:company_id (
-            name,
-            code
-          )
-        `)
-        .single()
-
-      if (error) throw error
+      const workResp = await fetch('/api/admin/operators/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'addWorkHistory', ...workData }),
+      })
+      const workPayload = await workResp.json().catch(() => null)
+      if (!workResp.ok) throw new Error(workPayload?.error || 'Не удалось добавить период работы')
+      const data = workPayload?.data
 
       const newWorkWithCompany = {
         ...data,
@@ -1519,15 +1513,14 @@ export default function OperatorProfilePage() {
     try {
       setError(null)
       
-      const { error } = await supabase
-        .from('operator_work_history')
-        .update({
-          is_current: false,
-          end_date: new Date().toISOString().split('T')[0]
-        })
-        .eq('id', workId)
-
-      if (error) throw error
+      const endResp = await fetch('/api/admin/operators/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'endWorkHistory', operator_id: operatorId, work_id: workId }),
+      })
+      if (!endResp.ok) {
+        throw new Error((await endResp.json().catch(() => null))?.error || 'Не удалось завершить период')
+      }
 
       setWorkHistory(prev => prev.map(w => 
         w.id === workId 
@@ -2678,6 +2671,7 @@ export default function OperatorProfilePage() {
               </div>
 
               <DocumentList
+                operatorId={operatorId}
                 documents={documents}
                 onVerify={canDocumentUpload ? handleDocumentVerify : undefined}
                 onDelete={canDocumentUpload ? handleDocumentDelete : undefined}
