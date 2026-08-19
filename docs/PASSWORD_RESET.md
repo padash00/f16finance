@@ -111,3 +111,45 @@ Supabase Dashboard → **Authentication → Emails → Reset Password**.
 
 А вот **сменить** известный пароль оператор теперь может сам, в профиле: чаще
 всего он и получает временный, сказанный вслух.
+
+## Остальные письма
+
+Система шлёт через Supabase ещё одно письмо — **приглашение сотруднику**
+(`inviteUserByEmail` из выдачи прав и из участников организации). Его шаблон
+живёт там же: Authentication → Emails → **Invite user**. Старое название в нём
+осталось с тех же времён.
+
+**Subject:**
+
+```text
+Доступ в Orda Point
+```
+
+**Body:**
+
+```html
+<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#0F1415">
+  <h2 style="margin:0 0 16px;font-size:20px;font-weight:600">Вам открыли доступ в Orda Point</h2>
+
+  <p style="margin:0 0 16px;font-size:15px;line-height:1.5">
+    Orda Point — рабочее место точки: смены, касса, склад, зарплата и задачи.
+    Доступ выдал руководитель вашей организации.
+  </p>
+
+  <p style="margin:0 0 20px">
+    <a href="{{ .ConfirmationURL }}"
+       style="display:inline-block;padding:12px 20px;background:#0F7F6E;color:#ffffff;text-decoration:none;border-radius:10px;font-size:15px;font-weight:600">
+      Задать пароль и войти
+    </a>
+  </p>
+
+  <p style="margin:0;font-size:13px;line-height:1.5;color:#8A94A1">
+    Ссылка действует ограниченное время и срабатывает один раз. Если вы не ждали этого письма — просто удалите его.
+  </p>
+</div>
+```
+
+Остальные шаблоны (Confirm signup, Magic Link, Change Email) система не
+использует: вход идёт по паролю, подтверждение почты выключено. Их можно
+оставить как есть — но если правите, меняйте название там же, чтобы старое имя
+не всплыло при первой же смене настроек.
