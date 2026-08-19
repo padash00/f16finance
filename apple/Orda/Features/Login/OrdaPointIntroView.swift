@@ -69,41 +69,50 @@ struct OrdaPointIntroView: View {
         static let travel = Animation.timingCurve(0.32, 0.94, 0.24, 1.0, duration: 0.42)
     }
 
-    /// Размер знака в заставке — от ширины экрана, с разумными границами.
-    private func symbolSize(for width: CGFloat) -> CGFloat {
-        min(max(width * 0.28, 92), 120)
-    }
+    /// Размер знака в заставке. Одно число на все устройства: логотип не
+    /// должен прыгать по размеру между телефоном и планшетом.
+    private static let symbolSize: CGFloat = 112
 
     var body: some View {
-        GeometryReader { proxy in
-            ZStack {
-                background
+        ZStack {
+            background
 
-                // Знак стоит ровно в середине экрана, а название висит под
-                // ним на постоянном расстоянии.
-                //
-                // Не `VStack`: в нём по центру оказывается пара «знак плюс
-                // название», то есть сам знак уезжает выше середины, а текст
-                // ниже — на глаз это читается как отсутствие выравнивания. К
-                // тому же при появлении названия знак не должен шевелиться:
-                // он в этот момент уже стоит на своём месте.
-                let size = symbolSize(for: proxy.size.width)
-                ZStack {
-                    symbol(size: size)
-
-                    Text("Orda Point")
-                        .font(.system(size: size * 0.30, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .opacity(wordmarkShown ? 1 : 0)
-                        .offset(y: wordmarkShown ? size * 0.86 : size * 0.86 + 7)
-                        .blur(radius: wordmarkShown ? 0 : 3)
-                        .opacity(symbolFlewOut ? 0 : 1)
-                }
-            }
-            .ignoresSafeArea()
+            // Один блок: знак и название живут в общей стопке с общей осью и
+            // заданным расстоянием. Никаких отдельных сдвигов по экрану — до
+            // этого название ставилось смещением от знака, и композиция
+            // разъезжалась: знак выше и левее, текст ниже и правее.
+            OrdaPointLockup(
+                symbolSize: Self.symbolSize,
+                segments: segments,
+                point: pointProgress,
+                glow: glow,
+                wordmarkOpacity: wordmarkShown ? 1 : 0,
+                // Проявление — на несколько точек: конечное место названия
+                // задано вёрсткой, анимация его не переносит.
+                wordmarkOffset: wordmarkShown ? 0 : 6,
+                wordmarkColor: .white
+            )
+            // Переход: композиция уменьшается к размеру шапки входа и гаснет,
+            // пока под ней проявляется та же композиция уже на своём месте.
+            //
+            // Раньше здесь был matchedGeometryEffect, но у него оказалось два
+            // источника разом — заставка и шапка существуют одновременно, — и
+            // SwiftUI не мог решить, чью геометрию считать настоящей: экран
+            // оставался пустым. Совпадение осей и пропорций даёт ту же
+            // непрерывность без неопределённости.
+            .scaleEffect(lockScale * (symbolFlewOut ? Self.headoverScale : 1))
+            .opacity(symbolFlewOut ? 0 : 1)
         }
+        // Своя система координат на весь экран: композиция считается от него,
+        // а не от чего-то, что окажется рядом.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea()
         .task { await run() }
     }
+
+    /// Во сколько раз композиция уменьшается на переходе: до размера знака в
+    /// шапке входа, чтобы глаз читал это как один и тот же логотип.
+    private static let headoverScale: CGFloat = 76 / symbolSize
 
     // ── Куски ────────────────────────────────────────────────────────────────
 
@@ -120,17 +129,6 @@ struct OrdaPointIntroView: View {
             )
         }
         .opacity(backgroundLifted ? 0 : 1)
-    }
-
-    @ViewBuilder
-    private func symbol(size: CGFloat) -> some View {
-        // Знак — тот же объект, что и в шапке входа: на переходе он не
-        // исчезает и не создаётся заново, а переезжает.
-        OrdaPointSymbol(segments: segments, point: pointProgress, glow: glow)
-            .frame(width: size, height: size)
-            .scaleEffect(lockScale)
-            .matchedGeometryEffect(id: BrandTransition.symbolID, in: namespace, isSource: !symbolFlewOut)
-            .opacity(symbolFlewOut ? 0.999 : 1)
     }
 
     // ── Сценарий ─────────────────────────────────────────────────────────────

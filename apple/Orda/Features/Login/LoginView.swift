@@ -207,44 +207,18 @@ struct LoginView: View {
     private func isWide(_ width: CGFloat) -> Bool { width >= 820 }
 
     private func header(width: CGFloat) -> some View {
-        // Расстояния считаются от размера знака, а не берутся из шкалы
-        // отступов: у знака и у названия своя оптика, и на планшете, где знак
-        // крупнее, тот же отступ в 16 точек выглядит прижатым.
+        // Та же композиция, что в заставке: знак и название одной стопкой с
+        // общей осью. Раньше шапка складывала их сама, своими отступами, — и
+        // расходилась с заставкой, из которой знак сюда прилетает.
         let size: CGFloat = isWide(width) ? 96 : 76
 
-        return VStack(spacing: 0) {
-            mark(size: size)
-
-            Text("Orda Point")
-                .font(.system(size: size * 0.46, weight: .semibold, design: .rounded))
-                .foregroundStyle(Theme.text)
-                .padding(.top, size * 0.20)
-
-            Text("Управление клубом и точками продаж")
-                .font(Typography.callout)
-                .foregroundStyle(Theme.textDim)
-                .multilineTextAlignment(.center)
-                .padding(.top, size * 0.10)
-        }
-    }
-
-    /// Знак в шапке.
-    ///
-    /// Тот же объект, что летел в заставке: `matchedGeometryEffect` с общим
-    /// пространством связывает их, и знак не исчезает в центре, чтобы
-    /// появиться здесь, — он сюда приезжает. Пока заставка идёт, здесь стоит
-    /// невидимая цель перехода: место знака уже занято, а рисует его пока
-    /// заставка.
-    private func mark(size: CGFloat) -> some View {
-        OrdaPointSymbol()
-            .frame(width: size, height: size)
-            .matchedGeometryEffect(
-                id: BrandTransition.symbolID,
-                in: brandNamespace ?? ownNamespace,
-                isSource: waitsForIntro
-            )
-            .opacity(waitsForIntro ? 0 : 1)
-            .animation(.easeIn(duration: 0.16), value: waitsForIntro)
+        return OrdaPointLockup(
+            symbolSize: size,
+            wordmarkOpacity: waitsForIntro ? 0 : 1,
+            descriptor: "Управление клубом и точками продаж"
+        )
+        .opacity(waitsForIntro ? 0 : 1)
+        .animation(.easeIn(duration: 0.22), value: waitsForIntro)
     }
 
     private func field(

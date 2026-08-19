@@ -223,50 +223,82 @@ public struct ArcSegment: Shape {
     }
 }
 
-/// Знак и название рядом — то, что стоит в шапке входа.
-public struct OrdaPointLogo: View {
+/// Знак и название как одна композиция.
+///
+/// Единственный способ поставить логотип на экран: знак и название всегда в
+/// одной стопке с общей осью и заданным расстоянием. До этого заставка и
+/// шапка входа складывали их сами — знак оказывался выше и левее, название
+/// ниже и правее, между ними зияла дыра. Это не «съехали отступы»: элементы
+/// были самостоятельными, и каждый считал своё положение от экрана.
+///
+/// Здесь у них один родитель, одна система координат и один центр. Всё, что
+/// снаружи, двигает композицию целиком — не знак и не текст по отдельности.
+public struct OrdaPointLockup: View {
     public var symbolSize: CGFloat
-    public var layout: Layout
-    public var showsDescriptor: Bool
+    /// Состояние сборки знака — для заставки.
+    public var segments: [CGFloat]
+    public var point: CGFloat
+    public var glow: CGFloat
+    /// Появление названия: 0 — ещё нет.
+    public var wordmarkOpacity: Double
+    /// Крошечный сдвиг на проявлении. Больше нескольких точек здесь быть не
+    /// может: конечное место названия задано вёрсткой, а не анимацией.
+    public var wordmarkOffset: CGFloat
+    public var wordmarkColor: Color
+    /// Строка под названием. В заставке её нет — там только бренд.
+    public var descriptor: String?
 
-    public enum Layout: Sendable { case stacked, horizontal }
-
-    public init(symbolSize: CGFloat, layout: Layout = .stacked, showsDescriptor: Bool = true) {
+    public init(
+        symbolSize: CGFloat,
+        segments: [CGFloat] = [1, 1, 1, 1],
+        point: CGFloat = 1,
+        glow: CGFloat = 0,
+        wordmarkOpacity: Double = 1,
+        wordmarkOffset: CGFloat = 0,
+        wordmarkColor: Color = Theme.text,
+        descriptor: String? = nil
+    ) {
         self.symbolSize = symbolSize
-        self.layout = layout
-        self.showsDescriptor = showsDescriptor
+        self.segments = segments
+        self.point = point
+        self.glow = glow
+        self.wordmarkOpacity = wordmarkOpacity
+        self.wordmarkOffset = wordmarkOffset
+        self.wordmarkColor = wordmarkColor
+        self.descriptor = descriptor
+    }
+
+    /// Расстояние от знака до названия: доля от размера знака, но не выходя
+    /// за 12–20 точек. Логотип должен читаться как один блок и на телефоне, и
+    /// на планшете.
+    public static func spacing(for symbolSize: CGFloat) -> CGFloat {
+        // 0,12 доли, а не 0,15: у шрифта есть свой верхний просвет, и на глаз
+        // расстояние выходит больше заданного. С этим коэффициентом просвет
+        // между знаком и буквами читается как 12–16 точек — то, что нужно.
+        min(max(symbolSize * 0.12, 12), 20)
     }
 
     public var body: some View {
-        switch layout {
-        case .stacked:
-            VStack(spacing: Spacing.md) {
-                OrdaPointSymbol()
-                    .frame(width: symbolSize, height: symbolSize)
-                wordmark
-                    .multilineTextAlignment(.center)
-            }
-        case .horizontal:
-            HStack(spacing: Spacing.md) {
-                OrdaPointSymbol()
-                    .frame(width: symbolSize, height: symbolSize)
-                wordmark
-            }
-        }
-    }
+        VStack(spacing: Self.spacing(for: symbolSize)) {
+            OrdaPointSymbol(segments: segments, point: point, glow: glow)
+                .frame(width: symbolSize, height: symbolSize)
 
-    @ViewBuilder
-    private var wordmark: some View {
-        VStack(alignment: layout == .stacked ? .center : .leading, spacing: Spacing.xxs) {
-            Text("Orda Point")
-                .font(.system(size: symbolSize * 0.52, weight: .semibold, design: .rounded))
-                .foregroundStyle(Theme.text)
-            if showsDescriptor {
-                Text("Управление клубом и точками продаж")
-                    .font(Typography.callout)
-                    .foregroundStyle(Theme.textDim)
+            VStack(spacing: Spacing.xs) {
+                Text("Orda Point")
+                    .font(.system(size: symbolSize * 0.30, weight: .semibold, design: .rounded))
+                    .foregroundStyle(wordmarkColor)
+
+                if let descriptor {
+                    Text(descriptor)
+                        .font(Typography.callout)
+                        .foregroundStyle(Theme.textDim)
+                        .multilineTextAlignment(.center)
+                }
             }
+            .opacity(wordmarkOpacity)
+            .offset(y: wordmarkOffset)
         }
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -274,7 +306,7 @@ public struct OrdaPointLogo: View {
     VStack(spacing: 32) {
         OrdaPointSymbol().frame(width: 120, height: 120)
         OrdaPointSymbol(segments: [1, 0.4, 0, 0.7], point: 1).frame(width: 120, height: 120)
-        OrdaPointLogo(symbolSize: 72)
+        OrdaPointLockup(symbolSize: 112, descriptor: "Управление клубом и точками продаж")
     }
     .padding(40)
     .background(Theme.background)
