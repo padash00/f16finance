@@ -30,6 +30,7 @@ function json(data: unknown, status = 200) {
 const Body = z.discriminatedUnion('action', [
   z.object({ action: z.literal('approve'), deviceId: z.string().uuid(), stationId: z.string().uuid() }),
   z.object({ action: z.literal('revoke'), deviceId: z.string().uuid(), reason: z.string().max(300).optional() }),
+  z.object({ action: z.literal('reopen'), deviceId: z.string().uuid() }),
 ])
 
 export async function POST(request: Request) {
@@ -81,6 +82,38 @@ export async function POST(request: Request) {
       })
 
       return json({ ok: true, status: 'revoked' })
+    }
+
+    // ── Возврат отозванного в заявки ──────────────────────────────────────
+    // Отозвать — решение человека, и вернуть тоже. Само устройство воскреснуть
+    // не может: иначе отзыв ничего не значил бы, ведь достаточно перезапустить
+    // программу. Но и тупика быть не должно — отклонили по ошибке, вернули.
+    if (body.action === 'reopen') {
+      await supabase
+        .from('arena_station_devices')
+        .update({
+          status: 'pending',
+          station_id: null,
+          revoked_at: null,
+          revoke_reason: null,
+          approved_at: null,
+          approved_by: null,
+          device_token_hash: null,
+          client_secret_hash: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', device.id)
+
+      await writeAuditLog(supabase as any, {
+        actorUserId: access.user?.id || null,
+        action: 'arena_agent.reopen',
+        entityType: 'arena-station-device',
+        entityId: String(device.id),
+        organizationId: access.activeOrganization?.id || null,
+        payload: { previous_status: device.status },
+      })
+
+      return json({ ok: true, status: 'pending' })
     }
 
     // ── Подтверждение ─────────────────────────────────────────────────────

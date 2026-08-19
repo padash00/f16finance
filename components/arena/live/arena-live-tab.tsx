@@ -66,6 +66,14 @@ type LiveData = {
   stations: StationRow[]
   pendingDevices: PendingDevice[]
   activeDevices: ActiveDevice[]
+  revokedDevices: RevokedDevice[]
+}
+
+type RevokedDevice = {
+  id: string
+  hostname: string | null
+  mac: string | null
+  revokedAt: string | null
 }
 
 type ActiveDevice = {
@@ -175,7 +183,7 @@ export function ArenaLiveTab(props: {
     return () => clearInterval(timer)
   }, [load])
 
-  async function decide(deviceId: string, action: 'approve' | 'revoke') {
+  async function decide(deviceId: string, action: 'approve' | 'revoke' | 'reopen') {
     setBusyDevice(deviceId)
     try {
       const body: Record<string, unknown> = { action, deviceId }
@@ -319,6 +327,39 @@ export function ArenaLiveTab(props: {
                 ) : (
                   <p className="mt-2 text-xs text-muted-foreground">Подтверждать устройства может владелец.</p>
                 )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : null}
+
+      {/* Отклонённые — чтобы отказ по ошибке не был тупиком */}
+      {data && data.revokedDevices.length > 0 && props.canManageDevices ? (
+        <Card className="p-4">
+          <div className="text-sm font-semibold text-foreground">Отклонённые устройства</div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Отклонённое устройство не может вернуться само — иначе отказ ничего бы не значил,
+            достаточно было бы перезапустить программу. Вернуть его в заявки можете только вы.
+          </p>
+          <div className="mt-3 space-y-2">
+            {data.revokedDevices.map((device) => (
+              <div
+                key={device.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border p-3 text-xs"
+              >
+                <div className="text-muted-foreground">
+                  <span className="text-foreground">{device.hostname || 'без имени'}</span>
+                  {device.mac ? ` · ${device.mac}` : ''}
+                  {device.revokedAt ? ` · отклонено ${new Date(device.revokedAt).toLocaleString('ru-RU')}` : ''}
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busyDevice === device.id}
+                  onClick={() => void decide(device.id, 'reopen')}
+                >
+                  Вернуть в заявки
+                </Button>
               </div>
             ))}
           </div>

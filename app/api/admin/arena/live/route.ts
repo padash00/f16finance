@@ -68,7 +68,7 @@ export async function GET(request: Request) {
         supabase.from('arena_zones').select('id, name').eq('point_project_id', projectId),
         supabase
           .from('arena_station_devices')
-          .select('id, station_id, status, last_seen_at, agent_version, reported_hostname, reported_senet_ws_num, requested_at, device_instance_id, reported_mac')
+          .select('id, station_id, status, last_seen_at, agent_version, reported_hostname, reported_senet_ws_num, requested_at, device_instance_id, reported_mac, revoked_at')
           .eq('point_project_id', projectId),
         supabase
           .from('arena_station_runtime')
@@ -167,6 +167,17 @@ export async function GET(request: Request) {
         }
       })
 
+    // Отозванные показываем отдельно: иначе отклонённое по ошибке устройство
+    // исчезает из интерфейса навсегда и вернуть его нечем.
+    const revoked = (devices || [])
+      .filter((d: any) => d.status === 'revoked')
+      .map((d: any) => ({
+        id: String(d.id),
+        hostname: d.reported_hostname ?? null,
+        mac: d.reported_mac ?? null,
+        revokedAt: d.revoked_at ?? null,
+      }))
+
     const observedCount = rows.filter((r) => isObserved(r.state)).length
     const clientCount = rows.filter((r) => isCommerciallyOccupied(r.state)).length
 
@@ -201,6 +212,7 @@ export async function GET(request: Request) {
         stations: rows,
         pendingDevices: pending,
         activeDevices: active,
+        revokedDevices: revoked,
       },
     })
   } catch (error) {
