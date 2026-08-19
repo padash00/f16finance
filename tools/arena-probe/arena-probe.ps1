@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Orda Arena Probe — временный наблюдатель для проверки контракта.
 
@@ -436,13 +436,33 @@ Write-Host ''
 try {
     if ($Register) {
         Invoke-Register
-    } elseif (-not $DeviceToken -or -not $ClientSecret) {
-        Write-Err 'Нужны -DeviceToken и -ClientSecret, либо -Register для подачи заявки.'
-        exit 1
-    } elseif ($SelfTest) {
-        Invoke-SelfTest
     } else {
-        Invoke-Loop
+        # Учётных данных нет — спрашиваем один раз и запоминаем. Вводить
+        # шестидесятисимвольную строку при каждом запуске никто не станет.
+        if (-not $DeviceToken -or -not $ClientSecret) {
+            Write-Host '  Устройство ещё не настроено.' -ForegroundColor Yellow
+            Write-Host '  Возьмите токен и секрет из Orda — вкладка «Мониторинг», после подтверждения заявки.' -ForegroundColor DarkGray
+            Write-Host ''
+            if (-not $DeviceToken)  { $DeviceToken  = (Read-Host '  Токен устройства').Trim() }
+            if (-not $ClientSecret) { $ClientSecret = (Read-Host '  Секрет устройства').Trim() }
+
+            if (-not $DeviceToken -or -not $ClientSecret) {
+                Write-Err 'Без токена и секрета наблюдать нечем.'
+                exit 1
+            }
+
+            $Settings.deviceToken = $DeviceToken
+            $Settings.clientSecret = $ClientSecret
+            Save-Settings $Settings
+            Write-Ok 'Сохранено — в следующий раз спрашивать не буду.'
+            Write-Host ''
+        }
+
+        if ($SelfTest) {
+            Invoke-SelfTest
+        } else {
+            Invoke-Loop
+        }
     }
 } catch {
     Write-Host ''
