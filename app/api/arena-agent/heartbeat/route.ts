@@ -46,15 +46,29 @@ const Body = z.object({
    * Если бы выбирал probe, правило отбора пришлось бы менять пересборкой
    * образа на семидесяти семи машинах.
    */
+  /**
+   * Что запущено.
+   *
+   * Принимаются ДВА формата, и это принципиально: старые устройства присылают
+   * просто имена, новые — имена с весом и признаком окна.
+   *
+   * Сервер обязан понимать обе версии. Иначе выкладка новой версии ослепляет
+   * весь парк до пересборки образа — на бездисковых машинах это означает
+   * остановку клуба ради обновления мониторинга. Один раз я так уже сломал
+   * наблюдение на станции 21 и не хочу повторять это на семидесяти семи.
+   */
   processes: z
     .array(
-      z.object({
-        name: z.string().max(260),
-        /** Сколько памяти занимает. Игра берёт сотни мегабайт, служба — единицы. */
-        memoryMb: z.number().int().min(0).max(1_000_000).optional().nullable(),
-        /** Есть ли окно. У игры оно есть, у фоновой службы нет. */
-        hasWindow: z.boolean().optional().nullable(),
-      }),
+      z.union([
+        z.string().max(260),
+        z.object({
+          name: z.string().max(260),
+          /** Сколько памяти занимает. Игра берёт сотни мегабайт, служба — единицы. */
+          memoryMb: z.number().int().min(0).max(1_000_000).optional().nullable(),
+          /** Есть ли окно. У игры оно есть, у фоновой службы нет. */
+          hasWindow: z.boolean().optional().nullable(),
+        }),
+      ]),
     )
     .max(60)
     .optional()
@@ -101,7 +115,15 @@ export async function POST(request: Request) {
     // служебная программа — единицы мегабайт и без окна. Это по-прежнему
     // догадка, а не знание: пометка так и останется «возможно игра», пока
     // процесс не привязан к каталогу клуба.
-    const candidates = (body.processes || []).filter(
+    // Приводим оба формата к одному виду. У старых устройств веса и окна нет —
+    // тогда выбор вырождается в прежний, и это лучше, чем отказ принять данные.
+    const observedProcesses = (body.processes || []).map((process) =>
+      typeof process === 'string'
+        ? { name: process, memoryMb: null as number | null, hasWindow: null as boolean | null }
+        : { name: process.name, memoryMb: process.memoryMb ?? null, hasWindow: process.hasWindow ?? null },
+    )
+
+    const candidates = observedProcesses.filter(
       (process) => classifyProcess(process.name) === 'unknown_candidate',
     )
     const withWindow = candidates.filter((process) => process.hasWindow)
