@@ -13,7 +13,7 @@
     "capabilities:check": "node --import ./scripts/test-register.mjs scripts/export-capabilities.mjs --check",
     "audit:reads": "node scripts/audit-read-guards.mjs",
     "audit:capabilities": "node scripts/audit-capability-routes.mjs",
-    "audit:app": "node scripts/audit-api-paths.mjs && node scripts/audit-native-gates.mjs && node scripts/audit-action-contracts.mjs && node scripts/audit-db-links.mjs && node scripts/audit-view-task.mjs && node scripts/audit-browser-db.mjs",
+    "audit:app": "node scripts/audit-vercel-config.mjs && node scripts/audit-api-paths.mjs && node scripts/audit-native-gates.mjs && node scripts/audit-action-contracts.mjs && node scripts/audit-db-links.mjs && node scripts/audit-view-task.mjs && node scripts/audit-browser-db.mjs",
     "verify:release": "npm run typecheck && npm run capabilities:check && npm run audit:app && npm run lint && npm run build",
     "smoke:live": "node scripts/smoke-live.mjs",
     "test": "node --import ./scripts/test-register.mjs --test \"tests/**/*.test.ts\""
