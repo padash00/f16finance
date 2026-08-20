@@ -203,6 +203,17 @@ function formatBytes(bytes: number) {
   return `${value.toFixed(value >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`
 }
 
+/**
+ * Уведомление об обновлении.
+ *
+ * Свёрнуто в маленькую метку по умолчанию. Это кассовый экран: большая
+ * карточка ложилась поверх формы продажи ровно в тот момент, когда оператор
+ * пробивает чек, и убрать её было нечем. Обновление никогда не бывает
+ * срочнее продажи, поэтому места на экране оно само не занимает — метка
+ * сообщает, что версия есть, а подробности открываются по нажатию.
+ *
+ * Само разворачивается только ошибка: она требует решения человека.
+ */
 function UpdateBanner({
   state,
   onCheck,
@@ -216,9 +227,42 @@ function UpdateBanner({
   onInstall: () => void
   onOpenReleases: () => void
 }) {
+  const [expanded, setExpanded] = useState(false)
+  // Перезапуск закрывает программу вместе с набранным, но не пробитым чеком.
+  // Корзина живёт внутри страницы продажи, отсюда её не видно, поэтому
+  // защита простая: одного случайного нажатия недостаточно.
+  const [confirmInstall, setConfirmInstall] = useState(false)
+
   if (!state || state.status === 'development' || state.status === 'idle') return null
 
   const progressPercent = Math.max(0, Math.min(100, Math.round(state.progress?.percent || 0)))
+  const version = state.latestVersion ? ` · ${state.latestVersion}` : ''
+
+  if (!expanded && state.status !== 'error') {
+    const label =
+      state.status === 'checking'
+        ? 'Проверяем обновление'
+        : state.status === 'downloading'
+          ? `Загрузка ${progressPercent}%`
+          : state.status === 'downloaded'
+            ? `Обновление готово${version}`
+            : state.status === 'installing'
+              ? 'Устанавливаем…'
+              : `Есть обновление${version}`
+
+    return (
+      <div className="pointer-events-none fixed bottom-3 right-3 z-[100]">
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="pointer-events-auto flex items-center gap-2 rounded-full border border-white/10 bg-black/80 px-3 py-1.5 text-[11px] font-medium text-white/75 shadow-lg backdrop-blur-xl transition hover:border-white/25 hover:text-white"
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+          {label}
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="pointer-events-none fixed bottom-4 right-4 z-[100] w-[min(92vw,380px)]">
@@ -231,13 +275,27 @@ function UpdateBanner({
               {state.latestVersion ? ` · новая ${state.latestVersion}` : ''}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onOpenReleases}
-            className="rounded-full border border-white/10 px-3 py-1 text-[11px] font-medium text-white/75 transition hover:border-white/20 hover:text-white"
-          >
-            Релизы
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={onOpenReleases}
+              className="rounded-full border border-white/10 px-3 py-1 text-[11px] font-medium text-white/75 transition hover:border-white/20 hover:text-white"
+            >
+              Релизы
+            </button>
+            {/* Свернуть: оператор в любой момент возвращает себе экран. */}
+            <button
+              type="button"
+              onClick={() => {
+                setExpanded(false)
+                setConfirmInstall(false)
+              }}
+              title="Свернуть"
+              className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-medium text-white/60 transition hover:border-white/20 hover:text-white"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         {state.status === 'checking' && (
@@ -292,15 +350,21 @@ function UpdateBanner({
         {state.status === 'downloaded' && (
           <>
             <p className="text-sm text-white/85">
-              Обновление скачано. Осталось перезапустить программу, и новая версия установится автоматически.
+              {confirmInstall
+                ? 'Программа закроется. Если в корзине набран чек, он не сохранится — пробейте его сначала.'
+                : 'Обновление скачано. Осталось перезапустить программу, и новая версия установится автоматически.'}
             </p>
             <div className="mt-4 flex gap-2">
               <button
                 type="button"
-                onClick={onInstall}
-                className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90"
+                onClick={() => (confirmInstall ? onInstall() : setConfirmInstall(true))}
+                className={
+                  confirmInstall
+                    ? 'rounded-2xl bg-amber-400 px-4 py-2 text-sm font-semibold text-black transition hover:bg-amber-300'
+                    : 'rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90'
+                }
               >
-                Перезапустить и обновить
+                {confirmInstall ? 'Да, закрыть и обновить' : 'Перезапустить и обновить'}
               </button>
               <button
                 type="button"
