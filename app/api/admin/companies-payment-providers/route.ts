@@ -20,6 +20,12 @@ export async function GET(request: Request) {
   const access = await getRequestAccessContext(request)
   if ('response' in access) return access.response
 
+  // Изменение этого списка требует права, а показ не требовал ничего, кроме
+  // входа: любой оператор видел все точки организации. Читает пусть тот же,
+  // кто вправе править, — это экран настроек, а не общий справочник.
+  const denied = await requireCapability(access, 'settings.manage_companies')
+  if (denied) return denied
+
   const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
   const scope = await resolveCompanyScope({
     activeOrganizationId: access.activeOrganization?.id || null,

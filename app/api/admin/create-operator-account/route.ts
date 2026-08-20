@@ -204,11 +204,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: err?.message || 'Internal server error' }, { status: 500 })
   }
 }
-
-export async function GET() {
-  return NextResponse.json({
-    status: 'ok',
-    message: 'Operator account creation API',
-    usage: 'POST with { operatorId, username, email, name }',
-  })
-}

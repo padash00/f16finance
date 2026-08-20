@@ -18,6 +18,13 @@ export async function GET(request: Request) {
   const access = await getRequestAccessContext(request)
   if ('response' in access) return access.response
 
+  // Правом не закрываем: отсюда берётся подпись способа оплаты («Kaspi» или
+  // «Карта») для всех денежных экранов сразу, и своё право у неё было бы
+  // выдумкой. Но и любому вошедшему отдавать незачем — только своим.
+  if (!access.isSuperAdmin && !access.staffMember) {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+  }
+
   const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
   const scope = await resolveCompanyScope({
     activeOrganizationId: access.activeOrganization?.id || null,
