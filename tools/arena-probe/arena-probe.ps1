@@ -270,6 +270,52 @@ function Get-RunningProcesses {
     }
 }
 
+<#
+    Кто вошёл в SENET и по какому счёту.
+
+    Читается из журнала службы SENET. Найдено разведкой на боевых станциях:
+    при входе клиента туда пишется строка вида
+
+        Authorize username: olzhas, password=... type: 4
+
+    а следом результат «auth result status: 0» — ноль означает успех.
+
+    ПАРОЛЬ НЕ ЧИТАЕТСЯ И НИКУДА НЕ ИДЁТ. Из строки берутся только имя и тип
+    счёта; всё остальное отбрасывается прямо здесь, а не «на сервере разберём».
+
+    Журнал — источник временный. У службы SENET есть локальный интерфейс на
+    порту 20001, читать оттуда было бы надёжнее: формат журнала может смениться
+    с любым обновлением. Но интерфейс требует отдельного разбора, а журнал
+    работает сейчас.
+#>
+function Get-SenetSession {
+    $logPath = "$env:ProgramData\Enestech\Logs\senet-credential.log"
+    if (-not (Test-Path $logPath)) { return $null }
+
+    try {
+        # Хвоста хватает: нас интересует последний вход, а не вся история.
+        $tail = Get-Content $logPath -Tail 400 -ErrorAction Stop
+
+        $login = $null
+        $accountType = $null
+
+        for ($i = $tail.Count - 1; $i -ge 0; $i--) {
+            $m = [regex]::Match($tail[$i], 'Authorize username:\s*([^,]+),.*?type:\s*(-?\d+)')
+            if ($m.Success) {
+                $login = $m.Groups[1].Value.Trim()
+                $accountType = [int]$m.Groups[2].Value
+                break
+            }
+        }
+
+        if (-not $login) { return $null }
+
+        return @{ login = $login; accountType = $accountType }
+    } catch {
+        return $null
+    }
+}
+
 function Get-BootTime {
     try {
         $os = Get-CimInstance Win32_OperatingSystem -ErrorAction Stop
@@ -320,6 +366,20 @@ function Send-Heartbeat {
         sourceInstanceId = $script:SourceInstanceId
         sourceSeq        = $script:Seq
     }
+
+    # Данные сессии SENET шлём только когда за компьютером клиент. Под
+    # технической учётной записью последний вход в журнале относится к
+    # предыдущему человеку, и показывать его было бы прямым враньём.
+    if ($body.windowsUserKind -eq 'senet_user') {
+        $senet = Get-SenetSession
+        if ($senet) {
+            $body.senetLogin = $senet.login
+            $body.senetAccountType = $senet.accountType
+        }
+    }
+
+    $identity = Get-MachineIdentity
+    if ($identity.wsNum) { $body.senetWsNum = $identity.wsNum }
     return Invoke-Orda -Path '/api/arena-agent/heartbeat' -Body $body -WithAuth
 }
 

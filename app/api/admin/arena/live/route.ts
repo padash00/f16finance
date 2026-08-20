@@ -72,7 +72,7 @@ export async function GET(request: Request) {
           .eq('point_project_id', projectId),
         supabase
           .from('arena_station_runtime')
-          .select('station_id, observed_user_kind, observed_user_kind_at, observed_game_process, observed_game_path, observed_game_at, observed_state_hint, last_boot_at, last_heartbeat_at, agent_version')
+          .select('station_id, observed_user_kind, observed_user_kind_at, observed_game_process, observed_game_path, observed_game_at, observed_state_hint, last_boot_at, last_heartbeat_at, agent_version, observed_senet_login, observed_senet_account_type, observed_senet_at, observed_senet_ws_num')
           .eq('point_project_id', projectId),
       ])
 
@@ -133,6 +133,17 @@ export async function GET(request: Request) {
         agent: device
           ? { version: device.agent_version ?? null, lastSeenAt: device.last_seen_at ?? null }
           : null,
+        // Сессия показывается только при свежем сигнале и только когда за
+        // компьютером клиент. После его ухода это уже прошлое, а не текущее.
+        session:
+          resolved.freshness === 'fresh' && resolved.state === 'CLIENT' && runtime?.observed_senet_login
+            ? {
+                login: String(runtime.observed_senet_login),
+                accountType: runtime.observed_senet_account_type ?? null,
+                since: runtime.observed_senet_at ?? null,
+              }
+            : null,
+        senetWsNum: runtime?.observed_senet_ws_num ?? null,
         bootAt: runtime?.last_boot_at ?? null,
       }
     })

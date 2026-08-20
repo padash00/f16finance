@@ -34,6 +34,23 @@ type StationRow = {
   process: { name: string; classification: string } | null
   lastKnown: { userKind: string | null; process: string | null } | null
   agent: { version: string | null; lastSeenAt: string | null } | null
+  session: { login: string; accountType: number | null; since: string | null } | null
+  senetWsNum: number | null
+}
+
+/**
+ * Тип счёта SENET по-человечески.
+ *
+ * Числа взяты из задания владельца и подтверждены на боевой станции: в журнале
+ * входа стоит «type: 4», и это постоплата.
+ */
+const ACCOUNT_TYPES: Record<number, string> = {
+  [-4]: 'безлимит',
+  0: 'по чеку',
+  1: 'обычный',
+  2: 'школьный',
+  3: 'сотрудник',
+  4: 'постоплата',
 }
 
 type PendingDevice = {
@@ -478,6 +495,7 @@ export function ArenaLiveTab(props: {
                 <th className="py-2 pl-4 pr-2 font-normal">Станция</th>
                 <th className="w-40 py-2 px-2 font-normal">Зона</th>
                 <th className="w-44 py-2 px-2 font-normal">Состояние</th>
+                <th className="w-44 py-2 px-2 font-normal">Кто за компьютером</th>
                 <th className="w-40 py-2 px-2 font-normal">Сигнал</th>
                 <th className="py-2 px-2 pr-4 font-normal">Что запущено</th>
               </tr>
@@ -496,6 +514,20 @@ export function ArenaLiveTab(props: {
                       >
                         {meta.label}
                       </span>
+                    </td>
+                    <td className="py-2 px-2 text-xs">
+                      {station.session ? (
+                        <span className="text-foreground">
+                          {station.session.login}
+                          {station.session.accountType !== null ? (
+                            <span className="ml-1 text-muted-foreground">
+                              ({ACCOUNT_TYPES[station.session.accountType] ?? `тип ${station.session.accountType}`})
+                            </span>
+                          ) : null}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </td>
                     <td className="py-2 px-2 text-xs text-muted-foreground">
                       {station.state === 'UNPROVISIONED' ? '—' : ago(station.lastSeenSecondsAgo)}
