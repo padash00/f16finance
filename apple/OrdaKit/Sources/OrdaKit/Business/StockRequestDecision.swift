@@ -10,9 +10,29 @@ struct StockRequestDecision: Encodable {
     let requestID: String
     let approved: Bool
     let comment: String?
+    /// Сколько одобрено по каждой позиции.
+    ///
+    /// Функция в базе требует строку на каждую позицию заявки: без неё решение
+    /// не проходит вовсе. Здесь строк не было, и одобрить заявку из телефона
+    /// было нельзя — кнопка просто возвращала ошибку.
+    ///
+    /// Кнопка «Одобрить» означает «как просили», поэтому количества берутся из
+    /// самой заявки. Частичное одобрение — правка количеств — пока только на
+    /// сайте.
+    let items: [Line]
+
+    struct Line: Encodable {
+        let requestItemID: String
+        let approvedQty: Double
+
+        enum CodingKeys: String, CodingKey {
+            case requestItemID = "request_item_id"
+            case approvedQty = "approved_qty"
+        }
+    }
 
     enum CodingKeys: String, CodingKey {
-        case action, approved
+        case action, approved, items
         case requestID = "requestId"
         case comment = "decision_comment"
     }

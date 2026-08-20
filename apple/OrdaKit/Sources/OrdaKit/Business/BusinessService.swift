@@ -1174,9 +1174,23 @@ public struct BusinessService: Sendable {
     /// Сервер делает это одной атомарной функцией — минусует со склада и
     /// плюсует на витрину, — поэтому решение нельзя разложить на два запроса.
     /// Требует `store-requests.approve` либо `store-requests.reject`.
-    public func decideStockRequest(id: String, approved: Bool, comment: String? = nil) async throws {
+    /// `lines` — позиции заявки: одобряем их в запрошенном количестве.
+    /// При отказе количества не нужны, там решение принимается целиком.
+    public func decideStockRequest(
+        id: String,
+        approved: Bool,
+        lines: [StockRequest.Line] = [],
+        comment: String? = nil
+    ) async throws {
         let body = try JSONEncoder().encode(
-            StockRequestDecision(requestID: id, approved: approved, comment: comment)
+            StockRequestDecision(
+                requestID: id,
+                approved: approved,
+                comment: comment,
+                items: approved
+                    ? lines.map { StockRequestDecision.Line(requestItemID: $0.id, approvedQty: $0.requested) }
+                    : []
+            )
         )
         _ = try await api.send(
             APIRequest(path: "/api/admin/inventory/requests", method: .post, body: body)

@@ -574,17 +574,41 @@ export async function POST(request: Request) {
     if (!requestId) return json({ error: 'request-id-required' }, 400)
     await ensureInventoryRequestAccess(supabase as any, requestId, inventoryScope)
 
+    // Строки решения: сколько по каждой позиции одобрено.
+    //
+    // Функция в базе требует строку на КАЖДУЮ позицию заявки — без неё
+    // падает с `inventory-request-decision-line-missing`. Страница склада их
+    // присылает (там количество можно править), а приложение — нет: там
+    // кнопка «Одобрить» означает «как просили», и заявки из телефона не
+    // одобрялись вообще, с невнятной ошибкой.
+    //
+    // Нет строк и решение положительное — значит «одобрить как просили».
+    // Дочитываем количества сами.
+    let decisionItems: Array<{ request_item_id: string; approved_qty: number }> = Array.isArray(body.items)
+      ? body.items.map((item: any) => ({
+          request_item_id: String(item.request_item_id || '').trim(),
+          approved_qty: normalizeQty(item.approved_qty),
+        }))
+      : []
+
+    if (decisionItems.length === 0 && body.approved === true) {
+      const { data: requestedLines, error: linesError } = await supabase
+        .from('inventory_request_items')
+        .select('id, requested_qty')
+        .eq('request_id', requestId)
+      if (linesError) throw linesError
+      decisionItems = ((requestedLines || []) as any[]).map((line) => ({
+        request_item_id: String(line.id),
+        approved_qty: normalizeQty(line.requested_qty),
+      }))
+    }
+
     const decision = await decideInventoryRequest(supabase as any, {
       request_id: requestId,
       approved: body.approved === true,
       decision_comment: body.decision_comment || null,
       actor_user_id: actorUserId,
-      items: Array.isArray(body.items)
-        ? body.items.map((item: any) => ({
-            request_item_id: String(item.request_item_id || '').trim(),
-            approved_qty: normalizeQty(item.approved_qty),
-          }))
-        : [],
+      items: decisionItems,
     })
 
     await writeAuditLog(supabase as any, {

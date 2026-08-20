@@ -395,10 +395,13 @@ final class BusinessStore {
     private(set) var requestDecisionError: String?
 
     /// Одобрить или отклонить заявку точки.
+    ///
+    /// `lines` нужны при одобрении: сервер ждёт количество по каждой позиции.
+    /// Кнопка «Одобрить» означает «как просили» — количества берём из заявки.
     @discardableResult
-    func decideStockRequest(id: String, approved: Bool) async -> Bool {
+    func decideStockRequest(id: String, approved: Bool, lines: [StockRequest.Line] = []) async -> Bool {
         do {
-            try await service.decideStockRequest(id: id, approved: approved)
+            try await service.decideStockRequest(id: id, approved: approved, lines: lines)
             // Решение меняет остатки на складе и витрине — перечитываем всё
             // хозяйство, а не только список заявок.
             await loadStore()

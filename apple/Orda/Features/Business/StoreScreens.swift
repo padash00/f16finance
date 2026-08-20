@@ -470,7 +470,7 @@ struct RequestsScreen: View {
                 if canApprove {
                     result.append(
                         RowAction("Одобрить", icon: "checkmark.circle", tint: Theme.positive) {
-                            Task { await store.decideStockRequest(id: request.id, approved: true) }
+                            Task { await store.decideStockRequest(id: request.id, approved: true, lines: request.lines) }
                         }
                     )
                 }
@@ -545,7 +545,7 @@ private struct RequestDetail: View {
                                 }
                                 if canApprove {
                                     Button("Одобрить") {
-                                        Task { await store.decideStockRequest(id: request.id, approved: true) }
+                                        Task { await store.decideStockRequest(id: request.id, approved: true, lines: request.lines) }
                                     }
                                     .buttonStyle(PrimaryButtonStyle())
                                 }
