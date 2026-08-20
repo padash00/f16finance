@@ -76,6 +76,24 @@ export async function GET(request: Request) {
       return { data: out, error: null }
     }
 
+    // Сначала спрашиваем базу посчитать самой.
+    //
+    // Раньше сервер выкачивал каждую строку продажи за день, вчера, неделю и
+    // месяц — постранично по тысяче — и складывал их в приложении. На точке с
+    // сотней чеков в день это тысячи строк по сети ради четырёх чисел, и
+    // «Обзор» открывался секундами.
+    //
+    // Если функции в базе ещё нет (миграция не применена), молча считаем
+    // по-старому: экран важнее скорости.
+    const { data: summaryRow } = await supabase.rpc('dashboard_sales_summary', {
+      p_company_ids: allowedCompanyIds && allowedCompanyIds.length > 0 ? allowedCompanyIds : [],
+      p_today: todayStr,
+      p_yesterday: yesterdayStr,
+      p_week_start: weekAgoStr,
+      p_month_start: monthStart,
+    })
+    const summary = (summaryRow as any) || null
+
     // Run all queries in parallel
     const [
       todaySalesRes,
@@ -86,26 +104,31 @@ export async function GET(request: Request) {
       lowStockRes,
       topItemsRes,
     ] = await Promise.all([
-      // Today totals
-      fetchAllPages((from, to) =>
-        applyPointSaleCompanyScope(
-          supabase.from('point_sales').select('total_amount, cash_amount, kaspi_amount, card_amount, online_amount').eq('sale_date', todayStr).order('id').range(from, to),
-        ),
-      ),
-      // Yesterday totals
-      fetchAllPages((from, to) =>
-        applyPointSaleCompanyScope(supabase.from('point_sales').select('total_amount').eq('sale_date', yesterdayStr).order('id').range(from, to)),
-      ),
-      // Week sales by day
-      fetchAllPages((from, to) =>
-        applyPointSaleCompanyScope(
-          supabase.from('point_sales').select('sale_date, total_amount').gte('sale_date', weekAgoStr).lte('sale_date', todayStr).order('sale_date').order('id').range(from, to),
-        ),
-      ),
-      // Month total
-      fetchAllPages((from, to) =>
-        applyPointSaleCompanyScope(supabase.from('point_sales').select('total_amount').gte('sale_date', monthStart).order('id').range(from, to)),
-      ),
+      // Строки чеков нужны только когда база не посчитала сама.
+      summary
+        ? Promise.resolve({ data: [], error: null })
+        : fetchAllPages((from, to) =>
+            applyPointSaleCompanyScope(
+              supabase.from('point_sales').select('total_amount, cash_amount, kaspi_amount, card_amount, online_amount').eq('sale_date', todayStr).order('id').range(from, to),
+            ),
+          ),
+      summary
+        ? Promise.resolve({ data: [], error: null })
+        : fetchAllPages((from, to) =>
+            applyPointSaleCompanyScope(supabase.from('point_sales').select('total_amount').eq('sale_date', yesterdayStr).order('id').range(from, to)),
+          ),
+      summary
+        ? Promise.resolve({ data: [], error: null })
+        : fetchAllPages((from, to) =>
+            applyPointSaleCompanyScope(
+              supabase.from('point_sales').select('sale_date, total_amount').gte('sale_date', weekAgoStr).lte('sale_date', todayStr).order('sale_date').order('id').range(from, to),
+            ),
+          ),
+      summary
+        ? Promise.resolve({ data: [], error: null })
+        : fetchAllPages((from, to) =>
+            applyPointSaleCompanyScope(supabase.from('point_sales').select('total_amount').gte('sale_date', monthStart).order('id').range(from, to)),
+          ),
       // Recent 10 sales
       applyPointSaleCompanyScope(
         supabase
@@ -155,27 +178,48 @@ export async function GET(request: Request) {
 
     // Today stats
     const todaySales = todaySalesRes.data || []
-    const todayTotal = todaySales.reduce((s: number, r: any) => s + (r.total_amount || 0), 0)
-    const todayCash = todaySales.reduce((s: number, r: any) => s + (r.cash_amount || 0), 0)
-    const todayKaspi = todaySales.reduce((s: number, r: any) => s + (r.kaspi_amount || 0), 0)
-    const todayCard = todaySales.reduce((s: number, r: any) => s + (r.card_amount || 0), 0)
-    const todayOnline = todaySales.reduce((s: number, r: any) => s + (r.online_amount || 0), 0)
-    const todayCount = todaySales.length
+    const num = (value: unknown) => Number(value ?? 0) || 0
+    const todayTotal = summary
+      ? num(summary.today?.total)
+      : todaySales.reduce((s: number, r: any) => s + (r.total_amount || 0), 0)
+    const todayCash = summary
+      ? num(summary.today?.cash)
+      : todaySales.reduce((s: number, r: any) => s + (r.cash_amount || 0), 0)
+    const todayKaspi = summary
+      ? num(summary.today?.kaspi)
+      : todaySales.reduce((s: number, r: any) => s + (r.kaspi_amount || 0), 0)
+    const todayCard = summary
+      ? num(summary.today?.card)
+      : todaySales.reduce((s: number, r: any) => s + (r.card_amount || 0), 0)
+    const todayOnline = summary
+      ? num(summary.today?.online)
+      : todaySales.reduce((s: number, r: any) => s + (r.online_amount || 0), 0)
+    const todayCount = summary ? num(summary.today?.count) : todaySales.length
 
     // Yesterday
-    const yesterdayTotal = (yesterdaySalesRes.data || []).reduce((s: number, r: any) => s + (r.total_amount || 0), 0)
+    const yesterdayTotal = summary
+      ? num(summary.yesterday)
+      : (yesterdaySalesRes.data || []).reduce((s: number, r: any) => s + (r.total_amount || 0), 0)
 
     // Change %
     const changePercent = yesterdayTotal > 0 ? Math.round(((todayTotal - yesterdayTotal) / yesterdayTotal) * 100) : null
 
     // Week by day
     const weekByDay: Record<string, number> = {}
-    for (const r of weekSalesRes.data || []) {
-      weekByDay[r.sale_date] = (weekByDay[r.sale_date] || 0) + (r.total_amount || 0)
+    if (summary) {
+      for (const row of (summary.week || []) as any[]) {
+        weekByDay[String(row.date)] = num(row.total)
+      }
+    } else {
+      for (const r of weekSalesRes.data || []) {
+        weekByDay[r.sale_date] = (weekByDay[r.sale_date] || 0) + (r.total_amount || 0)
+      }
     }
 
     // Month total
-    const monthTotal = (monthSalesRes.data || []).reduce((s: number, r: any) => s + (r.total_amount || 0), 0)
+    const monthTotal = summary
+      ? num(summary.month)
+      : (monthSalesRes.data || []).reduce((s: number, r: any) => s + (r.total_amount || 0), 0)
 
     // Top items
     const itemSums: Record<string, { name: string; qty: number }> = {}

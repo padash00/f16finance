@@ -577,7 +577,12 @@ final class BusinessStore {
     }
 
     func loadSalary() async {
-        isLoadingSalary = true
+        // Сначала прошлая ведомость: экран открывается сразу и обновляется на
+        // ходу. Цифры недели меняются медленно, а ожидание видно каждый раз.
+        if salary == nil, let cached = await service.cachedSalary(weekStart: salaryWeek) {
+            salary = cached
+        }
+        isLoadingSalary = salary == nil
         defer { isLoadingSalary = false }
         do {
             salary = try await service.salary(weekStart: salaryWeek)

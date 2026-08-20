@@ -280,6 +280,18 @@ public struct BusinessService: Sendable {
         return response.data
     }
 
+    /// Недельная ведомость из кэша — то, что владелец видел в прошлый раз.
+    ///
+    /// Ведомость собирается из смен, начислений и выплат всей команды и
+    /// приходит не мгновенно. Пустой экран со скелетом при каждом входе — то,
+    /// из-за чего приложение кажется медленнее, чем оно есть.
+    public func cachedSalary(weekStart: String) async -> SalaryWeekReport? {
+        let response: Envelope<SalaryWeekReport>? = await api.cached(
+            APIRequest(path: "/api/admin/salary", query: ["view": "weekly", "weekStart": weekStart])
+        )
+        return response?.data
+    }
+
     /// Зарплата административного состава на текущую половину месяца.
     ///
     /// Отдельный запрос, потому что деньги считаются иначе: у оператора неделя
