@@ -78,6 +78,17 @@ struct ArenaScreen: View {
         .toolbar { LogoutToolbarItem() }
         .refreshable { await arena.load() }
         .task { await arena.load() }
+        // Зал живёт своей жизнью: сессии запускают и закрывают из операторской
+        // программы на точке, гости уходят раньше времени. Часы на экране идут
+        // сами, а вот занятость станций надо переспрашивать — иначе на телефоне
+        // висит расстановка получасовой давности.
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(20))
+                if Task.isCancelled { break }
+                await arena.load()
+            }
+        }
         .onReceive(clock) { _ in arena.tick() }
         .sheet(item: $starting) { station in
             ArenaStartSheet(station: station)

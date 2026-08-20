@@ -61,6 +61,16 @@ struct ApprovalsScreen: View {
         .toolbar { LogoutToolbarItem() }
         .task { await store.loadPending() }
         .refreshable { await store.loadPending() }
+        // Расходы заводят на точках, пока владелец смотрит на этот экран.
+        // Ждать, пока он догадается потянуть вниз, значит держать человека у стойки:
+        // оператор стоит и ждёт решения.
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(30))
+                if Task.isCancelled { break }
+                await store.loadPending()
+            }
+        }
         .sheet(item: $declining) { expense in
             declineSheet(expense)
         }

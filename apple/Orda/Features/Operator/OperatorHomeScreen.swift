@@ -82,6 +82,17 @@ struct OperatorHomeScreen: View {
         .task {
             if store.hasOpenShift, sellsGoods, store.recentSales.isEmpty { await store.loadCatalog() }
         }
+        // Смена идёт не в телефоне: чеки пробивают на кассе точки, задачи
+        // ставят с сайта. Экран, открытый на стойке, обязан догонять их сам —
+        // иначе оператор смотрит на цифры десятиминутной давности и верит им.
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(30))
+                if Task.isCancelled { break }
+                await store.loadShift()
+                await cabinet.loadOverview()
+            }
+        }
     }
 
     /// То, что требует внимания, и деньги недели.
