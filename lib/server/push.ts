@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { isApnsToken, sendApnsPush, type ApnsPayload } from '@/lib/server/apns'
+import { writeNotificationLogSafe } from '@/lib/server/audit'
 import type { AdminSupabaseClient } from '@/lib/server/supabase'
 
 type ExpoMessage = { to: string; title: string; body: string; data?: Record<string, unknown>; sound?: 'default' }
@@ -76,6 +77,30 @@ export async function sendPush(
     sendExpoPush(expoTokens, payload),
     sendApnsPush(apnsTokens, apnsPayload),
   ])
+
+  // Записываем каждую отправку.
+  //
+  // На вопрос «уведомления вообще работают?» ответить было нечем: отправки
+  // нигде не оставляли следа. Не пришло — и непонятно, сервер не отправил,
+  // Apple не принял или телефон не показал. Теперь первые два случая видны:
+  // сколько адресов было, сколько ушло и что ответил Apple.
+  //
+  // Молча и в стороне: журнал не должен мешать отправке.
+  void writeNotificationLogSafe({
+    channel: 'push',
+    recipient: `устройств: ${cleaned.length}`,
+    status: apnsResult.configError ? 'failed' : apnsResult.sent > 0 ? 'sent' : 'skipped',
+    payload: {
+      title: payload.title,
+      tokens: cleaned.length,
+      apple: apnsTokens.length,
+      expo: expoTokens.length,
+      sent: apnsResult.sent,
+      invalid: apnsResult.invalidTokens.length,
+      config_error: apnsResult.configError || null,
+      reasons: apnsResult.reasons.slice(0, 5),
+    },
+  })
 
   // Наверх отдаём и причины отказа: без них поломка настройки выглядит как
   // успешная отправка, и разбираться в «уведомления не приходят» нечем.

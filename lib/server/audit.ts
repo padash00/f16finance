@@ -293,6 +293,22 @@ export async function writeAuditLog(client: any, entry: AuditEntry) {
   }
 }
 
+/**
+ * Записать отправку, не мешая самой отправке.
+ *
+ * Тот же приём, что у `writeSystemErrorLogSafe`: журнал полезен, но ради него
+ * не стоит ронять уведомление — и звать его с готовым клиентом на каждой
+ * стороне неудобно.
+ */
+export async function writeNotificationLogSafe(entry: NotificationEntry) {
+  try {
+    if (!hasAdminSupabaseCredentials()) return
+    await writeNotificationLog(createAdminSupabaseClient(), entry)
+  } catch (error) {
+    console.warn('Notification log write skipped', error)
+  }
+}
+
 export async function writeNotificationLog(client: any, entry: NotificationEntry) {
   try {
     const { error } = await client.from('notification_log').insert([
