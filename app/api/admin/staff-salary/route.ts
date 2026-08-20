@@ -165,6 +165,38 @@ async function recomputeDebtMirrors(supabase: any, itemRows: any[]) {
 }
 
 /**
+ * Постраничное чтение таблицы: PostgREST отдаёт максимум тысячу строк за раз и
+ * молча обрезает остальное. Для выборок без верхней границы по дате — истории
+ * корректировок, расходов — это значит однажды тихо потерять старые строки.
+ */
+async function fetchAllPages(
+  supabase: any,
+  params: {
+    table: string
+    columns: string
+    order: string
+    scope?: (query: any) => any
+  },
+): Promise<any[]> {
+  const pageSize = 1000
+  const rows: any[] = []
+  for (let page = 0; page < 20; page += 1) {
+    let query = supabase
+      .from(params.table)
+      .select(params.columns)
+      .order(params.order, { ascending: false })
+      .range(page * pageSize, page * pageSize + pageSize - 1)
+    if (params.scope) query = params.scope(query)
+    const { data, error } = await query
+    if (error) throw error
+    const batch = (data ?? []) as any[]
+    rows.push(...batch)
+    if (batch.length < pageSize) break
+  }
+  return rows
+}
+
+/**
  * Активные позиции сканера с пагинацией: PostgREST молча режет выборку на
  * 1000 строк, из-за чего свежие позиции не попадали в ответ (карточка «−0»).
  * sinceISO — нижняя граница created_at (обычно дата последней выплаты).
@@ -312,11 +344,17 @@ export async function GET(req: Request) {
       .order('full_name')
     if (allowedStaffIds) staffQuery.in('id', allowedStaffIds)
 
-    const adjQuery = supabase
-      .from('staff_adjustments')
-      .select('id, staff_id, kind, amount, date, comment, status, created_at, closed_by_payment_id, source_payment_id, closed_at')
-      .order('created_at', { ascending: false })
-    if (allowedStaffIds) adjQuery.in('staff_id', allowedStaffIds)
+    // Корректировки — за всё время: непогашенный долг может быть и прошлогодним,
+    // отрезать по дате нельзя. Но выборка без границ упирается в тысячу строк,
+    // которую PostgREST отдаёт молча, — и самые старые долги однажды начали бы
+    // тихо пропадать из расчёта. Поэтому дочитываем страницами.
+    const adjQuery = () =>
+      fetchAllPages(supabase, {
+        table: 'staff_adjustments',
+        columns: 'id, staff_id, kind, amount, date, comment, status, created_at, closed_by_payment_id, source_payment_id, closed_at',
+        order: 'created_at',
+        scope: (query: any) => (allowedStaffIds ? query.in('staff_id', allowedStaffIds) : query),
+      })
 
     const paymentsQuery = supabase
       .from('staff_salary_payments')
@@ -333,33 +371,26 @@ export async function GET(req: Request) {
       .order('name')
     if (allowedOperatorIds) adminOpsQuery.in('id', allowedOperatorIds)
 
-    const expensesQuery = supabase
-      .from('expenses')
-      .select('id, source_type, source_id')
-      .in('source_type', ['salary_payment', 'salary_advance'])
-    if (scope.allowedCompanyIds) expensesQuery.in('company_id', scope.allowedCompanyIds)
-
     const rulesQuery = supabase
       .from('operator_salary_rules')
       .select('company_code, shift_type, base_per_shift')
       .eq('is_active', true)
     if (allowedCompanyCodes) rulesQuery.in('company_code', allowedCompanyCodes)
 
-    const [staffRes, adjRes, paymentsRes, rulesRes, adminOpsRes, expensesRes] = await Promise.all([
+    const [staffRes, adjustmentsAll, paymentsRes, rulesRes, adminOpsRes] = await Promise.all([
       staffQuery,
-      adjQuery,
+      adjQuery(),
       paymentsQuery,
       rulesQuery,
       adminOpsQuery,
-      expensesQuery,
     ])
 
     if (staffRes.error) throw staffRes.error
-    if (adjRes.error) throw adjRes.error
     if (paymentsRes.error) throw paymentsRes.error
     if (rulesRes.error) throw rulesRes.error
     if (adminOpsRes.error) throw adminOpsRes.error
-    if (expensesRes.error) throw expensesRes.error
+
+    const adjRes = { data: adjustmentsAll, error: null as any }
 
     // Все staff (вкл. архивных) — для матчинга operator↔staff, чтобы уволенный
     // сотрудник не «воскресал» как виртуальный из operators.is_admin_staff.
@@ -470,56 +501,6 @@ export async function GET(req: Request) {
       item_ids: accum.itemIds,
     }))
 
-    const paymentRows = (paymentsRes.data ?? []) as any[]
-    const adjustmentRows = (adjRes.data ?? []) as any[]
-    const expenseRows = (expensesRes.data ?? []) as any[]
-
-    const expectedPaymentSourceIds = new Set<string>()
-    for (const payment of paymentRows) {
-      const staffId = String(payment?.staff_id || '')
-      const payDate = String(payment?.pay_date || '')
-      const slot = String(payment?.slot || '')
-      const monthRange = monthRangeFromDate(payDate)
-      if (!staffId || !monthRange || !slot) continue
-      expectedPaymentSourceIds.add(`staff:${staffId}:month:${monthRange.monthKey}:slot:${slot}`)
-    }
-    const actualPaymentSourceIds = new Set<string>(
-      expenseRows
-        .filter((row) => String(row?.source_type || '') === 'salary_payment')
-        .map((row) => String(row?.source_id || ''))
-        .filter((value) => value.startsWith('staff:')),
-    )
-    const missingPaymentExpenseCount = [...expectedPaymentSourceIds].filter((id) => !actualPaymentSourceIds.has(id)).length
-    const orphanPaymentExpenseCount = [...actualPaymentSourceIds].filter((id) => !expectedPaymentSourceIds.has(id)).length
-
-    const expectedAdvanceSourceIds = new Set<string>(
-      adjustmentRows
-        .filter((row) =>
-          String(row?.kind || '') === 'advance' &&
-          String(row?.status || 'active') === 'active' &&
-          !row?.source_payment_id
-        )
-        .map((row) => `staff-adjustment:${String(row?.id || '')}`)
-        .filter((value) => value !== 'staff-adjustment:'),
-    )
-    const actualAdvanceSourceIds = new Set<string>(
-      expenseRows
-        .filter((row) => String(row?.source_type || '') === 'salary_advance')
-        .map((row) => String(row?.source_id || ''))
-        .filter((value) => value.startsWith('staff-adjustment:')),
-    )
-    const missingAdvanceExpenseCount = [...expectedAdvanceSourceIds].filter((id) => !actualAdvanceSourceIds.has(id)).length
-    const orphanAdvanceExpenseCount = [...actualAdvanceSourceIds].filter((id) => !expectedAdvanceSourceIds.has(id)).length
-
-    const debtPaymentsQuery = supabase
-      .from('staff_debt_payments')
-      .select('id, staff_id, amount, comment, paid_at, status')
-      .eq('status', 'active')
-      .order('paid_at', { ascending: false })
-    // Изоляция: платежи только по сотрудникам своей орг (staff_debt_payments.staff_id).
-    if (allowedStaffIds) debtPaymentsQuery.in('staff_id', allowedStaffIds)
-    const { data: debtPaymentsData } = await debtPaymentsQuery
-
     // Сводка для телефона: те же деньги, но уже посчитанные.
     //
     // Полный ответ — это пять сырых массивов, из которых сумму «к выплате»
@@ -557,6 +538,76 @@ export async function GET(req: Request) {
         },
       })
     }
+
+
+    // Сверка «выплата ↔ расход» и список погашений долга нужны только
+    // ведомости на сайте. Телефон просит посчитанную сводку и до сюда не
+    // доходит — а раньше доходил и ждал, пока сервер прочитает всю историю
+    // расходов по зарплате ради баннера, которого в приложении нет.
+    const paymentRows = (paymentsRes.data ?? []) as any[]
+    const adjustmentRows = (adjRes.data ?? []) as any[]
+
+    const expensesQuery = () =>
+      fetchAllPages(supabase, {
+        table: 'expenses',
+        columns: 'id, source_type, source_id',
+        order: 'created_at',
+        scope: (query: any) => {
+          const scoped = query.in('source_type', ['salary_payment', 'salary_advance'])
+          return scope.allowedCompanyIds ? scoped.in('company_id', scope.allowedCompanyIds) : scoped
+        },
+      })
+
+    const debtPaymentsQuery = () => {
+      const query = supabase
+        .from('staff_debt_payments')
+        .select('id, staff_id, amount, comment, paid_at, status')
+        .eq('status', 'active')
+        .order('paid_at', { ascending: false })
+      // Изоляция: платежи только по сотрудникам своей орг (staff_debt_payments.staff_id).
+      if (allowedStaffIds) query.in('staff_id', allowedStaffIds)
+      return query
+    }
+
+    const [expenseRows, debtPaymentsRes] = await Promise.all([expensesQuery(), debtPaymentsQuery()])
+    const debtPaymentsData = debtPaymentsRes.data
+
+    const expectedPaymentSourceIds = new Set<string>()
+    for (const payment of paymentRows) {
+      const staffId = String(payment?.staff_id || '')
+      const payDate = String(payment?.pay_date || '')
+      const slot = String(payment?.slot || '')
+      const monthRange = monthRangeFromDate(payDate)
+      if (!staffId || !monthRange || !slot) continue
+      expectedPaymentSourceIds.add(`staff:${staffId}:month:${monthRange.monthKey}:slot:${slot}`)
+    }
+    const actualPaymentSourceIds = new Set<string>(
+      expenseRows
+        .filter((row) => String(row?.source_type || '') === 'salary_payment')
+        .map((row) => String(row?.source_id || ''))
+        .filter((value) => value.startsWith('staff:')),
+    )
+    const missingPaymentExpenseCount = [...expectedPaymentSourceIds].filter((id) => !actualPaymentSourceIds.has(id)).length
+    const orphanPaymentExpenseCount = [...actualPaymentSourceIds].filter((id) => !expectedPaymentSourceIds.has(id)).length
+
+    const expectedAdvanceSourceIds = new Set<string>(
+      adjustmentRows
+        .filter((row) =>
+          String(row?.kind || '') === 'advance' &&
+          String(row?.status || 'active') === 'active' &&
+          !row?.source_payment_id
+        )
+        .map((row) => `staff-adjustment:${String(row?.id || '')}`)
+        .filter((value) => value !== 'staff-adjustment:'),
+    )
+    const actualAdvanceSourceIds = new Set<string>(
+      expenseRows
+        .filter((row) => String(row?.source_type || '') === 'salary_advance')
+        .map((row) => String(row?.source_id || ''))
+        .filter((value) => value.startsWith('staff-adjustment:')),
+    )
+    const missingAdvanceExpenseCount = [...expectedAdvanceSourceIds].filter((id) => !actualAdvanceSourceIds.has(id)).length
+    const orphanAdvanceExpenseCount = [...actualAdvanceSourceIds].filter((id) => !expectedAdvanceSourceIds.has(id)).length
 
     return json({
       ...(debugMode
