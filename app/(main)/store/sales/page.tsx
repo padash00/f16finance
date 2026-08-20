@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { useApiCache } from '@/lib/client/use-api-cache'
+import { useToday } from '@/lib/client/use-today'
 import { usePersistentState } from '@/lib/client/use-persistent-state'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { PageSkeleton } from '@/components/skeleton'
@@ -88,7 +89,9 @@ const TABS: { key: Tab; label: string }[] = [
 const EMBED_TABS: Tab[] = ['abc', 'forecast']
 
 export default function SalesMonitorPage() {
-  const today = almatyDate()
+  // «Сегодня» — после гидрации: страница готовится заранее, и вычисленная при
+  // отрисовке дата попала бы в HTML как день сборки. Подробности в useToday.
+  const today = useToday('Asia/Almaty')
 
   // Память фильтров: вкладка, точка, период. Даты (from/to) — обычный state:
   // относительные пресеты («сегодня», «7 дней») пересчитываются от текущей даты
@@ -96,8 +99,8 @@ export default function SalesMonitorPage() {
   const [tab, setTab] = usePersistentState<Tab>('storeSales.tab', 'monitor')
   const [preset, setPreset] = usePersistentState<Preset>('storeSales.preset', 'today')
   const [savedRange, setSavedRange] = usePersistentState<{ from: string; to: string } | null>('storeSales.range', null)
-  const [from, setFrom] = useState(today)
-  const [to, setTo] = useState(today)
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
   const [companyId, setCompanyId] = usePersistentState('storeSales.companyId', '')
   const { storeCompanyId } = useStoreScope()
   const [companies, setCompanies] = useState<Company[]>([])
@@ -110,7 +113,9 @@ export default function SalesMonitorPage() {
   const seenIds = useRef<Set<string>>(new Set())
   const [flashIds, setFlashIds] = useState<Set<string>>(new Set())
 
-  const isToday = to === today
+  // Пока даты нет, «сегодня ли это» неизвестно — и живого монитора быть не
+  // может: он привязан к текущему дню.
+  const isToday = !!today && to === today
   const isEmbed = EMBED_TABS.includes(tab)
   const isProduct = tab === 'best' || tab === 'profit' || tab === 'stock'
 
@@ -123,10 +128,12 @@ export default function SalesMonitorPage() {
   const qsParams = new URLSearchParams({ from, to })
   if (effectiveCompanyId) qsParams.set('company_id', effectiveCompanyId)
   const qs = qsParams.toString()
+  // Без дат запрашивать нечего: период ещё не восстановлен.
+  const hasPeriod = !!from && !!to
   const { data: mon, loading: monLoading, error: monError, refresh: loadMonitor } =
-    useApiCache<MonData>(`/api/admin/sales-monitor?${qs}`, { enabled: tab === 'monitor' })
+    useApiCache<MonData>(`/api/admin/sales-monitor?${qs}`, { enabled: hasPeriod && tab === 'monitor' })
   const { data: prod, loading: prodLoading, error: prodError, refresh: loadProducts } =
-    useApiCache<ProdData>(`/api/admin/product-analytics?${qs}`, { enabled: isProduct })
+    useApiCache<ProdData>(`/api/admin/product-analytics?${qs}`, { enabled: hasPeriod && isProduct })
   const loading = tab === 'monitor' ? monLoading : prodLoading
   const error = tab === 'monitor' ? monError : isProduct ? prodError : null
 
@@ -163,13 +170,16 @@ export default function SalesMonitorPage() {
   // произвольный диапазон берётся из savedRange. Срабатывает после загрузки
   // localStorage (usePersistentState меняет preset/savedRange) и при смене пресета.
   useEffect(() => {
+    // Относительные пресеты считаются от сегодняшней даты — ждём, пока она
+    // появится после гидрации.
+    if (!today) return
     if (preset === 'custom') {
       if (savedRange?.from && savedRange?.to) { setFrom(savedRange.from); setTo(savedRange.to) }
       return
     }
     applyPreset(preset)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preset, savedRange])
+  }, [preset, savedRange, today])
 
   useEffect(() => {
     fetch('/api/admin/companies', { cache: 'no-store' }).then((r) => r.json()).then((j) => setCompanies(j.data || [])).catch(() => {})
