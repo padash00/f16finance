@@ -123,6 +123,15 @@ struct AddExpenseSheet: View {
                         .foregroundStyle(Theme.textDim)
                 }
 
+                if picksCogs {
+                    // Владельцу выбор оставлен, но молча — значит однажды
+                    // товар придёт и накладной, и расходом, а себестоимость
+                    // удвоится.
+                    Text("Себестоимость обычно приходит из приёмки. Заводите её здесь, только если накладной нет — иначе товар посчитается дважды.")
+                        .font(Typography.caption)
+                        .foregroundStyle(Theme.warning)
+                }
+
                 FieldLabel("Что купили")
                 TextField("Например: картриджи для принтера", text: $itemName)
                     .textFieldStyle(.plain)
@@ -319,10 +328,25 @@ struct AddExpenseSheet: View {
         Binding(get: { isPickerOpen }, set: { isPickerOpen = $0 })
     }
 
-    /// Себестоимость руками заводит только владелец, и то через приёмку —
-    /// сервер отвергает такие категории у всех остальных.
+    /// Кому сервер разрешит завести себестоимость руками.
+    ///
+    /// Обычно её заводит приёмка, где есть накладная, и для остальных статья
+    /// закрыта. Но владельцу сервер её принимает — и на сайте она у него в
+    /// списке есть. В приложении список фильтровался у всех подряд, поэтому
+    /// владелец видел подпись «здесь не заводятся» на своё же право.
+    private var canPickCogs: Bool {
+        guard let session = access?.session else { return false }
+        return session.isSuperAdmin || session.staffRole == "owner"
+    }
+
     private var selectableCategories: [ExpenseCategory] {
-        (model?.categories ?? []).filter { !$0.isCogs }
+        let all = model?.categories ?? []
+        return canPickCogs ? all : all.filter { !$0.isCogs }
+    }
+
+    /// Выбрана себестоимость — напоминаем, где ей место.
+    private var picksCogs: Bool {
+        selectableCategories.first { $0.id == categoryID }?.isCogs == true
     }
 
     private var draft: ExpenseDraft {
