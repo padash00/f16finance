@@ -156,13 +156,34 @@ function Get-MachineIdentity {
         Write-Warn "MAC получить не удалось: $($_.Exception.Message)"
     }
 
-    # Номер рабочей станции SENET. Где он лежит — пока неизвестно; это один из
-    # вопросов теста на PC21. Пробуем переменную окружения и не настаиваем.
+    # Номер рабочей станции SENET.
+    #
+    # Найден разведкой на станции 21: SENET (вендор Enestech) держит его в
+    # State.json своей рабочей службы, рядом с MAC. Это официальное место, а не
+    # догадка, — поэтому читаем прямо оттуда.
     $wsNum = $null
-    foreach ($name in @('SENET_WS_NUM', 'WS_NUM', 'WORKSTATION_NUMBER')) {
-        $value = [Environment]::GetEnvironmentVariable($name, 'Machine')
-        if (-not $value) { $value = [Environment]::GetEnvironmentVariable($name) }
-        if ($value -and $value -match '^\d+$') { $wsNum = [int]$value; break }
+    $statePath = "$env:ProgramData\Enestech\Service\State.json"
+    if (Test-Path $statePath) {
+        try {
+            $state = Get-Content $statePath -Raw -ErrorAction Stop | ConvertFrom-Json
+            if ($state.ws_num -ne $null -and "$($state.ws_num)" -match '^\d+$') {
+                $wsNum = [int]$state.ws_num
+            }
+            # MAC оттуда же надёжнее: сетевых карт бывает несколько, а SENET
+            # знает, какая из них считается адресом станции.
+            if ($state.mac -and -not $mac) { $mac = "$($state.mac)" }
+        } catch {
+            Write-Warn "State.json не прочитался: $($_.Exception.Message)"
+        }
+    }
+
+    # Запасной путь на случай другой версии SENET.
+    if (-not $wsNum) {
+        foreach ($name in @('SENET_WS_NUM', 'WS_NUM', 'WORKSTATION_NUMBER')) {
+            $value = [Environment]::GetEnvironmentVariable($name, 'Machine')
+            if (-not $value) { $value = [Environment]::GetEnvironmentVariable($name) }
+            if ($value -and $value -match '^\d+$') { $wsNum = [int]$value; break }
+        }
     }
 
     return @{

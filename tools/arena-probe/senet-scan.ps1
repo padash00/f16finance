@@ -275,6 +275,107 @@ foreach ($hive in @('HKLM:\SOFTWARE', 'HKLM:\SOFTWARE\WOW6432Node', 'HKCU:\SOFTW
     }
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+Head "9. КЛЮЧЕВЫЕ ФАЙЛЫ: СОДЕРЖИМОЕ С МАСКИРОВКОЙ"
+# ─────────────────────────────────────────────────────────────────────────────
+# Здесь единственное место, где печатаются значения, — и только для файлов,
+# где они заведомо не секрет: номер станции и её MAC.
+#
+# Для журналов печатается хвост с маскировкой: длинные строки из букв и цифр
+# заменяются многоточием, потому что именно так выглядят токены. Нам нужен
+# ФОРМАТ записи о входе, а не сам ключ доступа.
+
+function Hide-Secrets([string]$text) {
+    if (-not $text) { return $text }
+    # Длинные однородные последовательности — почти всегда токен или хэш.
+    $out = [regex]::Replace($text, '[A-Za-z0-9+/=_\-]{24,}', '<скрыто>')
+    # И всё, что идёт после слова-маркера.
+    $out = [regex]::Replace($out, '(?i)(token|password|secret|apikey|api_key|authorization|bearer)\s*[:=]\s*\S+', '$1=<скрыто>')
+    return $out
+}
+
+Line ""
+Line "  --- State.json (номер станции в SENET) ---"
+$statePath = "$env:ProgramData\Enestech\Service\State.json"
+if (Test-Path $statePath) {
+    try {
+        $state = Get-Content $statePath -Raw -ErrorAction Stop | ConvertFrom-Json
+        Line "      mac    = $($state.mac)"
+        Line "      ws_num = $($state.ws_num)"
+    } catch { Line "      не прочитался: $($_.Exception.Message)" }
+} else {
+    Line "      файла нет"
+}
+
+Line ""
+Line "  --- Session.json (служебное состояние) ---"
+$sessionPath = "$env:ProgramData\Enestech\Service\Session.json"
+if (Test-Path $sessionPath) {
+    try {
+        $raw = (Get-Content $sessionPath -Raw -ErrorAction Stop).Trim()
+        if ($raw.Length -eq 0) {
+            Line "      файл пуст"
+        } else {
+            Line "      $(Hide-Secrets $raw)"
+        }
+    } catch { Line "      не прочитался" }
+} else {
+    Line "      файла нет"
+}
+
+# Журналы: последние строки. Ищем, как выглядит запись о входе клиента.
+$logs = @(
+    'workstation-service.log',
+    'senet-credential.log',
+    'elauncher.log',
+    'lagent.log'
+)
+foreach ($logName in $logs) {
+    $logPath = "$env:ProgramData\Enestech\Logs\$logName"
+    Line ""
+    Line "  --- $logName (последние 30 строк) ---"
+    if (-not (Test-Path $logPath)) {
+        Line "      файла нет"
+        continue
+    }
+    try {
+        $tail = Get-Content $logPath -Tail 30 -ErrorAction Stop
+        foreach ($ln in $tail) {
+            $clean = Hide-Secrets $ln
+            if ($clean.Length -gt 300) { $clean = $clean.Substring(0, 300) + ' …' }
+            Line "      $clean"
+        }
+    } catch {
+        Line "      не прочитался: $($_.Exception.Message)"
+    }
+}
+
+# Отдельно — строки, где встречается имя вошедшего пользователя. Это самый
+# короткий путь к тому, как SENET записывает логин клиента.
+$me = $env:USERNAME
+Line ""
+Line "  --- строки журналов с именем текущего пользователя ---"
+if ($me) {
+    $hits = 0
+    foreach ($logName in $logs) {
+        $logPath = "$env:ProgramData\Enestech\Logs\$logName"
+        if (-not (Test-Path $logPath)) { continue }
+        try {
+            $found = Select-String -Path $logPath -Pattern ([regex]::Escape($me)) -SimpleMatch -ErrorAction SilentlyContinue |
+                Select-Object -Last 6
+            foreach ($f in $found) {
+                $clean = Hide-Secrets $f.Line
+                if ($clean.Length -gt 300) { $clean = $clean.Substring(0, 300) + ' …' }
+                Line "      [$logName : $($f.LineNumber)]  $clean"
+                $hits++
+            }
+        } catch { }
+    }
+    if ($hits -eq 0) { Line "      имя '$me' в журналах не встречается" }
+} else {
+    Line "      имя пользователя не определено"
+}
+
 Line ''
 Line "==================================================================="
 Line "Готово. Отчёт сохранён: $ReportPath"
