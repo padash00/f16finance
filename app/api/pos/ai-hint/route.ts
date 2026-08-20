@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { logAiUsageSafe } from '@/lib/ai/usage-tracker'
 import { addDaysISO, localDayISO } from '@/lib/core/time'
+import { fetchAllRows } from '@/lib/server/fetch-all-rows'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
@@ -38,29 +39,31 @@ export async function GET(request: Request) {
     const yesterday = addDaysISO(today, -1)
 
     // Fetch today's and yesterday's sales total
-    const [todayRes, yesterdayRes] = await Promise.all([
-      supabase
-        .from('point_sales')
-        .select('total_amount')
-        .eq('company_id', companyId)
-        .eq('sale_date', today),
-      supabase
-        .from('point_sales')
-        .select('total_amount')
-        .eq('company_id', companyId)
-        .eq('sale_date', yesterday),
-    ])
+    // Страницами: за день на бойкой точке чеков бывает больше тысячи, а
+    // PostgREST молча отдаёт первую тысячу. Подсказка говорила бы «выручка
+    // упала», когда она выросла.
+    const daySales = (day: string) =>
+      fetchAllRows<{ id: string; total_amount: number }>((from, to) =>
+        supabase
+          .from('point_sales')
+          .select('id, total_amount')
+          .eq('company_id', companyId)
+          .eq('sale_date', day)
+          .order('id')
+          .range(from, to),
+      )
 
-    const todayTotal = (todayRes.data || []).reduce((sum, row) => sum + Number(row.total_amount || 0), 0)
-    const yesterdayTotal = (yesterdayRes.data || []).reduce((sum, row) => sum + Number(row.total_amount || 0), 0)
+    const [todayRows, yesterdayRows] = await Promise.all([daySales(today), daySales(yesterday)])
+
+    const todayTotal = todayRows.reduce((sum, row) => sum + Number(row.total_amount || 0), 0)
+    const yesterdayTotal = yesterdayRows.reduce((sum, row) => sum + Number(row.total_amount || 0), 0)
     const changePercent = yesterdayTotal > 0
       ? Math.round(((todayTotal - yesterdayTotal) / yesterdayTotal) * 100)
       : 0
 
-    // Fetch today's sale IDs for this company
-    const todaySaleIds = (todayRes.data || []).length > 0
-      ? (await supabase.from('point_sales').select('id').eq('company_id', companyId).eq('sale_date', today)).data?.map((r) => r.id) || []
-      : []
+    // Чеки сегодняшнего дня — для разбора по товарам. Второй раз за теми же
+    // строками не ходим: их идентификаторы уже прочитаны выше.
+    const todaySaleIds = todayRows.map((row: any) => row.id).filter(Boolean)
 
     // Fetch top 3 items sold today
     let topItemsText = 'нет продаж'

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { fetchAllRows } from '@/lib/server/fetch-all-rows'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { requireCapability } from '@/lib/server/capabilities'
 import { resolveCompanyScope } from '@/lib/server/organizations'
@@ -28,36 +29,39 @@ export async function GET(request: Request) {
       isSuperAdmin: access.isSuperAdmin,
     })
 
-    // Build sales query
-    let salesQuery = supabase
-      .from('point_sales')
-      .select('id, sold_at, shift, payment_method, cash_amount, kaspi_amount, card_amount, online_amount, total_amount, operator_id, items:point_sale_items(item_id, quantity, unit_price, total_price, inventory_items(name))')
-      .eq('sale_date', date)
-      .order('sold_at', { ascending: true })
-
-    if (shift) salesQuery = salesQuery.eq('shift', shift)
-    if (locationId) salesQuery = salesQuery.eq('location_id', locationId)
-    if (companyScope.allowedCompanyIds !== null) {
-      if (companyScope.allowedCompanyIds.length === 0) {
-        return json({
-          ok: true,
-          data: {
-            date,
-            shift: shift || 'all',
-            totals: { amount: 0, cash: 0, kaspi: 0, card: 0, online: 0, count: 0, avg_check: 0 },
-            top_items: [],
-            by_hour: Array.from({ length: 24 }, (_, h) => ({ hour: h, amount: 0 })),
-            sales: [],
-          },
-        })
-      }
-      salesQuery = salesQuery.in('company_id', companyScope.allowedCompanyIds)
+    // Пустой скоуп — своих точек нет, показывать нечего. Проверяем до
+    // запроса: иначе `in('company_id', [])` вернул бы пусто и без объяснения.
+    if (companyScope.allowedCompanyIds !== null && companyScope.allowedCompanyIds.length === 0) {
+      return json({
+        ok: true,
+        data: {
+          date,
+          shift: shift || 'all',
+          totals: { amount: 0, cash: 0, kaspi: 0, card: 0, online: 0, count: 0, avg_check: 0 },
+          top_items: [],
+          by_hour: Array.from({ length: 24 }, (_, h) => ({ hour: h, amount: 0 })),
+          sales: [],
+        },
+      })
     }
 
-    const { data: sales, error: salesError } = await salesQuery
-    if (salesError) throw salesError
+    // Продажи за день. Читаем страницами: точка с потоком чеков легко даёт
+    // больше тысячи за смену, а PostgREST молча отдаёт первую тысячу — итог
+    // в отчёте оказался бы меньше настоящего, и понять это было бы не по чему.
+    const allSales = await fetchAllRows<any>((from, to) => {
+      let salesQuery = supabase
+        .from('point_sales')
+        .select('id, sold_at, shift, payment_method, cash_amount, kaspi_amount, card_amount, online_amount, total_amount, operator_id, items:point_sale_items(item_id, quantity, unit_price, total_price, inventory_items(name))')
+        .eq('sale_date', date)
+        .order('sold_at', { ascending: true })
+        .order('id')
 
-    const allSales = sales || []
+      if (shift) salesQuery = salesQuery.eq('shift', shift)
+      if (locationId) salesQuery = salesQuery.eq('location_id', locationId)
+      if (companyScope.allowedCompanyIds) salesQuery = salesQuery.in('company_id', companyScope.allowedCompanyIds)
+
+      return salesQuery.range(from, to)
+    })
 
     // Aggregate totals
     const totalAmount = allSales.reduce((s: number, r: any) => s + Number(r.total_amount || 0), 0)

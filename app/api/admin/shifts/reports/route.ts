@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
 import { resolveCompanyScope } from '@/lib/server/organizations'
+import { fetchAllRows } from '@/lib/server/fetch-all-rows'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -175,12 +176,19 @@ export async function GET(request: Request) {
     // Живые суммы для ОТКРЫТЫХ смен (closing_cash/kaspi ещё пустые → берём из продаж).
     const openShiftIds = shifts.filter((s) => s.status === 'open').map((s) => s.id)
     if (openShiftIds.length > 0) {
-      const { data: openSales } = await supabase
-        .from('point_sales')
-        .select('shift_id, cash_amount, kaspi_amount, total_amount')
-        .in('shift_id', openShiftIds)
+      // Страницами: открытая смена на потоке даёт больше тысячи чеков, а
+      // PostgREST отдаёт первую тысячу молча — «живая касса» показывала бы
+      // меньше, чем в ящике, и расхождение списали бы на оператора.
+      const openSales = await fetchAllRows<any>((from, to) =>
+        supabase
+          .from('point_sales')
+          .select('shift_id, cash_amount, kaspi_amount, total_amount')
+          .in('shift_id', openShiftIds)
+          .order('id')
+          .range(from, to),
+      )
       const byShift = new Map<string, { sales: number; cash: number; kaspi: number; count: number }>()
-      for (const r of (openSales || []) as any[]) {
+      for (const r of openSales) {
         const k = String(r.shift_id || '')
         if (!k) continue
         const a = byShift.get(k) || { sales: 0, cash: 0, kaspi: 0, count: 0 }
