@@ -32,12 +32,25 @@ export async function GET(request: Request) {
     let query = supabase
       .from('client_bookings')
       .select(
-        'id, company_id, customer_id, starts_at, ends_at, status, notes, source, created_at, updated_at, customer:customer_id(id, name, phone)',
+        'id, company_id, customer_id, station_id, station_name_snapshot, booking_group_id, contact_phone, contact_name, tariff_id, starts_at, ends_at, status, notes, source, created_at, updated_at, customer:customer_id(id, name, phone)',
       )
       .order('starts_at', { ascending: false })
       .limit(200)
 
     if (status) query = query.eq('status', status)
+
+    // Окно по датам: без него владелец видит последние двести броней вперемешку
+    // за все месяцы, а спрашивает он обычно про конкретный день.
+    const from = url.searchParams.get('from')
+    const to = url.searchParams.get('to')
+    if (from) query = query.gte('starts_at', from)
+    if (to) query = query.lte('starts_at', to)
+
+    // Только брони конкретных ПК: заявки из клиентского приложения без станции
+    // живут своей жизнью и в зале не отображаются.
+    if (url.searchParams.get('stations_only') === '1') {
+      query = query.not('station_id', 'is', null)
+    }
     if (companyScope.allowedCompanyIds !== null) {
       if (companyScope.allowedCompanyIds.length === 0) {
         return json({ ok: true, data: [] })
@@ -48,12 +61,48 @@ export async function GET(request: Request) {
     const { data, error } = await query
     if (error) throw error
 
-    const rows = (data || []).map((row: any) => ({
-      ...row,
-      customer: Array.isArray(row.customer) ? row.customer[0] || null : row.customer || null,
-    }))
+    const rows = (data || []).map((row: any) => {
+      const customer = Array.isArray(row.customer) ? row.customer[0] || null : row.customer || null
+      return {
+        ...row,
+        customer,
+        // Телефон и имя берутся из брони, а карточка клиента подставляется
+        // запасным вариантом: оператор бронирует по звонку, и человека в базе
+        // может не быть вовсе.
+        phone: row.contact_phone || customer?.phone || null,
+        name: row.contact_name || customer?.name || null,
+      }
+    })
 
-    return json({ ok: true, data: rows })
+    // Компания на пять ПК — одна бронь, а не пять строк. В тетради так и было,
+    // и в списке должно быть так же: иначе владелец увидит пять записей об
+    // одном звонке и решит, что вечер загружен вдвое сильнее.
+    const groups = new Map<string, any>()
+    const singles: any[] = []
+
+    for (const row of rows) {
+      if (!row.booking_group_id) {
+        singles.push({ ...row, stations: row.station_name_snapshot ? [row.station_name_snapshot] : [] })
+        continue
+      }
+      const existing = groups.get(row.booking_group_id)
+      if (existing) {
+        if (row.station_name_snapshot) existing.stations.push(row.station_name_snapshot)
+        existing.ids.push(row.id)
+      } else {
+        groups.set(row.booking_group_id, {
+          ...row,
+          ids: [row.id],
+          stations: row.station_name_snapshot ? [row.station_name_snapshot] : [],
+        })
+      }
+    }
+
+    const merged = [...singles, ...groups.values()].sort((a, b) =>
+      a.starts_at < b.starts_at ? 1 : -1,
+    )
+
+    return json({ ok: true, data: merged })
   } catch (error: any) {
     return json({ error: error?.message || 'client-bookings-admin-fetch-failed' }, 500)
   }

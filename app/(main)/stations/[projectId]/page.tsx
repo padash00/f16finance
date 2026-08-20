@@ -11,6 +11,7 @@ import {
   AlertTriangle, RefreshCw, TrendingUp, Calendar, Map, Search, Download, Paintbrush, Gamepad2, Layers, LayoutGrid, Activity,
 } from 'lucide-react'
 import { ArenaLiveTab } from '@/components/arena/live/arena-live-tab'
+import { ArenaBookingsTab } from '@/components/arena/bookings/arena-bookings-tab'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { PageSkeleton } from '@/components/skeleton'
 import {
@@ -1032,10 +1033,10 @@ function StationsPageContent() {
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'manage' | 'map' | 'analytics' | 'catalog' | 'settings' | 'live'>(() => {
+  const [activeTab, setActiveTab] = useState<'manage' | 'map' | 'analytics' | 'catalog' | 'settings' | 'live' | 'bookings'>(() => {
     if (typeof window === 'undefined') return 'manage'
     const t = new URLSearchParams(window.location.search).get('tab')
-    return t === 'map' || t === 'analytics' || t === 'catalog' || t === 'settings' || t === 'live' ? t : 'manage'
+    return t === 'map' || t === 'analytics' || t === 'catalog' || t === 'settings' || t === 'live' || t === 'bookings' ? t : 'manage'
   })
 
   const cellSize = 70
@@ -1208,7 +1209,7 @@ function StationsPageContent() {
 
   useEffect(() => {
     const t = searchParams.get('tab')
-    if (t === 'map' || t === 'analytics' || t === 'manage' || t === 'catalog' || t === 'settings' || t === 'live') setActiveTab(t)
+    if (t === 'map' || t === 'analytics' || t === 'manage' || t === 'catalog' || t === 'settings' || t === 'live' || t === 'bookings') setActiveTab(t)
     const af = searchParams.get('afrom')
     const at = searchParams.get('ato')
     if (af && isISODate(af)) setAnalyticsFrom(af)
@@ -1980,6 +1981,7 @@ function StationsPageContent() {
             <div className="flex gap-0 overflow-x-auto border-b border-border">
               {[
                 { id: 'live', label: 'Мониторинг', icon: Activity },
+                { id: 'bookings', label: 'Брони', icon: Calendar },
                 { id: 'manage', label: 'Управление', icon: Settings },
                 { id: 'catalog', label: 'Каталог игр', icon: Gamepad2 },
                 { id: 'map', label: 'Карта', icon: Map },
@@ -2726,6 +2728,13 @@ function StationsPageContent() {
           страницы: если он упадёт, карта, киоск, тарифы и управление
           продолжат работать.
         */}
+        {/*
+          Брони заводят операторы в своей программе; здесь владелец их видит.
+          Отдельная вкладка, а не часть карты: смотреть список по дню и
+          смотреть расстановку зала — разные задачи.
+        */}
+        {activeTab === 'bookings' && <ArenaBookingsTab companyId={companyId} />}
+
         {activeTab === 'live' && (
           <ArenaLiveTab
             projectId={projectId}
