@@ -507,8 +507,30 @@ final class BusinessStore {
         }
     }
 
+    /// Загрузка, которая не должна ронять экран, но и не должна молчать.
+    ///
+    /// Здесь стояло `try?`: отказ сервера — нет права, устаревшая сборка,
+    /// сломанный запрос — превращался в пустой список без единого слова.
+    /// Человек видел «ничего нет» и не мог отличить это от «сервер отказал».
+    ///
+    /// Старые данные при отказе остаются — это по-прежнему важнее пустоты, —
+    /// но причина попадает в ошибку своего раздела и доходит до экрана.
+    private func attempt<T>(_ work: () async throws -> T, into keyPath: ReferenceWritableKeyPath<BusinessStore, APIError?>) async -> T? {
+        do {
+            let value = try await work()
+            self[keyPath: keyPath] = nil
+            return value
+        } catch let apiError as APIError {
+            self[keyPath: keyPath] = apiError
+            return nil
+        } catch {
+            self[keyPath: keyPath] = .transport(message: error.localizedDescription)
+            return nil
+        }
+    }
+
     func taskComments(taskID: String) async -> [TaskComment] {
-        (try? await service.taskComments(taskID: taskID)) ?? []
+        await attempt({ try await service.taskComments(taskID: taskID) }, into: \.tasksError) ?? []
     }
 
     func addTaskComment(taskID: String, content: String) async -> String? {
@@ -632,7 +654,7 @@ final class BusinessStore {
     private(set) var myTasks: [TeamTask] = []
 
     func loadMyTasks() async {
-        myTasks = (try? await service.myTasks()) ?? myTasks
+        myTasks = await attempt({ try await service.myTasks() }, into: \.tasksError) ?? myTasks
     }
 
     func loadTasks() async {
@@ -776,9 +798,9 @@ final class BusinessStore {
     private(set) var revisionActs: [RevisionAct] = []
 
     func loadRevisionActs() async {
-        // Молча: акты — дополнение к списку ревизий, и их отказ не должен
-        // прятать сам список.
-        revisionActs = (try? await service.auditActs()) ?? revisionActs
+        // Отказ по актам не прячет сам список ревизий — но и не молчит:
+        // причина уходит в ошибку раздела.
+        revisionActs = await attempt({ try await service.auditActs() }, into: \.storeError) ?? revisionActs
     }
 
     /// Отменить открытый акт. Возвращает текст ошибки или `nil`.
@@ -830,7 +852,7 @@ final class BusinessStore {
 
         isLoadingMovements = movements.isEmpty
         defer { isLoadingMovements = false }
-        movements = (try? await service.storeMovements(scope: movementsScope)) ?? movements
+        movements = await attempt({ try await service.storeMovements(scope: movementsScope) }, into: \.storeError) ?? movements
     }
 
     func loadRevisions() async {

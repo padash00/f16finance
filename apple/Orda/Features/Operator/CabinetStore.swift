@@ -134,10 +134,33 @@ final class CabinetStore {
         }
     }
 
+    /// Загрузка, которая не должна ронять экран, но и не должна молчать.
+    ///
+    /// Здесь стояло `try?`: отказ сервера — нет права, устаревшая сборка,
+    /// сломанный запрос — превращался в пустой экран без единого слова. Человек
+    /// видел «ничего нет» и не мог отличить это от «сервер отказал», а сказать,
+    /// что именно не работает, было нечем.
+    ///
+    /// Старые данные при отказе остаются на месте — это по-прежнему важнее
+    /// пустоты, — но причина теперь доходит до экрана.
+    private func attempt<T>(_ work: () async throws -> T) async -> T? {
+        do {
+            let value = try await work()
+            error = nil
+            return value
+        } catch let apiError as APIError {
+            error = apiError.operatorMessage
+            return nil
+        } catch {
+            self.error = error.localizedDescription
+            return nil
+        }
+    }
+
     func loadTasks() async {
         isLoadingTasks = true
         defer { isLoadingTasks = false }
-        tasks = (try? await service.tasks()) ?? tasks
+        tasks = await attempt { try await service.tasks() } ?? tasks
     }
 
     /// Какую неделю смотрим. Понедельник, «2026-08-17».
@@ -170,7 +193,7 @@ final class CabinetStore {
     }
 
     func loadSalary() async {
-        salary = (try? await service.salary(weekStart: salaryWeek)) ?? salary
+        salary = await attempt { try await service.salary(weekStart: salaryWeek) } ?? salary
     }
 
     /// Какую неделю графика смотрим.
@@ -189,7 +212,7 @@ final class CabinetStore {
     }
 
     func loadSchedule() async {
-        schedule = (try? await service.schedule(weekStart: scheduleWeek)) ?? schedule
+        schedule = await attempt { try await service.schedule(weekStart: scheduleWeek) } ?? schedule
     }
 
     /// Объяснение правила или текст ошибки — одним значением, чтобы экран не
@@ -226,7 +249,7 @@ final class CabinetStore {
 
     /// Молча: отказ здесь означает «не старший», и жаловаться не на что.
     func loadLeadDesk() async {
-        leadDesk = (try? await service.leadDesk()) ?? leadDesk
+        leadDesk = await attempt { try await service.leadDesk() } ?? leadDesk
     }
 
     func submitLeadProposal(
@@ -288,7 +311,7 @@ final class CabinetStore {
     }
 
     func loadIncidents() async {
-        incidents = (try? await service.incidents()) ?? incidents
+        incidents = await attempt { try await service.incidents() } ?? incidents
     }
 
     func loadKnowledge() async {
