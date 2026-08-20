@@ -63,6 +63,10 @@ $$;
 comment on function public.dashboard_sales_summary is
   'Суммы продаж для «Обзора»: день, вчера, неделя по дням, месяц. Считает база, а не приложение.';
 
--- Индекс под этот запрос: выборка всегда по точке и диапазону дат.
-create index if not exists idx_point_sales_company_date
-  on public.point_sales(company_id, sale_date);
+-- Индекс под этот запрос — по точке и диапазону дат — уже есть:
+-- `idx_point_sales_company_sale_date` из 20260629_perf_indexes.sql.
+--
+-- Здесь стоял `create index if not exists idx_point_sales_company_date`, и он
+-- молча ничего не делал: имя было занято другим индексом — по created_at, из
+-- 20260417_performance_indexes.sql. `if not exists` сверяет имя, а не смысл,
+-- поэтому «индекс уже есть» и «индекс есть, но не тот» выглядят одинаково.
