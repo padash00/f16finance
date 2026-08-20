@@ -31,7 +31,11 @@ struct SessionClient: Sendable {
     }
 
     enum AuthError: LocalizedError, Equatable {
-        case invalidCredentials
+        /// `hint` — как сервер прочитал ввод: по логину или по почте. Операторы
+        /// входят по логину, сотрудники по почте, и решает наличие «@».
+        /// Оператор, набравший свою почту, получал «неверный логин или пароль»
+        /// без единой зацепки — и пробовал то же самое ещё раз.
+        case invalidCredentials(hint: String?)
         case rateLimited
         case notConfigured
         /// Сервер отвечает, но эндпоинта входа у него нет.
@@ -41,8 +45,8 @@ struct SessionClient: Sendable {
 
         var errorDescription: String? {
             switch self {
-            case .invalidCredentials:
-                "Неверный логин или пароль."
+            case let .invalidCredentials(hint):
+                hint ?? "Неверный логин или пароль."
             case .rateLimited:
                 "Слишком много попыток входа. Подождите пару минут."
             case .notConfigured:
@@ -180,7 +184,7 @@ struct SessionClient: Sendable {
             let payload = try? JSONDecoder().decode(ErrorResponse.self, from: data)
             switch http.statusCode {
             case 401:
-                throw AuthError.invalidCredentials
+                throw AuthError.invalidCredentials(hint: payload?.message)
             case 404:
                 throw AuthError.endpointMissing
             case 429:

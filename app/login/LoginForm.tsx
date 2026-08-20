@@ -43,7 +43,12 @@ type HostOrg = { name: string; slug: string } | null
 function translateSupabaseError(msg: string | null | undefined): string {
   if (!msg) return 'Не удалось войти'
   const m = msg.toLowerCase()
-  if (m.includes('invalid login credentials') || m.includes('invalid_credentials')) return 'Неверный email или пароль'
+  // Вкладка «Сотрудники» ждёт рабочую почту. Оператор, зашедший сюда со своим
+  // логином, получал «неверный email или пароль» и пробовал то же самое ещё
+  // раз — в журнале такие попытки идут парами по две-три секунды.
+  if (m.includes('invalid login credentials') || m.includes('invalid_credentials')) {
+    return 'Неверный email или пароль. Операторы входят на вкладке «Операторы» — по логину, без почты.'
+  }
   if (m.includes('email not confirmed')) return 'Email не подтверждён — проверьте почту'
   if (m.includes('user not found')) return 'Пользователь не найден'
   if (m.includes('email rate limit') || m.includes('rate limit')) return 'Слишком много попыток — подождите минуту'
@@ -204,7 +209,11 @@ export default function LoginForm({
         email: toOperatorAuthEmail(username),
         password,
       })
-      if (signInError) throw new Error('Неверный логин или пароль')
+      if (signInError) {
+        throw new Error(
+          'Неверный логин или пароль. Здесь вход по логину оператора — сотрудники входят на вкладке «Сотрудники», по рабочей почте.',
+        )
+      }
 
       const {
         data: { user: operatorUser },

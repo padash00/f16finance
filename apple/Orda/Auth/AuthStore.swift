@@ -371,7 +371,7 @@ final class AuthStore {
                 let refreshed = try await auth.refresh(refreshToken: refreshToken)
                 await MainActor.run { self.persist(refreshed) }
                 return .token(refreshed.accessToken)
-            } catch SessionClient.AuthError.invalidCredentials {
+            } catch SessionClient.AuthError.invalidCredentials(_) {
                 // 401 на продлении: сервер отозвал refresh-токен.
                 return .rejected
             } catch {
