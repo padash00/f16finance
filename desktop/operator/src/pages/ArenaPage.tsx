@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button'
 import WorkModeSwitch from '@/components/WorkModeSwitch'
 import { toastError, toastInfo } from '@/lib/toast'
 import * as api from '@/lib/api'
+import { BookingModal } from '@/components/BookingModal'
 import { useCashlessLabels } from '@/lib/use-cashless-labels'
 import { arenaExtensionMinutesFromPayment } from '../../../../lib/core/arena-extension-minutes'
 import { effectiveZoneExtensionHourly } from '../../../../lib/core/arena-zone-extension-hourly'
@@ -993,6 +994,7 @@ function ArenaMapView({
   tariffs,
   now,
   operators,
+  bookings,
   onStationClick,
 }: {
   zones: ArenaZone[]
@@ -1002,9 +1004,22 @@ function ArenaMapView({
   tariffs: ArenaTariff[]
   now: number
   operators: import('@/types').BootstrapOperator[]
+  /** Брони точки. Отдельный слой: к сессиям отношения не имеют. */
+  bookings: api.StationBooking[]
   onStationClick: (station: ArenaStation) => void
 }) {
   const sessionsByStation = new Map(sessions.map(s => [s.station_id, s]))
+
+  /** Ближайшая незакончившаяся бронь станции. */
+  const nextBookingByStation = new Map<string, api.StationBooking>()
+  for (const booking of bookings) {
+    if (!booking.stationId) continue
+    if (new Date(booking.endsAt).getTime() <= now) continue
+    const current = nextBookingByStation.get(booking.stationId)
+    if (!current || booking.startsAt < current.startsAt) {
+      nextBookingByStation.set(booking.stationId, booking)
+    }
+  }
   const stationsOnMap = stations.filter(s => s.grid_x != null && s.grid_y != null)
   const zonesOnMap = zones.filter(z => z.grid_x != null)
 
@@ -1101,12 +1116,21 @@ function ArenaMapView({
           const isExpired = occupied && remainingMs <= 0
           const isWarning = occupied && !isExpired && remainingMs < 5 * 60_000
 
+          // Бронь меняет вид свободной станции: оператор должен видеть, что
+          // сажать сюда надолго нельзя, ДО того как усадит человека.
+          const nextBooking = nextBookingByStation.get(station.id) ?? null
+          const bookedNow =
+            nextBooking &&
+            new Date(nextBooking.startsAt).getTime() <= now &&
+            new Date(nextBooking.endsAt).getTime() > now
+
           const stColor = !occupied ? '#10b981' : isExpired ? '#ef4444' : isWarning ? '#f59e0b' : '#f87171'
           const stBg = !occupied
-            ? 'rgba(16,185,129,0.15)'
+            ? (bookedNow ? 'rgba(139,92,246,0.22)' : nextBooking ? 'rgba(139,92,246,0.10)' : 'rgba(16,185,129,0.15)')
             : isExpired ? 'rgba(239,68,68,0.28)' : isWarning ? 'rgba(245,158,11,0.24)' : 'rgba(248,113,113,0.22)'
           const stBorder = !occupied
-            ? 'rgba(16,185,129,0.6)' : isExpired ? 'rgba(239,68,68,0.85)' : isWarning ? 'rgba(245,158,11,0.75)' : 'rgba(248,113,113,0.55)'
+            ? (nextBooking ? 'rgba(139,92,246,0.75)' : 'rgba(16,185,129,0.6)')
+            : isExpired ? 'rgba(239,68,68,0.85)' : isWarning ? 'rgba(245,158,11,0.75)' : 'rgba(248,113,113,0.55)'
 
           return (
             <button
@@ -1133,8 +1157,23 @@ function ArenaMapView({
               >
                 {station.name}
               </span>
-              {!occupied && (
+              {!occupied && !nextBooking && (
                 <span className="font-semibold leading-none" style={{ fontSize: 8.5, letterSpacing: 0.5, color: '#34d399' }}>СВОБОДНО</span>
+              )}
+              {/*
+                Занятость по брони и по сессии — разные вещи, и подпись должна
+                это различать. «Бронь 21:00» означает, что место обещано, а не
+                что за ним сидят: до этого часа станцию можно занимать.
+              */}
+              {!occupied && nextBooking && (
+                <span
+                  className="font-semibold leading-none"
+                  style={{ fontSize: 8.5, letterSpacing: 0.3, color: '#c4b5fd' }}
+                >
+                  {bookedNow
+                    ? `БРОНЬ ДО ${new Date(nextBooking.endsAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`
+                    : `БРОНЬ ${new Date(nextBooking.startsAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`}
+                </span>
               )}
               {occupied && !isExpired && (
                 <span
@@ -1198,6 +1237,12 @@ export default function ArenaPage({
 
   // Modal state
   const [startTarget, setStartTarget] = useState<ArenaStation | null>(null)
+
+  // Брони. Живут отдельно от сессий и переживают закрытие смены: обещание
+  // клиенту не исчезает оттого, что оператор сдал смену.
+  const [bookingTarget, setBookingTarget] = useState<ArenaStation | null>(null)
+  const [bookings, setBookings] = useState<api.StationBooking[]>([])
+  const [bookingHorizon, setBookingHorizon] = useState<string | null>(null)
   const [manageTarget, setManageTarget] = useState<{ station: ArenaStation; session: ArenaSession } | null>(null)
   const [massStartTarget, setMassStartTarget] = useState<ArenaZone | null>(null)
   const [techTarget, setTechTarget] = useState<ArenaStation | null>(null)
@@ -1444,13 +1489,48 @@ export default function ArenaPage({
     setMassStartTarget(null)
   }
 
+  const loadBookings = useCallback(async () => {
+    try {
+      const result = await api.fetchBookings(config, session)
+      setBookings(result.bookings)
+      setBookingHorizon((result as any).horizonEnd ?? null)
+    } catch {
+      // Брони — вспомогательный слой. Их недоступность не должна мешать
+      // работе с залом: карта и сессии продолжают жить своей жизнью.
+    }
+  }, [config, session])
+
+  useEffect(() => {
+    void loadBookings()
+    const timer = setInterval(() => void loadBookings(), 60_000)
+    return () => clearInterval(timer)
+  }, [loadBookings])
+
+  /**
+   * Клик по станции.
+   *
+   * Свободная станция открывает БРОНЬ, а не запуск сессии. Сессии заводит
+   * SENET — он и есть источник правды о том, кто сейчас играет. Дублировать
+   * их вручную значит плодить в отчётах часы, которых не было.
+   *
+   * Существующие сессии по-прежнему открываются на управление: закрыть уже
+   * заведённую руками сессию должно быть чем.
+   */
   function handleStationClick(station: ArenaStation) {
     const activeSession = sessions.find(s => s.station_id === station.id)
     if (activeSession) {
       setManageTarget({ station, session: activeSession })
     } else {
-      setStartTarget(station)
+      setBookingTarget(station)
     }
+  }
+
+  /** Брони конкретной станции, которые ещё не закончились. */
+  function bookingsForStation(stationId: string): api.StationBooking[] {
+    const now = Date.now()
+    return bookings
+      .filter((b) => b.stationId === stationId && new Date(b.endsAt).getTime() > now)
+      .sort((a, b) => (a.startsAt < b.startsAt ? -1 : 1))
   }
 
   // ─── Group stations by zone (list view) ──────────────────────────────────────
@@ -1632,6 +1712,7 @@ export default function ArenaPage({
               tariffs={tariffs}
               now={now}
               operators={bootstrap.operators}
+              bookings={bookings}
               onStationClick={handleStationClick}
             />
             {/* Mini summary under map */}
@@ -1749,6 +1830,22 @@ export default function ArenaPage({
           onConfirm={handleStart}
           onCancel={() => setStartTarget(null)}
           loading={actionLoading}
+        />
+      )}
+
+      {bookingTarget && (
+        <BookingModal
+          config={config}
+          session={session}
+          station={bookingTarget}
+          tariffs={tariffs}
+          existing={bookingsForStation(bookingTarget.id)}
+          horizonEnd={bookingHorizon}
+          onDone={() => {
+            setBookingTarget(null)
+            void loadBookings()
+          }}
+          onCancel={() => setBookingTarget(null)}
         />
       )}
 

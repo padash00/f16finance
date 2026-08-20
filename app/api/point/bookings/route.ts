@@ -19,6 +19,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 
+import { checkBookingHorizon, horizonRefusalText, operationalDayEnd } from '@/lib/core/booking-horizon'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requirePointDevice } from '@/lib/server/point-devices'
 import { requireCurrentOpenShiftId } from '@/lib/server/point-shifts'
@@ -110,6 +111,9 @@ export async function GET(request: Request) {
     return json({
       ok: true,
       serverTime: new Date().toISOString(),
+      // Докуда этой смене разрешено бронировать. Интерфейс подставит это в
+      // выбор времени, чтобы оператор не упирался в отказ вслепую.
+      horizonEnd: operationalDayEnd(new Date()).toISOString(),
       bookings: (data || []).map((row: any) => ({
         id: String(row.id),
         stationId: row.station_id ? String(row.station_id) : null,
@@ -182,6 +186,24 @@ export async function POST(request: Request) {
 
     if (!(endsAt > startsAt)) {
       return json({ error: 'invalid-window', message: 'Конец брони должен быть позже начала.' }, 400)
+    }
+
+    // Горизонт: не дальше конца текущих операционных суток.
+    //
+    // Дневная смена вправе занять и ночь — ночь входит в те же сутки. Ночная
+    // упирается в утро: следующий день принадлежит другим людям, и раздавать
+    // за них обязательства нельзя. Проверка стоит на сервере, потому что
+    // интерфейс можно обойти, а обещание клиенту — нет.
+    const horizon = checkBookingHorizon(startsAt, endsAt, new Date())
+    if (!horizon.ok) {
+      return json(
+        {
+          error: 'beyond-horizon',
+          message: horizonRefusalText(horizon),
+          horizonEnd: horizon.horizonEnd.toISOString(),
+        },
+        409,
+      )
     }
 
     // Станция обязана принадлежать этой точке.

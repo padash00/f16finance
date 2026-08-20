@@ -1112,6 +1112,111 @@ export async function logArenaTech(
   )
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// БРОНИРОВАНИЕ СТАНЦИЙ
+// ─────────────────────────────────────────────────────────────────────────────
+// Бронь и сессия — разные вещи. Бронь это обещание на будущее, сессия — факт
+// использования сейчас. Ни одна из функций ниже сессию не запускает и не
+// трогает: иначе в отчётах появились бы часы, которых не было.
+//
+// Брони не привязаны к смене: закрытие смены их не касается, они остаются до
+// своего времени. Оператор сдал смену — обещание клиенту никуда не делось.
+
+export type StationBooking = {
+  id: string
+  stationId: string | null
+  stationName: string | null
+  startsAt: string
+  endsAt: string
+  status: string
+  phone: string | null
+  name: string | null
+  customerId: string | null
+  tariffId: string | null
+  notes: string | null
+}
+
+export async function fetchBookings(
+  config: AppConfig,
+  session: OperatorSession,
+  params?: { from?: string; to?: string },
+): Promise<{ serverTime: string; bookings: StationBooking[] }> {
+  const query = new URLSearchParams()
+  if (params?.from) query.set('from', params.from)
+  if (params?.to) query.set('to', params.to)
+  const suffix = query.toString() ? `?${query}` : ''
+
+  const data = await request<{ ok: boolean; serverTime: string; bookings: StationBooking[] }>(
+    config,
+    'GET',
+    `/api/point/bookings${suffix}`,
+    undefined,
+    operatorHeaders(session),
+  )
+  return { serverTime: data.serverTime, bookings: data.bookings || [] }
+}
+
+export type PhoneLookup = {
+  phone: string
+  known: boolean
+  name: string | null
+  customer: { id: string; name: string | null; since: string } | null
+  stats: { total: number; completed: number; cancelled: number }
+  history: Array<{ id: string; stationName: string | null; startsAt: string; endsAt: string; status: string }>
+}
+
+/** «Этот номер уже звонил» — до создания брони, во время разговора. */
+export async function lookupBookingPhone(
+  config: AppConfig,
+  session: OperatorSession,
+  phone: string,
+): Promise<PhoneLookup> {
+  return await request<PhoneLookup>(
+    config,
+    'GET',
+    `/api/point/bookings/lookup?phone=${encodeURIComponent(phone)}`,
+    undefined,
+    operatorHeaders(session),
+  )
+}
+
+export async function createBooking(
+  config: AppConfig,
+  session: OperatorSession,
+  payload: {
+    stationId: string
+    startsAt: string
+    endsAt: string
+    phone: string
+    name?: string | null
+    tariffId?: string | null
+    notes?: string | null
+  },
+): Promise<{ bookingId: string; stationName: string; knownCustomer: { id: string; name: string | null } | null }> {
+  return await request(
+    config,
+    'POST',
+    '/api/point/bookings',
+    { action: 'create', ...payload },
+    operatorHeaders(session),
+  )
+}
+
+export async function cancelBooking(
+  config: AppConfig,
+  session: OperatorSession,
+  bookingId: string,
+  reason?: string | null,
+): Promise<{ ok: boolean }> {
+  return await request(
+    config,
+    'POST',
+    '/api/point/bookings',
+    { action: 'cancel', bookingId, reason: reason || null },
+    operatorHeaders(session),
+  )
+}
+
 export async function startArenaSession(
   config: AppConfig,
   session: OperatorSession,
