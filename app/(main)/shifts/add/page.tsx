@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useToday } from '@/lib/client/use-today'
 import { CalendarPlus } from 'lucide-react'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { Card } from '@/components/ui/card'
@@ -25,14 +26,6 @@ type Operator = {
   is_active: boolean
 }
 
-const todayISO = () => {
-  const d = new Date()
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
-
 export default function AddShiftPage() {
   const { can } = useCapabilities()
   const router = useRouter()
@@ -42,13 +35,20 @@ export default function AddShiftPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const [date, setDate] = useState(todayISO())
+  // Дата — после гидрации: страница готовится заранее, во время сборки, и
+  // «сегодня» в готовом HTML было бы днём сборки — то есть форма предлагала бы
+  // поставить смену на прошедшую дату. Подробности в useToday.
+  const [date, setDate] = useState('')
   const [companyId, setCompanyId] = useState<string>('')
   const [operatorName, setOperatorName] = useState('')
   const [shiftType, setShiftType] = useState<'day' | 'night'>('day')
   const [comment, setComment] = useState('')
 
-  const today = todayISO()
+  const today = useToday()
+
+  useEffect(() => {
+    if (today) setDate((current) => current || today)
+  }, [today])
 
   useEffect(() => {
     const loadCompanies = async () => {
@@ -102,7 +102,7 @@ export default function AddShiftPage() {
     }
 
     // только сегодня и в будущее
-    if (date < today) {
+    if (today && date < today) {
       setError(`Нельзя ставить смену на прошедшую дату (${today} и дальше)`)
       setSaving(false)
       return

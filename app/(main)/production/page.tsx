@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { useToday } from '@/lib/client/use-today'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { TableSkeleton } from '@/components/skeleton'
 import { DatePicker } from '@/components/ui/date-picker'
@@ -67,9 +68,19 @@ export default function ProductionPage() {
   const [isSemiFinished, setIsSemiFinished] = useState(false)
 
   // анализ продаж
-  const todayISO = new Date().toISOString().slice(0, 10)
-  const [anFrom, setAnFrom] = useState(todayISO)
-  const [anTo, setAnTo] = useState(todayISO)
+  //
+  // Дата — после гидрации: страница готовится заранее, во время сборки, и
+  // вычисленное при отрисовке «сегодня» попало бы в готовый HTML как день
+  // сборки. Подробности в useToday.
+  const todayISO = useToday()
+  const [anFrom, setAnFrom] = useState('')
+  const [anTo, setAnTo] = useState('')
+
+  useEffect(() => {
+    if (!todayISO || anFrom) return
+    setAnFrom(todayISO)
+    setAnTo(todayISO)
+  }, [todayISO, anFrom])
   const [analysis, setAnalysis] = useState<any>(null)
   const [anLoading, setAnLoading] = useState(false)
   const [showJournal, setShowJournal] = useState(false)
@@ -146,6 +157,8 @@ export default function ProductionPage() {
   }, [])
 
   const runAnalysis = useCallback(async () => {
+    // Без периода запрашивать нечего: он появится сразу после гидрации.
+    if (!anFrom || !anTo) return
     setAnLoading(true); setErr(null)
     try {
       const p = new URLSearchParams({ from: anFrom, to: anTo })

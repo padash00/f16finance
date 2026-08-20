@@ -38,6 +38,7 @@ import {
   Users,
 } from 'lucide-react'
 
+import { useToday } from '@/lib/client/use-today'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
@@ -1077,10 +1078,24 @@ export default function SalesKpiPage() {
   // Период задаётся месяцем. Произвольные даты остаются доступны, но по
   // умолчанию страница показывает целый месяц: так поправка на месяц и смены в
   // таблице говорят об одном и том же отрезке.
-  const [month, setMonth] = useState(currentMonthKey())
+  // Месяц — после гидрации: страница готовится заранее, во время сборки, и
+  // вычисленный при отрисовке месяц попал бы в готовый HTML как месяц сборки.
+  // Подробности в useToday.
+  const today = useToday()
+  const [month, setMonth] = useState('')
   const [customRange, setCustomRange] = useState(false)
-  const [from, setFrom] = useState(monthBounds(currentMonthKey()).from)
-  const [to, setTo] = useState(monthBounds(currentMonthKey()).to)
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
+
+  // Первый месяц — текущий; дальше человек выбирает сам.
+  useEffect(() => {
+    if (!today || month) return
+    const key = today.slice(0, 7)
+    const bounds = monthBounds(key)
+    setMonth(key)
+    setFrom(bounds.from)
+    setTo(bounds.to)
+  }, [today, month])
   const [companyId, setCompanyId] = useState<string>('')
   const [openShift, setOpenShift] = useState<string | null>(null)
   const [exporting, setExporting] = useState<'pdf' | 'xlsx' | null>(null)
@@ -1104,7 +1119,8 @@ export default function SalesKpiPage() {
   const query = new URLSearchParams({ from, to })
   if (companyId) query.set('company_id', companyId)
 
-  const apiKey = `/api/admin/sales-kpi?${query.toString()}`
+  // Без периода запрашивать нечего: он появится сразу после гидрации.
+  const apiKey = from && to ? `/api/admin/sales-kpi?${query.toString()}` : null
   const { data, error, loading, refreshing, refresh } = useApi<{ data: ApiData }>(apiKey)
 
   const payload = data?.data
@@ -1373,7 +1389,7 @@ export default function SalesKpiPage() {
           companyId={payload.company.id}
           companyName={payload.company.name}
           onClose={() => setShowSettings(false)}
-          onSaved={() => mutateApi(apiKey)}
+          onSaved={() => { if (apiKey) mutateApi(apiKey) }}
         />
       ) : null}
 

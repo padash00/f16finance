@@ -12,6 +12,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
+import { useToday } from '@/lib/client/use-today'
 import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
@@ -163,8 +164,18 @@ export default function TaxPage() {
     if (typeof window === 'undefined') return false
     return localStorage.getItem('tax_include_extra') === '1'
   })
-  const [dateFrom, setDateFrom] = useState(startOfYearISO())
-  const [dateTo, setDateTo] = useState(todayISO())
+  // Период — после гидрации: страница готовится заранее, во время сборки, и
+  // «сегодня» с «началом года» попали бы в готовый HTML из дня сборки.
+  // Подробности в useToday.
+  const today = useToday()
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+
+  useEffect(() => {
+    if (!today || dateTo) return
+    setDateFrom(`${today.slice(0, 4)}-01-01`)
+    setDateTo(today)
+  }, [today, dateTo])
   // Raw incomes для гибкого расчёта по company × payment_type
   const [incomeRows, setIncomeRows] = useState<Array<{ date: string; company_id: string | null; cash_amount: number; kaspi_amount: number; online_amount: number; card_amount: number }>>([])
   const [companies, setCompanies] = useState<Array<{ id: string; name: string; show_in_structure?: boolean; code?: string | null }>>([])
@@ -253,6 +264,8 @@ export default function TaxPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // Без периода запрашивать нечего: он появится сразу после гидрации.
+    if (!dateFrom || !dateTo) return
     void load()
   }, [dateFrom, dateTo])
 

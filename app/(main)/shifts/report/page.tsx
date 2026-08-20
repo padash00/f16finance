@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useState, useCallback } from 'react'
+import { useToday } from '@/lib/client/use-today'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -80,9 +81,16 @@ function pad2(n: number) {
 }
 
 export default function ShiftReportPage() {
-  const today = new Date().toISOString().split('T')[0]
+  // Дата — после гидрации: страница готовится заранее, во время сборки, и
+  // «сегодня» в готовом HTML было бы днём сборки — отчёт открывался бы за
+  // давно прошедший день. Подробности в useToday.
+  const today = useToday()
 
-  const [date, setDate] = useState(today)
+  const [date, setDate] = useState('')
+
+  useEffect(() => {
+    if (today) setDate((current) => current || today)
+  }, [today])
   const [shift, setShift] = useState<'' | 'day' | 'night'>('')
   const [locationId, setLocationId] = useState('')
   const [companyId, setCompanyId] = useState('')
@@ -113,6 +121,8 @@ export default function ShiftReportPage() {
   }, [])
 
   const loadReport = useCallback(async () => {
+    // Без даты запрашивать нечего: она появится сразу после гидрации.
+    if (!date) return
     setLoading(true)
     setError(null)
     try {
