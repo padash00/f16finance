@@ -147,6 +147,7 @@ function Write-Err($text)  { Write-Host "  $text" -ForegroundColor Red;      Wri
 #>
 function Get-MachineIdentity {
     $mac = $null
+    $stateMac = $null
     try {
         $adapter = Get-CimInstance Win32_NetworkAdapterConfiguration -ErrorAction Stop |
                    Where-Object { $_.IPEnabled -eq $true -and $_.MACAddress } |
@@ -169,9 +170,16 @@ function Get-MachineIdentity {
             if ($state.ws_num -ne $null -and "$($state.ws_num)" -match '^\d+$') {
                 $wsNum = [int]$state.ws_num
             }
-            # MAC оттуда же надёжнее: сетевых карт бывает несколько, а SENET
-            # знает, какая из них считается адресом станции.
-            if ($state.mac -and -not $mac) { $mac = "$($state.mac)" }
+            # MAC из этого файла НЕ берём.
+            #
+            # На бездисковых клиентах State.json, судя по всему, вшит в
+            # мастер-образ: на разных машинах он показывает один и тот же
+            # адрес и один и тот же номер 1. Настоящий адрес сетевой карты
+            # машины отличается — именно он и нужен для опознания.
+            #
+            # Номер ws_num отсюда шлём как наблюдение, но не как истину: пока
+            # не подтверждено, что он у машин разный.
+            if ($state.mac) { $stateMac = "$($state.mac)" }
         } catch {
             Write-Warn "State.json не прочитался: $($_.Exception.Message)"
         }
@@ -190,6 +198,7 @@ function Get-MachineIdentity {
         hostname = $env:COMPUTERNAME
         mac      = $mac
         wsNum    = $wsNum
+        stateMac = $stateMac
     }
 }
 
@@ -467,6 +476,10 @@ function Invoke-Register {
     Write-Step "имя компьютера: $($identity.hostname)"
     Write-Step "MAC: $(if ($identity.mac) { $identity.mac } else { 'не получен' })"
     Write-Step "номер SENET: $(if ($identity.wsNum) { $identity.wsNum } else { 'не получен' })"
+    if ($identity.stateMac -and $identity.stateMac -ne $identity.mac) {
+        Write-Warn "MAC в State.json ($($identity.stateMac)) не совпадает с адресом сетевой карты"
+        Write-Warn "Похоже, файл вшит в образ — опознавать станцию по нему нельзя"
+    }
     Write-Step "загружен: $(Get-BootTime)"
     Write-Step "пользователь: $(Get-WindowsUserKind)"
     Write-Host ''
