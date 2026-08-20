@@ -292,3 +292,110 @@ export async function listWeeklyTelegramOperators(
     (operator) => !!operator.telegram_chat_id && (operator.role === 'admin' || operator.role === 'worker'),
   )
 }
+
+/**
+ * Данные для расчёта недели сразу по всем операторам.
+ *
+ * `listOperatorSalaryData` спрашивает базу про одного человека: доходы,
+ * корректировки, долги — три запроса. Ведомость за неделю зовёт её на каждого
+ * оператора, и три запроса превращаются в три десятка. Ответ базы быстрый, но
+ * дорога до неё одна и та же для каждого, и складывается она в секунды
+ * ожидания на пустом месте.
+ *
+ * Здесь те же три запроса, но на всех сразу — дальше расчёт разбирает строки
+ * по людям уже в памяти.
+ */
+export async function listOperatorsSalaryData(
+  supabase: AdminSupabaseClient,
+  params: {
+    operatorIds: string[]
+    dateFrom: string
+    dateTo: string
+    weekStart?: string
+    companyIds?: string[] | null
+  },
+) {
+  const operatorIds = Array.from(new Set(params.operatorIds.filter(Boolean)))
+  const empty = new Map<string, { incomes: SalaryIncomeRow[]; adjustments: SalaryAdjustmentRow[]; debts: SalaryDebtRow[] }>()
+  if (operatorIds.length === 0) return empty
+
+  const companyIds = params.companyIds === undefined || params.companyIds === null
+    ? null
+    : params.companyIds.filter(Boolean)
+
+  // PostgREST молча отдаёт первую тысячу строк. Неделя на всех операторов в
+  // тысячу укладывается с запасом, но «с запасом» — это не «никогда»: молча
+  // потерянные строки означают недоплату, поэтому дочитываем страницами.
+  const fetchAll = async <T,>(build: (from: number, to: number) => any): Promise<T[]> => {
+    const pageSize = 1000
+    const rows: T[] = []
+    for (let page = 0; page < 20; page += 1) {
+      const { data, error } = await build(page * pageSize, page * pageSize + pageSize - 1)
+      if (error) throw error
+      const batch = (data || []) as T[]
+      rows.push(...batch)
+      if (batch.length < pageSize) break
+    }
+    return rows
+  }
+
+  const [incomes, adjustments, debts] = await Promise.all([
+    fetchAll<SalaryIncomeRow>((from, to) =>
+      supabase
+        .from('incomes')
+        .select('date,company_id,shift,cash_amount,kaspi_amount,online_amount,card_amount,operator_id,operator_name')
+        .in('operator_id', operatorIds)
+        .gte('date', params.dateFrom)
+        .lte('date', params.dateTo)
+        .order('id')
+        .range(from, to),
+    ),
+    fetchAll<SalaryAdjustmentRow>((from, to) =>
+      supabase
+        .from('operator_salary_adjustments')
+        .select('operator_id,amount,kind,company_id,status')
+        .in('operator_id', operatorIds)
+        .gte('date', params.dateFrom)
+        .lte('date', params.dateTo)
+        .order('id')
+        .range(from, to),
+    ),
+    fetchAll<SalaryDebtRow>((from, to) => {
+      const base = supabase
+        .from('debts')
+        .select('operator_id,amount,company_id,status')
+        .in('operator_id', operatorIds)
+        .eq('status', 'active')
+      const scoped = params.weekStart
+        ? base.eq('week_start', params.weekStart)
+        : base.gte('week_start', params.dateFrom).lte('week_start', params.dateTo)
+      return scoped.order('id').range(from, to)
+    }),
+  ])
+
+  const result = empty
+  for (const id of operatorIds) result.set(id, { incomes: [], adjustments: [], debts: [] })
+
+  // Фильтр по точкам — тот же, что в `listOperatorSalaryData`: у дохода точка
+  // обязательна, у корректировки и долга может отсутствовать (общие для всех).
+  for (const row of incomes) {
+    const bucket = result.get(String(row.operator_id || ''))
+    if (!bucket) continue
+    if (companyIds && !companyIds.includes(String(row.company_id || ''))) continue
+    bucket.incomes.push(row)
+  }
+  for (const row of adjustments) {
+    const bucket = result.get(String(row.operator_id || ''))
+    if (!bucket) continue
+    if (companyIds && row.company_id && !companyIds.includes(String(row.company_id))) continue
+    bucket.adjustments.push(row)
+  }
+  for (const row of debts) {
+    const bucket = result.get(String(row.operator_id || ''))
+    if (!bucket) continue
+    if (companyIds && row.company_id && !companyIds.includes(String(row.company_id))) continue
+    bucket.debts.push(row)
+  }
+
+  return result
+}

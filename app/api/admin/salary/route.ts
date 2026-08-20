@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { addDaysISO } from '@/lib/core/date'
-import { calculateOperatorWeekSummary, type SalaryOperatorMeta } from '@/lib/domain/salary'
+import { calculateOperatorWeekSummary, type SalaryOperatorMeta, type SalaryWeekCompanyAllocation } from '@/lib/domain/salary'
 import { evaluatePointRules, type PointRuleRow } from '@/lib/domain/point-rules'
 import {
   ensureOrganizationOperatorAccess,
@@ -12,7 +12,7 @@ import {
 } from '@/lib/server/organizations'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
-import { listOperatorSalaryData, listSalaryReferenceData } from '@/lib/server/repositories/salary'
+import { listOperatorSalaryData, listOperatorsSalaryData, listSalaryReferenceData } from '@/lib/server/repositories/salary'
 import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
 import { requireAddon } from '@/lib/server/entitlements'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
@@ -341,6 +341,61 @@ async function safeDeleteExpenses(
   if (error) throw error
 }
 
+/**
+ * Совпадает ли сохранённая неделя с только что посчитанной.
+ *
+ * Ведомость пересчитывала неделю каждого оператора при каждом открытии
+ * страницы — и каждый раз писала результат обратно, даже когда он был тот же
+ * самый. Открыл владелец зарплаты трижды за утро — три десятка одинаковых
+ * записей в базу, и всё это время страница ждёт.
+ */
+function weekRowMatches(
+  existing: any,
+  next: {
+    weekEnd: string
+    summary: { grossAmount: number; bonusAmount: number; fineAmount: number; debtAmount: number; advanceAmount: number; netAmount: number }
+    paidAmount: number
+    remainingAmount: number
+    status: string
+    lastPaymentDate: string | null
+    lockedAt: string | null
+  },
+) {
+  if (!existing) return false
+  const same = (left: any, right: number) => roundMoney(Number(left || 0)) === roundMoney(right)
+  return (
+    String(existing.week_end || '') === next.weekEnd &&
+    same(existing.gross_amount, next.summary.grossAmount) &&
+    same(existing.bonus_amount, next.summary.bonusAmount) &&
+    same(existing.fine_amount, next.summary.fineAmount) &&
+    same(existing.debt_amount, next.summary.debtAmount) &&
+    same(existing.advance_amount, next.summary.advanceAmount) &&
+    same(existing.net_amount, next.summary.netAmount) &&
+    same(existing.paid_amount, next.paidAmount) &&
+    same(existing.remaining_amount, next.remainingAmount) &&
+    String(existing.status || '') === next.status &&
+    (existing.last_payment_date || null) === next.lastPaymentDate &&
+    // Заморозка недели — событие: если она наступает сейчас, запись нужна.
+    (existing.locked_at || null) === next.lockedAt
+  )
+}
+
+/** То же для разбивки по точкам: те же точки и те же суммы — писать нечего. */
+function allocationsMatch(existing: any[], next: SalaryWeekCompanyAllocation[], weekId: string) {
+  const stored = (existing || []).filter((row) => String(row.salary_week_id) === weekId)
+  if (stored.length !== next.length) return false
+  const byCompany = new Map(stored.map((row) => [String(row.company_id), row]))
+  return next.every((allocation) => {
+    const row = byCompany.get(allocation.companyId)
+    if (!row) return false
+    return (
+      roundMoney(Number(row.accrued_amount || 0)) === roundMoney(allocation.accruedAmount) &&
+      roundMoney(Number(row.share_ratio || 0)) === roundMoney(allocation.shareRatio) &&
+      roundMoney(Number(row.allocated_net_amount || 0)) === roundMoney(allocation.netAmount)
+    )
+  })
+}
+
 async function ensureSalaryWeekSnapshot(params: {
   supabase: ReturnType<typeof createAdminSupabaseClient>
   operatorId: string
@@ -350,6 +405,20 @@ async function ensureSalaryWeekSnapshot(params: {
   operator?: SalaryOperatorMeta | null
   references?: Awaited<ReturnType<typeof listSalaryReferenceData>>
   pointRules?: SalaryRulesBundle
+  /**
+   * Данные, уже прочитанные вызывающим на всех операторов сразу.
+   *
+   * Без них расчёт одной недели одного человека стоит пять запросов в базу, а
+   * ведомость зовёт его на каждого — три десятка операторов превращались в
+   * полторы сотни походов туда-обратно. Читает теперь вызывающий, одним
+   * запросом на всех; сюда приходит готовая доля этого человека.
+   */
+  prefetched?: {
+    data: Awaited<ReturnType<typeof listOperatorSalaryData>>
+    existingWeek: any | null
+    activePayments: any[]
+    allocations: any[]
+  }
 }) {
   const weekEnd = addDaysISO(params.weekStart, 6)
   const references = params.references || (await listSalaryReferenceData(params.supabase, { companyIds: params.companyIds || null }))
@@ -364,13 +433,15 @@ async function ensureSalaryWeekSnapshot(params: {
     if (operatorError) throw operatorError
     operator = mapOperatorMeta(operatorRow)
   }
-  const operatorData = await listOperatorSalaryData(params.supabase, {
-    operatorId: params.operatorId,
-    dateFrom: params.weekStart,
-    dateTo: weekEnd,
-    weekStart: params.weekStart,
-    companyIds: params.companyIds || null,
-  })
+  const operatorData =
+    params.prefetched?.data ||
+    (await listOperatorSalaryData(params.supabase, {
+      operatorId: params.operatorId,
+      dateFrom: params.weekStart,
+      dateTo: weekEnd,
+      weekStart: params.weekStart,
+      companyIds: params.companyIds || null,
+    }))
 
   const rawSummary = calculateOperatorWeekSummary({
     operatorId: params.operatorId,
@@ -389,25 +460,35 @@ async function ensureSalaryWeekSnapshot(params: {
     rules: params.pointRules?.weekRules || [],
   })
 
-  const { data: existingWeek, error: existingWeekError } = await params.supabase
-    .from('operator_salary_weeks')
-    .select(
-      'id, locked_at, status, gross_amount, bonus_amount, fine_amount, debt_amount, advance_amount, net_amount, paid_amount, remaining_amount, last_payment_date',
-    )
-    .eq('operator_id', params.operatorId)
-    .eq('week_start', params.weekStart)
-    .maybeSingle()
+  let existingWeek: any | null
+  let activePayments: any[]
 
-  if (existingWeekError) throw existingWeekError
+  if (params.prefetched) {
+    existingWeek = params.prefetched.existingWeek
+    activePayments = params.prefetched.activePayments
+  } else {
+    const { data: weekRow, error: existingWeekError } = await params.supabase
+      .from('operator_salary_weeks')
+      .select(
+        'id, locked_at, status, week_end, gross_amount, bonus_amount, fine_amount, debt_amount, advance_amount, net_amount, paid_amount, remaining_amount, last_payment_date',
+      )
+      .eq('operator_id', params.operatorId)
+      .eq('week_start', params.weekStart)
+      .maybeSingle()
 
-  const { data: activePayments, error: paymentsError } = await params.supabase
-    .from('operator_salary_week_payments')
-    .select('id,total_amount,payment_date')
-    .eq('operator_id', params.operatorId)
-    .eq('salary_week_id', existingWeek?.id || '00000000-0000-0000-0000-000000000000')
-    .eq('status', 'active')
+    if (existingWeekError) throw existingWeekError
+    existingWeek = weekRow
 
-  if (paymentsError) throw paymentsError
+    const { data: paymentRows, error: paymentsError } = await params.supabase
+      .from('operator_salary_week_payments')
+      .select('id,total_amount,payment_date')
+      .eq('operator_id', params.operatorId)
+      .eq('salary_week_id', existingWeek?.id || '00000000-0000-0000-0000-000000000000')
+      .eq('status', 'active')
+
+    if (paymentsError) throw paymentsError
+    activePayments = (paymentRows || []) as any[]
+  }
 
   const paidAmount = roundMoney((activePayments || []).reduce((sum, item) => sum + Number(item.total_amount || 0), 0))
   const remainingAmount = roundMoney(summary.netAmount - paidAmount)
@@ -477,7 +558,15 @@ async function ensureSalaryWeekSnapshot(params: {
 
     if (error) throw error
     weekId = String(data.id)
-  } else {
+  } else if (!weekRowMatches(existingWeek, {
+    weekEnd,
+    summary,
+    paidAmount,
+    remainingAmount,
+    status,
+    lastPaymentDate,
+    lockedAt,
+  })) {
     const { error } = await params.supabase
       .from('operator_salary_weeks')
       .update({
@@ -500,7 +589,13 @@ async function ensureSalaryWeekSnapshot(params: {
     if (error) throw error
   }
 
-  if (summary.companyAllocations.length > 0) {
+  const allocationsUnchanged =
+    params.prefetched !== undefined &&
+    allocationsMatch(params.prefetched.allocations, summary.companyAllocations, weekId as string)
+
+  if (allocationsUnchanged) {
+    // Ничего не поменялось — незачем переписывать те же строки.
+  } else if (summary.companyAllocations.length > 0) {
     const newRows = summary.companyAllocations.map((allocation) => ({
       salary_week_id: weekId,
       operator_id: params.operatorId,
@@ -616,9 +711,14 @@ export async function GET(req: Request) {
         .order('name')
       if (allowedOperatorIds) activeOperatorsQuery = activeOperatorsQuery.in('id', allowedOperatorIds)
 
+      // Раньше отсюда брали четыре колонки — только чтобы понять, кого ещё
+      // показать в списке. Те же строки нужны расчёту целиком, и второй раз
+      // спрашивать их у базы (на каждого оператора отдельно) незачем.
       let existingWeeksQuery = supabase
         .from('operator_salary_weeks')
-        .select('operator_id,remaining_amount,paid_amount,net_amount,status')
+        .select(
+          'id,operator_id,remaining_amount,paid_amount,net_amount,status,locked_at,week_end,gross_amount,bonus_amount,fine_amount,debt_amount,advance_amount,last_payment_date',
+        )
         .eq('week_start', weekStart)
       if (allowedOperatorIds) existingWeeksQuery = existingWeeksQuery.in('operator_id', allowedOperatorIds)
 
@@ -707,9 +807,56 @@ export async function GET(req: Request) {
         }
       })
 
+      // Всё, что нужно расчёту, — четырьмя запросами на всех операторов сразу.
+      // По одному на человека это было бы пять запросов на каждого: доходы,
+      // корректировки, долги, сохранённая неделя и выплаты по ней.
+      const operatorIdsForWeek = operatorRows.map((operator) => operator.id)
+      const existingWeekByOperator = new Map<string, any>()
+      for (const row of (existingWeeks || []) as any[]) {
+        existingWeekByOperator.set(String(row.operator_id), row)
+      }
+      const existingWeekIds = Array.from(existingWeekByOperator.values())
+        .map((row) => String(row.id || ''))
+        .filter(Boolean)
+
+      const [salaryDataByOperator, activePaymentRows, existingAllocationRows] = await Promise.all([
+        listOperatorsSalaryData(supabase, {
+          operatorIds: operatorIdsForWeek,
+          dateFrom: weekStart,
+          dateTo: weekEnd,
+          weekStart,
+          companyIds: allowedCompanyIds || null,
+        }),
+        existingWeekIds.length > 0
+          ? supabase
+              .from('operator_salary_week_payments')
+              .select('id,salary_week_id,total_amount,payment_date')
+              .in('salary_week_id', existingWeekIds)
+              .eq('status', 'active')
+          : Promise.resolve({ data: [] as any[], error: null as any }),
+        existingWeekIds.length > 0
+          ? supabase
+              .from('operator_salary_week_company_allocations')
+              .select('salary_week_id,company_id,accrued_amount,share_ratio,allocated_net_amount')
+              .in('salary_week_id', existingWeekIds)
+          : Promise.resolve({ data: [] as any[], error: null as any }),
+      ])
+
+      if (activePaymentRows.error) throw activePaymentRows.error
+      if (existingAllocationRows.error) throw existingAllocationRows.error
+
+      const activePaymentsByWeekId = new Map<string, any[]>()
+      for (const row of (activePaymentRows.data || []) as any[]) {
+        const key = String(row.salary_week_id)
+        const list = activePaymentsByWeekId.get(key) || []
+        list.push(row)
+        activePaymentsByWeekId.set(key, list)
+      }
+
       const snapshots = await Promise.all(
-        operatorRows.map((operator) =>
-          ensureSalaryWeekSnapshot({
+        operatorRows.map((operator) => {
+          const existingWeek = existingWeekByOperator.get(operator.id) || null
+          return ensureSalaryWeekSnapshot({
             supabase,
             operatorId: operator.id,
             weekStart,
@@ -718,8 +865,14 @@ export async function GET(req: Request) {
             operator,
             references,
             pointRules,
-          }),
-        ),
+            prefetched: {
+              data: salaryDataByOperator.get(operator.id) || { incomes: [], adjustments: [], debts: [] },
+              existingWeek,
+              activePayments: existingWeek ? activePaymentsByWeekId.get(String(existingWeek.id)) || [] : [],
+              allocations: (existingAllocationRows.data || []) as any[],
+            },
+          })
+        }),
       )
 
       const weekIds = snapshots.map((snapshot) => snapshot.weekId)
