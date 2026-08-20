@@ -26,15 +26,21 @@ struct SalesKpiScreen: View {
     /// вкладка, и данные приходят тем же запросом, что и список магазинов:
     /// показывать одну доплату значило показывать сумму без объяснения.
     @State private var report: SalesKpiReport?
+    /// Цели на ближайшие смены. Отдельным запросом: они считаются на две недели
+    /// вперёд, а не за прошедший месяц, — и грузить их вместе с отчётом значило
+    /// бы задерживать то, ради чего экран открывают чаще.
+    @State private var planList: SalesKpiPlans?
+    @State private var isLoadingPlans = false
     @State private var section: Section = .payout
 
     private enum Section: String, CaseIterable, Identifiable {
-        case payout, review, people
+        case payout, review, plans, people
         var id: String { rawValue }
         var label: String {
             switch self {
             case .payout: "Кому доплатить"
             case .review: "Почему касса"
+            case .plans: "Цели"
             case .people: "По продавцам"
             }
         }
@@ -64,6 +70,8 @@ struct SalesKpiScreen: View {
                     people
                 } else if section == .review {
                     review
+                } else if section == .plans {
+                    plans
                 } else {
                 totalsCard(payout)
                 if payout.rows.isEmpty {
@@ -86,7 +94,13 @@ struct SalesKpiScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .task { await loadStores() }
-        .task(id: reloadKey) { await loadPayout() }
+        .task(id: reloadKey) {
+            planList = nil
+            await loadPayout()
+        }
+        .task(id: "\(section.rawValue)|\(reloadKey)") {
+            if section == .plans { await loadPlans() }
+        }
         .refreshable { await reload() }
     }
 
@@ -305,6 +319,98 @@ struct SalesKpiScreen: View {
     }
 
     // ── Данные ───────────────────────────────────────────────────────────────
+
+    /// Цели на ближайшие смены.
+    ///
+    /// Продавцу нужно знать цель до смены, а не после. На сайте эта лестница
+    /// есть, в приложении её не было — и человек за прилавком узнавал свой
+    /// порог только со слов старшего.
+    ///
+    /// Правка и фиксация целей остаются на сайте: это решение руководителя, и
+    /// принимать его на бегу с телефона незачем — зафиксированный план уже
+    /// обещан продавцу.
+    @ViewBuilder
+    private var plans: some View {
+        if isLoadingPlans && planList == nil {
+            LoadingRows(count: 3)
+        } else if let planList, !planList.plans.isEmpty {
+            Card {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    SectionHeader("Ближайшие смены", subtitle: planList.monthlyText)
+                    ForEach(planList.plans) { plan in
+                        planRow(plan)
+                        if plan.id != planList.plans.last?.id { Divider().overlay(Theme.border) }
+                    }
+                }
+            }
+        } else {
+            WideEmptyState(
+                icon: "target",
+                title: "Целей пока нет",
+                message: "Пороги считаются по истории смен. Как только её наберётся достаточно, цели появятся здесь."
+            )
+        }
+    }
+
+    private func planRow(_ plan: SalesKpiPlans.Plan) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("\(DateFormatting.dayMonth(plan.date)) · \(plan.shiftLabel)")
+                    .font(Typography.callout)
+                    .foregroundStyle(Theme.text)
+                Spacer()
+                if plan.locked {
+                    // Обещание, данное продавцу: пересчёту больше не подлежит.
+                    Text("Зафиксирован")
+                        .font(Typography.caption)
+                        .foregroundStyle(Theme.positive)
+                } else {
+                    Text("Предварительный")
+                        .font(Typography.caption)
+                        .foregroundStyle(Theme.textDim)
+                }
+            }
+
+            if plan.hasTargets {
+                HStack(spacing: Spacing.md) {
+                    targetPill("Порог", plan.control, tint: Theme.textDim)
+                    targetPill("Бонус", plan.b1, tint: Theme.text)
+                    targetPill("Выше", plan.b2, tint: Theme.brand)
+                    targetPill("Рекорд", plan.b3, tint: Theme.positive)
+                }
+            } else {
+                Text("Мало истории — пороги не посчитаны")
+                    .font(Typography.caption)
+                    .foregroundStyle(Theme.textDim)
+            }
+
+            HStack(spacing: Spacing.sm) {
+                if let expected = plan.expectedRevenue {
+                    Text("прогноз \(Money.format(expected))")
+                }
+                if let receipts = plan.expectedReceipts {
+                    Text("· \(receipts) чек.")
+                }
+                if let weather = plan.weatherLabel {
+                    Text("· \(weather)")
+                }
+            }
+            .font(Typography.caption)
+            .foregroundStyle(Theme.textDim)
+        }
+        .padding(.vertical, Spacing.xs)
+    }
+
+    private func targetPill(_ label: String, _ value: Double?, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(label)
+                .font(Typography.label)
+                .foregroundStyle(Theme.textDim)
+            Text(value == nil ? "—" : Money.format(value))
+                .font(Typography.caption.weight(.semibold))
+                .foregroundStyle(tint)
+        }
+    }
 
     /// Почему касса получилась такой.
     ///
@@ -547,6 +653,29 @@ struct SalesKpiScreen: View {
             loadError = .transport(message: error.localizedDescription)
         }
         isLoading = false
+    }
+
+    /// Цели грузим при первом заходе на вкладку: большинство открывает экран
+    /// ради доплаты, и лишний запрос всем незачем.
+    private func loadPlans() async {
+        guard let store = selectedStore, planList == nil, !isLoadingPlans else { return }
+        isLoadingPlans = true
+        defer { isLoadingPlans = false }
+        let today = Date()
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        let from = formatter.string(from: today)
+        let to = formatter.string(from: today.addingTimeInterval(13 * 86_400))
+
+        let service = SalesKpiService(api: api)
+        do {
+            planList = try await service.plans(companyID: store.id, from: from, to: to)
+        } catch let error as APIError {
+            loadError = error
+        } catch {
+            loadError = .transport(message: error.localizedDescription)
+        }
     }
 
     private func reload() async {

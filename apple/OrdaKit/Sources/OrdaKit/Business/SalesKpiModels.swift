@@ -311,6 +311,92 @@ extension SalesKpiReport.Totals {
     }()
 }
 
+/// Цели на ближайшие смены.
+///
+/// Лестница уровней: до «контроля» смена считается провальной, дальше три
+/// порога бонуса. Цифра здесь — это обещание, данное продавцу заранее, а не
+/// оценка задним числом: зафиксированный план не пересчитывается, даже если
+/// прогноз изменился.
+public struct SalesKpiPlans: Decodable, Sendable {
+    public let plans: [Plan]
+    /// Поправка на месяц: сезон делает цели выше или ниже обычного.
+    public let monthlyIndex: Double?
+
+    /// Насколько цели этого месяца отличаются от обычных — словами.
+    public var monthlyText: String? {
+        guard let monthlyIndex else { return nil }
+        let delta = Int(((monthlyIndex - 1) * 100).rounded())
+        if abs(delta) < 2 { return "Цели как обычно" }
+        return delta > 0 ? "Цели выше обычного на \(delta)%" : "Цели ниже обычного на \(abs(delta))%"
+    }
+
+    public struct Plan: Decodable, Sendable, Identifiable, Hashable {
+        public let date: String
+        public let shift: String
+        /// Ниже этого смена считается провальной.
+        public let control: Double?
+        /// Три порога бонуса, по возрастанию.
+        public let b1: Double?
+        public let b2: Double?
+        public let b3: Double?
+        public let expectedRevenue: Double?
+        public let expectedReceipts: Int?
+        /// Зафиксирован — значит обещан продавцу и больше не пересчитывается.
+        public let locked: Bool
+        /// Погода на этот день, если прогноз известен: «дождь», «жара».
+        public let weatherLabel: String?
+
+        public var id: String { "\(date)|\(shift)" }
+        public var shiftLabel: String { shift == "night" ? "Ночь" : "День" }
+
+        /// Есть ли что показывать: без истории пороги не считаются.
+        public var hasTargets: Bool { b1 != nil }
+
+        private enum CodingKeys: String, CodingKey {
+            case date, shift, control, b1, b2, b3, locked, weather
+            case expectedRevenue = "expected_revenue"
+            case expectedReceipts = "expected_receipts"
+        }
+
+        private struct WeatherRef: Decodable {
+            let bucketLabel: String?
+            let known: Bool?
+            private enum CodingKeys: String, CodingKey {
+                case bucketLabel = "bucket_label"
+                case known
+            }
+        }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            date = try c.decodeFlexibleString(forKey: .date) ?? ""
+            shift = try c.decodeFlexibleString(forKey: .shift) ?? "day"
+            control = try c.decodeFlexibleDouble(forKey: .control)
+            b1 = try c.decodeFlexibleDouble(forKey: .b1)
+            b2 = try c.decodeFlexibleDouble(forKey: .b2)
+            b3 = try c.decodeFlexibleDouble(forKey: .b3)
+            expectedRevenue = try c.decodeFlexibleDouble(forKey: .expectedRevenue)
+            expectedReceipts = (try c.decodeFlexibleDouble(forKey: .expectedReceipts)).map { Int($0) }
+            locked = (try? c.decode(Bool.self, forKey: .locked)) ?? false
+            let weather = (try? c.decodeIfPresent(WeatherRef.self, forKey: .weather)) ?? nil
+            weatherLabel = weather?.known == true ? weather?.bucketLabel : nil
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey { case plans, monthly }
+
+    private struct MonthlyRef: Decodable {
+        let index: Double?
+        private enum CodingKeys: String, CodingKey { case index = "monthly_index" }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        plans = (try? c.decode([Plan].self, forKey: .plans)) ?? []
+        monthlyIndex = (try? c.decode([MonthlyRef].self, forKey: .monthly))?.first?.index
+    }
+}
+
 public struct SalesKpiService: Sendable {
     private let api: APIClient
 
@@ -330,6 +416,14 @@ public struct SalesKpiService: Sendable {
         let bounds = SalesKpiService.monthBounds(month)
         let response: DataEnvelope<SalesKpiReport> = try await api.send(
             APIRequest(path: "/api/admin/sales-kpi", query: ["from": bounds.from, "to": bounds.to])
+        )
+        return response.data
+    }
+
+    /// Цели на ближайшие дни. Две недели вперёд — дальше прогноз не держит.
+    public func plans(companyID: String, from: String, to: String) async throws -> SalesKpiPlans {
+        let response: DataEnvelope<SalesKpiPlans> = try await api.send(
+            APIRequest(path: "/api/admin/sales-kpi/plans", query: ["company_id": companyID, "from": from, "to": to])
         )
         return response.data
     }
