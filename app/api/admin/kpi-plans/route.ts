@@ -102,8 +102,6 @@ export async function GET(req: Request) {
       }
       cq = cq.in('id', companyScope.allowedCompanyIds)
     }
-    const { data: companies, error: cErr } = await cq
-    if (cErr) throw cErr
 
     // Plans — на год и пересекающиеся (year/h1/h2/months)
     let pq = supabase
@@ -117,7 +115,9 @@ export async function GET(req: Request) {
       // organization_id), поэтому org A видела цели org B.
       pq = pq.in('company_id', companyScope.allowedCompanyIds)
     }
-    const { data: plans, error: pErr } = await pq
+    // Список точек и список планов друг другу не нужны — берём вместе.
+    const [{ data: companies, error: cErr }, { data: plans, error: pErr }] = await Promise.all([cq, pq])
+    if (cErr) throw cErr
     if (pErr) throw pErr
 
     // Facts — incomes/expenses/point_sales за год (с late-night kaspi split).
@@ -171,22 +171,6 @@ export async function GET(req: Request) {
       return q
     }
 
-    const rawIncomes = await fetchAll<any>(buildIncomesQ)
-    const incomes = splitIncomeKaspiByCalendarDay(rawIncomes as ReportIncomeCalendarRow[])
-
-    let expenses: any[] = []
-    try {
-      expenses = await fetchAll<any>(buildExpensesQ)
-    } catch (eErr: any) {
-      await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/kpi-plans:expenses', message: eErr?.message || 'expenses fetch error' })
-    }
-
-    let sales: any[] = []
-    try {
-      sales = await fetchAll<any>(buildSalesQ)
-    } catch (sErr: any) {
-      await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/kpi-plans:point_sales', message: sErr?.message || 'sales fetch error' })
-    }
 
     // Прошлогодние факты — для сезонности и YoY. Тянем без жёсткой обвязки:
     // если упадёт — просто отдадим пустые данные, не ломаем основную выдачу.
@@ -221,12 +205,35 @@ export async function GET(req: Request) {
       return q
     }
 
-    let priorIncomesRaw: any[] = []
-    let priorExpenses: any[] = []
-    let priorSales: any[] = []
-    try { priorIncomesRaw = await fetchAll<any>(buildPriorIncomesQ) } catch {}
-    try { priorExpenses = await fetchAll<any>(buildPriorExpensesQ) } catch {}
-    try { priorSales = await fetchAll<any>(buildPriorSalesQ) } catch {}
+    // Шесть выгрузок за год — доходы, расходы и продажи, свои и прошлогодние —
+    // читались одна за другой. Каждая идёт страницами по тысяче строк, то есть
+    // очередь получалась не из шести запросов, а из шести пачек. Между собой
+    // они не связаны: считаем разом.
+    //
+    // Прошлогодние и расходы с продажами по-прежнему прощают ошибку — страница
+    // важнее полноты сравнения, — а доходы текущего года нет: без них считать
+    // нечего.
+    const soft = async (load: () => Promise<any[]>, area?: string): Promise<any[]> => {
+      try {
+        return await load()
+      } catch (error: any) {
+        if (area) {
+          await writeSystemErrorLogSafe({ scope: 'server', area, message: error?.message || 'fetch error' })
+        }
+        return []
+      }
+    }
+
+    const [rawIncomes, expenses, sales, priorIncomesRaw, priorExpenses, priorSales] = await Promise.all([
+      fetchAll<any>(buildIncomesQ),
+      soft(() => fetchAll<any>(buildExpensesQ), 'api/admin/kpi-plans:expenses'),
+      soft(() => fetchAll<any>(buildSalesQ), 'api/admin/kpi-plans:point_sales'),
+      soft(() => fetchAll<any>(buildPriorIncomesQ)),
+      soft(() => fetchAll<any>(buildPriorExpensesQ)),
+      soft(() => fetchAll<any>(buildPriorSalesQ)),
+    ])
+
+    const incomes = splitIncomeKaspiByCalendarDay(rawIncomes as ReportIncomeCalendarRow[])
     const priorIncomes = splitIncomeKaspiByCalendarDay(priorIncomesRaw as ReportIncomeCalendarRow[])
 
     // Агрегаторы: ключ '${companyId}|${start}|${end}' (companyId = '' для общего)

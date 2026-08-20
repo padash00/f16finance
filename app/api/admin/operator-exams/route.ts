@@ -214,95 +214,112 @@ export async function GET(request: Request) {
     }
 
     // ─── Список экзаменов + справочники для формы ─────────────────────────
-    let examsQuery = supabase
-      .from('operator_exams')
-      .select('id, title, company_ids, question_count, open_count, pass_score, deadline_at, status, created_at')
-      .order('created_at', { ascending: false })
-      .limit(100)
-    if (orgId) examsQuery = examsQuery.eq('organization_id', orgId)
+    //
+    // Экзамены, точки, регламенты, назначения и настройки читались один за
+    // другим, хотя из всего этого связаны только две пары: попытки нужны после
+    // экзаменов, операторы — после назначений. Пять цепочек считаем разом.
+    const allowedCompanyIds = companyScope.allowedCompanyIds
 
-    const { data: exams, error: examsError } = await examsQuery
-    if (examsError) throw examsError
+    const examsTask = (async () => {
+      let examsQuery = supabase
+        .from('operator_exams')
+        .select('id, title, company_ids, question_count, open_count, pass_score, deadline_at, status, created_at')
+        .order('created_at', { ascending: false })
+        .limit(100)
+      if (orgId) examsQuery = examsQuery.eq('organization_id', orgId)
 
-    // Ленивое закрытие по дедлайну: отдельного крона нет, а поле «дедлайн» без
-    // последствий — обманка. Просроченные незавершённые попытки гасим при
-    // первом же открытии страницы.
-    const overdue = ((exams || []) as ExamRow[]).filter(
-      (exam) => exam.status === 'active' && exam.deadline_at && new Date(exam.deadline_at) < new Date(),
-    )
-    if (overdue.length > 0) {
-      const overdueIds = overdue.map((exam) => exam.id)
-      await supabase
-        .from('operator_exam_attempts')
-        .update({ status: 'expired' })
-        .in('exam_id', overdueIds)
-        .in('status', ['pending', 'sent', 'in_progress'])
-      await supabase.from('operator_exams').update({ status: 'finished' }).in('id', overdueIds)
-      for (const exam of overdue) exam.status = 'finished'
-    }
+      const { data: exams, error: examsError } = await examsQuery
+      if (examsError) throw examsError
 
-    const examIds = ((exams || []) as ExamRow[]).map((e) => e.id)
-    const statsByExam = new Map<string, { assigned: number; completed: number; passed: number; scoreSum: number }>()
-    if (examIds.length > 0) {
-      const { data: attempts } = await supabase
-        .from('operator_exam_attempts')
-        .select('exam_id, status, score, passed')
-        .in('exam_id', examIds)
-        .limit(5000)
-      for (const row of (attempts || []) as any[]) {
-        const stat = statsByExam.get(row.exam_id) || { assigned: 0, completed: 0, passed: 0, scoreSum: 0 }
-        stat.assigned += 1
-        if (row.status === 'completed') {
-          stat.completed += 1
-          stat.scoreSum += Number(row.score || 0)
-          if (row.passed) stat.passed += 1
-        }
-        statsByExam.set(row.exam_id, stat)
+      // Ленивое закрытие по дедлайну: отдельного крона нет, а поле «дедлайн» без
+      // последствий — обманка. Просроченные незавершённые попытки гасим при
+      // первом же открытии страницы.
+      const overdue = ((exams || []) as ExamRow[]).filter(
+        (exam) => exam.status === 'active' && exam.deadline_at && new Date(exam.deadline_at) < new Date(),
+      )
+      if (overdue.length > 0) {
+        const overdueIds = overdue.map((exam) => exam.id)
+        await Promise.all([
+          supabase
+            .from('operator_exam_attempts')
+            .update({ status: 'expired' })
+            .in('exam_id', overdueIds)
+            .in('status', ['pending', 'sent', 'in_progress']),
+          supabase.from('operator_exams').update({ status: 'finished' }).in('id', overdueIds),
+        ])
+        for (const exam of overdue) exam.status = 'finished'
       }
-    }
+
+      const examIds = ((exams || []) as ExamRow[]).map((e) => e.id)
+      const statsByExam = new Map<string, { assigned: number; completed: number; passed: number; scoreSum: number }>()
+      if (examIds.length > 0) {
+        const { data: attempts } = await supabase
+          .from('operator_exam_attempts')
+          .select('exam_id, status, score, passed')
+          .in('exam_id', examIds)
+          .limit(5000)
+        for (const row of (attempts || []) as any[]) {
+          const stat = statsByExam.get(row.exam_id) || { assigned: 0, completed: 0, passed: 0, scoreSum: 0 }
+          stat.assigned += 1
+          if (row.status === 'completed') {
+            stat.completed += 1
+            stat.scoreSum += Number(row.score || 0)
+            if (row.passed) stat.passed += 1
+          }
+          statsByExam.set(row.exam_id, stat)
+        }
+      }
+      return { exams: (exams || []) as ExamRow[], statsByExam }
+    })()
 
     // Точки организации.
-    let companiesQuery = supabase.from('companies').select('id, name, code, industry').order('name')
-    if (companyScope.allowedCompanyIds) companiesQuery = companiesQuery.in('id', companyScope.allowedCompanyIds)
-    const { data: companies } = await companiesQuery
+    const companiesTask = (async () => {
+      let companiesQuery = supabase.from('companies').select('id, name, code, industry').order('name')
+      if (allowedCompanyIds) companiesQuery = companiesQuery.in('id', allowedCompanyIds)
+      const { data } = await companiesQuery
+      return data
+    })()
 
     // Готовность цепочки: экзамен собирается из опубликованных регламентов, а те
     // привязаны к нише. Показываем это на странице, чтобы «не хватает статей»
     // не всплывало сюрпризом уже при отправке.
-    let articlesQuery = supabase
-      .from('knowledge_articles')
-      .select('id', { count: 'exact', head: true })
-      .eq('is_published', true)
-    if (orgId) articlesQuery = articlesQuery.eq('organization_id', orgId)
-    const { count: publishedArticles } = await articlesQuery
+    const articlesTask = (async () => {
+      let articlesQuery = supabase
+        .from('knowledge_articles')
+        .select('id', { count: 'exact', head: true })
+        .eq('is_published', true)
+      if (orgId) articlesQuery = articlesQuery.eq('organization_id', orgId)
+      const { count } = await articlesQuery
+      return count
+    })()
 
     // Операторы с привязкой к точкам — форма показывает только тех, кто работает
     // на выбранных точках.
-    const allowedCompanyIds = companyScope.allowedCompanyIds
-    let assignmentsQuery = supabase
-      .from('operator_company_assignments')
-      .select('operator_id, company_id')
-      .eq('is_active', true)
-      .limit(5000)
-    if (allowedCompanyIds) assignmentsQuery = assignmentsQuery.in('company_id', allowedCompanyIds)
-    const { data: assignments } = await assignmentsQuery
+    const operatorsTask = (async () => {
+      let assignmentsQuery = supabase
+        .from('operator_company_assignments')
+        .select('operator_id, company_id')
+        .eq('is_active', true)
+        .limit(5000)
+      if (allowedCompanyIds) assignmentsQuery = assignmentsQuery.in('company_id', allowedCompanyIds)
+      const { data: assignments } = await assignmentsQuery
 
-    const companyIdsByOperator = new Map<string, string[]>()
-    for (const row of (assignments || []) as any[]) {
-      const list = companyIdsByOperator.get(String(row.operator_id)) || []
-      list.push(String(row.company_id))
-      companyIdsByOperator.set(String(row.operator_id), list)
-    }
+      const companyIdsByOperator = new Map<string, string[]>()
+      for (const row of (assignments || []) as any[]) {
+        const list = companyIdsByOperator.get(String(row.operator_id)) || []
+        list.push(String(row.company_id))
+        companyIdsByOperator.set(String(row.operator_id), list)
+      }
 
-    const operatorIds = Array.from(companyIdsByOperator.keys())
-    let operators: any[] = []
-    if (operatorIds.length > 0) {
+      const operatorIds = Array.from(companyIdsByOperator.keys())
+      if (operatorIds.length === 0) return [] as any[]
+
       const { data: operatorRows } = await supabase
         .from('operators')
         .select('id, name, short_name, telegram_chat_id, is_active, operator_profiles(full_name)')
         .in('id', operatorIds)
         .eq('is_active', true)
-      operators = ((operatorRows || []) as any[]).map((row) => {
+      return ((operatorRows || []) as any[]).map((row) => {
         const profile = Array.isArray(row.operator_profiles) ? row.operator_profiles[0] : row.operator_profiles
         return {
           id: String(row.id),
@@ -311,17 +328,28 @@ export async function GET(request: Request) {
           company_ids: companyIdsByOperator.get(String(row.id)) || [],
         }
       })
-    }
+    })()
 
     // Настройки автоаттестации: колонок может не быть до применения миграции,
     // поэтому ошибку читаем как «выключено», а не как поломку страницы.
-    const { data: orgSettings } = orgId
-      ? await supabase
-          .from('organizations')
-          .select('auto_exam_enabled, auto_exam_days, auto_exam_questions, auto_exam_open, auto_exam_pass_score')
-          .eq('id', orgId)
-          .maybeSingle()
-      : { data: null }
+    const settingsTask = (async () => {
+      if (!orgId) return null
+      const { data } = await supabase
+        .from('organizations')
+        .select('auto_exam_enabled, auto_exam_days, auto_exam_questions, auto_exam_open, auto_exam_pass_score')
+        .eq('id', orgId)
+        .maybeSingle()
+      return data
+    })()
+
+    const [examsResult, companies, publishedArticles, operators, orgSettings] = await Promise.all([
+      examsTask,
+      companiesTask,
+      articlesTask,
+      operatorsTask,
+      settingsTask,
+    ])
+    const { exams, statsByExam } = examsResult
 
     return json({
       ok: true,

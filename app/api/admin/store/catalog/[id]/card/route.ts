@@ -132,7 +132,83 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     const locById = new Map(locations.map((l) => [String(l.id), l]))
     const locationIds = locations.map((l) => String(l.id)).filter(Boolean)
 
-    // 3. Остатки по этим локациям для товара.
+    // Пять оставшихся кусков карточки зависят только от товара и списка
+    // локаций — друг от друга нет. Читались по очереди: остатки, продажи за
+    // месяц, приёмки, история продаж, долги. Пять дорог до базы там, где
+    // хватает одной.
+    const since30 = new Date(Date.now() - 30 * DAY_MS).toISOString()
+    const hasLocations = locationIds.length > 0
+
+    const [balRows, saleRows, recRows, shRows, debtRows] = await Promise.all([
+      // Остатки по доступным локациям.
+      hasLocations
+        ? supabase
+            .from('inventory_balances')
+            .select('location_id, quantity')
+            .eq('item_id', itemId)
+            .in('location_id', locationIds)
+            .then((r: any) => {
+              if (r.error) throw r.error
+              return (r.data || []) as any[]
+            })
+        : Promise.resolve([] as any[]),
+
+      // Продажи за 30 дней. Ходовой товар может иметь больше тысячи — это
+      // сумма, забираем всё.
+      hasLocations
+        ? fetchAllPages((from, to) =>
+            supabase
+              .from('inventory_movements')
+              .select('quantity')
+              .eq('movement_type', 'sale')
+              .eq('item_id', itemId)
+              .in('from_location_id', locationIds)
+              .gte('created_at', since30)
+              .order('id')
+              .range(from, to),
+          )
+        : Promise.resolve([] as any[]),
+
+      // История приёмок растёт без ограничения — постранично, иначе
+      // «последняя закупочная» берётся из усечённой выборки.
+      fetchAllPages((from, to) =>
+        supabase
+          .from('inventory_receipt_items')
+          .select('quantity, unit_cost, receipt:receipt_id(received_at, status, supplier:supplier_id(name, organization_name))')
+          .eq('item_id', itemId)
+          .order('id')
+          .range(from, to),
+      ),
+
+      // Последние продажи — для истории в карточке.
+      hasLocations
+        ? supabase
+            .from('inventory_movements')
+            .select('quantity, total_amount, created_at, from_location:from_location_id(name, company:company_id(name))')
+            .eq('movement_type', 'sale')
+            .eq('item_id', itemId)
+            .in('from_location_id', locationIds)
+            .order('created_at', { ascending: false })
+            .limit(30)
+            .then((r: any) => (r.data || []) as any[])
+        : Promise.resolve([] as any[]),
+
+      // Долги: point_debt_items связаны с товаром только по имени —
+      // касса пишет item_name из каталога.
+      (() => {
+        let debtQuery = supabase
+          .from('point_debt_items')
+          .select('client_name, quantity, total_amount, created_at, status, company:company_id(name)')
+          .ilike('item_name', String(item.name || ''))
+          .order('created_at', { ascending: false })
+          .limit(30)
+        if (allowedCompanyIds) debtQuery = debtQuery.in('company_id', allowedCompanyIds)
+        return debtQuery.then((r: any) => (r.data || []) as any[])
+      })(),
+    ])
+
+    // ── Дальше только раскладка прочитанного ────────────────────────────────
+
     const stockByLocation: Array<{
       location_id: string
       location: string
@@ -141,118 +217,67 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       quantity: number
     }> = []
     let totalStock = 0
-    if (locationIds.length > 0) {
-      const { data: balRows, error: balErr } = await supabase
-        .from('inventory_balances')
-        .select('location_id, quantity')
-        .eq('item_id', itemId)
-        .in('location_id', locationIds)
-      if (balErr) throw balErr
-      for (const b of balRows || []) {
-        const loc = locById.get(String((b as any).location_id))
-        if (!loc) continue
-        const qty = Number((b as any).quantity || 0)
-        totalStock += qty
-        const companyName = Array.isArray(loc.company)
-          ? (loc.company[0]?.name || null)
-          : (loc.company?.name || null)
-        stockByLocation.push({
-          location_id: String(loc.id),
-          location: String(loc.name || '—'),
-          location_type: String(loc.location_type || ''),
-          company: companyName,
-          quantity: round2(qty),
-        })
-      }
+    for (const b of balRows) {
+      const loc = locById.get(String((b as any).location_id))
+      if (!loc) continue
+      const qty = Number((b as any).quantity || 0)
+      totalStock += qty
+      const companyName = Array.isArray(loc.company)
+        ? (loc.company[0]?.name || null)
+        : (loc.company?.name || null)
+      stockByLocation.push({
+        location_id: String(loc.id),
+        location: String(loc.name || '—'),
+        location_type: String(loc.location_type || ''),
+        company: companyName,
+        quantity: round2(qty),
+      })
     }
     // Показываем сначала с остатком, потом нулевые; внутри — по названию.
     stockByLocation.sort((a, b) => (b.quantity - a.quantity) || a.location.localeCompare(b.location, 'ru'))
 
-    // 4. Продажи за 30 дней (movement_type='sale', from_location_id ∈ доступные локации).
-    const since30 = new Date(Date.now() - 30 * DAY_MS).toISOString()
     let sold30 = 0
-    if (locationIds.length > 0) {
-      // Ходовой товар может иметь >1000 продаж за 30 дней — это сумма, забираем всё.
-      const saleRows = await fetchAllPages((from, to) =>
-        supabase
-          .from('inventory_movements')
-          .select('quantity')
-          .eq('movement_type', 'sale')
-          .eq('item_id', itemId)
-          .in('from_location_id', locationIds)
-          .gte('created_at', since30)
-          .order('id')
-          .range(from, to),
-      )
-      for (const s of saleRows || []) {
-        const q = Number((s as any).quantity || 0)
-        if (q > 0) sold30 += q
-      }
+    for (const s of saleRows) {
+      const q = Number((s as any).quantity || 0)
+      if (q > 0) sold30 += q
     }
     const velocityPerWeek = round1(sold30 / 4.3) // ~4.3 недели в 30 днях
 
-    // 5. Последняя приёмка → последняя закупочная цена + поставщик.
     let lastPurchasePrice: number | null = null
     let lastSupplier: string | null = null
     let lastReceivedAt: string | null = null
-    let purchaseRows: any[] = []
-    {
-      // История приёмок товара растёт без ограничения — постранично, иначе
-      // «последняя закупочная» берётся из усечённой выборки.
-      const recRows = await fetchAllPages((from, to) =>
-        supabase
-          .from('inventory_receipt_items')
-          .select('quantity, unit_cost, receipt:receipt_id(received_at, status, supplier:supplier_id(name, organization_name))')
-          .eq('item_id', itemId)
-          .order('id')
-          .range(from, to),
-      )
-      purchaseRows = recRows as any[]
-      for (const r of (recRows || []) as any[]) {
-        const receipt = r.receipt || {}
-        const receivedAt = String(receipt.received_at || '')
-        if (lastReceivedAt && lastReceivedAt >= receivedAt) continue
-        lastReceivedAt = receivedAt
-        lastPurchasePrice = Number(r.unit_cost || 0)
-        const supplier = receipt.supplier || {}
-        lastSupplier =
-          String(supplier.organization_name || '').trim() ||
-          String(supplier.name || '').trim() ||
-          null
-      }
+    const purchaseRows = recRows as any[]
+    for (const r of purchaseRows) {
+      const receipt = r.receipt || {}
+      const receivedAt = String(receipt.received_at || '')
+      if (lastReceivedAt && lastReceivedAt >= receivedAt) continue
+      lastReceivedAt = receivedAt
+      lastPurchasePrice = Number(r.unit_cost || 0)
+      const supplier = receipt.supplier || {}
+      lastSupplier =
+        String(supplier.organization_name || '').trim() ||
+        String(supplier.name || '').trim() ||
+        null
     }
 
-    // 6. Маржа: закуп = последняя приёмка || default_purchase_price.
+    // Маржа: закуп = последняя приёмка || default_purchase_price.
     const salePrice = Number(item.sale_price || 0)
     const defaultPurchase = Number(item.default_purchase_price || 0)
     const purchase = lastPurchasePrice != null && lastPurchasePrice > 0 ? lastPurchasePrice : defaultPurchase
     const marginPct = salePrice > 0 ? round1(((salePrice - purchase) / salePrice) * 100) : 0
     const marginAbs = round2(salePrice - purchase)
 
-    // 7. История продаж — последние 30 движений-продаж
-    let salesHistory: Array<{ date: string; quantity: number; amount: number; location: string }> = []
-    if (locationIds.length > 0) {
-      const { data: shRows } = await supabase
-        .from('inventory_movements')
-        .select('quantity, total_amount, created_at, from_location:from_location_id(name, company:company_id(name))')
-        .eq('movement_type', 'sale')
-        .eq('item_id', itemId)
-        .in('from_location_id', locationIds)
-        .order('created_at', { ascending: false })
-        .limit(30)
-      salesHistory = ((shRows || []) as any[]).map((r) => {
-        const loc = Array.isArray(r.from_location) ? r.from_location[0] : r.from_location
-        const comp = loc ? (Array.isArray(loc.company) ? loc.company[0] : loc.company) : null
-        return {
-          date: String(r.created_at || ''),
-          quantity: round2(Number(r.quantity || 0)),
-          amount: round2(Number(r.total_amount || 0)),
-          location: String(comp?.name || loc?.name || '—'),
-        }
-      })
-    }
+    const salesHistory = shRows.map((r: any) => {
+      const loc = Array.isArray(r.from_location) ? r.from_location[0] : r.from_location
+      const comp = loc ? (Array.isArray(loc.company) ? loc.company[0] : loc.company) : null
+      return {
+        date: String(r.created_at || ''),
+        quantity: round2(Number(r.quantity || 0)),
+        amount: round2(Number(r.total_amount || 0)),
+        location: String(comp?.name || loc?.name || '—'),
+      }
+    })
 
-    // 8. История закупок — из уже загруженных приёмок (без отменённых)
     const purchaseHistory = purchaseRows
       .map((r) => {
         const receipt = (Array.isArray(r.receipt) ? r.receipt[0] : r.receipt) || {}
@@ -270,30 +295,17 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       .slice(0, 30)
       .map(({ status: _status, ...rest }) => rest)
 
-    // 9. История долгов — point_debt_items связаны с товаром только по имени
-    // (item_name пишется кассой из каталога) — матчим точным именем.
-    let debtHistory: Array<{ date: string; client: string; quantity: number; amount: number; status: string; company: string }> = []
-    {
-      let debtQuery = supabase
-        .from('point_debt_items')
-        .select('client_name, quantity, total_amount, created_at, status, company:company_id(name)')
-        .ilike('item_name', String(item.name || ''))
-        .order('created_at', { ascending: false })
-        .limit(30)
-      if (allowedCompanyIds) debtQuery = debtQuery.in('company_id', allowedCompanyIds)
-      const { data: debtRows } = await debtQuery
-      debtHistory = ((debtRows || []) as any[]).map((r) => {
-        const comp = Array.isArray(r.company) ? r.company[0] : r.company
-        return {
-          date: String(r.created_at || ''),
-          client: String(r.client_name || '—'),
-          quantity: round2(Number(r.quantity || 0)),
-          amount: round2(Number(r.total_amount || 0)),
-          status: String(r.status || 'active'),
-          company: String(comp?.name || '—'),
-        }
-      })
-    }
+    const debtHistory = debtRows.map((r: any) => {
+      const comp = Array.isArray(r.company) ? r.company[0] : r.company
+      return {
+        date: String(r.created_at || ''),
+        client: String(r.client_name || '—'),
+        quantity: round2(Number(r.quantity || 0)),
+        amount: round2(Number(r.total_amount || 0)),
+        status: String(r.status || 'active'),
+        company: String(comp?.name || '—'),
+      }
+    })
 
     return json({
       ok: true,
