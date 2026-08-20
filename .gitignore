@@ -37,3 +37,4 @@ apple/Config.local.xcconfig
 # В репозиторий не попадают — там секреты остаются навсегда.
 tools/arena-probe/probe-settings.local.json
 tools/arena-probe/arena-probe.log
+tools/arena-probe/senet-scan-report.txt

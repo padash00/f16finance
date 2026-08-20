@@ -34,7 +34,16 @@ param(
 
 $ErrorActionPreference = 'Continue'
 
-$ReportPath = Join-Path $PSScriptRoot 'senet-scan-report.txt'
+# Каталог для отчёта. $PSScriptRoot есть только когда скрипт запущен файлом;
+# при встраивании в батник его нет, и путь приходит переменной $ScanRoot.
+# Порядок важен: $ScanRoot приходит снаружи и указывает, где лежит батник.
+# $PSScriptRoot при запуске из батника указывает во временную папку — отчёт
+# оказался бы в %TEMP% и был бы стёрт вместе с распакованным скриптом.
+$Root = if ($ScanRoot) { $ScanRoot }
+        elseif ($PSScriptRoot) { $PSScriptRoot }
+        else { (Get-Location).Path }
+
+$ReportPath = Join-Path $Root 'senet-scan-report.txt'
 if (Test-Path $ReportPath) { Remove-Item $ReportPath -Force -ErrorAction SilentlyContinue }
 
 function Line($text) {
