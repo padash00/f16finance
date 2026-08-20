@@ -121,6 +121,10 @@ Head "3. КАТАЛОГИ SENET"
 # Типовые места установки. Проверяем каждое; найденное добавляем к каталогам из
 # процессов и служб.
 $guesses = @(
+    # Найдено разведкой на станции 21: вендор SENET — Enestech.
+    "$env:ProgramFiles\Enestech",  "${env:ProgramFiles(x86)}\Enestech",
+    "$env:ProgramData\Enestech",   "$env:LOCALAPPDATA\Enestech",
+    "$env:APPDATA\Enestech",       "D:\SENET\Enestech", "D:\SENET",
     "$env:ProgramData\SENET",       "$env:ProgramData\Senet",
     "${env:ProgramFiles(x86)}\SENET", "${env:ProgramFiles(x86)}\Senet",
     "$env:ProgramFiles\SENET",      "$env:ProgramFiles\Senet",
@@ -148,7 +152,7 @@ foreach ($r in $roots) {
     try {
         $files += Get-ChildItem -Path $r -Recurse -File -ErrorAction SilentlyContinue |
             Where-Object {
-                $_.Extension -match '^\.(json|xml|ini|cfg|conf|log|txt|dat|db|config)$' -and
+                $_.Extension -match '^\.(json|xml|ini|cfg|conf|log|txt|dat|db|config|sqlite|sqlite3|litedb|state|session)$' -and
                 $_.Length -lt 5MB
             }
     } catch { }
@@ -205,6 +209,70 @@ if ($jsonFiles) {
     }
 } else {
     Line "  JSON-файлов не найдено"
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+Head "6. СТРУКТУРА КАТАЛОГОВ (имена папок, два уровня)"
+# ─────────────────────────────────────────────────────────────────────────────
+# Названия папок сами по себе подсказывают, где искать: Shell, Client, Session,
+# Cache. Без этого приходится гадать по одним лишь файлам.
+foreach ($r in $roots) {
+    Line ""
+    Line "  $r"
+    try {
+        Get-ChildItem -Path $r -Directory -ErrorAction SilentlyContinue |
+            Select-Object -First 25 | ForEach-Object {
+                Line "      $($_.Name)\"
+                Get-ChildItem -Path $_.FullName -Directory -ErrorAction SilentlyContinue |
+                    Select-Object -First 12 | ForEach-Object { Line "          $($_.Name)\" }
+            }
+    } catch { Line "      нет доступа" }
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+Head "7. ФАЙЛЫ, ИЗМЕНЁННЫЕ ЗА ПОСЛЕДНИЙ ЧАС (любые расширения)"
+# ─────────────────────────────────────────────────────────────────────────────
+# Самый полезный раздел, если запускать при активной сессии клиента: данные
+# сессии пишутся В МОМЕНТ входа, и свежая отметка времени выдаёт нужный файл
+# вернее любого угадывания по имени.
+$since = (Get-Date).AddHours(-1)
+$fresh = @()
+foreach ($r in $roots) {
+    try {
+        $fresh += Get-ChildItem -Path $r -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.LastWriteTime -gt $since -and $_.Length -lt 20MB }
+    } catch { }
+}
+if ($fresh) {
+    foreach ($f in ($fresh | Sort-Object LastWriteTime -Descending | Select-Object -First 40)) {
+        Line "  $($f.LastWriteTime.ToString('HH:mm:ss'))  $([int]($f.Length / 1KB)) КБ  $($f.FullName)"
+    }
+} else {
+    Line "  ничего не менялось за час"
+    Line "  (запустите при АКТИВНОЙ сессии клиента — тогда здесь будет главное)"
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+Head "8. РЕЕСТР: ветки Enestech и SENET"
+# ─────────────────────────────────────────────────────────────────────────────
+# Настройки клиента часто лежат в реестре, а не в файлах. Печатаются имена
+# веток и параметров, значения — нет.
+foreach ($hive in @('HKLM:\SOFTWARE', 'HKLM:\SOFTWARE\WOW6432Node', 'HKCU:\SOFTWARE')) {
+    foreach ($vendor in @('Enestech', 'SENET', 'Senet')) {
+        $path = "$hive\$vendor"
+        if (Test-Path $path) {
+            Line "  $path"
+            try {
+                Get-ChildItem -Path $path -Recurse -ErrorAction SilentlyContinue |
+                    Select-Object -First 20 | ForEach-Object {
+                        Line "      $($_.Name)"
+                        $props = ($_ | Get-ItemProperty -ErrorAction SilentlyContinue).PSObject.Properties |
+                            Where-Object { $_.Name -notmatch '^PS' } | Select-Object -First 15
+                        foreach ($prop in $props) { Line "          параметр: $($prop.Name)" }
+                    }
+            } catch { Line "      нет доступа" }
+        }
+    }
 }
 
 Line ''
