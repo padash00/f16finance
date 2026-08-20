@@ -91,343 +91,382 @@ export async function GET(request: Request) {
       hasCapability(access, 'store-showcase.view'),
     ])
 
-    // ── Pending inventory requests ──────────────────────────────────────────
-    if (canSeeRequests) try {
-      let requestsQuery = supabase
-        .from('inventory_requests')
-        .select('id, status, created_at, requesting_company_id, company:companies!requesting_company_id(name)')
-        .in('status', ['new', 'disputed'])
-        .order('created_at', { ascending: false })
-        .limit(10)
+    // Четыре раздела считались один за другим, хотя друг от друга не зависят:
+    // заявки, дни рождения, долги, низкие остатки. Колокольчик дёргает каждая
+    // страница и потом каждые полторы минуты — то есть эта очередь стояла
+    // перед человеком всё время, пока он работает.
+    //
+    // Считаем разом. Каждый раздел по-прежнему со своим catch: упавшие
+    // остатки не должны уносить дни рождения. Порядок в ответе задаётся
+    // ниже, а не тем, кто первым успел.
 
-      if (companyScope.allowedCompanyIds) {
-        requestsQuery = requestsQuery.in('requesting_company_id', companyScope.allowedCompanyIds)
-      }
+    const requestsSection = (async (): Promise<NotificationGroup[]> => {
+      const found: NotificationGroup[] = []
+      // ── Pending inventory requests ──────────────────────────────────────────
+      if (canSeeRequests) try {
+        let requestsQuery = supabase
+          .from('inventory_requests')
+          .select('id, status, created_at, requesting_company_id, company:companies!requesting_company_id(name)')
+          .in('status', ['new', 'disputed'])
+          .order('created_at', { ascending: false })
+          .limit(10)
 
-      const { data: requestRows } = await requestsQuery
-      if (requestRows && requestRows.length > 0) {
-        const items: NotificationItem[] = requestRows.slice(0, 5).map((row: any) => {
-          const company = Array.isArray(row.company) ? row.company[0] : row.company
-          return {
-            id: String(row.id),
-            title: company?.name || 'Точка',
-            subtitle: row.status === 'disputed' ? 'Спорная' : 'Новая заявка',
+        if (companyScope.allowedCompanyIds) {
+          requestsQuery = requestsQuery.in('requesting_company_id', companyScope.allowedCompanyIds)
+        }
+
+        const { data: requestRows } = await requestsQuery
+        if (requestRows && requestRows.length > 0) {
+          const items: NotificationItem[] = requestRows.slice(0, 5).map((row: any) => {
+            const company = Array.isArray(row.company) ? row.company[0] : row.company
+            return {
+              id: String(row.id),
+              title: company?.name || 'Точка',
+              subtitle: row.status === 'disputed' ? 'Спорная' : 'Новая заявка',
+              href: '/store/requests',
+              date: row.created_at || null,
+            }
+          })
+          found.push({
+            id: 'requests',
+            label: 'Заявки ждут решения',
+            icon: 'clipboard',
             href: '/store/requests',
-            date: row.created_at || null,
-          }
-        })
-        groups.push({
-          id: 'requests',
-          label: 'Заявки ждут решения',
-          icon: 'clipboard',
-          href: '/store/requests',
-          count: requestRows.length,
-          items,
-        })
-      }
-    } catch (e) {
-      await writeSystemErrorLogSafe({
-        scope: 'server',
-        area: 'api/admin/notifications.requests',
-        message: (e as any)?.message || 'requests-section-failed',
-      })
-    }
-
-    // ── Upcoming birthdays (7 days) ─────────────────────────────────────────
-    if (canSeeBirthdays) try {
-      let operatorsQuery = supabase
-        .from('operators')
-        .select('id, name, short_name, operator_profiles(full_name, birth_date)')
-        .eq('is_active', true)
-
-      if (allowedOperatorIds) operatorsQuery = operatorsQuery.in('id', allowedOperatorIds)
-
-      const { data: operators } = await operatorsQuery
-
-      const now = new Date()
-      const birthdayItems: NotificationItem[] = []
-      for (const row of operators || []) {
-        const profile = Array.isArray((row as any).operator_profiles)
-          ? (row as any).operator_profiles[0]
-          : (row as any).operator_profiles
-        const birthDate = profile?.birth_date
-        if (!birthDate) continue
-        const daysUntil = getDaysUntilBirthday(birthDate, now)
-        if (daysUntil == null || daysUntil > 7) continue
-        birthdayItems.push({
-          id: String((row as any).id),
-          title: profile?.full_name || (row as any).name,
-          subtitle: daysUntil === 0 ? 'Сегодня!' : `Через ${daysUntil} дн.`,
-          href: '/birthdays',
-          date: birthDate,
+            count: requestRows.length,
+            items,
+          })
+        }
+      } catch (e) {
+        await writeSystemErrorLogSafe({
+          scope: 'server',
+          area: 'api/admin/notifications.requests',
+          message: (e as any)?.message || 'requests-section-failed',
         })
       }
-      birthdayItems.sort((a, b) => {
-        const da = getDaysUntilBirthday(a.date || '', now) ?? 999
-        const db = getDaysUntilBirthday(b.date || '', now) ?? 999
-        return da - db
-      })
-      if (birthdayItems.length > 0) {
-        groups.push({
-          id: 'birthdays',
-          label: 'Дни рождения',
-          icon: 'cake',
-          href: '/birthdays',
-          count: birthdayItems.length,
-          items: birthdayItems.slice(0, 5),
-        })
-      }
-    } catch (e) {
-      await writeSystemErrorLogSafe({
-        scope: 'server',
-        area: 'api/admin/notifications.birthdays',
-        message: (e as any)?.message || 'birthdays-section-failed',
-      })
-    }
+      return found
+    })()
 
-    // ── Unpaid point debts ──────────────────────────────────────────────────
-    if (canSeeDebts) try {
-      let debtsQuery = supabase
-        .from('debts')
-        .select('id, amount, client_name, created_at, company_id, company:companies!company_id(name)')
-        .eq('status', 'active')
-        .order('created_at', { ascending: false })
-        .limit(50)
-
-      if (allowedCompanyIds) debtsQuery = debtsQuery.in('company_id', allowedCompanyIds)
-
-      const { data: debts, error: debtsError } = await debtsQuery
-      if (debtsError) throw debtsError
-      if (debts && debts.length > 0) {
-        const items: NotificationItem[] = debts.slice(0, 5).map((row: any) => {
-          const company = Array.isArray(row.company) ? row.company[0] : row.company
-          const debtor = (row.client_name || '').trim() || 'Должник'
-          return {
-            id: String(row.id),
-            title: company?.name || 'Точка',
-            subtitle: `${debtor} · ${Number(row.amount || 0).toLocaleString('ru-RU')} ₸`,
-            href: '/point-debts',
-            date: row.created_at || null,
-          }
-        })
-        groups.push({
-          id: 'debts',
-          label: 'Долги с точки',
-          icon: 'receipt',
-          href: '/point-debts',
-          count: debts.length,
-          items,
-        })
-      }
-    } catch (e) {
-      await writeSystemErrorLogSafe({
-        scope: 'server',
-        area: 'api/admin/notifications.debts',
-        message: (e as any)?.message || 'debts-section-failed',
-      })
-    }
-
-    // ── Low stock alerts (showcase = catalog - warehouse; flag items at/below threshold) ──
-    let lowStockStage = 'start'
-    if (canSeeShowcase) try {
-      // null = супер-админ/legacy (все компании). Пустой массив = скоуп без компаний
-      // (Test без точек) → НЕ показываем чужое (NEVER-pattern). Раньше []→null = утечка.
-      const allowedCompanySet = allowedCompanyIds === null ? null : new Set(allowedCompanyIds)
-
-      // Showcase activated only for points that have an active point_display location.
-      lowStockStage = 'enabled-point-display-locations'
-      // Изоляция: фильтр по своим точкам опущен в САМ запрос. Раньше читались
-      // локации всех тенантов и отсеивались уже в JS — при лимите PostgREST в
-      // 1000 строк чужие записи вытесняли свои, и «низкие остатки» пропадали.
-      const enabledPoints = await fetchAllPages((from, to) => {
-        let q = supabase
-          .from('inventory_locations')
-          .select('id, company_id')
-          .eq('location_type', 'point_display')
+    const birthdaysSection = (async (): Promise<NotificationGroup[]> => {
+      const found: NotificationGroup[] = []
+      // ── Upcoming birthdays (7 days) ─────────────────────────────────────────
+      if (canSeeBirthdays) try {
+        let operatorsQuery = supabase
+          .from('operators')
+          .select('id, name, short_name, operator_profiles(full_name, birth_date)')
           .eq('is_active', true)
-          .not('company_id', 'is', null)
-        if (allowedCompanyIds) q = q.in('company_id', allowedCompanyIds)
-        return q.order('id').range(from, to)
-      })
-      const enabledCompanyIds = Array.from(
-        new Set(
-          (enabledPoints || [])
-            .map((r: any) => String(r.company_id || ''))
-            .filter((companyId) => companyId && (!allowedCompanySet || allowedCompanySet.has(companyId))),
-        ),
-      )
 
-      if (enabledCompanyIds.length > 0) {
-        const enabledCompanySet = new Set(enabledCompanyIds)
+        if (allowedOperatorIds) operatorsQuery = operatorsQuery.in('id', allowedOperatorIds)
 
-        lowStockStage = 'catalog-and-warehouse-locations'
-        // Изоляция: тот же приём — фильтр по своим точкам в самом запросе,
-        // а не постфактум в JS (иначе чужие локации съедали лимит в 1000 строк).
-        const allLocations = await fetchAllPages((from, to) =>
-          supabase
-            .from('inventory_locations')
-            .select('id, company_id, location_type')
-            .in('location_type', ['warehouse', 'point_display'])
-            .in('company_id', enabledCompanyIds)
-            .order('id')
-            .range(from, to),
-        )
+        const { data: operators } = await operatorsQuery
 
-        const locations = (allLocations || []).filter((row: any) =>
-          enabledCompanySet.has(String(row.company_id || '')),
-        )
-        const locationIds = locations.map((row: any) => String(row.id)).filter(Boolean)
-        const locationCompanyIds = Array.from(
-          new Set(locations.map((row: any) => String(row.company_id || '')).filter(Boolean)),
-        )
-
-        const companyNameById = new Map<string, string>()
-        if (locationCompanyIds.length > 0) {
-          lowStockStage = 'company-names'
-          // Изоляция: раньше читался справочник компаний ВСЕХ тенантов целиком
-          // (фильтр был только в JS ниже) — и он же упирался в лимит 1000 строк.
-          const { data: companies, error: companiesError } = await supabase
-            .from('companies')
-            .select('id, name')
-            .in('id', locationCompanyIds)
-          if (companiesError) throw companiesError
-          const locationCompanySet = new Set(locationCompanyIds)
-          for (const company of companies || []) {
-            const companyId = String((company as any).id || '')
-            if (locationCompanySet.has(companyId)) {
-              companyNameById.set(companyId, String((company as any).name || 'Точка'))
-            }
-          }
+        const now = new Date()
+        const birthdayItems: NotificationItem[] = []
+        for (const row of operators || []) {
+          const profile = Array.isArray((row as any).operator_profiles)
+            ? (row as any).operator_profiles[0]
+            : (row as any).operator_profiles
+          const birthDate = profile?.birth_date
+          if (!birthDate) continue
+          const daysUntil = getDaysUntilBirthday(birthDate, now)
+          if (daysUntil == null || daysUntil > 7) continue
+          birthdayItems.push({
+            id: String((row as any).id),
+            title: profile?.full_name || (row as any).name,
+            subtitle: daysUntil === 0 ? 'Сегодня!' : `Через ${daysUntil} дн.`,
+            href: '/birthdays',
+            date: birthDate,
+          })
         }
-
-        if (locationIds.length > 0) {
-          lowStockStage = 'inventory-balances'
-          const balanceRows: any[] = []
-          for (const locationChunk of chunk(locationIds)) {
-            const data = await fetchAllPages((from, to) =>
-              supabase
-                .from('inventory_balances')
-                .select('item_id, location_id, quantity')
-                .in('location_id', locationChunk)
-                .order('location_id')
-                .order('item_id')
-                .range(from, to),
-            )
-            balanceRows.push(...(data || []))
-          }
-
-          const itemIds = Array.from(
-            new Set(balanceRows.map((row: any) => String(row.item_id || '')).filter(Boolean)),
-          )
-          if (itemIds.length > 0) {
-            lowStockStage = 'inventory-items'
-            // Изоляция: раньше вычитывался ВЕСЬ каталог товаров всех тенантов, и
-            // нужные позиции отбирались в JS — чужие товары вытесняли свои из
-            // лимита в 1000 строк. Теперь спрашиваем только нужные id (чанками,
-            // чтобы не упереться в длину URL).
-            const allItems: any[] = []
-            for (const itemChunk of chunk(itemIds)) {
-              const data = await fetchAllPages((from, to) =>
-                supabase
-                  .from('inventory_items')
-                  .select('id, name, low_stock_threshold')
-                  .in('id', itemChunk)
-                  .order('id')
-                  .range(from, to),
-              )
-              allItems.push(...(data || []))
-            }
-            const itemIdSet = new Set(itemIds)
-            const items = (allItems || []).filter((row: any) => itemIdSet.has(String(row.id || '')))
-
-            const locationMap = new Map<string, any>(locations.map((row: any) => [String(row.id), row]))
-            const itemMap = new Map<string, any>(items.map((row: any) => [String(row.id), row]))
-            const grouped = new Map<
-              string,
-              {
-                companyId: string
-                companyName: string
-                itemId: string
-                itemName: string
-                threshold: number
-                catalogQty: number
-                warehouseQty: number
-                showcaseQty: number
-              }
-            >()
-
-            for (const row of balanceRows || []) {
-              const item = itemMap.get(String((row as any).item_id || ''))
-              const location = locationMap.get(String((row as any).location_id || ''))
-              if (!item?.name || !location?.company_id) continue
-
-              const key = `${location.company_id}:${row.item_id}`
-              const prev = grouped.get(key) || {
-                companyId: String(location.company_id),
-                companyName: companyNameById.get(String(location.company_id)) || 'Точка',
-                itemId: String(row.item_id || ''),
-                itemName: String(item.name),
-                threshold: Number(item.low_stock_threshold || 0),
-                catalogQty: 0,
-                warehouseQty: 0,
-                showcaseQty: 0,
-              }
-
-              const qty = Number((row as any).quantity || 0)
-              if (location.location_type === 'warehouse') prev.warehouseQty += qty
-              if (location.location_type === 'point_display') prev.showcaseQty += qty
-              grouped.set(key, prev)
-            }
-
-            // v8: catalog = warehouse + showcase. Низкий остаток = витрина пустеет,
-            // но товар где-то ещё есть (на складе) — иначе он просто отсутствует.
-            const lowStock = Array.from(grouped.values())
-              .map((entry) => ({ ...entry, catalogQty: entry.warehouseQty + entry.showcaseQty }))
-              .filter((entry) => {
-                // Считаем только товары, которые есть на точке (склад + витрина > 0)
-                if (entry.catalogQty <= 0) return false
-                // Если задан порог — флаг при showcase ≤ порог
-                // Без порога — флаг только при showcase = 0 и при наличии товара на складе
-                return entry.threshold > 0 ? entry.showcaseQty <= entry.threshold : entry.showcaseQty <= 0
-              })
-
-            if (lowStock.length > 0) {
-              const items: NotificationItem[] = lowStock.slice(0, 5).map((entry) => ({
-                id: `${entry.companyId}:${entry.itemId}`,
-                title: entry.itemName,
-                subtitle:
-                  entry.threshold > 0
-                    ? `${entry.companyName} · витрина ${entry.showcaseQty.toLocaleString('ru-RU')} ≤ мин ${entry.threshold.toLocaleString('ru-RU')}`
-                    : `${entry.companyName} · витрина 0`,
-                href: `/store/showcase?company_id=${entry.companyId}`,
-                date: null,
-              }))
-
-              groups.push({
-                id: 'low-stock',
-                label: 'Низкие остатки',
-                icon: 'alert',
-                href: '/store/showcase',
-                count: lowStock.length,
-                items,
-              })
-            }
-          }
+        birthdayItems.sort((a, b) => {
+          const da = getDaysUntilBirthday(a.date || '', now) ?? 999
+          const db = getDaysUntilBirthday(b.date || '', now) ?? 999
+          return da - db
+        })
+        if (birthdayItems.length > 0) {
+          found.push({
+            id: 'birthdays',
+            label: 'Дни рождения',
+            icon: 'cake',
+            href: '/birthdays',
+            count: birthdayItems.length,
+            items: birthdayItems.slice(0, 5),
+          })
         }
+      } catch (e) {
+        await writeSystemErrorLogSafe({
+          scope: 'server',
+          area: 'api/admin/notifications.birthdays',
+          message: (e as any)?.message || 'birthdays-section-failed',
+        })
       }
-    } catch (e) {
-      await writeSystemErrorLogSafe({
-        scope: 'server',
-        area: 'api/admin/notifications.low-stock',
-        message: (e as any)?.message || 'low-stock-section-failed',
-        payload: {
-          stage: lowStockStage,
-          code: (e as any)?.code || null,
-          details: (e as any)?.details || null,
-          hint: (e as any)?.hint || null,
-        },
-      })
+      return found
+    })()
+
+    const debtsSection = (async (): Promise<NotificationGroup[]> => {
+      const found: NotificationGroup[] = []
+      // ── Unpaid point debts ──────────────────────────────────────────────────
+      if (canSeeDebts) try {
+        let debtsQuery = supabase
+          .from('debts')
+          .select('id, amount, client_name, created_at, company_id, company:companies!company_id(name)')
+          .eq('status', 'active')
+          .order('created_at', { ascending: false })
+          .limit(50)
+
+        if (allowedCompanyIds) debtsQuery = debtsQuery.in('company_id', allowedCompanyIds)
+
+        const { data: debts, error: debtsError } = await debtsQuery
+        if (debtsError) throw debtsError
+        if (debts && debts.length > 0) {
+          const items: NotificationItem[] = debts.slice(0, 5).map((row: any) => {
+            const company = Array.isArray(row.company) ? row.company[0] : row.company
+            const debtor = (row.client_name || '').trim() || 'Должник'
+            return {
+              id: String(row.id),
+              title: company?.name || 'Точка',
+              subtitle: `${debtor} · ${Number(row.amount || 0).toLocaleString('ru-RU')} ₸`,
+              href: '/point-debts',
+              date: row.created_at || null,
+            }
+          })
+          found.push({
+            id: 'debts',
+            label: 'Долги с точки',
+            icon: 'receipt',
+            href: '/point-debts',
+            count: debts.length,
+            items,
+          })
+        }
+      } catch (e) {
+        await writeSystemErrorLogSafe({
+          scope: 'server',
+          area: 'api/admin/notifications.debts',
+          message: (e as any)?.message || 'debts-section-failed',
+        })
+      }
+      return found
+    })()
+
+    const showcaseSection = (async (): Promise<NotificationGroup[]> => {
+      const found: NotificationGroup[] = []
+      // ── Low stock alerts (showcase = catalog - warehouse; flag items at/below threshold) ──
+      let lowStockStage = 'start'
+      if (canSeeShowcase) try {
+        // null = супер-админ/legacy (все компании). Пустой массив = скоуп без компаний
+        // (Test без точек) → НЕ показываем чужое (NEVER-pattern). Раньше []→null = утечка.
+        const allowedCompanySet = allowedCompanyIds === null ? null : new Set(allowedCompanyIds)
+
+        // Showcase activated only for points that have an active point_display location.
+        lowStockStage = 'enabled-point-display-locations'
+        // Изоляция: фильтр по своим точкам опущен в САМ запрос. Раньше читались
+        // локации всех тенантов и отсеивались уже в JS — при лимите PostgREST в
+        // 1000 строк чужие записи вытесняли свои, и «низкие остатки» пропадали.
+        const enabledPoints = await fetchAllPages((from, to) => {
+          let q = supabase
+            .from('inventory_locations')
+            .select('id, company_id')
+            .eq('location_type', 'point_display')
+            .eq('is_active', true)
+            .not('company_id', 'is', null)
+          if (allowedCompanyIds) q = q.in('company_id', allowedCompanyIds)
+          return q.order('id').range(from, to)
+        })
+        const enabledCompanyIds = Array.from(
+          new Set(
+            (enabledPoints || [])
+              .map((r: any) => String(r.company_id || ''))
+              .filter((companyId) => companyId && (!allowedCompanySet || allowedCompanySet.has(companyId))),
+          ),
+        )
+
+        if (enabledCompanyIds.length > 0) {
+          const enabledCompanySet = new Set(enabledCompanyIds)
+
+          lowStockStage = 'catalog-and-warehouse-locations'
+          // Изоляция: тот же приём — фильтр по своим точкам в самом запросе,
+          // а не постфактум в JS (иначе чужие локации съедали лимит в 1000 строк).
+          const allLocations = await fetchAllPages((from, to) =>
+            supabase
+              .from('inventory_locations')
+              .select('id, company_id, location_type')
+              .in('location_type', ['warehouse', 'point_display'])
+              .in('company_id', enabledCompanyIds)
+              .order('id')
+              .range(from, to),
+          )
+
+          const locations = (allLocations || []).filter((row: any) =>
+            enabledCompanySet.has(String(row.company_id || '')),
+          )
+          const locationIds = locations.map((row: any) => String(row.id)).filter(Boolean)
+          const locationCompanyIds = Array.from(
+            new Set(locations.map((row: any) => String(row.company_id || '')).filter(Boolean)),
+          )
+
+          const companyNameById = new Map<string, string>()
+          if (locationCompanyIds.length > 0) {
+            lowStockStage = 'company-names'
+            // Изоляция: раньше читался справочник компаний ВСЕХ тенантов целиком
+            // (фильтр был только в JS ниже) — и он же упирался в лимит 1000 строк.
+            const { data: companies, error: companiesError } = await supabase
+              .from('companies')
+              .select('id, name')
+              .in('id', locationCompanyIds)
+            if (companiesError) throw companiesError
+            const locationCompanySet = new Set(locationCompanyIds)
+            for (const company of companies || []) {
+              const companyId = String((company as any).id || '')
+              if (locationCompanySet.has(companyId)) {
+                companyNameById.set(companyId, String((company as any).name || 'Точка'))
+              }
+            }
+          }
+
+          if (locationIds.length > 0) {
+            lowStockStage = 'inventory-balances'
+            // Чанки — чтобы не упереться в длину адреса, а не потому, что их
+            // надо читать по очереди: между собой они не связаны.
+            const balanceChunks = await Promise.all(
+              chunk(locationIds).map((locationChunk) =>
+                fetchAllPages((from, to) =>
+                  supabase
+                    .from('inventory_balances')
+                    .select('item_id, location_id, quantity')
+                    .in('location_id', locationChunk)
+                    .order('location_id')
+                    .order('item_id')
+                    .range(from, to),
+                ),
+              ),
+            )
+            const balanceRows: any[] = balanceChunks.flatMap((rows) => rows || [])
+
+            const itemIds = Array.from(
+              new Set(balanceRows.map((row: any) => String(row.item_id || '')).filter(Boolean)),
+            )
+            if (itemIds.length > 0) {
+              lowStockStage = 'inventory-items'
+              // Изоляция: раньше вычитывался ВЕСЬ каталог товаров всех тенантов, и
+              // нужные позиции отбирались в JS — чужие товары вытесняли свои из
+              // лимита в 1000 строк. Теперь спрашиваем только нужные id (чанками,
+              // чтобы не упереться в длину URL).
+              const itemChunks = await Promise.all(
+                chunk(itemIds).map((itemChunk) =>
+                  fetchAllPages((from, to) =>
+                    supabase
+                      .from('inventory_items')
+                      .select('id, name, low_stock_threshold')
+                      .in('id', itemChunk)
+                      .order('id')
+                      .range(from, to),
+                  ),
+                ),
+              )
+              const allItems: any[] = itemChunks.flatMap((rows) => rows || [])
+              const itemIdSet = new Set(itemIds)
+              const items = (allItems || []).filter((row: any) => itemIdSet.has(String(row.id || '')))
+
+              const locationMap = new Map<string, any>(locations.map((row: any) => [String(row.id), row]))
+              const itemMap = new Map<string, any>(items.map((row: any) => [String(row.id), row]))
+              const grouped = new Map<
+                string,
+                {
+                  companyId: string
+                  companyName: string
+                  itemId: string
+                  itemName: string
+                  threshold: number
+                  catalogQty: number
+                  warehouseQty: number
+                  showcaseQty: number
+                }
+              >()
+
+              for (const row of balanceRows || []) {
+                const item = itemMap.get(String((row as any).item_id || ''))
+                const location = locationMap.get(String((row as any).location_id || ''))
+                if (!item?.name || !location?.company_id) continue
+
+                const key = `${location.company_id}:${row.item_id}`
+                const prev = grouped.get(key) || {
+                  companyId: String(location.company_id),
+                  companyName: companyNameById.get(String(location.company_id)) || 'Точка',
+                  itemId: String(row.item_id || ''),
+                  itemName: String(item.name),
+                  threshold: Number(item.low_stock_threshold || 0),
+                  catalogQty: 0,
+                  warehouseQty: 0,
+                  showcaseQty: 0,
+                }
+
+                const qty = Number((row as any).quantity || 0)
+                if (location.location_type === 'warehouse') prev.warehouseQty += qty
+                if (location.location_type === 'point_display') prev.showcaseQty += qty
+                grouped.set(key, prev)
+              }
+
+              // v8: catalog = warehouse + showcase. Низкий остаток = витрина пустеет,
+              // но товар где-то ещё есть (на складе) — иначе он просто отсутствует.
+              const lowStock = Array.from(grouped.values())
+                .map((entry) => ({ ...entry, catalogQty: entry.warehouseQty + entry.showcaseQty }))
+                .filter((entry) => {
+                  // Считаем только товары, которые есть на точке (склад + витрина > 0)
+                  if (entry.catalogQty <= 0) return false
+                  // Если задан порог — флаг при showcase ≤ порог
+                  // Без порога — флаг только при showcase = 0 и при наличии товара на складе
+                  return entry.threshold > 0 ? entry.showcaseQty <= entry.threshold : entry.showcaseQty <= 0
+                })
+
+              if (lowStock.length > 0) {
+                const items: NotificationItem[] = lowStock.slice(0, 5).map((entry) => ({
+                  id: `${entry.companyId}:${entry.itemId}`,
+                  title: entry.itemName,
+                  subtitle:
+                    entry.threshold > 0
+                      ? `${entry.companyName} · витрина ${entry.showcaseQty.toLocaleString('ru-RU')} ≤ мин ${entry.threshold.toLocaleString('ru-RU')}`
+                      : `${entry.companyName} · витрина 0`,
+                  href: `/store/showcase?company_id=${entry.companyId}`,
+                  date: null,
+                }))
+
+                found.push({
+                  id: 'low-stock',
+                  label: 'Низкие остатки',
+                  icon: 'alert',
+                  href: '/store/showcase',
+                  count: lowStock.length,
+                  items,
+                })
+              }
+            }
+          }
+        }
+      } catch (e) {
+        await writeSystemErrorLogSafe({
+          scope: 'server',
+          area: 'api/admin/notifications.low-stock',
+          message: (e as any)?.message || 'low-stock-section-failed',
+          payload: {
+            stage: lowStockStage,
+            code: (e as any)?.code || null,
+            details: (e as any)?.details || null,
+            hint: (e as any)?.hint || null,
+          },
+        })
+      }
+      return found
+    })()
+
+    for (const section of await Promise.all([
+      requestsSection,
+      birthdaysSection,
+      debtsSection,
+      showcaseSection,
+    ])) {
+      groups.push(...section)
     }
+
 
     const total = groups.reduce((sum, g) => sum + g.count, 0)
     return json({ ok: true, data: { total, groups } })
