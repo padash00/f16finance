@@ -79,14 +79,30 @@ function routeFileFor(apiPath) {
   return fs.existsSync(file) ? file : null
 }
 
-/** Страница каталога, которую обслуживает адрес: самое длинное совпадение. */
+/**
+ * Страница каталога, которую обслуживает адрес: самое длинное совпадение.
+ *
+ * Разделитель у адреса и у страницы бывает разный: чеки кассы лежат по
+ * `/api/pos/receipts`, а страница называется `/pos-receipts`. По голому
+ * префиксу такой адрес приписывался кассе — и роут, честно просящий право
+ * своей страницы, попадал в отчёт как чужой. Поэтому пробуем оба написания.
+ */
 function pageFor(apiPath) {
   const trimmed = apiPath.replace(/^\/api\/admin/, '').replace(/^\/api/, '')
-  return (
-    [...pageByPath.entries()]
-      .filter(([pagePath]) => trimmed === pagePath || trimmed.startsWith(`${pagePath}/`))
-      .sort((a, b) => b[0].length - a[0].length)[0]?.[1] ?? null
-  )
+  const variants = new Set([trimmed])
+  const segments = trimmed.split('/').filter(Boolean)
+  for (let cut = 1; cut < segments.length; cut += 1) {
+    variants.add(`/${segments.slice(0, cut).join('/')}/${segments.slice(cut).join('-')}`)
+    variants.add(`/${segments.join('-')}`)
+  }
+
+  const matches = []
+  for (const variant of variants) {
+    for (const [pagePath, pageId] of pageByPath.entries()) {
+      if (variant === pagePath || variant.startsWith(`${pagePath}/`)) matches.push([pagePath, pageId])
+    }
+  }
+  return matches.sort((a, b) => b[0].length - a[0].length)[0]?.[1] ?? null
 }
 
 function getHandler(source) {
@@ -101,13 +117,20 @@ function getHandler(source) {
  * `if (op.role === 'operator')` — это разбор данных, а не запрет, и в отчёте
  * она была бы шумом, из-за которого перестанут читать весь отчёт.
  */
-function roleGatesIn(source) {
+function roleGatesIn(source, handler) {
   const roles = new Set()
+  // Помощники, которые обработчик просмотра действительно зовёт. Раньше сюда
+  // попадали все `can*` файла — в том числе те, что стерегут закрытие акта или
+  // проведение ревизии. Ограничение на изменение данных законно и к меню
+  // отношения не имеет: пункт открывается просмотром.
+  const helpers = [...source.matchAll(/function (can[A-Za-z]*)\([^)]*\)[^{]*\{([\s\S]*?)\n\}/g)]
+    .filter(([, name]) => new RegExp(`\\b${name}\\(`).test(handler))
+    .map(([, , body]) => body)
+
   const guards = [
-    // помощники: function canManage(...) { ... }
-    ...[...source.matchAll(/function can[A-Za-z]*\([^)]*\)[^{]*\{([\s\S]*?)\n\}/g)].map((m) => m[1]),
+    ...helpers,
     // и условия прямо в обработчике, где рядом стоит isSuperAdmin
-    ...source.split('\n').filter((line) => /isSuperAdmin/.test(line) && /role/i.test(line)),
+    ...handler.split('\n').filter((line) => /isSuperAdmin/.test(line) && /role/i.test(line)),
   ]
   for (const guard of guards) {
     for (const m of guard.matchAll(/(?:staffRole|role) [!=]== '([a-z_]+)'/g)) roles.add(m[1])
@@ -125,6 +148,13 @@ const KNOWN_GOOD = new Set([
   '/api/admin/shifts/z-report',
   // «Биллинг поставщикам» — раздел store-billing, право сходится.
   '/api/admin/store/debts',
+  // Акт инвентаризации — это и есть «Ревизии»: раздел store-revisions, право
+  // сходится, разошлись только названия — «audit» в адресе, «revisions» на
+  // странице.
+  '/api/admin/store/audit',
+  // Возврат по чеку — раздел pos-returns, право сходится. Адрес в
+  // единственном числе, страница во множественном.
+  '/api/pos/return',
 ])
 
 const foreignCapability = []
@@ -165,7 +195,7 @@ for (const apiPath of [...calledPaths].sort()) {
   }
 
   // 2. Прямая проверка роли — в самом роуте или через общий помощник.
-  const roles = roleGatesIn(source)
+  const roles = roleGatesIn(source, handler)
   if (/isStoreManager\(/.test(handler)) {
     roles.add('owner')
     roles.add('manager')

@@ -48,10 +48,21 @@ function collectClientActions() {
     let match
     while ((match = actionRe.exec(source))) {
       const action = match[1] || match[2]
-      const window = source.slice(Math.max(0, match.index - 600), match.index + 600)
-      const pathMatch = /path:\s*"(\/api\/[^"]+)"/.exec(window)
-        || /APIRequest\.multipart\(\s*"(\/api\/[^"]+)"/.exec(window)
-      if (!pathMatch) continue
+      // Берём БЛИЖАЙШИЙ адрес, а не первый попавшийся в окне. Первый — это
+      // часто хвост предыдущей функции: `addTaskComment` объявляет действие,
+      // а на 600 символов выше заканчивается соседний метод со своим путём, и
+      // аудит рапортовал, что комментарий к задаче шлют в живую активность.
+      const from = Math.max(0, match.index - 600)
+      const window = source.slice(from, match.index + 600)
+      const candidates = [
+        ...window.matchAll(/path:\s*"(\/api\/[^"]+)"/g),
+        ...window.matchAll(/APIRequest\.multipart\(\s*"(\/api\/[^"]+)"/g),
+      ]
+      if (!candidates.length) continue
+      const anchor = match.index - from
+      const pathMatch = candidates.sort(
+        (left, right) => Math.abs(left.index - anchor) - Math.abs(right.index - anchor),
+      )[0]
 
       // Путь может содержать подстановку — берём часть до неё.
       const path = pathMatch[1].split('\\(')[0].replace(/\/$/, '')
