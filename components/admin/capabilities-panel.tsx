@@ -4,11 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight, Loader2, RotateCcw, ShieldAlert, ShieldCheck, Search } from 'lucide-react'
 
 import { Input } from '@/components/ui/input'
-import {
-  CAPABILITY_GROUPS,
-  type Capability,
-  type CapabilityPage,
-} from '@/lib/core/capabilities'
+import { CAPABILITY_GROUPS, isDenyByDefault, type Capability, type CapabilityPage } from '@/lib/core/capabilities'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useNavSession } from '@/lib/nav/use-nav-session'
 import { getPathFeature } from '@/lib/nav/sections'
@@ -337,7 +333,7 @@ export function CapabilitiesPanel({ scope = 'global' }: { scope?: 'global' | 'or
         ${
           full
             ? `<div class="note"><b>Роль обходит проверки прав в коде.</b> ${esc(lockedRoleHint(role))}. Настройки в матрице на неё не влияют.</div>`
-            : `<div class="note"><b>Модель fail-open.</b> Роль базово получает весь каталог, а на /access права только <b>отнимаются</b>. «Открыто ${grantedCount}» означает, что явно снято ${total - grantedCount} — остальное досталось по умолчанию, включая права, добавленные в систему позже.</div>`
+            : `<div class="note"><b>Модель fail-open.</b> Роль базово получает весь каталог, а на /access права только <b>отнимаются</b>. «Открыто ${grantedCount}» означает, что явно снято ${total - grantedCount} — остальное досталось по умолчанию, включая права, добавленные в систему позже.<br>Исключение — права с пометкой «только явно» (оценка бизнеса): они не достаются никому, кроме владельца, пока их не выдадут поимённо.</div>`
         }
         <div class="sec">Видит страницы (${visiblePages.length})</div>
         <ul>${pageRows || '<li>— ни одной</li>'}</ul>
@@ -869,6 +865,14 @@ function PageRow({
                     <div className="flex items-center gap-1.5" title={cap.id}>
                       {severityBadge(cap.severity)}
                       <span>{cap.label}</span>
+                      {isDenyByDefault(cap.id) && (
+                        <span
+                          className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400"
+                          title="Это право не достаётся по умолчанию, как остальные: пока переключатель выключен, раздела нет ни у кого, кроме владельца. Включите его роли явно, если хотите открыть."
+                        >
+                          только явно
+                        </span>
+                      )}
                     </div>
                   </td>
                   {roles.map((role) => {

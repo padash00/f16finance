@@ -3,7 +3,7 @@
   "summary": {
     "groups": 9,
     "pages": 85,
-    "capabilities": 398
+    "capabilities": 400
   },
   "groups": [
     {
@@ -2209,6 +2209,20 @@
               "label": "Изменить игру на станции",
               "description": null,
               "severity": "medium",
+              "deps": []
+            },
+            {
+              "id": "stations.view_live",
+              "label": "Мониторинг станций",
+              "description": null,
+              "severity": "low",
+              "deps": []
+            },
+            {
+              "id": "stations.manage_agent_binding",
+              "label": "Подтверждение наблюдающих устройств",
+              "description": null,
+              "severity": "high",
               "deps": []
             },
             {

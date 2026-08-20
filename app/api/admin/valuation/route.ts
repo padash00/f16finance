@@ -49,10 +49,14 @@ export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
-    // Оценка стоимости бизнеса — крайне чувствительно: только владелец/суперадмин.
-    if (!access.isSuperAdmin && access.staffRole !== 'owner') {
-      return json({ error: 'forbidden' }, 403)
-    }
+    // Оценка стоимости бизнеса — крайне чувствительно, и раньше здесь стояла
+    // проверка роли: только владелец. Она держалась не на осторожности, а на
+    // том, что права работают «от разрешено» — сняв её, мы открыли бы оценку
+    // всему штату по умолчанию.
+    //
+    // Теперь `valuation.view` выдаётся только явно (DENY_BY_DEFAULT_CAPABILITIES),
+    // поэтому проверки права достаточно: по умолчанию его нет ни у кого, кроме
+    // владельца, а выдать финансисту — решение владельца, а не наше.
     const denied = await requireCapability(access, 'valuation.view')
     if (denied) return denied
 

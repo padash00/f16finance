@@ -25,7 +25,7 @@ import 'server-only'
 
 import { NextResponse } from 'next/server'
 
-import { getAllCapabilityIds } from '@/lib/core/capabilities'
+import { DENY_BY_DEFAULT_CAPABILITIES, getAllCapabilityIds, isDenyByDefault } from '@/lib/core/capabilities'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 type CapabilitiesCache = {
@@ -160,6 +160,11 @@ export async function loadUserCapabilities(
     return result
   }
 
+  // Права, которые не выдаются сами собой (оценка бизнеса): их не даёт ни
+  // fail-open, ни принадлежность к штату — только явная выдача ниже. Владелец
+  // сюда не доходит: он забрал полный набор строкой выше.
+  for (const capability of DENY_BY_DEFAULT_CAPABILITIES) result.delete(capability)
+
   // 1) role_capabilities — что ОТНЯТО у роли (granted=false). granted=true — no-op.
   if (role) {
     const { data: roleRows } = await supabase
@@ -170,6 +175,10 @@ export async function loadUserCapabilities(
 
     for (const row of (roleRows || []) as Array<{ capability: string; granted: boolean }>) {
       if (!row.granted) result.delete(row.capability)
+      // Для обычного права `granted=true` — пустое действие: оно и так есть.
+      // Для права «от запрещено» это единственный способ его выдать, иначе
+      // галочка на /access у супер-админа ничего бы не меняла.
+      else if (isDenyByDefault(row.capability)) result.add(row.capability)
     }
   }
 

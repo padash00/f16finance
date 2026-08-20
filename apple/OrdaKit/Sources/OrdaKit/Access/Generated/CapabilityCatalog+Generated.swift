@@ -687,6 +687,8 @@ extension CapabilityCatalog {
                         Capability(id: "stations.delete_game_catalog", label: "Удалить игру", description: nil, severity: .high, deps: []),
                         Capability(id: "stations.bulk_upsert_games", label: "Массовое обновление игр", description: nil, severity: .high, deps: []),
                         Capability(id: "stations.edit_station_game", label: "Изменить игру на станции", description: nil, severity: .medium, deps: []),
+                        Capability(id: "stations.view_live", label: "Мониторинг станций", description: nil, severity: .low, deps: []),
+                        Capability(id: "stations.manage_agent_binding", label: "Подтверждение наблюдающих устройств", description: nil, severity: .high, deps: []),
                         Capability(id: "stations.delete_station_game", label: "Удалить игру со станции", description: nil, severity: .medium, deps: []),
                         Capability(id: "stations.create_tariff", label: "Создать тариф", description: nil, severity: .high, deps: []),
                         Capability(id: "stations.edit_tariff", label: "Изменить тариф", description: nil, severity: .high, deps: []),
