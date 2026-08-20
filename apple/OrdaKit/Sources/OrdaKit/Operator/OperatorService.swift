@@ -235,6 +235,37 @@ public struct OperatorService: Sendable {
         )
     }
 
+    // ── Живая активность ─────────────────────────────────────────────────────
+
+    /// Отдать серверу адрес карточки смены.
+    ///
+    /// Дальше он сам досылает ей новые цифры при каждой продаже: пробивают их
+    /// на точке, а карточку видно на телефоне — обновить её изнутри
+    /// приложения, лежащего в кармане, невозможно.
+    public func registerLiveActivityToken(token: String, companyID: String, shiftID: String?) async {
+        var body: [String: Any] = ["action": "register", "token": token, "company_id": companyID]
+        if let shiftID, !shiftID.isEmpty { body["shift_id"] = shiftID }
+        _ = try? await api.send(
+            APIRequest(
+                path: "/api/mobile/live-activity",
+                method: .post,
+                body: try? JSONSerialization.data(withJSONObject: body)
+            )
+        )
+    }
+
+    /// Смена закрыта — адрес больше не нужен: иначе сервер будет слать
+    /// обновления в пустоту при каждой продаже следующей смены.
+    public func forgetLiveActivityToken(token: String) async {
+        _ = try? await api.send(
+            APIRequest(
+                path: "/api/mobile/live-activity",
+                method: .post,
+                body: try? JSONSerialization.data(withJSONObject: ["action": "stop", "token": token])
+            )
+        )
+    }
+
     public func addTaskComment(taskID: String, content: String) async throws {
         let body: [String: Any] = ["action": "addComment", "taskId": taskID, "content": content]
         _ = try await api.send(

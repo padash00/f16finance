@@ -34,6 +34,16 @@ const UNRECOVERABLE_REASONS = new Set(['BadDeviceToken', 'Unregistered', 'Device
 
 export type ApnsPushType = 'alert' | 'background' | 'liveactivity'
 
+/** Живая активность: событие и новое состояние карточки. */
+export type ApnsLiveActivity = {
+  event: 'update' | 'end'
+  contentState: Record<string, unknown>
+  /** Через сколько секунд состояние считать устаревшим. */
+  staleInSeconds?: number
+  /** Когда убрать законченную карточку, unix-секунды. */
+  dismissalUnix?: number
+}
+
 export type ApnsPayload = {
   title: string
   body: string
@@ -44,6 +54,8 @@ export type ApnsPayload = {
   categoryId?: string
   /** Идентификатор для схлопывания повторов (напр. одна и та же смена). */
   collapseId?: string
+  /** Обновление живой активности вместо обычного уведомления. */
+  liveActivity?: ApnsLiveActivity
   pushType?: ApnsPushType
 }
 
@@ -175,6 +187,24 @@ export function isApnsToken(token: string): boolean {
 }
 
 function buildBody(payload: ApnsPayload): string {
+  // Живая активность — другое тело: Apple ждёт событие, отметку времени и
+  // новое состояние карточки. Звук и текст здесь не показываются.
+  if (payload.liveActivity) {
+    const aps: Record<string, unknown> = {
+      timestamp: Math.floor(Date.now() / 1000),
+      event: payload.liveActivity.event,
+      'content-state': payload.liveActivity.contentState,
+      alert: { title: payload.title, body: payload.body },
+    }
+    if (payload.liveActivity.staleInSeconds) {
+      aps['stale-date'] = Math.floor(Date.now() / 1000) + payload.liveActivity.staleInSeconds
+    }
+    if (payload.liveActivity.event === 'end' && payload.liveActivity.dismissalUnix) {
+      aps['dismissal-date'] = payload.liveActivity.dismissalUnix
+    }
+    return JSON.stringify({ aps })
+  }
+
   const aps: Record<string, unknown> = {
     alert: { title: payload.title, body: payload.body },
     sound: 'default',

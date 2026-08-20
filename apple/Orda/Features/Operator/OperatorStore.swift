@@ -66,7 +66,37 @@ final class OperatorStore {
         self.service = service
         self.outbox = outbox
         self.queue = SaleQueue(service: service)
+
+        #if os(iOS)
+        // Адрес карточки на блокировке отдаём серверу: продажи пробивают на
+        // точке, в операторской программе, и досылать карточке новые цифры
+        // может только он. Приложение до этого обновляло её само — то есть
+        // лишь пока телефон в руках.
+        ShiftLiveActivityController.registerToken = { [weak self] token in
+            guard let self else { return }
+            Task { await self.sendActivityToken(token) }
+        }
+        ShiftLiveActivityController.forgetToken = { [weak self] token in
+            guard let self else { return }
+            Task { await self.forgetActivityToken(token) }
+        }
+        #endif
     }
+
+    #if os(iOS)
+    private func sendActivityToken(_ token: String) async {
+        guard let shift, !shift.companyID.isEmpty else { return }
+        await service.registerLiveActivityToken(
+            token: token,
+            companyID: shift.companyID,
+            shiftID: shift.id
+        )
+    }
+
+    private func forgetActivityToken(_ token: String) async {
+        await service.forgetLiveActivityToken(token: token)
+    }
+    #endif
 
     // ── Загрузка ─────────────────────────────────────────────────────────────
 

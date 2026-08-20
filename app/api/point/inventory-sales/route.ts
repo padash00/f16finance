@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { pushShiftActivity } from '@/lib/server/live-activity'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { humanizeDbError } from '@/lib/server/db-error-humanize'
@@ -1034,6 +1035,35 @@ export async function POST(request: Request) {
         customer_id: loyaltyResult?.customerId || null,
       },
     })
+
+    // Карточка смены на экране блокировки: досылаем новые цифры.
+    //
+    // Продажу пробивают здесь, на точке, а карточку видит владелец в телефоне.
+    // Раньше она обновлялась только пока телефон в руках — то есть почти
+    // никогда, и на блокировке висели цифры часовой давности.
+    void (async () => {
+      try {
+        const summary = await fetchShiftSummary({
+          supabase,
+          locationId: location.id,
+          saleDate,
+          shift,
+          shiftId: shiftIdAttach,
+        })
+        await pushShiftActivity({
+          companyId: device.company_id,
+          shiftId: shiftIdAttach || null,
+          state: {
+            revenue: Number((summary as any)?.total_amount || 0),
+            receipts: Number((summary as any)?.sale_count || 0),
+            cash: Number((summary as any)?.cash_amount || 0),
+            kaspi: Number((summary as any)?.kaspi_amount || 0),
+          },
+        })
+      } catch {
+        /* карточка — удобство, продажа важнее */
+      }
+    })()
 
     // Low stock check в фоне — только для каталожных товаров
     const soldItemIds = items.map((i) => i.item_id).filter((id): id is string => !!id)

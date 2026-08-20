@@ -15,6 +15,13 @@ import OrdaKit
 @MainActor
 enum ShiftLiveActivityController {
     private static var current: Activity<ShiftActivityAttributes>?
+    /// Кому отдавать адрес карточки. Ставится извне: контроллер про сеть знать
+    /// не должен, но без адреса карточка обновляется только пока телефон в
+    /// руках — а продажи пробивают на точке, в операторской программе.
+    static var registerToken: ((String) -> Void)?
+    static var forgetToken: ((String) -> Void)?
+    private static var tokenTask: Task<Void, Never>?
+    private static var lastToken: String?
 
     /// Разрешены ли живые активности. Человек мог выключить их в настройках.
     private static var isAvailable: Bool {
@@ -43,10 +50,34 @@ enum ShiftLiveActivityController {
             openedAt: openedAt,
             isNight: isNight
         )
+        // `pushType: .token` — Apple выдаёт карточке собственный адрес, по
+        // которому сервер досылает ей новое состояние. Без него карточка живёт
+        // ровно столько, сколько приложение успевает её обновлять само.
         current = try? Activity.request(
             attributes: attributes,
-            content: ActivityContent(state: state, staleDate: nil)
+            content: ActivityContent(state: state, staleDate: nil),
+            pushType: .token
         )
+        observeToken()
+    }
+
+    /// Слушать адрес карточки. Apple выдаёт его не сразу и может поменять —
+    /// поэтому подписка, а не однократное чтение.
+    private static func observeToken() {
+        guard let activity = current else { return }
+        let id = activity.id
+        tokenTask?.cancel()
+        tokenTask = Task {
+            guard let live = Activity<ShiftActivityAttributes>.activities.first(where: { $0.id == id })
+            else { return }
+            for await data in live.pushTokenUpdates {
+                let token = data.map { String(format: "%02x", $0) }.joined()
+                await MainActor.run {
+                    lastToken = token
+                    registerToken?(token)
+                }
+            }
+        }
     }
 
     static func update(_ state: ShiftActivityAttributes.ContentState) {
@@ -81,6 +112,14 @@ enum ShiftLiveActivityController {
     /// оставленная активность продолжала бы показывать чужие деньги на экране
     /// блокировки.
     static func stop() {
+        tokenTask?.cancel()
+        tokenTask = nil
+        // Сервер должен забыть адрес: иначе он продолжит слать обновления по
+        // закрытой смене — в пустоту, но каждой продажей.
+        if let lastToken {
+            forgetToken?(lastToken)
+            self.lastToken = nil
+        }
         guard let activity = current else { return }
         let id = activity.id
         current = nil
@@ -94,6 +133,9 @@ enum ShiftLiveActivityController {
     static func adopt() {
         guard current == nil else { return }
         current = Activity<ShiftActivityAttributes>.activities.first
+        // После перезапуска адрес нужно передать заново: сервер мог его
+        // забыть, а карточка на экране осталась.
+        observeToken()
     }
 }
 #endif
