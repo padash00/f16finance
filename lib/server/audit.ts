@@ -327,6 +327,36 @@ export async function writeSystemErrorLog(client: any, entry: SystemErrorEntry) 
   })
 }
 
+/**
+ * Человеческое описание ошибки для журнала.
+ *
+ * `String(error)` на объекте даёт «[object Object]» — именно это и лежало в
+ * журнале вместо причины: у ошибок базы нет класса `Error`, это обычные
+ * объекты с полями `message`, `code`, `details`, `hint`. Запись есть, а что
+ * сломалось — неизвестно.
+ */
+export function describeError(error: unknown): string {
+  if (error instanceof Error) return error.message
+  if (typeof error === 'string') return error
+  if (error && typeof error === 'object') {
+    const source = error as Record<string, unknown>
+    const message = String(source.message || '').trim()
+    const parts = [
+      message,
+      source.code ? `код ${source.code}` : '',
+      source.details ? String(source.details) : '',
+      source.hint ? String(source.hint) : '',
+    ].filter(Boolean)
+    if (parts.length > 0) return parts.join(' · ')
+    try {
+      return JSON.stringify(error).slice(0, 500)
+    } catch {
+      return 'нераспознанная ошибка'
+    }
+  }
+  return String(error)
+}
+
 export async function writeSystemErrorLogSafe(entry: SystemErrorEntry) {
   try {
     if (!hasAdminSupabaseCredentials()) return

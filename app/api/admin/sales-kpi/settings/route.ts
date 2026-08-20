@@ -16,7 +16,7 @@ import { NextResponse } from 'next/server'
 import { requireStaffCapability } from '@/lib/server/capabilities'
 import { requireAddon } from '@/lib/server/entitlements'
 import { resolveCompanyScope } from '@/lib/server/organizations'
-import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { writeAuditLog, writeSystemErrorLogSafe, describeError } from '@/lib/server/audit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { normalizeStoreKpiSettings } from '@/lib/domain/store-kpi'
@@ -130,7 +130,7 @@ export async function GET(request: Request) {
     await writeSystemErrorLogSafe({
       scope: 'server',
       area: 'api/admin/sales-kpi/settings GET',
-      message: error instanceof Error ? error.message : String(error),
+      message: describeError(error),
     })
     return json({ error: 'internal-error' }, 500)
   }
@@ -370,7 +370,7 @@ export async function POST(request: Request) {
     await writeSystemErrorLogSafe({
       scope: 'server',
       area: 'api/admin/sales-kpi/settings POST',
-      message: error instanceof Error ? error.message : String(error),
+      message: describeError(error),
     })
     return json({ error: 'internal-error' }, 500)
   }
@@ -415,7 +415,7 @@ export async function DELETE(request: Request) {
     await writeSystemErrorLogSafe({
       scope: 'server',
       area: 'api/admin/sales-kpi/settings DELETE',
-      message: error instanceof Error ? error.message : String(error),
+      message: describeError(error),
     })
     return json({ error: 'internal-error' }, 500)
   }

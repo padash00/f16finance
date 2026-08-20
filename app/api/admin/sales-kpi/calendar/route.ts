@@ -16,7 +16,7 @@
  */
 import { NextResponse } from 'next/server'
 
-import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { writeAuditLog, writeSystemErrorLogSafe, describeError } from '@/lib/server/audit'
 import {
   confidenceOf,
   expandHolidays,
@@ -108,7 +108,7 @@ export async function GET(request: Request) {
     await writeSystemErrorLogSafe({
       scope: 'server',
       area: 'api/admin/sales-kpi/calendar GET',
-      message: error instanceof Error ? error.message : String(error),
+      message: describeError(error),
     })
     console.error('[sales-kpi/calendar]', error)
     return json({ error: 'internal-error' }, 500)
@@ -434,7 +434,7 @@ export async function POST(request: Request) {
 
     return json({ error: 'unknown-action' }, 400)
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = describeError(error)
     await writeSystemErrorLogSafe({
       scope: 'server',
       area: 'api/admin/sales-kpi/calendar POST',

@@ -15,7 +15,7 @@
  */
 import { NextResponse } from 'next/server'
 
-import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { writeSystemErrorLogSafe, describeError } from '@/lib/server/audit'
 import {
   earliestSaleDate,
   inScope,
@@ -208,7 +208,7 @@ export async function GET(request: Request) {
     await writeSystemErrorLogSafe({
       scope: 'server',
       area: 'api/admin/sales-kpi/accuracy GET',
-      message: error instanceof Error ? error.message : String(error),
+      message: describeError(error),
     })
     console.error('[sales-kpi/accuracy]', error)
     return json({ error: 'internal-error' }, 500)

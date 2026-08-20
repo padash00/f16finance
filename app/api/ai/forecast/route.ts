@@ -1,3 +1,4 @@
+import { describeError } from '@/lib/server/audit'
 /**
  * AI Forecast API: умный прогноз доходов/расходов/прибыли с разбивкой
  * по категориям, трендами, точками роста и сравнением с KPI планом.
@@ -552,9 +553,9 @@ export async function POST(request: Request) {
               endpoint: '/api/ai/forecast',
               model: OPENAI_MODEL,
               status: 'error',
-              error: error instanceof Error ? error.message : String(error),
+              error: describeError(error),
             })
-            controller.enqueue(encoder.encode(sse('error', { error: error instanceof Error ? error.message : String(error) })))
+            controller.enqueue(encoder.encode(sse('error', { error: describeError(error) })))
             controller.close()
           }
         },
@@ -575,7 +576,7 @@ export async function POST(request: Request) {
         endpoint: '/api/ai/forecast',
         model: OPENAI_MODEL,
         status: 'error',
-        error: error instanceof Error ? error.message : String(error),
+        error: describeError(error),
       })
       throw error
     })

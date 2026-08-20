@@ -205,17 +205,37 @@ export function buildAuthoritativeSaleLines(params: {
 }
 
 export async function resolvePointSaleLocation(supabase: any, companyId: string) {
+  // Витрину ищем БЕЗ фильтра по активности — и вот почему.
+  //
+  // Уникальный индекс не разрешает второй `point_display` у точки, независимо
+  // от того, включён он или выключен. А поиск шёл только по включённым: если
+  // витрину когда-то отключили, она не находилась, код шёл создавать новую и
+  // упирался в индекс. Экран продаж у оператора падал целиком — тридцать три
+  // раза за две недели, и понять по ошибке «duplicate key» было невозможно.
   const { data, error } = await supabase
     .from('inventory_locations')
-    .select('id, name, code, location_type')
+    .select('id, name, code, location_type, is_active')
     .eq('company_id', companyId)
     .eq('location_type', 'point_display')
-    .eq('is_active', true)
     .limit(1)
     .maybeSingle()
 
   if (error) throw error
-  if (data?.id) return data
+
+  if (data?.id) {
+    if (data.is_active !== false) return data
+
+    // Выключенная витрина — единственная возможная у точки. Раз с неё просят
+    // продавать, включаем: другой всё равно не будет, а отказ означал бы
+    // «касса не работает» без объяснения.
+    const { data: revived } = await supabase
+      .from('inventory_locations')
+      .update({ is_active: true })
+      .eq('id', data.id)
+      .select('id, name, code, location_type')
+      .maybeSingle()
+    return revived || { id: data.id, name: data.name, code: data.code, location_type: data.location_type }
+  }
 
   // Авто-создание витрины если её нет (новая точка после v8 модели)
   const { data: company } = await supabase
@@ -238,13 +258,13 @@ export async function resolvePointSaleLocation(supabase: any, companyId: string)
     .select('id, name, code, location_type')
     .single()
   if (createErr) {
-    // Возможно, кто-то параллельно создал — попробуем ещё раз прочитать
+    // Кто-то создал параллельно. Читаем снова — снова без фильтра по
+    // активности, иначе вернёмся к той же ошибке.
     const { data: retry } = await supabase
       .from('inventory_locations')
       .select('id, name, code, location_type')
       .eq('company_id', companyId)
       .eq('location_type', 'point_display')
-      .eq('is_active', true)
       .limit(1)
       .maybeSingle()
     if (retry?.id) return retry

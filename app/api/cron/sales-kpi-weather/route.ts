@@ -15,7 +15,7 @@
 
 import { NextResponse } from 'next/server'
 
-import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { writeSystemErrorLogSafe, describeError } from '@/lib/server/audit'
 import { verifyCronRequest } from '@/lib/server/cron-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { fetchOpenMeteo } from '@/lib/server/weather-open-meteo'
@@ -91,7 +91,7 @@ export async function GET(request: Request) {
         await writeSystemErrorLogSafe({
           scope: 'server',
           area: 'cron/sales-kpi-weather company',
-          message: `${row.company_id}: ${companyError instanceof Error ? companyError.message : String(companyError)}`,
+          message: `${row.company_id}: ${describeError(companyError)}`,
         })
         report.push({ company_id: row.company_id, error: true })
       }
@@ -102,7 +102,7 @@ export async function GET(request: Request) {
     await writeSystemErrorLogSafe({
       scope: 'server',
       area: 'cron/sales-kpi-weather',
-      message: error instanceof Error ? error.message : String(error),
+      message: describeError(error),
     })
     return json({ error: 'internal-error' }, 500)
   }

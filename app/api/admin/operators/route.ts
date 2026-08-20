@@ -345,7 +345,7 @@ export async function POST(req: Request) {
 
       const [{ data: operator }, { data: profile }] = await Promise.all([
         supabase.from('operators').select('id, name, short_name, is_active, role').eq('id', operatorId).maybeSingle(),
-        supabase.from('operator_profiles').select('full_name, phone, email, position').eq('operator_id', operatorId).maybeSingle(),
+        supabase.from('operator_profiles').select('full_name, phone, email').eq('operator_id', operatorId).maybeSingle(),
       ])
 
       if (!operator) return json({ error: 'Оператор не найден' }, 404)
@@ -357,7 +357,11 @@ export async function POST(req: Request) {
             full_name: (profile as any)?.full_name?.trim() || (operator as any).name,
             short_name: (operator as any).short_name?.trim() || null,
             role: 'other',
-            position: (profile as any)?.position?.trim() || 'Оператор',
+            // Должность сюда не пишем: у `staff` нет такой колонки, и вставка
+            // падала целиком — «Could not find the 'position' column of
+            // 'staff'». Перевод оператора в сотрудники не проходил вовсе.
+            // Должность оператора живёт в `operator_profiles.position`, а у
+            // сотрудника её место занимает `role`.
             phone: (profile as any)?.phone?.trim() || null,
             email: (profile as any)?.email?.trim() || null,
             is_active: (operator as any).is_active !== false,

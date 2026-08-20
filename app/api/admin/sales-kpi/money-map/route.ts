@@ -11,7 +11,7 @@
  */
 import { NextResponse } from 'next/server'
 
-import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { writeSystemErrorLogSafe, describeError } from '@/lib/server/audit'
 import { inScope, loadStoreKpiSettings, resolveStoreKpiContext } from '@/lib/server/store-kpi'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -192,7 +192,7 @@ export async function GET(request: Request) {
     await writeSystemErrorLogSafe({
       scope: 'server',
       area: 'api/admin/sales-kpi/money-map GET',
-      message: error instanceof Error ? error.message : String(error),
+      message: describeError(error),
     })
     console.error('[sales-kpi/money-map]', error)
     return json({ error: 'internal-error' }, 500)

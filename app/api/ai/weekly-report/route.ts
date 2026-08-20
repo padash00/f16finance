@@ -1,3 +1,4 @@
+import { describeError } from '@/lib/server/audit'
 import { NextResponse } from 'next/server'
 
 import { logAiUsageSafe } from '@/lib/ai/usage-tracker'
@@ -123,9 +124,9 @@ export async function POST(request: Request) {
               endpoint: '/api/ai/weekly-report',
               model: OPENAI_MODEL,
               status: 'error',
-              error: error instanceof Error ? error.message : String(error),
+              error: describeError(error),
             })
-            controller.enqueue(encoder.encode(sse('error', { error: error instanceof Error ? error.message : String(error) })))
+            controller.enqueue(encoder.encode(sse('error', { error: describeError(error) })))
             controller.close()
           }
         },
@@ -146,7 +147,7 @@ export async function POST(request: Request) {
         endpoint: '/api/ai/weekly-report',
         model: OPENAI_MODEL,
         status: 'error',
-        error: error instanceof Error ? error.message : String(error),
+        error: describeError(error),
       })
       throw error
     })

@@ -11,7 +11,7 @@
  */
 import { NextResponse } from 'next/server'
 
-import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { writeAuditLog, writeSystemErrorLogSafe, describeError } from '@/lib/server/audit'
 import { awardMonthlyBonusToPayroll, voidMonthlyBonus } from '@/lib/server/store-kpi-payroll'
 import {
   earliestSaleDate,
@@ -169,7 +169,7 @@ export async function GET(request: Request) {
     await writeSystemErrorLogSafe({
       scope: 'server',
       area: 'api/admin/sales-kpi/quality GET',
-      message: error instanceof Error ? error.message : String(error),
+      message: describeError(error),
     })
     console.error('[sales-kpi/quality]', error)
     return json({ error: 'internal-error' }, 500)
@@ -424,7 +424,7 @@ export async function POST(request: Request) {
     await writeSystemErrorLogSafe({
       scope: 'server',
       area: 'api/admin/sales-kpi/quality POST',
-      message: error instanceof Error ? error.message : String(error),
+      message: describeError(error),
     })
     console.error('[sales-kpi/quality]', error)
     return json({ error: 'internal-error' }, 500)

@@ -1,5 +1,5 @@
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
-import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { writeSystemErrorLogSafe, describeError } from '@/lib/server/audit'
 import { escapeTelegramHtml } from '@/lib/telegram/message-kit'
 import { sendTelegramMessage } from '@/lib/telegram/send'
 
@@ -100,7 +100,7 @@ export async function checkAndNotifyLowStock(
         await writeSystemErrorLogSafe({
           area: 'low-stock-notifier',
           scope: 'server',
-          message: error instanceof Error ? error.message : String(error),
+          message: describeError(error),
           payload: { itemIds, locationId, staffId, telegramChatId: chatId },
         })
       }
@@ -129,7 +129,7 @@ export async function checkAndNotifyLowStock(
     await writeSystemErrorLogSafe({
       area: 'low-stock-notifier',
       scope: 'server',
-      message: error instanceof Error ? error.message : String(error),
+      message: describeError(error),
       payload: { itemIds, locationId },
     })
     // Never throw — background task, don't break main flow

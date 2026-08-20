@@ -13,7 +13,7 @@
  */
 import { NextResponse } from 'next/server'
 
-import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { writeSystemErrorLogSafe, describeError } from '@/lib/server/audit'
 import { getRequestOperatorContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { earliestSaleDate, loadShiftFacts, loadStoreKpiSettings, todayISO } from '@/lib/server/store-kpi'
@@ -169,7 +169,7 @@ export async function GET(request: Request) {
     await writeSystemErrorLogSafe({
       scope: 'server',
       area: 'api/operator/sales-kpi GET',
-      message: error instanceof Error ? error.message : String(error),
+      message: describeError(error),
     })
     console.error('[operator/sales-kpi]', error)
     return json({ error: 'internal-error' }, 500)

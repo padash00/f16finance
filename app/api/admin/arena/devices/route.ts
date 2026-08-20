@@ -14,7 +14,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 
 import { generateSecret, sha256 } from '@/lib/server/arena-runtime/auth'
-import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { writeAuditLog, writeSystemErrorLogSafe, describeError } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
@@ -263,7 +263,7 @@ export async function POST(request: Request) {
     await writeSystemErrorLogSafe({
       scope: 'server',
       area: 'api/admin/arena/devices POST',
-      message: error instanceof Error ? error.message : String(error),
+      message: describeError(error),
     })
     return json({ error: 'internal-error' }, 500)
   }

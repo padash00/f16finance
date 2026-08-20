@@ -12,7 +12,7 @@
 
 import { NextResponse } from 'next/server'
 
-import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { writeAuditLog, writeSystemErrorLogSafe, describeError } from '@/lib/server/audit'
 import { buildShiftReportContract } from '@/lib/reports/build-shift-report-contract'
 import {
   barChartSvg,
@@ -277,7 +277,7 @@ export async function POST(request: Request) {
     await writeSystemErrorLogSafe({
       scope: 'server',
       area: 'api/admin/sales-kpi/export',
-      message: error instanceof Error ? error.message : String(error),
+      message: describeError(error),
     })
     console.error('[sales-kpi/export]', error)
     return json({ error: 'export-failed', detail: error instanceof Error ? error.message : null }, 500)

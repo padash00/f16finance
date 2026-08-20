@@ -184,8 +184,11 @@ export async function GET(req: Request) {
     let query = supabase.from('monthly_profitability_inputs').select('*').order('month', { ascending: true })
     if (orgId) query = query.eq('organization_id', orgId)
 
-    if (from) query = query.gte('month', from)
-    if (to) query = query.lte('month', to)
+    // Границы — датами, а не `YYYY-MM`: колонка `month` типа `date`, и Postgres
+    // на `month >= '2026-01'` отвечает `invalid input syntax for type date`.
+    // В соседнем роуте /summary это чинили десятого августа, здесь осталось.
+    if (from) query = query.gte('month', monthStart(from))
+    if (to) query = query.lte('month', monthEnd(to))
 
     const { data, error } = await query
     if (error) throw error

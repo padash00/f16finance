@@ -1,3 +1,4 @@
+import { describeError } from '@/lib/server/audit'
 /**
  * ИИ-разбор смены и месяца.
  *
@@ -308,7 +309,7 @@ ${POST_SHIFT_SCHEMA}
 
     return { result, error: null }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = describeError(error)
 
     await args.supabase.from('store_kpi_ai_runs').insert({
       organization_id: args.organizationId,
@@ -416,7 +417,7 @@ ${MONTHLY_SCHEMA}
 
     return { result, error: null }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = describeError(error)
 
     await args.supabase.from('store_kpi_ai_runs').insert({
       organization_id: args.organizationId,
@@ -529,7 +530,7 @@ ${CASHIER_SCHEMA}
 
     return { result, error: null }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = describeError(error)
     await args.supabase.from('store_kpi_ai_runs').insert({
       organization_id: args.organizationId,
       company_id: args.companyId,

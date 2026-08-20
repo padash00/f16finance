@@ -23,7 +23,7 @@
 
 import { NextResponse } from 'next/server'
 
-import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { writeSystemErrorLogSafe, describeError } from '@/lib/server/audit'
 import { verifyCronRequest } from '@/lib/server/cron-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { sendTelegram } from '@/lib/server/telegram'
@@ -166,7 +166,7 @@ export async function GET(request: Request) {
         // Одна точка не должна ронять рассылку остальным.
         report.push({
           company: pointName,
-          error: companyError instanceof Error ? companyError.message : String(companyError),
+          error: describeError(companyError),
         })
       }
     }
@@ -176,7 +176,7 @@ export async function GET(request: Request) {
     await writeSystemErrorLogSafe({
       scope: 'server',
       area: 'api/cron/sales-kpi-digest',
-      message: error instanceof Error ? error.message : String(error),
+      message: describeError(error),
     })
     return json({ error: 'internal-error' }, 500)
   }

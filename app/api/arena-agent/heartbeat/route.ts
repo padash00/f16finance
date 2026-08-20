@@ -25,7 +25,7 @@ import {
 import { classifyProcess } from '@/lib/domain/arena-runtime/process-classification'
 import { applyObservation } from '@/lib/domain/arena-runtime/projection'
 import { authenticateDevice } from '@/lib/server/arena-runtime/auth'
-import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { writeSystemErrorLogSafe, describeError } from '@/lib/server/audit'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 export const runtime = 'nodejs'
@@ -228,7 +228,7 @@ export async function POST(request: Request) {
     await writeSystemErrorLogSafe({
       scope: 'server',
       area: 'api/arena-agent/heartbeat',
-      message: error instanceof Error ? error.message : String(error),
+      message: describeError(error),
     })
     return json({ error: 'internal-error' }, 500)
   }

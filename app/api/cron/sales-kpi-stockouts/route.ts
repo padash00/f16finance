@@ -22,7 +22,7 @@
 
 import { NextResponse } from 'next/server'
 
-import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { writeSystemErrorLogSafe, describeError } from '@/lib/server/audit'
 import { verifyCronRequest } from '@/lib/server/cron-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { addDaysISO, todayISO } from '@/lib/server/store-kpi'
@@ -190,7 +190,7 @@ export async function GET(request: Request) {
         // Одна точка не должна ронять обход остальных.
         report.push({
           company_id: companyId,
-          error: companyError instanceof Error ? companyError.message : String(companyError),
+          error: describeError(companyError),
         })
       }
     }
@@ -200,7 +200,7 @@ export async function GET(request: Request) {
     await writeSystemErrorLogSafe({
       scope: 'server',
       area: 'api/cron/sales-kpi-stockouts',
-      message: error instanceof Error ? error.message : String(error),
+      message: describeError(error),
     })
     return json({ error: 'internal-error' }, 500)
   }

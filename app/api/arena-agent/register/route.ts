@@ -19,7 +19,7 @@ import { z } from 'zod'
 
 import { ARENA_PROTOCOL_VERSION, ARENA_SCHEMA_VERSION, HEARTBEAT_INTERVAL_SEC } from '@/lib/domain/arena-runtime/config'
 import { normalizeMac, verifyBootstrapKey } from '@/lib/server/arena-runtime/auth'
-import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { writeSystemErrorLogSafe, describeError } from '@/lib/server/audit'
 import { checkRateLimit } from '@/lib/server/rate-limit'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -147,7 +147,7 @@ export async function POST(request: Request) {
     await writeSystemErrorLogSafe({
       scope: 'server',
       area: 'api/arena-agent/register',
-      message: error instanceof Error ? error.message : String(error),
+      message: describeError(error),
     })
     return json({ error: 'internal-error' }, 500)
   }
