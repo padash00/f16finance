@@ -53,9 +53,12 @@ export async function sendExpoPush(
  *
  * Возвращает список токенов, которые APNs признал мёртвыми навсегда.
  */
-export async function sendPush(tokens: string[], payload: PushPayload): Promise<{ invalidTokens: string[] }> {
+export async function sendPush(
+  tokens: string[],
+  payload: PushPayload,
+): Promise<{ invalidTokens: string[]; sent: number; reasons: string[]; configError?: string }> {
   const cleaned = tokens.map((t) => String(t || '').trim()).filter(Boolean)
-  if (cleaned.length === 0) return { invalidTokens: [] }
+  if (cleaned.length === 0) return { invalidTokens: [], sent: 0, reasons: [] }
 
   const expoTokens = cleaned.filter(isExpoToken)
   const apnsTokens = cleaned.filter(isApnsToken)
@@ -74,7 +77,14 @@ export async function sendPush(tokens: string[], payload: PushPayload): Promise<
     sendApnsPush(apnsTokens, apnsPayload),
   ])
 
-  return { invalidTokens: apnsResult.invalidTokens }
+  // Наверх отдаём и причины отказа: без них поломка настройки выглядит как
+  // успешная отправка, и разбираться в «уведомления не приходят» нечем.
+  return {
+    invalidTokens: apnsResult.invalidTokens,
+    sent: apnsResult.sent,
+    reasons: apnsResult.reasons,
+    configError: apnsResult.configError,
+  }
 }
 
 /**

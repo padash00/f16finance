@@ -52,9 +52,20 @@ export type ApnsResult = {
   failed: number
   /** Токены, которые больше никогда не заработают — их надо удалить из БД. */
   invalidTokens: string[]
+  /**
+   * Причины отказов словами Apple: `BadDeviceToken`, `InvalidProviderToken`,
+   * `TopicDisallowed`, `ExpiredProviderToken`.
+   *
+   * Без них любая поломка выглядела одинаково — «отправлено», и уведомление
+   * просто не приходило. Битый ключ, чужой bundle id и отладочный токен на
+   * боевом APNs неразличимы, пока не видно ответа Apple.
+   */
+  reasons: string[]
+  /** Отправка не состоялась из-за настроек сервера, а не из-за устройств. */
+  configError?: 'not-configured' | 'bad-key' | 'no-tokens'
 }
 
-const EMPTY_RESULT: ApnsResult = { sent: 0, failed: 0, invalidTokens: [] }
+const EMPTY_RESULT: ApnsResult = { sent: 0, failed: 0, invalidTokens: [], reasons: [] }
 
 // ────────────────────────────────────────────────────────────────────────────
 // Конфигурация
@@ -185,20 +196,22 @@ function buildBody(payload: ApnsPayload): string {
  */
 export async function sendApnsPush(tokens: string[], payload: ApnsPayload): Promise<ApnsResult> {
   const config = readConfig()
-  if (!config) return EMPTY_RESULT
+  if (!config) return { ...EMPTY_RESULT, configError: 'not-configured' }
 
   const unique = Array.from(new Set(tokens.map((t) => String(t || '').trim()).filter(isApnsToken)))
-  if (unique.length === 0) return EMPTY_RESULT
+  if (unique.length === 0) return { ...EMPTY_RESULT, configError: 'no-tokens' }
 
   const authToken = buildAuthToken(config)
-  if (!authToken) return EMPTY_RESULT
+  // Ключ не подписался: файл повреждён или в переменную попал не тот текст.
+  // Молчать здесь нельзя — снаружи это выглядело как успешная отправка.
+  if (!authToken) return { ...EMPTY_RESULT, configError: 'bad-key' }
 
   const body = buildBody(payload)
   const pushType: ApnsPushType = payload.pushType || 'alert'
   const topic = pushType === 'liveactivity' ? `${config.bundleId}.push-type.liveactivity` : config.bundleId
 
   let client: http2.ClientHttp2Session | null = null
-  const result: ApnsResult = { sent: 0, failed: 0, invalidTokens: [] }
+  const result: ApnsResult = { sent: 0, failed: 0, invalidTokens: [], reasons: [] }
 
   try {
     client = http2.connect(`https://${config.host}`)
@@ -246,6 +259,7 @@ export async function sendApnsPush(tokens: string[], payload: ApnsPayload): Prom
                   result.failed += 1
                   try {
                     const reason = JSON.parse(responseBody)?.reason
+                    if (reason && !result.reasons.includes(reason)) result.reasons.push(reason)
                     if (reason && UNRECOVERABLE_REASONS.has(reason)) {
                       result.invalidTokens.push(token)
                     }
