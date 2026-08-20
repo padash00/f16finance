@@ -32,6 +32,7 @@ import { confirmDialog } from '@/components/ui/confirm-dialog'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Input } from '@/components/ui/input'
 import { addDaysISO, formatRuDate, mondayOfDate, toISODateLocal, todayISO } from '@/lib/core/date'
+import { useToday } from '@/lib/client/use-today'
 import { formatMoney } from '@/lib/core/format'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { calculateOperatorShiftBreakdown } from '@/lib/domain/salary'
@@ -77,14 +78,25 @@ function OperatorSalaryDetailPageContent() {
     return value === 'undefined' || value === 'null' ? '' : value
   }, [params])
 
-  const currentWeek = toISODateLocal(mondayOfDate(new Date()))
-  const initialWeek = useMemo(() => {
+  // Текущая неделя — после гидрации: карточка готовится заранее, во время
+  // сборки, и вычисленная при отрисовке неделя попала бы в HTML как неделя
+  // сборки. Подробности в useToday.
+  const today = useToday()
+  const currentWeek = useMemo(
+    () => (today ? toISODateLocal(mondayOfDate(new Date(`${today}T12:00:00`))) : ''),
+    [today],
+  )
+  // Неделя из адреса известна сразу — она в ссылке, а не во времени.
+  const weekFromUrl = useMemo(() => {
     const fromParam = searchParams?.get('dateFrom') || searchParams?.get('weekStart') || ''
-    const normalized = /^\d{4}-\d{2}-\d{2}$/.test(fromParam.trim()) ? fromParam.trim() : ''
-    return normalized || currentWeek
-  }, [searchParams, currentWeek])
+    return /^\d{4}-\d{2}-\d{2}$/.test(fromParam.trim()) ? fromParam.trim() : ''
+  }, [searchParams])
 
-  const [weekStart, setWeekStart] = useState(initialWeek)
+  const [weekStart, setWeekStart] = useState(weekFromUrl)
+
+  useEffect(() => {
+    if (!weekStart && currentWeek) setWeekStart(currentWeek)
+  }, [currentWeek, weekStart])
   const [data, setData] = useState<PageData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -117,10 +129,11 @@ function OperatorSalaryDetailPageContent() {
   const [voidConfirm, setVoidConfirm] = useState<VoidTarget | null>(null)
   const [voidSaving, setVoidSaving] = useState(false)
 
-  const weekEnd = useMemo(() => addDaysISO(weekStart, 6), [weekStart])
+  const weekEnd = useMemo(() => (weekStart ? addDaysISO(weekStart, 6) : ''), [weekStart])
 
   const load = useCallback(async (silent = false) => {
-    if (!operatorId) return
+    // Без недели запрашивать нечего: она появится сразу после гидрации.
+    if (!operatorId || !weekStart) return
     if (!silent) setLoading(true)
     if (!silent) setError(null)
     try {

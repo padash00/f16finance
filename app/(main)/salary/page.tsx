@@ -4,6 +4,7 @@ import { FormEvent, Fragment, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { downloadReportPdf } from '@/lib/client/download-pdf'
 import { useApiCache } from '@/lib/client/use-api-cache'
+import { useToday } from '@/lib/client/use-today'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useCashlessLabels } from '@/lib/client/use-cashless-labels'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
@@ -308,8 +309,23 @@ export default function SalaryPage() {
   const canStaffAddAdjustment = can('staff.add_adjustment')
   const canStaffAddExtraDay = can('staff.add_extra_day')
 
-  const currentWeek = toISODateLocal(mondayOfDate(new Date()))
-  const [weekStart, setWeekStart] = useState(currentWeek)
+  // Текущая неделя — после гидрации, а не при отрисовке.
+  //
+  // Страница готовится заранее, во время сборки: вычисленная здесь неделя
+  // попадала в готовый HTML как неделя сборки. Браузер считал настоящую,
+  // разметка расходилась, и React перерисовывал страницу целиком — отсюда
+  // мигание при открытии зарплаты. Подробности в useToday.
+  const today = useToday()
+  const currentWeek = useMemo(
+    () => (today ? toISODateLocal(mondayOfDate(new Date(`${today}T12:00:00`))) : ''),
+    [today],
+  )
+  const [weekStart, setWeekStart] = useState('')
+
+  // Первая неделя — текущая; дальше человек листает сам.
+  useEffect(() => {
+    if (currentWeek && !weekStart) setWeekStart(currentWeek)
+  }, [currentWeek, weekStart])
   // error — только для ошибок мутаций; ошибки загрузки отдаёт useApiCache (loadError)
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
@@ -352,12 +368,15 @@ export default function SalaryPage() {
   const [adjSuccess, setAdjSuccess] = useState(false)
   const [broadcastConfirm, setBroadcastConfirm] = useState(false)
 
-  const weekEnd = useMemo(() => addDaysISO(weekStart, 6), [weekStart])
+  const weekEnd = useMemo(() => (weekStart ? addDaysISO(weekStart, 6) : ''), [weekStart])
 
   // SWR-кэш: повторное открытие страницы мгновенно показывает прошлые данные,
   // свежие подтягиваются фоном. После мутаций зовём load() (refresh — тихая перезагрузка при наличии кэша).
   const salaryUrl = `/api/admin/salary?view=weekly&weekStart=${encodeURIComponent(weekStart)}`
-  const { data, loading, error: loadError, refreshing, refresh: load } = useApiCache<SalaryData>(salaryUrl)
+  // Без недели запрашивать нечего: она появится сразу после гидрации.
+  const { data, loading, error: loadError, refreshing, refresh: load } = useApiCache<SalaryData>(salaryUrl, {
+    enabled: !!weekStart,
+  })
 
   useEffect(() => { if (!error) return; const t = setTimeout(() => setError(null), 6000); return () => clearTimeout(t) }, [error])
   useEffect(() => { if (advanceTarget) { setAdvanceCompanyId(advanceTarget.week.companyAllocations[0]?.companyId || data?.companies[0]?.id || ''); setAdvanceDate(todayISO()); setAdvanceCash(''); setAdvanceKaspi(''); setAdvanceComment('') } }, [advanceTarget, data?.companies])
@@ -1127,7 +1146,9 @@ export default function SalaryPage() {
                     <span className="rounded-full border border-border bg-white dark:bg-white/5 px-3 py-1">
                       Неделя:{' '}
                       <span className="font-semibold text-foreground">
-                        {formatRuDate(weekStart)} — {formatRuDate(weekEnd)}
+                        {/* До гидрации недели ещё нет — показываем прочерк, а
+                            не «NaN.NaN.NaN» из разбора пустой даты. */}
+                        {weekStart ? `${formatRuDate(weekStart)} — ${formatRuDate(weekEnd)}` : '—'}
                       </span>
                     </span>
                     {data ? (

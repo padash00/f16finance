@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback, useRef, Suspense } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { useToday } from '@/lib/client/use-today'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
 import { PageSkeleton, TableSkeleton } from '@/components/skeleton'
@@ -315,16 +316,18 @@ function SalaryRulesContent() {
   const [filterCompany, setFilterCompany] = useState<string>('all')
   const [filterShift, setFilterShift] = useState<ShiftType | 'all'>('all')
   const [searchTerm, setSearchTerm] = useState('')
-  const todayISO = useMemo(() => {
-    const now = new Date()
-    const yyyy = now.getFullYear()
-    const mm = String(now.getMonth() + 1).padStart(2, '0')
-    const dd = String(now.getDate()).padStart(2, '0')
-    return `${yyyy}-${mm}-${dd}`
-  }, [])
+  // После гидрации: страница готовится заранее, и дата, вычисленная при
+  // отрисовке, попала бы в поле «действует с» как день сборки — и в разметку,
+  // из-за которой React перерисовывает страницу. Подробности в useToday.
+  const todayISO = useToday()
   const [newTierMonths, setNewTierMonths] = useState('6')
   const [newTierPercent, setNewTierPercent] = useState('5')
-  const [newTierFrom, setNewTierFrom] = useState(todayISO)
+  const [newTierFrom, setNewTierFrom] = useState('')
+
+  // Поле «действует с» по умолчанию — сегодня, как только дата известна.
+  useEffect(() => {
+    if (todayISO) setNewTierFrom((current) => current || todayISO)
+  }, [todayISO])
   const [savingTierId, setSavingTierId] = useState<string | null>(null)
   const [addingTier, setAddingTier] = useState(false)
   const [deletingTierId, setDeletingTierId] = useState<string | null>(null)
