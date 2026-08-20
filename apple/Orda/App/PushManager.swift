@@ -140,9 +140,13 @@ final class PushManager {
     /// Одобрить расход, не открывая приложение.
     func approveExpense(id: String) async {
         guard let api else { return }
-        _ = try? await api.send(
-            APIRequest(path: "/api/admin/expenses/\(id)/approve", method: .post)
-        )
+        do {
+            _ = try await api.send(
+                APIRequest(path: "/api/admin/expenses/\(id)/approve", method: .post)
+            )
+        } catch {
+            await reportActionFailure("Расход не одобрен", reason: error)
+        }
     }
 
     /// Ответить на личное сообщение прямо из уведомления.
@@ -152,9 +156,41 @@ final class PushManager {
         let body = try? JSONSerialization.data(
             withJSONObject: ["recipientUserId": userID, "message": text]
         )
-        _ = try? await api.send(
-            APIRequest(path: "/api/direct-messages", method: .post, body: body)
+        do {
+            _ = try await api.send(
+                APIRequest(path: "/api/direct-messages", method: .post, body: body)
+            )
+        } catch {
+            await reportActionFailure("Ответ не отправлен", reason: error)
+        }
+    }
+
+    /// Сказать, что действие из уведомления не прошло.
+    ///
+    /// Эти два действия человек делает, не открывая приложение: нажал
+    /// «Одобрить» — и пошёл дальше, уверенный, что расход одобрен. Отказ здесь
+    /// молчал, и узнать о нём было неоткуда: экрана нет, приложение закрыто.
+    ///
+    /// Поэтому отвечаем тем же способом, каким спросили, — уведомлением.
+    private func reportActionFailure(_ title: String, reason: Error) async {
+        let message: String
+        if let apiError = reason as? APIError {
+            message = apiError.userMessage
+        } else {
+            message = reason.localizedDescription
+        }
+
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = "\(message) Откройте приложение и повторите."
+        content.sound = .default
+
+        let request = UNNotificationRequest(
+            identifier: "orda.action-failed.\(UUID().uuidString)",
+            content: content,
+            trigger: nil
         )
+        try? await UNUserNotificationCenter.current().add(request)
     }
 
     // ── Разрешение ───────────────────────────────────────────────────────────

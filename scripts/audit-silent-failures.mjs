@@ -19,10 +19,11 @@ import { join } from 'node:path'
 const ROOT = 'apple/Orda'
 
 /**
- * Не обращения к серверу: пауза и чтение файла из галереи. Их `try?` — это не
- * проглоченный отказ, а «не получилось — ну и ладно».
+ * Не обращения к серверу: пауза, чтение файла из галереи и показ локального
+ * уведомления (`UNUserNotificationCenter.current().add`). Их `try?` — это не
+ * проглоченный отказ сервера, а «не получилось — ну и ладно».
  */
-const NOT_NETWORK = new Set(['sleep', 'loadTransferable'])
+const NOT_NETWORK = new Set(['sleep', 'loadTransferable', 'current'])
 
 /**
  * Справочник точек. Его просит десяток экранов ради выпадающего списка, и
