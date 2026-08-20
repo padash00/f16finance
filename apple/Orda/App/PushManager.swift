@@ -168,7 +168,7 @@ final class PushManager {
         case .denied:
             status = .denied
         case .authorized, .provisional, .ephemeral:
-            status = .authorized(registered: deviceToken != nil)
+            status = .authorized(registered: registrationAccepted)
             registerForRemoteNotifications()
         @unknown default:
             status = .unknown
@@ -205,7 +205,9 @@ final class PushManager {
     func didReceive(deviceToken data: Data) {
         let token = data.map { String(format: "%02x", $0) }.joined()
         deviceToken = token
-        status = .authorized(registered: true)
+        // «Зарегистрировано» — это когда адрес принял сервер, а не когда его
+        // выдал Apple. Ставим после ответа сервера, ниже.
+        status = .authorized(registered: registrationAccepted)
         Task { await sendTokenIfPossible() }
     }
 
@@ -241,11 +243,37 @@ final class PushManager {
         let body: [String: Any] = ["token": deviceToken, "platform": platformName]
         guard let data = try? JSONSerialization.data(withJSONObject: body) else { return }
 
-        // Best-effort: провал регистрации не должен ничего ломать в интерфейсе.
-        _ = try? await api.send(
-            APIRequest(path: "/api/mobile/register-push", method: .post, body: data)
-        )
+        // Провал регистрации не ломает интерфейс — но и не исчезает.
+        //
+        // Здесь стоял `try?`: отказ сервера уходил в пустоту, адрес не
+        // сохранялся, и снаружи это выглядело как «уведомления просто не
+        // приходят». В базе — ноль устройств, и причину назвать нечем.
+        //
+        // Теперь причина остаётся в `lastRegistrationError` — её показывает
+        // проверка в настройках. А `registered` ставим только после того, как
+        // сервер адрес принял: до этого «зарегистрировано» было обещанием, за
+        // которым ничего не стояло.
+        do {
+            _ = try await api.send(
+                APIRequest(path: "/api/mobile/register-push", method: .post, body: data)
+            )
+            registrationAccepted = true
+            lastRegistrationError = nil
+            status = .authorized(registered: true)
+        } catch let error as APIError {
+            registrationAccepted = false
+            lastRegistrationError = "Сервер не принял адрес: \(error.userMessage)"
+            status = .authorized(registered: false)
+        } catch {
+            registrationAccepted = false
+            lastRegistrationError = "Не удалось отправить адрес: \(error.localizedDescription)"
+            status = .authorized(registered: false)
+        }
     }
+
+    /// Принял ли сервер адрес. Наличие адреса у Apple ещё не значит, что о нём
+    /// знает сервер, — а уведомление шлёт именно он.
+    private(set) var registrationAccepted = false
 
     // ── Проверка ─────────────────────────────────────────────────────────────
 

@@ -33,14 +33,16 @@ const REFERENCE_CALLS = new Set(['companies', 'disabledCapabilities'])
 /**
  * Известные и осознанные.
  *
- * Счётчики на значках (непрочитанные сообщения, открытые экзамены) и отправка
- * адреса для уведомлений: это фон, который не должен мешать смене. У отправки
- * адреса к тому же своя видимая ошибка — `PushManager.lastRegistrationError`.
+ * Счётчики на значках: непрочитанные сообщения и открытые экзамены. Это фон,
+ * который не должен мешать смене.
+ *
+ * Отправка адреса для уведомлений отсюда ушла: её отказ означал ноль устройств
+ * в базе и «уведомления не приходят» без единой причины. Теперь причина
+ * остаётся в `PushManager.lastRegistrationError`.
  */
 const KNOWN = new Set([
   'CabinetStore.swift:threads',
   'CabinetStore.swift:exams',
-  'PushManager.swift:send',
   'FeedScreens.swift:markNewsViewed',
   'FeedScreens.swift:teamChat',
   'FeedScreens.swift:react',
