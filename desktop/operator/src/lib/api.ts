@@ -1126,6 +1126,8 @@ export type StationBooking = {
   id: string
   stationId: string | null
   stationName: string | null
+  /** Компания на несколько ПК: одна бронь, несколько строк. */
+  groupId: string | null
   startsAt: string
   endsAt: string
   status: string
@@ -1184,7 +1186,7 @@ export async function createBooking(
   config: AppConfig,
   session: OperatorSession,
   payload: {
-    stationId: string
+    stationIds: string[]
     startsAt: string
     endsAt: string
     phone: string
@@ -1192,7 +1194,12 @@ export async function createBooking(
     tariffId?: string | null
     notes?: string | null
   },
-): Promise<{ bookingId: string; stationName: string; knownCustomer: { id: string; name: string | null } | null }> {
+): Promise<{
+  bookingIds: string[]
+  groupId: string | null
+  stationNames: string[]
+  knownCustomer: { id: string; name: string | null } | null
+}> {
   return await request(
     config,
     'POST',
@@ -1206,13 +1213,18 @@ export async function cancelBooking(
   config: AppConfig,
   session: OperatorSession,
   bookingId: string,
-  reason?: string | null,
+  options?: { wholeGroup?: boolean; reason?: string | null },
 ): Promise<{ ok: boolean }> {
   return await request(
     config,
     'POST',
     '/api/point/bookings',
-    { action: 'cancel', bookingId, reason: reason || null },
+    {
+      action: 'cancel',
+      bookingId,
+      wholeGroup: options?.wholeGroup ?? false,
+      reason: options?.reason || null,
+    },
     operatorHeaders(session),
   )
 }

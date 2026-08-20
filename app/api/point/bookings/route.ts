@@ -52,7 +52,14 @@ export function normalizePhone(raw: string | null | undefined): string | null {
 
 const CreateBody = z.object({
   action: z.literal('create'),
-  stationId: z.string().uuid(),
+  /**
+   * Станции компании.
+   *
+   * В тетради компания на пять мест была одной записью. Здесь строк по-прежнему
+   * пять — иначе не проверить пересечения и не отменить один ПК из пяти, — но
+   * у них общая группа, и оператор видит их как одну бронь.
+   */
+  stationIds: z.array(z.string().uuid()).min(1).max(20),
   startsAt: z.string().datetime({ offset: true }),
   endsAt: z.string().datetime({ offset: true }),
   phone: z.string().min(5).max(32),
@@ -64,6 +71,8 @@ const CreateBody = z.object({
 const CancelBody = z.object({
   action: z.literal('cancel'),
   bookingId: z.string().uuid(),
+  /** Отменить всю компанию, а не один ПК из неё. */
+  wholeGroup: z.boolean().optional(),
   reason: z.string().max(300).optional().nullable(),
 })
 
@@ -98,7 +107,7 @@ export async function GET(request: Request) {
 
     const { data, error } = await supabase
       .from('client_bookings')
-      .select('id, station_id, station_name_snapshot, starts_at, ends_at, status, contact_phone, contact_name, customer_id, tariff_id, notes, created_at')
+      .select('id, station_id, station_name_snapshot, booking_group_id, starts_at, ends_at, status, contact_phone, contact_name, customer_id, tariff_id, notes, created_at')
       .eq('point_project_id', projectId)
       .not('station_id', 'is', null)
       .in('status', ['requested', 'confirmed'])
@@ -118,6 +127,7 @@ export async function GET(request: Request) {
         id: String(row.id),
         stationId: row.station_id ? String(row.station_id) : null,
         stationName: row.station_name_snapshot ?? null,
+        groupId: row.booking_group_id ? String(row.booking_group_id) : null,
         startsAt: row.starts_at,
         endsAt: row.ends_at,
         status: row.status,
@@ -157,7 +167,7 @@ export async function POST(request: Request) {
     if (body.action === 'cancel') {
       const { data: booking } = await supabase
         .from('client_bookings')
-        .select('id, point_project_id, status')
+        .select('id, point_project_id, status, booking_group_id')
         .eq('id', body.bookingId)
         .maybeSingle()
       if (!booking) return json({ error: 'booking-not-found' }, 404)
@@ -167,17 +177,28 @@ export async function POST(request: Request) {
         return json({ error: 'forbidden' }, 403)
       }
 
-      const { error } = await supabase
-        .from('client_bookings')
-        .update({
-          status: 'cancelled',
-          notes: body.reason || null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', booking.id)
+      const patch = {
+        status: 'cancelled',
+        notes: body.reason || null,
+        updated_at: new Date().toISOString(),
+      }
+
+      // Компания звонит и отменяет целиком — это один разговор, а не пять.
+      // Но отменить один ПК из пяти тоже должно быть можно: часть компании
+      // передумала, остальные придут.
+      const query =
+        body.wholeGroup && booking.booking_group_id
+          ? supabase.from('client_bookings').update(patch).eq('booking_group_id', booking.booking_group_id)
+          : supabase.from('client_bookings').update(patch).eq('id', booking.id)
+
+      const { error } = await query
       if (error) throw error
 
-      return json({ ok: true, status: 'cancelled' })
+      return json({
+        ok: true,
+        status: 'cancelled',
+        wholeGroup: Boolean(body.wholeGroup && booking.booking_group_id),
+      })
     }
 
     // ── Создание ──────────────────────────────────────────────────────────
@@ -206,18 +227,27 @@ export async function POST(request: Request) {
       )
     }
 
-    // Станция обязана принадлежать этой точке.
-    const { data: station } = await supabase
+    // Станции обязаны принадлежать этой точке.
+    const stationIds = [...new Set(body.stationIds)]
+    const { data: stations } = await supabase
       .from('arena_stations')
       .select('id, name, point_project_id, company_id, is_active')
-      .eq('id', body.stationId)
-      .maybeSingle()
-    if (!station) return json({ error: 'station-not-found' }, 404)
-    if (String(station.point_project_id) !== String(projectId)) {
-      return json({ error: 'forbidden', message: 'Станция принадлежит другой точке.' }, 403)
+      .in('id', stationIds)
+
+    const found = (stations || []) as any[]
+    if (found.length !== stationIds.length) {
+      return json({ error: 'station-not-found' }, 404)
     }
-    if (!station.is_active) {
-      return json({ error: 'station-inactive', message: 'Станция выключена — бронировать нечего.' }, 409)
+    for (const st of found) {
+      if (String(st.point_project_id) !== String(projectId)) {
+        return json({ error: 'forbidden', message: 'Станция принадлежит другой точке.' }, 403)
+      }
+      if (!st.is_active) {
+        return json(
+          { error: 'station-inactive', message: 'Станция ' + st.name + ' выключена — бронировать нечего.' },
+          409,
+        )
+      }
     }
 
     // ── Пересечения ───────────────────────────────────────────────────────
@@ -226,24 +256,30 @@ export async function POST(request: Request) {
     // включения расширения btree_gist, а это решение владельца, а не миграции.
     const { data: overlaps } = await supabase
       .from('client_bookings')
-      .select('id, starts_at, ends_at, contact_name, contact_phone')
-      .eq('station_id', station.id)
+      .select('id, station_id, starts_at, ends_at, contact_name')
+      .in('station_id', stationIds)
       .in('status', ['requested', 'confirmed'])
       .lt('starts_at', endsAt.toISOString())
       .gt('ends_at', startsAt.toISOString())
 
     if (overlaps && overlaps.length > 0) {
+      // Называем конкретные ПК: «что-то занято» бесполезно, когда оператор
+      // держит клиента на линии и выбирает из пяти машин.
       const clash = overlaps[0] as any
+      const busyNames = (overlaps as any[])
+        .map((o) => found.find((st) => String(st.id) === String(o.station_id))?.name)
+        .filter(Boolean)
+        .join(', ')
       return json(
         {
           error: 'booking-overlap',
-          message: `Станция уже забронирована с ${new Date(clash.starts_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })} до ${new Date(clash.ends_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}.`,
-          conflict: {
-            id: String(clash.id),
-            startsAt: clash.starts_at,
-            endsAt: clash.ends_at,
-            name: clash.contact_name ?? null,
-          },
+          message:
+            'Уже забронировано: ' +
+            busyNames +
+            '. Освободится в ' +
+            new Date(clash.ends_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) +
+            '.',
+          busyStations: busyNames,
         },
         409,
       )
@@ -280,39 +316,42 @@ export async function POST(request: Request) {
       shiftId = null
     }
 
-    const { data: created, error } = await supabase
-      .from('client_bookings')
-      .insert([
-        {
-          customer_id: customerId,
-          company_id: companyId,
-          point_project_id: projectId,
-          station_id: station.id,
-          station_name_snapshot: String(station.name),
-          starts_at: startsAt.toISOString(),
-          ends_at: endsAt.toISOString(),
-          status: 'confirmed',
-          contact_phone: phone,
-          contact_name: body.name || knownName,
-          tariff_id: body.tariffId || null,
-          notes: body.notes || null,
-          source: 'operator',
-          // Кто именно из операторов завёл бронь, устройство не знает: оно
-          // общее на точку. Ответственность привязывается через смену.
-          created_by_operator_id: null,
-          shift_id: shiftId,
-        },
-      ])
-      .select('id')
-      .single()
+    // Компания получает общий признак группы. Строк по-прежнему по одной на
+    // станцию — иначе не отменить один ПК из пяти и не проверить пересечения,
+    // — но в списке это будет одна бронь, как строка в тетради.
+    const groupId = found.length > 1 ? crypto.randomUUID() : null
+
+    const rows = found.map((st) => ({
+      customer_id: customerId,
+      company_id: companyId,
+      point_project_id: projectId,
+      station_id: st.id,
+      station_name_snapshot: String(st.name),
+      booking_group_id: groupId,
+      starts_at: startsAt.toISOString(),
+      ends_at: endsAt.toISOString(),
+      status: 'confirmed',
+      contact_phone: phone,
+      contact_name: body.name || knownName,
+      tariff_id: body.tariffId || null,
+      notes: body.notes || null,
+      source: 'operator',
+      // Кто именно из операторов завёл бронь, устройство не знает: оно общее
+      // на точку. Ответственность привязывается через смену.
+      created_by_operator_id: null,
+      shift_id: shiftId,
+    }))
+
+    const { data: created, error } = await supabase.from('client_bookings').insert(rows).select('id')
 
     if (error) throw error
 
     return json(
       {
         ok: true,
-        bookingId: String(created.id),
-        stationName: String(station.name),
+        bookingIds: (created || []).map((r: any) => String(r.id)),
+        groupId,
+        stationNames: found.map((st) => String(st.name)),
         // Оператору полезно сразу узнать, что человек уже бывал.
         knownCustomer: customerId ? { id: customerId, name: knownName } : null,
       },

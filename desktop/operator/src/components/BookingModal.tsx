@@ -20,6 +20,8 @@ type Props = {
   config: AppConfig
   session: OperatorSession
   station: ArenaStation
+  /** Все станции точки — из них выбирается компания. */
+  allStations: ArenaStation[]
   tariffs: ArenaTariff[]
   /** Уже существующие брони этой станции — чтобы показать занятые часы. */
   existing: StationBooking[]
@@ -43,6 +45,7 @@ export function BookingModal({
   config,
   session,
   station,
+  allStations,
   tariffs,
   existing,
   horizonEnd,
@@ -64,6 +67,21 @@ export function BookingModal({
   const [endsAt, setEndsAt] = useState(defaults.end)
   const [tariffId, setTariffId] = useState<string>('')
   const [notes, setNotes] = useState('')
+
+  /**
+   * Станции компании.
+   *
+   * В тетради компания на пять мест была одной записью, и здесь так же: один
+   * телефон, одно время, несколько ПК. Заводить пять отдельных броней на один
+   * разговор — это и есть та ручная работа, от которой уходим.
+   */
+  const [pickedStations, setPickedStations] = useState<string[]>([station.id])
+
+  // Соседи по зоне: компания почти всегда садится рядом, и предлагать ей ПК
+  // из другого конца зала бессмысленно.
+  const zoneNeighbours = allStations
+    .filter((s) => s.id !== station.id && s.zone_id === station.zone_id && s.is_active !== false)
+    .sort((a, b) => a.name.localeCompare(b.name, 'ru', { numeric: true }))
 
   const [lookup, setLookup] = useState<PhoneLookup | null>(null)
   const [saving, setSaving] = useState(false)
@@ -116,7 +134,7 @@ export function BookingModal({
     setSaving(true)
     try {
       await api.createBooking(config, session, {
-        stationId: station.id,
+        stationIds: pickedStations,
         startsAt: start.toISOString(),
         endsAt: end.toISOString(),
         phone,
@@ -139,7 +157,11 @@ export function BookingModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-5 shadow-2xl">
         <div className="flex items-baseline justify-between gap-2">
-          <h2 className="text-lg font-semibold text-foreground">Бронь станции {station.name}</h2>
+          <h2 className="text-lg font-semibold text-foreground">
+            {pickedStations.length > 1
+              ? `Бронь: ${pickedStations.length} ПК`
+              : `Бронь станции ${station.name}`}
+          </h2>
           <span className="text-xs text-muted-foreground">Сессия не запускается</span>
         </div>
 
@@ -183,6 +205,38 @@ export function BookingModal({
               </div>
             )}
           </div>
+
+          {/* Компания: добавить соседние ПК одним разговором */}
+          {zoneNeighbours.length > 0 && (
+            <div>
+              <label className="mb-1 block text-xs text-muted-foreground">
+                Ещё ПК для компании {pickedStations.length > 1 ? `(выбрано ${pickedStations.length})` : ''}
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {zoneNeighbours.map((s) => {
+                  const picked = pickedStations.includes(s.id)
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() =>
+                        setPickedStations((prev) =>
+                          prev.includes(s.id) ? prev.filter((x) => x !== s.id) : [...prev, s.id],
+                        )
+                      }
+                      className={
+                        picked
+                          ? 'rounded-lg border border-primary bg-primary/20 px-2.5 py-1 text-xs font-semibold text-foreground'
+                          : 'rounded-lg border border-border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground'
+                      }
+                    >
+                      {s.name}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="mb-1 block text-xs text-muted-foreground">Имя</label>

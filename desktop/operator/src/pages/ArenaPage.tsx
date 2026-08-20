@@ -1838,6 +1838,7 @@ export default function ArenaPage({
           config={config}
           session={session}
           station={bookingTarget}
+          allStations={stations}
           tariffs={tariffs}
           existing={bookingsForStation(bookingTarget.id)}
           horizonEnd={bookingHorizon}
