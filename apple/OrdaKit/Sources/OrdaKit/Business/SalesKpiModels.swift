@@ -150,6 +150,62 @@ public struct SalesKpiReport: Decodable, Sendable {
     public let totals: Totals
     /// Со скольких смен ставится статус: по паре смен человека не оценивают.
     public let minQualifyingShifts: Int
+    /// Разбор по сменам: почему касса получилась такой.
+    ///
+    /// Приходил в том же ответе и не использовался — приложение показывало
+    /// «кому доплатить» и «по продавцам», а вопрос «за что» оставался на сайте.
+    public let shifts: [Shift]
+
+    /// Смена с разбором.
+    ///
+    /// Главное здесь — `verdict`: касса просела из-за того, что мало людей
+    /// зашло, или из-за того, как продавец с ними работал. Это два разных
+    /// ответа, и путать их нельзя — за пустой вечер человек не отвечает.
+    public struct Shift: Decodable, Sendable, Identifiable, Hashable {
+        public let date: String
+        public let shift: String
+        public let shiftID: String?
+        public let cashierName: String?
+        public let revenue: Double
+        public let expectedRevenue: Double?
+        public let receipts: Int
+        public let verdict: String
+        /// Что именно сложилось так — короткими фразами от сервера.
+        public let evidence: [String]
+
+        public var id: String { shiftID ?? "\(date)-\(shift)" }
+
+        public var shiftLabel: String { shift == "night" ? "Ночь" : "День" }
+
+        /// Средний чек — то, о чём спрашивают первым.
+        public var averageReceipt: Double { receipts > 0 ? revenue / Double(receipts) : 0 }
+
+        /// Насколько касса разошлась с ожидаемой. `nil` — ожидания нет.
+        public var deviation: Double? {
+            guard let expectedRevenue, expectedRevenue > 0 else { return nil }
+            return (revenue - expectedRevenue) / expectedRevenue
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case date, shift, revenue, receipts, verdict, evidence
+            case shiftID = "shift_id"
+            case cashierName = "cashier_name"
+            case expectedRevenue = "expected_revenue"
+        }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            date = try c.decodeFlexibleString(forKey: .date) ?? ""
+            shift = try c.decodeFlexibleString(forKey: .shift) ?? "day"
+            shiftID = try c.decodeFlexibleString(forKey: .shiftID)
+            cashierName = try c.decodeFlexibleString(forKey: .cashierName)
+            revenue = try c.decodeFlexibleDouble(forKey: .revenue) ?? 0
+            expectedRevenue = try c.decodeFlexibleDouble(forKey: .expectedRevenue)
+            receipts = Int(try c.decodeFlexibleDouble(forKey: .receipts) ?? 0)
+            verdict = try c.decodeFlexibleString(forKey: .verdict) ?? "NORMAL"
+            evidence = (try? c.decode([String].self, forKey: .evidence)) ?? []
+        }
+    }
 
     public struct Cashier: Decodable, Sendable, Identifiable, Hashable {
         public let cashierID: String
@@ -236,6 +292,7 @@ public struct SalesKpiReport: Decodable, Sendable {
         cashiers = try c.decodeIfPresent([Cashier].self, forKey: .cashiers) ?? []
         totals = try c.decodeIfPresent(Totals.self, forKey: .totals) ?? Totals.empty
         minQualifyingShifts = try c.decodeIfPresent(SettingsRef.self, forKey: .settings)?.minQualifyingShifts ?? 6
+        shifts = (try? c.decode([Shift].self, forKey: .shifts)) ?? []
     }
 
     private struct CompanyRef: Decodable { let name: String? }
@@ -244,7 +301,7 @@ public struct SalesKpiReport: Decodable, Sendable {
         private enum CodingKeys: String, CodingKey { case minQualifyingShifts = "min_qualifying_shifts" }
     }
 
-    private enum CodingKeys: String, CodingKey { case company, cashiers, totals, settings }
+    private enum CodingKeys: String, CodingKey { case company, cashiers, totals, settings, shifts }
 }
 
 extension SalesKpiReport.Totals {

@@ -29,11 +29,12 @@ struct SalesKpiScreen: View {
     @State private var section: Section = .payout
 
     private enum Section: String, CaseIterable, Identifiable {
-        case payout, people
+        case payout, review, people
         var id: String { rawValue }
         var label: String {
             switch self {
             case .payout: "Кому доплатить"
+            case .review: "Почему касса"
             case .people: "По продавцам"
             }
         }
@@ -61,6 +62,8 @@ struct SalesKpiScreen: View {
 
                 if section == .people {
                     people
+                } else if section == .review {
+                    review
                 } else {
                 totalsCard(payout)
                 if payout.rows.isEmpty {
@@ -302,6 +305,113 @@ struct SalesKpiScreen: View {
     }
 
     // ── Данные ───────────────────────────────────────────────────────────────
+
+    /// Почему касса получилась такой.
+    ///
+    /// Главный вопрос владельца к слабой смене — «это продавец плохо работал
+    /// или людей не было?». Это два разных ответа, и путать их нельзя: за
+    /// пустой вечер человек не отвечает. Сервер уже разбирает каждую смену и
+    /// присылает вывод тем же ответом — на сайте это отдельная вкладка, а в
+    /// приложении показывали только сумму к доплате, без объяснения, за что.
+    @ViewBuilder
+    private var review: some View {
+        if let report, !report.shifts.isEmpty {
+            Card {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    SectionHeader("Разбор смен", subtitle: "\(report.shifts.count) \(pluralShifts(report.shifts.count))")
+                    ForEach(reviewOrder) { shift in
+                        shiftRow(shift)
+                        if shift.id != reviewOrder.last?.id { Divider().overlay(Theme.border) }
+                    }
+                }
+            }
+        } else if report != nil {
+            WideEmptyState(
+                icon: "calendar",
+                title: "Смен за месяц нет",
+                message: "Разбор появится, когда за прилавком отработают хотя бы одну смену."
+            )
+        } else {
+            LoadingRows(count: 3)
+        }
+    }
+
+    /// Сначала то, что требует внимания: вопрос к продавцу, потом сильные
+    /// смены, потом остальное. Внутри — по дате, свежие сверху.
+    private var reviewOrder: [SalesKpiReport.Shift] {
+        (report?.shifts ?? []).sorted { left, right in
+            let leftWeight = reviewWeight(left.verdict)
+            let rightWeight = reviewWeight(right.verdict)
+            if leftWeight != rightWeight { return leftWeight < rightWeight }
+            return left.date > right.date
+        }
+    }
+
+    private func reviewWeight(_ verdict: String) -> Int {
+        switch verdict {
+        case "POSSIBLE_CASHIER_ISSUE": 0
+        case "STRONG_CASHIER": 1
+        case "LOW_DEMAND", "HIGH_DEMAND": 2
+        default: 3
+        }
+    }
+
+    /// Ярлык вывода. Слова те же, что на сайте: расхождение здесь означало бы
+    /// два разных языка об одном и том же.
+    private func verdictLabel(_ verdict: String) -> (text: String, tint: Color) {
+        switch verdict {
+        case "LOW_DEMAND": ("Мало покупателей", Theme.info)
+        case "POSSIBLE_CASHIER_ISSUE": ("Вопрос к продавцу", Theme.warning)
+        case "HIGH_DEMAND": ("Вытянул поток", Theme.info)
+        case "STRONG_CASHIER": ("Сильная смена", Theme.positive)
+        case "INSUFFICIENT_DATA": ("Мало данных", Theme.textDim)
+        default: ("Норма", Theme.textDim)
+        }
+    }
+
+    private func shiftRow(_ shift: SalesKpiReport.Shift) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("\(DateFormatting.dayMonth(shift.date)) · \(shift.shiftLabel)")
+                    .font(Typography.callout)
+                    .foregroundStyle(Theme.text)
+                Spacer()
+                Text(verdictLabel(shift.verdict).text)
+                    .font(Typography.caption)
+                    .foregroundStyle(verdictLabel(shift.verdict).tint)
+            }
+
+            HStack(spacing: Spacing.md) {
+                Text(Money.format(shift.revenue))
+                    .font(Typography.callout.weight(.semibold))
+                    .foregroundStyle(Theme.text)
+                if let deviation = shift.deviation {
+                    // deviation — доля (0,12), а Percent ждёт проценты.
+                    Text(Percent.format(deviation * 100, signed: true))
+                        .font(Typography.caption)
+                        .foregroundStyle(deviation >= 0 ? Theme.positive : Theme.warning)
+                }
+                Text("\(shift.receipts) чек. · средний \(Money.format(shift.averageReceipt))")
+                    .font(Typography.caption)
+                    .foregroundStyle(Theme.textDim)
+            }
+
+            if let cashier = shift.cashierName, !cashier.isEmpty {
+                Text(cashier)
+                    .font(Typography.caption)
+                    .foregroundStyle(Theme.textDim)
+            }
+
+            // Доводы сервера — то, из-за чего он так решил. Без них ярлык
+            // остаётся приговором без объяснения.
+            ForEach(shift.evidence.prefix(3), id: \.self) { line in
+                Text("· \(line)")
+                    .font(Typography.caption)
+                    .foregroundStyle(Theme.textDim)
+            }
+        }
+        .padding(.vertical, Spacing.xs)
+    }
 
     /// Как работают за прилавком — не про деньги к доплате, а про работу.
     ///
