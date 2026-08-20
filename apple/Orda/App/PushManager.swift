@@ -210,9 +210,18 @@ final class PushManager {
     }
 
     func didFailToRegister(error: Error) {
-        // На симуляторе без настроенного APNs это ожидаемо. Не шумим.
+        // На симуляторе без настроенного APNs это ожидаемо — не шумим на
+        // экране. Но текст ошибки сохраняем: на живом телефоне это
+        // единственное место, где Apple объясняет, почему адрес не выдан —
+        // например, что у приложения нет права на уведомления. Без этой
+        // строчки «уведомления не приходят» неразрешимо: сервер видит только
+        // отсутствие устройства и причины назвать не может.
+        lastRegistrationError = error.localizedDescription
         status = .authorized(registered: false)
     }
+
+    /// Почему Apple не выдал адрес. Пусто — не выдавал или всё в порядке.
+    private(set) var lastRegistrationError: String?
 
     /// Вход состоялся: отправляем токен, если он уже есть.
     func sessionDidStart() {
@@ -264,11 +273,26 @@ final class PushManager {
             return "Уведомления запрещены в настройках телефона. Откройте «Настройки» → Orda → «Уведомления»."
         }
 
-        // Токен приходит от системы не мгновенно после первого разрешения.
+        // Токен приходит от системы не мгновенно после первого разрешения:
+        // ждём его до шести секунд, проверяя каждые полсекунды. Прежние две
+        // секунды не покрывали медленную сеть, и человек получал «устройств
+        // нет» на исправном телефоне.
         if deviceToken == nil {
             registerForRemoteNotifications()
-            try? await Task.sleep(for: .seconds(2))
+            for _ in 0..<12 {
+                try? await Task.sleep(for: .milliseconds(500))
+                if deviceToken != nil { break }
+            }
             await sendTokenIfPossible()
+        }
+
+        // Адрес так и не пришёл — и Apple объяснил почему. Это чинится не на
+        // сервере, поэтому текст показываем как есть.
+        if deviceToken == nil, let lastRegistrationError {
+            return "Телефон не смог получить адрес для уведомлений у Apple: \(lastRegistrationError)"
+        }
+        if deviceToken == nil {
+            return "Телефон пока не получил адрес для уведомлений у Apple. Проверьте связь и попробуйте ещё раз через минуту."
         }
 
         struct Result: Decodable {
