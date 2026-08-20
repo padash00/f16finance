@@ -23,6 +23,29 @@ export const SITE_DESCRIPTION = `${SITE_NAME} — система для упра
  * Задаётся явно: NEXT_PUBLIC_PRODUCT_MARK=ОК
  * Иначе: первые буквы двух слов из SITE_NAME («Orda Control» → «OC»).
  */
+/**
+ * Переопределён ли бренд под клиента.
+ *
+ * Продукт умеет вставать под чужим именем: `NEXT_PUBLIC_SITE_NAME` и
+ * `NEXT_PUBLIC_PRODUCT_MARK`. В такой установке наш знак был бы чужим лицом —
+ * там остаются буквы.
+ *
+ * Само по себе заданное имя ещё не значит «чужой»: наша же установка держит
+ * `NEXT_PUBLIC_SITE_NAME=Orda Point`, и по одному факту «переменная задана»
+ * мы спрятали бы собственный знак у себя. Поэтому смотрим на имя.
+ */
+export function isCustomBrand(siteName: string, productMark: string): boolean {
+  if (productMark.trim()) return true
+  const name = siteName.trim()
+  if (!name) return false
+  return !/^orda\b/i.test(name)
+}
+
+export const HAS_CUSTOM_BRAND = isCustomBrand(
+  SITE_NAME,
+  (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_PRODUCT_MARK?.trim()) || '',
+)
+
 export function getProductMark(): string {
   const custom = (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_PRODUCT_MARK?.trim()) || ''
   if (custom) return custom.slice(0, 3).toUpperCase()

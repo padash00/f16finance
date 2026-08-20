@@ -7,11 +7,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { normalizeOperatorUsername, toOperatorAuthEmail } from '@/lib/core/auth'
 import { SITE_NAME } from '@/lib/core/site'
+import { OrdaPointSymbol } from '@/components/brand/orda-point-symbol'
 import {
   AlertCircle,
   ArrowLeft,
   ArrowRight,
-  Brain,
   Building2,
   CheckCircle2,
   Eye,
@@ -84,8 +84,11 @@ function BrandPanel({
         <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-[11px] font-medium uppercase tracking-[0.18em] backdrop-blur-sm">
           {badge}
         </div>
+        {/* Знак Orda Point — тот же, что в приложении и в иконке вкладки.
+            Здесь стоял универсальный «мозг» из набора иконок: страница входа
+            встречает человека первой, и встречала его чужим лицом. */}
         <div className="mt-10 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-white/15 shadow-lg backdrop-blur-sm">
-          <Brain className="h-7 w-7 text-white" />
+          <OrdaPointSymbol size={34} title="" tone="mono" className="text-white" />
         </div>
         <h1 className="mt-6 max-w-md text-4xl font-semibold leading-[1.12] tracking-[-0.03em]">{title}</h1>
         <p className="mt-4 max-w-md text-sm leading-7 text-emerald-50/80">{subtitle}</p>
@@ -279,8 +282,9 @@ export default function LoginForm({
   const renderForm = ({ title, subtitle, submitLabel }: { title: string; subtitle: string; submitLabel: string }) => (
     <div className="rounded-[2rem] border border-[#e3e8f0] bg-white p-7 shadow-[0_24px_60px_-28px_rgba(15,32,56,0.3)] sm:p-9">
       <div className="mb-7 flex flex-col items-center text-center lg:items-start lg:text-left">
-        <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#10b981,#0a7d4a)] shadow-lg shadow-emerald-600/25 lg:hidden">
-          <Brain className="h-6 w-6 text-white" />
+        {/* На телефоне левой панели нет — знак переезжает сюда, в шапку формы. */}
+        <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#20C997,#0F7F6E)] shadow-lg shadow-emerald-600/25 lg:hidden">
+          <OrdaPointSymbol size={28} title="" tone="mono" className="text-white" />
         </div>
         <h2 className="text-2xl font-semibold tracking-[-0.02em] text-[#0f2038]">{title}</h2>
         <p className="mt-2 max-w-sm text-sm leading-6 text-[#5b6b82]">{subtitle}</p>

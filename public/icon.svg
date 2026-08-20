@@ -1,39 +1,16 @@
-<svg width="180" height="180" viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1" width="180" height="180">
   <defs>
-    <radialGradient id="bgGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(58 42) rotate(43.1524) scale(88.2321)">
-      <stop stop-color="#BBF7D0" stop-opacity="0.42" />
-      <stop offset="0.35" stop-color="#4ade80" stop-opacity="0.18" />
-      <stop offset="1" stop-color="#166534" stop-opacity="0" />
-    </radialGradient>
-    <linearGradient id="bgGreen" x1="90" y1="0" x2="90" y2="180" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#22c55e" />
-      <stop offset="0.46" stop-color="#16a34a" />
-      <stop offset="1" stop-color="#15803d" />
-    </linearGradient>
-    <linearGradient id="strokeGreen" x1="23" y1="16" x2="150" y2="161" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#DCFCE7" />
-      <stop offset="0.48" stop-color="#4ade80" />
-      <stop offset="1" stop-color="#166534" />
-    </linearGradient>
-    <linearGradient id="fillGreen" x1="58" y1="74" x2="121" y2="130" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#BBF7D0" />
-      <stop offset="1" stop-color="#15803d" />
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#20C997"/>
+      <stop offset="1" stop-color="#0F7F6E"/>
     </linearGradient>
   </defs>
-
-  <rect width="180" height="180" rx="28" fill="url(#bgGreen)" />
-  <rect width="180" height="180" rx="28" fill="url(#bgGlow)" />
-
-  <circle cx="90" cy="92" r="67" stroke="url(#strokeGreen)" stroke-width="6.5" />
-
-  <path d="M45 37C57.6 27.4 72.4 22 89 22C105.6 22 120.4 27.4 133 37" stroke="url(#strokeGreen)" stroke-width="5.4" stroke-linecap="round" />
-  <path d="M59 38.5L80 29.5L69.5 46.5" stroke="url(#strokeGreen)" stroke-width="4.6" stroke-linejoin="round" />
-  <path d="M121 38.5L100 29.5L110.5 46.5" stroke="url(#strokeGreen)" stroke-width="4.6" stroke-linejoin="round" />
-
-  <rect x="58" y="100" width="12" height="28" rx="2.5" fill="url(#fillGreen)" />
-  <rect x="79" y="86" width="12" height="42" rx="2.5" fill="url(#fillGreen)" />
-  <rect x="100" y="70" width="12" height="58" rx="2.5" fill="url(#fillGreen)" />
-
-  <path d="M47 95C63.3 90.2 79.2 83.6 94.5 74.2C103.8 68.5 112 62.2 120 54" stroke="url(#strokeGreen)" stroke-width="6.5" stroke-linecap="round" />
-  <path d="M119.5 44L131 53.8L118 65" stroke="url(#strokeGreen)" stroke-width="6.2" stroke-linejoin="round" />
+  <rect width="1" height="1" fill="url(#bg)"/>
+  <g transform="translate(0.5 0.5) scale(0.57) translate(-0.5 -0.5)">
+    <path d="M 0.62692 0.12067 A 0.4 0.4 0 0 1 0.87933 0.37308" fill="none" stroke="#fff" stroke-width="0.17" stroke-linecap="round"/>
+    <path d="M 0.87933 0.62692 A 0.4 0.4 0 0 1 0.62692 0.87933" fill="none" stroke="#fff" stroke-width="0.17" stroke-linecap="round"/>
+    <path d="M 0.37308 0.87933 A 0.4 0.4 0 0 1 0.12067 0.62692" fill="none" stroke="#fff" stroke-width="0.17" stroke-linecap="round"/>
+    <path d="M 0.12067 0.37308 A 0.4 0.4 0 0 1 0.37308 0.12067" fill="none" stroke="#fff" stroke-width="0.17" stroke-linecap="round"/>
+    <circle cx="0.5" cy="0.5" r="0.1" fill="#fff"/>
+  </g>
 </svg>
