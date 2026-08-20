@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { requireCapability } from '@/lib/server/capabilities'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { verifyUploadedObject } from '@/lib/server/storage-upload'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 export const runtime = 'nodejs'
@@ -56,6 +57,7 @@ export async function POST(request: Request) {
       company_id?: string
       media_type?: 'image' | 'video'
       url?: string
+      storage_path?: string | null
       title?: string | null
       duration_sec?: number | null
     }
@@ -72,6 +74,18 @@ export async function POST(request: Request) {
     })
     if (companyScope.allowedCompanyIds && !companyScope.allowedCompanyIds.includes(body.company_id)) {
       return json({ error: 'forbidden' }, 403)
+    }
+
+    // Файл летит в хранилище мимо сервера — байтов он не видел. Разрешение
+    // ограничивало путь и заявленный тип, но не содержимое: под видом картинки
+    // мог уехать ролик на сотню мегабайт. Смотрим, что там оказалось на самом
+    // деле, и не заводим запись на файл, который не подошёл.
+    if (body.storage_path) {
+      const verified = await verifyUploadedObject({
+        policy: 'customer-display-ads',
+        path: String(body.storage_path),
+      })
+      if ('error' in verified) return json({ error: verified.error }, 400)
     }
 
     // следующий sort_order = max+1 в рамках компании

@@ -12,8 +12,14 @@
  * Скрипт следит, чтобы список таких мест только сокращался. Новые попадания —
  * ошибка сборки; про оставшиеся известно, они перечислены ниже и ждут очереди.
  *
- * Аутентификация (`supabase.auth.*`) и файлы (`supabase.storage.*`) сюда не
- * входят: сессия и загрузка файла в браузере — норма.
+ * Аутентификация (`supabase.auth.*`) остаётся в браузере: сессия там и живёт.
+ *
+ * А вот файлы — не остаются. Пока страница грузила их своим ключом, корзина
+ * принимала запись от любого, у кого есть публичный ключ и сессия: ни права,
+ * ни типа, ни размера никто не смотрел. Теперь разрешение выдаёт сервер
+ * (`/api/admin/storage/upload-url`), а байты идут по одноразовой ссылке —
+ * `lib/client/upload-file.ts`. Прямая запись в хранилище из браузера — тоже
+ * ошибка сборки.
  */
 
 import { readdirSync, readFileSync, statSync } from 'node:fs'
@@ -56,10 +62,11 @@ for (const file of ROOTS.flatMap(files)) {
   const usesBrowserClient =
     src.includes("from '@/lib/supabaseClient'") || src.includes('createBrowserClient')
   if (!usesBrowserClient) continue
-  // `.storage.from(...)` — файлы, а не таблицы.
+  // `.storage.from(...)` — файлы, а не таблицы: у них своя строка отчёта.
   const tableReads = [...src.matchAll(/(?<!storage)\.from\('([a-z_]+)'\)/g)].map((m) => m[1])
-  if (tableReads.length === 0) continue
-  offenders.push({ file, tables: [...new Set(tableReads)] })
+  const storageWrites = /storage\s*\n?\s*\.from\([^)]*\)\s*\n?\s*\.(upload|remove|createSignedUploadUrl)\(/.test(src)
+  if (tableReads.length === 0 && !storageWrites) continue
+  offenders.push({ file, tables: [...new Set(tableReads)], storage: storageWrites })
 }
 
 const fresh = offenders.filter((item) => !KNOWN.has(item.file))
@@ -78,10 +85,12 @@ if (fresh.length === 0) {
 console.log('\n── База из браузера, мимо роутов и прав ──\n')
 for (const item of fresh) {
   console.log(`  ${item.file}`)
-  console.log(`      таблицы: ${item.tables.join(', ')}`)
+  if (item.tables.length > 0) console.log(`      таблицы: ${item.tables.join(', ')}`)
+  if (item.storage) console.log('      запись в хранилище файлов')
 }
 console.log(
   '\nПраво из каталога такие запросы не проверяет, скоуп организации — тоже.\n' +
-    'Перенесите чтение и запись в серверный роут.\n',
+    'Чтение и запись — в серверный роут; загрузку файлов — через\n' +
+    'lib/client/upload-file.ts, там разрешение выдаёт сервер.\n',
 )
 process.exit(1)

@@ -16,9 +16,8 @@ import { useStoreScope } from '@/components/store/store-scope'
 import { Button } from '@/components/ui/button'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { Card } from '@/components/ui/card'
-import { supabase } from '@/lib/supabaseClient'
+import { uploadFile } from '@/lib/client/upload-file'
 
-const ADS_BUCKET = 'customer-display-ads'
 
 type CompanyOption = { id: string; name: string; code?: string | null }
 
@@ -106,20 +105,10 @@ export default function AdvertisingPage({ embedded = false }: { embedded?: boole
     setUploading(true)
     setError(null)
     try {
-      // 1. Грузим файл НАПРЯМУЮ в Supabase Storage из браузера —
-      //    минуя Next.js API (у Vercel лимит тела ~4.5 МБ, видео не пройдёт).
-      const ext = (file.name.split('.').pop() || (mediaType === 'video' ? 'mp4' : 'jpg'))
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, '')
-      const suffix = Math.random().toString(36).slice(2, 10)
-      const fileName = `ad_${Date.now()}_${suffix}.${ext || 'bin'}`
-
-      const { error: upErr } = await supabase.storage
-        .from(ADS_BUCKET)
-        .upload(fileName, file, { contentType: file.type, upsert: false })
-      if (upErr) throw new Error(upErr.message || 'Не удалось загрузить файл')
-
-      const { data: pub } = supabase.storage.from(ADS_BUCKET).getPublicUrl(fileName)
+      // 1. Файл идёт в хранилище напрямую, но по разрешению сервера: тот
+      //    проверяет право, тип и размер и выдаёт одноразовую ссылку. Через
+      //    сервер целиком нельзя — у Vercel лимит тела ~4,5 МБ, ролик больше.
+      const uploaded = await uploadFile({ policy: 'customer-display-ads', file })
 
       // 2. Создаём запись в БД (маленький JSON — лимита нет).
       const createRes = await fetch('/api/admin/advertising', {
@@ -128,7 +117,8 @@ export default function AdvertisingPage({ embedded = false }: { embedded?: boole
         body: JSON.stringify({
           company_id: companyId,
           media_type: mediaType,
-          url: pub.publicUrl,
+          url: uploaded.publicUrl,
+          storage_path: uploaded.path,
           title: file.name,
           duration_sec: mediaType === 'image' ? 8 : null,
         }),

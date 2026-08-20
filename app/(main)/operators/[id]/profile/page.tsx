@@ -14,6 +14,7 @@ import { PageSkeleton } from '@/components/skeleton'
 import { getPublicAppUrl } from '@/lib/core/app-url'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { supabase } from '@/lib/supabaseClient'
+import { uploadFile } from '@/lib/client/upload-file'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import {
   ArrowLeft,
@@ -350,19 +351,14 @@ function AvatarUpload({
       const objectUrl = URL.createObjectURL(file)
       setPreviewUrl(objectUrl)
 
-      const fileExt = file.name.split('.').pop()
-      const fileName = `${operatorId}-${Date.now()}.${fileExt}`
-      const filePath = `avatars/${fileName}`
-
-      const { error: uploadError } = await supabase.storage
-        .from('operator-files')
-        .upload(filePath, file)
-
-      if (uploadError) throw uploadError
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('operator-files')
-        .getPublicUrl(filePath)
+      // Файл идёт в хранилище по разрешению сервера: тот проверяет право,
+      // тип и размер. Раньше браузер грузил сам, своим ключом, — значит
+      // корзина принимала запись от любого с сессией.
+      const { publicUrl } = await uploadFile({
+        policy: 'operator-avatars',
+        file,
+        folder: operatorId,
+      })
 
       const patchRes = await fetch('/api/admin/operators/profile', {
         method: 'PATCH',
@@ -512,19 +508,11 @@ function DocumentUpload({
     try {
       setUploading(true)
 
-      const fileExt = selectedFile.name.split('.').pop()
-      const fileName = `${operatorId}/${documentType}-${Date.now()}.${fileExt}`
-      const filePath = `documents/${fileName}`
-
-      const { error: uploadError } = await supabase.storage
-        .from('operator-files')
-        .upload(filePath, selectedFile)
-
-      if (uploadError) throw uploadError
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('operator-files')
-        .getPublicUrl(filePath)
+      const { publicUrl } = await uploadFile({
+        policy: 'operator-documents',
+        file: selectedFile,
+        folder: operatorId,
+      })
 
       // Запись заводит сервер: здесь только файл и поля формы. Раньше строку
       // вставлял браузер, минуя право «Загрузить документы оператора».
