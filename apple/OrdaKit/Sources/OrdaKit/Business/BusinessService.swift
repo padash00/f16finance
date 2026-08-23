@@ -444,6 +444,73 @@ public struct BusinessService: Sendable {
         )
     }
 
+    /// Поправить записанный расход.
+    ///
+    /// Ошибаются в сумме чаще, чем кажется, — и до сих пор исправить это можно
+    /// было только с сайта. Требует `expenses.edit`.
+    public func updateExpense(
+        id: String,
+        date: String,
+        companyID: String,
+        category: String,
+        cashAmount: Double,
+        kaspiAmount: Double,
+        comment: String?
+    ) async throws {
+        var payload: [String: Any] = [
+            "date": date,
+            "company_id": companyID,
+            "category": category,
+            "cash_amount": cashAmount,
+            "kaspi_amount": kaspiAmount,
+        ]
+        if let comment, !comment.isEmpty { payload["comment"] = comment }
+
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/expenses",
+                method: .post,
+                body: try JSONSerialization.data(withJSONObject: [
+                    "action": "updateExpense",
+                    "expenseId": id,
+                    "payload": payload,
+                ])
+            )
+        )
+    }
+
+    /// Поправить записанный доход. Требует `income.edit`.
+    public func updateIncome(
+        id: String,
+        date: String,
+        cashAmount: Double,
+        kaspiAmount: Double,
+        cardAmount: Double,
+        onlineAmount: Double,
+        comment: String?
+    ) async throws {
+        var payload: [String: Any] = [
+            "date": date,
+            "cash_amount": cashAmount,
+            "kaspi_amount": kaspiAmount,
+            "card_amount": cardAmount,
+            "online_amount": onlineAmount,
+        ]
+        if let comment, !comment.isEmpty { payload["comment"] = comment }
+
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/incomes",
+                method: .post,
+                body: try JSONSerialization.data(withJSONObject: [
+                    "action": "updateIncome",
+                    "incomeId": id,
+                    "payload": payload,
+                ])
+            )
+        )
+    }
+
     /// Выплатить зарплату оператору за неделю.
     ///
     /// Приложение умело выдать аванс и записать корректировку, а саму выплату —
