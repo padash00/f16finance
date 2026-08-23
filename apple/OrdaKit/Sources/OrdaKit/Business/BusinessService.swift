@@ -1331,6 +1331,44 @@ public struct BusinessService: Sendable {
         )
     }
 
+    /// Двинуть заявку дальше: «выдано» или «получено».
+    ///
+    /// Это физические действия: со склада выдают коробку, на точке её
+    /// принимают. Оба делают, стоя рядом с товаром, — а отмечать приходилось с
+    /// ноутбука, и цепочка обрывалась на одобрении.
+    ///
+    /// Порядок проверяет сервер: «выдано» — только из одобренной, «получено» —
+    /// только из выданной.
+    public func moveStockRequest(id: String, to status: StockRequestStage) async throws {
+        struct Body: Encodable {
+            let action = "transitionStatus"
+            let requestId: String
+            let status: String
+        }
+        let request = try APIRequest.json(
+            "/api/admin/inventory/requests",
+            body: Body(requestId: id, status: status.rawValue)
+        )
+        _ = try await api.send(request)
+    }
+
+    /// Откатить одобрение: товар вернётся на склад.
+    ///
+    /// Требует `store-requests.undecide`. Причина обязательна — откат меняет
+    /// остатки, и через месяц никто не вспомнит, почему.
+    public func undoStockRequestDecision(id: String, reason: String) async throws {
+        struct Body: Encodable {
+            let action = "undecideRequest"
+            let requestId: String
+            let reason: String
+        }
+        let request = try APIRequest.json(
+            "/api/admin/inventory/requests",
+            body: Body(requestId: id, reason: reason)
+        )
+        _ = try await api.send(request)
+    }
+
     /// Зарегистрировать инцидент. Требует `incidents.create`.
     public func createIncident(_ draft: IncidentDraft) async throws {
         let body = try JSONEncoder().encode(draft.payload())

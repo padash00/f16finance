@@ -394,6 +394,35 @@ final class BusinessStore {
 
     private(set) var requestDecisionError: String?
 
+    /// Двинуть заявку дальше: выдано → получено.
+    ///
+    /// Возвращает текст ошибки или `nil`. Остатки меняются, поэтому после
+    /// удачи перечитываем весь склад, а не только список заявок.
+    func moveStockRequest(id: String, to stage: StockRequestStage) async -> String? {
+        do {
+            try await service.moveStockRequest(id: id, to: stage)
+            await loadStore()
+            return nil
+        } catch let error as APIError {
+            return error.userMessage
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    /// Откатить одобрение заявки: товар вернётся на склад.
+    func undoStockRequestDecision(id: String, reason: String) async -> String? {
+        do {
+            try await service.undoStockRequestDecision(id: id, reason: reason)
+            await loadStore()
+            return nil
+        } catch let error as APIError {
+            return error.userMessage
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
     /// Одобрить или отклонить заявку точки.
     ///
     /// `lines` нужны при одобрении: сервер ждёт количество по каждой позиции.

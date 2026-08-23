@@ -529,6 +529,15 @@ private struct RequestDetail: View {
 
     private var canApprove: Bool { access?.can("store-requests.approve") ?? false }
     private var canReject: Bool { access?.can("store-requests.reject") ?? false }
+    /// Выдача и приёмка — физические действия у товара, а отмечались с
+    /// ноутбука: цепочка обрывалась сразу после одобрения.
+    private var canMove: Bool { access?.can("store-requests.transition_status") ?? false }
+    private var canUndo: Bool { access?.can("store-requests.undecide") ?? false }
+
+    @State private var isMoving = false
+    @State private var undoOpen = false
+    @State private var undoReason = ""
+    @State private var moveError: String?
 
     var body: some View {
         ScreenScroll {
@@ -557,6 +566,30 @@ private struct RequestDetail: View {
                                     }
                                     .buttonStyle(PrimaryButtonStyle())
                                 }
+                            }
+                        }
+                    }
+                }
+
+                // Дальше по цепочке: со склада выдали — точка приняла.
+                if let stage = request.nextStage, canMove {
+                    Card {
+                        VStack(alignment: .leading, spacing: Spacing.md) {
+                            if let moveError {
+                                Text(moveError)
+                                    .font(Typography.caption)
+                                    .foregroundStyle(Theme.negative)
+                            }
+                            Button(isMoving ? "Отмечаем…" : stage.actionLabel) {
+                                Task { await move(to: stage) }
+                            }
+                            .buttonStyle(PrimaryButtonStyle())
+                            .disabled(isMoving)
+
+                            if request.isApproved && canUndo {
+                                Button("Откатить одобрение") { undoOpen = true }
+                                    .buttonStyle(SecondaryButtonStyle())
+                                    .disabled(isMoving)
                             }
                         }
                     }
@@ -630,6 +663,40 @@ private struct RequestDetail: View {
         }
         .background(Theme.background)
         .navigationTitle("Заявка")
+        // Откат меняет остатки: товар уходит обратно на склад. Причина
+        // обязательна — через месяц никто не вспомнит, почему откатывали.
+        .alert("Откатить одобрение?", isPresented: $undoOpen) {
+            TextField("Причина", text: $undoReason)
+            Button("Откатить", role: .destructive) {
+                Task { await undo() }
+            }
+            .disabled(undoReason.trimmingCharacters(in: .whitespaces).isEmpty)
+            Button("Отмена", role: .cancel) { undoReason = "" }
+        } message: {
+            Text("Товар вернётся на склад, а заявка снова станет новой.")
+        }
+    }
+
+    private func move(to stage: StockRequestStage) async {
+        isMoving = true
+        defer { isMoving = false }
+        moveError = await store.moveStockRequest(id: request.id, to: stage)
+        if moveError == nil { Haptics.success() } else { Haptics.error() }
+    }
+
+    private func undo() async {
+        isMoving = true
+        defer { isMoving = false }
+        moveError = await store.undoStockRequestDecision(
+            id: request.id,
+            reason: undoReason.trimmingCharacters(in: .whitespaces)
+        )
+        if moveError == nil {
+            undoReason = ""
+            Haptics.success()
+        } else {
+            Haptics.error()
+        }
     }
 }
 

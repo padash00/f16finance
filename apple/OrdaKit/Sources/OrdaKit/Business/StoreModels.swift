@@ -272,6 +272,18 @@ public struct StockRequest: Decodable, Sendable, Identifiable, Hashable {
 
     public var isPending: Bool { status == "pending" || status == "new" }
 
+    /// Одобрена, но со склада ещё не выдана.
+    public var isApproved: Bool { status == "approved_full" || status == "approved_partial" }
+    /// Выдана со склада, точкой ещё не принята.
+    public var isIssued: Bool { status == "issued" }
+
+    /// Следующий шаг цепочки. `nil` — заявка своё прошла.
+    public var nextStage: StockRequestStage? {
+        if isApproved { return .issued }
+        if isIssued { return .received }
+        return nil
+    }
+
     private enum CodingKeys: String, CodingKey {
         case id, status, comment
         case createdAt = "created_at"
@@ -470,5 +482,20 @@ public struct NewStoreItem: Encodable, Sendable {
         case companyID = "company_id"
         case salePrice = "sale_price"
         case purchasePrice = "purchase_price"
+    }
+}
+
+
+/// Куда двигать заявку. Порядок — тот же, что на складе: одобрили, выдали,
+/// приняли.
+public enum StockRequestStage: String, Sendable {
+    case issued
+    case received
+
+    public var actionLabel: String {
+        switch self {
+        case .issued: "Отметить выдачу"
+        case .received: "Отметить получение"
+        }
     }
 }
