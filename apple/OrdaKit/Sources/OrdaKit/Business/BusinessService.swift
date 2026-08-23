@@ -1276,6 +1276,37 @@ public struct BusinessService: Sendable {
         _ = try await api.send(request)
     }
 
+    /// Остатки точки: склад и витрина по каждому товару.
+    ///
+    /// Требует `store-warehouse.view`.
+    public func warehouseStock(companyID: String?) async throws -> WarehouseStock {
+        var query: [String: String] = [:]
+        if let companyID, !companyID.isEmpty { query["company_id"] = companyID }
+        let response: DataEnvelope<WarehouseStock> = try await api.send(
+            APIRequest(path: "/api/admin/store/warehouse", query: query)
+        )
+        return response.data
+    }
+
+    /// Поставить остаток склада равным пересчитанному.
+    ///
+    /// Именно «поставить», а не «прибавить»: после пересчёта человек знает,
+    /// сколько лежит на полке, а не насколько ошиблись. Требует
+    /// `store-warehouse.edit`.
+    public func setWarehouseQuantity(companyID: String, itemID: String, quantity: Double) async throws {
+        struct Body: Encodable {
+            let action = "setWarehouse"
+            let company_id: String
+            let item_id: String
+            let quantity: Double
+        }
+        let request = try APIRequest.json(
+            "/api/admin/store/warehouse",
+            body: Body(company_id: companyID, item_id: itemID, quantity: quantity)
+        )
+        _ = try await api.send(request)
+    }
+
     /// Поиск по всему складу: товары, приёмки, списания, заявки.
     ///
     /// Требует `store.global_search`.

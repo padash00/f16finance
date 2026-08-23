@@ -247,9 +247,22 @@ struct StoreScreen: View {
 struct StockScreen: View {
     @Environment(BusinessStore.self) private var store
 
+    @Environment(\.access) private var access
+
     @State private var search = ""
     @State private var mode: Mode = .byItem
     @State private var onlyLow = false
+
+    /// Правка остатка после пересчёта. Ставит остаток равным тому, что лежит на
+    /// полке, а не прибавляет разницу: человек у полки знает количество, а не
+    /// величину прошлой ошибки.
+    @State private var editing: StockBalance?
+    @State private var editLocation: StoreLocation?
+    @State private var editValue = ""
+    @State private var editError: String?
+    @State private var isSaving = false
+
+    private var canEdit: Bool { access?.can("store-warehouse.edit") ?? false }
 
     private enum Mode: String, CaseIterable, Identifiable {
         case byItem, byLocation
@@ -285,6 +298,44 @@ struct StockScreen: View {
         }
         .task { await store.loadStore() }
         .refreshable { await store.loadStore() }
+        .alert("Поправить остаток", isPresented: Binding(get: { editing != nil }, set: { if !$0 { editing = nil } })) {
+            TextField("Сколько на полке", text: $editValue)
+                #if os(iOS)
+                .keyboardType(.decimalPad)
+                #endif
+            Button("Сохранить") {
+                if let balance = editing, let location = editLocation {
+                    Task { await saveStock(balance, location: location) }
+                }
+            }
+            Button("Отмена", role: .cancel) { editing = nil }
+        } message: {
+            if let editing {
+                Text("\(editing.name). Сейчас числится \(Quantity.format(editing.quantity)) \(editing.unit). Введите столько, сколько лежит на самом деле — остаток станет равен этому числу.")
+            }
+        }
+        .alert("Не удалось", isPresented: Binding(get: { editError != nil }, set: { if !$0 { editError = nil } })) {
+            Button("Понятно", role: .cancel) { editError = nil }
+        } message: {
+            Text(editError ?? "")
+        }
+    }
+
+    private func saveStock(_ balance: StockBalance, location: StoreLocation) async {
+        guard let companyID = location.companyID else { return }
+        isSaving = true
+        defer { isSaving = false }
+        editError = await store.setWarehouseQuantity(
+            companyID: companyID,
+            itemID: balance.itemID,
+            quantity: AmountParsing.value(editValue)
+        )
+        if editError == nil {
+            editing = nil
+            Haptics.success()
+        } else {
+            Haptics.error()
+        }
     }
 
     @ViewBuilder
@@ -373,13 +424,30 @@ struct StockScreen: View {
 
                                     ForEach(Array((grouped[location.id] ?? []).enumerated()), id: \.element.id) { index, balance in
                                         if index > 0 { RowDivider() }
-                                        StockRowView(
-                                            name: balance.name,
-                                            quantity: balance.quantity,
-                                            unit: balance.unit,
-                                            threshold: balance.lowStockThreshold,
-                                            caption: nil
-                                        )
+                                        HStack(spacing: Spacing.sm) {
+                                            StockRowView(
+                                                name: balance.name,
+                                                quantity: balance.quantity,
+                                                unit: balance.unit,
+                                                threshold: balance.lowStockThreshold,
+                                                caption: nil
+                                            )
+                                            // Править можно только склад: у
+                                            // витрины свой порядок — товар туда
+                                            // попадает заявкой, а не рукой.
+                                            if canEdit, location.kind == "warehouse", location.companyID != nil {
+                                                Button {
+                                                    editValue = Quantity.format(balance.quantity)
+                                                    editLocation = location
+                                                    editing = balance
+                                                } label: {
+                                                    Image(systemName: "pencil")
+                                                        .foregroundStyle(Theme.brand)
+                                                }
+                                                .buttonStyle(.plain)
+                                                .disabled(isSaving)
+                                            }
+                                        }
                                     }
                                 }
                             }

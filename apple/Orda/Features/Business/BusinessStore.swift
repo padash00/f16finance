@@ -394,6 +394,22 @@ final class BusinessStore {
 
     private(set) var requestDecisionError: String?
 
+    /// Поставить остаток склада равным пересчитанному.
+    ///
+    /// Возвращает текст ошибки или `nil`. Остаток — общий для витрины и
+    /// заявок, поэтому перечитываем весь склад.
+    func setWarehouseQuantity(companyID: String, itemID: String, quantity: Double) async -> String? {
+        do {
+            try await service.setWarehouseQuantity(companyID: companyID, itemID: itemID, quantity: quantity)
+            await loadStore()
+            return nil
+        } catch let error as APIError {
+            return error.userMessage
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
     /// Двинуть заявку дальше: выдано → получено.
     ///
     /// Возвращает текст ошибки или `nil`. Остатки меняются, поэтому после

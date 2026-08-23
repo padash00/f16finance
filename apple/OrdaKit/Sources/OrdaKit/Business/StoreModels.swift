@@ -15,6 +15,11 @@ public struct StoreLocation: Decodable, Sendable, Identifiable, Hashable {
     public let kind: String
     public let isActive: Bool
     public let companyName: String?
+    /// Точка, которой принадлежит место хранения.
+    ///
+    /// Сервер присылал его всегда, а приложение не читало — и правка остатка
+    /// была невозможна: серверу нужна точка, чтобы найти её склад.
+    public let companyID: String?
 
     /// Человеческое имя типа.
     ///
@@ -53,6 +58,7 @@ public struct StoreLocation: Decodable, Sendable, Identifiable, Hashable {
         case id, name, code
         case kind = "location_type"
         case isActive = "is_active"
+        case companyID = "company_id"
         case company
     }
 
@@ -66,6 +72,7 @@ public struct StoreLocation: Decodable, Sendable, Identifiable, Hashable {
         kind = try c.decodeFlexibleString(forKey: .kind) ?? "warehouse"
         isActive = try c.decodeIfPresent(Bool.self, forKey: .isActive) ?? true
         companyName = try c.decodeIfPresent(NamedRef.self, forKey: .company)?.name
+        companyID = try c.decodeFlexibleString(forKey: .companyID)
     }
 }
 
@@ -497,5 +504,72 @@ public enum StockRequestStage: String, Sendable {
         case .issued: "Отметить выдачу"
         case .received: "Отметить получение"
         }
+    }
+}
+
+// ── Остатки по локациям ──────────────────────────────────────────────────────
+
+/// Остатки точки: что лежит на складе и что стоит на витрине.
+///
+/// В приложении была только номенклатура — что заведено, с ценой и штрихкодом.
+/// Сколько чего лежит и где, приходилось смотреть с ноутбука; поправить
+/// остаток после пересчёта — тем более.
+public struct WarehouseStock: Decodable, Sendable {
+    public let balances: [Balance]
+    public let companies: [StockCompany]
+    public let selectedCompanyID: String?
+
+    public struct StockCompany: Decodable, Sendable, Identifiable, Hashable {
+        public let id: String
+        public let name: String
+    }
+
+    public struct Balance: Decodable, Sendable, Identifiable, Hashable {
+        public let itemID: String
+        public let name: String
+        public let barcode: String?
+        public let unit: String
+        /// Сколько на складе всего.
+        public let warehouse: Double
+        /// Из них отложено под заявки — трогать нельзя.
+        public let reserved: Double
+        /// Сколько стоит на витрине.
+        public let showcase: Double
+
+        public var id: String { itemID }
+
+        /// Свободный остаток склада: общий минус отложенное.
+        public var available: Double { max(0, warehouse - reserved) }
+
+        private enum CodingKeys: String, CodingKey {
+            case itemID = "item_id"
+            case item
+            case warehouse = "warehouse_quantity"
+            case reserved = "warehouse_reserved"
+            case showcase = "showcase_quantity"
+        }
+
+        private struct ItemRef: Decodable {
+            let name: String?
+            let barcode: String?
+            let unit: String?
+        }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            itemID = try c.decodeFlexibleString(forKey: .itemID) ?? ""
+            let item = (try? c.decodeIfPresent(ItemRef.self, forKey: .item)) ?? nil
+            name = item?.name ?? "Без названия"
+            barcode = item?.barcode
+            unit = item?.unit ?? "шт"
+            warehouse = try c.decodeFlexibleDouble(forKey: .warehouse) ?? 0
+            reserved = try c.decodeFlexibleDouble(forKey: .reserved) ?? 0
+            showcase = try c.decodeFlexibleDouble(forKey: .showcase) ?? 0
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case balances, companies
+        case selectedCompanyID = "selectedCompanyId"
     }
 }
