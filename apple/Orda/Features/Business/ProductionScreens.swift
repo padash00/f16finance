@@ -80,9 +80,15 @@ final class ProductionStore {
 /// первого — блюда продаются неравномерно, и средний food cost по меню врёт.
 struct ProductionScreen: View {
     @Environment(\.api) private var api
+    @Environment(\.access) private var access
     @State private var store: ProductionStore?
     @State private var tab: Tab = .dishes
     @State private var selected: RecipeEconomics?
+    /// Ингредиенты добавляют по ходу дела: привезли новый сироп — он нужен в
+    /// техкарте сегодня, а не когда дойдут руки до ноутбука.
+    @State private var newIngredientOpen = false
+
+    private var canCreateIngredient: Bool { access?.can("production.create_ingredient") ?? false }
 
     private enum Tab: Hashable { case dishes, ingredients }
 
@@ -102,7 +108,21 @@ struct ProductionScreen: View {
         }
         .background(Theme.background)
         .navigationTitle("Техкарты")
-        .toolbar { LogoutToolbarItem() }
+        .toolbar {
+            LogoutToolbarItem()
+            if canCreateIngredient {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        newIngredientOpen = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $newIngredientOpen) {
+            NewIngredientSheet { await store?.load() }
+        }
         .task {
             if store == nil {
                 let created = ProductionStore(api: api)
@@ -1775,6 +1795,93 @@ private struct ConsumableIssueLineRow: View {
                 .font(Typography.callout.weight(.medium))
                 .monospacedDigit()
                 .foregroundStyle(Theme.text)
+        }
+    }
+}
+
+
+/// Новый ингредиент: название, единица, цена закупа.
+///
+/// Три поля — потому что больше и не нужно, чтобы поставить его в техкарту.
+/// Остальное (категория, поставщики) дописывается на сайте, когда дойдут руки.
+private struct NewIngredientSheet: View {
+    let onCreated: () async -> Void
+
+    @Environment(\.api) private var api
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var name = ""
+    @State private var unit = "г"
+    @State private var price = ""
+    @State private var isSaving = false
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            ScreenScroll {
+                Card {
+                    VStack(alignment: .leading, spacing: Spacing.md) {
+                        FieldLabel("Название")
+                        TextField("Например: сироп карамель", text: $name)
+                            .textFieldStyle(.plain)
+                            .font(Typography.callout)
+
+                        HStack(spacing: Spacing.md) {
+                            VStack(alignment: .leading) {
+                                FieldLabel("Единица")
+                                TextField("г", text: $unit).textFieldStyle(.plain)
+                            }
+                            VStack(alignment: .leading) {
+                                FieldLabel("Цена закупа за единицу")
+                                TextField("0", text: $price)
+                                    .textFieldStyle(.plain)
+                                    #if os(iOS)
+                                    .keyboardType(.decimalPad)
+                                    #endif
+                            }
+                        }
+
+                        Text("Цена нужна, чтобы техкарта считала себестоимость. Её можно поправить позже.")
+                            .font(Typography.caption)
+                            .foregroundStyle(Theme.textDim)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        if let error {
+                            Text(error).font(Typography.caption).foregroundStyle(Theme.negative)
+                        }
+
+                        Button(isSaving ? "Сохраняем…" : "Добавить") {
+                            Task { await save() }
+                        }
+                        .buttonStyle(PrimaryButtonStyle())
+                        .disabled(isSaving || name.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                }
+            }
+            .background(Theme.background)
+            .navigationTitle("Ингредиент")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Отмена") { dismiss() } } }
+        }
+    }
+
+    private func save() async {
+        isSaving = true
+        defer { isSaving = false }
+        do {
+            try await ProductionService(api: api).createIngredient(
+                name: name.trimmingCharacters(in: .whitespaces),
+                unit: unit.trimmingCharacters(in: .whitespaces).isEmpty ? "г" : unit,
+                purchasePrice: AmountParsing.value(price)
+            )
+            await onCreated()
+            dismiss()
+        } catch let apiError as APIError {
+            error = apiError.userMessage
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 }

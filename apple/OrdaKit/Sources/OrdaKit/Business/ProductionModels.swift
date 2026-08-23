@@ -1190,6 +1190,30 @@ public struct ProductionService: Sendable {
             APIRequest(path: "/api/admin/production/analysis", query: ["from": from, "to": to])
         )
     }
+
+    /// Завести ингредиент. Требует `production.create_ingredient`.
+    ///
+    /// Ингредиенты добавляют по ходу дела — привезли новый сироп, и он нужен в
+    /// техкарте сегодня, а не когда дойдут руки до ноутбука.
+    public func createIngredient(name: String, unit: String, purchasePrice: Double) async throws {
+        struct Body: Encodable {
+            let name: String
+            let unit: String
+            let purchase_price: Double
+        }
+        let request = try APIRequest.json(
+            "/api/admin/production/ingredients",
+            body: Body(name: name, unit: unit, purchase_price: purchasePrice)
+        )
+        _ = try await api.send(request)
+    }
+
+    /// Удалить ингредиент. Требует `production.delete_ingredient`.
+    public func deleteIngredient(id: String) async throws {
+        _ = try await api.send(
+            APIRequest(path: "/api/admin/production/ingredients", method: .delete, query: ["id": id])
+        )
+    }
 }
 
 /// План закупа на следующую неделю.
