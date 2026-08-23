@@ -54,9 +54,14 @@ function collectClientActions() {
       // аудит рапортовал, что комментарий к задаче шлют в живую активность.
       const from = Math.max(0, match.index - 600)
       const window = source.slice(from, match.index + 600)
+      // Форм вызова несколько, и знать надо все: пропущенная форма означает,
+      // что действие припишется соседнему адресу — и отчёт назовёт поломкой
+      // исправный код.
       const candidates = [
         ...window.matchAll(/path:\s*"(\/api\/[^"]+)"/g),
         ...window.matchAll(/APIRequest\.multipart\(\s*"(\/api\/[^"]+)"/g),
+        ...window.matchAll(/APIRequest\.json\(\s*"(\/api\/[^"]+)"/g),
+        ...window.matchAll(/APIRequest\(\s*"(\/api\/[^"]+)"/g),
       ]
       if (!candidates.length) continue
       const anchor = match.index - from
