@@ -62,6 +62,10 @@ struct AdvanceSheet: View {
     @Environment(BusinessStore.self) private var store
     @Environment(AuthStore.self) private var auth
 
+    @State private var voidTarget: SalaryRow.Week.Payment?
+    @State private var isVoiding = false
+    @State private var voidError: String?
+
     private var canMarkDebt: Bool { auth.resolver?.can("salary.mark_debt_paid") ?? false }
     private var canSendTelegram: Bool { auth.resolver?.can("salary.send_telegram") ?? false }
     private var canAdvance: Bool { auth.resolver?.can("salary.create_advance") ?? false }
@@ -107,6 +111,8 @@ struct AdvanceSheet: View {
                     }
                 }
 
+                paymentsCard
+
                 Card {
                     VStack(alignment: .leading, spacing: Spacing.md) {
                         FieldLabel("Что делаем")
@@ -119,6 +125,7 @@ struct AdvanceSheet: View {
                     }
                 }
 
+                if kind != .payment {
                 Card {
                     VStack(alignment: .leading, spacing: Spacing.md) {
                         FieldLabel("Точка")
@@ -134,11 +141,12 @@ struct AdvanceSheet: View {
                         .tint(Theme.brand)
                     }
                 }
+                }
 
                 Card {
                     VStack(alignment: .leading, spacing: Spacing.md) {
-                        if kind == .advance {
-                            // У аванса две кассы: часть наличными из ящика,
+                        if kind == .advance || kind == .payment {
+                            // У аванса и выплаты две кассы: часть наличными из ящика,
                             // часть переводом. Премия и штраф — просто число.
                             amountField("Наличными", text: $cashText)
                             RowDivider()
@@ -255,6 +263,22 @@ struct AdvanceSheet: View {
             }
             .background(Theme.background)
             .navigationTitle(row.operatorName)
+            // Откат выплаты — деньги уже отданы человеку. Спрашиваем прежде,
+            // чем менять расчёт недели.
+            .confirmationDialog(
+                "Отменить выплату?",
+                isPresented: Binding(get: { voidTarget != nil }, set: { if !$0 { voidTarget = nil } }),
+                titleVisibility: .visible
+            ) {
+                if let payment = voidTarget {
+                    Button("Отменить \(Money.format(payment.total))", role: .destructive) {
+                        Task { await voidPayment(payment) }
+                    }
+                }
+                Button("Оставить", role: .cancel) { voidTarget = nil }
+            } message: {
+                Text("Сумма вернётся в остаток к выплате. Деньги, отданные человеку, программа вернуть не может — это делаете вы.")
+            }
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -285,6 +309,96 @@ struct AdvanceSheet: View {
                 .keyboardType(.numberPad)
                 #endif
                 .frame(maxWidth: 140)
+        }
+    }
+
+    private var canVoidPayment: Bool { auth.resolver?.can("salary.void_payment") ?? false }
+
+    /// Выплаты недели.
+    ///
+    /// Итога «выплачено» мало, когда надо откатить ошибку: если выплат за
+    /// неделю две, без списка не видно, какую именно отменяешь. Отменённые
+    /// показываем тоже — иначе непонятно, куда делись деньги из истории.
+    @ViewBuilder
+    private var paymentsCard: some View {
+        let payments = row.week.payments
+        if !payments.isEmpty {
+            Card {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    SectionHeader("Выплаты недели", subtitle: Money.format(row.week.paidAmount))
+                    ForEach(payments) { payment in
+                        paymentRow(payment)
+                        if payment.id != payments.last?.id { RowDivider() }
+                    }
+                    if let voidError {
+                        Text(voidError)
+                            .font(Typography.caption)
+                            .foregroundStyle(Theme.negative)
+                    }
+                }
+            }
+        }
+    }
+
+    private func paymentRow(_ payment: SalaryRow.Week.Payment) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(DateFormatting.dayMonth(payment.date))
+                    .font(Typography.callout)
+                    .foregroundStyle(payment.isActive ? Theme.text : Theme.textDim)
+                if let comment = payment.comment, !comment.isEmpty {
+                    Text(comment)
+                        .font(Typography.caption)
+                        .foregroundStyle(Theme.textDim)
+                        .lineLimit(1)
+                }
+                if !payment.isActive {
+                    Text("отменена")
+                        .font(Typography.caption)
+                        .foregroundStyle(Theme.warning)
+                }
+            }
+
+            Spacer(minLength: Spacing.sm)
+
+            Text(Money.format(payment.total))
+                .font(Typography.callout.weight(.medium))
+                .monospacedDigit()
+                .foregroundStyle(payment.isActive ? Theme.text : Theme.textDim)
+
+            if payment.isActive && canVoidPayment {
+                Button {
+                    voidTarget = payment
+                } label: {
+                    Image(systemName: "arrow.uturn.backward")
+                        .foregroundStyle(Theme.warning)
+                }
+                .buttonStyle(.plain)
+                .disabled(isVoiding)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func voidPayment(_ payment: SalaryRow.Week.Payment) async {
+        isVoiding = true
+        defer { isVoiding = false }
+        do {
+            try await BusinessService(api: api).voidSalaryPayment(
+                paymentID: payment.id,
+                operatorID: row.operatorID,
+                weekStart: weekStart
+            )
+            voidError = nil
+            Haptics.success()
+            await onDone()
+            dismiss()
+        } catch let error as APIError {
+            voidError = error.userMessage
+            Haptics.error()
+        } catch {
+            voidError = error.localizedDescription
+            Haptics.error()
         }
     }
 
