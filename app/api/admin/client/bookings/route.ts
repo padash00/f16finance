@@ -32,7 +32,7 @@ export async function GET(request: Request) {
     let query = supabase
       .from('client_bookings')
       .select(
-        'id, company_id, customer_id, station_id, station_name_snapshot, booking_group_id, contact_phone, contact_name, tariff_id, starts_at, ends_at, status, notes, source, created_at, updated_at, customer:customer_id(id, name, phone)',
+        'id, company_id, customer_id, station_id, station_name_snapshot, booking_group_id, contact_phone, contact_name, tariff_id, starts_at, ends_at, status, notes, cancel_reason, cancelled_at, source, created_at, updated_at, customer:customer_id(id, name, phone)',
       )
       .order('starts_at', { ascending: false })
       .limit(200)
@@ -117,12 +117,81 @@ export async function POST(request: Request) {
     const supabase = createAdminSupabaseClient()
     const body = (await request.json().catch(() => null)) as
       | {
-          action?: 'setStatus'
+          action?: 'setStatus' | 'cancel'
           bookingId?: string
           status?: 'requested' | 'confirmed' | 'cancelled' | 'completed' | 'rejected'
           notes?: string
+          wholeGroup?: boolean
+          reason?: string
         }
       | null
+
+    /**
+     * Отмена брони станции.
+     *
+     * Отдельно от setStatus, потому что тот путь требует карточки клиента и
+     * шлёт уведомление. У брони, заведённой оператором по звонку, клиента в
+     * базе может не быть вовсе — там только телефон, и это нормально.
+     *
+     * Причина пишется в своё поле: notes хранит то, что человек просил при
+     * бронировании, и затирать это отменой нельзя.
+     */
+    if (body?.action === 'cancel') {
+      if (!body.bookingId) return json({ error: 'invalid-payload' }, 400)
+
+      const { data: booking, error: bookingError } = await supabase
+        .from('client_bookings')
+        .select('id, company_id, booking_group_id, status')
+        .eq('id', body.bookingId)
+        .maybeSingle()
+      if (bookingError) throw bookingError
+      if (!booking) return json({ error: 'booking-not-found' }, 404)
+
+      // Нет точки — нет права: бронь без company_id иначе прошла бы проверку
+      // молча, как это уже случалось на соседнем пути.
+      if (!booking.company_id) return json({ error: 'forbidden' }, 403)
+
+      const scope = await resolveCompanyScope({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        requestedCompanyId: String(booking.company_id),
+        isSuperAdmin: access.isSuperAdmin,
+      })
+      if (
+        scope.allowedCompanyIds !== null &&
+        !scope.allowedCompanyIds.includes(String(booking.company_id))
+      ) {
+        return json({ error: 'forbidden' }, 403)
+      }
+
+      const wholeGroup = Boolean(body.wholeGroup && booking.booking_group_id)
+      const patch = {
+        status: 'cancelled',
+        cancel_reason: body.reason?.trim() || null,
+        cancelled_at: new Date().toISOString(),
+        cancelled_by_user_id: (access as any).user?.id || null,
+        updated_at: new Date().toISOString(),
+      }
+
+      let query = supabase.from('client_bookings').update(patch)
+      query = wholeGroup
+        ? query.eq('booking_group_id', booking.booking_group_id)
+        : query.eq('id', booking.id)
+
+      // Точку тоже фиксируем в запросе: групповая отмена идёт по признаку
+      // группы, и без этого условия чужая строка с тем же признаком попала бы
+      // под обновление.
+      const { data: cancelled, error: cancelError } = await query
+        .eq('company_id', booking.company_id)
+        .in('status', ['requested', 'confirmed'])
+        .select('id, station_name_snapshot')
+      if (cancelError) throw cancelError
+
+      return json({
+        ok: true,
+        cancelledCount: (cancelled || []).length,
+        stationNames: (cancelled || []).map((r: any) => r.station_name_snapshot).filter(Boolean),
+      })
+    }
 
     if (body?.action !== 'setStatus' || !body.bookingId || !body.status) {
       return json({ error: 'invalid-payload' }, 400)

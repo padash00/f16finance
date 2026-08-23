@@ -1136,6 +1136,8 @@ export type StationBooking = {
   customerId: string | null
   tariffId: string | null
   notes: string | null
+  /** Когда бронь завели. Нужно в карточке: «записана в 19:40». */
+  createdAt?: string | null
 }
 
 export async function fetchBookings(
@@ -1193,11 +1195,14 @@ export async function createBooking(
     name?: string | null
     tariffId?: string | null
     notes?: string | null
+    /** Забронировать свободные, занятые пропустить. Второе нажатие после отказа. */
+    skipBusy?: boolean
   },
 ): Promise<{
   bookingIds: string[]
   groupId: string | null
   stationNames: string[]
+  skippedStations?: string[]
   knownCustomer: { id: string; name: string | null } | null
 }> {
   return await request(
@@ -1214,7 +1219,7 @@ export async function cancelBooking(
   session: OperatorSession,
   bookingId: string,
   options?: { wholeGroup?: boolean; reason?: string | null },
-): Promise<{ ok: boolean }> {
+): Promise<{ ok: boolean; cancelledCount?: number; stationNames?: string[] }> {
   return await request(
     config,
     'POST',
@@ -1225,6 +1230,28 @@ export async function cancelBooking(
       wholeGroup: options?.wholeGroup ?? false,
       reason: options?.reason || null,
     },
+    operatorHeaders(session),
+  )
+}
+
+/**
+ * Перенести или продлить бронь.
+ *
+ * «Давайте не на девять, а на десять» раньше означало отменить и завести
+ * заново: продиктовать телефон, имя, набрать те же пять машин. Компания
+ * переносится целиком — она пришла вместе и сядет вместе.
+ */
+export async function rescheduleBooking(
+  config: AppConfig,
+  session: OperatorSession,
+  bookingId: string,
+  window: { startsAt: string; endsAt: string },
+): Promise<{ ok: boolean; movedCount?: number; stationNames?: string[] }> {
+  return await request(
+    config,
+    'POST',
+    '/api/point/bookings',
+    { action: 'reschedule', bookingId, startsAt: window.startsAt, endsAt: window.endsAt },
     operatorHeaders(session),
   )
 }

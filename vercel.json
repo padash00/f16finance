@@ -126,6 +126,10 @@
     {
       "path": "/api/cron/sales-kpi-weather",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/expire-bookings",
+      "schedule": "5 * * * *"
     }
   ]
 }

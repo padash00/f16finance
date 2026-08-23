@@ -59,13 +59,21 @@ const CreateBody = z.object({
    * пять — иначе не проверить пересечения и не отменить один ПК из пяти, — но
    * у них общая группа, и оператор видит их как одну бронь.
    */
-  stationIds: z.array(z.string().uuid()).min(1).max(20),
+  stationIds: z.array(z.string().uuid()).min(1).max(40),
   startsAt: z.string().datetime({ offset: true }),
   endsAt: z.string().datetime({ offset: true }),
   phone: z.string().min(5).max(32),
   name: z.string().max(120).optional().nullable(),
   tariffId: z.string().uuid().optional().nullable(),
   notes: z.string().max(500).optional().nullable(),
+  /**
+   * Забронировать свободные, а занятые пропустить.
+   *
+   * Без этого компания на десять машин упирается в отказ целиком из-за одного
+   * занятого ПК, и оператор набирает список заново, держа человека на линии.
+   * Флаг ставится вторым нажатием, после того как сервер назвал занятые.
+   */
+  skipBusy: z.boolean().optional(),
 })
 
 const CancelBody = z.object({
@@ -76,7 +84,22 @@ const CancelBody = z.object({
   reason: z.string().max(300).optional().nullable(),
 })
 
-const Body = z.discriminatedUnion('action', [CreateBody, CancelBody])
+/**
+ * Перенос и продление.
+ *
+ * «Давайте не на девять, а на десять» — самая частая правка, и до сих пор она
+ * означала отменить бронь и завести заново: заново продиктовать телефон, имя,
+ * набрать те же пять машин. Компания переносится целиком: она пришла вместе и
+ * сядет вместе.
+ */
+const RescheduleBody = z.object({
+  action: z.literal('reschedule'),
+  bookingId: z.string().uuid(),
+  startsAt: z.string().datetime({ offset: true }),
+  endsAt: z.string().datetime({ offset: true }),
+})
+
+const Body = z.discriminatedUnion('action', [CreateBody, CancelBody, RescheduleBody])
 
 /**
  * Брони точки на выбранный день.
@@ -136,6 +159,7 @@ export async function GET(request: Request) {
         customerId: row.customer_id ? String(row.customer_id) : null,
         tariffId: row.tariff_id ? String(row.tariff_id) : null,
         notes: row.notes ?? null,
+        createdAt: row.created_at,
       })),
     })
   } catch (error) {
@@ -177,27 +201,133 @@ export async function POST(request: Request) {
         return json({ error: 'forbidden' }, 403)
       }
 
+      // Причина отмены живёт в своём поле. Раньше она писалась в notes и
+      // затирала заметку с бронирования: «просил место у окна» превращалось в
+      // «передумал». Это разные разговоры, и хранить их в одном поле нельзя.
       const patch = {
         status: 'cancelled',
-        notes: body.reason || null,
+        cancel_reason: body.reason?.trim() || null,
+        cancelled_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }
 
       // Компания звонит и отменяет целиком — это один разговор, а не пять.
       // Но отменить один ПК из пяти тоже должно быть можно: часть компании
       // передумала, остальные придут.
-      const query =
-        body.wholeGroup && booking.booking_group_id
-          ? supabase.from('client_bookings').update(patch).eq('booking_group_id', booking.booking_group_id)
-          : supabase.from('client_bookings').update(patch).eq('id', booking.id)
+      const wholeGroup = Boolean(body.wholeGroup && booking.booking_group_id)
 
-      const { error } = await query
+      let query = supabase.from('client_bookings').update(patch)
+      query = wholeGroup
+        ? query.eq('booking_group_id', booking.booking_group_id)
+        : query.eq('id', booking.id)
+
+      // Уже отменённые и состоявшиеся не трогаем: иначе повторное нажатие
+      // перепишет время отмены и причину, и станет непонятно, когда это
+      // случилось на самом деле.
+      const { data: cancelled, error } = await query
+        .in('status', ['requested', 'confirmed'])
+        .select('id, station_name_snapshot')
+
       if (error) throw error
 
       return json({
         ok: true,
         status: 'cancelled',
-        wholeGroup: Boolean(body.wholeGroup && booking.booking_group_id),
+        wholeGroup,
+        cancelledCount: (cancelled || []).length,
+        stationNames: (cancelled || []).map((r: any) => r.station_name_snapshot).filter(Boolean),
+      })
+    }
+
+    // ── Перенос и продление ───────────────────────────────────────────────
+    if (body.action === 'reschedule') {
+      const { data: booking } = await supabase
+        .from('client_bookings')
+        .select('id, point_project_id, status, booking_group_id, station_id')
+        .eq('id', body.bookingId)
+        .maybeSingle()
+      if (!booking) return json({ error: 'booking-not-found' }, 404)
+      if (String(booking.point_project_id) !== String(projectId)) {
+        return json({ error: 'forbidden' }, 403)
+      }
+      if (!['requested', 'confirmed'].includes(String(booking.status))) {
+        return json({ error: 'booking-not-active', message: 'Эту бронь уже сняли — перенести нечего.' }, 409)
+      }
+
+      const newStart = new Date(body.startsAt)
+      const newEnd = new Date(body.endsAt)
+      if (!(newEnd > newStart)) {
+        return json({ error: 'invalid-window', message: 'Конец брони должен быть позже начала.' }, 400)
+      }
+
+      const horizon = checkBookingHorizon(newStart, newEnd, new Date())
+      if (!horizon.ok) {
+        return json(
+          {
+            error: 'beyond-horizon',
+            message: horizonRefusalText(horizon),
+            horizonEnd: horizon.horizonEnd.toISOString(),
+          },
+          409,
+        )
+      }
+
+      // Вся компания переносится вместе: одна бронь — одно время.
+      const { data: siblings } = booking.booking_group_id
+        ? await supabase
+            .from('client_bookings')
+            .select('id, station_id, station_name_snapshot')
+            .eq('booking_group_id', booking.booking_group_id)
+            .eq('point_project_id', projectId)
+            .in('status', ['requested', 'confirmed'])
+        : { data: [{ id: booking.id, station_id: booking.station_id, station_name_snapshot: null }] }
+
+      const movingRows = (siblings || []) as any[]
+      const movingIds = movingRows.map((r) => String(r.id))
+      const movingStationIds = movingRows.map((r) => String(r.station_id)).filter(Boolean)
+
+      // Новое время не должно наехать на чужую бронь. Свои же строки из
+      // проверки исключаем: бронь всегда пересекается сама с собой.
+      const { data: clashes } = await supabase
+        .from('client_bookings')
+        .select('id, station_id, station_name_snapshot, ends_at')
+        .in('station_id', movingStationIds)
+        .in('status', ['requested', 'confirmed'])
+        .lt('starts_at', newEnd.toISOString())
+        .gt('ends_at', newStart.toISOString())
+
+      const foreign = ((clashes || []) as any[]).filter((c) => !movingIds.includes(String(c.id)))
+      if (foreign.length > 0) {
+        const busyNames = foreign.map((c) => c.station_name_snapshot).filter(Boolean).join(', ')
+        return json(
+          {
+            error: 'booking-overlap',
+            message:
+              'На это время уже занято: ' +
+              (busyNames || 'другая бронь') +
+              '. Освободится в ' +
+              new Date(foreign[0].ends_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) +
+              '.',
+          },
+          409,
+        )
+      }
+
+      const { data: moved, error: moveError } = await supabase
+        .from('client_bookings')
+        .update({
+          starts_at: newStart.toISOString(),
+          ends_at: newEnd.toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .in('id', movingIds)
+        .select('id, station_name_snapshot')
+      if (moveError) throw moveError
+
+      return json({
+        ok: true,
+        movedCount: (moved || []).length,
+        stationNames: (moved || []).map((r: any) => r.station_name_snapshot).filter(Boolean),
       })
     }
 
@@ -262,14 +392,19 @@ export async function POST(request: Request) {
       .lt('starts_at', endsAt.toISOString())
       .gt('ends_at', startsAt.toISOString())
 
-    if (overlaps && overlaps.length > 0) {
+    const busyIds = new Set((overlaps || []).map((o: any) => String(o.station_id)))
+    const busyStations = found.filter((st) => busyIds.has(String(st.id)))
+    const free = found.filter((st) => !busyIds.has(String(st.id)))
+
+    if (busyStations.length > 0 && !body.skipBusy) {
       // Называем конкретные ПК: «что-то занято» бесполезно, когда оператор
       // держит клиента на линии и выбирает из пяти машин.
-      const clash = overlaps[0] as any
-      const busyNames = (overlaps as any[])
-        .map((o) => found.find((st) => String(st.id) === String(o.station_id))?.name)
-        .filter(Boolean)
-        .join(', ')
+      //
+      // И сразу говорим, сколько остаётся свободных: компания на десять машин
+      // обычно согласна на восемь, а собирать список заново — это те же
+      // полминуты молчания в трубку, от которых уходим.
+      const clash = overlaps![0] as any
+      const busyNames = busyStations.map((st) => String(st.name)).join(', ')
       return json(
         {
           error: 'booking-overlap',
@@ -280,6 +415,23 @@ export async function POST(request: Request) {
             new Date(clash.ends_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) +
             '.',
           busyStations: busyNames,
+          busyStationIds: busyStations.map((st) => String(st.id)),
+          freeCount: free.length,
+        },
+        409,
+      )
+    }
+
+    // Занятые пропускаем — но если свободных не осталось, бронировать нечего.
+    const bookable = body.skipBusy ? free : found
+    if (bookable.length === 0) {
+      return json(
+        {
+          error: 'booking-overlap',
+          message: 'Все выбранные ПК заняты на это время.',
+          busyStations: busyStations.map((st) => String(st.name)).join(', '),
+          busyStationIds: busyStations.map((st) => String(st.id)),
+          freeCount: 0,
         },
         409,
       )
@@ -319,9 +471,9 @@ export async function POST(request: Request) {
     // Компания получает общий признак группы. Строк по-прежнему по одной на
     // станцию — иначе не отменить один ПК из пяти и не проверить пересечения,
     // — но в списке это будет одна бронь, как строка в тетради.
-    const groupId = found.length > 1 ? crypto.randomUUID() : null
+    const groupId = bookable.length > 1 ? crypto.randomUUID() : null
 
-    const rows = found.map((st) => ({
+    const rows = bookable.map((st) => ({
       customer_id: customerId,
       company_id: companyId,
       point_project_id: projectId,
@@ -351,7 +503,9 @@ export async function POST(request: Request) {
         ok: true,
         bookingIds: (created || []).map((r: any) => String(r.id)),
         groupId,
-        stationNames: found.map((st) => String(st.name)),
+        stationNames: bookable.map((st) => String(st.name)),
+        // Что не поместилось — оператор должен узнать, не сверяя списки.
+        skippedStations: busyStations.map((st) => String(st.name)),
         // Оператору полезно сразу узнать, что человек уже бывал.
         knownCustomer: customerId ? { id: customerId, name: knownName } : null,
       },

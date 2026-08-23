@@ -19,12 +19,15 @@ function playBeep(freq: number, delay = 0) {
     osc.stop(ctx.currentTime + delay + 0.3)
   } catch { /* ignore */ }
 }
-import { AlertTriangle, CheckCircle2, Clock, Download, History, List, LogOut, Map as MapIcon, Monitor, Printer, RefreshCw, Wrench, X } from 'lucide-react'
+import { AlertTriangle, CalendarClock, CheckCircle2, Clock, Download, History, List, LogOut, Map as MapIcon, Monitor, Printer, RefreshCw, Wrench, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import WorkModeSwitch from '@/components/WorkModeSwitch'
 import { toastError, toastInfo } from '@/lib/toast'
 import * as api from '@/lib/api'
 import { BookingModal } from '@/components/BookingModal'
+import { BookingDetailsModal } from '@/components/BookingDetailsModal'
+import { BookingsPanel } from '@/components/BookingsPanel'
+import { BookingTimeline } from '@/components/BookingTimeline'
 import { useCashlessLabels } from '@/lib/use-cashless-labels'
 import { arenaExtensionMinutesFromPayment } from '../../../../lib/core/arena-extension-minutes'
 import { effectiveZoneExtensionHourly } from '../../../../lib/core/arena-zone-extension-hourly'
@@ -995,6 +998,7 @@ function ArenaMapView({
   now,
   operators,
   bookings,
+  previewAt,
   onStationClick,
 }: {
   zones: ArenaZone[]
@@ -1006,15 +1010,27 @@ function ArenaMapView({
   operators: import('@/types').BootstrapOperator[]
   /** Брони точки. Отдельный слой: к сессиям отношения не имеют. */
   bookings: api.StationBooking[]
+  /**
+   * Момент, на который смотрим.
+   *
+   * Оператор спрашивает не «что сейчас», а «что будет к девяти»: человек на
+   * телефоне называет время, и карта должна отвечать про него. NULL — обычный
+   * режим, карта про текущий момент.
+   */
+  previewAt?: number | null
   onStationClick: (station: ArenaStation) => void
 }) {
   const sessionsByStation = new Map(sessions.map(s => [s.station_id, s]))
+
+  // Всё, что про брони, считается на выбранный момент. Сессии — нет: они про
+  // сейчас, а что будет через два часа, известно только SENET.
+  const at = previewAt ?? now
 
   /** Ближайшая незакончившаяся бронь станции. */
   const nextBookingByStation = new Map<string, api.StationBooking>()
   for (const booking of bookings) {
     if (!booking.stationId) continue
-    if (new Date(booking.endsAt).getTime() <= now) continue
+    if (new Date(booking.endsAt).getTime() <= at) continue
     const current = nextBookingByStation.get(booking.stationId)
     if (!current || booking.startsAt < current.startsAt) {
       nextBookingByStation.set(booking.stationId, booking)
@@ -1121,8 +1137,8 @@ function ArenaMapView({
           const nextBooking = nextBookingByStation.get(station.id) ?? null
           const bookedNow =
             nextBooking &&
-            new Date(nextBooking.startsAt).getTime() <= now &&
-            new Date(nextBooking.endsAt).getTime() > now
+            new Date(nextBooking.startsAt).getTime() <= at &&
+            new Date(nextBooking.endsAt).getTime() > at
 
           const stColor = !occupied ? '#10b981' : isExpired ? '#ef4444' : isWarning ? '#f59e0b' : '#f87171'
           const stBg = !occupied
@@ -1243,6 +1259,12 @@ export default function ArenaPage({
   const [bookingTarget, setBookingTarget] = useState<ArenaStation | null>(null)
   const [bookings, setBookings] = useState<api.StationBooking[]>([])
   const [bookingHorizon, setBookingHorizon] = useState<string | null>(null)
+  /** Открытая карточка брони: смотрим и отменяем. */
+  const [bookingDetails, setBookingDetails] = useState<api.StationBooking | null>(null)
+  /** Список всех броней точки — когда звонят отменять, ищут по телефону. */
+  const [showBookings, setShowBookings] = useState(false)
+  /** На какой час смотрит карта. NULL — на текущий момент. */
+  const [previewAt, setPreviewAt] = useState<number | null>(null)
   const [manageTarget, setManageTarget] = useState<{ station: ArenaStation; session: ArenaSession } | null>(null)
   const [massStartTarget, setMassStartTarget] = useState<ArenaZone | null>(null)
   const [techTarget, setTechTarget] = useState<ArenaStation | null>(null)
@@ -1264,6 +1286,10 @@ export default function ArenaPage({
 
   // Track which sessions we've already alerted/notified
   const notifiedRef = useRef<Set<string>>(new Set())
+
+  // О каких бронях уже напомнили. Ключ — компания целиком, чтобы пять машин
+  // не дали пять одинаковых напоминаний подряд.
+  const bookingRemindedRef = useRef<Set<string>>(new Set())
 
   // Track previous session IDs to detect ended sessions
   const prevSessionIdsRef = useRef<Set<string>>(new Set())
@@ -1344,6 +1370,46 @@ export default function ArenaPage({
       if (!activeIds.has(id)) notifiedRef.current.delete(id)
     }
   }, [sessions])
+
+  // ─── Напоминание о брони за 15 минут ─────────────────────────────────────
+  //
+  // Обещание, о котором вспомнили, когда человек уже стоит у стойки, — это
+  // испорченный вечер: место занято, освобождать некрасиво. Пятнадцать минут
+  // хватает, чтобы досадить кого-то к концу сеанса или подготовить машины.
+  //
+  // Напоминание идёт в кассу, а не в Telegram владельцу: реагировать на него
+  // оператору, и он сейчас смотрит именно в этот экран.
+  useEffect(() => {
+    for (const booking of bookings) {
+      const key = booking.groupId || booking.id
+      if (bookingRemindedRef.current.has(key)) continue
+      const startsIn = new Date(booking.startsAt).getTime() - now
+      if (startsIn > 0 && startsIn <= 15 * 60_000) {
+        bookingRemindedRef.current.add(key)
+        // Компания на пять машин — одно напоминание, а не пять подряд.
+        const groupStations = bookings
+          .filter((b) => (b.groupId ? b.groupId === booking.groupId : b.id === booking.id))
+          .map((b) => b.stationName)
+          .filter(Boolean)
+          .join(', ')
+        toastInfo(
+          `🕒 Через 15 минут бронь: ${groupStations || 'станция'}` +
+            (booking.name ? ` — ${booking.name}` : ''),
+          12000,
+        )
+        playBeep(660)
+      }
+    }
+  }, [bookings, now])
+
+  // Бронь ушла (отменили или время прошло) — забываем, что напоминали. Иначе
+  // перенесённая на вечер бронь останется без напоминания.
+  useEffect(() => {
+    const liveKeys = new Set(bookings.map((b) => b.groupId || b.id))
+    for (const key of bookingRemindedRef.current) {
+      if (!liveKeys.has(key)) bookingRemindedRef.current.delete(key)
+    }
+  }, [bookings])
 
   // ─── Actions ────────────────────────────────────────────────────────────────
 
@@ -1515,14 +1581,31 @@ export default function ArenaPage({
    *
    * Существующие сессии по-прежнему открываются на управление: закрыть уже
    * заведённую руками сессию должно быть чем.
+   *
+   * Забронированная станция открывает карточку брони, а не форму новой. Раньше
+   * система знала, что место обещано, а показать обещание было негде: звонили
+   * отменять — и оператор ничего не мог сделать.
    */
   function handleStationClick(station: ArenaStation) {
     const activeSession = sessions.find(s => s.station_id === station.id)
     if (activeSession) {
       setManageTarget({ station, session: activeSession })
-    } else {
-      setBookingTarget(station)
+      return
     }
+
+    const booked = bookingsForStation(station.id)[0]
+    if (booked) {
+      setBookingDetails(booked)
+      return
+    }
+
+    setBookingTarget(station)
+  }
+
+  /** Вся компания одной брони: строки с общим признаком группы. */
+  function groupOf(booking: api.StationBooking): api.StationBooking[] {
+    if (!booking.groupId) return [booking]
+    return bookings.filter((b) => b.groupId === booking.groupId)
   }
 
   /** Брони конкретной станции, которые ещё не закончились. */
@@ -1625,6 +1708,26 @@ export default function ArenaPage({
             </div>
           )}
 
+          {/*
+            Брони списком. Когда звонят отменять, человек называет телефон, а
+            не номер машины: искать его по карте зала невозможно.
+          */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            title="Брони"
+            onClick={() => setShowBookings(true)}
+            className="relative rounded-lg px-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100"
+          >
+            <CalendarClock className="h-4 w-4" />
+            {bookings.length > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 rounded-full bg-violet-500 px-1 text-[9px] font-bold leading-4 text-white">
+                {bookings.length}
+              </span>
+            )}
+          </Button>
+
           <Button
             type="button"
             variant="ghost"
@@ -1704,6 +1807,14 @@ export default function ArenaPage({
           </div>
         ) : viewMode === 'map' ? (
           <div className="flex flex-col gap-4">
+            {/* «А на девять есть десять компьютеров?» — ответ без счёта глазами */}
+            <BookingTimeline
+              stations={stations}
+              bookings={bookings}
+              horizonEnd={bookingHorizon}
+              previewAt={previewAt}
+              onPreview={setPreviewAt}
+            />
             <ArenaMapView
               zones={zones}
               stations={stations}
@@ -1713,6 +1824,7 @@ export default function ArenaPage({
               now={now}
               operators={bootstrap.operators}
               bookings={bookings}
+              previewAt={previewAt}
               onStationClick={handleStationClick}
             />
             {/* Mini summary under map */}
@@ -1839,14 +1951,48 @@ export default function ArenaPage({
           session={session}
           station={bookingTarget}
           allStations={stations}
+          zones={zones}
           tariffs={tariffs}
           existing={bookingsForStation(bookingTarget.id)}
+          allBookings={bookings}
           horizonEnd={bookingHorizon}
           onDone={() => {
             setBookingTarget(null)
             void loadBookings()
           }}
           onCancel={() => setBookingTarget(null)}
+        />
+      )}
+
+      {/* Список броней: поиск по телефону, отсюда же карточка и отмена */}
+      {showBookings && (
+        <BookingsPanel
+          bookings={bookings}
+          onSelect={(booking) => {
+            setShowBookings(false)
+            setBookingDetails(booking)
+          }}
+          onClose={() => setShowBookings(false)}
+        />
+      )}
+
+      {/* Карточка брони: кто, на когда, и кнопки отмены */}
+      {bookingDetails && (
+        <BookingDetailsModal
+          config={config}
+          session={session}
+          booking={bookingDetails}
+          groupBookings={groupOf(bookingDetails)}
+          onChanged={() => {
+            setBookingDetails(null)
+            void loadBookings()
+          }}
+          onClose={() => setBookingDetails(null)}
+          onBookAnother={() => {
+            const station = stations.find((s) => s.id === bookingDetails.stationId)
+            setBookingDetails(null)
+            if (station) setBookingTarget(station)
+          }}
         />
       )}
 

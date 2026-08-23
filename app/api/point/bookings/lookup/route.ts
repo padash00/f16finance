@@ -54,7 +54,10 @@ export async function GET(request: Request) {
       .limit(20)
 
     const rows = (history || []) as any[]
-    const completed = rows.filter((r) => r.status === 'completed').length
+    // `expired` — время прошло; `completed` — состоялась по наблюдению. Для
+    // оператора это одно и то же: вечер позади. Разделение важно там, где
+    // считают явку, а здесь важно «сколько раз этот человек уже бронировал».
+    const completed = rows.filter((r) => r.status === 'completed' || r.status === 'expired').length
     const cancelled = rows.filter((r) => r.status === 'cancelled').length
 
     // Имя берём из карточки, а если её нет — из последней брони: человек его

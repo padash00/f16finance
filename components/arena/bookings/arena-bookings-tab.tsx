@@ -29,6 +29,7 @@ type BookingRow = {
   phone: string | null
   name: string | null
   notes: string | null
+  cancel_reason: string | null
   source: string
   created_at: string
 }
@@ -38,6 +39,9 @@ const STATUS_LABELS: Record<string, { label: string; className: string }> = {
   requested: { label: 'заявка', className: 'bg-amber-500/10 text-amber-700 dark:text-amber-300' },
   cancelled: { label: 'отменена', className: 'bg-slate-500/10 text-slate-600 dark:text-slate-300' },
   completed: { label: 'состоялась', className: 'bg-sky-500/10 text-sky-700 dark:text-sky-300' },
+  // «Время прошло», а не «состоялась»: пришёл человек или нет — система не
+  // знает, отметку явки никто не ставит.
+  expired: { label: 'время прошло', className: 'bg-slate-500/10 text-slate-600 dark:text-slate-300' },
   rejected: { label: 'отклонена', className: 'bg-rose-500/10 text-rose-700 dark:text-rose-300' },
 }
 
@@ -60,6 +64,10 @@ export function ArenaBookingsTab(props: { companyId?: string | null }) {
   const [rows, setRows] = useState<BookingRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  /** Какую бронь сейчас подтверждают к отмене. Второе нажатие — не лишнее: обещание живому человеку. */
+  const [cancelling, setCancelling] = useState<BookingRow | null>(null)
+  const [cancelReason, setCancelReason] = useState('')
+  const [cancelBusy, setCancelBusy] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -88,6 +96,39 @@ export function ArenaBookingsTab(props: { companyId?: string | null }) {
     void load()
   }, [load])
 
+  /**
+   * Отмена с сайта.
+   *
+   * Компания на пять ПК отменяется целиком: в списке это одна строка, и снять
+   * из неё один компьютер владелец не просит — это разговор оператора с
+   * клиентом, и делается он в кассе.
+   */
+  const cancelBooking = useCallback(async () => {
+    if (!cancelling) return
+    setCancelBusy(true)
+    try {
+      const res = await fetch('/api/admin/client/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'cancel',
+          bookingId: cancelling.id,
+          wholeGroup: true,
+          reason: cancelReason.trim() || null,
+        }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok || !json?.ok) throw new Error(json?.error || `HTTP ${res.status}`)
+      setCancelling(null)
+      setCancelReason('')
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось отменить бронь')
+    } finally {
+      setCancelBusy(false)
+    }
+  }, [cancelling, cancelReason, load])
+
   return (
     <div className="space-y-4">
       <Card className="p-4">
@@ -106,7 +147,7 @@ export function ArenaBookingsTab(props: { companyId?: string | null }) {
             Обновить
           </Button>
           <p className="text-xs text-muted-foreground">
-            Брони заводят операторы в своей программе. Здесь — просмотр.
+            Брони заводят операторы в своей программе. Отсюда бронь можно снять.
           </p>
         </div>
       </Card>
@@ -146,7 +187,8 @@ export function ArenaBookingsTab(props: { companyId?: string | null }) {
                   <th className="w-40 py-2 px-2 font-normal">Телефон</th>
                   <th className="py-2 px-2 font-normal">Компьютеры</th>
                   <th className="w-32 py-2 px-2 font-normal">Статус</th>
-                  <th className="py-2 px-2 pr-4 font-normal">Заметка</th>
+                  <th className="py-2 px-2 font-normal">Заметка</th>
+                  <th className="w-28 py-2 px-2 pr-4 font-normal" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
@@ -196,8 +238,32 @@ export function ArenaBookingsTab(props: { companyId?: string | null }) {
                           {status.label}
                         </span>
                       </td>
-                      <td className="py-2.5 px-2 pr-4 text-xs text-muted-foreground">
+                      <td className="py-2.5 px-2 text-xs text-muted-foreground">
                         {row.notes || '—'}
+                        {/*
+                          Причина отмены — отдельная строка, а не замена
+                          заметки: одно про бронирование, другое про отмену.
+                        */}
+                        {row.cancel_reason ? (
+                          <div className="text-[11px] text-rose-600 dark:text-rose-300">
+                            отменена: {row.cancel_reason}
+                          </div>
+                        ) : null}
+                      </td>
+                      <td className="py-2.5 px-2 pr-4 text-right">
+                        {row.status === 'confirmed' || row.status === 'requested' ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setCancelling(row)
+                              setCancelReason('')
+                            }}
+                            className="h-7 px-2 text-xs text-rose-600 hover:text-rose-700 dark:text-rose-300"
+                          >
+                            Снять
+                          </Button>
+                        ) : null}
                       </td>
                     </tr>
                   )
@@ -207,6 +273,55 @@ export function ArenaBookingsTab(props: { companyId?: string | null }) {
           </div>
         )}
       </Card>
+
+      {/*
+        Подтверждение отмены. Бронь — обещание живому человеку, и снять его
+        случайным попаданием по строке быть не должно.
+      */}
+      {cancelling ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <Card className="w-full max-w-md p-5">
+            <h3 className="text-base font-semibold text-foreground">Снять бронь?</h3>
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              {cancelling.name || 'Без имени'}
+              {cancelling.phone ? ` · ${cancelling.phone}` : ''} · {timeRange(cancelling.starts_at, cancelling.ends_at)}
+              {cancelling.stations.length > 0 ? ` · ${cancelling.stations.join(', ')}` : ''}
+            </p>
+            {cancelling.stations.length > 1 ? (
+              <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                Это компания на {cancelling.stations.length} ПК — снимется целиком.
+              </p>
+            ) : null}
+
+            <label className="mt-4 mb-1 block text-xs text-muted-foreground">Причина</label>
+            <Input
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              placeholder="Например: клиент перенёс"
+              className="h-9"
+            />
+
+            <div className="mt-5 flex justify-end gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={cancelBusy}
+                onClick={() => setCancelling(null)}
+              >
+                Не снимать
+              </Button>
+              <Button
+                size="sm"
+                disabled={cancelBusy}
+                onClick={() => void cancelBooking()}
+                className="bg-rose-600 text-white hover:bg-rose-700"
+              >
+                {cancelBusy ? 'Снимаю…' : 'Снять бронь'}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      ) : null}
     </div>
   )
 }
