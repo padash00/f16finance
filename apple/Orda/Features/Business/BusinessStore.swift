@@ -845,6 +845,23 @@ final class BusinessStore {
         }
     }
 
+    /// Закрыть акт: провести ревизию.
+    ///
+    /// Остатки станут такими, какими их пересчитали, поэтому перечитываем весь
+    /// склад, а не только список актов.
+    func closeRevisionAct(id: String) async -> String? {
+        do {
+            try await service.closeAuditAct(id: id)
+            await loadStore()
+            await loadRevisionActs()
+            return nil
+        } catch let error as APIError {
+            return error.userMessage
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
     /// Откатить проведённый акт: остатки вернутся к состоянию до него.
     func revertRevisionAct(id: String) async -> String? {
         do {

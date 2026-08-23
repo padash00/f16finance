@@ -806,11 +806,13 @@ struct RevisionActsSheet: View {
     @Environment(\.access) private var access
 
     @State private var cancelling: RevisionAct?
+    @State private var closing: RevisionAct?
     @State private var reverting: RevisionAct?
     @State private var isBusy = false
     @State private var error: String?
 
     private var canCancel: Bool { access?.can("store-revisions.cancel") ?? false }
+    private var canCommit: Bool { access?.can("store-revisions.commit") ?? false }
 
     var body: some View {
         NavigationStack {
@@ -866,6 +868,18 @@ struct RevisionActsSheet: View {
                                     .fixedSize(horizontal: false, vertical: true)
                             }
 
+                            // Провести ревизию — то, ради чего её и открывали.
+                            // Приложение умело акт открыть и отменить, но не
+                            // закрыть: считали по полкам с телефоном, а
+                            // завершали с ноутбука.
+                            if act.isOpen, canCommit {
+                                Button { closing = act } label: {
+                                    Label("Провести ревизию", systemImage: "checkmark.seal")
+                                }
+                                .buttonStyle(PrimaryButtonStyle())
+                                .disabled(isBusy)
+                            }
+
                             if canCancel {
                                 if act.isOpen {
                                     Button { cancelling = act } label: {
@@ -894,6 +908,17 @@ struct RevisionActsSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Готово") { dismiss() }
                 }
+            }
+            // Проведение необратимо в обычном смысле: откат есть, но он
+            // отдельное тяжёлое действие и только у владельца. Поэтому
+            // спрашиваем и говорим, что именно произойдёт с остатками.
+            .alert("Провести ревизию?", isPresented: Binding(get: { closing != nil }, set: { if !$0 { closing = nil } })) {
+                Button("Провести", role: .destructive) {
+                    if let act = closing { Task { await run { await store.closeRevisionAct(id: act.id) } } }
+                }
+                Button("Не сейчас", role: .cancel) {}
+            } message: {
+                Text("Остатки станут такими, какими их пересчитали. Недостача превратится в долг, излишек — в приход. Откатить сможет только владелец.")
             }
             .alert("Отменить акт?", isPresented: Binding(get: { cancelling != nil }, set: { if !$0 { cancelling = nil } })) {
                 Button("Отменить акт", role: .destructive) {
