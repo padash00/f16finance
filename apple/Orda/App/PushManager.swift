@@ -274,7 +274,25 @@ final class PushManager {
     /// Токен уходит на сайт только когда есть и он, и авторизованная сессия:
     /// эндпоинт регистрации требует Bearer-токен.
     private func sendTokenIfPossible() async {
-        guard isSignedIn, let api, let deviceToken else { return }
+        // Раньше здесь стоял один `guard` на три условия — и при любом из них
+        // отправка молча не происходила. Снаружи это выглядело так: разрешение
+        // есть, адрес у телефона есть, в базе ноль устройств, в журнале
+        // сервера пусто. То есть запрос не уходил, и понять, какое из трёх
+        // условий не выполнено, было нельзя ни изнутри, ни снаружи.
+        //
+        // Теперь каждое молчание называет себя.
+        guard let api else {
+            lastRegistrationError = "приложение ещё не готово к запросам"
+            return
+        }
+        guard let deviceToken else {
+            lastRegistrationError = "адреса от Apple пока нет"
+            return
+        }
+        guard isSignedIn else {
+            lastRegistrationError = "вход ещё не подтверждён сервером"
+            return
+        }
 
         let body: [String: Any] = ["token": deviceToken, "platform": platformName]
         guard let data = try? JSONSerialization.data(withJSONObject: body) else { return }
