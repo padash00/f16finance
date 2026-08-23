@@ -579,6 +579,73 @@ public struct SupplierDebtService: Sendable {
         )
         return response.data
     }
+
+    /// Загрузить чек об оплате и получить его адрес.
+    ///
+    /// Отдельным шагом, потому что оплата без чека не принимается: сервер
+    /// требует подтверждение платежа, и это правильно — иначе долг закрывается
+    /// со слов. Фотографируют его тут же, телефоном.
+    public func uploadPaymentReceipt(fileName: String, mimeType: String, data: Data) async throws -> String {
+        struct Response: Decodable { let documentURL: String
+            private enum CodingKeys: String, CodingKey { case documentURL = "document_url" }
+        }
+        let request = APIRequest.multipart(
+            "/api/admin/store/receipts/upload",
+            fileField: "file",
+            fileName: fileName,
+            mimeType: mimeType,
+            fileData: data
+        )
+        let response: Response = try await api.send(request)
+        return response.documentURL
+    }
+
+    /// Оплатить долг поставщику. Требует `store-billing.pay_debt`.
+    ///
+    /// `receiptURL` обязателен — см. `uploadPaymentReceipt`.
+    public func payDebt(
+        id: String,
+        paidAt: String,
+        method: String,
+        receiptURL: String,
+        comment: String?
+    ) async throws {
+        struct Body: Encodable {
+            let paid_at: String
+            let payment_method: String
+            let receipt_file_url: String
+            let comment: String?
+        }
+        let request = try APIRequest.json(
+            "/api/admin/store/debts/\(id)/pay",
+            body: Body(paid_at: paidAt, payment_method: method, receipt_file_url: receiptURL, comment: comment)
+        )
+        _ = try await api.send(request)
+    }
+
+    /// Списать долг без оплаты. Требует `store-billing.write_off_debt`.
+    ///
+    /// Причина обязательна: списание — это признание, что денег поставщик не
+    /// получит, и через полгода никто не вспомнит, почему так решили.
+    public func writeOffDebt(id: String, reason: String) async throws {
+        struct Body: Encodable { let reason: String }
+        let request = try APIRequest.json("/api/admin/store/debts/\(id)/write-off", body: Body(reason: reason))
+        _ = try await api.send(request)
+    }
+
+    /// Перенести срок оплаты. Требует `store-billing.reschedule_debt`.
+    public func rescheduleDebt(id: String, dueDate: String, reason: String?) async throws {
+        struct Body: Encodable {
+            let due_date: String
+            let reason: String?
+        }
+        let request = try APIRequest.json(
+            "/api/admin/store/debts/\(id)/due-date",
+            method: .patch,
+            body: Body(due_date: dueDate, reason: reason)
+        )
+        _ = try await api.send(request)
+    }
 }
 
 extension String {

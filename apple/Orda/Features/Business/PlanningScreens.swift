@@ -1,5 +1,6 @@
 import OrdaKit
 import OrdaUI
+import PhotosUI
 import SwiftUI
 
 // ── Доверенные поставщики ────────────────────────────────────────────────────
@@ -26,6 +27,7 @@ final class TrustedVendorStore {
             self.error = .transport(message: error.localizedDescription)
         }
     }
+
 }
 
 /// Кому можно платить без фото чека.
@@ -561,6 +563,15 @@ private enum DebtFilter: String, CaseIterable, Identifiable {
     }
 }
 
+/// Итог загрузки чека: адрес файла или причина отказа.
+///
+/// Отдельным типом, а не `Result<String, String>`: строка не годится в роли
+/// ошибки, а заводить ради этого класс ошибок незачем.
+enum ReceiptUpload {
+    case success(String)
+    case failure(String)
+}
+
 @MainActor @Observable
 final class SupplierBillingStore {
     private(set) var board: SupplierDebtBoard?
@@ -570,6 +581,46 @@ final class SupplierBillingStore {
     private let service: SupplierDebtService
 
     init(api: APIClient) { service = SupplierDebtService(api: api) }
+
+    /// Загрузить чек об оплате. Возвращает адрес файла или текст ошибки.
+    func uploadReceipt(data: Data, fileName: String, mimeType: String) async -> ReceiptUpload {
+        do {
+            let url = try await service.uploadPaymentReceipt(fileName: fileName, mimeType: mimeType, data: data)
+            return .success(url)
+        } catch let error as APIError {
+            return .failure(error.userMessage)
+        } catch {
+            return .failure(error.localizedDescription)
+        }
+    }
+
+    /// Оплатить долг. Возвращает текст ошибки или `nil`.
+    func pay(id: String, paidAt: String, method: String, receiptURL: String, comment: String?) async -> String? {
+        await run { try await self.service.payDebt(id: id, paidAt: paidAt, method: method, receiptURL: receiptURL, comment: comment) }
+    }
+
+    /// Списать долг без оплаты.
+    func writeOff(id: String, reason: String) async -> String? {
+        await run { try await self.service.writeOffDebt(id: id, reason: reason) }
+    }
+
+    /// Перенести срок оплаты.
+    func reschedule(id: String, dueDate: String, reason: String?) async -> String? {
+        await run { try await self.service.rescheduleDebt(id: id, dueDate: dueDate, reason: reason) }
+    }
+
+    /// Общая обвязка: выполнить, перечитать доску, вернуть текст ошибки.
+    private func run(_ work: () async throws -> Void) async -> String? {
+        do {
+            try await work()
+            await load()
+            return nil
+        } catch let error as APIError {
+            return error.userMessage
+        } catch {
+            return error.localizedDescription
+        }
+    }
 
     func load() async {
         isLoading = true
@@ -588,8 +639,14 @@ final class SupplierBillingStore {
 /// Счета поставщиков: кому и сколько должны, что уже просрочено.
 ///
 /// Свод «должны / просрочено» приходит с сервера — это те же цифры, что в
-/// биллинге на сайте. Оплата и списание долга остаются там: это необратимые
-/// действия с деньгами, и делать их мимоходом с телефона незачем.
+/// биллинге на сайте.
+///
+/// Оплата, списание и перенос срока сначала были оставлены на сайте: решение
+/// необратимое, деньги. Но смотрят на долг именно в телефоне — и уходили за
+/// ноутбуком, чтобы нажать одну кнопку. Действия перенесены сюда, с двумя
+/// оговорками: оплата не принимается без фотографии чека (так требует сервер,
+/// и это правильно — иначе долг закрывается со слов), а списание требует
+/// причины.
 struct SupplierBillingScreen: View {
     @Environment(\.api) private var api
 
@@ -638,7 +695,7 @@ struct SupplierBillingScreen: View {
             ) { debt in
                 SupplierDebtRow(debt: debt)
             } detail: { debt in
-                SupplierDebtDetail(debt: debt)
+                SupplierDebtDetail(debt: debt, store: store)
             } empty: {
                 WideEmptyState(
                     icon: filter == .overdue ? "checkmark.circle" : "doc.text",
@@ -794,10 +851,46 @@ private struct SupplierDebtRow: View {
 
 private struct SupplierDebtDetail: View {
     let debt: SupplierDebt
+    /// Хранилище нужно, чтобы после оплаты доска перечиталась: суммы «должны»
+    /// и «просрочено» меняются вместе с долгом.
+    var store: SupplierBillingStore?
+
+    @Environment(\.access) private var access
+
+    @State private var payOpen = false
+    @State private var writeOffOpen = false
+    @State private var rescheduleOpen = false
+
+    private var canPay: Bool { access?.can("store-billing.pay_debt") ?? false }
+    private var canWriteOff: Bool { access?.can("store-billing.write_off_debt") ?? false }
+    private var canReschedule: Bool { access?.can("store-billing.reschedule_debt") ?? false }
+
+    /// Действия есть только у открытого долга: оплаченный и списанный уже
+    /// закрыты, и кнопки на них были бы обманом.
+    private var isOpen: Bool { debt.status == "open" || debt.status == "overdue" }
 
     var body: some View {
         ScreenScroll {
             VStack(spacing: Spacing.lg) {
+                if isOpen, canPay || canWriteOff || canReschedule {
+                    Card {
+                        VStack(spacing: Spacing.sm) {
+                            if canPay {
+                                Button("Оплатить") { payOpen = true }
+                                    .buttonStyle(PrimaryButtonStyle())
+                            }
+                            if canReschedule {
+                                Button("Перенести срок") { rescheduleOpen = true }
+                                    .buttonStyle(SecondaryButtonStyle())
+                            }
+                            if canWriteOff {
+                                Button("Списать без оплаты") { writeOffOpen = true }
+                                    .buttonStyle(SecondaryButtonStyle())
+                            }
+                        }
+                    }
+                }
+
                 Card(accent: accent) {
                     VStack(alignment: .leading, spacing: Spacing.sm) {
                         Text(debt.supplierName)
@@ -886,7 +979,23 @@ private struct SupplierDebtDetail: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-    }
+    
+        .sheet(isPresented: $payOpen) {
+            DebtPaySheet(debt: debt, store: store)
+        }
+        .sheet(isPresented: $writeOffOpen) {
+            DebtReasonSheet(
+                title: "Списать долг",
+                note: "Списание означает, что поставщик этих денег не получит. Причина обязательна: через полгода никто не вспомнит, почему так решили.",
+                actionTitle: "Списать"
+            ) { reason in
+                await store?.writeOff(id: debt.id, reason: reason)
+            }
+        }
+        .sheet(isPresented: $rescheduleOpen) {
+            DebtRescheduleSheet(debt: debt, store: store)
+        }
+}
 
     private var accent: Color {
         if debt.isOverdue { return Theme.negative }
@@ -898,5 +1007,268 @@ private struct SupplierDebtDetail: View {
         if debt.isPaid { return .good }
         if debt.isWrittenOff { return .neutral }
         return .warning
+    }
+}
+
+// ── Действия с долгом поставщику ─────────────────────────────────────────────
+
+/// Оплата долга: дата, способ, чек.
+///
+/// Чек обязателен — так требует сервер, и это правильно: иначе долг
+/// закрывается со слов, а через месяц никто не докажет, что деньги ушли.
+/// Фотографируют его тут же, телефоном; в этом и смысл переноса действия сюда.
+private struct DebtPaySheet: View {
+    let debt: SupplierDebt
+    var store: SupplierBillingStore?
+
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var paidAt = Date()
+    @State private var method = "cash"
+    @State private var comment = ""
+    @State private var photo: PhotosPickerItem?
+    @State private var receiptURL: String?
+    @State private var isUploading = false
+    @State private var isSaving = false
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            ScreenScroll {
+                Card {
+                    VStack(alignment: .leading, spacing: Spacing.md) {
+                        SectionHeader(debt.supplierName, subtitle: Money.format(debt.amount))
+
+                        FieldLabel("Дата оплаты")
+                        DatePicker("", selection: $paidAt, displayedComponents: .date)
+                            .labelsHidden()
+
+                        FieldLabel("Чем платили")
+                        Picker("Чем платили", selection: $method) {
+                            Text("Наличными").tag("cash")
+                            Text("Kaspi").tag("kaspi")
+                        }
+                        .pickerStyle(.segmented)
+
+                        FieldLabel("Чек об оплате")
+                        if receiptURL != nil {
+                            Label("Чек загружен", systemImage: "checkmark.circle.fill")
+                                .font(Typography.caption)
+                                .foregroundStyle(Theme.positive)
+                        }
+                        PhotosPicker(selection: $photo, matching: .images) {
+                            Label(
+                                isUploading ? "Загружаем…" : (receiptURL == nil ? "Сфотографировать чек" : "Заменить чек"),
+                                systemImage: "camera"
+                            )
+                        }
+                        .buttonStyle(SecondaryButtonStyle())
+                        .disabled(isUploading || isSaving)
+
+                        FieldLabel("Комментарий")
+                        TextField("необязательно", text: $comment)
+                            .textFieldStyle(.plain)
+                            .font(Typography.callout)
+
+                        if let error {
+                            Text(error).font(Typography.caption).foregroundStyle(Theme.negative)
+                        }
+
+                        Button(isSaving ? "Сохраняем…" : "Оплатить") {
+                            Task { await pay() }
+                        }
+                        .buttonStyle(PrimaryButtonStyle())
+                        .disabled(isSaving || isUploading || receiptURL == nil)
+
+                        if receiptURL == nil {
+                            Text("Без чека оплата не принимается — так устроен учёт долгов.")
+                                .font(Typography.caption)
+                                .foregroundStyle(Theme.textDim)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+            }
+            .background(Theme.background)
+            .navigationTitle("Оплата долга")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Отмена") { dismiss() } } }
+            .onChange(of: photo) { _, item in
+                guard let item else { return }
+                Task { await upload(item) }
+            }
+        }
+    }
+
+    private func upload(_ item: PhotosPickerItem) async {
+        isUploading = true
+        defer { isUploading = false }
+        guard let data = try? await item.loadTransferable(type: Data.self) else {
+            error = "Не удалось прочитать фотографию"
+            return
+        }
+        switch await store?.uploadReceipt(data: data, fileName: "receipt.jpg", mimeType: "image/jpeg") {
+        case let .success(url):
+            receiptURL = url
+            error = nil
+        case let .failure(message):
+            error = message
+        case nil:
+            error = "Не удалось загрузить чек"
+        }
+    }
+
+    private func pay() async {
+        guard let receiptURL else { return }
+        isSaving = true
+        defer { isSaving = false }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+
+        error = await store?.pay(
+            id: debt.id,
+            paidAt: formatter.string(from: paidAt),
+            method: method,
+            receiptURL: receiptURL,
+            comment: comment.trimmingCharacters(in: .whitespaces).isEmpty ? nil : comment
+        )
+        if error == nil {
+            Haptics.success()
+            dismiss()
+        } else {
+            Haptics.error()
+        }
+    }
+}
+
+/// Действие, которому нужна причина: списание долга.
+private struct DebtReasonSheet: View {
+    let title: String
+    let note: String
+    let actionTitle: String
+    let action: (String) async -> String?
+
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var reason = ""
+    @State private var isSaving = false
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            ScreenScroll {
+                Card {
+                    VStack(alignment: .leading, spacing: Spacing.md) {
+                        Text(note)
+                            .font(Typography.caption)
+                            .foregroundStyle(Theme.textDim)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        FieldLabel("Причина")
+                        TextField("например: поставщик закрылся", text: $reason)
+                            .textFieldStyle(.plain)
+                            .font(Typography.callout)
+
+                        if let error {
+                            Text(error).font(Typography.caption).foregroundStyle(Theme.negative)
+                        }
+
+                        Button(isSaving ? "Сохраняем…" : actionTitle) {
+                            Task {
+                                isSaving = true
+                                defer { isSaving = false }
+                                error = await action(reason.trimmingCharacters(in: .whitespaces))
+                                if error == nil {
+                                    Haptics.success()
+                                    dismiss()
+                                } else {
+                                    Haptics.error()
+                                }
+                            }
+                        }
+                        .buttonStyle(DestructiveButtonStyle())
+                        .disabled(isSaving || reason.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                }
+            }
+            .background(Theme.background)
+            .navigationTitle(title)
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Отмена") { dismiss() } } }
+        }
+    }
+}
+
+/// Перенос срока оплаты.
+private struct DebtRescheduleSheet: View {
+    let debt: SupplierDebt
+    var store: SupplierBillingStore?
+
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var dueDate = Date()
+    @State private var reason = ""
+    @State private var isSaving = false
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            ScreenScroll {
+                Card {
+                    VStack(alignment: .leading, spacing: Spacing.md) {
+                        SectionHeader(debt.supplierName, subtitle: Money.format(debt.amount))
+
+                        FieldLabel("Новый срок")
+                        DatePicker("", selection: $dueDate, displayedComponents: .date)
+                            .labelsHidden()
+
+                        FieldLabel("Причина")
+                        TextField("необязательно", text: $reason)
+                            .textFieldStyle(.plain)
+                            .font(Typography.callout)
+
+                        if let error {
+                            Text(error).font(Typography.caption).foregroundStyle(Theme.negative)
+                        }
+
+                        Button(isSaving ? "Сохраняем…" : "Перенести") {
+                            Task { await save() }
+                        }
+                        .buttonStyle(PrimaryButtonStyle())
+                        .disabled(isSaving)
+                    }
+                }
+            }
+            .background(Theme.background)
+            .navigationTitle("Срок оплаты")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Отмена") { dismiss() } } }
+        }
+    }
+
+    private func save() async {
+        isSaving = true
+        defer { isSaving = false }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        error = await store?.reschedule(
+            id: debt.id,
+            dueDate: formatter.string(from: dueDate),
+            reason: reason.trimmingCharacters(in: .whitespaces).isEmpty ? nil : reason
+        )
+        if error == nil {
+            Haptics.success()
+            dismiss()
+        } else {
+            Haptics.error()
+        }
     }
 }
