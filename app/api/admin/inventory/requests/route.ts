@@ -8,6 +8,18 @@ import { decideInventoryRequest, ensureInventoryRequestAccess, fetchInventoryReq
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { notifyInventoryRequestDecided } from '@/lib/server/telegram'
 
+/**
+ * Минута на запрос.
+ *
+ * Решение по заявке — не одна строка: функция в базе списывает остатки,
+ * пишет движения и правит долги по каждой позиции. На умолчании Vercel
+ * (десяток секунд) большая заявка не укладывалась: шлюз обрывал ответ и
+ * отдавал ошибку, а транзакция в базе к тому времени уже прошла. На сайте
+ * заявка выглядела одобренной, в телефоне — «сервер временно недоступен», и
+ * человек жал ещё раз, получая «решение уже принято».
+ */
+export const maxDuration = 60
+
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
