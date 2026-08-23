@@ -390,3 +390,85 @@ extension KeyedDecodingContainer {
         return nil
     }
 }
+
+// ── Поиск по складу и заведение товара ───────────────────────────────────────
+
+/// Находка глобального поиска: товар, приёмка, списание, заявка.
+///
+/// «Где эта банка» — вопрос, который задают стоя у полки, а не за столом.
+/// На сайте поиск есть, в приложении не было: телефон умел искать только
+/// внутри открытого списка.
+public struct StoreSearchHit: Decodable, Sendable, Identifiable, Hashable {
+    public let type: String
+    public let title: String
+    public let subtitle: String?
+
+    public var id: String { "\(type)|\(title)|\(subtitle ?? "")" }
+
+    /// Человеческое имя раздела — по нему видно, где находка лежит.
+    public var kindLabel: String {
+        switch type {
+        case "item": "Товар"
+        case "receipt": "Приёмка"
+        case "writeoff": "Списание"
+        case "request": "Заявка"
+        case "supplier": "Поставщик"
+        case "revision": "Ревизия"
+        default: "Склад"
+        }
+    }
+}
+
+/// Товар, найденный по штрихкоду.
+public struct BarcodeLookup: Decodable, Sendable {
+    public let item: Item?
+
+    public struct Item: Decodable, Sendable, Hashable {
+        public let id: String
+        public let name: String
+        public let unit: String?
+        public let salePrice: Double?
+
+        private enum CodingKeys: String, CodingKey {
+            case id, name, unit
+            case salePrice = "sale_price"
+        }
+    }
+}
+
+/// Новый товар: имя, штрихкод и цены.
+///
+/// Заводится камерой, стоя у полки. Поэтому обязательного минимума ровно два
+/// поля — имя и штрихкод; остальное можно дописать позже на сайте.
+public struct NewStoreItem: Encodable, Sendable {
+    public let action = "createItem"
+    public let companyID: String
+    public let name: String
+    public let barcode: String
+    public let unit: String
+    public let salePrice: Double
+    public let purchasePrice: Double
+
+    public init(
+        companyID: String,
+        name: String,
+        barcode: String,
+        unit: String = "шт",
+        salePrice: Double = 0,
+        purchasePrice: Double = 0
+    ) {
+        self.companyID = companyID
+        self.name = name
+        self.barcode = barcode
+        self.unit = unit
+        self.salePrice = salePrice
+        self.purchasePrice = purchasePrice
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case action, name, barcode, unit
+        case companyID = "company_id"
+        case salePrice = "sale_price"
+        case purchasePrice = "purchase_price"
+    }
+}

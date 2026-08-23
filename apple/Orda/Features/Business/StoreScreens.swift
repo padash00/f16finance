@@ -40,7 +40,15 @@ struct StoreScreen: View {
             case .requests: RequestsScreen()
             }
         }
-        .toolbar { LogoutToolbarItem() }
+                .toolbar {
+            LogoutToolbarItem()
+            // Поиск по всему складу — стоя у полки, а не в открытом списке.
+            ToolbarItem(placement: .primaryAction) {
+                NavigationLink(destination: StoreSearchScreen()) {
+                    Image(systemName: "magnifyingglass")
+                }
+            }
+        }
         .task { await store.loadStore() }
         .refreshable { await store.loadStore() }
     }

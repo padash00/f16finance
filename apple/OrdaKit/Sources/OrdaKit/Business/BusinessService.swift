@@ -1169,6 +1169,33 @@ public struct BusinessService: Sendable {
         )
     }
 
+    /// Поиск по всему складу: товары, приёмки, списания, заявки.
+    ///
+    /// Требует `store.global_search`.
+    public func searchStore(query: String, companyID: String?) async throws -> [StoreSearchHit] {
+        struct Response: Decodable { let results: [StoreSearchHit] }
+        var params = ["q": query]
+        if let companyID, !companyID.isEmpty { params["company_id"] = companyID }
+        let response: DataEnvelope<Response> = try await api.send(
+            APIRequest(path: "/api/admin/store/global-search", query: params)
+        )
+        return response.data.results
+    }
+
+    /// Что за товар с таким штрихкодом. `nil` — такого ещё нет.
+    public func lookupBarcode(_ barcode: String) async throws -> BarcodeLookup.Item? {
+        struct Body: Encodable { let action = "lookupBarcode"; let barcode: String }
+        let request = try APIRequest.json("/api/admin/store/warehouse", body: Body(barcode: barcode))
+        let response: DataEnvelope<BarcodeLookup> = try await api.send(request)
+        return response.data.item
+    }
+
+    /// Завести товар. Требует `store-warehouse.create_item`.
+    public func createStoreItem(_ item: NewStoreItem) async throws {
+        let request = try APIRequest.json("/api/admin/store/warehouse", body: item)
+        _ = try await api.send(request)
+    }
+
     /// Решение по заявке склада: одобрить или отклонить.
     ///
     /// Сервер делает это одной атомарной функцией — минусует со склада и
