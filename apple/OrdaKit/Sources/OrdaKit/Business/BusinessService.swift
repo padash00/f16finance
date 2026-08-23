@@ -444,6 +444,79 @@ public struct BusinessService: Sendable {
         )
     }
 
+    /// Выплатить зарплату оператору за неделю.
+    ///
+    /// Приложение умело выдать аванс и записать корректировку, а саму выплату —
+    /// нет: считали на телефоне, платили с ноутбука. Требует
+    /// `salary.create_payment`.
+    ///
+    /// `withAdvance` — закрыть выплатой и выданный ранее аванс: сервер сам
+    /// разнесёт суммы, иначе аванс повис бы отдельным долгом.
+    public func paySalaryWeek(
+        operatorID: String,
+        weekStart: String,
+        paymentDate: String,
+        cashAmount: Double,
+        kaspiAmount: Double,
+        comment: String?,
+        withAdvance: Bool
+    ) async throws {
+        var payload: [String: Any] = [
+            "operator_id": operatorID,
+            "week_start": weekStart,
+            "payment_date": paymentDate,
+            "cash_amount": cashAmount,
+            "kaspi_amount": kaspiAmount,
+        ]
+        if let comment, !comment.isEmpty { payload["comment"] = comment }
+
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/salary",
+                method: .post,
+                body: try JSONSerialization.data(withJSONObject: [
+                    "action": withAdvance ? "createPaymentWithAdvance" : "createWeeklyPayment",
+                    "payload": payload,
+                ])
+            )
+        )
+    }
+
+    /// Отменить выплату. Требует `salary.void_payment`.
+    ///
+    /// Ошиблись суммой — откатить надо там же, где ошиблись, а не назавтра с
+    /// компьютера.
+    public func voidSalaryPayment(paymentID: String, operatorID: String, weekStart: String) async throws {
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/salary",
+                method: .post,
+                body: try JSONSerialization.data(withJSONObject: [
+                    "action": "voidPayment",
+                    "paymentId": paymentID,
+                    "operatorId": operatorID,
+                    "weekStart": weekStart,
+                ])
+            )
+        )
+    }
+
+    /// Отменить корректировку — премию или штраф.
+    public func voidSalaryAdjustment(adjustmentID: String, operatorID: String, weekStart: String) async throws {
+        _ = try await api.send(
+            APIRequest(
+                path: "/api/admin/salary",
+                method: .post,
+                body: try JSONSerialization.data(withJSONObject: [
+                    "action": "voidAdjustment",
+                    "adjustmentId": adjustmentID,
+                    "operatorId": operatorID,
+                    "weekStart": weekStart,
+                ])
+            )
+        )
+    }
+
     /// Корректировка зарплаты: премия или штраф по факту смены.
     ///
     /// Решение о премии принимают в тот же день, когда её заслужили, — иначе

@@ -13,6 +13,10 @@ import SwiftUI
 struct AdvanceSheet: View {
     /// Что делаем с деньгами оператора.
     enum Kind: String, CaseIterable, Identifiable {
+        /// Выплата недели. Приложение умело выдать аванс и записать
+        /// корректировку, а саму выплату — нет: считали на телефоне, платили с
+        /// ноутбука. Стоит первой: за этим на экран и приходят.
+        case payment
         case advance
         case bonus
         case fine
@@ -21,6 +25,7 @@ struct AdvanceSheet: View {
 
         var title: String {
             switch self {
+            case .payment: "Выплата"
             case .advance: "Аванс"
             case .bonus: "Премия"
             case .fine: "Штраф"
@@ -29,6 +34,7 @@ struct AdvanceSheet: View {
 
         var action: String {
             switch self {
+            case .payment: "Выплатить"
             case .advance: "Выдать аванс"
             case .bonus: "Начислить премию"
             case .fine: "Удержать штраф"
@@ -37,6 +43,7 @@ struct AdvanceSheet: View {
 
         var note: String {
             switch self {
+            case .payment: "Выплата закроет неделю. Выданный аванс зачтётся в неё, а не повиснет отдельным долгом."
             case .advance: "Аванс сразу станет расходом точки и уменьшит остаток к выплате за неделю."
             case .bonus: "Премия прибавится к расчёту недели."
             case .fine: "Штраф вычтется из расчёта недели."
@@ -58,12 +65,14 @@ struct AdvanceSheet: View {
     private var canMarkDebt: Bool { auth.resolver?.can("salary.mark_debt_paid") ?? false }
     private var canSendTelegram: Bool { auth.resolver?.can("salary.send_telegram") ?? false }
     private var canAdvance: Bool { auth.resolver?.can("salary.create_advance") ?? false }
+    private var canPay: Bool { auth.resolver?.can("salary.create_payment") ?? false }
     private var canAdjust: Bool { auth.resolver?.can("salary.create_adjustment") ?? false }
 
     /// Виды, доступные по правам. Пустой список означает, что человеку сюда
     /// вообще нечего было открывать, — но строка списка это уже проверила.
     private var kinds: [Kind] {
         var result: [Kind] = []
+        if canPay { result.append(.payment) }
         if canAdvance { result.append(.advance) }
         if canAdjust { result.append(contentsOf: [.bonus, .fine]) }
         return result
@@ -280,7 +289,9 @@ struct AdvanceSheet: View {
     }
 
     private func submit() async {
-        let amount = kind == .advance ? total : AdvanceSheet.parse(amountText)
+        // У выплаты и аванса сумма складывается из наличных и Kaspi,
+        // у премии и штрафа — одно поле.
+        let amount = (kind == .advance || kind == .payment) ? total : AdvanceSheet.parse(amountText)
 
         if kind == .advance, companyID.isEmpty {
             error = "Выберите точку — аванс ложится расходом на её кассу."
@@ -300,6 +311,18 @@ struct AdvanceSheet: View {
         do {
             let service = BusinessService(api: api)
             switch kind {
+            case .payment:
+                try await service.paySalaryWeek(
+                    operatorID: row.operatorID,
+                    weekStart: weekStart,
+                    paymentDate: AdvanceSheet.isoDay(paymentDate),
+                    cashAmount: cash,
+                    kaspiAmount: kaspi,
+                    comment: comment.trimmingCharacters(in: .whitespaces),
+                    // Аванс за эту неделю закрываем той же выплатой: иначе он
+                    // останется висеть отдельным долгом, хотя деньги отданы.
+                    withAdvance: row.week.advanceAmount > 0
+                )
             case .advance:
                 try await service.createSalaryAdvance(
                     operatorID: row.operatorID,
