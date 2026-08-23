@@ -1169,6 +1169,40 @@ public struct BusinessService: Sendable {
         )
     }
 
+    /// Сменить логин оператора. Требует `operators.edit_login`.
+    ///
+    /// Логин меняют, когда человека перепутали при заведении или он сам его не
+    /// помнит, — и почти всегда это выясняется на точке, а не за ноутбуком.
+    public func changeOperatorLogin(operatorID: String, username: String) async throws {
+        struct Body: Encodable { let operatorId: String; let username: String }
+        let request = try APIRequest.json(
+            "/api/admin/update-operator-login",
+            body: Body(operatorId: operatorID, username: username)
+        )
+        _ = try await api.send(request)
+    }
+
+    /// Повысить оператора до сотрудника. Требует `operators.promote`.
+    ///
+    /// `monthlySalary` — оклад новой должности; ноль означает «оставить как
+    /// есть», сервер сам решит.
+    public func promoteOperator(operatorID: String, role: String, monthlySalary: Double?) async throws {
+        struct Payload: Encodable {
+            let operatorId: String
+            let role: String
+            let monthly_salary: Double?
+        }
+        struct Body: Encodable {
+            let action = "promoteOperator"
+            let payload: Payload
+        }
+        let request = try APIRequest.json(
+            "/api/admin/operator-career",
+            body: Body(payload: Payload(operatorId: operatorID, role: role, monthly_salary: monthlySalary))
+        )
+        _ = try await api.send(request)
+    }
+
     /// Поиск по всему складу: товары, приёмки, списания, заявки.
     ///
     /// Требует `store.global_search`.

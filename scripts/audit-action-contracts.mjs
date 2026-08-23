@@ -92,6 +92,10 @@ function collectServerActions(apiPath) {
   // `body.action === 'x'`, `action: 'x'` в типе, `case 'x':`
   for (const re of [
     /action\s*===\s*'([a-zA-Z0-9_.-]+)'/g,
+    // Роут может принимать одно действие и отсеивать остальные отрицанием:
+    // `if (body?.action !== 'promoteOperator') return 400`. Это тоже список
+    // принимаемых — из одного пункта.
+    /action\s*!==\s*'([a-zA-Z0-9_.-]+)'/g,
     /action:\s*'([a-zA-Z0-9_.-]+)'/g,
     /case\s+'([a-zA-Z0-9_.-]+)'\s*:/g,
   ]) {
@@ -140,6 +144,10 @@ for (const file of walk(join(ROOT, 'app', 'api'), (name) => name === 'route.ts')
   const source = readFileSync(file, 'utf8')
   for (const re of [
     /action\s*===\s*'([a-zA-Z0-9_.-]+)'/g,
+    // Роут может принимать одно действие и отсеивать остальные отрицанием:
+    // `if (body?.action !== 'promoteOperator') return 400`. Это тоже список
+    // принимаемых — из одного пункта.
+    /action\s*!==\s*'([a-zA-Z0-9_.-]+)'/g,
     /action:\s*'([a-zA-Z0-9_.-]+)'/g,
     /case\s+'([a-zA-Z0-9_.-]+)'\s*:/g,
   ]) {

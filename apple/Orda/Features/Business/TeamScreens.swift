@@ -171,7 +171,15 @@ private struct OperatorDetail: View {
     @State private var isLinking = false
     @State private var linkError: String?
 
+    /// Смена логина и повышение — были только на сайте. Оба решения
+    /// принимаются на точке: логин выясняется, когда человек не может войти
+    /// перед сменой, а повышение — когда оператор уже месяц работает старшим.
+    @State private var loginOpen = false
+    @State private var promoteOpen = false
+
     private var canLink: Bool { access?.can("operators.edit") ?? false }
+    private var canEditLogin: Bool { access?.can("operators.edit_login") ?? false }
+    private var canPromote: Bool { access?.can("operators.promote") ?? false }
 
     var body: some View {
         ScreenScroll {
@@ -180,7 +188,7 @@ private struct OperatorDetail: View {
 
                 staffLinkCard
 
-                if canToggle || canReset { accessCard }
+                if canToggle || canReset || canEditLogin || canPromote { accessCard }
 
                 DashboardGrid {
                     MetricTile(
@@ -335,6 +343,24 @@ private struct OperatorDetail: View {
                     .buttonStyle(SecondaryButtonStyle())
                 }
 
+                if canEditLogin {
+                    Button {
+                        loginOpen = true
+                    } label: {
+                        Label("Изменить логин", systemImage: "person.text.rectangle")
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                }
+
+                if canPromote {
+                    Button {
+                        promoteOpen = true
+                    } label: {
+                        Label("Повысить в должности", systemImage: "arrow.up.circle")
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                }
+
                 if canToggle {
                 Button {
                     confirmingToggle = true
@@ -355,6 +381,12 @@ private struct OperatorDetail: View {
         }
         .sheet(isPresented: $resetting) {
             ResetPasswordSheet(person: person) { await store.loadTeam() }
+        }
+        .sheet(isPresented: $loginOpen) {
+            OperatorLoginSheet(person: person) { await store.loadTeam() }
+        }
+        .sheet(isPresented: $promoteOpen) {
+            PromoteOperatorSheet(person: person) { await store.loadTeam() }
         }
         .sheet(isPresented: $dismissing) {
             DismissSheet(
@@ -825,6 +857,170 @@ struct SalaryRowView: View {
             }
 
             StatusChip(row.week.statusLabel, kind: chipKind)
+        }
+    }
+}
+
+
+/// Смена логина оператора.
+///
+/// Логин — это то, чем человек входит в программу точки. Меняют его, когда при
+/// заведении ошиблись или человек его не помнит; выясняется это перед сменой,
+/// а не за ноутбуком, — поэтому действие и переехало в телефон.
+private struct OperatorLoginSheet: View {
+    let person: TeamOperator
+    let onDone: () async -> Void
+
+    @Environment(\.api) private var api
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var username = ""
+    @State private var isSaving = false
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            ScreenScroll {
+                Card {
+                    VStack(alignment: .leading, spacing: Spacing.md) {
+                        SectionHeader(person.displayName, subtitle: "Новый логин для входа")
+
+                        TextField("например: aidos", text: $username)
+                            .textFieldStyle(.plain)
+                            .font(Typography.callout)
+                            #if os(iOS)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            #endif
+
+                        Text("Строчные латинские буквы и цифры. Пароль не меняется.")
+                            .font(Typography.caption)
+                            .foregroundStyle(Theme.textDim)
+
+                        if let error {
+                            Text(error).font(Typography.caption).foregroundStyle(Theme.negative)
+                        }
+
+                        Button(isSaving ? "Сохраняем…" : "Сохранить логин") {
+                            Task { await save() }
+                        }
+                        .buttonStyle(PrimaryButtonStyle())
+                        .disabled(isSaving || username.trimmingCharacters(in: .whitespaces).count < 3)
+                    }
+                }
+            }
+            .background(Theme.background)
+            .navigationTitle("Логин")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Отмена") { dismiss() } } }
+        }
+    }
+
+    private func save() async {
+        isSaving = true
+        defer { isSaving = false }
+        do {
+            try await BusinessService(api: api).changeOperatorLogin(
+                operatorID: person.id,
+                username: username.trimmingCharacters(in: .whitespaces).lowercased()
+            )
+            await onDone()
+            dismiss()
+        } catch let apiError as APIError {
+            error = apiError.userMessage
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+
+/// Повышение оператора до сотрудника.
+///
+/// Решение принимают, когда человек уже месяц тянет старшего, — и до сих пор
+/// оно ждало ноутбука. Оклад необязателен: если не задан, сервер оставляет
+/// прежний расчёт.
+private struct PromoteOperatorSheet: View {
+    let person: TeamOperator
+    let onDone: () async -> Void
+
+    @Environment(\.api) private var api
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var role = "other"
+    @State private var salary = ""
+    @State private var isSaving = false
+    @State private var error: String?
+
+    private let roles: [(String, String)] = [
+        ("manager", "Управляющий"),
+        ("marketer", "Маркетолог"),
+        ("other", "Сотрудник"),
+    ]
+
+    var body: some View {
+        NavigationStack {
+            ScreenScroll {
+                Card {
+                    VStack(alignment: .leading, spacing: Spacing.md) {
+                        SectionHeader(person.displayName, subtitle: "Новая должность")
+
+                        Picker("Должность", selection: $role) {
+                            ForEach(roles, id: \.0) { Text($0.1).tag($0.0) }
+                        }
+                        .pickerStyle(.segmented)
+
+                        FieldLabel("Оклад в месяц")
+                        TextField("не менять", text: $salary)
+                            .textFieldStyle(.plain)
+                            .font(Typography.callout)
+                            #if os(iOS)
+                            .keyboardType(.numberPad)
+                            #endif
+
+                        Text("Оператор станет сотрудником: смены и выплаты сохранятся, а доступ будет по должности.")
+                            .font(Typography.caption)
+                            .foregroundStyle(Theme.textDim)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        if let error {
+                            Text(error).font(Typography.caption).foregroundStyle(Theme.negative)
+                        }
+
+                        Button(isSaving ? "Оформляем…" : "Повысить") {
+                            Task { await save() }
+                        }
+                        .buttonStyle(PrimaryButtonStyle())
+                        .disabled(isSaving)
+                    }
+                }
+            }
+            .background(Theme.background)
+            .navigationTitle("Повышение")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Отмена") { dismiss() } } }
+        }
+    }
+
+    private func save() async {
+        isSaving = true
+        defer { isSaving = false }
+        let amount = AmountParsing.value(salary)
+        do {
+            try await BusinessService(api: api).promoteOperator(
+                operatorID: person.id,
+                role: role,
+                monthlySalary: amount > 0 ? amount : nil
+            )
+            await onDone()
+            dismiss()
+        } catch let apiError as APIError {
+            error = apiError.userMessage
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 }
