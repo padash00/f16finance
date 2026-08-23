@@ -18,13 +18,33 @@ export const dynamic = 'force-dynamic'
 export async function POST(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
-    if ('response' in access) return access.response
+    if ('response' in access) {
+      // Отказ по авторизации записываем.
+      //
+      // В журнал попадают только исключения, а ранний выход — не исключение:
+      // если телефон приходит без живой сессии, снаружи это неотличимо от
+      // «телефон не приходил вовсе». Обе картины дают ноль устройств в базе и
+      // пустой журнал, а чинятся в разных местах.
+      await writeSystemErrorLogSafe({
+        scope: 'server',
+        area: 'api/mobile/register-push',
+        message: `адрес не принят: нет доступа (${access.response.status})`,
+      })
+      return access.response
+    }
 
     const body = (await request.json().catch(() => null)) as { token?: string; platform?: string } | null
     const token = String(body?.token || '').trim()
 
     const isExpo = token.startsWith('ExponentPushToken') || token.startsWith('ExpoPushToken')
     if (!isExpo && !isApnsToken(token)) {
+      // Тоже записываем: пустой или неузнанный адрес выглядит снаружи так же,
+      // как отсутствие телефона.
+      await writeSystemErrorLogSafe({
+        scope: 'server',
+        area: 'api/mobile/register-push',
+        message: `адрес не принят: неузнанная форма (длина ${token.length})`,
+      })
       return NextResponse.json({ error: 'bad-token' }, { status: 400 })
     }
 
