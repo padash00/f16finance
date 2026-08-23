@@ -392,3 +392,88 @@ public struct StoreMovementList: Decodable, Sendable {
         movements = (try root.decodeIfPresent(Payload.self, forKey: .data))?.movements ?? []
     }
 }
+
+// ── Состав акта ревизии ──────────────────────────────────────────────────────
+
+/// Что внутри акта: пересчитанное с расхождениями и непосчитанное.
+///
+/// Приложение знало только счётчик «12 из 40» — по нему нельзя ни поправить
+/// количество, ни понять, где расхождение. А пересчитывают, стоя у полки, и
+/// именно там выясняется, что в акте не то число.
+public struct RevisionActDetail: Decodable, Sendable {
+    public let totalItems: Int
+    public let countedItems: Int
+    /// Пересчитанные позиции.
+    public let report: [Line]
+    /// Позиции с остатком, до которых не дошли.
+    public let uncounted: [Pending]
+
+    /// Пересчитанная позиция: сколько числилось и сколько насчитали.
+    public struct Line: Decodable, Sendable, Identifiable, Hashable {
+        public let itemID: String
+        public let name: String
+        public let expected: Double
+        public let counted: Double
+        public let variance: Double
+        public let purchasePrice: Double
+        /// Двое считали и получили разное — так бывает при двойном пересчёте.
+        public let conflict: Bool
+        public let countedBy: String?
+
+        public var id: String { itemID }
+
+        /// Во сколько обходится расхождение: недостача — деньгами.
+        public var varianceCost: Double { variance * purchasePrice }
+
+        private enum CodingKeys: String, CodingKey {
+            case name, expected, counted, variance, conflict, countedBy
+            case itemID = "item_id"
+            case purchasePrice = "purchase_price"
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            itemID = try c.decodeFlexibleString(forKey: .itemID) ?? ""
+            name = try c.decodeFlexibleString(forKey: .name) ?? "Товар"
+            expected = try c.decodeFlexibleDouble(forKey: .expected) ?? 0
+            counted = try c.decodeFlexibleDouble(forKey: .counted) ?? 0
+            variance = try c.decodeFlexibleDouble(forKey: .variance) ?? 0
+            purchasePrice = try c.decodeFlexibleDouble(forKey: .purchasePrice) ?? 0
+            conflict = (try? c.decode(Bool.self, forKey: .conflict)) ?? false
+            countedBy = try c.decodeFlexibleString(forKey: .countedBy)
+        }
+    }
+
+    /// Позиция, до которой не дошли: числится, но не пересчитана.
+    public struct Pending: Decodable, Sendable, Identifiable, Hashable {
+        public let itemID: String
+        public let name: String
+        public let expected: Double
+
+        public var id: String { itemID }
+
+        private enum CodingKeys: String, CodingKey {
+            case name, expected
+            case itemID = "item_id"
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            itemID = try c.decodeFlexibleString(forKey: .itemID) ?? ""
+            name = try c.decodeFlexibleString(forKey: .name) ?? "Товар"
+            expected = try c.decodeFlexibleDouble(forKey: .expected) ?? 0
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case totalItems, countedItems, report, uncounted
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        totalItems = (try? c.decode(Int.self, forKey: .totalItems)) ?? 0
+        countedItems = (try? c.decode(Int.self, forKey: .countedItems)) ?? 0
+        report = (try? c.decode([Line].self, forKey: .report)) ?? []
+        uncounted = (try? c.decode([Pending].self, forKey: .uncounted)) ?? []
+    }
+}

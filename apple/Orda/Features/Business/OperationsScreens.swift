@@ -807,6 +807,7 @@ struct RevisionActsSheet: View {
 
     @State private var cancelling: RevisionAct?
     @State private var closing: RevisionAct?
+    @State private var opening: RevisionAct?
     @State private var reverting: RevisionAct?
     @State private var isBusy = false
     @State private var error: String?
@@ -868,6 +869,14 @@ struct RevisionActsSheet: View {
                                     .fixedSize(horizontal: false, vertical: true)
                             }
 
+                            // Состав акта: что пересчитано, где расхождение.
+                            // Счётчик «12 из 40» не отвечает ни на один из
+                            // вопросов, которые задают, стоя у полки.
+                            Button { opening = act } label: {
+                                Label("Открыть состав", systemImage: "list.bullet.rectangle")
+                            }
+                            .buttonStyle(SecondaryButtonStyle())
+
                             // Провести ревизию — то, ради чего её и открывали.
                             // Приложение умело акт открыть и отменить, но не
                             // закрыть: считали по полкам с телефоном, а
@@ -912,6 +921,9 @@ struct RevisionActsSheet: View {
             // Проведение необратимо в обычном смысле: откат есть, но он
             // отдельное тяжёлое действие и только у владельца. Поэтому
             // спрашиваем и говорим, что именно произойдёт с остатками.
+            .sheet(item: $opening) { act in
+                RevisionActScreen(act: act)
+            }
             .alert("Провести ревизию?", isPresented: Binding(get: { closing != nil }, set: { if !$0 { closing = nil } })) {
                 Button("Провести", role: .destructive) {
                     if let act = closing { Task { await run { await store.closeRevisionAct(id: act.id) } } }

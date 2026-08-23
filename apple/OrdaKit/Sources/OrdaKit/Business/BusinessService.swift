@@ -1604,6 +1604,35 @@ public struct BusinessService: Sendable {
         )
     }
 
+    /// Состав акта: пересчитанное с расхождениями и непосчитанное.
+    ///
+    /// Требует `store-revisions.view`.
+    public func auditActDetail(id: String) async throws -> RevisionActDetail {
+        let response: DataEnvelope<RevisionActDetail> = try await api.send(
+            APIRequest(path: "/api/admin/store/audit", query: ["act": id])
+        )
+        return response.data
+    }
+
+    /// Записать пересчитанное количество по позиции.
+    ///
+    /// `resolve` заменяет все прежние подсчёты одним итоговым — это ответ на
+    /// расхождение, когда двое насчитали разное. Требует
+    /// `store-revisions.edit`.
+    public func recountAuditItem(actID: String, itemID: String, quantity: Double) async throws {
+        struct Body: Encodable {
+            let action = "resolve"
+            let act_id: String
+            let item_id: String
+            let qty: Double
+        }
+        let request = try APIRequest.json(
+            "/api/admin/store/audit",
+            body: Body(act_id: actID, item_id: itemID, qty: quantity)
+        )
+        _ = try await api.send(request)
+    }
+
     /// Закрыть акт: провести ревизию.
     ///
     /// Это и есть завершение ревизии — остатки становятся такими, какими их
