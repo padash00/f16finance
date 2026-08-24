@@ -342,6 +342,77 @@ async function safeDeleteExpenses(
 }
 
 /**
+ * Закрыть долги недели, когда она выплачена полностью.
+ *
+ * Долг вычитается из суммы к выплате: netAmount = начислено + премии − штрафы
+ * − ДОЛГ − аванс. То есть в момент выплаты клуб уже забрал эти деньги, и
+ * запись обязана закрыться. Но закрытие жило в отдельной кнопке «Отметить
+ * долг оплаченным», а владелец жал «Выплатить» — за девять месяцев так
+ * накопилось 425 открытых долгов на 3,6 млн, которых на самом деле нет.
+ *
+ * Закрываем только при ПОЛНОМ погашении недели. Частичная выплата означает,
+ * что оператор получил не всю сумму: удержание ещё не состоялось целиком, и
+ * гасить долг рано.
+ *
+ * Кнопка «Отметить оплаченным» остаётся — для случаев, когда долг закрывают
+ * мимо зарплаты (клиент занёс деньги сам).
+ */
+async function closeWeekDebtsIfSettled(params: {
+  supabase: ReturnType<typeof createAdminSupabaseClient>
+  operatorId: string
+  weekStart: string
+  remainingAmount: number
+  allowedCompanyIds: string[] | null
+  actorUserId: string | null
+}): Promise<{ closed: number; amount: number }> {
+  // Копейка допуска — та же, что в проверке «выплата превышает остаток».
+  if (params.remainingAmount > 0.009) return { closed: 0, amount: 0 }
+
+  let query = params.supabase
+    .from('debts')
+    .select('id, amount')
+    .eq('operator_id', params.operatorId)
+    .eq('week_start', params.weekStart)
+    .eq('status', 'active')
+  if (params.allowedCompanyIds) query = query.in('company_id', params.allowedCompanyIds)
+
+  const { data: debts, error } = await query
+  if (error) throw error
+  if (!debts || debts.length === 0) return { closed: 0, amount: 0 }
+
+  const ids = debts.map((d: any) => String(d.id))
+  const amount = roundMoney(debts.reduce((sum: number, d: any) => sum + Number(d.amount || 0), 0))
+  const paidAt = new Date().toISOString()
+
+  const { error: updateError } = await params.supabase
+    .from('debts')
+    .update({ status: 'paid', paid_at: paidAt })
+    .in('id', ids)
+  if (updateError) throw updateError
+
+  // Позиции сканера убираем так же, как это делает ручное закрытие: инвентарь
+  // НЕ возвращаем, оператор рассчитался деньгами.
+  let scannerQuery = params.supabase
+    .from('point_debt_items')
+    .update({ status: 'deleted', deleted_at: paidAt })
+    .eq('operator_id', params.operatorId)
+    .eq('week_start', params.weekStart)
+    .eq('status', 'active')
+  if (params.allowedCompanyIds) scannerQuery = scannerQuery.in('company_id', params.allowedCompanyIds)
+  await scannerQuery
+
+  await writeAuditLog(params.supabase, {
+    actorUserId: params.actorUserId,
+    entityType: 'debt',
+    entityId: ids[0],
+    action: 'closed-by-payment',
+    payload: { operator_id: params.operatorId, week_start: params.weekStart, count: ids.length, amount },
+  })
+
+  return { closed: ids.length, amount }
+}
+
+/**
  * Совпадает ли сохранённая неделя с только что посчитанной.
  *
  * Ведомость пересчитывала неделю каждого оператора при каждом открытии
@@ -1687,6 +1758,17 @@ export async function POST(req: Request) {
         pointRules: await listSalaryPointRules(supabase, allowedCompanyIds || null),
       })
 
+      // Неделя погашена полностью — значит долг, вычтенный из суммы к выплате,
+      // уже удержан. Закрываем его здесь, а не ждём отдельной кнопки.
+      const debtsClosed = await closeWeekDebtsIfSettled({
+        supabase,
+        operatorId: String(body.payload.operator_id),
+        weekStart,
+        remainingAmount: weekAfterPayment.remainingAmount,
+        allowedCompanyIds: allowedCompanyIds || null,
+        actorUserId: user?.id || null,
+      })
+
       await writeAuditLog(supabase, {
         actorUserId: user?.id || null,
         entityType: 'operator-salary-week-payment',
@@ -1699,6 +1781,7 @@ export async function POST(req: Request) {
           kaspi_amount: split.kaspiAmount,
           total_amount: split.totalAmount,
           company_count: expenseRows.length,
+          debts_closed: debtsClosed.closed,
         },
       })
 
@@ -1708,6 +1791,7 @@ export async function POST(req: Request) {
           payment,
           expenses: expenseRows,
           week: weekAfterPayment,
+          debtsClosed,
         },
       })
     }
@@ -1914,6 +1998,17 @@ export async function POST(req: Request) {
         pointRules: await listSalaryPointRules(supabase, allowedCompanyIds || null),
       })
 
+      // Выплата с переносом сверх остатка: неделя закрыта, остаток ушёл
+      // авансом на следующую. Долг этой недели удержан — закрываем.
+      const debtsClosedWithAdvance = await closeWeekDebtsIfSettled({
+        supabase,
+        operatorId: String(body.payload.operator_id),
+        weekStart,
+        remainingAmount: weekAfterPayment.remainingAmount,
+        allowedCompanyIds: allowedCompanyIds || null,
+        actorUserId: user?.id || null,
+      })
+
       await writeAuditLog(supabase, {
         actorUserId: user?.id || null,
         entityType: 'operator-salary-week-payment',
@@ -1928,6 +2023,7 @@ export async function POST(req: Request) {
           overpayment_amount: overpayment,
           advance_adjustment_id: advanceAdjustmentId,
           company_count: expenseRows.length,
+          debts_closed: debtsClosedWithAdvance.closed,
         },
       })
 
@@ -1939,6 +2035,7 @@ export async function POST(req: Request) {
           overpaymentAmount: overpayment,
           advanceAdjustmentId,
           week: weekAfterPayment,
+          debtsClosed: debtsClosedWithAdvance,
         },
       })
     }
@@ -2009,15 +2106,42 @@ export async function POST(req: Request) {
 
       const weekAfterVoid = await ensureSalaryWeekSnapshot({ supabase, operatorId: body.operatorId, weekStart: weekStart2, actorUserId: user?.id || null, companyIds: allowedCompanyIds || null, pointRules: await listSalaryPointRules(supabase, allowedCompanyIds || null) })
 
+      // Аннулирование — обратная сторона автозакрытия долгов при выплате.
+      // Деньги вернулись, значит удержание не состоялось, и долг обязан снова
+      // стать активным. Иначе долг остаётся «оплаченным» без оплаты.
+      //
+      // Открываем долги недели, если после отмены она перестала быть погашенной.
+      // Оговорка: под возврат попадёт и долг, закрытый вручную кнопкой
+      // «Отметить оплаченным». Это осознанный выбор в пользу денег: лучше
+      // лишний раз показать долг, чем спрятать неудержанный.
+      let debtsReopened = 0
+      if (weekAfterVoid.remainingAmount > 0.009) {
+        let reopenQuery = supabase
+          .from('debts')
+          .update({ status: 'active', paid_at: null })
+          .eq('operator_id', body.operatorId)
+          .eq('week_start', weekStart2)
+          .eq('status', 'paid')
+        if (allowedCompanyIds) reopenQuery = reopenQuery.in('company_id', allowedCompanyIds)
+        const { data: reopened, error: reopenError } = await reopenQuery.select('id')
+        if (reopenError) throw reopenError
+        debtsReopened = (reopened || []).length
+      }
+
       await writeAuditLog(supabase, {
         actorUserId: user?.id || null,
         entityType: 'operator-salary-week-payment',
         entityId: body.paymentId,
         action: 'void',
-        payload: { operator_id: body.operatorId, week_start: weekStart2, expense_count: expenseIds.length },
+        payload: {
+          operator_id: body.operatorId,
+          week_start: weekStart2,
+          expense_count: expenseIds.length,
+          debts_reopened: debtsReopened,
+        },
       })
 
-      return json({ ok: true, data: { week: weekAfterVoid } })
+      return json({ ok: true, data: { week: weekAfterVoid, debtsReopened } })
     }
 
     if (body.action === 'voidAdjustment') {
