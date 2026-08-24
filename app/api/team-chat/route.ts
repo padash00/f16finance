@@ -7,6 +7,7 @@
  */
 
 import { NextResponse } from 'next/server'
+import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { hasCapability } from '@/lib/server/capabilities'
 import { listOrganizationCompanyIds } from '@/lib/server/organizations'
 import { pushToOrganization, pushToUsers } from '@/lib/server/push'
@@ -419,6 +420,19 @@ export async function POST(request: Request) {
         title: `${senderName} упомянул вас`,
         body: messageText.slice(0, 140),
         data: { kind: 'team-chat-mention' },
+      })
+    } else {
+      // Упоминание распознано, а получателя нет.
+      //
+      // Так бывает, когда у человека нет учётной записи (оператор заведён, но
+      // доступ не выдавали), когда он выбыл из организации или когда имя в
+      // чате написано иначе, чем в карточке. Раньше все три случая выглядели
+      // одинаково — тишина: ни уведомления, ни следа, и «тегаешь, а не
+      // приходит» было неразрешимо.
+      await writeSystemErrorLogSafe({
+        scope: 'server',
+        area: 'team-chat.mention',
+        message: `упоминание без получателя: ${mentioned.names.join(', ')}`,
       })
     }
   }
