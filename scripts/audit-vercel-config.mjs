@@ -13,7 +13,8 @@
  * тяжёлыми запросами.
  */
 
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 const ALLOWED_KEYS = new Set([
   'buildCommand',
@@ -56,6 +57,35 @@ for (const key of Object.keys(config)) {
         '      Комментарии сюда не поместятся: объяснение — в коде или в docs.',
     )
   }
+}
+
+// ── .vercelignore ────────────────────────────────────────────────────────────
+//
+// Правило без ведущего слэша совпадает с любым путём, где встречается такое
+// имя. Строка `mobile/` выбрасывала не только приложение в корне, но и
+// `app/api/mobile/` — роуты уведомлений. Файлы были в репозитории, собирались
+// локально, а на бою отвечали 404: телефон отправлял адрес в пустоту.
+try {
+  const ignore = readFileSync('.vercelignore', 'utf8')
+  for (const line of ignore.split('\n')) {
+    const rule = line.trim()
+    if (!rule || rule.startsWith('#') || rule.startsWith('/') || rule.startsWith('*')) continue
+    const name = rule.replace(/\/$/, '')
+    if (existsSync(join('app', 'api', name)) || existsSync(join('app', name))) {
+      problems.push(
+        `правило «${rule}» выбросит и app/api/${name} — на бою этих роутов не будет.\n` +
+          '      Поставьте ведущий слэш: правило станет только про корень.',
+      )
+    } else {
+      problems.push(
+        `правило «${rule}» без ведущего слэша: совпадёт с любым путём, где есть\n` +
+          `      такое имя. Сегодня совпадений нет, но появится app/api/${name} — и\n` +
+          '      он молча исчезнет с боя. Поставьте ведущий слэш.',
+      )
+    }
+  }
+} catch {
+  // Файла может не быть — это нормально.
 }
 
 const regions = config.regions || []
