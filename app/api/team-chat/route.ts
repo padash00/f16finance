@@ -358,7 +358,7 @@ export async function POST(request: Request) {
     senderUserId = access.user.id
   }
   if (access.staffMember) {
-    senderName = access.staffMember.full_name || access.user?.email || 'Сотрудник'
+    senderName = access.staffMember.full_name || access.staffMember.short_name || 'Сотрудник'
     senderRole = access.staffMember.role || 'staff'
   } else if (access.operatorAuth) {
     senderOperatorId = access.operatorAuth.operator_id
@@ -371,7 +371,19 @@ export async function POST(request: Request) {
       .maybeSingle()
     senderName = (op as any)?.short_name || (op as any)?.name || access.operatorAuth.username || 'Оператор'
   } else if (access.isSuperAdmin) {
-    senderName = access.user?.email || 'Супер-админ'
+    // Почта в подписи — это ошибка, а не имя.
+    //
+    // Уведомление приходило как «padash00@gmail.com обращается ко всем»: и
+    // выглядит поломкой, и раздаёт адрес всем, кто в чате. Ищем карточку
+    // сотрудника этого человека в организации — там лежит настоящее имя.
+    const { data: member } = await supabase
+      .from('organization_members')
+      .select('staff:staff_id(full_name, short_name)')
+      .eq('organization_id', orgId)
+      .eq('user_id', access.user?.id || '')
+      .maybeSingle()
+    const person = Array.isArray((member as any)?.staff) ? (member as any).staff[0] : (member as any)?.staff
+    senderName = person?.full_name || person?.short_name || access.user?.email || 'Администратор'
     senderRole = 'super_admin'
   }
 
