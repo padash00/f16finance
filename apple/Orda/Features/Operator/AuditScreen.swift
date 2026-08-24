@@ -111,6 +111,16 @@ struct AuditCountScreen: View {
     @State private var showScanner = false
     @State private var pendingItem: AuditItem?
     @State private var quantityText = ""
+    /// Что отсканировали последним — и сколько насчитали.
+    ///
+    /// Скан прибавлял по единице: годится, когда проводишь камерой по каждой
+    /// банке, и бесполезно, когда на полке двадцать четыре. Ввести число можно
+    /// было только выйдя из сканера и найдя позицию в списке руками — то есть
+    /// каждый раз откладывая телефон и коробку.
+    @State private var scannedItem: AuditItem?
+    @State private var scanQuantity = ""
+    @State private var search = ""
+    @State private var onlyUncounted = false
     @State private var toast: String?
     @State private var toastIsError = false
     @State private var isSaving = false
@@ -153,7 +163,7 @@ struct AuditCountScreen: View {
             progressHeader(sheet)
 
             List {
-                ForEach(sheet.items) { item in
+                ForEach(visibleItems(sheet)) { item in
                     AuditItemRow(
                         item: item,
                         counted: counts[item.itemID],
@@ -165,6 +175,7 @@ struct AuditCountScreen: View {
                 }
             }
             .listStyle(.plain)
+            .searchable(text: $search, prompt: "Название или штрихкод")
 
             bottomBar
         }
@@ -185,6 +196,17 @@ struct AuditCountScreen: View {
 
             ProgressView(value: sheet.items.isEmpty ? 0 : Double(countedCount) / Double(sheet.items.count))
                 .tint(Theme.accent(for: .operator))
+
+            // Ближе к концу пересчёта вопрос один: что ещё осталось. Листать
+            // ради этого весь список — то же самое, что считать заново.
+            if countedCount > 0, countedCount < sheet.items.count {
+                Toggle(isOn: $onlyUncounted) {
+                    Text("Только непосчитанные — \(sheet.items.count - countedCount)")
+                        .font(Typography.caption)
+                }
+                .toggleStyle(.button)
+                .tint(Theme.accent(for: .operator))
+            }
 
             if sheet.mode == .double {
                 Label("Слепой счёт: чужие цифры скрыты", systemImage: "eye.slash")
@@ -222,9 +244,12 @@ struct AuditCountScreen: View {
 
     private var scannerSheet: some View {
         NavigationStack {
-            VStack {
+            VStack(spacing: Spacing.md) {
                 ScannerPane { code in handleScan(code) }
                     .padding(Spacing.lg)
+
+                scannedPanel
+
                 Spacer()
             }
             .background(Theme.background)
@@ -240,6 +265,58 @@ struct AuditCountScreen: View {
                         .padding(.horizontal, Spacing.lg)
                 }
             }
+        }
+    }
+
+    /// Что делать с только что отсканированным.
+    ///
+    /// Скан по-прежнему прибавляет единицу — так считают штучный товар, проводя
+    /// камерой по каждой банке. Но рядом сразу стоит поле: если на полке
+    /// двадцать четыре, это число вводится здесь же, не выходя из сканера.
+    @ViewBuilder
+    private var scannedPanel: some View {
+        if let item = scannedItem {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                Text(item.name)
+                    .font(Typography.callout)
+                    .foregroundStyle(Theme.text)
+                    .lineLimit(2)
+
+                HStack(spacing: Spacing.sm) {
+                    TextField("0", text: $scanQuantity)
+                        .font(Typography.monospacedDigits(Typography.title))
+                        .textFieldStyle(.plain)
+                        #if os(iOS)
+                        .keyboardType(.decimalPad)
+                        #endif
+                        .frame(maxWidth: 120)
+                        .padding(Spacing.sm)
+                        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+
+                    Text(item.unit ?? "шт")
+                        .font(Typography.callout)
+                        .foregroundStyle(Theme.textDim)
+
+                    Spacer()
+
+                    Button("Записать") {
+                        let value = Double(scanQuantity.replacingOccurrences(of: ",", with: ".")) ?? 0
+                        counts[item.itemID] = max(0, value)
+                        savedMessage = nil
+                        toast(text: "\(item.name) — \(Quantity.format(max(0, value)))", isError: false)
+                        Haptics.success()
+                    }
+                    .buttonStyle(PrimaryButtonStyle(tint: Theme.accent(for: .operator)))
+                }
+
+                Text("Скан прибавляет по одной. Нужно другое число — впишите и нажмите «Записать».")
+                    .font(Typography.caption)
+                    .foregroundStyle(Theme.textDim)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(Spacing.lg)
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+            .padding(.horizontal, Spacing.lg)
         }
     }
 
@@ -296,6 +373,20 @@ struct AuditCountScreen: View {
 
     // ── Поведение ────────────────────────────────────────────────────────────
 
+    /// Что показывать в списке.
+    ///
+    /// На складе четыреста позиций, а ищут одну — ту, что в руках. Без поиска
+    /// её листали пальцем, стоя у стеллажа.
+    private func visibleItems(_ sheet: AuditSheet) -> [AuditItem] {
+        var items = sheet.items
+        if onlyUncounted { items = items.filter { counts[$0.itemID] == nil } }
+        let text = search.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !text.isEmpty else { return items }
+        return items.filter {
+            $0.name.lowercased().contains(text) || ($0.barcode?.contains(text) ?? false)
+        }
+    }
+
     private var countedCount: Int {
         guard let sheet else { return 0 }
         return sheet.items.filter { counts[$0.itemID] != nil }.count
@@ -315,6 +406,10 @@ struct AuditCountScreen: View {
         let next = (counts[item.itemID] ?? 0) + 1
         counts[item.itemID] = next
         savedMessage = nil
+        // Показываем отсканированное рядом с камерой: отсюда число правится
+        // сразу, без выхода в список.
+        scannedItem = item
+        scanQuantity = Quantity.format(next)
         toast(text: "\(item.name) — \(Quantity.format(next))", isError: false)
         Haptics.success()
     }
