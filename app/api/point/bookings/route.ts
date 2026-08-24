@@ -447,13 +447,13 @@ export async function POST(request: Request) {
     if (phone) {
       const { data: customer } = await supabase
         .from('customers')
-        .select('id, full_name, phone')
+        .select('id, name, phone')
         .eq('company_id', companyId)
         .eq('phone', phone)
         .maybeSingle()
       if (customer) {
         customerId = String(customer.id)
-        knownName = customer.full_name ? String(customer.full_name) : null
+        knownName = customer.name ? String(customer.name) : null
       }
     }
 
@@ -462,7 +462,11 @@ export async function POST(request: Request) {
     // значило бы потерять клиента на телефоне.
     let shiftId: string | null = null
     try {
-      const shift = await requireCurrentOpenShiftId(supabase as any, device as any)
+      // Функция ждёт companyId строкой. Передавать сюда всё устройство — как
+      // было — значит отправить объект туда, где база ждёт uuid: запрос падал
+      // с «invalid input syntax for type uuid: [object Object]», ошибка
+      // глушилась catch-ом, и бронь молча теряла привязку к смене.
+      const shift = await requireCurrentOpenShiftId(supabase as any, String(companyId))
       shiftId = typeof shift === 'string' ? shift : null
     } catch {
       shiftId = null

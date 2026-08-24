@@ -114,6 +114,11 @@ export async function GET(request: Request) {
           client_name: debt.client_name,
           amount: debt.amount,
           week_start: toWeek,
+          // date — NOT NULL в таблице debts, и без него ВЕСЬ перенос падал:
+          // каждое воскресенье крон обрывался на первой же вставке, долги
+          // оставались висеть в старой неделе, а ошибка уходила в ответ крона,
+          // который никто не читает.
+          date: toWeek,
           status: 'active',
           comment: debt.comment,
           rolled_over_from_id: debt.id,

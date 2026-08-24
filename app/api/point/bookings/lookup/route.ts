@@ -38,7 +38,7 @@ export async function GET(request: Request) {
     // Карточка клиента, если такой номер заводили.
     const { data: customer } = await supabase
       .from('customers')
-      .select('id, full_name, phone, created_at')
+      .select('id, name, phone, created_at')
       .eq('company_id', companyId)
       .eq('phone', phone)
       .maybeSingle()
@@ -63,7 +63,7 @@ export async function GET(request: Request) {
     // Имя берём из карточки, а если её нет — из последней брони: человек его
     // называл, и переспрашивать каждый раз невежливо.
     const name =
-      (customer?.full_name ? String(customer.full_name) : null) ||
+      (customer?.name ? String(customer.name) : null) ||
       (rows.find((r) => r.contact_name)?.contact_name ?? null)
 
     return json({
@@ -72,7 +72,7 @@ export async function GET(request: Request) {
       known: Boolean(customer) || rows.length > 0,
       name,
       customer: customer
-        ? { id: String(customer.id), name: customer.full_name ?? null, since: customer.created_at }
+        ? { id: String(customer.id), name: customer.name ?? null, since: customer.created_at }
         : null,
       stats: {
         total: rows.length,
