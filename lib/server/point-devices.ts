@@ -36,7 +36,7 @@ export type PointDeviceContext = {
 }
 
 const POINT_PROJECT_SELECT =
-  'id, name, project_token, shift_report_chat_id, point_mode, feature_flags, is_active, notes, point_project_companies(company_id, point_mode, feature_flags, company:company_id(id, name, code, organization_id, brand_color, brand_logo_url, payment_provider:payment_provider_id(id, code, name, country_code, supports_midnight_split)))'
+  'id, name, project_token, shift_report_chat_id, point_mode, feature_flags, is_active, notes, last_seen_at, point_project_companies(company_id, point_mode, feature_flags, company:company_id(id, name, code, organization_id, brand_color, brand_logo_url, payment_provider:payment_provider_id(id, code, name, country_code, supports_midnight_split)))'
 
 /** Company JSONB flags override project; `null` / missing per key inherits from project (empty `{}` does not wipe project). */
 function mergePointFeatureFlags(
@@ -162,7 +162,28 @@ export async function requirePointDevice(request: Request): Promise<
 
   const requestedCompanyId = request.headers.get('x-point-company-id')?.trim() || ''
 
-  await supabase.from('point_projects').update({ last_seen_at: new Date().toISOString() }).eq('id', data.id)
+  /**
+   * Отметка «устройство живо» — не чаще раза в минуту.
+   *
+   * Раньше она писалась на КАЖДЫЙ запрос кассы и киоска: по журналу боевой
+   * базы это 1 660 084 обновления. Каждое такое обновление уходит в журнал
+   * репликации, а его непрерывно вычитывает движок подписок — по замерам он
+   * съедал 64% всего времени базы. То есть строчка, которая нужна только для
+   * ответа «когда точка выходила на связь», разгоняла нагрузку на всю систему,
+   * включая страницы, к кассе отношения не имеющие.
+   *
+   * Плюс запись ждали синхронно, добавляя лишний поход в базу к каждому
+   * запросу оператора — то есть замедляя ровно то место, где человек стоит у
+   * стойки с клиентом.
+   *
+   * Минута точности здесь достаточна: присутствие показывается как «на связи /
+   * не выходила N минут», и секунды в этом ответе ничего не меняют.
+   */
+  const lastSeenAt = (data as { last_seen_at?: string | null }).last_seen_at
+  const lastSeenMs = lastSeenAt ? new Date(lastSeenAt).getTime() : 0
+  if (!Number.isFinite(lastSeenMs) || Date.now() - lastSeenMs > 60_000) {
+    await supabase.from('point_projects').update({ last_seen_at: new Date().toISOString() }).eq('id', data.id)
+  }
 
   return {
     supabase,

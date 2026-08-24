@@ -74,19 +74,11 @@ export async function POST(request: Request) {
 }
 ```
 
-## Инвентарь — таблицы БД
+## Инвентарь
 
-| Таблица | Назначение |
-|---------|-----------|
-| `inventory_items` | Каталог товаров (name, barcode, unit, sale_price) |
-| `inventory_locations` | Места хранения (warehouse / point_display) per company |
-| `inventory_balances` | Остатки: (location_id, item_id) → quantity |
-| `inventory_movements` | История движений |
-| `inventory_receipts` | Приходы (от поставщика) |
-| `inventory_requests` | Заявки на перемещение (warehouse → showcase) |
-| `inventory_request_items` | Строки заявки |
+Состав таблиц `inventory_*` — в миграциях `supabase/migrations`.
 
-`inventory_decide_request` — Supabase функция, атомарно одобряет заявку (минусует со склада, плюсует витрину).
+`inventory_decide_request` — Supabase функция, атомарно одобряет заявку (минусует со склада, плюсует витрину). Не повторять её логику в коде: два шага вместо одного дают расхождение остатков.
 
 ## Что не сделано / TODO
 
@@ -101,15 +93,6 @@ export async function POST(request: Request) {
 - **Operator**: `cd desktop/operator && npm run build` → GitHub Release
 - **Supabase миграции**: применять через SQL Editor или `supabase db push`
 
-## ENV переменные (обязательные)
+## ENV переменные
 
-```
-NEXT_PUBLIC_SUPABASE_URL
-NEXT_PUBLIC_SUPABASE_ANON_KEY
-SUPABASE_SERVICE_ROLE_KEY
-OPENAI_API_KEY             # для AI фич (provider: OpenAI, модель gpt-4o-mini; OPENAI_MODEL — опц.)
-TELEGRAM_BOT_TOKEN         # для Telegram отчётов
-GOOGLE_WALLET_ISSUER_ID    # опц.: карты лояльности Google Wallet (lib/server/google-wallet.ts)
-GOOGLE_WALLET_SA_EMAIL     # опц.: email сервис-аккаунта Google Cloud
-GOOGLE_WALLET_SA_KEY       # опц.: private_key сервис-аккаунта (PEM или base64)
-```
+Список — в `.env.example`. Боевые значения живут в Vercel, локальные — в `.env.local`.
