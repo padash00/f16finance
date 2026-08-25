@@ -205,6 +205,27 @@ final class BusinessStore {
         async let approvals: Void = loadPending()
         async let points: Void = loadCompanies()
         _ = await (dash, approvals, points)
+
+        // Соседние вкладки — следом и тихо.
+        //
+        // Человек почти никогда не остаётся на сводке: он идёт в задачи или в
+        // чат. Раньше каждая вкладка начинала грузиться в момент нажатия, и
+        // первое открытие всегда было ожиданием. Здесь оно уже позади: ответы
+        // лягут в кэш, и вкладка откроется мгновенно.
+        //
+        // Отдельной задачей и после основного: сводка не должна ждать этого.
+        Task { await warmAdjacentTabs() }
+    }
+
+    /// Тихо подогреть то, куда пойдут дальше.
+    ///
+    /// Только чтение и только три запроса: подогревать весь раздел значит
+    /// сложить на сервер работу, которую никто не просил.
+    private func warmAdjacentTabs() async {
+        async let tasks: Void = loadMyTasks()
+        async let team: Void = loadTasks()
+        async let store: Void = loadStore()
+        _ = await (tasks, team, store)
     }
 
     func loadDashboard() async {
