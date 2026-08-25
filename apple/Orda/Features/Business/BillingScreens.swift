@@ -343,6 +343,10 @@ struct SummaryPill: View {
         VStack(alignment: .leading, spacing: 1) {
             Text(value)
                 .font(Typography.headline)
+                // Сумма меняется после оплаты долга: переход показывает, что
+                // именно изменилось, вместо того чтобы подменить число рывком.
+                .contentTransition(.numericText())
+                .animation(Motion.value, value: value)
                 .monospacedDigit()
                 .foregroundStyle(tint)
             Text(title)

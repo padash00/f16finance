@@ -1400,6 +1400,25 @@ public struct BusinessService: Sendable {
         _ = try await api.send(request)
     }
 
+    /// Что присылать человеку.
+    public func notificationPrefs() async throws -> NotificationPrefs {
+        try await api.send(APIRequest(path: "/api/me/notification-prefs"))
+    }
+
+    /// Включить или выключить событие. Канал `push` — уведомления на телефон.
+    public func setNotificationPref(event: String, enabled: Bool, channel: String = "push") async throws {
+        struct Body: Encodable {
+            let channel: String
+            let eventType: String
+            let enabled: Bool
+        }
+        let request = try APIRequest.json(
+            "/api/me/notification-prefs",
+            body: Body(channel: channel, eventType: event, enabled: enabled)
+        )
+        _ = try await api.send(request)
+    }
+
     /// Поиск по всему складу: товары, приёмки, списания, заявки.
     ///
     /// Требует `store.global_search`.

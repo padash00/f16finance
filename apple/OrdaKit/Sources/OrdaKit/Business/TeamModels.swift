@@ -523,3 +523,65 @@ public struct StaffSalarySummary: Decodable, Sendable {
         case meLinked = "me_linked"
     }
 }
+
+// ── Настройки уведомлений ────────────────────────────────────────────────────
+
+/// Что присылать человеку и куда.
+///
+/// Сейчас выбор один на всё: либо все уведомления, либо ни одного — и когда
+/// чат шумит, выключают вместе с ним просроченные долги и назначенные смены.
+/// Сервер умеет различать события давно, экрана не было.
+public struct NotificationPrefs: Decodable, Sendable {
+    public let prefs: [Pref]
+    public let events: [String]
+
+    public struct Pref: Decodable, Sendable, Hashable {
+        public let channel: String
+        public let eventType: String
+        public let enabled: Bool
+
+        private enum CodingKeys: String, CodingKey {
+            case channel, enabled
+            case eventType = "event_type"
+        }
+    }
+
+    /// Включено ли событие. По умолчанию да: человек не настраивал — значит
+    /// получает всё, как и раньше.
+    public func isEnabled(_ event: String, channel: String = "push") -> Bool {
+        prefs.first { $0.eventType == event && $0.channel == channel }?.enabled ?? true
+    }
+}
+
+/// Человеческие названия событий — те же слова, что человек видит в жизни.
+public enum NotificationEventLabels {
+    public static func title(_ event: String) -> String {
+        switch event {
+        case "team_chat_message": "Сообщения в командном чате"
+        case "dm": "Личные сообщения"
+        case "announcement": "Объявления"
+        case "mention": "Когда упомянули меня"
+        case "shift_assigned": "Назначили смену"
+        case "shift_changed": "Смену перенесли"
+        case "task_assigned": "Поручили задачу"
+        case "task_commented": "Ответили в задаче"
+        case "debt_overdue": "Долг просрочен"
+        case "debt_added": "Новый долг"
+        case "birthday": "Дни рождения"
+        case "holiday": "Праздники"
+        case "news_post": "Новости"
+        default: event
+        }
+    }
+
+    /// Разделы: без них тринадцать переключателей читаются как список без порядка.
+    public static func group(_ event: String) -> String {
+        switch event {
+        case "team_chat_message", "dm", "announcement", "mention": "Общение"
+        case "shift_assigned", "shift_changed": "Смены"
+        case "task_assigned", "task_commented": "Задачи"
+        case "debt_overdue", "debt_added": "Деньги"
+        default: "Прочее"
+        }
+    }
+}

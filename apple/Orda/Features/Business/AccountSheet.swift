@@ -772,6 +772,13 @@ struct NotificationsCard: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 #endif
+
+                // Что именно присылать. Раньше выбор был один на всё: когда чат
+                // шумит, выключали вместе с ним просроченные долги и смены.
+                NavigationLink(destination: NotificationPrefsScreen()) {
+                    Label("Что присылать", systemImage: "slider.horizontal.3")
+                }
+                .buttonStyle(SecondaryButtonStyle())
             }
         }
         .task { await refresh() }
