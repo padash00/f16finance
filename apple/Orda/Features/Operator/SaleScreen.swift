@@ -277,22 +277,3 @@ struct SaleItemRow: View {
 }
 
 /// Короткое уведомление поверх экрана.
-struct ToastBanner: View {
-    let text: String
-    let isError: Bool
-
-    var body: some View {
-        HStack(spacing: Spacing.sm) {
-            Image(systemName: isError ? "exclamationmark.circle.fill" : "checkmark.circle.fill")
-            Text(text)
-                .font(Typography.callout.weight(.medium))
-                .lineLimit(2)
-        }
-        .foregroundStyle(Color.black.opacity(0.85))
-        .padding(.horizontal, Spacing.lg)
-        .padding(.vertical, Spacing.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(isError ? Theme.warning : Theme.positive, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
-        .shadow(color: .black.opacity(0.25), radius: 12, y: 6)
-    }
-}

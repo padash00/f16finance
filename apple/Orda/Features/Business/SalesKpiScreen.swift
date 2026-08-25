@@ -639,10 +639,12 @@ struct SalesKpiScreen: View {
 
     private func loadPayout() async {
         guard let store = selectedStore else { return }
+        let service = SalesKpiService(api: api)
+        // Прошлая доплата — сразу, свежая на ходу.
+        if payout == nil { payout = await service.cachedPayout(companyID: store.id, month: month) }
         isLoading = payout == nil
         loadError = nil
         do {
-            let service = SalesKpiService(api: api)
             payout = try await service.payout(companyID: store.id, month: month)
             // Отчёт по продавцам — тем же месяцем: раздел один, и переключение
             // между «кому доплатить» и «по продавцам» не должно ничего ждать.

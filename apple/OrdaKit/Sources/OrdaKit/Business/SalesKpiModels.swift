@@ -428,6 +428,14 @@ public struct SalesKpiService: Sendable {
         return response.data
     }
 
+    /// Доплата из кэша: экран открывают ради одной цифры, и ждать её незачем.
+    public func cachedPayout(companyID: String, month: String) async -> SalesKpiPayout? {
+        let response: DataEnvelope<SalesKpiPayout>? = await api.cached(
+            APIRequest(path: "/api/admin/sales-kpi/payout", query: ["company_id": companyID, "month": month])
+        )
+        return response?.data
+    }
+
     public func payout(companyID: String, month: String) async throws -> SalesKpiPayout {
         let response: DataEnvelope<SalesKpiPayout> = try await api.send(
             APIRequest(path: "/api/admin/sales-kpi/payout", query: ["company_id": companyID, "month": month])

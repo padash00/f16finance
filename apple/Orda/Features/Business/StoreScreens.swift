@@ -261,6 +261,8 @@ struct StockScreen: View {
     @State private var editValue = ""
     @State private var editError: String?
     @State private var isSaving = false
+    /// Подтверждение: окно закрывается, и без него не видно, записалось ли.
+    @State private var saved: ToastMessage?
 
     private var canEdit: Bool { access?.can("store-warehouse.edit") ?? false }
 
@@ -298,6 +300,7 @@ struct StockScreen: View {
         }
         .task { await store.loadStore() }
         .refreshable { await store.loadStore() }
+        .toast($saved)
         .alert("Поправить остаток", isPresented: Binding(get: { editing != nil }, set: { if !$0 { editing = nil } })) {
             TextField("Сколько на полке", text: $editValue)
                 #if os(iOS)
@@ -331,6 +334,7 @@ struct StockScreen: View {
             quantity: AmountParsing.value(editValue)
         )
         if editError == nil {
+            saved = ToastMessage("\(balance.name) — \(Quantity.format(AmountParsing.value(editValue))) \(balance.unit)")
             editing = nil
             Haptics.success()
         } else {

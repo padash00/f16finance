@@ -580,6 +580,14 @@ public struct SupplierDebtService: Sendable {
         return response.data
     }
 
+    /// Долги из кэша: то, что человек видел в прошлый раз.
+    public func cached(status: String = "all") async -> SupplierDebtBoard? {
+        let response: Envelope<SupplierDebtBoard>? = await api.cached(
+            APIRequest(path: "/api/admin/store/debts", query: ["status": status])
+        )
+        return response?.data
+    }
+
     /// Загрузить чек об оплате и получить его адрес.
     ///
     /// Отдельным шагом, потому что оплата без чека не принимается: сервер

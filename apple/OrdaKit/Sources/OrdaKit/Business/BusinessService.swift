@@ -117,6 +117,32 @@ public struct BusinessService: Sendable {
         )
     }
 
+    /// Доходы из кэша — то, что человек видел в прошлый раз.
+    ///
+    /// Экран открывается сразу и обновляется на ходу. Пустой скелет при каждом
+    /// входе — то, из-за чего приложение кажется медленнее, чем оно есть; для
+    /// сводки это давно сделано, а списки денег открывают не реже.
+    public func cachedIncomes(from: String, to: String) async -> [IncomeRow]? {
+        let response: DataList<IncomeRow>? = await api.cached(
+            APIRequest(
+                path: "/api/admin/incomes",
+                query: ["from": from, "to": to, "page_size": String(Self.pageSize)]
+            )
+        )
+        return response?.items
+    }
+
+    /// Расходы из кэша.
+    public func cachedExpenses(from: String, to: String) async -> [ExpenseRow]? {
+        let response: DataList<ExpenseRow>? = await api.cached(
+            APIRequest(
+                path: "/api/admin/expenses",
+                query: ["from": from, "to": to, "page_size": String(Self.pageSize)]
+            )
+        )
+        return response?.items
+    }
+
     public func expenses(from: String, to: String) async throws -> [ExpenseRow] {
         let response: DataList<ExpenseRow> = try await api.send(
             APIRequest(

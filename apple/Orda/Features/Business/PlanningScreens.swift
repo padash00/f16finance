@@ -623,7 +623,10 @@ final class SupplierBillingStore {
     }
 
     func load() async {
-        isLoading = true
+        // Прошлые долги — сразу: экран открывают, чтобы увидеть сумму, а не
+        // скелет.
+        if board == nil { board = await service.cached() }
+        isLoading = board == nil
         defer { isLoading = false }
         do {
             board = try await service.load()
@@ -860,6 +863,7 @@ private struct SupplierDebtDetail: View {
     @State private var payOpen = false
     @State private var writeOffOpen = false
     @State private var rescheduleOpen = false
+    @State private var done: ToastMessage?
 
     private var canPay: Bool { access?.can("store-billing.pay_debt") ?? false }
     private var canWriteOff: Bool { access?.can("store-billing.write_off_debt") ?? false }
@@ -980,8 +984,9 @@ private struct SupplierDebtDetail: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
     
+        .toast($done)
         .sheet(isPresented: $payOpen) {
-            DebtPaySheet(debt: debt, store: store)
+            DebtPaySheet(debt: debt, store: store) { done = ToastMessage("Долг оплачен") }
         }
         .sheet(isPresented: $writeOffOpen) {
             DebtReasonSheet(
@@ -989,11 +994,13 @@ private struct SupplierDebtDetail: View {
                 note: "Списание означает, что поставщик этих денег не получит. Причина обязательна: через полгода никто не вспомнит, почему так решили.",
                 actionTitle: "Списать"
             ) { reason in
-                await store?.writeOff(id: debt.id, reason: reason)
+                let error = await store?.writeOff(id: debt.id, reason: reason)
+                if error == nil { done = ToastMessage("Долг списан") }
+                return error
             }
         }
         .sheet(isPresented: $rescheduleOpen) {
-            DebtRescheduleSheet(debt: debt, store: store)
+            DebtRescheduleSheet(debt: debt, store: store) { done = ToastMessage("Срок перенесён") }
         }
 }
 
@@ -1020,6 +1027,8 @@ private struct SupplierDebtDetail: View {
 private struct DebtPaySheet: View {
     let debt: SupplierDebt
     var store: SupplierBillingStore?
+    /// Подтверждение показывает родитель: это окно к тому времени закроется.
+    var onDone: () -> Void = {}
 
     @Environment(\.dismiss) private var dismiss
 
@@ -1137,6 +1146,7 @@ private struct DebtPaySheet: View {
         )
         if error == nil {
             Haptics.success()
+            onDone()
             dismiss()
         } else {
             Haptics.error()
@@ -1208,6 +1218,7 @@ private struct DebtReasonSheet: View {
 private struct DebtRescheduleSheet: View {
     let debt: SupplierDebt
     var store: SupplierBillingStore?
+    var onDone: () -> Void = {}
 
     @Environment(\.dismiss) private var dismiss
 
@@ -1266,6 +1277,7 @@ private struct DebtRescheduleSheet: View {
         )
         if error == nil {
             Haptics.success()
+            onDone()
             dismiss()
         } else {
             Haptics.error()

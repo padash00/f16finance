@@ -244,9 +244,14 @@ final class BusinessStore {
     }
 
     func loadIncomes() async {
-        isLoadingIncomes = true
-        defer { isLoadingIncomes = false }
         let bounds = range.bounds
+        // Прошлый ответ — сразу, свежий — на ходу. Скелет показываем только
+        // когда показывать нечего.
+        if incomes.isEmpty, let cached = await service.cachedIncomes(from: bounds.from, to: bounds.to) {
+            incomes = cached
+        }
+        isLoadingIncomes = incomes.isEmpty
+        defer { isLoadingIncomes = false }
         do {
             incomes = try await service.incomes(from: bounds.from, to: bounds.to)
             incomesError = nil
@@ -258,9 +263,12 @@ final class BusinessStore {
     }
 
     func loadExpenses() async {
-        isLoadingExpenses = true
-        defer { isLoadingExpenses = false }
         let bounds = range.bounds
+        if expenses.isEmpty, let cached = await service.cachedExpenses(from: bounds.from, to: bounds.to) {
+            expenses = cached
+        }
+        isLoadingExpenses = expenses.isEmpty
+        defer { isLoadingExpenses = false }
         do {
             expenses = try await service.expenses(from: bounds.from, to: bounds.to)
             expensesError = nil
