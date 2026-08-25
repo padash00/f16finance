@@ -193,7 +193,9 @@ final class BusinessStore {
     private let service: BusinessService
 
     init(api: APIClient) {
-        self.service = BusinessService(api: api)
+        // Очередь отложенных действий: правка суммы или остатка не должна
+        // пропадать из-за обрыва связи на складе.
+        self.service = BusinessService(api: api, outbox: ActionOutbox(api: api))
     }
 
     // ── Загрузка ─────────────────────────────────────────────────────────────

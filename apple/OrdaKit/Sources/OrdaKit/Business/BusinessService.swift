@@ -7,9 +7,36 @@ import Foundation
 /// только удобство: отказ 403 всё равно нужно уметь показать по-человечески.
 public struct BusinessService: Sendable {
     private let api: APIClient
+    /// Очередь отложенных действий. Есть у оператора давно; владельцу она нужна
+    /// не меньше: склад в подвале, приёмка на парковке, связь рвётся одинаково.
+    private let outbox: ActionOutbox?
 
-    public init(api: APIClient) {
+    public init(api: APIClient, outbox: ActionOutbox? = nil) {
         self.api = api
+        self.outbox = outbox
+    }
+
+    /// Действие, которое может подождать связи.
+    ///
+    /// Сюда кладём **только повторяемые**: правку суммы, установку остатка,
+    /// перевод заявки. Повтор такого действия даёт тот же результат. Создание
+    /// записей класть нельзя — у них нет ключа, по которому сервер отличил бы
+    /// повтор от второй записи, и очередь наплодила бы дубли.
+    @discardableResult
+    private func deferrable(
+        path: String,
+        method: HTTPMethod = .post,
+        body: Data,
+        title: String,
+        mergeKey: String
+    ) async throws -> Bool {
+        guard let outbox else {
+            _ = try await api.send(APIRequest(path: path, method: method, body: body))
+            return true
+        }
+        return try await outbox.perform(
+            ActionOutbox.Item(path: path, method: method.rawValue, body: body, title: title, mergeKey: mergeKey)
+        )
     }
 
     // ── Дашборд ──────────────────────────────────────────────────────────────
@@ -492,16 +519,17 @@ public struct BusinessService: Sendable {
         ]
         if let comment, !comment.isEmpty { payload["comment"] = comment }
 
-        _ = try await api.send(
-            APIRequest(
-                path: "/api/admin/expenses",
-                method: .post,
-                body: try JSONSerialization.data(withJSONObject: [
-                    "action": "updateExpense",
-                    "expenseId": id,
-                    "payload": payload,
-                ])
-            )
+        // Правка повторяема: тот же расход с той же суммой. Значит её можно
+        // отложить до связи, а не терять.
+        try await deferrable(
+            path: "/api/admin/expenses",
+            body: try JSONSerialization.data(withJSONObject: [
+                "action": "updateExpense",
+                "expenseId": id,
+                "payload": payload,
+            ]),
+            title: "Правка расхода",
+            mergeKey: "expense-update-\(id)"
         )
     }
 
@@ -524,16 +552,15 @@ public struct BusinessService: Sendable {
         ]
         if let comment, !comment.isEmpty { payload["comment"] = comment }
 
-        _ = try await api.send(
-            APIRequest(
-                path: "/api/admin/incomes",
-                method: .post,
-                body: try JSONSerialization.data(withJSONObject: [
-                    "action": "updateIncome",
-                    "incomeId": id,
-                    "payload": payload,
-                ])
-            )
+        try await deferrable(
+            path: "/api/admin/incomes",
+            body: try JSONSerialization.data(withJSONObject: [
+                "action": "updateIncome",
+                "incomeId": id,
+                "payload": payload,
+            ]),
+            title: "Правка дохода",
+            mergeKey: "income-update-\(id)"
         )
     }
 
@@ -1393,11 +1420,13 @@ public struct BusinessService: Sendable {
             let item_id: String
             let quantity: Double
         }
-        let request = try APIRequest.json(
-            "/api/admin/store/warehouse",
-            body: Body(company_id: companyID, item_id: itemID, quantity: quantity)
+        // Остаток ставится равным числу — повтор даёт тот же результат.
+        try await deferrable(
+            path: "/api/admin/store/warehouse",
+            body: try JSONEncoder().encode(Body(company_id: companyID, item_id: itemID, quantity: quantity)),
+            title: "Остаток на складе",
+            mergeKey: "warehouse-set-\(companyID)-\(itemID)"
         )
-        _ = try await api.send(request)
     }
 
     /// Что присылать человеку.
