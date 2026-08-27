@@ -259,7 +259,7 @@ function buildStaffTimelineEvents(params: {
 const formatRoleLabel = (code: string): string => code === 'super_admin' ? 'Супер-админ' : getStaffRoleLabel(code)
 type WeeklyOperator = {
   operator: { id: string; name: string; short_name: string | null; full_name: string | null; is_active: boolean; telegram_chat_id: string | null; photo_url: string | null; position: string | null; documents_count: number; expiring_documents: number }
-  week: { id: string; weekStart: string; weekEnd: string; grossAmount: number; bonusAmount: number; fineAmount: number; debtAmount: number; advanceAmount: number; netAmount: number; paidAmount: number; remainingAmount: number; status: 'draft' | 'partial' | 'paid'; companyAllocations: Allocation[]; payments: Payment[]; shiftsCount: number; autoBonusTotal: number; seniorityBonusTotal?: number; shifts: ShiftBreakdown[] }
+  week: { id: string; weekStart: string; weekEnd: string; grossAmount: number; bonusAmount: number; fineAmount: number; debtAmount: number; debtActiveAmount?: number; advanceAmount: number; netAmount: number; paidAmount: number; remainingAmount: number; status: 'draft' | 'partial' | 'paid'; companyAllocations: Allocation[]; payments: Payment[]; shiftsCount: number; autoBonusTotal: number; seniorityBonusTotal?: number; shifts: ShiftBreakdown[] }
   hasActivity: boolean
 }
 type SalaryData = { weekStart: string; weekEnd: string; companies: CompanyOption[]; operators: WeeklyOperator[]; totals: { netAmount: number; paidAmount: number; advanceAmount: number; remainingAmount: number; paidOperators: number; totalOperators: number } }
@@ -270,6 +270,16 @@ const selectCls = 'h-11 w-full rounded-xl border border-border bg-card px-3 text
 const textarea = 'min-h-[96px] w-full rounded-2xl border border-border bg-white dark:bg-white/5 px-3 py-3 text-sm text-foreground placeholder:text-slate-500 focus:border-emerald-400/40 focus:outline-none'
 const money = formatMoney
 const parseMoney = (v: string) => { const n = Number(v.replace(',', '.').replace(/\s/g, '')); return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0 }
+/**
+ * Долг, который ещё можно закрыть кнопкой «Оплатил долг».
+ *
+ * В колонке «Долги» стоит вся сумма, вычтенная из зарплаты, — включая уже
+ * удержанную. Предлагать закрыть удержанный долг нельзя: это те же деньги
+ * вторым заходом.
+ */
+const openDebtAmount = (week: WeeklyOperator['week']) =>
+  week.debtActiveAmount === undefined ? week.debtAmount : week.debtActiveAmount
+
 const statusMeta = (s: WeeklyOperator['week']['status']) => s === 'paid' ? { label: 'Выплачено', className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' } : s === 'partial' ? { label: 'Частично', className: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300' } : { label: 'Не выплачено', className: 'border-slate-500/30 bg-slate-500/10 text-body' }
 
 function Modal(props: { title: string; subtitle?: string; onClose: () => void; children: React.ReactNode }) {
@@ -581,6 +591,21 @@ export default function SalaryPage() {
     const isOverpayment = overpaymentDelta > 0.009
     if (isOverpayment && !payAllowOverpayment) {
       return setError('Сумма выплаты превышает остаток по неделе. Включите «выдать сверх остатка», чтобы перенести разницу авансом на следующую неделю.')
+    }
+    // Недоплата проходила молча, и это било по долгам: неделя оставалась
+    // незакрытой, а вместе с ней оставался открытым и долг. Чаще всего сумма
+    // отстаёт не по замыслу, а потому что вкладку открыли давно и остаток с
+    // тех пор изменился.
+    const shortfall = payTarget.week.remainingAmount - total
+    if (shortfall > 0.009) {
+      const ok = await confirmDialog({
+        title: 'Это частичная выплата',
+        description:
+          `Сумма меньше остатка на ${money(shortfall)}. Неделя останется «Частично», ` +
+          `и долг недели не закроется — он закрывается только при полной выплате.`,
+        confirmLabel: 'Выплатить частично',
+      })
+      if (!ok) return
     }
     setPaySaving(true)
     setError(null)
@@ -899,10 +924,20 @@ export default function SalaryPage() {
   }
 
   const markDebtsPaid = async (item: WeeklyOperator) => {
+    // Кнопка — про деньги, занесённые мимо зарплаты. Такой долг перестаёт
+    // вычитаться, и сумма к выплате вырастает на его величину: человек
+    // рассчитался сам, удерживать больше нечего. Если неделю уже выплатили,
+    // долг из неё удержан — тогда это сбор тех же денег вторым заходом.
+    const open = openDebtAmount(item.week)
     const ok = await confirmDialog({
-      title: 'Отметить долг как оплаченный?',
-      description: `Долг ${money(item.week.debtAmount)} оператора ${getOperatorDisplayName(item.operator)} будет закрыт.`,
-      confirmLabel: 'Отметить оплаченным',
+      title: 'Долг закрыт деньгами мимо зарплаты?',
+      description:
+        `Долг ${money(open)} оператора ${getOperatorDisplayName(item.operator)} будет закрыт, ` +
+        `и сумма к выплате за неделю вырастет на ${money(open)} — удерживать его больше не из чего.` +
+        (item.week.status === 'paid'
+          ? '\n\nВНИМАНИЕ: неделя уже выплачена полностью, то есть долг из неё удержан. Закрывать его деньгами — значит взять эти деньги дважды.'
+          : ''),
+      confirmLabel: 'Долг занесли деньгами',
     })
     if (!ok) return
     setMarkDebtId(item.operator.id)
@@ -1272,7 +1307,7 @@ export default function SalaryPage() {
                       <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
                         <div className="text-[10px] text-slate-500">Долг</div>
                         <div className="mt-0.5 text-xs font-medium tabular-nums text-rose-700 dark:text-rose-300">{money(item.week.debtAmount)}</div>
-                        {item.week.debtAmount > 0 && can('salary.mark_debt_paid') ? (
+                        {openDebtAmount(item.week) > 0 && can('salary.mark_debt_paid') ? (
                           <button
                             type="button"
                             disabled={markDebtSaving && markDebtId === item.operator.id}
@@ -1447,7 +1482,7 @@ export default function SalaryPage() {
                           <td className="px-4 py-4 text-right text-rose-700 dark:text-rose-300">
                             <div className="flex flex-col items-end gap-1">
                               <span>{money(item.week.debtAmount)}</span>
-                              {item.week.debtAmount > 0 && can('salary.mark_debt_paid') ? (
+                              {openDebtAmount(item.week) > 0 && can('salary.mark_debt_paid') ? (
                                 <button
                                   type="button"
                                   disabled={markDebtSaving && markDebtId === item.operator.id}

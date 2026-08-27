@@ -384,9 +384,12 @@ async function closeWeekDebtsIfSettled(params: {
   const amount = roundMoney(debts.reduce((sum: number, d: any) => sum + Number(d.amount || 0), 0))
   const paidAt = new Date().toISOString()
 
+  // `settled_via: 'salary'` — метка «удержано из зарплаты». Без неё закрытый
+  // долг выпадал из расчёта недели, сумма к выплате росла на его величину, и
+  // полностью выплаченная неделя показывала остаток размером в долг.
   const { error: updateError } = await params.supabase
     .from('debts')
-    .update({ status: 'paid', paid_at: paidAt })
+    .update({ status: 'paid', paid_at: paidAt, settled_via: 'salary' })
     .in('id', ids)
   if (updateError) throw updateError
 
@@ -1044,6 +1047,7 @@ export async function GET(req: Request) {
               bonusAmount: snapshot.summary.bonusAmount,
               fineAmount: snapshot.summary.fineAmount,
               debtAmount: snapshot.summary.debtAmount,
+              debtActiveAmount: snapshot.summary.debtActiveAmount,
               advanceAmount: snapshot.summary.advanceAmount,
               netAmount: snapshot.summary.netAmount,
               paidAmount: snapshot.paidAmount,
@@ -1247,6 +1251,7 @@ export async function GET(req: Request) {
             bonusAmount: snapshot.summary.bonusAmount,
             fineAmount: snapshot.summary.fineAmount,
             debtAmount: snapshot.summary.debtAmount,
+            debtActiveAmount: snapshot.summary.debtActiveAmount,
             advanceAmount: snapshot.summary.advanceAmount,
             netAmount: snapshot.summary.netAmount,
             paidAmount: snapshot.paidAmount,
@@ -2118,10 +2123,14 @@ export async function POST(req: Request) {
       if (weekAfterVoid.remainingAmount > 0.009) {
         let reopenQuery = supabase
           .from('debts')
-          .update({ status: 'active', paid_at: null })
+          .update({ status: 'active', paid_at: null, settled_via: null })
           .eq('operator_id', body.operatorId)
           .eq('week_start', weekStart2)
           .eq('status', 'paid')
+          // Возвращаем только то, что закрыла сама зарплата. Раньше метки не
+          // было, и под возврат попадал долг, за который человек занёс деньги
+          // отдельно, — его открывали заново без всякой причины.
+          .eq('settled_via', 'salary')
         if (allowedCompanyIds) reopenQuery = reopenQuery.in('company_id', allowedCompanyIds)
         const { data: reopened, error: reopenError } = await reopenQuery.select('id')
         if (reopenError) throw reopenError
@@ -2254,8 +2263,10 @@ export async function POST(req: Request) {
       if (debtScope.allowedCompanyIds) {
         scannerQuery = scannerQuery.in('company_id', debtScope.allowedCompanyIds)
       }
+      // `cash` — деньги занесли мимо зарплаты. Такой долг из расчёта уходит, и
+      // сумма к выплате законно растёт: человек рассчитался сам.
       const [{ error: updateError }] = await Promise.all([
-        supabase.from('debts').update({ status: 'paid' }).in('id', ids),
+        supabase.from('debts').update({ status: 'paid', paid_at: paidAt, settled_via: 'cash' }).in('id', ids),
         scannerQuery,
       ])
 
