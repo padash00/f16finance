@@ -224,11 +224,14 @@ export async function listOperatorSalaryData(
     .gte('date', dateFrom)
     .lte('date', dateTo)
 
+  // Долг, удержанный из зарплаты, остаётся в расчёте и после закрытия — иначе
+  // «к выплате» вырастает на его сумму, и выплаченная неделя снова становится
+  // «Частично». Подробности — в `isDebtDeductedFromSalary`.
   const debtsBase = supabase
     .from('debts')
-    .select('operator_id,amount,company_id,status')
+    .select('operator_id,amount,company_id,status,settled_via')
     .eq('operator_id', operatorId)
-    .eq('status', 'active')
+    .or('status.eq.active,settled_via.eq.salary')
 
   const debtsQuery = weekStart
     ? debtsBase.eq('week_start', weekStart)
@@ -361,11 +364,13 @@ export async function listOperatorsSalaryData(
         .range(from, to),
     ),
     fetchAll<SalaryDebtRow>((from, to) => {
+      // Тот же отбор, что в `listOperatorSalaryData`: удержанный из зарплаты
+      // долг продолжает вычитаться.
       const base = supabase
         .from('debts')
-        .select('operator_id,amount,company_id,status')
+        .select('operator_id,amount,company_id,status,settled_via')
         .in('operator_id', operatorIds)
-        .eq('status', 'active')
+        .or('status.eq.active,settled_via.eq.salary')
       const scoped = params.weekStart
         ? base.eq('week_start', params.weekStart)
         : base.gte('week_start', params.dateFrom).lte('week_start', params.dateTo)

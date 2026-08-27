@@ -65,7 +65,9 @@ export async function GET(request: Request) {
         .select('company_id')
         .eq('operator_id', context.operator.id)
         .eq('week_start', weekStart)
-        .eq('status', 'active'),
+        // Удержанный из зарплаты долг остаётся в расчёте, значит его точка
+        // должна оставаться в скоупе — иначе расчёт потеряет её начисления.
+        .or('status.eq.active,settled_via.eq.salary'),
       supabase
         .from('incomes')
         .select('company_id')

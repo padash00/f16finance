@@ -666,7 +666,12 @@ export async function POST(request: Request) {
       if (aggDebt) {
         const next = Math.max(0, normalizeMoney(aggDebt.amount) - normalizeMoney(payItem.total_amount))
         if (next <= 0) {
-          await supabase.from('debts').update({ status: 'paid' }).eq('id', aggDebt.id)
+          // Должник рассчитался деньгами на точке — из зарплаты это не
+          // удерживали, значит долг из расчёта недели уходит.
+          await supabase
+            .from('debts')
+            .update({ status: 'paid', paid_at: new Date().toISOString(), settled_via: 'cash' })
+            .eq('id', aggDebt.id)
         } else {
           await supabase.from('debts').update({ amount: next }).eq('id', aggDebt.id)
         }

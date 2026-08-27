@@ -87,6 +87,7 @@ export type SalaryDebtRow = {
   amount: number | null
   company_id?: string | null
   status?: string | null
+  settled_via?: string | null
 }
 
 export type SalaryOperatorMeta = {
@@ -182,6 +183,8 @@ export type SalaryWeekSummary = {
   bonusAmount: number
   fineAmount: number
   debtAmount: number
+  /** Часть `debtAmount`, ещё не закрытая ничем. */
+  debtActiveAmount: number
   advanceAmount: number
   netAmount: number
   companyAllocations: SalaryWeekCompanyAllocation[]
@@ -221,6 +224,24 @@ function calculateIncomeTotal(row: Pick<SalaryIncomeRow, 'cash_amount' | 'kaspi_
 
 function isActiveStatus(value: string | null | undefined) {
   return !value || value === 'active'
+}
+
+/**
+ * Вычитается ли долг из зарплаты этой недели.
+ *
+ * Раньше расчёт смотрел только на статус: закрыт — значит из формулы вон. Но
+ * долг вычитается из суммы к выплате, и в момент выплаты клуб эти деньги уже
+ * удержал. Стоило долгу закрыться — он выпадал из расчёта, «к выплате» росло
+ * ровно на его сумму, и полностью выплаченная неделя показывала остаток
+ * размером в долг: «Частично» вместо «Выплачено».
+ *
+ * Поэтому удержанный из зарплаты долг (`settled_via = 'salary'`) продолжает
+ * вычитаться и после закрытия — сумма к выплате не должна меняться задним
+ * числом. Долг, закрытый деньгами мимо зарплаты (`cash`), вычитаться
+ * перестаёт: рост суммы к выплате там правильный, человек рассчитался сам.
+ */
+export function isDebtDeductedFromSalary(debt: { status?: string | null; settled_via?: string | null }) {
+  return isActiveStatus(debt.status) || debt.settled_via === 'salary'
 }
 
 function roundMoney(value: number) {
@@ -610,6 +631,7 @@ export function calculateOperatorSalarySummary(params: {
   let autoDebts = 0
   for (const debt of params.debts) {
     if (debt.operator_id !== params.operatorId) continue
+    if (!isDebtDeductedFromSalary(debt)) continue
     const amount = toAmount(debt.amount)
     if (amount > 0) autoDebts += amount
   }
@@ -841,14 +863,19 @@ export function calculateOperatorWeekSummary(params: {
   }
 
   let debtAmount = 0
+  // Долг, ещё не закрытый ничем. Отдельно от `debtAmount`, потому что
+  // удержанный из зарплаты долг из суммы к выплате не уходит, но закрывать
+  // его второй раз («Оплатил долг») уже нельзя — это сбор тех же денег дважды.
+  let debtActiveAmount = 0
   const unassignedDebts: number[] = []
   for (const debt of params.debts) {
     if (debt.operator_id !== params.operatorId) continue
-    if (!isActiveStatus(debt.status)) continue
+    if (!isDebtDeductedFromSalary(debt)) continue
 
     const amount = toAmount(debt.amount)
     if (amount <= 0) continue
     debtAmount += amount
+    if (isActiveStatus(debt.status)) debtActiveAmount += amount
 
     const targetCompanyId = debt.company_id || null
     if (targetCompanyId) {
@@ -920,6 +947,7 @@ export function calculateOperatorWeekSummary(params: {
     bonusAmount: roundMoney(bonusAmount),
     fineAmount: roundMoney(fineAmount),
     debtAmount: roundMoney(debtAmount),
+    debtActiveAmount: roundMoney(debtActiveAmount),
     advanceAmount: roundMoney(advanceAmount),
     netAmount: roundMoney(
       grossAmount + autoBonusTotal + bonusAmount - fineAmount - debtAmount - advanceAmount,
@@ -1048,6 +1076,7 @@ export function calculateSalaryBoard(params: {
 
   for (const debt of params.debts) {
     if (!debt.operator_id) continue
+    if (!isDebtDeductedFromSalary(debt)) continue
     const stat = ensureOperator(debt.operator_id)
     const amount = toAmount(debt.amount)
     if (amount <= 0) continue
