@@ -4,7 +4,7 @@ import { requireOrgFeature } from '@/lib/server/entitlements'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
-import { fetchStoreOverviewMetrics } from '@/lib/server/repositories/inventory'
+import { fetchStoreOverviewLists, fetchStoreOverviewMetrics } from '@/lib/server/repositories/inventory'
 import { json } from '@/lib/server/api-response'
 
 function canManageStore(access: {
@@ -31,13 +31,20 @@ export async function GET(request: Request) {
       requestedCompanyId: new URL(request.url).searchParams.get('company_id') || null,
       isSuperAdmin: access.isSuperAdmin,
     })
-    const data = await fetchStoreOverviewMetrics(supabase as any, {
+    const inventoryScope = {
       organizationId: access.activeOrganization?.id || null,
       allowedCompanyIds: companyScope.allowedCompanyIds,
       isSuperAdmin: access.isSuperAdmin,
-    })
+    }
+    // Счётчики — для веб-страницы, списки — для нативного приложения владельца:
+    // выпущенная сборка iOS разбирает locations/balances/requests/movements и
+    // без них показывает пустой склад. Один ответ обслуживает обоих.
+    const [metrics, lists] = await Promise.all([
+      fetchStoreOverviewMetrics(supabase as any, inventoryScope),
+      fetchStoreOverviewLists(supabase as any, inventoryScope),
+    ])
 
-    return json({ ok: true, data })
+    return json({ ok: true, data: { ...metrics, ...lists } })
   } catch (error: any) {
     await writeSystemErrorLogSafe({
       scope: 'server',

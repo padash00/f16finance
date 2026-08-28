@@ -448,6 +448,73 @@ const EMPTY_STORE_METRICS: StoreOverviewMetrics = {
  * низкий остаток сравнивает количество с порогом товара, и только по товарам,
  * у которых порог вообще задан.
  */
+/**
+ * Списки для обзора магазина: локации, остатки, заявки, движения.
+ *
+ * ПОЧЕМУ они всё ещё есть, хотя веб-страница живёт на счётчиках: этот ответ
+ * разбирает нативное приложение владельца (apple/OrdaKit, `StoreOverview`), а
+ * выпущенная сборка форму ответа фиксирует — сервер обязан отдавать её, пока
+ * живут старые версии на телефонах. Убрать поля можно только вместе с релизом
+ * приложения, но никак не раньше.
+ *
+ * От прежней версии отличается двумя вещами: остатки читаются по локациям
+ * скоупа, а не всей таблицей, и каталог товаров (`items`) не собирается вовсе —
+ * его не разбирал ни один клиент.
+ */
+export async function fetchStoreOverviewLists(supabase: AnySupabase, scope?: InventoryScope) {
+  const locationIds = await resolveScopeLocationIds(supabase, scope)
+  const [
+    { data: locations, error: locationsError },
+    { data: balances, error: balancesError },
+    { data: requests, error: requestsError },
+    { data: movements, error: movementsError },
+  ] = await Promise.all([
+    applyOrganizationFilter(
+      supabase
+        .from('inventory_locations')
+        .select('id, company_id, organization_id, name, code, location_type, is_active, company:company_id(id, name, code)')
+        .eq('is_active', true)
+        .order('location_type', { ascending: true })
+        .order('name', { ascending: true }),
+      scope,
+    ),
+    fetchAllPagesResult((from, to) =>
+      withLocationFilter(
+        supabase
+          .from('inventory_balances')
+          .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, low_stock_threshold), location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code))')
+          .gt('quantity', 0)
+          .order('updated_at', { ascending: false })
+          .order('location_id', { ascending: true })
+          .order('item_id', { ascending: true }),
+        locationIds,
+      ).range(from, to),
+    ),
+    supabase
+      .from('inventory_requests')
+      .select('id, requesting_company_id, status, comment, decision_comment, created_at, approved_at, company:requesting_company_id(id, name, code), source_location:source_location_id(id, name, code, location_type, organization_id), target_location:target_location_id(id, name, code, location_type, organization_id), items:inventory_request_items(id, item_id, requested_qty, approved_qty, comment, item:item_id(id, name, barcode, unit))')
+      .order('created_at', { ascending: false })
+      .limit(24),
+    supabase
+      .from('inventory_movements')
+      .select('id, movement_type, quantity, unit_cost, total_amount, reference_type, comment, created_at, item:item_id(id, name, barcode, unit), from_location:from_location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code)), to_location:to_location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code))')
+      .order('created_at', { ascending: false })
+      .limit(16),
+  ])
+
+  if (locationsError) throw locationsError
+  if (balancesError) throw balancesError
+  if (requestsError) throw requestsError
+  if (movementsError) throw movementsError
+
+  return {
+    locations: filterByCompanyScope(mapNestedRows(locations || []), scope, (row: any) => [row.company_id]),
+    balances: filterByLocationScope(mapNestedRows(balances || []), scope, (row: any) => row.location),
+    requests: filterByCompanyScope(mapNestedRows(requests || []), scope, (row: any) => [row.requesting_company_id, row.company?.id]),
+    movements: filterByMovementScope(mapNestedRows(movements || []), scope),
+  }
+}
+
 export async function fetchStoreOverviewMetrics(
   supabase: AnySupabase,
   scope?: InventoryScope,
