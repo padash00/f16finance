@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApiCache } from '@/lib/client/use-api-cache'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import {
@@ -54,12 +54,14 @@ import {
 import { isAbortError } from '@/lib/is-abort-error'
 import { LabelPrintDialog } from '@/components/store/label-print-dialog'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
-import { useStoreScope } from '@/components/store/store-scope'
+import { useStoreApiUrl, useStoreScope } from '@/components/store/store-scope'
 import { usePersistentState } from '@/lib/client/use-persistent-state'
+import { useVisibleSlice } from '@/lib/client/use-visible-slice'
 import { CopyText } from '@/components/ui/copy-text'
 import { confirmDialog } from '@/components/ui/confirm-dialog'
 import { toast } from '@/hooks/use-toast'
 import type { LabelItem } from '@/components/store/label-print-dialog'
+import { invalidateStoreCaches } from '@/lib/client/store-cache'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -146,6 +148,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
   const canPrintLabels = can('store-warehouse.print_labels')
 
   const { storeCompanyId } = useStoreScope()
+  const storeUrl = useStoreApiUrl()
   // Точка магазина с памятью — ключ 'store.companyId' общий со «Витриной»,
   // чтобы точка была одна на весь магазин; null → серверный дефолт.
   // ?company_id= в URL имеет приоритет над сохранённым значением (эффект ниже
@@ -237,10 +240,13 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
         const params = new URLSearchParams()
         if (itemSearch.trim()) params.set('q', itemSearch.trim())
         if (selectedCategory) params.set('category_id', selectedCategory)
-        const res = await fetch(`/api/admin/inventory/catalog?${params}`, { cache: 'no-store', signal: ac.signal })
+        params.set('limit', '30')
+        const res = await fetch(storeUrl(`/api/admin/inventory/catalog?${params}`), { cache: 'no-store', signal: ac.signal })
         const json = await res.json().catch(() => null)
         if (ac.signal.aborted) return
-        setItemSearchResults(json?.data?.items || [])
+        // Роут отдаёт массив товаров в data, а не { items }. Читали data.items —
+        // выпадашка была пуста всегда, сколько бы ни выгружалось с сервера.
+        setItemSearchResults(Array.isArray(json?.data) ? json.data : [])
       } catch (e) {
         if (isAbortError(e) || ac.signal.aborted) return
         setItemSearchResults([])
@@ -252,7 +258,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
       clearTimeout(t)
       ac.abort()
     }
-  }, [itemSearch, selectedCategory, addMode])
+  }, [itemSearch, selectedCategory, addMode, storeUrl])
 
   async function handleBarcodeLookup(e: React.FormEvent) {
     e.preventDefault()
@@ -597,6 +603,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
       const json = await res.json().catch(() => null)
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Ошибка применения')
       setWarehouseFileDone(`Обновлено: ${json.data?.updated ?? items.length}`)
+      invalidateStoreCaches()
       await load()
     } catch (err: any) {
       setWarehouseFileError(err?.message || 'Не удалось применить.')
@@ -642,6 +649,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
       setSaveSuccess(true)
       setLines([])
       setExcelRows([])
+      invalidateStoreCaches()
       await load()
       setTimeout(() => setSaveSuccess(false), 3000)
     } catch (err: any) {
@@ -679,6 +687,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
       const json = await res.json().catch(() => null)
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Ошибка удаления')
       setSelectedIds(new Set())
+      invalidateStoreCaches()
       await load()
       toast({ description: mode === 'all' ? 'Каталог очищен' : 'Позиции удалены' })
     } catch (err: any) {
@@ -710,20 +719,24 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
       }
       setEditingWh(null)
       setEditWhVal('')
+      invalidateStoreCaches()
       await load()
     } finally {
       setSavingWh(false)
     }
   }
 
-  const filteredBalances = balances.filter((b) => {
-    if (!stockSearch.trim()) return true
-    const q = stockSearch.toLowerCase()
-    return (
-      b.item?.name?.toLowerCase().includes(q) ||
-      b.item?.barcode?.toLowerCase().includes(q)
+  const filteredBalances = useMemo(() => {
+    const q = stockSearch.trim().toLowerCase()
+    if (!q) return balances
+    return balances.filter(
+      (b) => b.item?.name?.toLowerCase().includes(q) || b.item?.barcode?.toLowerCase().includes(q),
     )
-  })
+  }, [balances, stockSearch])
+
+  // Каталог точки — это тысячи позиций; рисуем порциями, иначе поиск тормозит
+  // на каждой букве.
+  const shownBalances = useVisibleSlice(filteredBalances, `${selectedCompanyId}|${stockSearch}`)
 
   const pendingLines = addMode === 'excel' ? excelRows : lines
   const canSave = pendingLines.some((l) => parseNum(l.quantity) > 0)
@@ -912,7 +925,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
           <>
             {/* Мобильная версия: карточки товаров вместо широкой таблицы */}
             <div className="space-y-3 p-3 sm:hidden">
-              {filteredBalances.map((b) => {
+              {shownBalances.visible.map((b) => {
                 const checked = selectedIds.has(b.item_id)
                 return (
                   <div
@@ -1027,7 +1040,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
-                {filteredBalances.map((b, idx) => (
+                {shownBalances.visible.map((b, idx) => (
                   <tr
                     key={b.item_id}
                     className={`transition hover:bg-slate-50 dark:hover:bg-white/[0.02] ${selectedIds.has(b.item_id) ? 'bg-rose-500/[0.05]' : ''}`}
@@ -1112,6 +1125,15 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
               </tbody>
             </table>
             </div>
+            {shownBalances.hasMore && (
+              <div className="flex flex-col items-center gap-2 border-t border-border px-4 py-4 text-xs text-muted-foreground sm:flex-row sm:justify-center">
+                <span>Показано {shownBalances.shown} из {shownBalances.total}</span>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={shownBalances.showMore}>Показать ещё</Button>
+                  <Button variant="ghost" size="sm" onClick={shownBalances.showAll}>Все {shownBalances.total}</Button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </Card>

@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatMoney } from '@/lib/core/format'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
+import { useStoreApiUrl } from '@/components/store/store-scope'
 
 type Supplier = {
   id: string
@@ -105,6 +106,7 @@ const fmtDate = (value: string | null | undefined) => {
 }
 
 export default function SupplierCardPage() {
+  const storeUrl = useStoreApiUrl()
   const { can } = useCapabilities()
   const params = useParams()
   const supplierId = String((params as any)?.id || '')
@@ -158,14 +160,16 @@ export default function SupplierCardPage() {
     if (!transferOpen || supplierOptions.length > 0) return
     void (async () => {
       try {
-        const res = await fetch('/api/admin/store/receipts', { cache: 'no-store' })
+        // Список поставщиков — у поставщиков: ответ приёмки вёз ещё весь каталог
+        // и документы, а нужны два поля на выпадашку «перенести к кому».
+        const res = await fetch(storeUrl('/api/admin/store/suppliers'), { cache: 'no-store' })
         const j = await res.json().catch(() => null)
         if (res.ok && j?.ok) {
           setSupplierOptions(((j.data?.suppliers || []) as any[]).map((s: any) => ({ id: String(s.id), name: s.name })).filter((s) => s.id !== supplierId))
         }
       } catch { /* ignore */ }
     })()
-  }, [transferOpen, supplierOptions.length, supplierId])
+  }, [transferOpen, supplierOptions.length, supplierId, storeUrl])
 
   const openTransferItems = () => { setTransferMode('items'); setTransferReceiptId(null); setTransferTarget(''); setTransferOpen(true) }
   const openTransferReceipt = (rid: string, label: string) => { setTransferMode('receipt'); setTransferReceiptId(rid); setTransferReceiptLabel(label); setTransferTarget(''); setTransferOpen(true) }
@@ -198,7 +202,7 @@ export default function SupplierCardPage() {
   const load = async () => {
     setError(null)
     try {
-      const response = await fetch(`/api/admin/store/suppliers/${supplierId}`, { cache: 'no-store' })
+      const response = await fetch(storeUrl(`/api/admin/store/suppliers/${supplierId}`), { cache: 'no-store' })
       const json = await response.json().catch(() => null)
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось загрузить поставщика')
       const s = json.data.supplier as Supplier
@@ -237,10 +241,10 @@ export default function SupplierCardPage() {
     if (catalog.length > 0 || !addAliasOpen) return
     void (async () => {
       try {
-        const response = await fetch('/api/admin/store/receipts', { cache: 'no-store' })
+        const response = await fetch(storeUrl('/api/admin/inventory/catalog?compact=1'), { cache: 'no-store' })
         const json = await response.json().catch(() => null)
-        if (response.ok && json?.ok) {
-          setCatalog((json.data?.items || []).map((it: any) => ({
+        if (response.ok && json?.ok && Array.isArray(json.data)) {
+          setCatalog(json.data.map((it: any) => ({
             id: it.id,
             name: it.name,
             barcode: it.barcode,
@@ -392,12 +396,12 @@ export default function SupplierCardPage() {
           <Card className="p-3 bg-white dark:bg-gray-900/60 border-slate-200 dark:border-gray-800">
             <div className="text-[11px] text-muted-foreground uppercase">Накладных</div>
             <div className="text-lg font-bold">{stats.receiptsCount}</div>
-            <div className="text-xs text-muted-foreground">{formatMoney(stats.totalSpend)} ₸ оборот</div>
+            <div className="text-xs text-muted-foreground">{formatMoney(stats.totalSpend)} оборот</div>
           </Card>
           <Card className="p-3 bg-white dark:bg-gray-900/60 border-slate-200 dark:border-gray-800">
             <div className="text-[11px] text-muted-foreground uppercase">Открытые долги</div>
             <div className="text-lg font-bold text-amber-600 dark:text-amber-300">{stats.openDebtsCount}</div>
-            <div className="text-xs text-muted-foreground">{formatMoney(stats.openDebtsSum)} ₸</div>
+            <div className="text-xs text-muted-foreground">{formatMoney(stats.openDebtsSum)}</div>
           </Card>
           <Card className="p-3 bg-white dark:bg-gray-900/60 border-slate-200 dark:border-gray-800">
             <div className="text-[11px] text-muted-foreground uppercase">Алиасов AI</div>
@@ -601,7 +605,7 @@ export default function SupplierCardPage() {
                   </div>
                   <div className="flex flex-col items-end gap-1.5">
                     <div className="text-right">
-                      <div className="text-sm font-semibold">{formatMoney(r.total_amount)} ₸</div>
+                      <div className="text-sm font-semibold">{formatMoney(r.total_amount)}</div>
                       <div className="text-xs text-muted-foreground">{r.items?.length || 0} позиций</div>
                     </div>
                     <Button type="button" variant="outline" size="sm" className="h-7 gap-1.5 text-xs" onClick={() => openTransferReceipt(r.id, r.invoice_number || `#${r.id.slice(0, 8)}`)}>
@@ -626,7 +630,7 @@ export default function SupplierCardPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 text-sm">
-                      <span className="font-medium">{formatMoney(d.total_amount)} ₸</span>
+                      <span className="font-medium">{formatMoney(d.total_amount)}</span>
                       {d.is_consignment ? <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-700 dark:text-purple-200 border border-purple-500/30">реализация</span> : null}
                       <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
                         d.status === 'open'

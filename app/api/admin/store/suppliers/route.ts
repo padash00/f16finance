@@ -1,13 +1,10 @@
-import { NextResponse } from 'next/server'
-
 import { requireCapability } from '@/lib/server/capabilities'
 import { requireOrgFeature } from '@/lib/server/entitlements'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
-
-function json(data: unknown, status = 200) {
-  return NextResponse.json(data, { status })
-}
+import { fetchAllRows } from '@/lib/server/fetch-all-rows'
+import { json } from '@/lib/server/api-response'
+import { chunkArray } from '@/lib/core/chunk'
 
 function canManageStore(access: {
   isSuperAdmin: boolean
@@ -15,28 +12,6 @@ function canManageStore(access: {
 }) {
   // Capability checks выше уже отсеивают; здесь — любой staff
   return access.isSuperAdmin || !!access.staffRole
-}
-
-// PostgREST молча режет ответ до 1000 строк — статистику по поставщикам
-// (все приёмки/долги/алиасы) забираем постранично, чанками id по 200 (лимит URL).
-const PAGE_SIZE = 1000
-async function fetchAllPages<T = any>(buildQuery: (from: number, to: number) => any): Promise<T[]> {
-  const out: T[] = []
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1)
-    if (error) throw error
-    const rows = data || []
-    out.push(...rows)
-    if (rows.length < PAGE_SIZE) break
-  }
-  return out
-}
-
-function chunkArray<T>(arr: T[], size: number): T[][] {
-  if (size <= 0) return [arr]
-  const out: T[][] = []
-  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
-  return out
 }
 
 async function fetchAllByChunkedIn(
@@ -48,7 +23,7 @@ async function fetchAllByChunkedIn(
 ): Promise<any[]> {
   const chunkResults = await Promise.all(
     chunkArray(ids, 200).map((chunk) =>
-      fetchAllPages((from, to) =>
+      fetchAllRows((from, to) =>
         supabase.from(table).select(columns).in(inColumn, chunk).order('id').range(from, to),
       ),
     ),

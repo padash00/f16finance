@@ -7,6 +7,7 @@ import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { CameraScanner, scanFeedback } from '@/components/store/camera-scanner'
 import { Skeleton } from '@/components/skeleton'
+import { useStoreApiUrl } from '@/components/store/store-scope'
 
 type Item = { id: string; name: string; barcode?: string | null; unit?: string }
 type Balance = { location_id: string; item_id: string; quantity: number; item?: Item | null }
@@ -26,6 +27,7 @@ const locLabel = (l: Loc) =>
   `${l.company?.name ? l.company.name + ' · ' : ''}${l.location_type === 'point_display' ? 'Витрина' : l.location_type === 'warehouse' ? 'Склад' : l.name}`
 
 export default function ScanRevisionPage() {
+  const storeUrl = useStoreApiUrl()
   const { can } = useCapabilities()
   const [data, setData] = useState<RevData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -126,7 +128,7 @@ export default function ScanRevisionPage() {
     let cancelled = false
     void (async () => {
       try {
-        const res = await fetch('/api/admin/store/revisions?scope=all', { cache: 'no-store' })
+        const res = await fetch(storeUrl('/api/admin/store/revisions?scope=all'), { cache: 'no-store' })
         const json = await res.json().catch(() => null)
         if (!res.ok) throw new Error(json?.error || `Ошибка загрузки (${res.status})`)
         if (!cancelled) setData(json?.data || null)
@@ -139,7 +141,7 @@ export default function ScanRevisionPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [storeUrl])
 
   const locations = data?.locations || []
   const selectedLoc = locations.find((l) => l.id === locationId) || null

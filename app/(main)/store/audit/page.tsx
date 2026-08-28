@@ -11,6 +11,10 @@ import { Card } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { useStoreApiUrl } from '@/components/store/store-scope'
+import { readApiCache, writeApiCache } from '@/lib/client/use-api-cache'
+import { formatMoney as money } from '@/lib/core/format'
+import { invalidateStoreCaches } from '@/lib/client/store-cache'
 
 type Loc = { id: string; name: string; location_type: string; company?: { name?: string | null } | null }
 type ActListRow = { id: string; status: string; comment: string | null; opened_at: string; closed_at: string | null; locationName: string; totalItems: number; countedItems: number }
@@ -32,12 +36,12 @@ type Detail = {
 }
 
 const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2))
-const money = (n: number) => Math.round(n || 0).toLocaleString('ru-RU') + ' ₸'
 const fmtDate = (s: string | null) => (s ? new Date(s).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—')
 const locLabel = (l: Loc | null) => (l ? `${l.company?.name ? l.company.name + ' · ' : ''}${l.location_type === 'point_display' ? 'Витрина' : l.location_type === 'warehouse' ? 'Склад' : l.name}` : '—')
 
 export default function StoreAuditPage() {
   const { can } = useCapabilities()
+  const storeUrl = useStoreApiUrl()
   const [view, setView] = useState<'list' | 'create' | 'detail'>('list')
   const [acts, setActs] = useState<ActListRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -65,29 +69,35 @@ export default function StoreAuditPage() {
   const [closeReport, setCloseReport] = useState<CloseRow[] | null>(null)
   const [closeSummary, setCloseSummary] = useState<CloseSummary | null>(null)
 
-  const loadActs = useCallback(async () => {
-    setLoading(true)
+  const actsUrl = storeUrl('/api/admin/store/audit')
+
+  const loadActs = useCallback(async (opts?: { fresh?: boolean }) => {
+    const cached = opts?.fresh ? null : readApiCache<ActListRow[]>(actsUrl)
+    if (cached) { setActs(cached); setLoading(false) }
+    else setLoading(true)
     try {
-      const res = await fetch('/api/admin/store/audit', { cache: 'no-store' })
+      const res = await fetch(actsUrl, { cache: 'no-store' })
       const j = await res.json().catch(() => null)
       if (!res.ok) throw new Error(j?.error || 'Ошибка')
-      setActs(j?.data || [])
+      const rows = j?.data || []
+      writeApiCache(actsUrl, rows)
+      setActs(rows)
       setError(null)
     } catch (e: any) {
       setError(e?.message || 'Не удалось загрузить акты')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [actsUrl])
 
   useEffect(() => {
     void loadActs()
     void (async () => {
-      const res = await fetch('/api/admin/store/revisions?scope=all', { cache: 'no-store' })
+      const res = await fetch(storeUrl('/api/admin/store/revisions?scope=all'), { cache: 'no-store' })
       const j = await res.json().catch(() => null)
       if (res.ok) setLocations((j?.data?.locations || []) as Loc[])
     })()
-  }, [loadActs])
+  }, [loadActs, storeUrl])
 
   // загрузка операторов/категорий при выборе локации в форме создания
   useEffect(() => {
@@ -95,11 +105,11 @@ export default function StoreAuditPage() {
     setFormData(null)
     setAssignments([])
     void (async () => {
-      const res = await fetch(`/api/admin/store/audit?form=${encodeURIComponent(locationId)}`, { cache: 'no-store' })
+      const res = await fetch(storeUrl(`/api/admin/store/audit?form=${encodeURIComponent(locationId)}`), { cache: 'no-store' })
       const j = await res.json().catch(() => null)
       if (res.ok) setFormData({ operators: j?.data?.operators || [], otherOperators: j?.data?.otherOperators || [], categories: j?.data?.categories || [] })
     })()
-  }, [view, locationId])
+  }, [view, locationId, storeUrl])
 
   const openDetail = useCallback(async (id: string, keepReport = false) => {
     setDetailId(id)
@@ -110,24 +120,24 @@ export default function StoreAuditPage() {
       setCloseSummary(null)
       setDebtsCreated(null)
     }
-    const res = await fetch(`/api/admin/store/audit?act=${encodeURIComponent(id)}`, { cache: 'no-store' })
+    const res = await fetch(storeUrl(`/api/admin/store/audit?act=${encodeURIComponent(id)}`), { cache: 'no-store' })
     const j = await res.json().catch(() => null)
     if (res.ok) setDetail(j?.data || null)
     else setError(j?.error || 'Ошибка загрузки акта')
-  }, [])
+  }, [storeUrl])
 
   // Живой опрос: пока открыта деталь НЕзакрытого акта — каждые 4с тихо подтягиваем
   // подсчёты операторов и прогресс (без мигания), чтобы видеть подсчёт в реальном времени.
   useEffect(() => {
     if (view !== 'detail' || !detailId || detail?.act.status !== 'open') return
     const t = setInterval(() => {
-      fetch(`/api/admin/store/audit?act=${encodeURIComponent(detailId)}`, { cache: 'no-store' })
+      fetch(storeUrl(`/api/admin/store/audit?act=${encodeURIComponent(detailId)}`), { cache: 'no-store' })
         .then((r) => (r.ok ? r.json() : null))
         .then((j) => { if (j?.data) setDetail(j.data) })
         .catch(() => {})
     }, 4000)
     return () => clearInterval(t)
-  }, [view, detailId, detail?.act.status])
+  }, [view, detailId, detail?.act.status, storeUrl])
 
   const createAct = async () => {
     if (!locationId || assignments.filter((a) => a.operator_id).length === 0) {
@@ -144,7 +154,8 @@ export default function StoreAuditPage() {
       })
       const j = await res.json().catch(() => null)
       if (!res.ok) throw new Error(j?.error || 'Ошибка создания')
-      await loadActs()
+      invalidateStoreCaches()
+      await loadActs({ fresh: true })
       await openDetail(j.data.id)
     } catch (e: any) {
       setError(e?.message || 'Не удалось создать акт')
@@ -171,7 +182,8 @@ export default function StoreAuditPage() {
       setCloseReport((j?.data?.report || []) as CloseRow[])
       setCloseSummary((j?.data?.summary || null) as CloseSummary | null)
       setDebtsCreated(Number(j?.data?.debtsCreated || 0))
-      await loadActs()
+      invalidateStoreCaches()
+      await loadActs({ fresh: true })
       await openDetail(detailId, true)
     } catch (e: any) {
       setError(e?.message || 'Не удалось закрыть акт')
@@ -189,7 +201,8 @@ export default function StoreAuditPage() {
       const res = await fetch('/api/admin/store/audit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'cancel', act_id: detailId }) })
       const j = await res.json().catch(() => null)
       if (!res.ok) throw new Error(j?.message || j?.error || 'Ошибка отмены')
-      await loadActs()
+      invalidateStoreCaches()
+      await loadActs({ fresh: true })
       setView('list')
     } catch (e: any) {
       setError(e?.message || 'Не удалось отменить акт')
@@ -210,7 +223,8 @@ export default function StoreAuditPage() {
       alert(`Откат выполнен. Возвращено позиций: ${j?.data?.reversedItems ?? 0}. Удалено долгов: ${j?.data?.debtsRemoved ?? 0}.`)
       setCloseReport(null)
       setCloseSummary(null)
-      await loadActs()
+      invalidateStoreCaches()
+      await loadActs({ fresh: true })
       await openDetail(detailId)
     } catch (e: any) {
       setError(e?.message || 'Не удалось откатить акт')
@@ -260,7 +274,7 @@ export default function StoreAuditPage() {
           backHref="/store/revisions"
           actions={
             <>
-              <Button variant="outline" size="sm" onClick={() => void loadActs()} className="h-9 gap-1.5">
+              <Button variant="outline" size="sm" onClick={() => void loadActs({ fresh: true })} className="h-9 gap-1.5">
                 <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
                 Обновить
               </Button>

@@ -1,11 +1,10 @@
-import { NextResponse } from 'next/server'
-
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
 import { requireOrgFeature } from '@/lib/server/entitlements'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { json } from '@/lib/server/api-response'
 
 /**
  * Fail-closed проверка принадлежности точки организации вызывающего.
@@ -27,11 +26,6 @@ async function assertCompanyInScope(
   if (!companyId || !scope.allowedCompanyIds.includes(String(companyId))) {
     throw new Error('company-out-of-scope')
   }
-}
-
-
-function json(data: unknown, status = 200) {
-  return NextResponse.json(data, { status })
 }
 
 const TEXT_FIELDS = [

@@ -209,14 +209,14 @@ export default function SimulationPage() {
         <div className="grid gap-4 sm:grid-cols-3">
           <div>
             <p className="text-[11px] uppercase tracking-widest text-blue-700 dark:text-blue-300/80">Потенциал клуба / мес</p>
-            <p className="mt-1 text-3xl font-bold tabular-nums text-blue-700 dark:text-blue-200">{formatMoney(Math.round(totalPotentialMonth))} ₸</p>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">{formatMoney(Math.round(calc.potential_per_day))} ₸ / день · только время устройств</p>
+            <p className="mt-1 text-3xl font-bold tabular-nums text-blue-700 dark:text-blue-200">{formatMoney(Math.round(totalPotentialMonth))}</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">{formatMoney(Math.round(calc.potential_per_day))} / день · только время устройств</p>
           </div>
           <div>
             <p className="text-[11px] uppercase tracking-widest text-emerald-700 dark:text-emerald-300/80">Факт / мес</p>
-            <p className="mt-1 text-3xl font-bold tabular-nums text-emerald-700 dark:text-emerald-200">{formatMoney(factMonth)} ₸</p>
+            <p className="mt-1 text-3xl font-bold tabular-nums text-emerald-700 dark:text-emerald-200">{formatMoney(factMonth)}</p>
             <p className="mt-0.5 text-[11px] text-muted-foreground">
-              {fact ? `${formatMoney(fact.revenue_per_day)} ₸ / день · по факту за ${fact.window_days} дн (вся выручка)` : 'нет данных'}
+              {fact ? `${formatMoney(fact.revenue_per_day)} / день · по факту за ${fact.window_days} дн (вся выручка)` : 'нет данных'}
             </p>
           </div>
           <div>
@@ -266,7 +266,7 @@ export default function SimulationPage() {
                 <XAxis dataKey="name" stroke="rgba(255,255,255,0.45)" fontSize={10} />
                 <YAxis stroke="rgba(255,255,255,0.45)" fontSize={10} tickFormatter={(v) => `${Math.round(Number(v) / 1000)}k`} />
                 <Tooltip
-                  formatter={(v: any) => `${formatMoney(Number(v))} ₸ / мес`}
+                  formatter={(v: any) => `${formatMoney(Number(v))} / мес`}
                   contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
                 />
                 <Bar dataKey="value" name="Потенциал / мес" radius={[4, 4, 0, 0]}>

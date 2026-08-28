@@ -1,23 +1,16 @@
-import { NextResponse } from 'next/server'
-
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireAnyCapability, requireCapability } from '@/lib/server/capabilities'
 import { resolveEffectiveOrganizationId } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { bulkSyncInventoryItemsToPointProducts, syncInventoryItemToPointProducts } from '@/lib/server/repositories/inventory'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { json } from '@/lib/server/api-response'
+import { chunkArray } from '@/lib/core/chunk'
+import { sanitizeOrFilterValue } from '@/lib/server/postgrest-filter'
+import { fetchAllRows } from '@/lib/server/fetch-all-rows'
 
 /** Импорт больших каталогов может занимать десятки секунд — поднимаем лимит на Vercel. */
 export const maxDuration = 300
-
-function chunkArray<T>(arr: T[], size: number): T[][] {
-  if (size <= 0) return [arr]
-  const out: T[][] = []
-  for (let i = 0; i < arr.length; i += size) {
-    out.push(arr.slice(i, i + size))
-  }
-  return out
-}
 
 /** Остаток из импорта всегда на company catalog_total: код CT-* → имя с «катал» → первый по алфавиту (ru). */
 function pickCentralCatalogId(
@@ -33,10 +26,6 @@ function pickCentralCatalogId(
     String(a.name || '').localeCompare(String(b.name || ''), 'ru', { sensitivity: 'base' }),
   )
   return sorted[0]?.id ? String(sorted[0].id) : undefined
-}
-
-function json(data: unknown, status = 200) {
-  return NextResponse.json(data, { status })
 }
 
 function canManageCatalog(access: { isSuperAdmin: boolean; staffRole: string }) {
@@ -80,48 +69,77 @@ export async function GET(request: Request) {
     const scopeOrg = orgId || (access.isSuperAdmin ? null : '00000000-0000-0000-0000-000000000000')
 
     // Опциональный фильтр остатков по точке (company) — для инлайн-правки в каталоге
-    const companyFilter = String(new URL(request.url).searchParams.get('company_id') || '').trim() || null
+    const params = new URL(request.url).searchParams
+    const companyFilter = String(params.get('company_id') || '').trim() || null
+
+    // Поиск по названию/штрихкоду и лимит — для пикеров товара (склад, приёмка).
+    // Без них отдаём каталог целиком: страница «Каталог» показывает всё.
+    // ПОЧЕМУ появилось: пикер склада слал ?q=..., сервер параметр игнорировал и
+    // на каждое нажатие клавиши выгружал весь каталог со всеми остатками.
+    const search = sanitizeOrFilterValue(params.get('q') || '')
+    const categoryFilter = String(params.get('category_id') || '').trim() || null
+    const rawLimit = Number(params.get('limit') || 0)
+    const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(Math.trunc(rawLimit), 200) : null
+    // compact=1 — справочник для выпадашки: имя, штрихкод, цена. Остатки такому
+    // вызову не нужны, а собираются они запросом на каждые 200 товаров.
+    const compact = params.get('compact') === '1'
+
+    const applyItemFilters = (q: any) => {
+      if (scopeOrg) q = q.eq('organization_id', scopeOrg)
+      // Каталог по точке: выбрана точка → только её товары; «Общий» → все магазины.
+      if (companyFilter) q = q.eq('company_id', companyFilter)
+      if (categoryFilter) q = q.eq('category_id', categoryFilter)
+      if (search) q = q.or(`name.ilike.%${search}%,barcode.ilike.%${search}%`)
+      // Справочник для выпадашки — только живые позиции: скрытый товар не должен
+      // предлагаться в заявке поставщику. Полный каталог отдаёт и скрытые:
+      // страница «Каталог» показывает их отдельным фильтром.
+      if (compact) q = q.eq('is_active', true)
+      return q
+    }
 
     // Fetch all inventory items with their category. image_url читаем МЯГКО —
     // колонки может не быть, если миграция карточки не применена.
     // ВАЖНО: PostgREST режет ответ до 1000 строк — забираем постранично.
-    const PAGE = 1000
-    const fetchAllPages = async (buildQuery: (from: number, to: number) => any): Promise<any[]> => {
-      const out: any[] = []
-      for (let from = 0; ; from += PAGE) {
-        const { data, error } = await buildQuery(from, from + PAGE - 1)
-        if (error) throw error
-        const rows = data || []
-        out.push(...rows)
-        if (rows.length < PAGE) break
-      }
-      return out
-    }
-
     const ITEM_COLS = 'id, name, barcode, category_id, company_id, sale_price, default_purchase_price, unit, notes, is_active, item_type, low_stock_threshold, requires_expiry, created_at, category:inventory_categories(id, name), company:company_id(id, name)'
+    // С лимитом хватает одного запроса; без него забираем каталог постранично.
+    const readItems = async (columns: string) =>
+      limit === null
+        ? fetchAllRows((from, to) =>
+            applyItemFilters(supabase.from('inventory_items').select(columns).order('name', { ascending: true })).range(from, to),
+          )
+        : await (async () => {
+            const { data, error } = await applyItemFilters(
+              supabase.from('inventory_items').select(columns).order('name', { ascending: true }).limit(limit),
+            )
+            // Ошибку бросаем, а не глотаем: на ней стоит мягкий фолбэк без image_url.
+            if (error) throw error
+            return data || []
+          })()
+
     let items: any[] = []
     try {
-      items = await fetchAllPages((from, to) => {
-        let q = supabase.from('inventory_items').select(`${ITEM_COLS}, image_url`).order('name', { ascending: true }).range(from, to)
-        if (scopeOrg) q = q.eq('organization_id', scopeOrg)
-        // Каталог по точке: выбрана точка → только её товары; «Общий» → все магазины.
-        if (companyFilter) q = q.eq('company_id', companyFilter)
-        return q
-      })
+      items = await readItems(`${ITEM_COLS}, image_url`)
     } catch {
-      items = (
-        await fetchAllPages((from, to) => {
-          let q = supabase.from('inventory_items').select(ITEM_COLS).order('name', { ascending: true }).range(from, to)
-          if (scopeOrg) q = q.eq('organization_id', scopeOrg)
-          if (companyFilter) q = q.eq('company_id', companyFilter)
-          return q
-        })
-      ).map((i: any) => ({ ...i, image_url: null }))
+      items = (await readItems(ITEM_COLS)).map((i: any) => ({ ...i, image_url: null }))
     }
 
     // v8: total = warehouse + showcase. catalog_total больше не используется.
     // Балансы только по товарам своей орг (inventory_balances не имеет org-колонки).
     // Чанки по 200 id (лимит длины URL) + пагинация внутри чанка; чанки параллельно.
+    if (compact) {
+      return json({
+        ok: true,
+        data: (items || []).map((item: any) => ({
+          id: item.id,
+          name: item.name,
+          barcode: item.barcode,
+          unit: item.unit,
+          sale_price: item.sale_price,
+          default_purchase_price: item.default_purchase_price,
+        })),
+      })
+    }
+
     const itemIds = (items || []).map((i: any) => String(i.id))
     const BAL_COLS = 'item_id, quantity, loc:inventory_locations(location_type, company_id)'
     let balances: any[] = []
@@ -129,15 +147,25 @@ export async function GET(request: Request) {
       if (itemIds.length) {
         const chunkResults = await Promise.all(
           chunkArray(itemIds, 200).map((ids) =>
-            fetchAllPages((from, to) =>
+            fetchAllRows((from, to) =>
               supabase.from('inventory_balances').select(BAL_COLS).in('item_id', ids).order('item_id').range(from, to),
             ),
           ),
         )
         balances = chunkResults.flat()
       }
+    } else if (itemIds.length && (limit !== null || search || categoryFilter)) {
+      // Платформенный контекст, но выборка сужена — остатки тоже только по ней.
+      const chunkResults = await Promise.all(
+        chunkArray(itemIds, 200).map((ids) =>
+          fetchAllRows((from, to) =>
+            supabase.from('inventory_balances').select(BAL_COLS).in('item_id', ids).order('item_id').range(from, to),
+          ),
+        ),
+      )
+      balances = chunkResults.flat()
     } else {
-      balances = await fetchAllPages((from, to) =>
+      balances = await fetchAllRows((from, to) =>
         supabase.from('inventory_balances').select(BAL_COLS).order('item_id').range(from, to),
       )
     }

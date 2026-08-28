@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic'
 import { StoreRouteSkeleton } from '@/components/store/store-route-skeleton'
 
 const ConsumablesPageContent = dynamic(
-  () => import('../../inventory/consumables/page').then((mod) => mod.ConsumablesPageContent),
+  () => import('@/components/store/consumables-page').then((mod) => mod.ConsumablesPageContent),
   { ssr: false, loading: () => <StoreRouteSkeleton /> },
 )
 

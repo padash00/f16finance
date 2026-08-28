@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import type { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
@@ -12,10 +12,8 @@ import {
 } from '@/lib/server/repositories/inventory'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
-
-function json(data: unknown, status = 200) {
-  return NextResponse.json(data, { status })
-}
+import { fetchAllRows } from '@/lib/server/fetch-all-rows'
+import { json } from '@/lib/server/api-response'
 
 function canManageStore(access: { isSuperAdmin: boolean; staffRole: string }) {
   return access.isSuperAdmin || !!access.staffRole
@@ -54,21 +52,6 @@ const UUID_RE = /^[0-9a-fA-F-]{36}$/
 const num = (v: unknown) => {
   const n = Number(v || 0)
   return Number.isFinite(n) ? Math.round((n + Number.EPSILON) * 1000) / 1000 : 0
-}
-
-// PostgREST молча режет ответ до 1000 строк — снимки/счёты/остатки больших
-// локаций (каталог >1000 позиций) забираем постранично.
-const PAGE_SIZE = 1000
-async function fetchAllPages<T = any>(buildQuery: (from: number, to: number) => any): Promise<T[]> {
-  const out: T[] = []
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1)
-    if (error) throw error
-    const rows = data || []
-    out.push(...rows)
-    if (rows.length < PAGE_SIZE) break
-  }
-  return out
 }
 
 // Чтение товаров чанками: один .in() на сотни UUID превышает лимит URL шлюза.
@@ -171,10 +154,10 @@ export async function GET(request: Request) {
       const act = guarded.act
       const [assigns, snapRows, countRows, loc] = await Promise.all([
         supabase.from('inventory_audit_assignments').select('id, operator_id, category_id, label').eq('act_id', actId),
-        fetchAllPages((from, to) =>
+        fetchAllRows((from, to) =>
           supabase.from('inventory_audit_snapshot').select('item_id, expected_qty').eq('act_id', actId).order('item_id').range(from, to),
         ),
-        fetchAllPages((from, to) =>
+        fetchAllRows((from, to) =>
           supabase.from('inventory_audit_counts').select('item_id, counted_qty, counted_by, counted_at').eq('act_id', actId).order('item_id').order('counted_at').range(from, to),
         ),
         supabase.from('inventory_locations').select('id, name, location_type, company_id').eq('id', (act as any).location_id).maybeSingle(),
@@ -291,12 +274,12 @@ export async function GET(request: Request) {
     const [locs, snapCounts, cntCounts] = await Promise.all([
       locIds.length ? supabase.from('inventory_locations').select('id, name, location_type, company_id, companies(name)').in('id', locIds) : Promise.resolve({ data: [] as any[] }),
       actIds.length
-        ? fetchAllPages((from, to) =>
+        ? fetchAllRows((from, to) =>
             supabase.from('inventory_audit_snapshot').select('act_id').in('act_id', actIds).order('act_id').order('item_id').range(from, to),
           )
         : Promise.resolve([] as any[]),
       actIds.length
-        ? fetchAllPages((from, to) =>
+        ? fetchAllRows((from, to) =>
             supabase.from('inventory_audit_counts').select('act_id').in('act_id', actIds).order('act_id').order('item_id').order('counted_at').range(from, to),
           )
         : Promise.resolve([] as any[]),
@@ -396,7 +379,7 @@ export async function POST(request: Request) {
 
       // снимок текущих остатков локации (локация >1000 позиций — постранично,
       // иначе часть товаров молча не попадёт в снимок ревизии)
-      const balances = await fetchAllPages((from, to) =>
+      const balances = await fetchAllRows((from, to) =>
         supabase.from('inventory_balances').select('item_id, quantity').eq('location_id', locationId).order('item_id').range(from, to),
       )
       const snapRows = ((balances as any[]) || []).map((b: any) => ({ act_id: actId, item_id: String(b.item_id), expected_qty: num(b.quantity) }))
@@ -449,10 +432,10 @@ export async function POST(request: Request) {
       // Снимок/счёты акта могут быть >1000 строк — постранично, иначе закрытие
       // молча потеряет позиции (особенно опасно с zero_uncounted).
       const [snapData, countsData] = await Promise.all([
-        fetchAllPages((from, to) =>
+        fetchAllRows((from, to) =>
           supabase.from('inventory_audit_snapshot').select('item_id, expected_qty').eq('act_id', actId).order('item_id').range(from, to),
         ),
-        fetchAllPages((from, to) =>
+        fetchAllRows((from, to) =>
           supabase.from('inventory_audit_counts').select('item_id, counted_qty, counted_at, counted_by').eq('act_id', actId).order('item_id').order('counted_at').range(from, to),
         ),
       ])
@@ -769,7 +752,7 @@ export async function POST(request: Request) {
       try {
         if (stocktakeId) {
           // Стоктейк большой ревизии >1000 строк — постранично, иначе откат вернёт не всё.
-          const stItems = await fetchAllPages((from, to) =>
+          const stItems = await fetchAllRows((from, to) =>
             supabase
               .from('inventory_stocktake_items')
               .select('item_id, delta_qty')

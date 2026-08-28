@@ -35,6 +35,29 @@ export function invalidateApiCache(prefix?: string) {
   }
 }
 
+/**
+ * Прочитать кэш вручную — для страниц, где загрузка уже написана своей функцией
+ * и раскладывает ответ по нескольким состояниям (форма, фильтры, справочники).
+ * Переписывать такую страницу на хук ради кэша дорого, а показать прошлые данные
+ * мгновенно хочется:
+ *
+ *   const cached = readApiCache<Data>(url)
+ *   if (cached) { apply(cached); setLoading(false) }   // экран уже не пустой
+ *   const fresh = await fetch(url) ... ; writeApiCache(url, payload); apply(payload)
+ *
+ * Кэш общий с useApiCache, поэтому invalidateApiCache() чистит и его. Класть
+ * нужно то же, что вернул бы хук — тело `data` из конверта ответа.
+ */
+export function readApiCache<T>(url: string, ttl = DEFAULT_TTL_MS): T | null {
+  const entry = cache.get(url)
+  if (!entry || Date.now() - entry.ts >= ttl) return null
+  return entry.data as T
+}
+
+export function writeApiCache(url: string, data: unknown) {
+  cache.set(url, { data, ts: Date.now() })
+}
+
 type UseApiCacheOptions = {
   /** Мс, сколько кэш годен как мгновенная заглушка (по умолчанию 5 мин). */
   ttl?: number

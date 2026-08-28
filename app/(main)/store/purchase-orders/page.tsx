@@ -11,6 +11,9 @@ import { Label } from '@/components/ui/label'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
+import { useStoreApiUrl } from '@/components/store/store-scope'
+import { readApiCache, writeApiCache } from '@/lib/client/use-api-cache'
+import { invalidateStoreCaches } from '@/lib/client/store-cache'
 
 type OrderStatus = 'draft' | 'sent' | 'received' | 'cancelled'
 
@@ -82,6 +85,7 @@ const fmtDate = (value: string | null | undefined) => {
 
 export default function PurchaseOrdersPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { can } = useCapabilities()
+  const storeUrl = useStoreApiUrl()
   const [orders, setOrders] = useState<OrderRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -104,16 +108,25 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
   const [statusBusy, setStatusBusy] = useState(false)
   useModalEscape(!!detail, () => { if (!statusBusy) setDetail(null) })
 
-  const load = async () => {
+  const ordersUrl = storeUrl(
+    statusFilter === 'all'
+      ? '/api/admin/store/purchase-orders'
+      : `/api/admin/store/purchase-orders?status=${statusFilter}`,
+  )
+  const ordersCacheKey = `${ordersUrl}#orders`
+
+  const load = async (opts?: { fresh?: boolean }) => {
+    // fresh — перезагрузка после смены статуса заявки: кэш устарел.
+    const cached = opts?.fresh ? null : readApiCache<OrderRow[]>(ordersCacheKey)
+    if (cached) { setOrders(cached); setLoading(false) }
     setError(null)
     try {
-      const url = statusFilter === 'all'
-        ? '/api/admin/store/purchase-orders'
-        : `/api/admin/store/purchase-orders?status=${statusFilter}`
-      const response = await fetch(url, { cache: 'no-store' })
+      const response = await fetch(ordersUrl, { cache: 'no-store' })
       const json = await response.json().catch(() => null)
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось загрузить заявки')
-      setOrders(json.data?.orders || [])
+      const orders = json.data?.orders || []
+      writeApiCache(ordersCacheKey, orders)
+      setOrders(orders)
     } catch (err: any) {
       setError(err?.message || 'Ошибка загрузки')
     } finally {
@@ -124,22 +137,25 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
   useEffect(() => {
     void load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter])
+  }, [statusFilter, storeUrl])
 
   // Подгружаем поставщиков и каталог при первом открытии формы создания.
   useEffect(() => {
     if (!createOpen || (suppliers.length > 0 && catalog.length > 0)) return
     void (async () => {
       try {
-        const [supRes, recRes] = await Promise.all([
-          fetch('/api/admin/store/suppliers', { cache: 'no-store' }),
-          fetch('/api/admin/store/receipts', { cache: 'no-store' }),
+        // Каталог берём у каталога, а не у приёмки: тот ответ вёз ещё документы
+        // приёмок с позициями, локации, черновики и категории расходов — ради
+        // одного выпадающего списка товаров.
+        const [supRes, catRes] = await Promise.all([
+          fetch(storeUrl('/api/admin/store/suppliers'), { cache: 'no-store' }),
+          fetch(storeUrl('/api/admin/inventory/catalog?compact=1'), { cache: 'no-store' }),
         ])
         const supJson = await supRes.json().catch(() => null)
-        const recJson = await recRes.json().catch(() => null)
+        const catJson = await catRes.json().catch(() => null)
         if (supRes.ok && supJson?.ok) setSuppliers(supJson.data?.suppliers || [])
-        if (recRes.ok && recJson?.ok) {
-          setCatalog((recJson.data?.items || []).map((it: any) => ({
+        if (catRes.ok && catJson?.ok && Array.isArray(catJson.data)) {
+          setCatalog(catJson.data.map((it: any) => ({
             id: it.id, name: it.name, barcode: it.barcode, unit: it.unit,
           })))
         }
@@ -147,13 +163,13 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
         // ignore
       }
     })()
-  }, [createOpen, suppliers.length, catalog.length])
+  }, [createOpen, suppliers.length, catalog.length, storeUrl])
 
   const openDetail = async (id: string) => {
     setDetailLoading(true)
     setError(null)
     try {
-      const response = await fetch(`/api/admin/store/purchase-orders/${id}`, { cache: 'no-store' })
+      const response = await fetch(storeUrl(`/api/admin/store/purchase-orders/${id}`), { cache: 'no-store' })
       const json = await response.json().catch(() => null)
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось загрузить заявку')
       setDetail(json.data.order)
@@ -191,7 +207,8 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
       setFormSupplier('')
       setFormComment('')
       setFormLines([{ item_id: '', qty: '' }])
-      await load()
+      invalidateStoreCaches()
+      await load({ fresh: true })
     } catch (err: any) {
       setError(err?.message || 'Ошибка')
     } finally {
@@ -238,7 +255,8 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось обновить статус')
       setSuccess('Статус обновлён')
       setDetail(null)
-      await load()
+      invalidateStoreCaches()
+      await load({ fresh: true })
     } catch (err: any) {
       setError(err?.message || 'Ошибка')
     } finally {

@@ -1,5 +1,3 @@
-import { NextResponse } from 'next/server'
-
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
 import { requireOrgFeature } from '@/lib/server/entitlements'
@@ -7,12 +5,10 @@ import { resolveCompanyScope } from '@/lib/server/organizations'
 import { ensureInventoryLocationAccess } from '@/lib/server/repositories/inventory'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { fetchAllRows } from '@/lib/server/fetch-all-rows'
+import { json } from '@/lib/server/api-response'
 
 const TABLE = 'inventory_revision_drafts'
-
-function json(data: unknown, status = 200) {
-  return NextResponse.json(data, { status })
-}
 
 function canManageStore(access: { isSuperAdmin: boolean; staffRole: string }) {
   return access.isSuperAdmin || !!access.staffRole
@@ -20,20 +16,6 @@ function canManageStore(access: { isSuperAdmin: boolean; staffRole: string }) {
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10)
-}
-
-// PostgREST молча режет ответ до 1000 строк — черновик большой ревизии забираем постранично.
-const PAGE_SIZE = 1000
-async function fetchAllPages<T = any>(buildQuery: (from: number, to: number) => any): Promise<T[]> {
-  const out: T[] = []
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1)
-    if (error) throw error
-    const rows = data || []
-    out.push(...rows)
-    if (rows.length < PAGE_SIZE) break
-  }
-  return out
 }
 
 async function setup(request: Request) {
@@ -70,7 +52,7 @@ export async function GET(request: Request) {
 
     // Ревизия большой локации — >1000 посчитанных позиций: постранично,
     // иначе часть подсчётов молча пропадает из общего черновика.
-    const data = await fetchAllPages((from, to) =>
+    const data = await fetchAllRows((from, to) =>
       s.supabase
         .from(TABLE)
         .select('item_id, actual_qty, counted_by, updated_at')

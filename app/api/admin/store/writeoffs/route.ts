@@ -1,5 +1,3 @@
-import { NextResponse } from 'next/server'
-
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { humanizeDbError } from '@/lib/server/db-error-humanize'
 import { resolveCompanyScope } from '@/lib/server/organizations'
@@ -8,10 +6,8 @@ import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { requireCapability } from '@/lib/server/capabilities'
 import { requireOrgFeature } from '@/lib/server/entitlements'
-
-function json(data: unknown, status = 200) {
-  return NextResponse.json(data, { status })
-}
+import { json } from '@/lib/server/api-response'
+import { normalizeQty } from '@/lib/domain/inventory-quantity'
 
 function canManageStore(access: {
   isSuperAdmin: boolean
@@ -42,12 +38,6 @@ function normalizeMoney(value: unknown) {
   const numeric = Number(value || 0)
   if (!Number.isFinite(numeric)) return 0
   return Math.round((numeric + Number.EPSILON) * 100) / 100
-}
-
-function normalizeQty(value: unknown) {
-  const amount = Number(value || 0)
-  if (!Number.isFinite(amount)) return 0
-  return Math.round((amount + Number.EPSILON) * 1000) / 1000
 }
 
 export async function GET(request: Request) {

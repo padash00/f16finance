@@ -17,6 +17,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { formatMoney } from '@/lib/core/format'
 import { isAbortError } from '@/lib/is-abort-error'
+import { useStoreApiUrl } from '@/components/store/store-scope'
+import { readApiCache, writeApiCache } from '@/lib/client/use-api-cache'
 
 type InventoryLocation = {
   id: string
@@ -77,22 +79,29 @@ function formatDateTime(value: string | null | undefined) {
 }
 
 export default function StoreAnalyticsPage({ embedded = false }: { embedded?: boolean } = {}) {
+  const storeUrl = useStoreApiUrl()
   const [tab, setTab] = useState<'showcase' | 'warehouse'>('showcase')
   const [days, setDays] = useState(30) // период движения: 1 / 7 / 30
   const [data, setData] = useState<AnalyticsResponse['data'] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const load = async (signal?: AbortSignal) => {
-    setLoading(true)
+  const analyticsUrl = storeUrl(`/api/admin/store/analytics?days=${days}`)
+  // Суффикс: в кэше лежит разобранный вид, а не сырой ответ.
+  const analyticsCacheKey = `${analyticsUrl}#analytics`
+
+  const load = async (signal?: AbortSignal, opts?: { fresh?: boolean }) => {
+    const cached = opts?.fresh ? null : readApiCache<NonNullable<AnalyticsResponse['data']>>(analyticsCacheKey)
+    if (cached) { setData(cached); setLoading(false) }
+    else setLoading(true)
     setError(null)
     try {
-      const response = await fetch(`/api/admin/store/analytics?days=${days}`, { cache: 'no-store', signal })
+      const response = await fetch(analyticsUrl, { cache: 'no-store', signal })
       const json = (await response.json().catch(() => null)) as AnalyticsResponse | null
       if (signal?.aborted) return
       if (!response.ok || !json?.ok || !json.data) throw new Error(json?.error || 'Не удалось загрузить аналитику')
 
-      setData({
+      const payload = {
         locations: (json.data.locations || []).map((location) => ({
           ...location,
           company: firstOrSelf(location.company),
@@ -111,7 +120,9 @@ export default function StoreAnalyticsPage({ embedded = false }: { embedded?: bo
           from_location: firstOrSelf(movement.from_location),
           to_location: firstOrSelf(movement.to_location),
         })),
-      })
+      }
+      writeApiCache(analyticsCacheKey, payload)
+      setData(payload)
     } catch (err: any) {
       if (isAbortError(err) || signal?.aborted) return
       setData(null)
@@ -126,7 +137,7 @@ export default function StoreAnalyticsPage({ embedded = false }: { embedded?: bo
     void load(ac.signal)
     return () => ac.abort()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [days])
+  }, [days, storeUrl])
 
   const pointLocations = useMemo(
     () => (data?.locations || []).filter((location) => location.location_type === 'point_display'),
@@ -266,7 +277,7 @@ export default function StoreAnalyticsPage({ embedded = false }: { embedded?: bo
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>Управление аналитикой</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => void load()} disabled={loading}>
+              <DropdownMenuItem onClick={() => void load(undefined, { fresh: true })} disabled={loading}>
                 <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                 Обновить данные
               </DropdownMenuItem>

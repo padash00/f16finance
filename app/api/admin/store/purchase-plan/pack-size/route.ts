@@ -1,14 +1,9 @@
-import { NextResponse } from 'next/server'
-
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
 import { requireOrgFeature } from '@/lib/server/entitlements'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
-
-function json(data: unknown, status = 200) {
-  return NextResponse.json(data, { status })
-}
+import { json } from '@/lib/server/api-response'
 
 // PATCH { item_id, pack_size } — задать размер упаковки товара (для плана закупа).
 export async function PATCH(request: Request) {

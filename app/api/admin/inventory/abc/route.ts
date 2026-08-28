@@ -1,13 +1,10 @@
-import { NextResponse } from 'next/server'
 import { requireCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
-
-function json(data: unknown, status = 200) {
-  return NextResponse.json(data, { status })
-}
+import { json } from '@/lib/server/api-response'
+import { chunkArray } from '@/lib/core/chunk'
 
 const PAGE = 1000
 
@@ -20,15 +17,6 @@ async function fetchAllPages(buildQuery: (from: number, to: number) => any): Pro
     const rows = data || []
     out.push(...rows)
     if (rows.length < PAGE) break
-  }
-  return out
-}
-
-function chunkArray<T>(arr: T[], size: number): T[][] {
-  if (size <= 0) return [arr]
-  const out: T[][] = []
-  for (let i = 0; i < arr.length; i += size) {
-    out.push(arr.slice(i, i + size))
   }
   return out
 }

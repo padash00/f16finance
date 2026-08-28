@@ -18,6 +18,7 @@ import { useCapabilities } from '@/lib/client/use-capabilities'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { isAbortError } from '@/lib/is-abort-error'
+import { useStoreApiUrl } from '@/components/store/store-scope'
 
 type AbcClass = 'A' | 'B' | 'C'
 type XyzClass = 'X' | 'Y' | 'Z'
@@ -95,6 +96,7 @@ const XYZ_LABEL: Record<XyzClass, string> = {
 
 export default function StoreAbcPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { can } = useCapabilities()
+  const storeUrl = useStoreApiUrl()
   const [tab, setTab] = useState<'sales' | 'stock'>('sales')
   const [period, setPeriod] = useState<number>(30)
   const [loading, setLoading] = useState(true)
@@ -112,7 +114,7 @@ export default function StoreAbcPage({ embedded = false }: { embedded?: boolean 
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/api/admin/inventory/abc?mode=${mode}&days=${days}`, {
+      const res = await fetch(storeUrl(`/api/admin/inventory/abc?mode=${mode}&days=${days}`), {
         cache: 'no-store',
         signal,
       })
@@ -137,7 +139,7 @@ export default function StoreAbcPage({ embedded = false }: { embedded?: boolean 
     const ac = new AbortController()
     void load(tab, period, ac.signal)
     return () => ac.abort()
-  }, [tab, period])
+  }, [tab, period, storeUrl])
 
   const categories = useMemo(() => {
     const set = new Set<string>()

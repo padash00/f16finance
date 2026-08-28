@@ -9,7 +9,7 @@ import { StoreRouteSkeleton } from '@/components/store/store-route-skeleton'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 
 const CatalogPageContent = dynamic(
-  () => import('../../inventory/catalog/page').then((m) => m.CatalogPageContent),
+  () => import('@/components/store/catalog-page').then((m) => m.CatalogPageContent),
   { ssr: false, loading: () => <StoreRouteSkeleton /> },
 )
 

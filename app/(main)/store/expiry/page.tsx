@@ -1,12 +1,14 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { AlertTriangle, CalendarClock } from 'lucide-react'
 import { TableSkeleton } from '@/components/skeleton'
 
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { useStoreApiUrl } from '@/components/store/store-scope'
+import { useApiCache } from '@/lib/client/use-api-cache'
 
 type Row = {
   id: string
@@ -34,28 +36,13 @@ function daysLabel(d: number) {
 }
 
 export default function StoreExpiryPage({ embedded = false }: { embedded?: boolean } = {}) {
-  const [data, setData] = useState<Data | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const storeUrl = useStoreApiUrl()
   const [filter, setFilter] = useState<'all' | 'expired' | 'soon'>('all')
   const [showDepleted, setShowDepleted] = useState(false)
 
-  useEffect(() => {
-    let cancelled = false
-    void (async () => {
-      try {
-        const res = await fetch('/api/admin/store/expiry', { cache: 'no-store' })
-        const j = await res.json().catch(() => null)
-        if (!res.ok) throw new Error(j?.error || `Ошибка (${res.status})`)
-        if (!cancelled) setData(j?.data || { rows: [], summary: { expired: 0, soon: 0, total: 0 } })
-      } catch (e: any) {
-        if (!cancelled) setError(e?.message || 'Не удалось загрузить')
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    })()
-    return () => { cancelled = true }
-  }, [])
+  // Вкладка «Срок годности» живёт в «Документах» и размонтируется при
+  // переключении — SWR-кэш возвращает на неё уже с данными.
+  const { data, loading, error } = useApiCache<Data>(storeUrl('/api/admin/store/expiry'))
 
   const depletedCount = useMemo(() => (data?.rows || []).filter((r) => (r.remaining ?? 0) <= 0.0005).length, [data?.rows])
 

@@ -1,17 +1,13 @@
-import { NextResponse } from 'next/server'
-
 import { generateAiText } from '@/lib/ai/provider'
 import { requireCapability } from '@/lib/server/capabilities'
 import { requireOrgFeature } from '@/lib/server/entitlements'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { json } from '@/lib/server/api-response'
 
 export const runtime = 'nodejs'
 
-function json(data: unknown, status = 200) {
-  return NextResponse.json(data, { status })
-}
 function canManageStore(access: { isSuperAdmin: boolean; staffRole: string }) {
   return access.isSuperAdmin || !!access.staffRole
 }

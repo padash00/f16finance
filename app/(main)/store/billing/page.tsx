@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { Download, Loader2, Receipt, FileText, Wallet, X, Trash2 } from 'lucide-react'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
-import { useStoreScope } from '@/components/store/store-scope'
+import { useStoreApiUrl, useStoreScope } from '@/components/store/store-scope'
+import { readApiCache, writeApiCache } from '@/lib/client/use-api-cache'
 
 import { downloadReportPdf } from '@/lib/client/download-pdf'
 
@@ -20,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { formatMoney } from '@/lib/core/format'
 import { summarizeSupplierDebts } from '@/lib/domain/supplier-debts'
+import { invalidateStoreCaches } from '@/lib/client/store-cache'
 
 type Supplier = {
   id: string
@@ -101,6 +103,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
   const [success, setSuccess] = useState<string | null>(null)
 
   const { storeCompanyId } = useStoreScope()
+  const storeUrl = useStoreApiUrl()
 
   const [searchQuery, setSearchQuery] = useState('')
   const [dateFrom, setDateFrom] = useState('')
@@ -142,18 +145,27 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
   useModalEscape(bulkPayOpen, () => { if (!bulkPaying) setBulkPayOpen(false) })
   useModalEscape(!!reschedDebt, () => { if (!rescheduling) setReschedDebt(null) })
 
-  const load = async () => {
-    setLoading(true)
+  const debtsUrl = storeUrl(`/api/admin/store/debts?status=${statusFilter}&include_receipts=1`)
+  const debtsCacheKey = `${debtsUrl}#billing`
+
+  const load = async (opts?: { fresh?: boolean }) => {
+    // fresh — после оплаты/списания долга: кэш устарел.
+    const cached = opts?.fresh
+      ? null
+      : readApiCache<{ debts: Debt[]; receipts: ReceiptLite[] }>(debtsCacheKey)
+    if (cached) { setDebts(cached.debts); setReceipts(cached.receipts); setLoading(false) }
+    else setLoading(true)
     setError(null)
     try {
-      const url = `/api/admin/store/debts?status=${statusFilter}&include_receipts=1`
-      const response = await fetch(url, { cache: 'no-store' })
+      const response = await fetch(debtsUrl, { cache: 'no-store' })
       const json = (await response.json().catch(() => null)) as DebtsResponse | null
       if (!response.ok || !json?.ok || !json.data) {
         throw new Error(json?.error || 'Не удалось загрузить долги')
       }
-      setDebts(json.data.debts || [])
-      setReceipts(json.data.receipts || [])
+      const payload = { debts: json.data.debts || [], receipts: json.data.receipts || [] }
+      writeApiCache(debtsCacheKey, payload)
+      setDebts(payload.debts)
+      setReceipts(payload.receipts)
     } catch (err: any) {
       setError(err?.message || 'Ошибка загрузки')
     } finally {
@@ -164,7 +176,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
   useEffect(() => {
     void load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter])
+  }, [statusFilter, debtsUrl])
 
   const filterDebt = (d: Debt) => {
     const q = searchQuery.trim().toLowerCase()
@@ -375,7 +387,8 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
       setBulkReceiptUrl('')
       setBulkComment('')
       setSelectedIds(new Set())
-      await load()
+      invalidateStoreCaches()
+      await load({ fresh: true })
     } catch (err: any) {
       setError(err?.message || 'Ошибка')
     } finally {
@@ -453,7 +466,8 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
       setReschedDebt(null)
       setReschedDate('')
       setReschedReason('')
-      await load()
+      invalidateStoreCaches()
+      await load({ fresh: true })
     } catch (err: any) {
       setError(err?.message || 'Не удалось перенести срок')
     } finally {
@@ -476,7 +490,8 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
       setSuccess('Долг списан')
       setWriteOffDebt(null)
       setWriteOffReason('')
-      await load()
+      invalidateStoreCaches()
+      await load({ fresh: true })
     } catch (err: any) {
       setError(err?.message || 'Не удалось списать долг')
     } finally {
@@ -486,7 +501,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
 
   const handleDeleteDebt = async (debt: Debt) => {
     const label = debt.supplier?.organization_name || debt.supplier?.name || 'поставщик'
-    if (!confirm(`Удалить долг «${label}» на ${formatMoney(debt.total_amount)} ₸?\n\nЗапись будет удалена безвозвратно. Приход и расход не затрагиваются.`)) return
+    if (!confirm(`Удалить долг «${label}» на ${formatMoney(debt.total_amount)}?\n\nЗапись будет удалена безвозвратно. Приход и расход не затрагиваются.`)) return
     setDeletingId(debt.id)
     setError(null)
     try {
@@ -494,7 +509,8 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
       const json = await response.json().catch(() => null)
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось удалить долг')
       setSuccess('Долг удалён')
-      await load()
+      invalidateStoreCaches()
+      await load({ fresh: true })
     } catch (err: any) {
       setError(err?.message || 'Не удалось удалить долг')
     } finally {
@@ -525,7 +541,8 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось провести оплату')
       setSuccess('Оплата проведена. Долг закрыт.')
       closePay()
-      await load()
+      invalidateStoreCaches()
+      await load({ fresh: true })
     } catch (err: any) {
       setError(err?.message || 'Не удалось провести оплату')
     } finally {
@@ -619,12 +636,12 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
             <Card className="p-3 bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
               <div className="text-[11px] text-muted-foreground uppercase">Открытых долгов</div>
               <div className="text-lg font-bold text-amber-700 dark:text-amber-300">{totalsByStatus.openCount}</div>
-              <div className="text-xs text-muted-foreground">{formatMoney(totalsByStatus.open)} ₸</div>
+              <div className="text-xs text-muted-foreground">{formatMoney(totalsByStatus.open)}</div>
             </Card>
             <Card className="p-3 bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
               <div className="text-[11px] text-muted-foreground uppercase">Просрочено</div>
               <div className="text-lg font-bold text-red-700 dark:text-red-300">{totalsByStatus.overdueCount}</div>
-              <div className="text-xs text-muted-foreground">{formatMoney(totalsByStatus.overdue)} ₸</div>
+              <div className="text-xs text-muted-foreground">{formatMoney(totalsByStatus.overdue)}</div>
             </Card>
             <Card className="p-3 bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
               <div className="text-[11px] text-muted-foreground uppercase">Фильтр статуса</div>
@@ -643,7 +660,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
           {selectedIds.size > 0 ? (
             <Card className="sticky top-2 z-10 p-3 bg-emerald-500/15 border-emerald-500/30 flex items-center justify-between flex-wrap gap-2">
               <div className="text-sm">
-                Выбрано: <b>{selectedIds.size}</b> · Сумма: <b>{formatMoney(selectedSum)} ₸</b>
+                Выбрано: <b>{selectedIds.size}</b> · Сумма: <b>{formatMoney(selectedSum)}</b>
               </div>
               <div className="flex items-center gap-2">
                 <Button
@@ -729,7 +746,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
                     <div className="flex items-center gap-3">
                       <div className="text-right">
                         <div className="text-xs text-muted-foreground">Сумма</div>
-                        <div className="text-lg font-semibold">{formatMoney(debt.total_amount)} ₸</div>
+                        <div className="text-lg font-semibold">{formatMoney(debt.total_amount)}</div>
                       </div>
                       <div className="flex flex-col gap-1.5">
                         {debt.status === 'open' && (
@@ -825,7 +842,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
                         </div>
                         <div className="text-right">
                           <div className="text-xs text-muted-foreground">Сумма</div>
-                          <div className="text-lg font-semibold">{formatMoney(r.total_amount || 0)} ₸</div>
+                          <div className="text-lg font-semibold">{formatMoney(r.total_amount || 0)}</div>
                         </div>
                       </div>
                     </Card>
@@ -848,7 +865,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
               <div>
                 <h2 className="text-lg font-semibold">Оплата долга</h2>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {payDebt.supplier?.organization_name || payDebt.supplier?.name || '—'} · {formatMoney(payDebt.total_amount)} ₸
+                  {payDebt.supplier?.organization_name || payDebt.supplier?.name || '—'} · {formatMoney(payDebt.total_amount)}
                 </p>
               </div>
               <button onClick={closePay} className="rounded-xl border border-border p-2 text-muted-foreground hover:text-slate-900 dark:hover:text-white">
@@ -942,7 +959,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
               <div>
                 <h2 className="text-lg font-semibold">Списать долг</h2>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {writeOffDebt.supplier?.organization_name || writeOffDebt.supplier?.name || '—'} · {formatMoney(writeOffDebt.total_amount)} ₸
+                  {writeOffDebt.supplier?.organization_name || writeOffDebt.supplier?.name || '—'} · {formatMoney(writeOffDebt.total_amount)}
                 </p>
               </div>
               <button onClick={() => !writingOff && setWriteOffDebt(null)} className="rounded-xl border border-border p-2 text-muted-foreground hover:text-slate-900 dark:hover:text-white">
@@ -985,7 +1002,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
               <div>
                 <h2 className="text-lg font-semibold">Оплата нескольких долгов</h2>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Будет закрыто {selectedIds.size} долгов на сумму {formatMoney(selectedSum)} ₸ одним чеком.
+                  Будет закрыто {selectedIds.size} долгов на сумму {formatMoney(selectedSum)} одним чеком.
                 </p>
               </div>
               <button onClick={() => !bulkPaying && setBulkPayOpen(false)} className="rounded-xl border border-border p-2 text-muted-foreground hover:text-slate-900 dark:hover:text-white">
@@ -1052,7 +1069,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
               <div>
                 <h2 className="text-lg font-semibold">Перенести срок оплаты</h2>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {reschedDebt.supplier?.organization_name || reschedDebt.supplier?.name || '—'} · {formatMoney(reschedDebt.total_amount)} ₸
+                  {reschedDebt.supplier?.organization_name || reschedDebt.supplier?.name || '—'} · {formatMoney(reschedDebt.total_amount)}
                 </p>
                 {reschedDebt.due_date ? (
                   <p className="text-xs text-muted-foreground mt-1">Текущий срок: {fmtDate(reschedDebt.due_date)}</p>

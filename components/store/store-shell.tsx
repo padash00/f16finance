@@ -3,34 +3,61 @@
 import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import {
-  Activity, Boxes, Warehouse, FileText, ClipboardList, Building2,
-  Receipt, Users2, Monitor, ReceiptText, ArrowLeft, Store, LogOut,
-  Clock, Settings, Menu, X, Search, Command, ShoppingCart, Sparkles, ChefHat,
-  ChevronDown, Check,
-} from 'lucide-react'
+import { ArrowLeft, Boxes, Check, ChevronDown, Command, LogOut, Menu, Search, Store, X } from 'lucide-react'
 import { isAbortError } from '@/lib/is-abort-error'
 import { StoreCompanyProvider, useStoreCompany } from '@/components/store/store-company-context'
+import { useNavVisibility } from '@/lib/client/use-nav-visibility'
+import { getSectionById } from '@/lib/nav/sections'
 
 type Item = { href: string; label: string; icon: any; exact?: boolean }
 
-const NAV: Item[] = [
-  { href: '/store/sales', label: 'Аналитика', icon: Activity },
-  { href: '/store/insights', label: 'AI-разбор', icon: Sparkles },
-  { href: '/store', label: 'Обзор', icon: Boxes, exact: true },
-  { href: '/store/stock', label: 'Склад', icon: Warehouse },
-  { href: '/store/production', label: 'Техкарты', icon: ChefHat },
-  { href: '/store/documents', label: 'Документы', icon: FileText },
-  { href: '/store/orders', label: 'Заявки', icon: ClipboardList },
-  { href: '/store/purchase-plan', label: 'План закупа', icon: ShoppingCart },
-  { href: '/store/vendors', label: 'Поставщики', icon: Building2 },
-  { href: '/store/cashbox', label: 'Касса', icon: Receipt },
-  { href: '/store/shifts', label: 'Смены', icon: Clock },
-  { href: '/store/clients', label: 'Клиенты', icon: Users2 },
-  { href: '/pos', label: 'Web POS', icon: Monitor },
-  { href: '/store/receipt-settings', label: 'Реквизиты ККМ', icon: ReceiptText },
-  { href: '/store/settings', label: 'Настройки', icon: Settings },
+/**
+ * Порядок пунктов в меню модуля. Сами пункты (заголовок, иконка, фича) берутся
+ * из раздела «Магазин» общей навигации — раньше здесь лежал второй, руками
+ * поддерживаемый список, и он успел разъехаться с первым.
+ */
+const NAV_ORDER = [
+  '/store/sales',
+  '/store/insights',
+  '/store',
+  '/store/stock',
+  '/store/production',
+  '/store/documents',
+  '/store/orders',
+  '/store/purchase-plan',
+  '/store/vendors',
+  '/store/cashbox',
+  '/store/shifts',
+  '/store/clients',
+  '/pos',
+  '/store/receipt-settings',
+  '/store/settings',
 ]
+
+// Внутри модуля названия короче: раздел и так подписан в шапке.
+const SHORT_LABEL: Record<string, string> = {
+  '/store': 'Обзор',
+  '/store/shifts': 'Смены',
+  '/store/receipt-settings': 'Реквизиты ККМ',
+  '/store/settings': 'Настройки',
+}
+
+const NAV: Item[] = (() => {
+  const section = getSectionById('store')
+  const byHref = new Map((section?.items || []).map((item) => [item.href, item]))
+  const out: Item[] = []
+  for (const href of NAV_ORDER) {
+    const item = byHref.get(href)
+    if (!item) continue
+    out.push({
+      href,
+      label: SHORT_LABEL[href] || item.label,
+      icon: item.icon,
+      exact: href === '/store',
+    })
+  }
+  return out
+})()
 
 export function StoreShell({ children }: { children: React.ReactNode }) {
   return (
@@ -116,6 +143,8 @@ function StoreCompanySwitcher() {
 function StoreShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
+  const { isNavItemVisible } = useNavVisibility()
+  const navItems = useMemo(() => NAV.filter((item) => isNavItemVisible(item.href)), [isNavItemVisible])
   const [mobileOpen, setMobileOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
 
@@ -141,7 +170,7 @@ function StoreShellInner({ children }: { children: React.ReactNode }) {
 
   const navList = (onNavigate?: () => void) => (
     <nav className="flex-1 space-y-1 px-2 py-3">
-      {NAV.map((item) => {
+      {navItems.map((item) => {
         const active = isActive(item)
         const Icon = item.icon
         return (
@@ -239,7 +268,7 @@ function StoreShellInner({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      {searchOpen && <StoreSearch onClose={() => setSearchOpen(false)} navItems={NAV} />}
+      {searchOpen && <StoreSearch onClose={() => setSearchOpen(false)} navItems={navItems} />}
     </div>
   )
 }

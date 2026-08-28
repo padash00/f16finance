@@ -1,5 +1,3 @@
-import { NextResponse } from 'next/server'
-
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
 import { requireOrgFeature } from '@/lib/server/entitlements'
@@ -12,10 +10,8 @@ import {
 } from '@/lib/server/repositories/inventory'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
-
-function json(data: unknown, status = 200) {
-  return NextResponse.json(data, { status })
-}
+import { json } from '@/lib/server/api-response'
+import { normalizeQty } from '@/lib/domain/inventory-quantity'
 
 function canManageStore(access: {
   isSuperAdmin: boolean
@@ -48,12 +44,6 @@ type Body = {
       comment?: string | null
     }>
   }
-}
-
-function normalizeQty(value: unknown) {
-  const amount = Number(value || 0)
-  if (!Number.isFinite(amount)) return 0
-  return Math.round((amount + Number.EPSILON) * 1000) / 1000
 }
 
 export async function GET(request: Request) {

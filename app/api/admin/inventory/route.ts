@@ -1,5 +1,3 @@
-import { NextResponse } from 'next/server'
-
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
 import { humanizeDbError } from '@/lib/server/db-error-humanize'
@@ -28,6 +26,7 @@ import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { escapeTelegramHtml } from '@/lib/telegram/message-kit'
 import { sendTelegramMessage } from '@/lib/telegram/send'
+import { json } from '@/lib/server/api-response'
 
 type CategoryBody = {
   action: 'createCategory'
@@ -201,10 +200,6 @@ type Body =
   | DeleteCategoryBody
   | UpdateSupplierBody
   | UpdateItemBody
-
-function json(data: unknown, status = 200) {
-  return NextResponse.json(data, { status })
-}
 
 async function notifyManagersAboutRequest(
   requestId: string,

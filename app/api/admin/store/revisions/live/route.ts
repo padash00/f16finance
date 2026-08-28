@@ -1,5 +1,3 @@
-import { NextResponse } from 'next/server'
-
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
 import { requireOrgFeature } from '@/lib/server/entitlements'
@@ -7,33 +5,11 @@ import { resolveCompanyScope } from '@/lib/server/organizations'
 import { ensureInventoryLocationAccess } from '@/lib/server/repositories/inventory'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
-
-function json(data: unknown, status = 200) {
-  return NextResponse.json(data, { status })
-}
+import { fetchAllRows } from '@/lib/server/fetch-all-rows'
+import { json } from '@/lib/server/api-response'
+import { chunkArray } from '@/lib/core/chunk'
 
 const UUID_RE = /^[0-9a-fA-F-]{36}$/
-
-// PostgREST молча режет ответ до 1000 строк — остатки большой локации постранично.
-const PAGE_SIZE = 1000
-async function fetchAllPages<T = any>(buildQuery: (from: number, to: number) => any): Promise<T[]> {
-  const out: T[] = []
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1)
-    if (error) throw error
-    const rows = data || []
-    out.push(...rows)
-    if (rows.length < PAGE_SIZE) break
-  }
-  return out
-}
-
-function chunkArray<T>(arr: T[], size: number): T[][] {
-  if (size <= 0) return [arr]
-  const out: T[][] = []
-  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
-  return out
-}
 
 // Живые изменения остатка локации с момента `since` — для «живой» ревизии.
 // Возвращает свежие остатки локации + движения (со знаком: приход +, расход -),
@@ -106,7 +82,7 @@ export async function GET(request: Request) {
       .filter((m) => m.delta !== 0)
 
     // Локация >1000 позиций — постранично, иначе «Система» в живой ревизии обрежется.
-    const balances = await fetchAllPages((from, to) =>
+    const balances = await fetchAllRows((from, to) =>
       supabase
         .from('inventory_balances')
         .select('item_id, quantity')

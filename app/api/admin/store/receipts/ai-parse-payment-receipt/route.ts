@@ -1,14 +1,9 @@
-import { NextResponse } from 'next/server'
-
 import { logAiUsageSafe } from '@/lib/ai/usage-tracker'
 import { requireCapability } from '@/lib/server/capabilities'
 import { requireOrgFeature } from '@/lib/server/entitlements'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
-
-function json(data: unknown, status = 200) {
-  return NextResponse.json(data, { status })
-}
+import { json } from '@/lib/server/api-response'
 
 type Body = {
   receipt_file_url?: string

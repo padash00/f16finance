@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useApiCache } from '@/lib/client/use-api-cache'
+import { useVisibleSlice } from '@/lib/client/use-visible-slice'
 import {
   AlertCircle,
   ArrowRight,
@@ -49,6 +50,7 @@ import { CopyText } from '@/components/ui/copy-text'
 import { toast } from '@/hooks/use-toast'
 import { LabelPrintDialog } from '@/components/store/label-print-dialog'
 import type { LabelItem } from '@/components/store/label-print-dialog'
+import { invalidateStoreCaches } from '@/lib/client/store-cache'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -327,6 +329,7 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
       setRequestLines([{ item_id: '', requested_qty: '' }])
       setRequestComment('')
       setShowRequestPanel(false)
+      invalidateStoreCaches()
       await load()
       setTimeout(() => setSendSuccess(false), 3000)
     } catch (err: any) {
@@ -371,6 +374,7 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
       setReturnLines([{ item_id: '', requested_qty: '' }])
       setReturnComment('')
       setShowReturnPanel(false)
+      invalidateStoreCaches()
       await load()
       setTimeout(() => setReturnSuccess(false), 3000)
     } catch (err: any) {
@@ -402,6 +406,7 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
       }
       setEditingSc(null)
       setEditScVal('')
+      invalidateStoreCaches()
       await load()
     } finally {
       setSavingSc(false)
@@ -416,14 +421,15 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
   const totalSale = balances.reduce((s, b) => s + Number(b.quantity || 0) * Number(b.item?.sale_price || 0), 0)
   const fmtMoney = (n: number) => n.toLocaleString('ru-RU', { maximumFractionDigits: 0 })
 
-  const filteredBalances = balances.filter((b) => {
-    if (!stockSearch.trim()) return true
-    const q = stockSearch.toLowerCase()
-    return (
-      b.item?.name?.toLowerCase().includes(q) ||
-      b.item?.barcode?.toLowerCase().includes(q)
+  const filteredBalances = useMemo(() => {
+    const q = stockSearch.trim().toLowerCase()
+    if (!q) return balances
+    return balances.filter(
+      (b) => b.item?.name?.toLowerCase().includes(q) || b.item?.barcode?.toLowerCase().includes(q),
     )
-  })
+  }, [balances, stockSearch])
+
+  const shownBalances = useVisibleSlice(filteredBalances, `${selectedCompanyId}|${stockSearch}`)
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -600,7 +606,7 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
           <>
             {/* Мобильная версия: карточки товаров вместо широкой таблицы */}
             <div className="space-y-3 p-3 sm:hidden">
-              {filteredBalances.map((b) => {
+              {shownBalances.visible.map((b) => {
                 const qty = Number(b.quantity)
                 const threshold = b.item?.low_stock_threshold ?? null
                 const isLow = threshold !== null ? qty <= threshold : qty <= 0
@@ -715,7 +721,7 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
-                {filteredBalances.map((b, idx) => {
+                {shownBalances.visible.map((b, idx) => {
                   const qty = Number(b.quantity)
                   const threshold = b.item?.low_stock_threshold ?? null
                   const isLow = threshold !== null ? qty <= threshold : qty <= 0
@@ -807,6 +813,15 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
               </tbody>
             </table>
             </div>
+            {shownBalances.hasMore && (
+              <div className="flex flex-col items-center gap-2 border-t border-border px-4 py-4 text-xs text-muted-foreground sm:flex-row sm:justify-center">
+                <span>Показано {shownBalances.shown} из {shownBalances.total}</span>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={shownBalances.showMore}>Показать ещё</Button>
+                  <Button variant="ghost" size="sm" onClick={shownBalances.showAll}>Все {shownBalances.total}</Button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </Card>

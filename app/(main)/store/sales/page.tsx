@@ -19,7 +19,7 @@ const REFRESH_MS = 12_000
 
 const embFallback = () => <PageSkeleton stats={0} rows={8} cols={5} />
 const AbcEmbed = dynamic(() => import('@/app/(main)/store/abc/page'), { ssr: false, loading: embFallback })
-const ForecastEmbed = dynamic(() => import('@/app/(main)/inventory/forecast/page').then((m) => m.InventoryForecastPageContent), { ssr: false, loading: embFallback })
+const ForecastEmbed = dynamic(() => import('@/components/store/forecast-page').then((m) => m.InventoryForecastPageContent), { ssr: false, loading: embFallback })
 
 // ── Монитор ──
 type Totals = { amount: number; count: number; avg_check: number; cash: number; cashless: number; net_profit: number }
@@ -78,6 +78,25 @@ const pad2 = (n: number) => String(n).padStart(2, '0')
 const almatyDate = (d = new Date()) => d.toLocaleDateString('en-CA', { timeZone: 'Asia/Almaty' })
 const dateMinus = (days: number) => { const d = new Date(); d.setDate(d.getDate() - days); return almatyDate(d) }
 
+/**
+ * Подпись «обновлено N с назад».
+ *
+ * Отдельный компонент, потому что секундный тик должен перерисовывать одну
+ * строчку, а не весь монитор с графиками, топом товаров и списком чеков —
+ * раньше страница целиком пересобиралась раз в секунду.
+ */
+function UpdatedAgo({ at }: { at: number | null }) {
+  const [, tick] = useState(0)
+  useEffect(() => {
+    if (at === null) return
+    const id = setInterval(() => tick((t) => t + 1), 1000)
+    return () => clearInterval(id)
+  }, [at])
+  if (at === null) return null
+  const sec = Math.floor((Date.now() - at) / 1000)
+  return <span>обновлено {sec < 5 ? 'только что' : `${sec} с назад`}</span>
+}
+
 const TABS: { key: Tab; label: string }[] = [
   { key: 'monitor', label: 'Монитор' },
   { key: 'best', label: 'Продаваемые' },
@@ -109,7 +128,6 @@ export default function SalesMonitorPage() {
 
   const [live, setLive] = useState(true)
   const [lastUpdated, setLastUpdated] = useState<number | null>(null)
-  const [, forceTick] = useState(0)
   const seenIds = useRef<Set<string>>(new Set())
   const [flashIds, setFlashIds] = useState<Set<string>>(new Set())
 
@@ -185,15 +203,22 @@ export default function SalesMonitorPage() {
     fetch('/api/admin/companies', { cache: 'no-store' }).then((r) => r.json()).then((j) => setCompanies(j.data || [])).catch(() => {})
   }, [])
 
-  // Авто-обновление монитора (только сегодня); refresh с кэшем — фоновый
+  // Авто-обновление монитора (только сегодня); refresh с кэшем — фоновый.
+  // На скрытой вкладке опрос стоит: смысла грузить сервер каждые 12 секунд ради
+  // экрана, на который никто не смотрит, нет. При возврате — сразу освежаем.
   useEffect(() => {
     if (tab !== 'monitor' || !live || !isToday) return
-    const id = setInterval(() => void loadMonitor(), REFRESH_MS)
-    return () => clearInterval(id)
+    let id: ReturnType<typeof setInterval> | null = null
+    const start = () => { if (id === null) id = setInterval(() => void loadMonitor(), REFRESH_MS) }
+    const stop = () => { if (id !== null) { clearInterval(id); id = null } }
+    const onVisibility = () => {
+      if (document.hidden) stop()
+      else { void loadMonitor(); start() }
+    }
+    if (!document.hidden) start()
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => { stop(); document.removeEventListener('visibilitychange', onVisibility) }
   }, [tab, live, isToday, loadMonitor])
-
-  useEffect(() => { const id = setInterval(() => forceTick((t) => t + 1), 1000); return () => clearInterval(id) }, [])
-  const agoSec = lastUpdated ? Math.floor((Date.now() - lastUpdated) / 1000) : null
 
   return (
     <div className="app-page-wide space-y-5">
@@ -272,7 +297,7 @@ export default function SalesMonitorPage() {
                 <span className={`h-2 w-2 rounded-full ${live ? 'animate-pulse bg-emerald-400' : 'bg-slate-500'}`} />
                 {live ? 'В реальном времени' : 'На паузе'}
               </span>
-              {agoSec !== null && <span>обновлено {agoSec < 5 ? 'только что' : `${agoSec} с назад`}</span>}
+              <UpdatedAgo at={lastUpdated} />
             </>
           ) : (
             <span>Период: {from === to ? from : `${from} — ${to}`}</span>

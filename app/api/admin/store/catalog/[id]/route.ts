@@ -1,11 +1,10 @@
-import { NextResponse } from 'next/server'
-
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
 import { requireOrgFeature } from '@/lib/server/entitlements'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { isStoreManager } from '@/lib/server/store-access'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { json } from '@/lib/server/api-response'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PATCH карточки товара — точечное сохранение фото/бренда/описания.
@@ -15,10 +14,6 @@ import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/se
 // Если колонок image_url/brand ещё нет (миграция не применена) — мягко
 // деградируем (description пишем всегда, image_url/brand — по возможности).
 // ─────────────────────────────────────────────────────────────────────────────
-
-function json(data: unknown, status = 200) {
-  return NextResponse.json(data, { status })
-}
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   try {

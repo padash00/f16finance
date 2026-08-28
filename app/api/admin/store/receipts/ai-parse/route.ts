@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server'
 import { PDFParse } from 'pdf-parse'
 
 import { logAiUsageSafe } from '@/lib/ai/usage-tracker'
@@ -9,10 +8,7 @@ import { fetchInventoryItemsForMatching, fetchInvoiceNameMappings } from '@/lib/
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
-
-function json(data: unknown, status = 200) {
-  return NextResponse.json(data, { status })
-}
+import { json } from '@/lib/server/api-response'
 
 type Body = {
   invoice_file_url?: string

@@ -1,15 +1,10 @@
-import { NextResponse } from 'next/server'
-
 import { isSupplierDebtOverdue, summarizeSupplierDebts } from '@/lib/domain/supplier-debts'
 import { requireCapability } from '@/lib/server/capabilities'
 import { requireOrgFeature } from '@/lib/server/entitlements'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
-
-function json(data: unknown, status = 200) {
-  return NextResponse.json(data, { status })
-}
+import { json } from '@/lib/server/api-response'
 
 function canManageStore(access: {
   isSuperAdmin: boolean

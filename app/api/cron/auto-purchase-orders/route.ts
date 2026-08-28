@@ -22,6 +22,7 @@ import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { listOrgReportTargets } from '@/lib/server/report-targets'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { sendTelegramMessage } from '@/lib/telegram/send'
+import { chunkArray } from '@/lib/core/chunk'
 
 export const runtime = 'nodejs'
 
@@ -38,13 +39,6 @@ async function fetchAllPages(build: (from: number, to: number) => any): Promise<
     out.push(...rows)
     if (rows.length < PAGE) break
   }
-  return out
-}
-
-function chunkArray<T>(arr: T[], size: number): T[][] {
-  if (size <= 0) return [arr]
-  const out: T[][] = []
-  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
   return out
 }
 

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   AlertTriangle, ArrowRight, Boxes, ClipboardList, FileText, History, Package,
   Search, Warehouse, Building2, Activity, Receipt, Users2,
@@ -12,15 +12,16 @@ import { Skeleton } from '@/components/skeleton'
 import { isAbortError } from '@/lib/is-abort-error'
 import { SupplierDebtsWidget } from '@/components/store/supplier-debts-widget'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { useStoreApiUrl } from '@/components/store/store-scope'
 
-type StoreOverviewResponse = {
-  items: Array<{ id: string; low_stock_threshold: number | null }>
-  locations: Array<{ id: string; location_type: 'warehouse' | 'point_display'; name: string; company?: { id: string; name: string } | null }>
-  balances: Array<{ location_id: string; quantity: number; location?: { id: string; location_type: 'warehouse' | 'point_display'; name: string } | null; item?: { id: string; name: string; low_stock_threshold: number | null } | null }>
-  requests: Array<{ id: string; status: string }>
-  receipts: Array<{ id: string }>
-  movements: Array<{ id: string }>
-  writeoffs: Array<{ id: string; reason?: string | null; comment?: string | null }>
+type StoreOverviewMetrics = {
+  pendingRequests: number
+  disputedRequests: number
+  showcases: number
+  receipts: number
+  unresolvedWriteoffs: number
+  lowStock: number
+  lowStockTop: Array<{ item_id: string; name: string; quantity: number; threshold: number; location_name: string | null }>
 }
 type AuditTimelineEntry = {
   id: string; entity_type: string; entity_id: string; action: string; created_at: string
@@ -41,7 +42,8 @@ const HUBS = [
 ]
 
 export default function StoreOverviewPage() {
-  const [overview, setOverview] = useState<StoreOverviewResponse | null>(null)
+  const storeUrl = useStoreApiUrl()
+  const [overview, setOverview] = useState<StoreOverviewMetrics | null>(null)
   const [timeline, setTimeline] = useState<AuditTimelineEntry[]>([])
   const [q, setQ] = useState('')
   const [searching, setSearching] = useState(false)
@@ -53,7 +55,7 @@ export default function StoreOverviewPage() {
     const timer = setTimeout(async () => {
       setSearching(true)
       try {
-        const res = await fetch(`/api/admin/store/global-search?q=${encodeURIComponent(q.trim())}`, { cache: 'no-store', signal: ac.signal })
+        const res = await fetch(storeUrl(`/api/admin/store/global-search?q=${encodeURIComponent(q.trim())}`), { cache: 'no-store', signal: ac.signal })
         const json = await res.json().catch(() => null)
         if (ac.signal.aborted) return
         setSearchResults(res.ok && json?.ok && Array.isArray(json?.data?.results) ? json.data.results : [])
@@ -61,19 +63,19 @@ export default function StoreOverviewPage() {
       finally { if (!ac.signal.aborted) setSearching(false) }
     }, 250)
     return () => { clearTimeout(timer); ac.abort() }
-  }, [q])
+  }, [q, storeUrl])
 
   useEffect(() => {
     const ac = new AbortController()
     async function load() {
       try {
         const [resOverview, resTimeline] = await Promise.all([
-          fetch('/api/admin/store/overview', { cache: 'no-store', signal: ac.signal }),
-          fetch('/api/admin/store/audit-timeline?limit=12', { cache: 'no-store', signal: ac.signal }),
+          fetch(storeUrl('/api/admin/store/overview'), { cache: 'no-store', signal: ac.signal }),
+          fetch(storeUrl('/api/admin/store/audit-timeline?limit=12'), { cache: 'no-store', signal: ac.signal }),
         ])
         if (ac.signal.aborted) return
         const jsonOverview = await resOverview.json().catch(() => null)
-        if (resOverview.ok && jsonOverview?.ok) setOverview(jsonOverview.data as StoreOverviewResponse)
+        if (resOverview.ok && jsonOverview?.ok) setOverview(jsonOverview.data as StoreOverviewMetrics)
         const jsonTimeline = await resTimeline.json().catch(() => null)
         if (ac.signal.aborted) return
         if (resTimeline.ok && jsonTimeline?.ok) setTimeline(Array.isArray(jsonTimeline?.data?.timeline) ? jsonTimeline.data.timeline : [])
@@ -81,27 +83,9 @@ export default function StoreOverviewPage() {
     }
     void load()
     return () => ac.abort()
-  }, [])
+  }, [storeUrl])
 
-  const metrics = useMemo(() => {
-    const balances = overview?.balances || []
-    const requests = overview?.requests || []
-    const lowStock = balances.filter((b) => { const t = b.item?.low_stock_threshold; return t != null && Number(b.quantity || 0) <= t })
-    return {
-      pendingRequests: requests.filter((i) => i.status === 'new').length,
-      showcases: (overview?.locations || []).filter((i) => i.location_type === 'point_display').length,
-      lowStock: lowStock.length,
-      receipts: (overview?.receipts || []).length,
-      unresolvedWriteoffs: (overview?.writeoffs || []).filter((w) => !String(w.reason || '').trim() || !String(w.comment || '').trim()).length,
-      receiptMismatch: requests.filter((i) => i.status === 'disputed').length,
-    }
-  }, [overview])
-
-  const topLowStock = useMemo(() => {
-    return (overview?.balances || [])
-      .filter((b) => { const t = b.item?.low_stock_threshold; return t != null && Number(b.quantity || 0) <= t })
-      .slice(0, 10)
-  }, [overview])
+  const topLowStock = overview?.lowStockTop || []
 
   const loaded = overview !== null
 
@@ -141,12 +125,12 @@ export default function StoreOverviewPage() {
 
       {/* KPI / алерты */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <Kpi label="Новые заявки" value={metrics.pendingRequests} hint="Ждут решения" tone={metrics.pendingRequests > 0 ? 'amber' : 'normal'} loaded={loaded} href="/store/orders" />
-        <Kpi label="Низкий остаток" value={metrics.lowStock} hint="Позиции под контролем" tone={metrics.lowStock > 0 ? 'rose' : 'normal'} loaded={loaded} />
-        <Kpi label="Витрины" value={metrics.showcases} hint="Точек с витриной" tone="normal" loaded={loaded} href="/store/stock" />
-        <Kpi label="Приёмки" value={metrics.receipts} hint="Последние документы" tone="normal" loaded={loaded} href="/store/documents" />
-        <Kpi label="Списания без причины" value={metrics.unresolvedWriteoffs} hint="Требуют разбора" tone={metrics.unresolvedWriteoffs > 0 ? 'rose' : 'normal'} loaded={loaded} href="/store/documents" />
-        <Kpi label="Расхождения" value={metrics.receiptMismatch} hint="Спорные заявки" tone={metrics.receiptMismatch > 0 ? 'amber' : 'normal'} loaded={loaded} href="/store/orders" />
+        <Kpi label="Новые заявки" value={overview?.pendingRequests ?? 0} hint="Ждут решения" tone={(overview?.pendingRequests ?? 0) > 0 ? 'amber' : 'normal'} loaded={loaded} href="/store/orders" />
+        <Kpi label="Низкий остаток" value={overview?.lowStock ?? 0} hint="Позиции под контролем" tone={(overview?.lowStock ?? 0) > 0 ? 'rose' : 'normal'} loaded={loaded} />
+        <Kpi label="Витрины" value={overview?.showcases ?? 0} hint="Точек с витриной" tone="normal" loaded={loaded} href="/store/stock" />
+        <Kpi label="Приёмки" value={overview?.receipts ?? 0} hint="Всего документов" tone="normal" loaded={loaded} href="/store/documents" />
+        <Kpi label="Списания без причины" value={overview?.unresolvedWriteoffs ?? 0} hint="Требуют разбора" tone={(overview?.unresolvedWriteoffs ?? 0) > 0 ? 'rose' : 'normal'} loaded={loaded} href="/store/documents" />
+        <Kpi label="Расхождения" value={overview?.disputedRequests ?? 0} hint="Спорные заявки" tone={(overview?.disputedRequests ?? 0) > 0 ? 'amber' : 'normal'} loaded={loaded} href="/store/orders" />
       </div>
 
       {/* Долги поставщикам */}
@@ -160,11 +144,11 @@ export default function StoreOverviewPage() {
             <Link href="/store/sales" className="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-300 hover:text-amber-700 dark:hover:text-amber-200">Прогноз <ArrowRight className="h-3.5 w-3.5" /></Link>
           </div>
           <div className="flex flex-wrap gap-2">
-            {topLowStock.map((b) => (
-              <span key={`${b.location_id}-${b.item?.id || 'item'}`} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-700 dark:text-amber-200">
+            {topLowStock.map((row) => (
+              <span key={row.item_id} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-700 dark:text-amber-200">
                 <Package className="h-3 w-3" />
-                {b.item?.name || 'Товар'} · <span className="font-semibold">{b.quantity}</span>
-                {b.location?.name ? <span className="text-amber-700/60 dark:text-amber-200/60">· {b.location.name}</span> : null}
+                {row.name} · <span className="font-semibold">{row.quantity}</span>
+                {row.location_name ? <span className="text-amber-700/60 dark:text-amber-200/60">· {row.location_name}</span> : null}
               </span>
             ))}
           </div>

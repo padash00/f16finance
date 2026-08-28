@@ -784,18 +784,18 @@ export default function BranchPlanPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <p className="text-[11px] uppercase tracking-widest text-purple-700 dark:text-purple-300/80">Стартовые вложения</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-purple-700 dark:text-purple-200">{formatMoney(Math.round(calc.totalCapex))} ₸</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-purple-700 dark:text-purple-200">{formatMoney(Math.round(calc.totalCapex))}</p>
             <p className="mt-0.5 text-[10px] text-muted-foreground">
               ПК: {formatMoney(Math.round(calc.pcCapex))} · прочее: {formatMoney(Math.round(calc.otherCapex))}
             </p>
           </div>
           <div>
             <p className="text-[11px] uppercase tracking-widest text-emerald-700 dark:text-emerald-300/80">Выручка / мес</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-700 dark:text-emerald-200">{formatMoney(Math.round(calc.baseScenario.revenue))} ₸</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-700 dark:text-emerald-200">{formatMoney(Math.round(calc.baseScenario.revenue))}</p>
           </div>
           <div>
             <p className="text-[11px] uppercase tracking-widest text-rose-700 dark:text-rose-300/80">Расходы / мес</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-rose-700 dark:text-rose-200">{formatMoney(Math.round(calc.baseScenario.opex))} ₸</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-rose-700 dark:text-rose-200">{formatMoney(Math.round(calc.baseScenario.opex))}</p>
             <p className="mt-0.5 text-[10px] text-muted-foreground">
               Фикс {formatMoney(Math.round(calc.baseScenario.opexFixed))} · % {formatMoney(Math.round(calc.baseScenario.opexPercent))}
             </p>
@@ -803,7 +803,7 @@ export default function BranchPlanPage() {
           <div>
             <p className="text-[11px] uppercase tracking-widest text-amber-700 dark:text-amber-300/80">Прибыль / мес</p>
             <p className={`mt-1 text-2xl font-bold tabular-nums ${calc.baseScenario.profit > 0 ? 'text-amber-700 dark:text-amber-200' : 'text-rose-700 dark:text-rose-200'}`}>
-              {formatMoney(Math.round(calc.baseScenario.profit))} ₸
+              {formatMoney(Math.round(calc.baseScenario.profit))}
             </p>
             {calc.paybackMonths != null ? (
               <p className="mt-0.5 text-[10px] text-muted-foreground">
@@ -834,7 +834,7 @@ export default function BranchPlanPage() {
                 <XAxis dataKey="month" stroke="rgba(255,255,255,0.45)" fontSize={10} />
                 <YAxis stroke="rgba(255,255,255,0.45)" fontSize={10} tickFormatter={(v) => `${Math.round(Number(v) / 1_000_000)}M`} />
                 <Tooltip
-                  formatter={(v: any) => `${formatMoney(Number(v))} ₸`}
+                  formatter={(v: any) => `${formatMoney(Number(v))}`}
                   contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
                 />
                 <Line type="monotone" dataKey="cash" name="Накопительный кэш" stroke="#a855f7" strokeWidth={2.5} dot={false} />
@@ -1010,11 +1010,11 @@ export default function BranchPlanPage() {
                   </div>
                   <div className="space-y-1">
                     <Label className="text-[10px]">Цена 1 ПК</Label>
-                    <div className="grid h-10 place-items-center rounded-lg border border-border bg-surface-muted text-sm tabular-nums">{formatMoney(Math.round(unit))} ₸</div>
+                    <div className="grid h-10 place-items-center rounded-lg border border-border bg-surface-muted text-sm tabular-nums">{formatMoney(Math.round(unit))}</div>
                   </div>
                   <div className="space-y-1">
                     <Label className="text-[10px]">Подитог</Label>
-                    <div className="grid h-10 place-items-center rounded-lg border border-purple-500/30 bg-purple-500/[0.06] text-sm font-semibold tabular-nums text-purple-700 dark:text-purple-200">{formatMoney(Math.round(total))} ₸</div>
+                    <div className="grid h-10 place-items-center rounded-lg border border-purple-500/30 bg-purple-500/[0.06] text-sm font-semibold tabular-nums text-purple-700 dark:text-purple-200">{formatMoney(Math.round(total))}</div>
                   </div>
                   <Button size="icon" variant="ghost" onClick={() => setDraft((d) => ({ ...d, pc_configs: d.pc_configs.filter((x) => x.id !== c.id) }))}>
                     <Trash2 className="h-4 w-4" />
@@ -1048,7 +1048,7 @@ export default function BranchPlanPage() {
                               <SelectLabel>{group.label}</SelectLabel>
                               {group.items.map((item, i) => (
                                 <SelectItem key={i} value={`${group.key}|${i}`}>
-                                  {item.name} · {formatMoney(item.price)} ₸
+                                  {item.name} · {formatMoney(item.price)}
                                 </SelectItem>
                               ))}
                             </SelectGroup>
@@ -1089,7 +1089,7 @@ export default function BranchPlanPage() {
         </div>
         <div className="mt-3 flex items-center justify-end rounded-xl border border-purple-500/30 bg-purple-500/[0.06] px-4 py-2.5">
           <span className="mr-2 text-sm text-muted-foreground">Итого ПК:</span>
-          <span className="text-lg font-bold tabular-nums text-purple-700 dark:text-purple-200">{formatMoney(Math.round(calc.pcCapex))} ₸</span>
+          <span className="text-lg font-bold tabular-nums text-purple-700 dark:text-purple-200">{formatMoney(Math.round(calc.pcCapex))}</span>
         </div>
       </Card>
 
@@ -1121,7 +1121,7 @@ export default function BranchPlanPage() {
                     <SelectLabel>{group.label}</SelectLabel>
                     {group.items.map((item, i) => (
                       <SelectItem key={i} value={`${group.key}|${i}`}>
-                        {item.name} · {formatMoney(item.price)} ₸
+                        {item.name} · {formatMoney(item.price)}
                       </SelectItem>
                     ))}
                   </SelectGroup>
@@ -1151,7 +1151,7 @@ export default function BranchPlanPage() {
               <div className="space-y-1">
                 {idx === 0 ? <Label className="text-[10px]">Подитог</Label> : null}
                 <div className="grid h-10 place-items-center rounded-lg border border-border bg-surface-muted text-sm tabular-nums">
-                  {formatMoney(Math.round(num(r.unit_price) * num(r.quantity)))} ₸
+                  {formatMoney(Math.round(num(r.unit_price) * num(r.quantity)))}
                 </div>
               </div>
               <Button size="icon" variant="ghost" onClick={() => setDraft((d) => ({ ...d, capex: d.capex.filter((x) => x.id !== r.id) }))}>
@@ -1162,7 +1162,7 @@ export default function BranchPlanPage() {
         </div>
         <div className="mt-3 flex items-center justify-end rounded-xl border border-purple-500/30 bg-purple-500/[0.06] px-4 py-2.5">
           <span className="mr-2 text-sm text-muted-foreground">Итого прочее:</span>
-          <span className="text-lg font-bold tabular-nums text-purple-700 dark:text-purple-200">{formatMoney(Math.round(calc.otherCapex))} ₸</span>
+          <span className="text-lg font-bold tabular-nums text-purple-700 dark:text-purple-200">{formatMoney(Math.round(calc.otherCapex))}</span>
         </div>
       </Card>
 
@@ -1286,7 +1286,7 @@ export default function BranchPlanPage() {
                 <XAxis dataKey="name" stroke="rgba(255,255,255,0.45)" fontSize={10} />
                 <YAxis stroke="rgba(255,255,255,0.45)" fontSize={10} tickFormatter={(v) => `${Math.round(Number(v) / 1_000_000)}M`} />
                 <Tooltip
-                  formatter={(v: any) => `${formatMoney(Number(v))} ₸ / мес`}
+                  formatter={(v: any) => `${formatMoney(Number(v))} / мес`}
                   contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
                 />
                 <Bar dataKey="value" name="Выручка / мес" radius={[4, 4, 0, 0]}>
@@ -1335,7 +1335,7 @@ export default function BranchPlanPage() {
                 <div className="grid h-10 place-items-center rounded-lg border border-border bg-surface-muted text-sm tabular-nums">
                   {r.kind === 'percent_of_revenue'
                     ? formatMoney(Math.round((num(r.amount) / 100) * calc.baseScenario.revenue))
-                    : formatMoney(Math.round(num(r.amount)))} ₸
+                    : formatMoney(Math.round(num(r.amount)))}
                 </div>
               </div>
               <Button size="icon" variant="ghost" onClick={() => setDraft((d) => ({ ...d, opex: d.opex.filter((x) => x.id !== r.id) }))}>
@@ -1346,7 +1346,7 @@ export default function BranchPlanPage() {
         </div>
         <div className="mt-3 flex items-center justify-end rounded-xl border border-rose-500/30 bg-rose-500/[0.06] px-4 py-2.5">
           <span className="mr-2 text-sm text-muted-foreground">Итого OPEX / мес:</span>
-          <span className="text-lg font-bold tabular-nums text-rose-700 dark:text-rose-200">{formatMoney(Math.round(calc.baseScenario.opex))} ₸</span>
+          <span className="text-lg font-bold tabular-nums text-rose-700 dark:text-rose-200">{formatMoney(Math.round(calc.baseScenario.opex))}</span>
         </div>
       </Card>
 

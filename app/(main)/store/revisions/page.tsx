@@ -20,6 +20,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { StoreDataTableSkeleton } from '@/components/store/store-data-table-skeleton'
 import { Skeleton } from '@/components/ui/skeleton'
 import { isAbortError } from '@/lib/is-abort-error'
+import { readApiCache, writeApiCache } from '@/lib/client/use-api-cache'
+import { invalidateStoreCaches } from '@/lib/client/store-cache'
 
 type InventoryLocation = {
   id: string
@@ -176,22 +178,38 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
   const liveSinceRef = useRef<string | null>(null)
   const liveSeenRef = useRef<Set<string>>(new Set())
 
+  const revisionsUrl = `/api/admin/store/revisions?scope=${scope}&archive=${archiveView ? 'archived' : 'active'}${storeCompanyId ? `&company_id=${encodeURIComponent(storeCompanyId)}` : ''}`
+  // Отдельный ключ кэша: кладём не только data, но и флаг canArchive из конверта.
+  const revisionsCacheKey = `${revisionsUrl}#page`
+
+  type RevisionsCached = { data: NonNullable<RevisionsResponse['data']>; canArchive: boolean }
+
+  const applyRevisions = (payload: RevisionsCached) => {
+    setCanArchive(payload.canArchive)
+    setData(payload.data)
+    setLocationId((current) => (current && (payload.data?.locations || []).some((l: any) => l.id === current)) ? current : (payload.data?.locations?.[0]?.id || ''))
+  }
+
   const load = async (signal?: AbortSignal, opts?: { soft?: boolean }) => {
-    const soft = Boolean(opts?.soft)
+    // После мутации (soft) кэш не подставляем — он заведомо устарел.
+    const cached = opts?.soft ? null : readApiCache<RevisionsCached>(revisionsCacheKey)
+    if (cached) applyRevisions(cached)
+    const soft = Boolean(opts?.soft) || !!cached
     if (soft) {
       setRefreshing(true)
+      setLoading(false)
     } else {
       setLoading(true)
     }
     setError(null)
     try {
-      const response = await fetch(`/api/admin/store/revisions?scope=${scope}&archive=${archiveView ? 'archived' : 'active'}${storeCompanyId ? `&company_id=${encodeURIComponent(storeCompanyId)}` : ''}`, { cache: 'no-store', signal })
+      const response = await fetch(revisionsUrl, { cache: 'no-store', signal })
       const json = (await response.json().catch(() => null)) as RevisionsResponse | null
       if (signal?.aborted) return
       if (!response.ok || !json?.ok || !json.data) throw new Error(json?.error || 'Не удалось загрузить ревизии')
-      setCanArchive(Boolean(json.canArchive))
-      setData(json.data)
-      setLocationId((current) => (current && (json.data?.locations || []).some((l: any) => l.id === current)) ? current : (json.data?.locations?.[0]?.id || ''))
+      const payload: RevisionsCached = { data: json.data, canArchive: Boolean(json.canArchive) }
+      writeApiCache(revisionsCacheKey, payload)
+      applyRevisions(payload)
     } catch (err: any) {
       if (isAbortError(err) || signal?.aborted) return
       if (!soft) setData(null)
@@ -718,6 +736,7 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
       setLines([])
       setSuccess('Ревизия проведена, расхождения записаны')
       dropDraft()
+      invalidateStoreCaches()
       await load(undefined, { soft: true })
     } catch (err: any) {
       setError(err?.message || 'Не удалось провести ревизию')
@@ -757,6 +776,7 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
             ? 'Акт убран в архив'
             : 'Акт возвращён в список',
       )
+      invalidateStoreCaches()
       await load(undefined, { soft: true })
     } catch (err: any) {
       setError(err?.message || 'Не удалось изменить акт')

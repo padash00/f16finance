@@ -15,6 +15,8 @@ import { StoreDataTableSkeleton } from '@/components/store/store-data-table-skel
 import { Skeleton } from '@/components/ui/skeleton'
 import { useDebouncedValue, useUrlState } from '@/lib/hooks/use-url-state'
 import { isAbortError } from '@/lib/is-abort-error'
+import { useStoreApiUrl } from '@/components/store/store-scope'
+import { readApiCache, writeApiCache } from '@/lib/client/use-api-cache'
 
 type InventoryLocation = {
   id: string
@@ -107,6 +109,7 @@ function movementTypeClass(type: string) {
 }
 
 function StoreMovementsPageContent({ embedded = false }: { embedded?: boolean } = {}) {
+  const storeUrl = useStoreApiUrl()
   const [data, setData] = useState<MovementsResponse['data'] | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -119,23 +122,30 @@ function StoreMovementsPageContent({ embedded = false }: { embedded?: boolean } 
   const [queryInput, setQueryInput] = useState(filters.q)
   const debouncedQuery = useDebouncedValue(queryInput, 300)
 
+  const scopeParam =
+    filters.place === 'warehouse' ? 'warehouse' : filters.place === 'showcase' ? 'showcase' : 'all'
+  const movementsUrl = storeUrl(`/api/admin/store/movements?scope=${scopeParam}`)
+  // Суффикс: в кэш кладём разобранный вид (вложенные связи развёрнуты), а не сырой ответ.
+  const movementsCacheKey = `${movementsUrl}#movements`
+
   const load = async (signal?: AbortSignal, opts?: { soft?: boolean }) => {
-    const soft = Boolean(opts?.soft)
+    const cached = opts?.soft ? null : readApiCache<NonNullable<MovementsResponse['data']>>(movementsCacheKey)
+    if (cached) setData(cached)
+    const soft = Boolean(opts?.soft) || !!cached
     if (soft) {
       setRefreshing(true)
+      setLoading(false)
     } else {
       setLoading(true)
     }
     setError(null)
     try {
-      const scope =
-        filters.place === 'warehouse' ? 'warehouse' : filters.place === 'showcase' ? 'showcase' : 'all'
-      const response = await fetch(`/api/admin/store/movements?scope=${scope}`, { cache: 'no-store', signal })
+      const response = await fetch(movementsUrl, { cache: 'no-store', signal })
       const json = (await response.json().catch(() => null)) as MovementsResponse | null
       if (signal?.aborted) return
       if (!response.ok || !json?.ok || !json.data) throw new Error(json?.error || 'Не удалось загрузить движения')
 
-      setData({
+      const payload = {
         locations: (json.data.locations || []).map((location) => ({
           ...location,
           company: firstOrSelf(location.company),
@@ -149,7 +159,9 @@ function StoreMovementsPageContent({ embedded = false }: { embedded?: boolean } 
           from_location: firstOrSelf(movement.from_location),
           to_location: firstOrSelf(movement.to_location),
         })),
-      })
+      }
+      writeApiCache(movementsCacheKey, payload)
+      setData(payload)
     } catch (err: any) {
       if (isAbortError(err) || signal?.aborted) return
       if (!soft) setData(null)
@@ -166,7 +178,7 @@ function StoreMovementsPageContent({ embedded = false }: { embedded?: boolean } 
     const ac = new AbortController()
     void load(ac.signal)
     return () => ac.abort()
-  }, [filters.place])
+  }, [filters.place, storeUrl])
 
   useEffect(() => {
     setQueryInput(filters.q)

@@ -1,5 +1,3 @@
-import { NextResponse } from 'next/server'
-
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { humanizeDbError } from '@/lib/server/db-error-humanize'
 import { resolveCompanyScope } from '@/lib/server/organizations'
@@ -10,10 +8,10 @@ import { createInventoryRequest } from '@/lib/server/repositories/inventory'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { notifyInventoryRequestCreated } from '@/lib/server/telegram'
 import { requireCapability } from '@/lib/server/capabilities'
-
-function json(data: unknown, status = 200) {
-  return NextResponse.json(data, { status })
-}
+import { fetchAllRows } from '@/lib/server/fetch-all-rows'
+import { groupStockByItem, showcaseStockView, warehouseAvailableItems } from '@/lib/domain/inventory-balances'
+import { json } from '@/lib/server/api-response'
+import { normalizeQty } from '@/lib/domain/inventory-quantity'
 
 function canView(access: { isSuperAdmin: boolean; staffRole: string }) {
   // Capability checks выше уже отсеивают; здесь — любой staff
@@ -23,25 +21,6 @@ function canView(access: { isSuperAdmin: boolean; staffRole: string }) {
 function canCreateRequest(access: { isSuperAdmin: boolean; staffRole: string }) {
   // Capability checks выше уже отсеивают; здесь — любой staff
   return access.isSuperAdmin || !!access.staffRole
-}
-
-function normalizeQty(v: unknown) {
-  const n = Number(v || 0)
-  return Number.isFinite(n) ? Math.round((n + Number.EPSILON) * 1000) / 1000 : 0
-}
-
-// PostgREST молча режет ответ до 1000 строк — большие выборки забираем постранично.
-const PAGE_SIZE = 1000
-async function fetchAllPages<T = any>(buildQuery: (from: number, to: number) => any): Promise<T[]> {
-  const out: T[] = []
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1)
-    if (error) throw error
-    const rows = data || []
-    out.push(...rows)
-    if (rows.length < PAGE_SIZE) break
-  }
-  return out
 }
 
 /**
@@ -191,7 +170,7 @@ export async function GET(request: Request) {
     ])
 
     // Каталог точки может быть >1000 позиций — постранично, иначе PostgREST молча обрежет остатки.
-    const balanceRows = await fetchAllPages((from, to) =>
+    const balanceRows = await fetchAllRows((from, to) =>
       supabase
         .from('inventory_balances')
         .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, sale_price, default_purchase_price, low_stock_threshold, category_id, category:category_id(id, name))')
@@ -201,51 +180,14 @@ export async function GET(request: Request) {
         .range(from, to),
     )
 
-    // v2: showcase читается напрямую из point_display.
-    // Старая формула catalog - warehouse оставлена в полях для совместимости с UI,
-    // которые могут показывать catalog/warehouse отдельно.
-    const byItem = new Map<string, any>()
-    for (const row of balanceRows || []) {
-      const itemId = row.item_id
-      if (!itemId) continue
-      let bucket = byItem.get(itemId)
-      if (!bucket) {
-        bucket = {
-          item_id: itemId,
-          item: row.item,
-          warehouse_quantity: 0,
-          point_display_quantity: 0,
-          updated_at: row.updated_at,
-        }
-        byItem.set(itemId, bucket)
-      }
-      if (row.location_id === warehouseLoc.id) bucket.warehouse_quantity = Number(row.quantity) || 0
-      else if (row.location_id === showcaseLoc.id) bucket.point_display_quantity = Number(row.quantity) || 0
-      if (row.updated_at > bucket.updated_at) bucket.updated_at = row.updated_at
-    }
-
-    const balances = Array.from(byItem.values())
-      .map((b) => {
-        // v2: читаем напрямую из point_display
-        const showcase = Number(b.point_display_quantity || 0)
-        return {
-          ...b,
-          showcase_quantity: showcase,
-          quantity: showcase, // back-compat: UI reads b.quantity as showcase
-        }
-      })
-      // Страница витрины показывает только товары, которые есть на витрине
-      .filter((b) => b.showcase_quantity > 0)
-      .sort((a, b) => b.showcase_quantity - a.showcase_quantity)
-
-    // Items available in warehouse for request dropdown
-    const warehouseItemsList = Array.from(byItem.values())
-      .filter((b) => b.warehouse_quantity > 0)
-      .map((b) => ({
-        item_id: b.item_id,
-        item: b.item,
-        quantity: b.warehouse_quantity,
-      }))
+    // v2: showcase читается напрямую из point_display. Поля warehouse/point_display
+    // остаются в ответе — интерфейс показывает их отдельными колонками.
+    const stock = groupStockByItem(balanceRows as any, {
+      warehouseId: warehouseLoc.id,
+      showcaseId: showcaseLoc.id,
+    })
+    const balances = showcaseStockView(stock)
+    const warehouseItemsList = warehouseAvailableItems(stock)
 
     const { data: pendingRequests } = await supabase
       .from('inventory_requests')

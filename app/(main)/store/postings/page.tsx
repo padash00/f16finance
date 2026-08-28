@@ -11,10 +11,12 @@ import { DatePicker } from '@/components/ui/date-picker'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useStoreScope } from '@/components/store/store-scope'
+import { readApiCache, writeApiCache } from '@/lib/client/use-api-cache'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { PageSkeleton, TableSkeleton } from '@/components/skeleton'
+import { invalidateStoreCaches } from '@/lib/client/store-cache'
 
 type Item = {
   id: string
@@ -149,22 +151,41 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
   // Доступ управляется системой прав (страница access), а не жёсткой ролью.
   const allowed = isSuperAdmin || can('store-postings.create') || can('store-postings.view')
 
-  const load = async () => {
-    setLoading(true)
+  // scope=all чтобы получить и склады, и витрины ВЫБРАННОЙ точки.
+  const postingsUrl = `/api/admin/store/receipts?scope=all${storeCompanyId ? `&company_id=${encodeURIComponent(storeCompanyId)}` : ''}`
+  // Тот же адрес читает страница приёмки, но кладёт в кэш свою раскладку —
+  // поэтому ключ с суффиксом.
+  const postingsCacheKey = `${postingsUrl}#postings`
+
+  type PostingsCached = { items: any[]; locations: Location[]; recent: RecentPosting[] }
+
+  const applyPostings = (payload: PostingsCached) => {
+    setItems(payload.items)
+    setLocations(payload.locations)
+    setLocationId((cur) => (cur && payload.locations.some((l) => l.id === cur)) ? cur : (payload.locations[0]?.id || ''))
+    setRecent(payload.recent)
+  }
+
+  const load = async (opts?: { fresh?: boolean }) => {
+    // fresh — перезагрузка после проведения документа: кэш заведомо устарел.
+    const cached = opts?.fresh ? null : readApiCache<PostingsCached>(postingsCacheKey)
+    if (cached) applyPostings(cached)
+    setLoading(!cached)
     setError(null)
     try {
-      // scope=all чтобы получить и склады, и витрины ВЫБРАННОЙ точки.
-      const res = await fetch(`/api/admin/store/receipts?scope=all${storeCompanyId ? `&company_id=${encodeURIComponent(storeCompanyId)}` : ''}`, { cache: 'no-store' })
+      const res = await fetch(postingsUrl, { cache: 'no-store' })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Ошибка загрузки')
       const data = json.data || {}
-      setItems(data.items || [])
-      const locs = ((data.locations as Location[]) || []).filter(
-        (l) => l.location_type === 'warehouse' || l.location_type === 'point_display',
-      )
-      setLocations(locs)
-      setLocationId((cur) => (cur && locs.some((l) => l.id === cur)) ? cur : (locs[0]?.id || ''))
-      setRecent(((data.receipts as RecentPosting[]) || []).filter((r) => r.kind === 'posting').slice(0, 20))
+      const payload: PostingsCached = {
+        items: data.items || [],
+        locations: ((data.locations as Location[]) || []).filter(
+          (l) => l.location_type === 'warehouse' || l.location_type === 'point_display',
+        ),
+        recent: ((data.receipts as RecentPosting[]) || []).filter((r) => r.kind === 'posting').slice(0, 20),
+      }
+      writeApiCache(postingsCacheKey, payload)
+      applyPostings(payload)
     } catch (e: any) {
       setError(e?.message || 'Ошибка')
     } finally {
@@ -368,7 +389,8 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
       restoreLinesFrom(viewPosting)
       setViewPosting(null)
       setSuccess('Оприходование отменено — строки загружены в форму. Отредактируйте и проведите заново.')
-      await load()
+      invalidateStoreCaches()
+      await load({ fresh: true })
     } catch (e: any) {
       setError(e?.message || 'Ошибка отмены')
       setViewPosting(null)
@@ -447,7 +469,8 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
       setLines([newLine()])
       setComment('')
       setConfirmOpen(false)
-      await load()
+      invalidateStoreCaches()
+      await load({ fresh: true })
     } catch (e: any) {
       setError(e?.message || 'Ошибка')
     } finally {

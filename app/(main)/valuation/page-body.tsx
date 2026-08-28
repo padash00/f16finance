@@ -147,7 +147,7 @@ export default function ValuationPage() {
               {fmtMln(data.valuation.low)} — {fmtMln(data.valuation.high)}
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Средняя оценка: <span className="font-semibold text-foreground">{formatMoney(data.valuation.mid)} ₸</span>
+              Средняя оценка: <span className="font-semibold text-foreground">{formatMoney(data.valuation.mid)}</span>
               {' '}· мультипликатор <span className="font-semibold text-amber-700 dark:text-amber-200">{data.multiple.mid}×</span> к годовой EBITDA
             </p>
           </>
@@ -162,9 +162,9 @@ export default function ValuationPage() {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Card className="border-border bg-white dark:bg-white/[0.02] p-4">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">EBITDA за 12 мес</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-300">{formatMoney(data.ebitda_12mo)} ₸</p>
+          <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-300">{formatMoney(data.ebitda_12mo)}</p>
           <p className="mt-1 text-[11px] text-muted-foreground">
-            Выручка {formatMoney(data.revenue_12mo)} ₸ · чистая прибыль {formatMoney(data.net_profit_12mo)} ₸
+            Выручка {formatMoney(data.revenue_12mo)} · чистая прибыль {formatMoney(data.net_profit_12mo)}
           </p>
         </Card>
         <Card className="border-border bg-white dark:bg-white/[0.02] p-4">
@@ -238,7 +238,7 @@ export default function ValuationPage() {
               <XAxis dataKey="month" stroke="rgba(255,255,255,0.45)" fontSize={10} interval="preserveStartEnd" />
               <YAxis stroke="rgba(255,255,255,0.45)" fontSize={10} tickFormatter={(v) => `${Math.round(Number(v) / 1000)}k`} />
               <Tooltip
-                formatter={(v: any) => `${formatMoney(Number(v))} ₸`}
+                formatter={(v: any) => `${formatMoney(Number(v))}`}
                 contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
               />
               <Bar dataKey="EBITDA" radius={[4, 4, 0, 0]}>

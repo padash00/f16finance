@@ -10,7 +10,7 @@ const fallback = () => <PageSkeleton stats={0} rows={8} cols={5} />
 
 const Suppliers = dynamic(() => import('@/app/(main)/store/suppliers/page'), { ssr: false, loading: fallback })
 const Billing = dynamic(() => import('@/app/(main)/store/billing/page'), { ssr: false, loading: fallback })
-const Consumables = dynamic(() => import('@/app/(main)/inventory/consumables/page').then((m) => m.ConsumablesPageContent), { ssr: false, loading: fallback })
+const Consumables = dynamic(() => import('@/components/store/consumables-page').then((m) => m.ConsumablesPageContent), { ssr: false, loading: fallback })
 
 type Tab = 'suppliers' | 'billing' | 'consumables'
 const TABS: { key: Tab; label: string; icon: any }[] = [

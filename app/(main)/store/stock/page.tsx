@@ -11,7 +11,7 @@ const fallback = () => <PageSkeleton stats={0} rows={8} cols={5} />
 const WarehouseTab = dynamic(() => import('@/app/(main)/store/warehouse/page'), { ssr: false, loading: fallback })
 const Showcase = dynamic(() => import('@/app/(main)/store/showcase/page'), { ssr: false, loading: fallback })
 const Movements = dynamic(() => import('@/app/(main)/store/movements/page'), { ssr: false, loading: fallback })
-const Catalog = dynamic(() => import('@/app/(main)/inventory/catalog/page').then((m) => m.CatalogPageContent), { ssr: false, loading: fallback })
+const Catalog = dynamic(() => import('@/components/store/catalog-page').then((m) => m.CatalogPageContent), { ssr: false, loading: fallback })
 
 type Tab = 'warehouse' | 'showcase' | 'movements' | 'catalog'
 const TABS: { key: Tab; label: string; icon: any }[] = [

@@ -1,16 +1,11 @@
-import { NextResponse } from 'next/server'
-
 import { requireCapability } from '@/lib/server/capabilities'
 import { requireOrgFeature } from '@/lib/server/entitlements'
 import { checkRateLimit } from '@/lib/server/rate-limit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { isStoreManager } from '@/lib/server/store-access'
+import { json } from '@/lib/server/api-response'
 
 export const runtime = 'nodejs'
-
-function json(data: unknown, status = 200) {
-  return NextResponse.json(data, { status })
-}
 
 // Несколько фото по штрихкоду из UPCitemdb (массив images).
 async function fromUpcItemDb(code: string): Promise<string[]> {

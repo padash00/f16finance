@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArchiveX, Loader2, MoreHorizontal, Package, RefreshCw, Search, Trash2 } from 'lucide-react'
 
 import { useStoreScope } from '@/components/store/store-scope'
+import { readApiCache, writeApiCache } from '@/lib/client/use-api-cache'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -27,6 +28,7 @@ import { useCapabilities } from '@/lib/client/use-capabilities'
 import { StoreDataTableSkeleton } from '@/components/store/store-data-table-skeleton'
 import { Skeleton } from '@/components/ui/skeleton'
 import { isAbortError } from '@/lib/is-abort-error'
+import { invalidateStoreCaches } from '@/lib/client/store-cache'
 
 type InventoryLocation = {
   id: string
@@ -75,7 +77,6 @@ type InventoryWriteoff = {
 type WriteoffsResponse = {
   ok: boolean
   data?: {
-    items: InventoryItem[]
     locations: InventoryLocation[]
     balances: InventoryBalance[]
     writeoffs: InventoryWriteoff[]
@@ -143,21 +144,34 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
   const [writeoffDetailsOpen, setWriteoffDetailsOpen] = useState(false)
   const [cancelling, setCancelling] = useState(false)
 
+  const writeoffsUrl = `/api/admin/store/writeoffs?scope=${scope}${storeCompanyId ? `&company_id=${encodeURIComponent(storeCompanyId)}` : ''}`
+
+  const applyWriteoffs = (payload: NonNullable<WriteoffsResponse['data']>) => {
+    setData(payload)
+    setLocationId((current) => (current && (payload.locations || []).some((l: any) => l.id === current)) ? current : (payload.locations?.[0]?.id || ''))
+  }
+
   const load = async (signal?: AbortSignal, opts?: { soft?: boolean }) => {
-    const soft = Boolean(opts?.soft)
+    // Вкладка «Списания» в «Документах» размонтируется при переключении —
+    // прошлый ответ показываем сразу, свежий догружаем фоном. После мутации
+    // (soft) кэш не подставляем: он заведомо устарел.
+    const cached = opts?.soft ? null : readApiCache<NonNullable<WriteoffsResponse['data']>>(writeoffsUrl)
+    if (cached) applyWriteoffs(cached)
+    const soft = Boolean(opts?.soft) || !!cached
     if (soft) {
       setRefreshing(true)
+      setLoading(false)
     } else {
       setLoading(true)
     }
     setError(null)
     try {
-      const response = await fetch(`/api/admin/store/writeoffs?scope=${scope}${storeCompanyId ? `&company_id=${encodeURIComponent(storeCompanyId)}` : ''}`, { cache: 'no-store', signal })
+      const response = await fetch(writeoffsUrl, { cache: 'no-store', signal })
       const json = (await response.json().catch(() => null)) as WriteoffsResponse | null
       if (signal?.aborted) return
       if (!response.ok || !json?.ok || !json.data) throw new Error(json?.error || 'Не удалось загрузить списания')
-      setData(json.data)
-      setLocationId((current) => (current && (json.data?.locations || []).some((l: any) => l.id === current)) ? current : (json.data?.locations?.[0]?.id || ''))
+      writeApiCache(writeoffsUrl, json.data)
+      applyWriteoffs(json.data)
     } catch (err: any) {
       if (isAbortError(err) || signal?.aborted) return
       if (!soft) setData(null)
@@ -322,6 +336,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
       setComment('')
       setLines([emptyLine()])
       setSuccess('Списание проведено, остатки обновлены')
+      invalidateStoreCaches()
       await load(undefined, { soft: true })
     } catch (err: any) {
       setError(err?.message || 'Не удалось провести списание')
@@ -353,6 +368,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
       setSuccess('Списание отменено, товар возвращён на остаток')
       setWriteoffDetailsOpen(false)
       setSelectedWriteoff(null)
+      invalidateStoreCaches()
       await load(undefined, { soft: true })
     } catch (err: any) {
       setError(err?.message || 'Не удалось отменить списание')

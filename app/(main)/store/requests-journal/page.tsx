@@ -26,6 +26,8 @@ import { StoreDataTableSkeleton } from '@/components/store/store-data-table-skel
 import { Skeleton } from '@/components/ui/skeleton'
 import { useDebouncedValue, useUrlState } from '@/lib/hooks/use-url-state'
 import { isAbortError } from '@/lib/is-abort-error'
+import { useStoreApiUrl } from '@/components/store/store-scope'
+import { readApiCache, writeApiCache } from '@/lib/client/use-api-cache'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 type InventoryLocation = {
@@ -212,6 +214,7 @@ function requestTimeline(request: InventoryRequest) {
 
 function StoreRequestsJournalPageContent({ embedded = false }: { embedded?: boolean }) {
   const { can } = useCapabilities()
+  const storeUrl = useStoreApiUrl()
   const [requests, setRequests] = useState<InventoryRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -228,22 +231,31 @@ function StoreRequestsJournalPageContent({ embedded = false }: { embedded?: bool
   const [searchInput, setSearchInput] = useState(filters.q)
   const debouncedSearch = useDebouncedValue(searchInput, 300)
 
+  const journalUrl = storeUrl('/api/admin/inventory/requests')
+  // Тот же адрес читает страница заявок, но разбирает ответ своим normalizeRequest
+  // (у неё есть поля, которых нет здесь) — поэтому свой ключ.
+  const journalCacheKey = `${journalUrl}#journal`
+
   const load = async (signal?: AbortSignal, opts?: { soft?: boolean }) => {
-    const soft = Boolean(opts?.soft)
+    const cached = opts?.soft ? null : readApiCache<InventoryRequest[]>(journalCacheKey)
+    if (cached) setRequests(cached)
+    const soft = Boolean(opts?.soft) || !!cached
     if (soft) {
       setRefreshing(true)
+      setLoading(false)
     } else {
       setLoading(true)
     }
     setError(null)
     try {
-      const response = await fetch('/api/admin/inventory/requests', { cache: 'no-store', signal })
+      const response = await fetch(journalUrl, { cache: 'no-store', signal })
       const json = (await response.json().catch(() => null)) as InventoryResponse | null
       if (signal?.aborted) return
       if (!response.ok || !json?.ok || !json.data) {
         throw new Error(json?.error || 'Не удалось загрузить журнал заявок')
       }
       const normalizedRequests = asArray(json.data.requests).map(normalizeRequest).filter((r) => r.id)
+      writeApiCache(journalCacheKey, normalizedRequests)
       setRequests(normalizedRequests)
     } catch (err: any) {
       if (isAbortError(err) || signal?.aborted) return
@@ -260,7 +272,7 @@ function StoreRequestsJournalPageContent({ embedded = false }: { embedded?: bool
     const ac = new AbortController()
     void load(ac.signal)
     return () => ac.abort()
-  }, [])
+  }, [storeUrl])
 
   useEffect(() => {
     if (!requestDetailsOpen) return

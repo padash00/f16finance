@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { PageSkeleton, StatGridSkeleton, TableSkeleton } from '@/components/skeleton'
+import { useStoreScope } from '@/components/store/store-scope'
 import { Clock, Loader2, RefreshCw, Settings, User, Wallet, CreditCard, X, ChevronRight, TrendingUp, RotateCcw } from 'lucide-react'
 
 type LiveTotals = { sales: number; cash: number; kaspi: number; count: number }
@@ -191,7 +192,11 @@ function salesOf(s: Shift): number | null {
 
 export default function StoreShiftsPage() {
   const { can } = useCapabilities()
-  const [storeCompanyId, setStoreCompanyId] = useState<string | null | undefined>(undefined)
+  const { storeCompanyId: pickedCompanyId } = useStoreScope()
+  const [configCompanyId, setConfigCompanyId] = useState<string | null | undefined>(undefined)
+  // Точка из переключателя в шапке главнее конфига: пока «Общий» — берём точку
+  // магазина по умолчанию, иначе показываем смены выбранной точки.
+  const storeCompanyId = pickedCompanyId ?? configCompanyId
   const [status, setStatus] = useState('closed')
   const [shifts, setShifts] = useState<Shift[]>([])
   const [loading, setLoading] = useState(true)
@@ -209,8 +214,8 @@ export default function StoreShiftsPage() {
   useEffect(() => {
     fetch('/api/admin/store/config', { cache: 'no-store' })
       .then((r) => r.json())
-      .then((j) => setStoreCompanyId(j?.data?.store_company_id || null))
-      .catch(() => setStoreCompanyId(null))
+      .then((j) => setConfigCompanyId(j?.data?.store_company_id || null))
+      .catch(() => setConfigCompanyId(null))
   }, [])
 
   const load = useCallback(async () => {

@@ -1,5 +1,3 @@
-import { NextResponse } from 'next/server'
-
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
 import { requireOrgFeature } from '@/lib/server/entitlements'
@@ -7,12 +5,9 @@ import { resolveCompanyScope } from '@/lib/server/organizations'
 import { computePurchasePlan } from '@/lib/server/purchase-plan'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { json } from '@/lib/server/api-response'
 
 export const dynamic = 'force-dynamic'
-
-function json(data: unknown, status = 200) {
-  return NextResponse.json(data, { status })
-}
 
 export async function GET(request: Request) {
   try {

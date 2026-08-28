@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useStoreScope } from '@/components/store/store-scope'
+import { formatMoney as money } from '@/lib/core/format'
 
 type Line = {
   item_id: string
@@ -55,7 +56,6 @@ type PlanData = {
 
 type Company = { id: string; name: string; code?: string | null }
 
-const money = (n: number) => Math.round(Number(n) || 0).toLocaleString('ru-RU') + ' ₸'
 const num = (n: number) => {
   const v = Number(n) || 0
   return Number.isInteger(v) ? String(v) : v.toFixed(2)

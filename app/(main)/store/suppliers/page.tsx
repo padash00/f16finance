@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { ArrowRight, Building2, Loader2, Plus, Search } from 'lucide-react'
 import { useCapabilities } from '@/lib/client/use-capabilities'
-import { useStoreScope } from '@/components/store/store-scope'
+import { useStoreApiUrl, useStoreScope } from '@/components/store/store-scope'
+import { readApiCache, writeApiCache } from '@/lib/client/use-api-cache'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -14,6 +15,7 @@ import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { TableSkeleton } from '@/components/skeleton'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
 import { formatMoney } from '@/lib/core/format'
+import { invalidateStoreCaches } from '@/lib/client/store-cache'
 
 type Supplier = {
   id: string
@@ -42,6 +44,7 @@ const fmtDate = (value: string | null | undefined) => {
 
 export default function SuppliersListPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { storeCompanyId } = useStoreScope()
+  const storeUrl = useStoreApiUrl()
   const { can } = useCapabilities()
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
@@ -53,19 +56,26 @@ export default function SuppliersListPage({ embedded = false }: { embedded?: boo
   const [form, setForm] = useState({ name: '', organization_name: '', bin_iin: '', contact_name: '', phone: '', lead_time_days: '3' })
   useModalEscape(addOpen, () => { if (!saving) setAddOpen(false) })
 
-  const load = useCallback(async () => {
+  const suppliersUrl = storeUrl('/api/admin/store/suppliers')
+  const suppliersCacheKey = `${suppliersUrl}#suppliers`
+
+  const load = useCallback(async (opts?: { fresh?: boolean }) => {
+    const cached = opts?.fresh ? null : readApiCache<Supplier[]>(suppliersCacheKey)
+    if (cached) { setSuppliers(cached); setLoading(false) }
     try {
-      const response = await fetch('/api/admin/store/suppliers', { cache: 'no-store' })
+      const response = await fetch(suppliersUrl, { cache: 'no-store' })
       const json = await response.json().catch(() => null)
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось загрузить поставщиков')
-      setSuppliers(json.data?.suppliers || [])
+      const rows = json.data?.suppliers || []
+      writeApiCache(suppliersCacheKey, rows)
+      setSuppliers(rows)
       setError(null)
     } catch (err: any) {
       setError(err?.message || 'Ошибка загрузки')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [suppliersUrl, suppliersCacheKey])
 
   useEffect(() => { void load() }, [load])
 
@@ -93,7 +103,8 @@ export default function SuppliersListPage({ embedded = false }: { embedded?: boo
       if (!res.ok || !j?.ok) throw new Error(j?.error || 'Не удалось создать поставщика')
       setAddOpen(false)
       setForm({ name: '', organization_name: '', bin_iin: '', contact_name: '', phone: '', lead_time_days: '3' })
-      await load()
+      invalidateStoreCaches()
+      await load({ fresh: true })
     } catch (e: any) {
       setError(e?.message || 'Ошибка создания')
     } finally {
@@ -184,11 +195,11 @@ export default function SuppliersListPage({ embedded = false }: { embedded?: boo
                   </td>
                   <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground">{s.bin_iin || '—'}</td>
                   <td className="px-3 py-2.5 text-right">{s.receipts_count}</td>
-                  <td className="px-3 py-2.5 text-right">{formatMoney(s.receipts_total)} ₸</td>
+                  <td className="px-3 py-2.5 text-right">{formatMoney(s.receipts_total)}</td>
                   <td className="px-3 py-2.5 text-right">
                     {s.open_debts_count > 0 ? (
                       <span className="text-amber-700 dark:text-amber-200">
-                        {s.open_debts_count} · {formatMoney(s.open_debts_sum)} ₸
+                        {s.open_debts_count} · {formatMoney(s.open_debts_sum)}
                       </span>
                     ) : (
                       <span className="text-muted-foreground">—</span>

@@ -1,5 +1,3 @@
-import { NextResponse } from 'next/server'
-
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireAnyCapability, requireCapability } from '@/lib/server/capabilities'
 import { humanizeDbError } from '@/lib/server/db-error-humanize'
@@ -8,10 +6,11 @@ import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { postInventoryReceipt } from '@/lib/server/repositories/inventory'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
-
-function json(data: unknown, status = 200) {
-  return NextResponse.json(data, { status })
-}
+import { fetchAllRows } from '@/lib/server/fetch-all-rows'
+import { groupStockByItem, warehouseStockView } from '@/lib/domain/inventory-balances'
+import { json } from '@/lib/server/api-response'
+import { normalizeQty } from '@/lib/domain/inventory-quantity'
+import { chunkArray } from '@/lib/core/chunk'
 
 function canManage(access: { isSuperAdmin: boolean; staffRole: string }) {
   // Capability checks выше уже отсеивают; здесь — любой staff
@@ -21,25 +20,6 @@ function canManage(access: { isSuperAdmin: boolean; staffRole: string }) {
 function canViewWarehouse(access: { isSuperAdmin: boolean; staffRole: string }) {
   // Capability checks выше уже отсеивают; здесь — любой staff
   return access.isSuperAdmin || !!access.staffRole
-}
-
-function normalizeQty(v: unknown) {
-  const n = Number(v || 0)
-  return Number.isFinite(n) ? Math.round((n + Number.EPSILON) * 1000) / 1000 : 0
-}
-
-// PostgREST молча режет ответ до 1000 строк — большие выборки забираем постранично.
-const PAGE_SIZE = 1000
-async function fetchAllPages<T = any>(buildQuery: (from: number, to: number) => any): Promise<T[]> {
-  const out: T[] = []
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1)
-    if (error) throw error
-    const rows = data || []
-    out.push(...rows)
-    if (rows.length < PAGE_SIZE) break
-  }
-  return out
 }
 
 /**
@@ -55,12 +35,6 @@ function isCompanyAllowed(allowedCompanyIds: string[] | null, companyId: string)
 }
 
 // Чанки по 200 id для .in() — иначе упираемся в лимит длины URL.
-function chunkArray<T>(arr: T[], size: number): T[][] {
-  if (size <= 0) return [arr]
-  const out: T[][] = []
-  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
-  return out
-}
 
 async function ensureCompanyLocation(
   supabase: any,
@@ -204,7 +178,7 @@ export async function GET(request: Request) {
     ])
 
     // Каталог точки может быть >1000 позиций — постранично, иначе PostgREST молча обрежет остатки.
-    const balanceRows = await fetchAllPages((from, to) =>
+    const balanceRows = await fetchAllRows((from, to) =>
       supabase
         .from('inventory_balances')
         .select('location_id, item_id, quantity, quantity_reserved, updated_at, item:item_id(id, name, barcode, unit, sale_price, default_purchase_price, category_id, category:category_id(id, name))')
@@ -215,46 +189,9 @@ export async function GET(request: Request) {
     )
 
     // v8: только склад и витрина. Каталог вычисляется как сумма (warehouse + showcase).
-    const byItem = new Map<string, any>()
-    for (const row of balanceRows || []) {
-      const itemId = row.item_id
-      if (!itemId) continue
-      let bucket = byItem.get(itemId)
-      if (!bucket) {
-        bucket = {
-          item_id: itemId,
-          item: row.item,
-          showcase_quantity: 0,
-          warehouse_quantity: 0,
-          warehouse_reserved: 0,
-          updated_at: row.updated_at,
-        }
-        byItem.set(itemId, bucket)
-      }
-      if (row.location_id === warehouse.id) {
-        bucket.warehouse_quantity = Number(row.quantity) || 0
-        bucket.warehouse_reserved = Number((row as any).quantity_reserved) || 0
-      } else if (row.location_id === showcase.id) {
-        bucket.showcase_quantity = Number(row.quantity) || 0
-      }
-      if (row.updated_at > bucket.updated_at) bucket.updated_at = row.updated_at
-    }
-
-    const balances = Array.from(byItem.values())
-      .map((b) => {
-        const wh = Number(b.warehouse_quantity || 0)
-        const sh = Number(b.showcase_quantity || 0)
-        return {
-          ...b,
-          showcase_quantity: sh,
-          warehouse_available: Math.max(0, wh - Number(b.warehouse_reserved || 0)),
-          catalog_quantity: wh + sh,
-          quantity: wh + sh,
-        }
-      })
-      // Страница склада показывает только товары, которые есть на складе
-      .filter((b) => Number(b.warehouse_quantity || 0) > 0 || Number(b.warehouse_reserved || 0) > 0)
-      .sort((a, b) => Number(b.warehouse_quantity || 0) - Number(a.warehouse_quantity || 0))
+    const balances = warehouseStockView(
+      groupStockByItem(balanceRows as any, { warehouseId: warehouse.id, showcaseId: showcase.id }),
+    )
 
     // Изоляция: справочник категорий тоже тенантный — без фильтра в выпадашку
     // склада падали названия категорий чужих организаций. Фильтруем по

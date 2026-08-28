@@ -25,6 +25,9 @@ import { StorePanelSkeleton } from '@/components/store/store-panel-skeleton'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useDebouncedValue, useUrlState } from '@/lib/hooks/use-url-state'
 import { isAbortError } from '@/lib/is-abort-error'
+import { useStoreApiUrl } from '@/components/store/store-scope'
+import { readApiCache, writeApiCache } from '@/lib/client/use-api-cache'
+import { invalidateStoreCaches } from '@/lib/client/store-cache'
 
 type InventoryLocation = {
   id: string
@@ -210,6 +213,7 @@ function requestItemsCount(request: InventoryRequest) {
 
 function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) {
   const { can } = useCapabilities()
+  const storeUrl = useStoreApiUrl()
   const canApprove = can('store-requests.approve')
   const canBulkApprove = can('store-requests.bulk_approve')
   const canReject = can('store-requests.reject')
@@ -237,31 +241,44 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [bulkSaving, setBulkSaving] = useState(false)
 
+  const requestsUrl = storeUrl('/api/admin/inventory/requests')
+  // Суффикс: кладём разобранные заявки, а не сырой ответ.
+  const requestsCacheKey = `${requestsUrl}#store-requests`
+
+  const applyRequests = (normalizedRequests: InventoryRequest[]) => {
+    setRequests(normalizedRequests)
+    setSelectedIds((prev) => prev.filter((id) => normalizedRequests.some((request) => request.id === id)))
+    setDecisionDrafts((prev) => {
+      const next = { ...prev }
+      for (const request of normalizedRequests) {
+        if (!next[request.id]) next[request.id] = createDecisionDraft(request)
+      }
+      return next
+    })
+  }
+
   const load = async (signal?: AbortSignal, opts?: { soft?: boolean }) => {
-    const soft = Boolean(opts?.soft)
+    // opts.soft — перезагрузка после решения по заявке: кэш устарел.
+    const cached = opts?.soft ? null : readApiCache<InventoryRequest[]>(requestsCacheKey)
+    if (cached) applyRequests(cached)
+    const soft = Boolean(opts?.soft) || !!cached
     if (soft) {
       setRefreshing(true)
+      setLoading(false)
     } else {
       setLoading(true)
     }
     setError(null)
     try {
-      const response = await fetch('/api/admin/inventory/requests', { cache: 'no-store', signal })
+      const response = await fetch(requestsUrl, { cache: 'no-store', signal })
       const json = (await response.json().catch(() => null)) as InventoryResponse | null
       if (signal?.aborted) return
       if (!response.ok || !json?.ok || !json.data) {
         throw new Error(json?.error || 'Не удалось загрузить заявки магазина')
       }
       const normalizedRequests = asArray(json.data.requests).map(normalizeRequest).filter((request) => request.id)
-      setRequests(normalizedRequests)
-      setSelectedIds((prev) => prev.filter((id) => normalizedRequests.some((request) => request.id === id)))
-      setDecisionDrafts((prev) => {
-        const next = { ...prev }
-        for (const request of normalizedRequests) {
-          if (!next[request.id]) next[request.id] = createDecisionDraft(request)
-        }
-        return next
-      })
+      writeApiCache(requestsCacheKey, normalizedRequests)
+      applyRequests(normalizedRequests)
     } catch (err: any) {
       if (isAbortError(err) || signal?.aborted) return
       setError(err?.message || 'Не удалось загрузить заявки магазина')
@@ -277,7 +294,7 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
     const ac = new AbortController()
     void load(ac.signal)
     return () => ac.abort()
-  }, [])
+  }, [storeUrl])
 
   useEffect(() => {
     setSearchInput(filters.q)
@@ -388,6 +405,7 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
       const json = await response.json().catch(() => null)
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Ошибка')
       setSuccess('Решение откачено, заявка вернулась в статус «Новая».')
+      invalidateStoreCaches()
       await load(undefined, { soft: true })
     } catch (err: any) {
       setError(err?.message || 'Ошибка')
@@ -408,6 +426,7 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
       const json = await response.json().catch(() => null)
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Ошибка')
       setSuccess(status === 'issued' ? 'Заявка отмечена как выданная.' : 'Заявка отмечена как полученная.')
+      invalidateStoreCaches()
       await load(undefined, { soft: true })
     } catch (err: any) {
       setError(err?.message || 'Ошибка')
@@ -449,6 +468,7 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
       }
 
       setSuccess(approved ? 'Решение по заявке сохранено.' : 'Заявка отклонена.')
+      invalidateStoreCaches()
       await load(undefined, { soft: true })
     } catch (err: any) {
       setError(err?.message || 'Не удалось обработать заявку')
@@ -504,6 +524,7 @@ function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) 
       const failed = Array.isArray(json?.data?.failed) ? json.data.failed.length : 0
       setSuccess(`${BULK_LABEL[action][0]} ${succeeded} из ${ids.length}${failed ? `, не удалось ${failed}` : ''}.`)
       setSelectedIds((prev) => prev.filter((id) => !ids.includes(id)))
+      invalidateStoreCaches()
       await load(undefined, { soft: true })
     } catch (err: any) {
       setError(err?.message || 'Не удалось выполнить массовое действие')

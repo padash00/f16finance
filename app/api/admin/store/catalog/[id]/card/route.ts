@@ -1,11 +1,11 @@
-import { NextResponse } from 'next/server'
-
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
 import { requireOrgFeature } from '@/lib/server/entitlements'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { fetchAllRows } from '@/lib/server/fetch-all-rows'
+import { json } from '@/lib/server/api-response'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Карточка товара (GET).
@@ -28,26 +28,8 @@ const DAY_MS = 86_400_000
 const round1 = (v: number) => Math.round((v + Number.EPSILON) * 10) / 10
 const round2 = (v: number) => Math.round((v + Number.EPSILON) * 100) / 100
 
-function json(data: unknown, status = 200) {
-  return NextResponse.json(data, { status })
-}
-
 function canManageCatalog(access: { isSuperAdmin: boolean; staffRole: string }) {
   return access.isSuperAdmin || !!access.staffRole
-}
-
-// PostgREST молча режет ответ до 1000 строк — продажи/приёмки товара постранично.
-const PAGE_SIZE = 1000
-async function fetchAllPages<T = any>(buildQuery: (from: number, to: number) => any): Promise<T[]> {
-  const out: T[] = []
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1)
-    if (error) throw error
-    const rows = data || []
-    out.push(...rows)
-    if (rows.length < PAGE_SIZE) break
-  }
-  return out
 }
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -156,7 +138,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       // Продажи за 30 дней. Ходовой товар может иметь больше тысячи — это
       // сумма, забираем всё.
       hasLocations
-        ? fetchAllPages((from, to) =>
+        ? fetchAllRows((from, to) =>
             supabase
               .from('inventory_movements')
               .select('quantity')
@@ -171,7 +153,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
 
       // История приёмок растёт без ограничения — постранично, иначе
       // «последняя закупочная» берётся из усечённой выборки.
-      fetchAllPages((from, to) =>
+      fetchAllRows((from, to) =>
         supabase
           .from('inventory_receipt_items')
           .select('quantity, unit_cost, receipt:receipt_id(received_at, status, supplier:supplier_id(name, organization_name))')

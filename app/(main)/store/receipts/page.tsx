@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, Loader2, MoreHorizontal, Package, PackagePlus, RefreshCw, Search, Sparkles, Trash2 } from 'lucide-react'
 import { useCapabilities } from '@/lib/client/use-capabilities'
-import { useStoreScope } from '@/components/store/store-scope'
+import { useStoreApiUrl, useStoreScope } from '@/components/store/store-scope'
+import { readApiCache, writeApiCache } from '@/lib/client/use-api-cache'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -51,9 +52,11 @@ import {
   parseQty,
   parseUnitCost,
 } from '@/lib/store/receipts/format'
+import { invalidateStoreCaches } from '@/lib/client/store-cache'
 
 export default function StoreReceiptsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { storeCompanyId } = useStoreScope()
+  const storeUrl = useStoreApiUrl()
   const { can } = useCapabilities()
   const canCreate = can('store-receipts.create')
   const canEdit = can('store-receipts.edit')
@@ -110,16 +113,35 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
   const [receiptDetailsOpen, setReceiptDetailsOpen] = useState(false)
   const [mobileExpandedReceipts, setMobileExpandedReceipts] = useState<Record<string, boolean>>({})
 
+  const receiptsUrl = `/api/admin/store/receipts?scope=${scope}${storeCompanyId ? `&company_id=${encodeURIComponent(storeCompanyId)}` : ''}`
+  // Суффикс ключа: тот же адрес читает страница оприходования, но раскладывает
+  // ответ по-своему. Один ключ на два разных вида payload — ошибка ожидающая часа.
+  const receiptsCacheKey = `${receiptsUrl}#receipts`
+
+  const applyReceipts = (payload: NonNullable<ReceiptsResponse['data']>) => {
+    setData(payload)
+    // Сброс локации при смене точки: если текущая не из набора новой точки — берём первую.
+    setLocationId((current) => (current && payload.locations.some((l: any) => l.id === current)) ? current : (payload.locations?.[0]?.id || ''))
+  }
+
   const load = async (signal?: AbortSignal, opts?: { soft?: boolean }) => {
-    const soft = Boolean(opts?.soft)
+    // Прошлый ответ показываем сразу, свежий догружаем фоном: вкладка «Приёмка»
+    // в «Документах» размонтируется при каждом переключении, и без кэша возврат
+    // на неё — это снова пустой экран со скелетоном.
+    // opts.soft — это перезагрузка после мутации: там кэш заведомо устарел,
+    // подставлять его нельзя, иначе на секунду вернутся старые цифры.
+    const cached = opts?.soft ? null : readApiCache<NonNullable<ReceiptsResponse['data']>>(receiptsCacheKey)
+    if (cached) applyReceipts(cached)
+    const soft = Boolean(opts?.soft) || !!cached
     if (soft) {
       setRefreshing(true)
+      setLoading(false)
     } else {
       setLoading(true)
     }
     setError(null)
     try {
-      const response = await fetch(`/api/admin/store/receipts?scope=${scope}${storeCompanyId ? `&company_id=${encodeURIComponent(storeCompanyId)}` : ''}`, { cache: 'no-store', signal })
+      const response = await fetch(receiptsUrl, { cache: 'no-store', signal })
       const json = (await response.json().catch(() => null)) as ReceiptsResponse | null
       if (signal?.aborted) return
       if (!response.ok || !json?.ok || !json.data) throw new Error(json?.error || 'Не удалось загрузить приемку')
@@ -131,13 +153,12 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
         drafts: asArray(json.data.drafts),
         expense_categories: asArray(json.data.expense_categories),
       }
-      setData(normalized)
-      // Сброс локации при смене точки: если текущая не из набора новой точки — берём первую.
-      setLocationId((current) => (current && normalized.locations.some((l: any) => l.id === current)) ? current : (normalized.locations?.[0]?.id || ''))
+      writeApiCache(receiptsCacheKey, normalized)
+      applyReceipts(normalized)
 
       // load debts and build a map by receipt_id
       try {
-        const debtsResponse = await fetch('/api/admin/store/debts?status=all', { cache: 'no-store', signal })
+        const debtsResponse = await fetch(storeUrl('/api/admin/store/debts?status=all'), { cache: 'no-store', signal })
         const debtsJson = await debtsResponse.json().catch(() => null)
         if (debtsResponse.ok && debtsJson?.ok && Array.isArray(debtsJson.data?.debts)) {
           const map = new Map<string, DebtSummary>()
@@ -383,6 +404,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
       }
       setReceiptDetailsOpen(false)
       setSelectedReceipt(null)
+      invalidateStoreCaches()
       await load(undefined, { soft: true })
     } catch (e: any) {
       alert(e?.message || 'Ошибка сети')
@@ -513,6 +535,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
       setComment('')
       setLines([emptyLine()])
       setSuccess('Приемка проведена. Остатки и цены обновлены везде.')
+      invalidateStoreCaches()
       await load(undefined, { soft: true })
     } catch (err: any) {
       setError(err?.message || 'Не удалось провести приемку')
@@ -574,6 +597,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось сохранить черновик')
       setDraftId(String(json?.data?.id || draftId || ''))
       setSuccess('Черновик сохранен')
+      invalidateStoreCaches()
       await load(undefined, { soft: true })
     } catch (err: any) {
       setError(err?.message || 'Не удалось сохранить черновик')
@@ -642,6 +666,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
       const json = await response.json().catch(() => null)
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось удалить черновик')
       if (draftId === id) setDraftId(null)
+      invalidateStoreCaches()
       await load(undefined, { soft: true })
     } catch (err: any) {
       setError(err?.message || 'Не удалось удалить черновик')

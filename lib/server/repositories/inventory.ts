@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+import { sanitizeOrFilterValue } from '@/lib/server/postgrest-filter'
+
 type AnySupabase = SupabaseClient<any, 'public', any>
 
 export type InventoryScope = {
@@ -25,15 +27,6 @@ export type InventoryOverview = {
   companies: any[]
 }
 
-export type StoreOverview = {
-  items: any[]
-  locations: any[]
-  balances: any[]
-  requests: any[]
-  receipts: any[]
-  movements: any[]
-}
-
 export type StoreAnalyticsData = {
   locations: any[]
   balances: any[]
@@ -53,7 +46,6 @@ export type StoreMovementsData = {
 }
 
 export type StoreWriteoffsData = {
-  items: any[]
   locations: any[]
   balances: any[]
   writeoffs: any[]
@@ -67,6 +59,7 @@ export type StoreRevisionsData = {
 }
 
 const PAGE_SIZE = 1000
+const MAX_PAGES = 50
 
 /**
  * PostgREST молча режет любой select до 1000 строк — забираем постранично
@@ -79,7 +72,10 @@ async function fetchAllPagesResult(
   buildQuery: (from: number, to: number) => any,
 ): Promise<{ data: any[]; error: any }> {
   const out: any[] = []
-  for (let from = 0; ; from += PAGE_SIZE) {
+  // Предохранитель: если выборка вдруг перестанет укорачиваться (например,
+  // запрос без устойчивого порядка), цикл не должен крутиться вечно.
+  for (let page = 0; page < MAX_PAGES; page += 1) {
+    const from = page * PAGE_SIZE
     const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1)
     if (error) return { data: out, error }
     const rows = data || []
@@ -272,77 +268,375 @@ export async function fetchInventoryRequests(supabase: AnySupabase, scope?: Inve
   return filterByCompanyScope(mapNestedRows(data || []), scope, (row: any) => [row.requesting_company_id, row.company?.id])
 }
 
-export async function fetchStoreOverview(supabase: AnySupabase, scope?: InventoryScope): Promise<StoreOverview> {
-  const [
-    { data: items, error: itemsError },
-    { data: locations, error: locationsError },
-    { data: balances, error: balancesError },
-    { data: requests, error: requestsError },
-    { data: receipts, error: receiptsError },
-    { data: movements, error: movementsError },
-  ] = await Promise.all([
+export type StoreSearchResult = {
+  type: 'item' | 'request' | 'receipt' | 'writeoff'
+  title: string
+  subtitle: string
+  href: string
+  score: number
+}
+
+/**
+ * Поиск по магазину для строки в шапке модуля.
+ *
+ * ПОЧЕМУ так: раньше поиск дёргал общую выборку магазина — на каждое нажатие
+ * клавиши читались весь каталог и вся таблица остатков, а фильтрация шла в Node,
+ * при том что остатки поиску вообще не нужны. Здесь ищет БД: ilike + limit
+ * по каждой сущности.
+ */
+export async function searchStore(
+  supabase: AnySupabase,
+  scope: InventoryScope | undefined,
+  rawQuery: string,
+): Promise<StoreSearchResult[]> {
+  const q = String(rawQuery || '').trim().toLowerCase()
+  if (!q) return []
+  const safe = sanitizeOrFilterValue(q)
+  if (!safe) return []
+
+  const { data: locationRows, error: locationsError } = await applyOrganizationFilter(
+    supabase.from('inventory_locations').select('id, company_id, organization_id, name').eq('is_active', true),
+    scope,
+  )
+  if (locationsError) throw locationsError
+  const locationIds = filterByCompanyScope(locationRows || [], scope, (row: any) => [row.company_id]).map(
+    (row: any) => String(row.id),
+  )
+
+  const requestsQuery = () => {
+    let query = supabase
+      .from('inventory_requests')
+      .select('id, status, requesting_company_id, company:requesting_company_id(id, name)')
+      .order('created_at', { ascending: false })
+      .limit(50)
+    if (isRestrictedScope(scope)) {
+      const allowed = Array.from(getAllowedCompanyIdSet(scope))
+      if (allowed.length === 0) return null
+      query = query.in('requesting_company_id', allowed)
+    }
+    return query
+  }
+  const requestsPromise = requestsQuery()
+
+  const [items, requests, receipts, writeoffs] = await Promise.all([
+    applyOrganizationFilter(
+      supabase
+        .from('inventory_items')
+        .select('id, name, barcode')
+        .eq('is_active', true)
+        .or(`name.ilike.%${safe}%,barcode.ilike.%${safe}%`)
+        .order('name')
+        .limit(10),
+      scope,
+    ),
+    requestsPromise || Promise.resolve({ data: [], error: null }),
+    locationIds.length
+      ? supabase
+          .from('inventory_receipts')
+          .select('id, invoice_number, supplier:supplier_id(id, name)')
+          .in('location_id', locationIds)
+          .ilike('invoice_number', `%${safe}%`)
+          .order('created_at', { ascending: false })
+          .limit(10)
+      : Promise.resolve({ data: [], error: null }),
+    locationIds.length
+      ? supabase
+          .from('inventory_writeoffs')
+          .select('id, reason, location:location_id(id, name)')
+          .in('location_id', locationIds)
+          .ilike('reason', `%${safe}%`)
+          .order('written_at', { ascending: false })
+          .limit(10)
+      : Promise.resolve({ data: [], error: null }),
+  ])
+
+  if (items.error) throw items.error
+  if (requests.error) throw requests.error
+  if (receipts.error) throw receipts.error
+  if (writeoffs.error) throw writeoffs.error
+
+  const results: StoreSearchResult[] = []
+
+  for (const item of items.data || []) {
+    const name = String((item as any).name || '')
+    const barcode = String((item as any).barcode || '')
+    results.push({
+      type: 'item',
+      title: name || 'Товар',
+      subtitle: barcode || 'Без штрихкода',
+      href: `/store/warehouse?q=${encodeURIComponent(barcode || name)}`,
+      score: barcode === q ? 100 : barcode.startsWith(q) ? 90 : name.toLowerCase().startsWith(q) ? 80 : 70,
+    })
+  }
+
+  for (const row of mapNestedRows((requests.data || []) as any[])) {
+    const requestId = String(row.id || '')
+    const companyName = String(row.company?.name || '')
+    const status = String(row.status || '')
+    if (!`${requestId} ${companyName} ${status}`.toLowerCase().includes(q)) continue
+    results.push({
+      type: 'request',
+      title: `Заявка ${requestId.slice(0, 8)}`,
+      subtitle: `${companyName || 'Точка'} · ${status}`,
+      href: `/store/requests?q=${encodeURIComponent(requestId)}`,
+      score: requestId.includes(q) ? 95 : 65,
+    })
+  }
+
+  for (const row of mapNestedRows((receipts.data || []) as any[])) {
+    const id = String(row.id || '')
+    const invoice = String(row.invoice_number || '')
+    results.push({
+      type: 'receipt',
+      title: `Приемка ${invoice || id.slice(0, 8)}`,
+      subtitle: String(row.supplier?.name || 'Без поставщика'),
+      href: `/store/receipts?q=${encodeURIComponent(invoice || id)}`,
+      score: invoice.toLowerCase() === q ? 92 : 62,
+    })
+  }
+
+  for (const row of mapNestedRows((writeoffs.data || []) as any[])) {
+    const id = String(row.id || '')
+    const reason = String(row.reason || '')
+    results.push({
+      type: 'writeoff',
+      title: `Списание ${id.slice(0, 8)}`,
+      subtitle: `${reason || 'Причина не указана'} · ${String(row.location?.name || 'Локация')}`,
+      href: `/store/writeoffs?q=${encodeURIComponent(reason || id)}`,
+      score: id.includes(q) ? 90 : 60,
+    })
+  }
+
+  return results.sort((a, b) => b.score - a.score).slice(0, 30)
+}
+
+export type StoreOverviewLowStockRow = {
+  item_id: string
+  name: string
+  quantity: number
+  threshold: number
+  location_name: string | null
+}
+
+export type StoreOverviewMetrics = {
+  pendingRequests: number
+  disputedRequests: number
+  showcases: number
+  receipts: number
+  unresolvedWriteoffs: number
+  lowStock: number
+  lowStockTop: StoreOverviewLowStockRow[]
+}
+
+const EMPTY_STORE_METRICS: StoreOverviewMetrics = {
+  pendingRequests: 0,
+  disputedRequests: 0,
+  showcases: 0,
+  receipts: 0,
+  unresolvedWriteoffs: 0,
+  lowStock: 0,
+  lowStockTop: [],
+}
+
+/**
+ * Счётчики для обзора магазина.
+ *
+ * ПОЧЕМУ только счётчики: прошлая версия ради шести чисел читала inventory_items
+ * и inventory_balances целиком — балансы вообще без фильтра по точке, изоляция
+ * делалась уже в Node. Здесь каждый счётчик считает сервер БД
+ * (count: 'exact', head: true), а строки читаются только там, где иначе нельзя:
+ * низкий остаток сравнивает количество с порогом товара, и только по товарам,
+ * у которых порог вообще задан.
+ */
+export async function fetchStoreOverviewMetrics(
+  supabase: AnySupabase,
+  scope?: InventoryScope,
+): Promise<StoreOverviewMetrics> {
+  const { data: locationRows, error: locationsError } = await applyOrganizationFilter(
+    supabase
+      .from('inventory_locations')
+      .select('id, company_id, organization_id, name, location_type')
+      .eq('is_active', true),
+    scope,
+  )
+  if (locationsError) throw locationsError
+
+  const locations = filterByCompanyScope(locationRows || [], scope, (row: any) => [row.company_id])
+  const locationIds = locations.map((row: any) => String(row.id))
+  if (locationIds.length === 0) return EMPTY_STORE_METRICS
+
+  const locationNameById = new Map<string, string>(
+    locations.map((row: any) => [String(row.id), String(row.name || '')]),
+  )
+  const showcases = locations.filter((row: any) => row.location_type === 'point_display').length
+
+  const countRequests = async (status: string): Promise<{ count: number | null; error: any }> => {
+    let query = supabase
+      .from('inventory_requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', status)
+    if (isRestrictedScope(scope)) {
+      const allowed = Array.from(getAllowedCompanyIdSet(scope))
+      if (allowed.length === 0) return { count: 0, error: null }
+      query = query.in('requesting_company_id', allowed)
+    }
+    const { count, error } = await query
+    return { count, error }
+  }
+
+  // Списания «требуют разбора» = пустая причина. Смотрим последние 90 дней:
+  // разбирать имеет смысл свежие, а запрос ложится на индекс (location_id, written_at).
+  const writeoffsSince = new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10)
+
+  const [pending, disputed, receipts, writeoffs, thresholdItems] = await Promise.all([
+    countRequests('new'),
+    countRequests('disputed'),
+    supabase
+      .from('inventory_receipts')
+      .select('id', { count: 'exact', head: true })
+      .in('location_id', locationIds),
+    fetchAllPagesResult((from, to) =>
+      supabase
+        .from('inventory_writeoffs')
+        .select('id, reason')
+        .in('location_id', locationIds)
+        .gte('written_at', writeoffsSince)
+        .order('id')
+        .range(from, to),
+    ),
     fetchAllPagesResult((from, to) =>
       applyOrganizationFilter(
         supabase
-        .from('inventory_items')
-        .select('id, name, barcode, sale_price, unit, item_type, low_stock_threshold, is_active, category:category_id(id, name)')
-        .eq('is_active', true)
-        .order('name', { ascending: true })
-        .order('id', { ascending: true }),
+          .from('inventory_items')
+          .select('id, name, low_stock_threshold')
+          .eq('is_active', true)
+          .not('low_stock_threshold', 'is', null)
+          .order('id'),
         scope,
       ).range(from, to),
     ),
-    applyOrganizationFilter(
-      supabase
-      .from('inventory_locations')
-      .select('id, company_id, organization_id, name, code, location_type, is_active, company:company_id(id, name, code)')
-      .eq('is_active', true)
-      .order('location_type', { ascending: true })
-      .order('name', { ascending: true }),
-      scope,
-    ),
-    fetchAllPagesResult((from, to) =>
-      supabase
-        .from('inventory_balances')
-        .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, low_stock_threshold), location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code))')
-        .gt('quantity', 0)
-        .order('updated_at', { ascending: false })
-        .order('location_id', { ascending: true })
-        .order('item_id', { ascending: true })
-        .range(from, to),
-    ),
-    supabase
-      .from('inventory_requests')
-      .select('id, requesting_company_id, status, comment, decision_comment, created_at, approved_at, company:requesting_company_id(id, name, code), source_location:source_location_id(id, name, code, location_type, organization_id), target_location:target_location_id(id, name, code, location_type, organization_id), items:inventory_request_items(id, item_id, requested_qty, approved_qty, comment, item:item_id(id, name, barcode, unit))')
-      .order('created_at', { ascending: false })
-      .limit(24),
-    supabase
-      .from('inventory_receipts')
-      .select('id, received_at, total_amount, invoice_number, invoice_file_url, comment, location:location_id(id, name, code, location_type, organization_id, company_id), supplier:supplier_id(id, name, bin_iin, organization_name), items:inventory_receipt_items(id, item_id, quantity, unit_cost, total_cost, item:item_id(id, name, barcode, unit))')
-      .order('created_at', { ascending: false })
-      .limit(10),
-    supabase
-      .from('inventory_movements')
-      .select('id, movement_type, quantity, unit_cost, total_amount, reference_type, comment, created_at, item:item_id(id, name, barcode, unit), from_location:from_location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code)), to_location:to_location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code))')
-      .order('created_at', { ascending: false })
-      .limit(16),
   ])
 
-  if (itemsError) throw itemsError
-  if (locationsError) throw locationsError
-  if (balancesError) throw balancesError
-  if (requestsError) throw requestsError
-  if (receiptsError) throw receiptsError
-  if (movementsError) throw movementsError
+  if (pending.error) throw pending.error
+  if (disputed.error) throw disputed.error
+  if (receipts.error) throw receipts.error
+  if (writeoffs.error) throw writeoffs.error
+  if (thresholdItems.error) throw thresholdItems.error
+
+  const unresolvedWriteoffs = (writeoffs.data || []).filter(
+    (row: any) => !String(row.reason || '').trim(),
+  ).length
+
+  const thresholdById = new Map<string, { name: string; threshold: number }>()
+  for (const item of thresholdItems.data || []) {
+    thresholdById.set(String(item.id), {
+      name: String(item.name || 'Товар'),
+      threshold: Number(item.low_stock_threshold || 0),
+    })
+  }
+
+  let lowStock = 0
+  const lowStockTop: StoreOverviewLowStockRow[] = []
+  if (thresholdById.size > 0) {
+    const itemIds = Array.from(thresholdById.keys())
+    const balances: any[] = []
+    // .in() по длинному списку упирается в лимит длины URL — режем на пачки.
+    for (let i = 0; i < itemIds.length; i += 200) {
+      const chunk = itemIds.slice(i, i + 200)
+      const { data, error } = await fetchAllPagesResult((from, to) =>
+        supabase
+          .from('inventory_balances')
+          .select('item_id, location_id, quantity')
+          .in('location_id', locationIds)
+          .in('item_id', chunk)
+          .order('item_id')
+          .order('location_id')
+          .range(from, to),
+      )
+      if (error) throw error
+      balances.push(...(data || []))
+    }
+
+    // Позиция считается один раз, даже если она мала и на складе, и на витрине:
+    // «низкий остаток» — про товар, а не про строку баланса. Берём минимальный
+    // запас по локациям, чтобы наверх всплывало самое горячее.
+    const worstByItem = new Map<string, StoreOverviewLowStockRow>()
+    for (const row of balances) {
+      const meta = thresholdById.get(String(row.item_id))
+      if (!meta) continue
+      const quantity = Number(row.quantity || 0)
+      if (quantity > meta.threshold) continue
+      const candidate: StoreOverviewLowStockRow = {
+        item_id: String(row.item_id),
+        name: meta.name,
+        quantity,
+        threshold: meta.threshold,
+        location_name: locationNameById.get(String(row.location_id)) || null,
+      }
+      const current = worstByItem.get(candidate.item_id)
+      if (!current || candidate.quantity < current.quantity) worstByItem.set(candidate.item_id, candidate)
+    }
+
+    lowStock = worstByItem.size
+    lowStockTop.push(
+      ...Array.from(worstByItem.values())
+        .sort((a, b) => a.quantity - b.quantity || a.name.localeCompare(b.name, 'ru'))
+        .slice(0, 10),
+    )
+  }
 
   return {
-    items: filterByOrganizationScope(mapNestedRows(items || []), scope, (row: any) => row.organization_id),
-    locations: filterByCompanyScope(mapNestedRows(locations || []), scope, (row: any) => [row.company_id]),
-    balances: filterByLocationScope(mapNestedRows(balances || []), scope, (row: any) => row.location),
-    requests: filterByCompanyScope(mapNestedRows(requests || []), scope, (row: any) => [row.requesting_company_id, row.company?.id]),
-    receipts: filterByLocationScope(mapNestedRows(receipts || []), scope, (row: any) => row.location),
-    movements: filterByMovementScope(mapNestedRows(movements || []), scope),
+    pendingRequests: Number(pending.count || 0),
+    disputedRequests: Number(disputed.count || 0),
+    showcases,
+    receipts: Number(receipts.count || 0),
+    unresolvedWriteoffs,
+    lowStock,
+    lowStockTop,
   }
+}
+
+const LOCATION_SCOPE_TABLE = 'inventory_locations'
+const NEVER_MATCH_UUID = '00000000-0000-0000-0000-000000000000'
+// Больше двух сотен id в .in() — это уже длина URL, на которой шлюз обрывает
+// запрос. У арендатора локаций единицы (склад + витрина на точку), так что
+// предел упирается только в платформенный контекст суперадмина без орг.
+const MAX_LOCATION_IDS_IN_FILTER = 200
+
+/**
+ * Id локаций, видимых в скоупе. `null` — фильтровать по локациям нельзя
+ * (платформенный контекст либо слишком длинный список), запрос идёт как раньше,
+ * а изоляцию доделывает filterByLocationScope в приложении.
+ *
+ * ЗАЧЕМ: выборки остатков читали `inventory_balances` целиком — всю таблицу
+ * всех арендаторов — и отфильтровывали чужое уже в Node. Со списком локаций
+ * фильтр уезжает в БД, и запрос ложится на индекс.
+ */
+async function resolveScopeLocationIds(
+  supabase: AnySupabase,
+  scope?: InventoryScope,
+): Promise<string[] | null> {
+  if (!isRestrictedScope(scope)) return null
+
+  const { data, error } = await applyOrganizationFilter(
+    supabase.from(LOCATION_SCOPE_TABLE).select('id, company_id, organization_id'),
+    scope,
+  )
+  if (error) throw error
+
+  const allowed = filterByCompanyScope(data || [], scope, (row: any) => [row.company_id])
+  const ids = allowed.map((row: any) => String(row.id))
+  return ids.length > MAX_LOCATION_IDS_IN_FILTER ? null : ids
+}
+
+/** Применить фильтр по локациям, если он вычислился. */
+function withLocationFilter(query: any, locationIds: string[] | null) {
+  if (locationIds === null) return query
+  // Пустой список — «видно ноль локаций» (орг без склада, пользователь без
+  // точек). `.in()` с пустым массивом PostgREST разбирает непредсказуемо,
+  // поэтому кладём заведомо несуществующий id: fail-closed, а не «всё подряд».
+  if (locationIds.length === 0) return query.in('location_id', [NEVER_MATCH_UUID])
+  return query.in('location_id', locationIds)
 }
 
 export async function fetchStoreAnalytics(
@@ -353,6 +647,7 @@ export async function fetchStoreAnalytics(
   // Окно движений по дате (Сегодня/Неделя/Месяц). days<=0 или undefined → всё время.
   const days = Number(options?.days || 0)
   const sinceIso = days > 0 ? new Date(Date.now() - days * 86400000).toISOString() : null
+  const locationIds = await resolveScopeLocationIds(supabase, scope)
   const [
     { data: locations, error: locationsError },
     { data: balances, error: balancesError },
@@ -368,14 +663,16 @@ export async function fetchStoreAnalytics(
       scope,
     ),
     fetchAllPagesResult((from, to) =>
-      supabase
-        .from('inventory_balances')
-        .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, low_stock_threshold), location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code))')
-        .gt('quantity', 0)
-        .order('updated_at', { ascending: false })
-        .order('location_id', { ascending: true })
-        .order('item_id', { ascending: true })
-        .range(from, to),
+      withLocationFilter(
+        supabase
+          .from('inventory_balances')
+          .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, low_stock_threshold), location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code))')
+          .gt('quantity', 0)
+          .order('updated_at', { ascending: false })
+          .order('location_id', { ascending: true })
+          .order('item_id', { ascending: true }),
+        locationIds,
+      ).range(from, to),
     ),
     fetchAllPagesResult((from, to) => {
       let q = supabase
@@ -479,23 +776,15 @@ export async function fetchStoreMovements(supabase: AnySupabase, scope?: Invento
 }
 
 export async function fetchStoreWriteoffs(supabase: AnySupabase, scope?: InventoryScope): Promise<StoreWriteoffsData> {
+  const locationIds = await resolveScopeLocationIds(supabase, scope)
+  // Каталога здесь нет намеренно: списывают только то, что лежит на локации,
+  // и страница выбирает позицию из balances. Полный каталог активных товаров
+  // уезжал клиенту на каждое открытие «Списаний» и ни разу не читался.
   const [
-    { data: items, error: itemsError },
     { data: locations, error: locationsError },
     { data: balances, error: balancesError },
     { data: writeoffs, error: writeoffsError },
   ] = await Promise.all([
-    fetchAllPagesResult((from, to) =>
-      applyOrganizationFilter(
-        supabase
-        .from('inventory_items')
-        .select('id, name, barcode, unit, item_type, is_active, company_id, category:category_id(id, name)')
-        .eq('is_active', true)
-        .order('name', { ascending: true })
-        .order('id', { ascending: true }),
-        scope,
-      ).range(from, to),
-    ),
     applyOrganizationFilter(
       supabase
       .from('inventory_locations')
@@ -507,14 +796,16 @@ export async function fetchStoreWriteoffs(supabase: AnySupabase, scope?: Invento
       scope,
     ),
     fetchAllPagesResult((from, to) =>
-      supabase
-        .from('inventory_balances')
-        .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, item_type), location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code))')
-        .gt('quantity', 0)
-        .order('updated_at', { ascending: false })
-        .order('location_id', { ascending: true })
-        .order('item_id', { ascending: true })
-        .range(from, to),
+      withLocationFilter(
+        supabase
+          .from('inventory_balances')
+          .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, item_type), location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code))')
+          .gt('quantity', 0)
+          .order('updated_at', { ascending: false })
+          .order('location_id', { ascending: true })
+          .order('item_id', { ascending: true }),
+        locationIds,
+      ).range(from, to),
     ),
     supabase
       .from('inventory_writeoffs')
@@ -523,13 +814,11 @@ export async function fetchStoreWriteoffs(supabase: AnySupabase, scope?: Invento
       .limit(80),
   ])
 
-  if (itemsError) throw itemsError
   if (locationsError) throw locationsError
   if (balancesError) throw balancesError
   if (writeoffsError) throw writeoffsError
 
   return {
-    items: filterByCompanyScope(mapNestedRows(items || []), scope, (row: any) => [row.company_id]),
     locations: filterByCompanyScope(mapNestedRows(locations || []), scope, (row: any) => [row.company_id]),
     balances: filterByLocationScope(mapNestedRows(balances || []), scope, (row: any) => row.location),
     writeoffs: filterByLocationScope(mapNestedRows(writeoffs || []), scope, (row: any) => row.location),
@@ -565,6 +854,7 @@ export async function fetchStoreRevisions(
   scope?: InventoryScope,
   options?: { archive?: RevisionArchiveMode },
 ): Promise<StoreRevisionsData> {
+  const locationIds = await resolveScopeLocationIds(supabase, scope)
   const [
     { data: items, error: itemsError },
     { data: locations, error: locationsError },
@@ -593,13 +883,15 @@ export async function fetchStoreRevisions(
       scope,
     ),
     fetchAllPagesResult((from, to) =>
-      supabase
-        .from('inventory_balances')
-        .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, item_type), location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code))')
-        .order('updated_at', { ascending: false })
-        .order('location_id', { ascending: true })
-        .order('item_id', { ascending: true })
-        .range(from, to),
+      withLocationFilter(
+        supabase
+          .from('inventory_balances')
+          .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, item_type), location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code))')
+          .order('updated_at', { ascending: false })
+          .order('location_id', { ascending: true })
+          .order('item_id', { ascending: true }),
+        locationIds,
+      ).range(from, to),
     ),
     supabase
       .from('inventory_stocktakes')
@@ -630,6 +922,7 @@ export async function fetchStoreRevisions(
 }
 
 export async function fetchInventoryOverview(supabase: AnySupabase, scope?: InventoryScope): Promise<InventoryOverview> {
+  const locationIds = await resolveScopeLocationIds(supabase, scope)
   const [
     { data: categories, error: categoriesError },
     { data: suppliers, error: suppliersError },
@@ -664,13 +957,15 @@ export async function fetchInventoryOverview(supabase: AnySupabase, scope?: Inve
       scope,
     ),
     fetchAllPagesResult((from, to) =>
-      supabase
-        .from('inventory_balances')
-        .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode), location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code))')
-        .order('updated_at', { ascending: false })
-        .order('location_id', { ascending: true })
-        .order('item_id', { ascending: true })
-        .range(from, to),
+      withLocationFilter(
+        supabase
+          .from('inventory_balances')
+          .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode), location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code))')
+          .order('updated_at', { ascending: false })
+          .order('location_id', { ascending: true })
+          .order('item_id', { ascending: true }),
+        locationIds,
+      ).range(from, to),
     ),
     supabase
       .from('inventory_receipts')
@@ -1351,6 +1646,7 @@ function mapNestedRows<T>(rows: T[]): T[] {
 }
 
 export async function fetchConsumableDashboard(supabase: AnySupabase, scope?: InventoryScope) {
+  const locationIds = await resolveScopeLocationIds(supabase, scope)
   const [
     { data: items, error: itemsError },
     { data: norms, error: normsError },
@@ -1375,13 +1671,15 @@ export async function fetchConsumableDashboard(supabase: AnySupabase, scope?: In
       .from('inventory_point_limits')
       .select('id, item_id, company_id, monthly_limit_qty'),
     fetchAllPagesResult((from, to) =>
-      supabase
-        .from('inventory_balances')
-        .select('location_id, item_id, quantity, item:item_id(id, name), location:location_id(id, name, location_type, company_id, organization_id)')
-        .gt('quantity', 0)
-        .order('location_id', { ascending: true })
-        .order('item_id', { ascending: true })
-        .range(from, to),
+      withLocationFilter(
+        supabase
+          .from('inventory_balances')
+          .select('location_id, item_id, quantity, item:item_id(id, name), location:location_id(id, name, location_type, company_id, organization_id)')
+          .gt('quantity', 0)
+          .order('location_id', { ascending: true })
+          .order('item_id', { ascending: true }),
+        locationIds,
+      ).range(from, to),
     ),
     applyOrganizationFilter(
       supabase
