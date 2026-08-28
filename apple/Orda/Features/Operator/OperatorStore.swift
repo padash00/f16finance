@@ -34,6 +34,8 @@ final class OperatorStore {
     private(set) var companyName = "Точка"
     private(set) var isLoadingCatalog = false
     private(set) var catalogError: String?
+    /// Почему не сохранился пересчёт, отправленный при уходе с экрана.
+    var auditSaveError: String?
 
     private(set) var cart: [SaleLine] = []
     var cartTotal: Double { cart.reduce(0) { $0 + $1.total } }
@@ -204,7 +206,24 @@ final class OperatorStore {
     func saveAuditCounts(actID: String, counts: [AuditCount]) async throws -> AuditSaveResult? {
         let result = try await service.saveAuditCounts(actID: actID, counts: counts)
         await refreshQueuedCounts()
+        auditSaveError = nil
         return result
+    }
+
+    /// Досылка пересчёта, когда экрана уже нет.
+    ///
+    /// Уходя с подсчёта, отправить остаток надо, а показать отказ негде: экран
+    /// закрывается. Поэтому причина ложится сюда и ждёт на списке актов —
+    /// иначе час работы пропадал бы молча.
+    func flushAuditCounts(actID: String, counts: [AuditCount]) async {
+        guard !counts.isEmpty else { return }
+        do {
+            _ = try await saveAuditCounts(actID: actID, counts: counts)
+        } catch let error as APIError {
+            auditSaveError = error.operatorMessage
+        } catch {
+            auditSaveError = error.localizedDescription
+        }
     }
 
     /// Кто вошёл. Очереди на диске общие для устройства, а телефон на точке

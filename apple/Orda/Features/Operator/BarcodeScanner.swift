@@ -15,6 +15,10 @@ import VisionKit
 /// нейронный движок), поэтому вызывающий обязан иметь ручной ввод как запасной
 /// путь — см. `isScanningSupported`.
 struct BarcodeScanner: UIViewControllerRepresentable {
+    /// Камера замерла: поверх неё что-то вводят, и распознавать сейчас нечего.
+    /// Без этого следующая бутылка на полке перебивает набранное число.
+    var isPaused: Bool = false
+
     /// Вызывается на каждый распознанный код. Дедупликацию делает вызывающий.
     let onScan: (String) -> Void
 
@@ -39,7 +43,12 @@ struct BarcodeScanner: UIViewControllerRepresentable {
 
     func updateUIViewController(_ controller: DataScannerViewController, context: Context) {
         context.coordinator.onScan = onScan
-        if !controller.isScanning {
+        if isPaused {
+            if controller.isScanning { controller.stopScanning() }
+        } else if !controller.isScanning {
+            // Проснулись — забываем последний код: ту же бутылку могут поднести
+            // снова намеренно, и отказ «уже сканировали» тут был бы враньём.
+            context.coordinator.forgetLast()
             try? controller.startScanning()
         }
     }
@@ -61,6 +70,11 @@ struct BarcodeScanner: UIViewControllerRepresentable {
 
         init(onScan: @escaping (String) -> Void) {
             self.onScan = onScan
+        }
+
+        func forgetLast() {
+            lastCode = nil
+            lastAt = .distantPast
         }
 
         func dataScanner(_ scanner: DataScannerViewController, didAdd items: [RecognizedItem], allItems: [RecognizedItem]) {
@@ -98,6 +112,8 @@ struct BarcodeScanner: UIViewControllerRepresentable {
 /// На Mac и на старых устройствах камеры для непрерывного сканирования нет —
 /// там сразу показываем поле ввода. Оно же нужно, когда штрихкод затёрт.
 struct ScannerPane: View {
+    /// Пока сверху вводят количество, камера не ищет коды.
+    var isPaused: Bool = false
     let onCode: (String) -> Void
 
     @State private var manualCode = ""
@@ -107,7 +123,7 @@ struct ScannerPane: View {
         VStack(spacing: Spacing.md) {
             #if os(iOS)
             if BarcodeScanner.isSupported {
-                BarcodeScanner(onScan: onCode)
+                BarcodeScanner(isPaused: isPaused, onScan: onCode)
                     .frame(height: 240)
                     .clipShape(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
                     .overlay {
