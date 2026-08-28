@@ -13,6 +13,7 @@ import { isAbortError } from '@/lib/is-abort-error'
 import { SupplierDebtsWidget } from '@/components/store/supplier-debts-widget'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { useStoreApiUrl } from '@/components/store/store-scope'
+import { readApiCache, writeApiCache } from '@/lib/client/use-api-cache'
 
 type StoreOverviewMetrics = {
   pendingRequests: number
@@ -65,25 +66,49 @@ export default function StoreOverviewPage() {
     return () => { clearTimeout(timer); ac.abort() }
   }, [q, storeUrl])
 
+  const overviewUrl = storeUrl('/api/admin/store/overview')
+  const timelineUrl = storeUrl('/api/admin/store/audit-timeline?limit=12')
+  // Суффикс ключа: в кэше лежат только счётчики, а ответ содержит ещё списки
+  // для мобильных приложений — путать эти два вида одним ключом нельзя.
+  const overviewCacheKey = `${overviewUrl}#metrics`
+
   useEffect(() => {
+    // Главная магазина открывается чаще всех остальных страниц раздела: прошлые
+    // цифры показываем сразу, свежие подтягиваем фоном.
+    const cachedOverview = readApiCache<StoreOverviewMetrics>(overviewCacheKey)
+    if (cachedOverview) setOverview(cachedOverview)
+    const cachedTimeline = readApiCache<AuditTimelineEntry[]>(timelineUrl)
+    if (cachedTimeline) setTimeline(cachedTimeline)
+
     const ac = new AbortController()
     async function load() {
       try {
         const [resOverview, resTimeline] = await Promise.all([
-          fetch(storeUrl('/api/admin/store/overview'), { cache: 'no-store', signal: ac.signal }),
-          fetch(storeUrl('/api/admin/store/audit-timeline?limit=12'), { cache: 'no-store', signal: ac.signal }),
+          fetch(overviewUrl, { cache: 'no-store', signal: ac.signal }),
+          fetch(timelineUrl, { cache: 'no-store', signal: ac.signal }),
         ])
         if (ac.signal.aborted) return
         const jsonOverview = await resOverview.json().catch(() => null)
-        if (resOverview.ok && jsonOverview?.ok) setOverview(jsonOverview.data as StoreOverviewMetrics)
+        if (resOverview.ok && jsonOverview?.ok) {
+          const metrics = jsonOverview.data as StoreOverviewMetrics
+          writeApiCache(overviewCacheKey, metrics)
+          setOverview(metrics)
+        }
         const jsonTimeline = await resTimeline.json().catch(() => null)
         if (ac.signal.aborted) return
-        if (resTimeline.ok && jsonTimeline?.ok) setTimeline(Array.isArray(jsonTimeline?.data?.timeline) ? jsonTimeline.data.timeline : [])
-      } catch (e) { if (!isAbortError(e) && !ac.signal.aborted) { setOverview(null); setTimeline([]) } }
+        if (resTimeline.ok && jsonTimeline?.ok) {
+          const timeline = Array.isArray(jsonTimeline?.data?.timeline) ? jsonTimeline.data.timeline : []
+          writeApiCache(timelineUrl, timeline)
+          setTimeline(timeline)
+        }
+      } catch (e) {
+        // Фоновая ошибка при живом кэше не должна стирать экран.
+        if (!isAbortError(e) && !ac.signal.aborted && !cachedOverview) { setOverview(null); setTimeline([]) }
+      }
     }
     void load()
     return () => ac.abort()
-  }, [storeUrl])
+  }, [overviewUrl, timelineUrl, overviewCacheKey])
 
   const topLowStock = overview?.lowStockTop || []
 

@@ -19,6 +19,7 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { isAbortError } from '@/lib/is-abort-error'
 import { useStoreApiUrl } from '@/components/store/store-scope'
+import { readApiCache, writeApiCache } from '@/lib/client/use-api-cache'
 
 type AbcClass = 'A' | 'B' | 'C'
 type XyzClass = 'X' | 'Y' | 'Z'
@@ -110,20 +111,34 @@ export default function StoreAbcPage({ embedded = false }: { embedded?: boolean 
   const [sortKey, setSortKey] = useState<SortKey>('revenue')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
+  type AbcCached = { rows: AbcRow[]; slowMovers: AbcRow[]; summary: AbcSummary }
+
+  const applyAbc = (payload: AbcCached) => {
+    setRows(payload.rows)
+    setSlowMovers(payload.slowMovers)
+    setSummary(payload.summary)
+  }
+
   const load = async (mode: 'sales' | 'stock' = tab, days: number = period, signal?: AbortSignal) => {
-    setLoading(true)
+    const url = storeUrl(`/api/admin/inventory/abc?mode=${mode}&days=${days}`)
+    // Суффикс: кладём разобранный ответ (данные лежат в трёх полях конверта).
+    const cacheKey = `${url}#abc`
+    const cached = readApiCache<AbcCached>(cacheKey)
+    if (cached) applyAbc(cached)
+    setLoading(!cached)
     setError(null)
     try {
-      const res = await fetch(storeUrl(`/api/admin/inventory/abc?mode=${mode}&days=${days}`), {
-        cache: 'no-store',
-        signal,
-      })
+      const res = await fetch(url, { cache: 'no-store', signal })
       const json = (await res.json().catch(() => null)) as AbcResponse | null
       if (signal?.aborted) return
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Не удалось загрузить ABC')
-      setRows(json.data || [])
-      setSlowMovers(json.slow_movers || [])
-      setSummary(json.summary || {})
+      const payload: AbcCached = {
+        rows: json.data || [],
+        slowMovers: json.slow_movers || [],
+        summary: json.summary || {},
+      }
+      writeApiCache(cacheKey, payload)
+      applyAbc(payload)
     } catch (e: any) {
       if (isAbortError(e) || signal?.aborted) return
       setRows([])

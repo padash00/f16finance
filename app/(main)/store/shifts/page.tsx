@@ -7,6 +7,7 @@ import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { PageSkeleton, StatGridSkeleton, TableSkeleton } from '@/components/skeleton'
 import { useStoreScope } from '@/components/store/store-scope'
+import { readApiCache, writeApiCache } from '@/lib/client/use-api-cache'
 import { Clock, Loader2, RefreshCw, Settings, User, Wallet, CreditCard, X, ChevronRight, TrendingUp, RotateCcw } from 'lucide-react'
 
 type LiveTotals = { sales: number; cash: number; kaspi: number; count: number }
@@ -220,13 +221,18 @@ export default function StoreShiftsPage() {
 
   const load = useCallback(async () => {
     if (!storeCompanyId) return
-    setLoading(true); setErr(null)
+    const p = new URLSearchParams({ company_id: storeCompanyId, status, limit: '200' })
+    const url = `/api/admin/shifts/reports?${p}`
+    const cached = readApiCache<any[]>(`${url}#shifts`)
+    if (cached) setShifts(cached)
+    setLoading(!cached); setErr(null)
     try {
-      const p = new URLSearchParams({ company_id: storeCompanyId, status, limit: '200' })
-      const res = await fetch(`/api/admin/shifts/reports?${p}`, { cache: 'no-store' })
+      const res = await fetch(url, { cache: 'no-store' })
       const j = await res.json()
       if (!res.ok || !j.ok) throw new Error(j.error || 'Ошибка загрузки')
-      setShifts(j.data?.shifts || [])
+      const rows = j.data?.shifts || []
+      writeApiCache(`${url}#shifts`, rows)
+      setShifts(rows)
     } catch (e: any) { setErr(e?.message || 'Ошибка') } finally { setLoading(false) }
   }, [storeCompanyId, status])
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { useApiCache } from '@/lib/client/use-api-cache'
 import { useToday } from '@/lib/client/use-today'
@@ -12,7 +12,7 @@ import { DatePicker } from '@/components/ui/date-picker'
 import {
   Activity, RefreshCw, Loader2, TrendingUp, Receipt,
   Clock, Trophy, Pause, Play, Users, Tags, Coins, Package, Search, AlertTriangle,
-  RotateCcw, Truck,
+  RotateCcw, Truck, ChevronRight,
 } from 'lucide-react'
 
 const REFRESH_MS = 12_000
@@ -60,7 +60,7 @@ type ProdData = {
   no_cost?: { sold: number; stock: number }
 }
 type Company = { id: string; name: string }
-type Tab = 'monitor' | 'best' | 'profit' | 'stock' | 'abc' | 'forecast'
+type Tab = 'monitor' | 'best' | 'profit' | 'category' | 'stock' | 'abc' | 'forecast'
 type Preset = 'today' | 'yesterday' | '7d' | '30d' | 'month' | 'custom'
 
 const card = 'rounded-2xl border border-border bg-white dark:bg-slate-900/60 shadow-lg shadow-black/20'
@@ -101,6 +101,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'monitor', label: 'Монитор' },
   { key: 'best', label: 'Продаваемые' },
   { key: 'profit', label: 'Доходные' },
+  { key: 'category', label: 'Категории' },
   { key: 'stock', label: 'Остатки' },
   { key: 'abc', label: 'ABC' },
   { key: 'forecast', label: 'Прогноз' },
@@ -135,7 +136,7 @@ export default function SalesMonitorPage() {
   // может: он привязан к текущему дню.
   const isToday = !!today && to === today
   const isEmbed = EMBED_TABS.includes(tab)
-  const isProduct = tab === 'best' || tab === 'profit' || tab === 'stock'
+  const isProduct = tab === 'best' || tab === 'profit' || tab === 'stock' || tab === 'category'
 
   // SWR-кэш: повторное открытие показывает прошлые данные мгновенно, свежие
   // подтягиваются фоном. refresh() (loadMonitor/loadProducts) — перезагрузка;
@@ -311,6 +312,8 @@ export default function SalesMonitorPage() {
        tab === 'forecast' ? <ForecastEmbed embedded /> :
        tab === 'monitor'
         ? <MonitorView data={mon} loading={loading} flashIds={flashIds} />
+        : tab === 'category'
+        ? <CategoryView data={prod} loading={loading} q={q} />
         : <ProductView data={prod} loading={loading} tab={tab} category={category} setCategory={setCategory} q={q} />}
     </div>
   )
@@ -652,6 +655,230 @@ function ProductView({ data, loading, tab, category, setCategory, q }: { data: P
                     )}
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
+
+// ───────────────────────── Категории ─────────────────────────
+
+type CategoryRow = {
+  name: string
+  revenue: number
+  profit: number
+  qty: number
+  margin: number
+  share: number
+  itemsTotal: number
+  itemsSold: number
+  deadCount: number
+  deadValue: number
+  stockValue: number
+  top: Item[]
+}
+
+type CategorySort = 'revenue' | 'profit' | 'margin' | 'dead'
+
+const CATEGORY_SORTS: { key: CategorySort; label: string }[] = [
+  { key: 'revenue', label: 'По выручке' },
+  { key: 'profit', label: 'По прибыли' },
+  { key: 'margin', label: 'По марже' },
+  { key: 'dead', label: 'По залежавшемуся' },
+]
+
+const NO_CATEGORY = 'Без категории'
+
+/**
+ * Разрез продаж по категориям.
+ *
+ * Считается из того же ответа, что и вкладки «Продаваемые/Доходные/Остатки» —
+ * отдельного запроса нет, переключение вкладки бесплатно.
+ *
+ * «Залежалось» — это позиции, у которых за период ноль продаж, но есть остаток:
+ * деньги, которые лежат на полке вместо кассы. Обычная таблица выручки этого не
+ * показывает — категория может выглядеть прибыльной и при этом держать склад.
+ */
+function CategoryView({ data, loading, q }: { data: ProdData | null; loading: boolean; q: string }) {
+  const [sort, setSort] = useState<CategorySort>('revenue')
+  const [openCategory, setOpenCategory] = useState<string | null>(null)
+
+  const rows = useMemo<CategoryRow[]>(() => {
+    const items = data?.items || []
+    const totalRevenue = items.reduce((sum, i) => sum + Number(i.revenue || 0), 0)
+    const byName = new Map<string, Item[]>()
+    for (const item of items) {
+      const key = item.category || NO_CATEGORY
+      const bucket = byName.get(key)
+      if (bucket) bucket.push(item)
+      else byName.set(key, [item])
+    }
+
+    const list: CategoryRow[] = []
+    for (const [name, group] of byName) {
+      const revenue = group.reduce((sum, i) => sum + Number(i.revenue || 0), 0)
+      const profit = group.reduce((sum, i) => sum + Number(i.profit || 0), 0)
+      const qty = group.reduce((sum, i) => sum + Number(i.qty || 0), 0)
+      const dead = group.filter((i) => Number(i.qty || 0) <= 0 && Number(i.stock || 0) > 0)
+      // Пустая категория (ни продаж, ни остатка) в отчёте только мешает.
+      if (revenue === 0 && qty === 0 && dead.length === 0) continue
+      list.push({
+        name,
+        revenue,
+        profit,
+        qty,
+        // Маржа категории — от её денег, а не среднее по товарам: две позиции
+        // с маржой 50% и 5% при разной выручке дают совсем не 27,5%.
+        margin: revenue > 0 ? Math.round((profit / revenue) * 1000) / 10 : 0,
+        share: totalRevenue > 0 ? Math.round((revenue / totalRevenue) * 1000) / 10 : 0,
+        itemsTotal: group.length,
+        itemsSold: group.filter((i) => Number(i.qty || 0) > 0).length,
+        deadCount: dead.length,
+        deadValue: dead.reduce((sum, i) => sum + Number(i.stock || 0) * Number(i.purchase_price || 0), 0),
+        stockValue: group.reduce((sum, i) => sum + Number(i.stock || 0) * Number(i.purchase_price || 0), 0),
+        top: [...group].sort((a, b) => b.revenue - a.revenue).slice(0, 8),
+      })
+    }
+
+    const search = q.trim().toLowerCase()
+    const filtered = search ? list.filter((row) => row.name.toLowerCase().includes(search)) : list
+    return filtered.sort((a, b) => {
+      if (sort === 'profit') return b.profit - a.profit
+      if (sort === 'margin') return b.margin - a.margin
+      if (sort === 'dead') return b.deadValue - a.deadValue
+      return b.revenue - a.revenue
+    })
+  }, [data, q, sort])
+
+  const summary = useMemo(() => {
+    const best = rows.reduce<CategoryRow | null>((acc, r) => (!acc || r.profit > acc.profit ? r : acc), null)
+    const heaviest = rows.reduce<CategoryRow | null>((acc, r) => (!acc || r.deadValue > acc.deadValue ? r : acc), null)
+    return {
+      count: rows.length,
+      best,
+      heaviest,
+      deadValue: rows.reduce((sum, r) => sum + r.deadValue, 0),
+    }
+  }, [rows])
+
+  if (loading && !data) return <Loading />
+  if (!data) return null
+
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Kpi label="Категорий" value={String(summary.count)} accent="text-foreground" icon={<Tags className="h-4 w-4" />} />
+        <Kpi
+          label="Больше всего прибыли"
+          value={summary.best?.name || '—'}
+          sub={summary.best ? `${fmt(summary.best.profit)} ₸ · маржа ${summary.best.margin}%` : undefined}
+          accent="text-emerald-600 dark:text-emerald-300"
+          icon={<Coins className="h-4 w-4" />}
+        />
+        <Kpi
+          label="Залежалось на складе"
+          value={`${fmt(summary.deadValue)} ₸`}
+          sub="закупочная цена позиций без продаж"
+          accent={summary.deadValue > 0 ? 'text-amber-600 dark:text-amber-300' : 'text-foreground'}
+          icon={<Package className="h-4 w-4" />}
+        />
+        <Kpi
+          label="Тяжелее всех"
+          value={summary.heaviest && summary.heaviest.deadValue > 0 ? summary.heaviest.name : '—'}
+          sub={summary.heaviest && summary.heaviest.deadValue > 0 ? `${fmt(summary.heaviest.deadValue)} ₸ без движения` : undefined}
+          accent="text-amber-600 dark:text-amber-300"
+          icon={<AlertTriangle className="h-4 w-4" />}
+        />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1 rounded-xl border border-border bg-white p-1 dark:bg-slate-950/50">
+        {CATEGORY_SORTS.map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setSort(key)}
+            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+              sort === key
+                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-200'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className={`${card} overflow-hidden`}>
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <span className="text-sm font-semibold text-foreground">Продажи по категориям</span>
+          <span className="rounded-full border border-border bg-surface-muted px-2 py-0.5 text-xs text-muted-foreground">{rows.length}</span>
+        </div>
+        {rows.length === 0 ? (
+          <div className="px-4 py-16 text-center text-sm text-slate-400">Нет данных за период</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-[11px] uppercase tracking-wider text-slate-500">
+                  <th className="px-4 py-2.5 font-medium">Категория</th>
+                  <th className="px-4 py-2.5 text-right font-medium">Выручка</th>
+                  <th className="px-4 py-2.5 text-right font-medium">Доля</th>
+                  <th className="px-4 py-2.5 text-right font-medium">Прибыль</th>
+                  <th className="px-4 py-2.5 text-right font-medium">Маржа</th>
+                  <th className="px-4 py-2.5 text-right font-medium">Продано</th>
+                  <th className="px-4 py-2.5 text-right font-medium">Позиций</th>
+                  <th className="px-4 py-2.5 text-right font-medium">Залежалось</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                {rows.map((row) => {
+                  const open = openCategory === row.name
+                  return (
+                    <Fragment key={row.name}>
+                      <tr
+                        onClick={() => setOpenCategory(open ? null : row.name)}
+                        className="cursor-pointer transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.02]"
+                      >
+                        <td className="px-4 py-2.5">
+                          <span className="flex items-center gap-1.5 text-foreground">
+                            <ChevronRight className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform ${open ? 'rotate-90' : ''}`} />
+                            {row.name}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-medium tabular-nums text-sky-600 dark:text-sky-300">{fmt(row.revenue)} ₸</td>
+                        <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">{row.share}%</td>
+                        <td className="px-4 py-2.5 text-right font-medium tabular-nums text-emerald-600 dark:text-emerald-300">{fmt(row.profit)} ₸</td>
+                        <td className={`px-4 py-2.5 text-right tabular-nums ${row.margin < 10 ? 'text-rose-600 dark:text-rose-300' : 'text-body'}`}>{row.margin}%</td>
+                        <td className="px-4 py-2.5 text-right tabular-nums text-body">{fmt(row.qty)}</td>
+                        <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">{row.itemsSold} / {row.itemsTotal}</td>
+                        <td className={`px-4 py-2.5 text-right tabular-nums ${row.deadValue > 0 ? 'text-amber-600 dark:text-amber-300' : 'text-slate-400'}`}>
+                          {row.deadValue > 0 ? `${fmt(row.deadValue)} ₸` : '—'}
+                          {row.deadCount > 0 && <span className="ml-1 text-[11px] text-slate-500">{row.deadCount} поз.</span>}
+                        </td>
+                      </tr>
+                      {open && (
+                        <tr className="bg-slate-50/60 dark:bg-white/[0.02]">
+                          <td colSpan={8} className="px-4 py-3">
+                            <div className="mb-2 text-[11px] uppercase tracking-wider text-slate-500">Товары категории — по выручке</div>
+                            <div className="space-y-1.5">
+                              {row.top.map((item) => (
+                                <div key={item.item_id} className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                                  <span className="min-w-0 flex-1 truncate text-body">{item.name}</span>
+                                  <span className="tabular-nums text-muted-foreground">{fmt(item.qty)} {item.unit}</span>
+                                  <span className="w-24 text-right tabular-nums text-sky-600 dark:text-sky-300">{fmt(item.revenue)} ₸</span>
+                                  <span className="w-24 text-right tabular-nums text-emerald-600 dark:text-emerald-300">{fmt(item.profit)} ₸</span>
+                                  <span className="w-20 text-right tabular-nums text-slate-400">ост. {fmt(item.stock)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  )
+                })}
               </tbody>
             </table>
           </div>

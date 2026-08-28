@@ -16,6 +16,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { formatMoney } from '@/lib/core/format'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
 import { useStoreApiUrl } from '@/components/store/store-scope'
+import { readApiCache, writeApiCache } from '@/lib/client/use-api-cache'
+import { invalidateStoreCaches } from '@/lib/client/store-cache'
 
 type Supplier = {
   id: string
@@ -191,7 +193,8 @@ export default function SupplierCardPage() {
       if (!res.ok || !j?.ok) throw new Error(j?.error || 'Не удалось перенести')
       setTransferOpen(false); setTransferTarget(''); setTransferReceiptId(null)
       setSuccess(transferMode === 'receipt' ? `Накладная перенесена · товаров: ${j.data?.movedItems ?? 0}` : `Перенесено товаров: ${j.data?.movedItems ?? 0}`)
-      await load()
+      invalidateStoreCaches()
+      await load({ fresh: true })
     } catch (e: any) {
       setError(e?.message || 'Ошибка переноса')
     } finally {
@@ -199,30 +202,40 @@ export default function SupplierCardPage() {
     }
   }
 
-  const load = async () => {
+  const supplierUrl = storeUrl(`/api/admin/store/suppliers/${supplierId}`)
+
+  const applySupplier = (data: any) => {
+    const s = data.supplier as Supplier
+    setSupplier(s)
+    setReceipts(data.receipts || [])
+    setDebts(data.debts || [])
+    setAliases(data.aliases || [])
+    setProducts(data.products || [])
+    setStats(data.stats || null)
+    setEditForm({
+      name: s.name || '',
+      organization_name: s.organization_name || '',
+      bin_iin: s.bin_iin || '',
+      contact_name: s.contact_name || '',
+      phone: s.phone || '',
+      sales_rep_name: s.sales_rep_name || '',
+      sales_rep_phone: s.sales_rep_phone || '',
+      lead_time_days: String(s.lead_time_days ?? 3),
+      notes: s.notes || '',
+    })
+  }
+
+  const load = async (opts?: { fresh?: boolean }) => {
+    // fresh — после правки карточки или переноса приёмок: кэш устарел.
+    const cached = opts?.fresh ? null : readApiCache<any>(supplierUrl)
+    if (cached) { applySupplier(cached); setLoading(false) }
     setError(null)
     try {
-      const response = await fetch(storeUrl(`/api/admin/store/suppliers/${supplierId}`), { cache: 'no-store' })
+      const response = await fetch(supplierUrl, { cache: 'no-store' })
       const json = await response.json().catch(() => null)
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось загрузить поставщика')
-      const s = json.data.supplier as Supplier
-      setSupplier(s)
-      setReceipts(json.data.receipts || [])
-      setDebts(json.data.debts || [])
-      setAliases(json.data.aliases || [])
-      setProducts(json.data.products || [])
-      setStats(json.data.stats || null)
-      setEditForm({
-        name: s.name || '',
-        organization_name: s.organization_name || '',
-        bin_iin: s.bin_iin || '',
-        contact_name: s.contact_name || '',
-        phone: s.phone || '',
-        sales_rep_name: s.sales_rep_name || '',
-        sales_rep_phone: s.sales_rep_phone || '',
-        lead_time_days: String(s.lead_time_days ?? 3),
-        notes: s.notes || '',
-      })
+      writeApiCache(supplierUrl, json.data)
+      applySupplier(json.data)
     } catch (err: any) {
       setError(err?.message || 'Ошибка загрузки')
     } finally {
@@ -234,7 +247,7 @@ export default function SupplierCardPage() {
     if (!supplierId) return
     void load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supplierId])
+  }, [supplierId, supplierUrl])
 
   // Catalog for the add-alias form (only loaded once when needed).
   useEffect(() => {
@@ -283,7 +296,8 @@ export default function SupplierCardPage() {
       setAliasItemId('')
       setAliasUnit('')
       setAliasSale('')
-      await load()
+      invalidateStoreCaches()
+      await load({ fresh: true })
     } catch (err: any) {
       setError(err?.message || 'Ошибка')
     } finally {
@@ -300,7 +314,8 @@ export default function SupplierCardPage() {
       const json = await response.json().catch(() => null)
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось удалить')
       setSuccess('Алиас удалён')
-      await load()
+      invalidateStoreCaches()
+      await load({ fresh: true })
     } catch (err: any) {
       setError(err?.message || 'Ошибка')
     }
@@ -337,7 +352,8 @@ export default function SupplierCardPage() {
       const json = await response.json().catch(() => null)
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось сохранить')
       setSuccess('Настройки поставщика сохранены')
-      await load()
+      invalidateStoreCaches()
+      await load({ fresh: true })
     } catch (err: any) {
       setError(err?.message || 'Ошибка сохранения')
     } finally {
