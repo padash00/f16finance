@@ -112,10 +112,33 @@ final class OperatorStore {
         await outbox.load()
         await refreshQueueCount()
         await loadShift()
+        watchShift()
         // Накопленные офлайн-чеки уходят при первой же возможности — деньги
         // не должны лежать на устройстве дольше необходимого.
         await flushQueue()
     }
+
+    /// Догонять смену, пока приложение открыто — на любой вкладке.
+    ///
+    /// Смену закрывают на кассе точки, а не в телефоне. Опрос жил на экране
+    /// «Смена» и умирал при переходе в «Продажу» или чат: закрытая смена
+    /// оставалась в приложении открытой, а карточка на экране блокировки
+    /// продолжала показывать выручку уже закрытой смены — с чужими деньгами.
+    private func watchShift() {
+        guard shiftWatch == nil else { return }
+        shiftWatch = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(30))
+                if Task.isCancelled { break }
+                // Хранилище отпустили — вышли из аккаунта или сменили роль.
+                // Круг заканчивается сам: держать его нечем и незачем.
+                guard let self else { break }
+                await self.loadShift()
+            }
+        }
+    }
+
+    private var shiftWatch: Task<Void, Never>?
 
     func loadShift() async {
         isLoadingShift = true

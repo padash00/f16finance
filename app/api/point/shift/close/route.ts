@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { endShiftActivity } from '@/lib/server/live-activity'
 import { writeAuditLog } from '@/lib/server/audit'
 import { requirePointDevice } from '@/lib/server/point-devices'
 
@@ -173,6 +174,10 @@ export async function POST(request: Request) {
   if (error) {
     return json({ error: 'point-shift-close-failed', detail: (error as any).message }, 400)
   }
+
+  // Смену закрывают на кассе, а карточка висит на телефоне оператора —
+  // гасим её отсюда же. См. тот же вызов в операторском маршруте.
+  await endShiftActivity(device.company_id, shiftId)
 
   await writeAuditLog(supabase as any, {
     action: 'point_shift.close',

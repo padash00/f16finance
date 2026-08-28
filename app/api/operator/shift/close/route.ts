@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { endShiftActivity } from '@/lib/server/live-activity'
 import { writeAuditLog } from '@/lib/server/audit'
 import { requireOperator } from '@/lib/server/operator-context'
 import { resolveCompanyOrganizationId } from '@/lib/server/point-devices'
@@ -138,6 +139,12 @@ export async function POST(request: Request) {
   if (error) {
     return json({ error: 'point-shift-close-failed', detail: (error as any).message }, 400)
   }
+
+  // Карточка смены на экране блокировки. Функция гашения была написана, но её
+  // никто не вызывал: смену закрывали, а карточка продолжала показывать
+  // выручку — деньги закрытой смены висели на заблокированном телефоне, пока
+  // человек не откроет приложение. Ждать этого нельзя.
+  await endShiftActivity(companyId, shiftId)
 
   await writeAuditLog(supabase as any, {
     action: 'point_shift.close',
