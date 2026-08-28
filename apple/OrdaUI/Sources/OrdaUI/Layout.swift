@@ -55,6 +55,16 @@ public enum Surface: Sendable {
         }
     }
 
+    /// Ширина колонки на низком экране — телефон, повёрнутый набок.
+    ///
+    /// Телефонные 640 точек оставляли по полторы сотни пустоты с каждой
+    /// стороны: экран стал вдвое шире, а содержимое осталось прежним. 900 —
+    /// это практически вся ширина за вычетом безопасных зон, и запас на
+    /// будущие модели пошире.
+    public var landscapeContentWidth: CGFloat {
+        self == .handheld ? 900 : contentWidth
+    }
+
     public var isCompact: Bool { self == .handheld }
     public var isWide: Bool { self != .handheld }
 }
@@ -86,6 +96,7 @@ public struct SurfaceReader<Content: View>: View {
 
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.verticalSizeClass) private var heightClass
     #endif
 
     public init(@ViewBuilder content: @escaping (Surface) -> Content) {
@@ -110,6 +121,11 @@ public struct SurfaceReader<Content: View>: View {
     #if os(iOS)
     private func resolve(width: CGFloat) -> Surface {
         if sizeClass == .compact { return .handheld }
+        // Телефон в альбоме — это низкий экран, а не планшет. Большие модели
+        // отдают широкий класс размера, и раскладка уезжала в панель с
+        // колонками: панель съедала треть и без того короткого экрана, а слева
+        // оставалась полоса безопасной зоны под «островом».
+        if heightClass == .compact { return .handheld }
         return width >= 1000 ? .desktop : .tablet
     }
     #endif
@@ -126,13 +142,26 @@ public struct SurfaceReader<Content: View>: View {
 public struct DashboardGrid<Content: View>: View {
     private let content: Content
     @Environment(\.surface) private var surface
+    #if os(iOS)
+    @Environment(\.verticalSizeClass) private var heightClass
+    #endif
 
     public init(@ViewBuilder content: () -> Content) {
         self.content = content()
     }
 
+    /// Телефон набок: экран вдвое шире портретного, и столбец карточек шириной
+    /// в треть его оставлял две трети пустыми.
+    private var isShort: Bool {
+        #if os(iOS)
+        heightClass == .compact
+        #else
+        false
+        #endif
+    }
+
     public var body: some View {
-        if surface.isCompact {
+        if surface.isCompact && !isShort {
             VStack(spacing: Spacing.lg) { content }
         } else {
             // Колонки подбираются по фактической ширине, а не по классу
@@ -142,8 +171,11 @@ public struct DashboardGrid<Content: View>: View {
             // всего окна. Внутри `NavigationSplitView` правая часть уже окна на
             // ширину боковой панели — и на iPad в портрете две колонки по 280
             // просто не помещались: карточки уезжали за правый край экрана.
+            // На низком экране порог шире: 380 даёт две колонки примерно той
+            // ширины, под которую карточки рисовались в портрете. С порогом в
+            // 280 их стало бы три, и цифры в них начали бы переноситься.
             LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 280), spacing: Spacing.lg, alignment: .top)],
+                columns: [GridItem(.adaptive(minimum: isShort ? 380 : 280), spacing: Spacing.lg, alignment: .top)],
                 alignment: .leading,
                 spacing: Spacing.lg
             ) {
@@ -157,6 +189,19 @@ public struct DashboardGrid<Content: View>: View {
 public struct ScreenScroll<Content: View>: View {
     private let content: Content
     @Environment(\.surface) private var surface
+    #if os(iOS)
+    @Environment(\.verticalSizeClass) private var heightClass
+    #endif
+
+    /// Низкий экран — телефон набок. Там ширины вдвое больше, чем в портрете,
+    /// и держать содержимое в телефонной колонке значит показывать половину.
+    private var maxWidth: CGFloat {
+        #if os(iOS)
+        heightClass == .compact ? surface.landscapeContentWidth : surface.contentWidth
+        #else
+        surface.contentWidth
+        #endif
+    }
 
     public init(@ViewBuilder content: () -> Content) {
         self.content = content()
@@ -169,7 +214,7 @@ public struct ScreenScroll<Content: View>: View {
             // включая те, до которых человек не долистает.
             LazyVStack(spacing: Spacing.lg) { content }
                 .padding(surface.screenPadding)
-                .frame(maxWidth: surface.contentWidth)
+                .frame(maxWidth: maxWidth)
                 .frame(maxWidth: .infinity, alignment: surface == .desktop ? .topLeading : .top)
         }
         .background(Theme.background)
