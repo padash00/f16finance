@@ -251,7 +251,7 @@ struct WarehouseDraftTests {
     @Test("Решение по заявке шлёт requestId тем именем, что читает роут")
     func decisionEncodesContract() throws {
         let body = try JSONEncoder().encode(
-            StockRequestDecision(requestID: "r-1", approved: false, comment: "Нет на складе")
+            StockRequestDecision(requestID: "r-1", approved: false, comment: "Нет на складе", items: [])
         )
         let json = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
 
@@ -259,5 +259,26 @@ struct WarehouseDraftTests {
         #expect(json["requestId"] as? String == "r-1")
         #expect(json["approved"] as? Bool == false)
         #expect(json["decision_comment"] as? String == "Нет на складе")
+    }
+
+    /// Одобрение без строк не проходило в базе: функция требует строку на
+    /// каждую позицию заявки. Тест держит именно это — имена полей и то, что
+    /// строки вообще уезжают.
+    @Test("Одобрение везёт построчные количества")
+    func decisionCarriesLines() throws {
+        let body = try JSONEncoder().encode(
+            StockRequestDecision(
+                requestID: "r-2",
+                approved: true,
+                comment: nil,
+                items: [.init(requestItemID: "li-1", approvedQty: 12)]
+            )
+        )
+        let json = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+        let items = try #require(json["items"] as? [[String: Any]])
+
+        #expect(items.count == 1)
+        #expect(items.first?["request_item_id"] as? String == "li-1")
+        #expect(items.first?["approved_qty"] as? Double == 12)
     }
 }

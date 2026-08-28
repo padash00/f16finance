@@ -60,16 +60,21 @@ struct RoleGatedSectionTests {
         #expect(pages(resolver(role: "marketer", capabilities: ["telegram.view"])).contains("telegram"))
     }
 
-    @Test("Оценка бизнеса — только владельцу")
-    func valuationStaysOwnerOnly() {
-        let capabilities: Set<String> = ["valuation.view"]
+    @Test("Оценка бизнеса открывается правом, а не должностью")
+    func valuationFollowsCapability() {
+        // Раньше раздел был закрыт по роли: роут спрашивал `role === 'owner'`.
+        // Теперь он спрашивает только право, а само право работает «от
+        // запрещено» — по умолчанию его нет ни у кого, и владелец выдаёт его
+        // руками. Гарантию «по умолчанию не выдано» держит сервер: в
+        // приложение приходит уже готовый набор прав, и проверить её здесь
+        // нечем — можно проверить только то, что меню идёт за правом.
+        #expect(pages(resolver(role: "owner", capabilities: ["valuation.view"])).contains("valuation"))
+        #expect(pages(resolver(role: "manager", capabilities: ["valuation.view"])).contains("valuation"))
 
-        #expect(pages(resolver(role: "owner", capabilities: capabilities)).contains("valuation"))
-        // Сервер называет раздел «крайне чувствительным» и отвергает всех
-        // остальных — показывать пункт значит вести в отказ.
-        #expect(!pages(resolver(role: "manager", capabilities: capabilities)).contains("valuation"))
-        // Пустая роль — не «любая роль»: сервер в такой ситуации отвергает.
-        #expect(!pages(resolver(role: nil, capabilities: capabilities)).contains("valuation"))
+        // Права нет — пункта нет, какой бы ни была должность.
+        #expect(!pages(resolver(role: "owner", capabilities: [])).contains("valuation"))
+        #expect(!pages(resolver(role: "manager", capabilities: [])).contains("valuation"))
+        #expect(!pages(resolver(role: nil, capabilities: [])).contains("valuation"))
     }
 
     @Test("Суперадмин проходит везде — как и на сервере")
@@ -84,14 +89,19 @@ struct RoleGatedSectionTests {
         #expect(visible.contains("valuation"))
     }
 
-    @Test("Ограничение по роли осталось ровно одно")
-    func onlyValuationIsGated() {
+    @Test("Ограничений по должности не осталось")
+    func nothingIsRoleGated() {
         let gated = Set(NativeSection.allCases.filter { $0.allowedStaffRoles != nil })
 
-        // Реклама и настройки магазина сюда не входят намеренно: их GET
-        // открыт любому сотруднику, роль там решает только правки. Спрятать
-        // их значило бы отобрать чтение у того, кому оно разрешено.
-        #expect(gated == [.valuation])
+        // Пусто — и это правильное состояние. Каждый такой замок означал
+        // расхождение меню и сервера: право выдано, пункт скрыт. Последней
+        // ушла оценка бизнеса — её роут перевели на право, а само право
+        // сделали выдаваемым, а не отнимаемым.
+        //
+        // Реклама и настройки магазина здесь не были никогда: их GET открыт
+        // любому сотруднику, должность решает только правки. Спрятать их
+        // значило бы отобрать чтение у того, кому оно разрешено.
+        #expect(gated.isEmpty)
     }
 
     @Test("План закупа и настройки магазина открываются своим правом")

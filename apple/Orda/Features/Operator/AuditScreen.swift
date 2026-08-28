@@ -177,6 +177,16 @@ struct AuditCountScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .task { await load() }
+        // Отметки «уже посчитал коллега» подтягиваем раз в двадцать секунд —
+        // так же, как страница на сайте. Без этого двое считают одну полку и
+        // узнают об этом из расхождения в акте, когда переделывать поздно.
+        .task(id: act.actID) {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(20))
+                if Task.isCancelled { break }
+                await refreshMarks()
+            }
+        }
         .sheet(isPresented: $showScanner) { scannerSheet }
         .sheet(item: $pendingItem) { item in quantitySheet(item) }
         .overlay(alignment: .top) {
@@ -219,6 +229,7 @@ struct AuditCountScreen: View {
             }
             .listStyle(.plain)
             .searchable(text: $search, prompt: "Название или штрихкод")
+            .refreshable { await refreshMarks() }
 
             bottomBar
         }
@@ -300,7 +311,7 @@ struct AuditCountScreen: View {
     private var scannerSheet: some View {
         NavigationStack {
             VStack(spacing: Spacing.md) {
-                ScannerPane(isPaused: scannedItem != nil) { code in handleScan(code) }
+                ScannerPane(isPaused: scannedItem != nil, refocusAfterManual: false) { code in handleScan(code) }
                     .padding(.horizontal, Spacing.lg)
                     .padding(.top, Spacing.lg)
 
@@ -423,6 +434,9 @@ struct AuditCountScreen: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
         .padding(Spacing.md)
         .transition(.move(edge: .bottom).combined(with: .opacity))
+        // Курсор ставим здесь, а не в момент скана: поля тогда ещё нет на
+        // экране, и присвоение фокуса уходило бы в никуда.
+        .onAppear { scanFieldFocused = true }
     }
 
     /// Коробки. Прибавляют к тому, что уже набрано: считают полку по частям.
@@ -538,7 +552,6 @@ struct AuditCountScreen: View {
         // введённое подставляет — полку пересчитывают, а не набирают заново.
         scannedItem = item
         scanQuantity = counts[item.itemID].map { Quantity.format($0) } ?? ""
-        scanFieldFocused = true
         Haptics.tap()
     }
 
@@ -598,6 +611,25 @@ struct AuditCountScreen: View {
         }
     }
 
+    /// Тихое обновление: чужие отметки меняются, мой ввод — нет.
+    ///
+    /// Своё число с сервера подставляем только там, где локально ничего не
+    /// ждёт отправки, иначе обновление затрёт только что набранное.
+    private func refreshMarks() async {
+        // В слепом режиме чужих отметок нет вовсе — и опрашивать нечего.
+        guard sheet?.mode == .single, scannedItem == nil, pendingItem == nil else { return }
+        do {
+            let loaded = try await OperatorService(api: api).auditSheet(actID: act.actID)
+            sheet = loaded
+            for item in loaded.items where !unsaved.contains(item.itemID) {
+                if let counted = item.counted { counts[item.itemID] = counted }
+            }
+        } catch {
+            // Фоновое обновление. Отказ означает лишь, что отметки постарели;
+            // экран продолжает работать, а следующий круг попробует снова.
+        }
+    }
+
     private func load() async {
         error = nil
         defer { isLoading = false }
@@ -620,6 +652,7 @@ struct AuditCountScreen: View {
         isSaving = true
         defer { isSaving = false }
         autosave?.cancel()
+        let queued = unsaved
         unsaved.removeAll()
 
         let payload = counts.map { AuditCount(itemID: $0.key, countedQuantity: $0.value) }
@@ -631,9 +664,11 @@ struct AuditCountScreen: View {
             savedMessage = result.map { "Сохранено \($0.saved)" } ?? "Связи нет — уйдёт само"
             Haptics.success()
         } catch let apiError as APIError {
+            unsaved.formUnion(queued)
             toast(text: apiError.operatorMessage, isError: true)
             Haptics.error()
         } catch {
+            unsaved.formUnion(queued)
             toast(text: error.localizedDescription, isError: true)
         }
     }

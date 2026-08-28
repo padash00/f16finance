@@ -114,6 +114,12 @@ struct BarcodeScanner: UIViewControllerRepresentable {
 struct ScannerPane: View {
     /// Пока сверху вводят количество, камера не ищет коды.
     var isPaused: Bool = false
+    /// Вернуть курсор в поле штрихкода после ввода.
+    ///
+    /// В продаже это верно: коды набивают один за другим. В ревизии — нет:
+    /// после кода открывается поле количества, и курсор, отскочивший обратно,
+    /// уводит клавиатуру у человека из-под пальцев.
+    var refocusAfterManual: Bool = true
     let onCode: (String) -> Void
 
     @State private var manualCode = ""
@@ -178,6 +184,6 @@ struct ScannerPane: View {
         guard !code.isEmpty else { return }
         onCode(code)
         manualCode = ""
-        manualFocused = true
+        manualFocused = refocusAfterManual
     }
 }
