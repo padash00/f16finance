@@ -70,7 +70,12 @@ struct KeychainStore: Sendable {
         return status == errSecSuccess || status == errSecInteractionNotAllowed
     }
 
-    func save(_ data: Data) {
+    /// Записать. Возвращает, легла ли запись.
+    ///
+    /// Раньше результат никто не смотрел, и неудачная запись означала выход из
+    /// аккаунта при следующем запуске — без причины и без следа.
+    @discardableResult
+    func save(_ data: Data) -> Bool {
         // Обновление вместо add: SecItemAdd на существующем ключе вернёт
         // errSecDuplicateItem, и сессия молча перестанет сохраняться.
         let query: [String: Any] = [
@@ -93,12 +98,11 @@ struct KeychainStore: Sendable {
             var insert = query
             insert[kSecValueData as String] = data
             insert.merge(accessAttributes()) { current, _ in current }
-            SecItemAdd(insert as CFDictionary, nil)
-            return
+            return SecItemAdd(insert as CFDictionary, nil) == errSecSuccess
         }
 
         let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
-        guard status != errSecSuccess else { return }
+        guard status != errSecSuccess else { return true }
 
         var insert = query
         insert[kSecValueData as String] = data
@@ -109,10 +113,12 @@ struct KeychainStore: Sendable {
         // errSecInteractionNotAllowed на заблокированном устройстве. Раньше
         // разбирался ровно один код, а всё остальное молча теряло сессию:
         // человек закрывал приложение вошедшим и открывал на экране входа.
-        if SecItemAdd(insert as CFDictionary, nil) == errSecDuplicateItem {
+        let added = SecItemAdd(insert as CFDictionary, nil)
+        if added == errSecDuplicateItem {
             SecItemDelete(query as CFDictionary)
-            SecItemAdd(insert as CFDictionary, nil)
+            return SecItemAdd(insert as CFDictionary, nil) == errSecSuccess
         }
+        return added == errSecSuccess
     }
 
     /// Прочитать. У биометрической записи здесь и появится запрос Face ID.

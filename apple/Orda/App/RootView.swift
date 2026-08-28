@@ -108,6 +108,10 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, phase in
             switch phase {
             case .active:
+                // Сессию могли не прочитать при фоновом запуске — связка
+                // ключей была закрыта. Пробуем снова: человек уже разблокировал
+                // телефон, иначе бы он сюда не смотрел.
+                Task { await auth.restoreIfPossible() }
                 Task { await auth.refreshRoleIfStale() }
                 // Заодно перерегистрируем устройство для уведомлений: адрес у
                 // Apple меняется — после переустановки, восстановления из

@@ -143,15 +143,40 @@ final class AuthStore {
             let session = try await auth.refresh(refreshToken: stored.refreshToken)
             persist(session)
             await loadRole()
-        } catch {
-            // Токен мёртв: пароль сменили, вход отозвали или прошло слишком
-            // много времени. Держаться за него незачем.
+        } catch SessionClient.AuthError.invalidCredentials {
+            // Сервер сам сказал, что токен мёртв: пароль сменили, вход
+            // отозвали. Держаться за него незачем.
             forgetQuickEntry()
             quickEntryError = "Быстрый вход устарел — войдите логином и паролем."
+        } catch {
+            // Сеть, пятисотка, неготовый сервер. Раньше стиралась запись
+            // устройства: человек, открывший приложение в подвале, терял
+            // быстрый вход навсегда и больше не мог его вернуть без пароля.
+            quickEntryError = "Сервер не ответил. Попробуйте ещё раз или войдите логином и паролем."
         }
     }
 
     // ── Жизненный цикл ───────────────────────────────────────────────────────
+
+    /// Есть ли вообще сохранённая сессия — не читая её.
+    ///
+    /// Отличает «человек вышел» от «прочитать не смогли»: во втором случае
+    /// показывать форму входа нельзя, токен на месте.
+    var hasStoredSession: Bool { keychain.exists() }
+
+    /// Повторная попытка при возвращении в приложение.
+    ///
+    /// Приложение поднимают в фоне — по уведомлению. Если связка ключей в тот
+    /// момент закрыта (телефон после перезагрузки ещё ни разу не
+    /// разблокировали), чтение не удаётся, и сессия считается отсутствующей.
+    /// Решение принималось один раз и больше не пересматривалось: токен лежал
+    /// нетронутым, а человек, открыв приложение, видел форму входа. Отсюда и
+    /// «закрываю приложение — выкидывает».
+    func restoreIfPossible() async {
+        guard phase == .signedOut, hasStoredSession else { return }
+        phase = .restoring
+        await restore()
+    }
 
     /// Восстановить сессию при запуске.
     func restore() async {
@@ -159,6 +184,11 @@ final class AuthStore {
             let data = keychain.load(),
             let stored = try? JSONDecoder().decode(SessionClient.Session.self, from: data)
         else {
+            // Запись есть, а прочитать не вышло — это не выход из аккаунта.
+            // Причину оставляем, чтобы такое перестало быть безымянным.
+            if keychain.exists() {
+                automaticSignOutReason = "Сессия сохранена, но прочитать её не удалось — попробуйте открыть приложение ещё раз."
+            }
             phase = .signedOut
             return
         }
@@ -182,6 +212,7 @@ final class AuthStore {
             }
         }
 
+        automaticSignOutReason = nil
         phase = .loadingRole
         await loadRole()
     }
@@ -367,7 +398,14 @@ final class AuthStore {
         session = newSession
         lastRefreshRejected = false
         if let data = try? JSONEncoder().encode(newSession) {
-            keychain.save(data)
+            if keychain.save(data) {
+                automaticSignOutReason = nil
+            } else {
+                // Записать не вышло. Сейчас человек работает, но следующий
+                // запуск встретит его формой входа — пусть хотя бы объяснит,
+                // почему, а не выглядит как случайный сброс.
+                automaticSignOutReason = "Сессию не удалось сохранить на устройстве — вход не переживёт закрытие приложения."
+            }
         }
         // Refresh-токен вращается: сохранённый при входе устареет через
         // несколько обновлений, и быстрый вход перестал бы работать сам собой.
