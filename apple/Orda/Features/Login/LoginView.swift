@@ -85,6 +85,16 @@ struct LoginView: View {
                                 .foregroundStyle(Theme.negative)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .transition(.opacity.combined(with: .move(edge: .top)))
+                        } else if let reason = auth.automaticSignOutReason {
+                            // Выход, которого человек не просил. Молчащая форма
+                            // входа выглядит как «приложение опять сбросило»,
+                            // и рассказать о причине было нечем.
+                            Text(reason)
+                                .font(Typography.caption)
+                                .foregroundStyle(Theme.warning)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .transition(.opacity)
                         }
 
                         Button {

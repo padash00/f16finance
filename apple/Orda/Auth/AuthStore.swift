@@ -175,7 +175,9 @@ final class AuthStore {
         // только когда сервер прямо сказал, что токен недействителен.
         if stored.isExpiringSoon {
             if case .rejected = await refreshSession() {
-                await signOut()
+                await signOutAutomatically(
+                    reason: "При запуске сервер отклонил продление сессии — вход нужен заново."
+                )
                 return
             }
         }
@@ -192,6 +194,7 @@ final class AuthStore {
 
         do {
             let newSession = try await auth.signIn(login: login, password: password)
+            automaticSignOutReason = nil
             suppressAutoQuickEntry = false
             persist(newSession)
             phase = .loadingRole
@@ -200,6 +203,28 @@ final class AuthStore {
             signInError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             phase = .signedOut
         }
+    }
+
+    /// Почему сессия закончилась сама.
+    ///
+    /// Экран входа выглядел одинаково после «нажал выйти» и после «приложение
+    /// вышло само» — и разобраться, почему человека выкидывает, было не по
+    /// чему: он видит форму входа и всё. Причина переживает перезапуск и
+    /// показывается над формой до первого успешного входа.
+    var automaticSignOutReason: String? {
+        get { UserDefaults.standard.string(forKey: Self.signOutReasonKey) }
+        set {
+            if let newValue { UserDefaults.standard.set(newValue, forKey: Self.signOutReasonKey) }
+            else { UserDefaults.standard.removeObject(forKey: Self.signOutReasonKey) }
+        }
+    }
+
+    private static let signOutReasonKey = "auth.automaticSignOutReason"
+
+    /// Выход, которого человек не просил. Причина остаётся на экране входа.
+    func signOutAutomatically(reason: String) async {
+        automaticSignOutReason = reason
+        await signOut()
     }
 
     func signOut() async {
@@ -270,7 +295,9 @@ final class AuthStore {
             // успели обменять: сессия могла остаться живой. Выходим, только
             // если сервер сам отверг refresh-токен.
             if case APIError.unauthorized = error, lastRefreshRejected {
-                await signOut()
+                await signOutAutomatically(
+                    reason: "Сервер не принял сессию при загрузке прав — вход нужен заново."
+                )
                 return false
             }
 
