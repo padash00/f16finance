@@ -157,14 +157,19 @@ async function collectInsights(
         .map(([name, qty]) => ({ name, qty }))
     }
 
-    // Низкие остатки (балансов может быть >1000 — постранично, иначе часть теряется)
-    const balances = await fetchAllPages((from, to) =>
-      supabase
+    // Низкие остатки (балансов может быть >1000 — постранично, иначе часть теряется).
+    // Скоуп по точкам организации обязателен: без него утренний обзор одной
+    // организации перечислял товары чужих — все остальные запросы этой функции
+    // фильтруются по companyIds, а этот был забыт.
+    const balances = await fetchAllPages((from, to) => {
+      let balQ = supabase
         .from('inventory_balances')
-        .select('quantity, item:item_id(name, low_stock_threshold)')
+        .select('quantity, item:item_id(name, low_stock_threshold), location:location_id!inner(company_id)')
         .order('item_id', { ascending: true })
-        .range(from, to),
-    ).catch(() => null)
+        .range(from, to)
+      if (companyIds) balQ = balQ.in('location.company_id', companyIds)
+      return balQ
+    }).catch(() => null)
     if (balances) {
       for (const b of balances as any[]) {
         const item = Array.isArray(b.item) ? b.item[0] : b.item
