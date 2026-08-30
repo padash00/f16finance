@@ -20,18 +20,31 @@ function jsonError(status: number, code: string) {
 }
 
 export async function POST(request: Request) {
-  if (!hasAdminSupabaseCredentials()) return jsonError(503, 'monitor_backend_not_configured')
+  if (!hasAdminSupabaseCredentials()) {
+    return jsonError(503, 'monitor_backend_not_configured')
+  }
 
   const contentType = request.headers.get('content-type') || ''
-  if (!contentType.toLowerCase().startsWith('application/json')) return jsonError(415, 'content_type_must_be_json')
+
+  if (!contentType.toLowerCase().startsWith('application/json')) {
+    return jsonError(415, 'content_type_must_be_json')
+  }
+
   const declaredLength = Number(request.headers.get('content-length') || 0)
-  if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) return jsonError(413, 'payload_too_large')
+
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
+    return jsonError(413, 'payload_too_large')
+  }
 
   try {
     const rawBody = await request.text()
-    if (new TextEncoder().encode(rawBody).byteLength > MAX_BODY_BYTES) return jsonError(413, 'payload_too_large')
+
+    if (new TextEncoder().encode(rawBody).byteLength > MAX_BODY_BYTES) {
+      return jsonError(413, 'payload_too_large')
+    }
 
     let parsed: unknown
+
     try {
       parsed = JSON.parse(rawBody)
     } catch {
@@ -39,20 +52,57 @@ export async function POST(request: Request) {
     }
 
     const result = serverMonitorTelemetryV1Schema.safeParse(parsed)
+
     if (!result.success) {
       return NextResponse.json(
-        { ok: false, error: 'invalid_payload', issues: result.error.issues.slice(0, 12).map((issue) => ({ path: issue.path.join('.'), message: issue.message })) },
+        {
+          ok: false,
+          error: 'invalid_payload',
+          issues: result.error.issues.slice(0, 12).map((issue) => ({
+            path: issue.path.join('.'),
+            message: issue.message,
+          })),
+        },
         { status: 422 },
       )
     }
+
     validateTelemetryTimestamp(result.data.timestamp)
 
+    // Временная диагностика авторизации агента.
+    // Полный Agent Key / secret в лог НЕ выводим.
+    const authHeader = request.headers.get('authorization') || ''
+    const bearer = authHeader.match(/^Bearer\s+(.+)$/i)?.[1]?.trim() || ''
+    const keyId = bearer.split('.')[0] || ''
+
+    const supabaseHost = (() => {
+      try {
+        return new URL(
+          process.env.NEXT_PUBLIC_SUPABASE_URL ||
+            process.env.SUPABASE_URL ||
+            '',
+        ).hostname
+      } catch {
+        return 'invalid'
+      }
+    })()
+
+    console.log('[server-monitor] agent auth diagnostic', {
+      authorizationPresent: Boolean(authHeader),
+      bearerPresent: Boolean(bearer),
+      keyId,
+      serverId: result.data.serverId,
+      supabaseHost,
+    })
+
     const supabase = createAdminSupabaseClient()
+
     const agent = await authenticateMonitorAgent({
       supabase,
-      authorization: request.headers.get('authorization'),
+      authorization: authHeader,
       serverId: result.data.serverId,
     })
+
     const committed = await commitMonitorTelemetry({
       supabase,
       telemetry: result.data,
@@ -62,14 +112,34 @@ export async function POST(request: Request) {
 
     if (committed.eventsCreated > 0) {
       await processMonitorNotificationOutbox(5).catch((error) => {
-        console.error('[server-monitor] immediate notification delivery failed', error)
+        console.error(
+          '[server-monitor] immediate notification delivery failed',
+          error,
+        )
       })
     }
 
-    return NextResponse.json({ ok: true, ...committed }, { status: committed.duplicate ? 200 : 202 })
+    return NextResponse.json(
+      {
+        ok: true,
+        ...committed,
+      },
+      {
+        status: committed.duplicate ? 200 : 202,
+      },
+    )
   } catch (error) {
-    if (error instanceof MonitorIngestError) return jsonError(error.status, error.code)
+    if (error instanceof MonitorIngestError) {
+      console.warn('[server-monitor] ingest rejected', {
+        status: error.status,
+        code: error.code,
+      })
+
+      return jsonError(error.status, error.code)
+    }
+
     console.error('[server-monitor] ingest failed', error)
+
     return jsonError(500, 'ingest_failed')
   }
 }
