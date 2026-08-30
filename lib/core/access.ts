@@ -131,6 +131,7 @@ export const ADMIN_PATHS = [
   '/store/sales',
   '/debug',
   '/settings',
+  '/server-monitor',
   '/telegram',
   '/access',
   '/knowledge-admin',
@@ -541,6 +542,7 @@ export const ACCESS_PAGE_GROUPS: readonly AccessPageGroup[] = [
     group: 'Система',
     pages: [
       { path: '/settings', label: 'Настройки системы' },
+      { path: '/server-monitor', label: 'Мониторинг сервера' },
       { path: '/access', label: 'Права и пароли' },
       { path: '/telegram', label: 'Telegram Bot' },
       { path: '/point-devices', label: 'Точки и устройства' },

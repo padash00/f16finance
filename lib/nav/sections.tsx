@@ -228,6 +228,7 @@ export const navSections: NavSection[] = [
       { href: '/subscription', label: 'Подписка', icon: CreditCard, note: 'Тариф, модули и счета' },
       { href: '/access', label: 'Права и пароли', icon: Shield, note: 'Доступ ролей и аккаунты' },
       { href: '/telegram', label: 'Telegram Bot', icon: MessageSquareText, note: 'Уведомления и команды', badge: 'new', badgeColor: 'blue' },
+      { href: '/server-monitor', label: 'Мониторинг сервера', icon: Activity, note: 'Состояние Windows Server и аварии', badge: 'live', badgeColor: 'green', isNew: true },
       { href: '/point-devices', label: 'Точки и устройства', icon: Building2, note: 'Токены и программы точек' },
       { href: '/logs', label: 'Логирование', icon: Logs, note: 'Аудит, уведомления и события' },
       { href: '/debug', label: 'Диагностика', icon: Wrench, note: 'Проверки и отладка' },
@@ -251,6 +252,7 @@ export const BASE_FREE_PATHS = new Set<string>([
   '/profile',
   '/settings',
   '/access',
+  '/server-monitor',
   '/subscription',
   '/notifications',
   '/workspace',
@@ -322,6 +324,7 @@ export function buildOwnerNavSections(): NavSection[] {
   const subscriptionItem = getSectionItem('system', '/subscription')
   const settingsItem = getSectionItem('system', '/settings')
   const accessItem = getSectionItem('system', '/access')
+  const serverMonitorItem = getSectionItem('system', '/server-monitor')
 
   const sections: NavSection[] = []
 
@@ -344,7 +347,7 @@ export function buildOwnerNavSections(): NavSection[] {
     })
   }
 
-  if (settingsItem || accessItem) {
+  if (settingsItem || accessItem || serverMonitorItem) {
     sections.push({
       id: 'owner-system',
       title: 'Настройки',
@@ -352,7 +355,7 @@ export function buildOwnerNavSections(): NavSection[] {
       accentColor: 'slate',
       icon: Settings2,
       // /access («Права и пароли») — управление доступом, доступно только владельцу.
-      items: [settingsItem, accessItem].filter(Boolean) as NavItem[],
+      items: [settingsItem, serverMonitorItem, accessItem].filter(Boolean) as NavItem[],
     })
   }
 

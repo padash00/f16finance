@@ -933,6 +933,18 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         ],
       },
       {
+        id: 'server-monitor',
+        path: '/server-monitor',
+        label: 'Мониторинг сервера',
+        capabilities: [
+          { id: 'server-monitor.view', label: 'Просмотр состояния и истории', severity: 'low' },
+          { id: 'server-monitor.edit', label: 'Изменение карточки сервера', severity: 'medium' },
+          { id: 'server-monitor.edit_settings', label: 'Изменение порогов и уведомлений', severity: 'high' },
+          { id: 'server-monitor.test_notifications', label: 'Тест Telegram-уведомлений', severity: 'medium' },
+          { id: 'server-monitor.manage_keys', label: 'Создание и ротация ключей агента', severity: 'high' },
+        ],
+      },
+      {
         id: 'telegram',
         path: '/telegram',
         label: 'Telegram-интеграция',
