@@ -92,10 +92,6 @@
       "schedule": "0 6 * * *"
     },
     {
-      "path": "/api/cron/debts-rollover",
-      "schedule": "59 18 * * 0"
-    },
-    {
       "path": "/api/cron/personal-task-reminders",
       "schedule": "*/5 * * * *"
     },
