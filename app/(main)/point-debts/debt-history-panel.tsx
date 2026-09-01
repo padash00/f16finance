@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { CalendarDays, History, Loader2, RefreshCw, Search, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -72,12 +73,19 @@ function amountText(event: DebtEvent) {
 
 export function DebtHistoryPanel() {
   const [open, setOpen] = useState(false)
+  const [actionHost, setActionHost] = useState<HTMLElement | null>(null)
   const [weekStart, setWeekStart] = useState(() => weekStartUtcISO(new Date()))
   const [data, setData] = useState<HistoryPayload | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [kind, setKind] = useState<'all' | 'purchase' | 'payment' | 'change'>('all')
+
+  useEffect(() => {
+    const header = document.querySelector<HTMLElement>('[data-tour="page-header"]')
+    const host = header?.querySelector<HTMLElement>('div.flex.flex-wrap.items-center.gap-2') ?? null
+    setActionHost(host)
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -133,17 +141,22 @@ export function DebtHistoryPanel() {
     return { debtors: debtors.size, purchases, payments }
   }, [data])
 
+  const historyAction = (
+    <Button
+      type="button"
+      variant="outline"
+      className="h-8 rounded-xl border-border bg-white text-xs text-body hover:bg-slate-50 dark:bg-white/5 dark:hover:bg-white/10"
+      onClick={() => setOpen(true)}
+      aria-label="Открыть историю долгов"
+    >
+      <History className="mr-1.5 h-3.5 w-3.5" />
+      История долгов
+    </Button>
+  )
+
   return (
     <>
-      <Button
-        type="button"
-        className="fixed bottom-6 right-6 z-40 shadow-lg"
-        onClick={() => setOpen(true)}
-        aria-label="Открыть историю долгов"
-      >
-        <History className="mr-2 h-4 w-4" />
-        История долгов
-      </Button>
+      {actionHost ? createPortal(historyAction, actionHost) : null}
 
       {open ? (
         <div className="fixed inset-0 z-50 bg-black/45" onMouseDown={() => setOpen(false)}>
