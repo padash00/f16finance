@@ -1,0 +1,11 @@
+.point-debt-history-host {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.75rem;
+}
+
+.point-debt-history-host > button {
+  position: static !important;
+  inset: auto !important;
+  z-index: auto !important;
+}
