@@ -526,6 +526,7 @@ export async function GET(req: Request) {
           totals: {
             toPay: rows.reduce((sum, row) => sum + row.toPay, 0),
             paidThisMonth: rows.reduce((sum, row) => sum + row.paid_this_month, 0),
+            remainder: rows.reduce((sum, row) => sum + row.remainder, 0),
             people: rows.length,
           },
           self_only: selfOnly,
@@ -1065,7 +1066,7 @@ export async function POST(req: Request) {
       // 3. Mark active adjustments since previous payout up to current payout date as paid.
       const { data: candidateAdjustments, error: adjFetchError } = await supabase
         .from('staff_adjustments')
-        .select('id, kind, amount, date, created_at')
+        .select('id, kind, amount, date, created_at, source_payment_id')
         .eq('staff_id', staff_id)
         .eq('status', 'active')
         .lte('date', pay_date)
@@ -1073,6 +1074,9 @@ export async function POST(req: Request) {
 
       const adjustmentsToClose = (candidateAdjustments || [])
         .filter((row: any) => {
+          // Остаток прошлой зарплаты — отдельное обязательство, а не бонус
+          // следующего периода. Не закрываем и не включаем его в новый расчёт.
+          if (String(row?.kind || '') === 'bonus' && row?.source_payment_id) return false
           if (!previousPayDate) return true
           const rowDate = String(row?.date || '')
           if (rowDate < previousPayDate) return false
@@ -1251,8 +1255,8 @@ export async function POST(req: Request) {
         })
       }
 
-      // Недоплата → «остаток к доплате»: симметрично переплате. Бонус-корректировка
-      // добавится к следующей выплате (или доплатите раньше и аннулируйте её).
+      // Недоплата → отдельный «остаток к доплате». Он остаётся активным и
+      // видимым до погашения, но не увеличивает начисление следующего периода.
       const underpaymentAmount = Math.max(0, calculatedToPay - total)
       let underpaymentAdjustmentId: string | null = null
       if (underpaymentAmount > 0) {

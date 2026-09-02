@@ -255,3 +255,75 @@ test('снятая корректировка не считается выход
   })
   assert.equal(summary.rows[0].extra_days.length, 0)
 })
+
+// ─── Остаток неполной выплаты живёт отдельно от нового слота ────────────────
+
+test('остаток 88 000 виден, но не превращает следующие 250 000 в 338 000', () => {
+  const member = staff({ monthly_salary: 500_000 })
+  const remainder = adj({
+    id: 'remainder-1',
+    kind: 'bonus',
+    amount: 88_000,
+    date: '2026-08-05',
+    comment: 'Остаток по выплате 2026-08-05',
+    created_at: '2026-08-05T10:00:01Z',
+    source_payment_id: 'p1',
+  })
+  const rows = filterStaffAdjustmentsForSlot(
+    [remainder],
+    member.id,
+    [pay({ amount: 162_000 })],
+    getSalarySlotRange('2026-08-20', 'second'),
+  )
+  const calc = calcStaffToPay(
+    member,
+    [remainder],
+    [pay({ amount: 162_000 })],
+    getSalarySlotRange('2026-08-20', 'second'),
+  )
+
+  assert.deepEqual(rows.map((row) => row.id), ['remainder-1'])
+  assert.equal(calc.half, 250_000)
+  assert.equal(calc.remainder, 88_000)
+  assert.equal(calc.bonuses, 0)
+  assert.equal(calc.toPay, 250_000)
+})
+
+test('обычный бонус считается, а автоматическая переплата-аванс всё ещё вычитается', () => {
+  const calc = calcStaffToPay(
+    staff({ monthly_salary: 500_000 }),
+    [
+      adj({ id: 'bonus', kind: 'bonus', amount: 20_000, date: '2026-08-20', source_payment_id: null }),
+      adj({ id: 'advance', kind: 'advance', amount: 10_000, date: '2026-08-20', source_payment_id: 'overpaid-payment' }),
+    ],
+    [pay()],
+    getSalarySlotRange('2026-08-20', 'second'),
+  )
+
+  assert.equal(calc.remainder, 0)
+  assert.equal(calc.bonuses, 20_000)
+  assert.equal(calc.advances, 10_000)
+  assert.equal(calc.toPay, 260_000)
+})
+
+test('непогашенный остаток не исчезает после более новой зарплатной выплаты', () => {
+  const remainder = adj({
+    id: 'remainder-old',
+    kind: 'bonus',
+    amount: 88_000,
+    date: '2026-08-05',
+    created_at: '2026-08-05T10:00:01Z',
+    source_payment_id: 'p1',
+  })
+  const laterPayments = [
+    pay(),
+    pay({ id: 'p2', pay_date: '2026-08-20', slot: 'second', created_at: '2026-08-20T10:00:00Z' }),
+  ]
+  const period = getSalarySlotRange('2026-09-10', 'first')
+  const rows = filterStaffAdjustmentsForSlot([remainder], 's1', laterPayments, period)
+  const calc = calcStaffToPay(staff({ monthly_salary: 500_000 }), [remainder], laterPayments, period)
+
+  assert.deepEqual(rows.map((row) => row.id), ['remainder-old'])
+  assert.equal(calc.remainder, 88_000)
+  assert.equal(calc.toPay, 250_000)
+})

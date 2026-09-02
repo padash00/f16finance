@@ -35,6 +35,7 @@ export type SlotAdjustment = {
   comment?: string | null
   status?: string | null
   created_at?: string | null
+  source_payment_id?: string | null
 }
 
 export type SlotPayment = {
@@ -79,10 +80,25 @@ export function slotForDate(isoDate: string): StaffSlot {
 }
 
 /**
+ * Автоматический остаток от неполной выплаты зарплаты.
+ *
+ * Исторически он хранится как `bonus`, чтобы не менять схему БД, но это не
+ * премия нового периода. `source_payment_id` связывает остаток с выплатой,
+ * которая его породила. Переплата тоже имеет source_payment_id, но kind=advance
+ * и по-прежнему должна уменьшать следующую выплату.
+ */
+export function isSalaryUnderpaymentRemainder(
+  adjustment: Pick<SlotAdjustment, 'kind' | 'source_payment_id'>,
+): boolean {
+  return adjustment.kind === 'bonus' && Boolean(adjustment.source_payment_id)
+}
+
+/**
  * Корректировки, которые ещё не закрыты выплатой.
  *
  * Всё, что было до последней выплаты, уже удержано или выдано — показывать это
- * снова значит вычесть один штраф дважды.
+ * снова значит вычесть один штраф дважды. Исключение — остаток неполной выплаты:
+ * он остаётся видимым до погашения, но в новый зарплатный слот не начисляется.
  */
 export function filterStaffAdjustmentsForSlot<A extends SlotAdjustment, P extends SlotPayment>(
   adjs: A[],
@@ -104,6 +120,7 @@ export function filterStaffAdjustmentsForSlot<A extends SlotAdjustment, P extend
     if (a.staff_id !== staffId || a.status !== 'active') return false
     if (!period) return true
     if (a.date > periodEnd) return false
+    if (isSalaryUnderpaymentRemainder(a)) return true
     if (!lastPayment) return true
     const lastPayDate = String(lastPayment.pay_date || '')
     if (a.date < lastPayDate) return false
@@ -162,6 +179,7 @@ export type StaffSlotCalc = {
   debts: number
   fines: number
   advances: number
+  remainder: number
   toPay: number
 }
 
@@ -172,14 +190,18 @@ export function calcStaffToPay(
   period?: SlotRange | null,
 ): StaffSlotCalc {
   const active = filterStaffAdjustmentsForSlot(adjs, s.id, payments, period)
+  const remainder = active
+    .filter(isSalaryUnderpaymentRemainder)
+    .reduce((sum, a) => sum + Number(a.amount || 0), 0)
+  const applied = active.filter((a) => !isSalaryUnderpaymentRemainder(a))
   const half = slotAccrualBase(s, period)
   const sumOf = (kind: string) =>
-    active.filter((a) => a.kind === kind).reduce((sum, a) => sum + Number(a.amount || 0), 0)
+    applied.filter((a) => a.kind === kind).reduce((sum, a) => sum + Number(a.amount || 0), 0)
   const bonuses = sumOf('bonus')
   const debts = sumOf('debt')
   const fines = sumOf('fine')
   const advances = sumOf('advance')
-  return { half, bonuses, debts, fines, advances, toPay: half + bonuses - debts - fines - advances }
+  return { half, bonuses, debts, fines, advances, remainder, toPay: half + bonuses - debts - fines - advances }
 }
 
 export type StaffSalaryRow = StaffSlotCalc & {
@@ -215,7 +237,7 @@ export type StaffSalarySummary = {
   slot: StaffSlot
   period: SlotRange | null
   rows: StaffSalaryRow[]
-  totals: { toPay: number; paidThisMonth: number; people: number }
+  totals: { toPay: number; paidThisMonth: number; remainder: number; people: number }
 }
 
 /**
@@ -288,6 +310,7 @@ export function buildStaffSalarySummary(args: {
     totals: {
       toPay: ordered.reduce((sum, r) => sum + r.toPay, 0),
       paidThisMonth: ordered.reduce((sum, r) => sum + r.paid_this_month, 0),
+      remainder: ordered.reduce((sum, r) => sum + r.remainder, 0),
       people: ordered.length,
     },
   }
