@@ -178,15 +178,41 @@ const STATUS_STYLE: Record<HealthStatus, { label: string; dot: string; badge: st
   offline: { label: 'OFFLINE', dot: 'bg-slate-500', badge: 'border-slate-500/30 bg-slate-500/10 text-slate-600 dark:text-slate-300' },
 }
 
-const CHART_COLORS = ['#10b981', '#38bdf8', '#f59e0b', '#e879f9']
+const CHART_COLORS = ['#10b981', '#38bdf8', '#f59e0b', '#e879f9', '#8b5cf6', '#ef4444']
 
 function asNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null
   const parsed = typeof value === 'number' ? value : Number(value)
   return Number.isFinite(parsed) ? parsed : null
 }
 
 function asText(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value : null
+}
+
+function asTemperature(value: unknown): number | null {
+  const temperature = asNumber(value)
+  return temperature !== null && temperature > 0 ? temperature : null
+}
+
+function roundMetric(value: number | null, digits = 1): number | null {
+  if (value === null) return null
+  const factor = 10 ** digits
+  return Math.round(value * factor) / factor
+}
+
+function formatChartValue(value: unknown, digits: number): string {
+  const number = asNumber(value)
+  return number === null ? '—' : number.toLocaleString('ru-RU', { maximumFractionDigits: digits })
+}
+
+function formatChartTime(value: string, range: HistoryRange): string {
+  const options: Intl.DateTimeFormatOptions = range === '1h' || range === '6h'
+    ? { hour: '2-digit', minute: '2-digit' }
+    : range === '24h'
+      ? { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }
+      : { day: '2-digit', month: '2-digit', hour: '2-digit' }
+  return new Date(value).toLocaleString('ru-RU', options)
 }
 
 function parseDisks(value: unknown): DiskData[] {
@@ -204,7 +230,7 @@ function parseDisks(value: unknown): DiskData[] {
     return [{
       id, name, totalBytes, usedBytes, freeBytes, freePercent,
       driveLetter: asText(row.driveLetter), model: asText(row.model),
-      temperatureC: asNumber(row.temperatureC), temperatureSource: asText(row.temperatureSource),
+      temperatureC: asTemperature(row.temperatureC), temperatureSource: asText(row.temperatureSource),
       temperatureSensor: asText(row.temperatureSensor),
       health: asText(row.health), operationalStatus: asText(row.operationalStatus),
       mediaType: asText(row.mediaType), busType: asText(row.busType), wearPercent: asNumber(row.wearPercent),
@@ -268,7 +294,7 @@ function temperature(value: number | null): string {
 }
 
 function maxTemperature(...values: Array<number | null>): number | null {
-  const available = values.filter((value): value is number => value !== null && Number.isFinite(value))
+  const available = values.filter((value): value is number => value !== null && Number.isFinite(value) && value > 0)
   return available.length ? Math.max(...available) : null
 }
 
@@ -427,14 +453,14 @@ export function ServerMonitorDashboard() {
   const memoryUsed = asNumber(current?.memory_data?.usedBytes)
 
   const chartData = useMemo(() => history.map((point) => ({
-    time: new Date(point.bucket_start).toLocaleString('ru-RU', historyRange === '1h' || historyRange === '6h' ? { hour: '2-digit', minute: '2-digit' } : { day: '2-digit', month: '2-digit', hour: '2-digit' }),
-    cpu: asNumber(point.cpu_usage_pct), ram: asNumber(point.memory_usage_pct),
-    cpuTemp: maxTemperature(asNumber(point.cpu_package_temp_c), asNumber(point.cpu_core_max_temp_c)),
-    rx: (asNumber(point.network_rx_bps) || 0) * 8 / 1_000_000,
-    tx: (asNumber(point.network_tx_bps) || 0) * 8 / 1_000_000,
-    ping: asNumber(point.ping_ms),
+    time: formatChartTime(point.bucket_start, historyRange),
+    cpu: roundMetric(asNumber(point.cpu_usage_pct)), ram: roundMetric(asNumber(point.memory_usage_pct)),
+    cpuTemp: roundMetric(maxTemperature(asTemperature(point.cpu_package_temp_c), asTemperature(point.cpu_core_max_temp_c))),
+    rx: roundMetric(asNumber(point.network_rx_bps) === null ? null : Number(point.network_rx_bps) * 8 / 1_000_000, 2),
+    tx: roundMetric(asNumber(point.network_tx_bps) === null ? null : Number(point.network_tx_bps) * 8 / 1_000_000, 2),
+    ping: roundMetric(asNumber(point.ping_ms)),
     ...Object.fromEntries(parseDisks(point.disks_data).flatMap((disk) => [
-      [`diskFree:${disk.id}`, disk.freePercent], [`diskTemp:${disk.id}`, disk.temperatureC],
+      [`diskFree:${disk.id}`, roundMetric(disk.freePercent, 2)], [`diskTemp:${disk.id}`, roundMetric(disk.temperatureC)],
     ])),
   })), [history, historyRange])
 
@@ -590,9 +616,9 @@ export function ServerMonitorDashboard() {
           <section className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">История метрик</h2><p className="text-sm text-muted-foreground">{history.length} агрегированных точек</p></div><div className="inline-flex rounded-lg border border-border bg-card p-1">{(['1h', '6h', '24h', '7d', '30d'] as HistoryRange[]).map((range) => <button key={range} type="button" onClick={() => setHistoryRange(range)} className={cn('min-w-12 rounded-md px-3 py-1.5 text-xs font-medium', historyRange === range ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground')}>{range}</button>)}</div></div>
             <div className="grid gap-4 xl:grid-cols-3">
-              <Card className="gap-3 p-4"><h3 className="text-sm font-semibold">CPU, RAM и температура</h3><div className="h-64">{historyLoading ? <div className="h-full animate-pulse rounded-lg bg-slate-100 dark:bg-white/5" /> : <ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" opacity={0.18} /><XAxis dataKey="time" tick={{ fontSize: 10 }} minTickGap={24} /><YAxis yAxisId="pct" domain={[0, 100]} tick={{ fontSize: 10 }} /><YAxis yAxisId="temp" orientation="right" domain={[0, 110]} tick={{ fontSize: 10 }} /><Tooltip /><Legend /><Line yAxisId="pct" type="monotone" dataKey="cpu" name="CPU %" stroke="#38bdf8" dot={false} /><Line yAxisId="pct" type="monotone" dataKey="ram" name="RAM %" stroke="#e879f9" dot={false} /><Line yAxisId="temp" type="monotone" dataKey="cpuTemp" name="CPU °C" stroke="#f59e0b" dot={false} connectNulls={false} /></LineChart></ResponsiveContainer>}</div></Card>
-              <Card className="gap-3 p-4"><h3 className="text-sm font-semibold">Диски</h3><div className="h-64"><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" opacity={0.18} /><XAxis dataKey="time" tick={{ fontSize: 10 }} minTickGap={24} /><YAxis yAxisId="free" domain={[0, 100]} tick={{ fontSize: 10 }} /><YAxis yAxisId="temp" orientation="right" domain={[0, 100]} tick={{ fontSize: 10 }} /><Tooltip /><Legend />{disks.slice(0, 4).flatMap((disk, index) => [<Line key={`free:${disk.id}`} yAxisId="free" type="monotone" dataKey={`diskFree:${disk.id}`} name={`${disk.driveLetter || disk.name} свободно %`} stroke={CHART_COLORS[index]} dot={false} connectNulls />, <Line key={`temp:${disk.id}`} yAxisId="temp" type="monotone" dataKey={`diskTemp:${disk.id}`} name={`${disk.driveLetter || disk.name} °C`} stroke={CHART_COLORS[index]} strokeDasharray="4 3" dot={false} connectNulls={false} />])}</LineChart></ResponsiveContainer></div></Card>
-              <Card className="gap-3 p-4"><h3 className="text-sm font-semibold">Сеть</h3><div className="h-64"><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" opacity={0.18} /><XAxis dataKey="time" tick={{ fontSize: 10 }} minTickGap={24} /><YAxis yAxisId="traffic" tick={{ fontSize: 10 }} /><YAxis yAxisId="ping" orientation="right" tick={{ fontSize: 10 }} /><Tooltip /><Legend /><Line yAxisId="traffic" type="monotone" dataKey="rx" name="RX Mbps" stroke="#10b981" dot={false} /><Line yAxisId="traffic" type="monotone" dataKey="tx" name="TX Mbps" stroke="#38bdf8" dot={false} /><Line yAxisId="ping" type="monotone" dataKey="ping" name="Ping ms" stroke="#f59e0b" dot={false} /></LineChart></ResponsiveContainer></div></Card>
+              <Card className="gap-3 p-4"><h3 className="text-sm font-semibold">CPU, RAM и температура</h3><div className="h-64">{historyLoading ? <div className="h-full animate-pulse rounded-lg bg-slate-100 dark:bg-white/5" /> : <ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" opacity={0.18} /><XAxis dataKey="time" tick={{ fontSize: 10 }} minTickGap={24} /><YAxis yAxisId="pct" domain={[0, 100]} tick={{ fontSize: 10 }} /><YAxis yAxisId="temp" orientation="right" domain={[0, 110]} tick={{ fontSize: 10 }} /><Tooltip formatter={(value) => formatChartValue(value, 1)} /><Legend /><Line yAxisId="pct" type="monotone" dataKey="cpu" name="CPU %" stroke="#38bdf8" dot={false} /><Line yAxisId="pct" type="monotone" dataKey="ram" name="RAM %" stroke="#e879f9" dot={false} /><Line yAxisId="temp" type="monotone" dataKey="cpuTemp" name="CPU °C" stroke="#f59e0b" dot={false} connectNulls={false} /></LineChart></ResponsiveContainer>}</div></Card>
+              <Card className="gap-3 p-4"><h3 className="text-sm font-semibold">Диски</h3><div className="h-64"><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" opacity={0.18} /><XAxis dataKey="time" tick={{ fontSize: 10 }} minTickGap={24} /><YAxis yAxisId="free" domain={[0, 100]} tick={{ fontSize: 10 }} /><YAxis yAxisId="temp" orientation="right" domain={[0, 100]} tick={{ fontSize: 10 }} /><Tooltip formatter={(value) => formatChartValue(value, 2)} />{disks.flatMap((disk, index) => { const color = CHART_COLORS[index % CHART_COLORS.length]; return [<Line key={`free:${disk.id}`} yAxisId="free" type="monotone" dataKey={`diskFree:${disk.id}`} name={`${disk.driveLetter || disk.name}: свободно %`} stroke={color} dot={false} connectNulls />, <Line key={`temp:${disk.id}`} yAxisId="temp" type="monotone" dataKey={`diskTemp:${disk.id}`} name={`${disk.driveLetter || disk.name}: °C`} stroke={color} strokeDasharray="4 3" dot={false} connectNulls={false} />] })}</LineChart></ResponsiveContainer></div></Card>
+              <Card className="gap-3 p-4"><h3 className="text-sm font-semibold">Сеть</h3><div className="h-64"><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" opacity={0.18} /><XAxis dataKey="time" tick={{ fontSize: 10 }} minTickGap={24} /><YAxis yAxisId="traffic" tick={{ fontSize: 10 }} /><YAxis yAxisId="ping" orientation="right" tick={{ fontSize: 10 }} /><Tooltip formatter={(value) => formatChartValue(value, 2)} /><Legend /><Line yAxisId="traffic" type="monotone" dataKey="rx" name="RX Mbps" stroke="#10b981" dot={false} /><Line yAxisId="traffic" type="monotone" dataKey="tx" name="TX Mbps" stroke="#38bdf8" dot={false} /><Line yAxisId="ping" type="monotone" dataKey="ping" name="Ping ms" stroke="#f59e0b" dot={false} /></LineChart></ResponsiveContainer></div></Card>
             </div>
           </section>
 
