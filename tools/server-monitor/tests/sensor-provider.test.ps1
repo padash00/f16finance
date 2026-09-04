@@ -21,7 +21,10 @@ $records = @(
     [pscustomobject]@{ HardwareType = 'Cpu'; HardwareIdentifier = '/cpu/0'; HardwareName = 'Intel Xeon'; SensorType = 'Temperature'; SensorName = 'CPU Package'; Value = 87.0 },
     [pscustomobject]@{ HardwareType = 'Cpu'; HardwareIdentifier = '/cpu/0'; HardwareName = 'Intel Xeon'; SensorType = 'Temperature'; SensorName = 'CPU Core #1'; Value = 82.0 },
     [pscustomobject]@{ HardwareType = 'Cpu'; HardwareIdentifier = '/cpu/0'; HardwareName = 'Intel Xeon'; SensorType = 'Temperature'; SensorName = 'CPU Core #2'; Value = 92.0 },
-    [pscustomobject]@{ HardwareType = 'Storage'; HardwareIdentifier = '/nvme/0'; HardwareName = 'Samsung SSD 990 PRO'; SensorType = 'Temperature'; SensorName = 'Temperature'; Value = 55.0 },
+    [pscustomobject]@{ HardwareType = 'Storage'; HardwareIdentifier = '/nvme/0'; HardwareName = 'Samsung SSD 990 PRO'; SensorType = 'Temperature'; SensorName = 'Composite Temperature'; Value = 55.0 },
+    [pscustomobject]@{ HardwareType = 'Storage'; HardwareIdentifier = '/nvme/0'; HardwareName = 'Samsung SSD 990 PRO'; SensorType = 'Temperature'; SensorName = 'Temperature #1'; Value = 61.0 },
+    [pscustomobject]@{ HardwareType = 'Storage'; HardwareIdentifier = '/nvme/0'; HardwareName = 'Samsung SSD 990 PRO'; SensorType = 'Temperature'; SensorName = 'Warning Temperature'; Value = 84.0 },
+    [pscustomobject]@{ HardwareType = 'Storage'; HardwareIdentifier = '/nvme/0'; HardwareName = 'Samsung SSD 990 PRO'; SensorType = 'Temperature'; SensorName = 'Critical Temperature'; Value = 93.0 },
     [pscustomobject]@{ HardwareType = 'Cpu'; HardwareIdentifier = '/cpu/0'; HardwareName = 'Intel Xeon'; SensorType = 'Temperature'; SensorName = 'Invalid sensor'; Value = 0.0 },
     [pscustomobject]@{ HardwareType = 'Cpu'; HardwareIdentifier = '/cpu/0'; HardwareName = 'Intel Xeon'; SensorType = 'Load'; SensorName = 'CPU Total'; Value = 41.0 }
 )
@@ -30,6 +33,7 @@ $result = Convert-HardwareSensorRecords -Records $records -Source 'fixture'
 Assert-Equal 87.0 $result.CpuPackage 'CPU package temperature was not mapped.'
 Assert-Equal 92.0 $result.CpuCoreMax 'Maximum CPU core temperature was not mapped.'
 Assert-Equal 55.0 $result.Storage['/nvme/0'].TemperatureC 'Storage temperature was not mapped.'
+Assert-Equal 'Composite Temperature' $result.Storage['/nvme/0'].TemperatureSensor 'Storage did not select its composite temperature.'
 Assert-Equal 'fixture' $result.Source 'Sensor source was not retained.'
 
 $windowsStorage = @{

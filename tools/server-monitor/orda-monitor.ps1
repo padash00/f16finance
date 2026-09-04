@@ -9,7 +9,7 @@ param(
 
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
-$script:AgentVersion = '1.1.0'
+$script:AgentVersion = '1.1.1'
 $script:PreviousNetwork = @{}
 
 $sensorProviderPath = Join-Path $PSScriptRoot 'sensor-provider.ps1'
@@ -231,6 +231,8 @@ function Get-Telemetry {
             freePercent = if ($total -gt 0) { [Math]::Round(($free / $total) * 100, 2) } else { 0 }
             temperatureC = if ($storageSensor) { Get-OptionalProperty $storageSensor 'TemperatureC' } else { $null }
             temperatureSource = if ($storageSensor) { [string](Get-OptionalProperty $storageSensor 'Source') } else { $null }
+            temperatureSensor = if ($storageSensor) { [string](Get-OptionalProperty $storageSensor 'TemperatureSensor') } else { $null }
+            temperatureSensors = if ($storageSensor) { @((Get-OptionalProperty $storageSensor 'TemperatureSensors' @())) } else { @() }
             health = if ($storageSensor -and (Get-OptionalProperty $storageSensor 'Health')) { [string](Get-OptionalProperty $storageSensor 'Health') } elseif ($hardware) { [string]$hardware.Status } else { $null }
             operationalStatus = if ($storageSensor) { [string](Get-OptionalProperty $storageSensor 'OperationalStatus') } else { $null }
             mediaType = if ($storageSensor) { [string](Get-OptionalProperty $storageSensor 'MediaType') } else { $null }

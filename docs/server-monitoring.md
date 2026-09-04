@@ -68,7 +68,7 @@ CRON_SECRET=случайная-длинная-строка
 .\tools\server-monitor\prepare-package.ps1
 ```
 
-Скрипт скачивает официальный `LibreHardwareMonitor` 0.9.6, проверяет SHA-256 и включает только необходимые DLL. В архив не попадают исполняемый GUI и установщики драйверов. Распаковать `ORDA-Server-Monitor-1.1.0.zip` на сервер во временный каталог.
+Скрипт скачивает официальный `LibreHardwareMonitor` 0.9.6, проверяет SHA-256 и включает только необходимые DLL. В архив не попадают исполняемый GUI и установщики драйверов. Распаковать `ORDA-Server-Monitor-1.1.1.zip` на сервер во временный каталог. Для дисков агент использует текущую `Composite Temperature`/`Temperature`; пороги `Warning Temperature` и `Critical Temperature` не считаются показаниями датчика.
 
 Открыть **Windows PowerShell 5.1 от имени администратора** в каталоге `tools\server-monitor` и выполнить:
 

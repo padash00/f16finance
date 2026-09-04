@@ -110,6 +110,8 @@ test('telemetry schema accepts sensor provenance and disk reliability data', () 
     disks: [{
       id: 'nvme-0', name: 'C:', driveLetter: 'C:', totalBytes: 100, usedBytes: 50, freeBytes: 50,
       freePercent: 50, temperatureC: 45, temperatureSource: 'Windows Storage Management',
+      temperatureSensor: 'Composite Temperature',
+      temperatureSensors: [{ name: 'Composite Temperature', temperatureC: 45 }],
       health: 'Healthy', operationalStatus: 'OK', mediaType: 'SSD', busType: 'NVMe', wearPercent: 4,
     }],
     network: { internetConnected: true, latencyMs: 10, interfaces: [] },

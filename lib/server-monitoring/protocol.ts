@@ -54,6 +54,11 @@ export const monitorDiskSchema = z.object({
   freePercent: percentage,
   temperatureC: temperature.nullable().optional(),
   temperatureSource: z.string().trim().max(160).nullable().optional(),
+  temperatureSensor: z.string().trim().max(160).nullable().optional(),
+  temperatureSensors: z.array(z.object({
+    name: z.string().trim().min(1).max(160),
+    temperatureC: temperature,
+  }).strict()).max(32).optional(),
   health: z.string().trim().max(120).nullable().optional(),
   operationalStatus: z.string().trim().max(240).nullable().optional(),
   mediaType: z.string().trim().max(120).nullable().optional(),

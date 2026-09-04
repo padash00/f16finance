@@ -16,6 +16,17 @@ function Get-SensorProperty {
     return $property.Value
 }
 
+function Get-StorageTemperaturePriority {
+    param([string]$Name)
+    if ($Name -match '(?i)warning|critical|threshold|limit') { return -1 }
+    if ($Name -match '(?i)^Composite Temperature$') { return 0 }
+    if ($Name -match '(?i)^Temperature$') { return 1 }
+    if ($Name -match '(?i)^Drive Temperature$|^Airflow Temperature$') { return 2 }
+    if ($Name -match '(?i)^Temperature\s*#\d+$') { return 10 }
+    if ($Name -match '(?i)temperature') { return 20 }
+    return -1
+}
+
 function Convert-HardwareSensorRecords {
     param([object[]]$Records, [string]$Source)
 
@@ -47,19 +58,30 @@ function Convert-HardwareSensorRecords {
             if ($sensorName -match '(?i)core') { $coreTemperatures += $value }
         } elseif ($hardwareType -match 'Storage|HDD|SSD') {
             if ($value -le 0) { continue }
+            $priority = Get-StorageTemperaturePriority -Name $sensorName
+            if ($priority -lt 0) { continue }
             if (-not $hardwareId) { $hardwareId = $hardwareName }
             if (-not $storage.ContainsKey($hardwareId)) {
                 $storage[$hardwareId] = [ordered]@{
                     Name = $hardwareName
                     TemperatureC = $null
+                    TemperatureSensor = $null
+                    TemperatureSensors = @()
+                    TemperaturePriority = [int]::MaxValue
                     Source = $Source
                 }
             }
-            $current = $storage[$hardwareId].TemperatureC
-            if ($null -eq $current -or $value -gt [double]$current) {
+            $storage[$hardwareId].TemperatureSensors += [ordered]@{ name = $sensorName; temperatureC = [Math]::Round($value, 2) }
+            if ($priority -lt [int]$storage[$hardwareId].TemperaturePriority) {
                 $storage[$hardwareId].TemperatureC = [Math]::Round($value, 2)
+                $storage[$hardwareId].TemperatureSensor = $sensorName
+                $storage[$hardwareId].TemperaturePriority = $priority
             }
         }
+    }
+
+    foreach ($storageKey in @($storage.Keys)) {
+        [void]$storage[$storageKey].Remove('TemperaturePriority')
     }
 
     $cpuPackage = if ($packageTemperatures.Count) { [Math]::Round(($packageTemperatures | Measure-Object -Maximum).Maximum, 2) } else { $null }

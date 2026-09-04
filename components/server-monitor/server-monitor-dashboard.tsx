@@ -133,6 +133,7 @@ type DiskData = {
   freePercent: number
   temperatureC: number | null
   temperatureSource: string | null
+  temperatureSensor: string | null
   health: string | null
   operationalStatus: string | null
   mediaType: string | null
@@ -204,6 +205,7 @@ function parseDisks(value: unknown): DiskData[] {
       id, name, totalBytes, usedBytes, freeBytes, freePercent,
       driveLetter: asText(row.driveLetter), model: asText(row.model),
       temperatureC: asNumber(row.temperatureC), temperatureSource: asText(row.temperatureSource),
+      temperatureSensor: asText(row.temperatureSensor),
       health: asText(row.health), operationalStatus: asText(row.operationalStatus),
       mediaType: asText(row.mediaType), busType: asText(row.busType), wearPercent: asNumber(row.wearPercent),
     }]
@@ -573,7 +575,7 @@ export function ServerMonitorDashboard() {
             <Card className="gap-4 p-5 md:col-span-2 xl:col-span-1">
               <div className="flex items-center justify-between"><span className="text-sm font-medium text-muted-foreground">STORAGE</span><HardDrive className="h-5 w-5 text-amber-500" /></div>
               <div className="max-h-28 space-y-3 overflow-y-auto pr-1">
-                {disks.length ? disks.map((disk) => <div key={disk.id}><div className="mb-1 flex justify-between gap-2 text-sm"><b>{disk.driveLetter || disk.name}</b><span>{percent(disk.freePercent)} свободно</span></div><MetricBar value={100 - disk.freePercent} tone={settings ? toneFor(disk.freePercent, Number(settings.disk_free_warning_pct), Number(settings.disk_free_critical_pct), 'low') : 'emerald'} /><div className="mt-1 flex flex-wrap gap-x-3 text-xs text-muted-foreground"><span>{temperature(disk.temperatureC)}</span><span>{disk.health || disk.operationalStatus || 'Health недоступен'}</span>{disk.mediaType || disk.busType ? <span>{[disk.mediaType, disk.busType].filter(Boolean).join(' · ')}</span> : null}{disk.wearPercent !== null ? <span>Износ {percent(disk.wearPercent)}</span> : null}</div></div>) : <p className="text-sm text-muted-foreground">Диски не получены</p>}
+                {disks.length ? disks.map((disk) => <div key={disk.id}><div className="mb-1 flex justify-between gap-2 text-sm"><b>{disk.driveLetter || disk.name}</b><span>{percent(disk.freePercent)} свободно</span></div><MetricBar value={100 - disk.freePercent} tone={settings ? toneFor(disk.freePercent, Number(settings.disk_free_warning_pct), Number(settings.disk_free_critical_pct), 'low') : 'emerald'} /><div className="mt-1 flex flex-wrap gap-x-3 text-xs text-muted-foreground"><span title={[disk.temperatureSource, disk.temperatureSensor].filter(Boolean).join(' · ')}>{temperature(disk.temperatureC)}</span><span>{disk.health || disk.operationalStatus || 'Health недоступен'}</span>{disk.mediaType || disk.busType ? <span>{[disk.mediaType, disk.busType].filter(Boolean).join(' · ')}</span> : null}{disk.wearPercent !== null ? <span>Износ {percent(disk.wearPercent)}</span> : null}</div></div>) : <p className="text-sm text-muted-foreground">Диски не получены</p>}
               </div>
               <p className="text-xs text-muted-foreground">{disks.length} томов · {formatBytes(disks.reduce((sum, disk) => sum + disk.totalBytes, 0))}</p>
             </Card>
