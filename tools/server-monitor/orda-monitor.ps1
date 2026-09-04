@@ -9,7 +9,7 @@ param(
 
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
-$script:AgentVersion = '1.1.1'
+$script:AgentVersion = '1.1.2'
 $script:PreviousNetwork = @{}
 
 $sensorProviderPath = Join-Path $PSScriptRoot 'sensor-provider.ps1'
@@ -215,6 +215,10 @@ function Get-Telemetry {
         $used = [Math]::Max(0.0, $total - $free)
         $hardware = $diskHardware[[string]$disk.DeviceID]
         $storageSensor = Find-StorageSensor -Storage $sensors.Storage -Hardware $hardware
+        $storageTemperatureSensors = [object[]]@()
+        if ($storageSensor) {
+            $storageTemperatureSensors = [object[]]@(Get-OptionalProperty $storageSensor 'TemperatureSensors' @())
+        }
         $model = if ($hardware) { [string]$hardware.Model } else { $null }
         $diskId = if ($hardware -and $hardware.Id) { [string]$hardware.Id } elseif ($disk.VolumeSerialNumber) { [string]$disk.VolumeSerialNumber } else { [string]$disk.DeviceID }
         if ($diskId.Length -gt 160) { $diskId = $diskId.Substring(0, 160) }
@@ -232,7 +236,7 @@ function Get-Telemetry {
             temperatureC = if ($storageSensor) { Get-OptionalProperty $storageSensor 'TemperatureC' } else { $null }
             temperatureSource = if ($storageSensor) { [string](Get-OptionalProperty $storageSensor 'Source') } else { $null }
             temperatureSensor = if ($storageSensor) { [string](Get-OptionalProperty $storageSensor 'TemperatureSensor') } else { $null }
-            temperatureSensors = if ($storageSensor) { @((Get-OptionalProperty $storageSensor 'TemperatureSensors' @())) } else { @() }
+            temperatureSensors = $storageTemperatureSensors
             health = if ($storageSensor -and (Get-OptionalProperty $storageSensor 'Health')) { [string](Get-OptionalProperty $storageSensor 'Health') } elseif ($hardware) { [string]$hardware.Status } else { $null }
             operationalStatus = if ($storageSensor) { [string](Get-OptionalProperty $storageSensor 'OperationalStatus') } else { $null }
             mediaType = if ($storageSensor) { [string](Get-OptionalProperty $storageSensor 'MediaType') } else { $null }
