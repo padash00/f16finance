@@ -18,6 +18,16 @@ const cpuSchema = z.object({
   usagePercent: percentage,
   packageTemperatureC: temperature.nullable().optional(),
   maxCoreTemperatureC: temperature.nullable().optional(),
+  temperatureSource: z.string().trim().max(160).nullable().optional(),
+  temperatureSensors: z.array(z.object({
+    name: z.string().trim().min(1).max(255),
+    temperatureC: temperature,
+  }).strict()).max(256).optional(),
+  thermalZones: z.array(z.object({
+    name: z.string().trim().min(1).max(500),
+    temperatureC: temperature,
+  }).strict()).max(64).optional(),
+  sensorErrors: z.array(z.string().trim().min(1).max(1000)).max(5).optional(),
 }).strict()
 
 const memorySchema = z.object({
@@ -43,7 +53,12 @@ export const monitorDiskSchema = z.object({
   freeBytes: byteCount,
   freePercent: percentage,
   temperatureC: temperature.nullable().optional(),
+  temperatureSource: z.string().trim().max(160).nullable().optional(),
   health: z.string().trim().max(120).nullable().optional(),
+  operationalStatus: z.string().trim().max(240).nullable().optional(),
+  mediaType: z.string().trim().max(120).nullable().optional(),
+  busType: z.string().trim().max(120).nullable().optional(),
+  wearPercent: percentage.nullable().optional(),
   status: z.string().trim().max(120).nullable().optional(),
 }).strict().superRefine((disk, context) => {
   if (disk.usedBytes > disk.totalBytes || disk.freeBytes > disk.totalBytes) {

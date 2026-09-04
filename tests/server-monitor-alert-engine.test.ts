@@ -92,3 +92,27 @@ test('telemetry schema rejects unknown fields and impossible percentages', () =>
   })
   assert.equal(result.success, false)
 })
+
+test('telemetry schema accepts sensor provenance and disk reliability data', () => {
+  const result = serverMonitorTelemetryV1Schema.safeParse({
+    schemaVersion: 1,
+    telemetryId: '40000000-0000-4000-8000-000000000002',
+    serverId: '20000000-0000-4000-8000-000000000001',
+    timestamp: '2026-08-30T10:00:00.000Z',
+    agentVersion: '1.1.0',
+    system: { hostname: 'F16-SERVER', windowsVersion: 'Windows Server 2019', uptimeSeconds: 10, lastBootAt: '2026-08-30T09:59:50.000Z', agentTime: '2026-08-30T10:00:00.000Z' },
+    cpu: {
+      model: 'CPU', usagePercent: 42, packageTemperatureC: 67, maxCoreTemperatureC: 71,
+      temperatureSource: 'LibreHardwareMonitorLib 0.9.6',
+      temperatureSensors: [{ name: 'CPU Core #1', temperatureC: 71 }], thermalZones: [], sensorErrors: [],
+    },
+    memory: { totalBytes: 100, usedBytes: 50, availableBytes: 50, usagePercent: 50 },
+    disks: [{
+      id: 'nvme-0', name: 'C:', driveLetter: 'C:', totalBytes: 100, usedBytes: 50, freeBytes: 50,
+      freePercent: 50, temperatureC: 45, temperatureSource: 'Windows Storage Management',
+      health: 'Healthy', operationalStatus: 'OK', mediaType: 'SSD', busType: 'NVMe', wearPercent: 4,
+    }],
+    network: { internetConnected: true, latencyMs: 10, interfaces: [] },
+  })
+  assert.equal(result.success, true)
+})

@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$ConfigPath = (Join-Path $PSScriptRoot 'config.json'),
+    [string]$ConfigPath = '',
     [switch]$Once,
     [switch]$DryRun,
     [Nullable[double]]$SimulateCpuUsagePercent,
@@ -9,10 +9,16 @@ param(
 
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
-$script:AgentVersion = '1.0.0'
+$script:AgentVersion = '1.1.0'
 $script:PreviousNetwork = @{}
 
+$sensorProviderPath = Join-Path $PSScriptRoot 'sensor-provider.ps1'
+if (-not (Test-Path -LiteralPath $sensorProviderPath -PathType Leaf)) { throw "Sensor provider not found: $sensorProviderPath" }
+. $sensorProviderPath
+
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+if (-not $ConfigPath) { $ConfigPath = Join-Path $PSScriptRoot 'config.json' }
 
 function Rotate-Log {
     param([string]$Path, [long]$MaxBytes = 5242880, [int]$Keep = 5)
@@ -41,6 +47,10 @@ function Write-AgentLog {
 function Get-OptionalProperty {
     param([object]$Object, [string]$Name, $Default = $null)
     if ($null -eq $Object) { return $Default }
+    if ($Object -is [Collections.IDictionary]) {
+        if ($Object.Contains($Name)) { return $Object[$Name] }
+        return $Default
+    }
     $property = $Object.PSObject.Properties[$Name]
     if ($null -eq $property) { return $Default }
     return $property.Value
@@ -57,6 +67,7 @@ function Get-DiskHardwareMap {
                     $map[[string]$logical.DeviceID] = @{
                         Id = [string]$drive.PNPDeviceID
                         Model = [string]$drive.Model
+                        SerialNumber = [string]$drive.SerialNumber
                         Status = [string]$drive.Status
                     }
                 }
@@ -66,6 +77,38 @@ function Get-DiskHardwareMap {
         Write-AgentLog -Level WARN -Message "Physical disk mapping unavailable: $($_.Exception.Message)"
     }
     return $map
+}
+
+function Convert-LinkSpeedToBps {
+    param($Value)
+    if ($null -eq $Value) { return $null }
+    if ($Value -is [byte] -or $Value -is [int16] -or $Value -is [int32] -or $Value -is [int64] -or $Value -is [uint16] -or $Value -is [uint32] -or $Value -is [uint64] -or $Value -is [double]) {
+        return [double]$Value
+    }
+    $text = ([string]$Value).Trim()
+    if ($text -notmatch '^(?<value>[0-9]+(?:[\.,][0-9]+)?)\s*(?<unit>[KMGT]?)bps$') { return $null }
+    $number = [double]::Parse(($Matches.value -replace ',', '.'), [Globalization.CultureInfo]::InvariantCulture)
+    $factor = switch ($Matches.unit.ToUpperInvariant()) { 'K' { 1e3 } 'M' { 1e6 } 'G' { 1e9 } 'T' { 1e12 } default { 1 } }
+    return [Math]::Round($number * $factor)
+}
+
+function Find-StorageSensor {
+    param([hashtable]$Storage, [hashtable]$Hardware)
+    if (-not $Hardware) { return $null }
+    $hardwareId = [string]$Hardware.Id
+    $model = ([string]$Hardware.Model).Trim()
+    $serial = ([string]$Hardware.SerialNumber).Trim()
+    foreach ($key in @($Storage.Keys)) {
+        $candidate = $Storage[$key]
+        $name = ([string](Get-OptionalProperty $candidate 'Name' '')).Trim()
+        $candidateSerial = ([string](Get-OptionalProperty $candidate 'SerialNumber' '')).Trim()
+        if (($hardwareId -and [string]$key -eq $hardwareId) -or
+            ($serial -and $candidateSerial -and $serial -eq $candidateSerial) -or
+            ($model -and $name -and ($model.IndexOf($name, [StringComparison]::OrdinalIgnoreCase) -ge 0 -or $name.IndexOf($model, [StringComparison]::OrdinalIgnoreCase) -ge 0))) {
+            return $candidate
+        }
+    }
+    return $null
 }
 
 function Get-Connectivity {
@@ -100,21 +143,29 @@ function Get-NetworkTelemetry {
     $interfaces = @()
     try {
         $adapters = @(Get-NetAdapter -IncludeHidden:$false -ErrorAction Stop | Where-Object { $_.HardwareInterface -eq $true })
+        $allStatistics = @()
+        try { $allStatistics = @(Get-NetAdapterStatistics -IncludeHidden -ErrorAction Stop) } catch {
+            Write-AgentLog -Level WARN -Message "Network byte counters unavailable: $($_.Exception.Message)"
+        }
         foreach ($adapter in $adapters) {
-            $statistics = Get-NetAdapterStatistics -Name $adapter.Name -ErrorAction Stop
+            $statistics = @($allStatistics | Where-Object {
+                ([string]$_.Name -eq [string]$adapter.Name) -or
+                ([string]$_.InterfaceDescription -eq [string]$adapter.InterfaceDescription)
+            } | Select-Object -First 1)
+            if ($statistics.Count) { $statistics = $statistics[0] } else { $statistics = $null }
             $key = [string]$adapter.InterfaceIndex
             $rx = 0.0
             $tx = 0.0
-            if ($script:PreviousNetwork.ContainsKey($key)) {
+            if ($statistics -and $script:PreviousNetwork.ContainsKey($key)) {
                 $previous = $script:PreviousNetwork[$key]
                 $elapsed = ($now - $previous.At).TotalSeconds
                 if ($elapsed -gt 0) {
-                    $rx = [Math]::Max(0, ([double]$statistics.ReceivedBytes - [double]$previous.Rx) / $elapsed)
-                    $tx = [Math]::Max(0, ([double]$statistics.SentBytes - [double]$previous.Tx) / $elapsed)
+                    $rx = [Math]::Max(0.0, ([double]$statistics.ReceivedBytes - [double]$previous.Rx) / $elapsed)
+                    $tx = [Math]::Max(0.0, ([double]$statistics.SentBytes - [double]$previous.Tx) / $elapsed)
                 }
             }
-            $script:PreviousNetwork[$key] = @{ At = $now; Rx = [double]$statistics.ReceivedBytes; Tx = [double]$statistics.SentBytes }
-            $addresses = @(Get-NetIPAddress -InterfaceIndex $adapter.InterfaceIndex -AddressFamily IPv4, IPv6 -ErrorAction SilentlyContinue |
+            if ($statistics) { $script:PreviousNetwork[$key] = @{ At = $now; Rx = [double]$statistics.ReceivedBytes; Tx = [double]$statistics.SentBytes } }
+            $addresses = @(Get-NetIPAddress -InterfaceIndex $adapter.InterfaceIndex -ErrorAction SilentlyContinue |
                 Where-Object { $_.IPAddress -and $_.AddressState -ne 'Tentative' } | ForEach-Object { [string]$_.IPAddress })
             $interfaces += [ordered]@{
                 id = $key
@@ -123,7 +174,7 @@ function Get-NetworkTelemetry {
                 ipAddresses = $addresses
                 status = if ([string]$adapter.Status -eq 'Up') { 'up' } elseif ([string]$adapter.Status -eq 'Disabled' -or [string]$adapter.Status -eq 'Disconnected') { 'down' } else { 'unknown' }
                 macAddress = [string]$adapter.MacAddress
-                linkSpeedBps = $null
+                linkSpeedBps = Convert-LinkSpeedToBps (Get-OptionalProperty $adapter 'LinkSpeed')
                 rxBytesPerSecond = [Math]::Round($rx, 2)
                 txBytesPerSecond = [Math]::Round($tx, 2)
             }
@@ -143,7 +194,7 @@ function Get-Telemetry {
     $cpuModel = (($processors | ForEach-Object { [string]$_.Name }) -join '; ').Trim()
     $totalMemory = [double]$os.TotalVisibleMemorySize * 1024
     $availableMemory = [double]$os.FreePhysicalMemory * 1024
-    $usedMemory = [Math]::Max(0, $totalMemory - $availableMemory)
+    $usedMemory = [Math]::Max(0.0, $totalMemory - $availableMemory)
     $memoryPercent = if ($totalMemory -gt 0) { ($usedMemory / $totalMemory) * 100 } else { 0 }
     $lastBootRaw = $os.LastBootUpTime
     $lastBoot = if ($lastBootRaw -is [DateTime]) {
@@ -151,18 +202,19 @@ function Get-Telemetry {
     } else {
         [Management.ManagementDateTimeConverter]::ToDateTime([string]$lastBootRaw).ToUniversalTime()
     }
-    # Hardware temperatures remain null in production-safe no-driver mode.
-    $temperatures = @{ CpuPackage = $null; CpuCoreMax = $null }
+    $sensorLibraryPath = Join-Path $PSScriptRoot 'sensors\LibreHardwareMonitorLib.dll'
+    $sensors = Get-HardwareSensorSnapshot -LibraryPath $sensorLibraryPath
     if ($null -ne $SimulateCpuUsagePercent) { $cpuUsage = [double]$SimulateCpuUsagePercent }
-    if ($null -ne $SimulateCpuTemperatureC) { $temperatures.CpuPackage = [double]$SimulateCpuTemperatureC }
+    if ($null -ne $SimulateCpuTemperatureC) { $sensors.CpuPackage = [double]$SimulateCpuTemperatureC }
 
     $diskHardware = Get-DiskHardwareMap
     $disks = @()
     foreach ($disk in Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3') {
         $total = [double]$disk.Size
         $free = [double]$disk.FreeSpace
-        $used = [Math]::Max(0, $total - $free)
+        $used = [Math]::Max(0.0, $total - $free)
         $hardware = $diskHardware[[string]$disk.DeviceID]
+        $storageSensor = Find-StorageSensor -Storage $sensors.Storage -Hardware $hardware
         $model = if ($hardware) { [string]$hardware.Model } else { $null }
         $diskId = if ($hardware -and $hardware.Id) { [string]$hardware.Id } elseif ($disk.VolumeSerialNumber) { [string]$disk.VolumeSerialNumber } else { [string]$disk.DeviceID }
         if ($diskId.Length -gt 160) { $diskId = $diskId.Substring(0, 160) }
@@ -177,13 +229,18 @@ function Get-Telemetry {
             usedBytes = [Math]::Round($used)
             freeBytes = [Math]::Round($free)
             freePercent = if ($total -gt 0) { [Math]::Round(($free / $total) * 100, 2) } else { 0 }
-            temperatureC = $null
-            health = if ($hardware) { [string]$hardware.Status } else { $null }
+            temperatureC = if ($storageSensor) { Get-OptionalProperty $storageSensor 'TemperatureC' } else { $null }
+            temperatureSource = if ($storageSensor) { [string](Get-OptionalProperty $storageSensor 'Source') } else { $null }
+            health = if ($storageSensor -and (Get-OptionalProperty $storageSensor 'Health')) { [string](Get-OptionalProperty $storageSensor 'Health') } elseif ($hardware) { [string]$hardware.Status } else { $null }
+            operationalStatus = if ($storageSensor) { [string](Get-OptionalProperty $storageSensor 'OperationalStatus') } else { $null }
+            mediaType = if ($storageSensor) { [string](Get-OptionalProperty $storageSensor 'MediaType') } else { $null }
+            busType = if ($storageSensor) { [string](Get-OptionalProperty $storageSensor 'BusType') } else { $null }
+            wearPercent = if ($storageSensor) { Get-OptionalProperty $storageSensor 'WearPercent' } else { $null }
             status = [string]$disk.Status
         }
     }
 
-    $networkInterfaces = Get-NetworkTelemetry
+    $networkInterfaces = @(Get-NetworkTelemetry)
     $connectivity = Get-Connectivity -HostName ([string]$Config.ConnectivityHost) -TimeoutMs ([int]$Config.ConnectivityTimeoutMs)
     return [ordered]@{
         schemaVersion = 1
@@ -194,15 +251,19 @@ function Get-Telemetry {
         system = [ordered]@{
             hostname = [Environment]::MachineName
             windowsVersion = ('{0} {1} build {2}' -f $os.Caption, $os.OSArchitecture, $os.BuildNumber).Trim()
-            uptimeSeconds = [Math]::Max(0, [Math]::Floor(($observedAt - $lastBoot).TotalSeconds))
+            uptimeSeconds = [Math]::Max(0.0, [Math]::Floor(($observedAt - $lastBoot).TotalSeconds))
             lastBootAt = $lastBoot.ToString('o')
             agentTime = $observedAt.ToString('o')
         }
         cpu = [ordered]@{
             model = if ($cpuModel) { $cpuModel } else { 'Unknown CPU' }
-            usagePercent = [Math]::Min(100, [Math]::Max(0, [Math]::Round($cpuUsage, 2)))
-            packageTemperatureC = $temperatures.CpuPackage
-            maxCoreTemperatureC = $temperatures.CpuCoreMax
+            usagePercent = [Math]::Min(100.0, [Math]::Max(0.0, [Math]::Round($cpuUsage, 2)))
+            packageTemperatureC = $sensors.CpuPackage
+            maxCoreTemperatureC = $sensors.CpuCoreMax
+            temperatureSource = [string]$sensors.Source
+            temperatureSensors = @($sensors.CpuSensors)
+            thermalZones = @($sensors.ThermalZones)
+            sensorErrors = @($sensors.Errors | Select-Object -First 5)
         }
         memory = [ordered]@{
             totalBytes = [Math]::Round($totalMemory)
@@ -210,7 +271,7 @@ function Get-Telemetry {
             availableBytes = [Math]::Round($availableMemory)
             usagePercent = [Math]::Round($memoryPercent, 2)
         }
-        disks = $disks
+        disks = @($disks)
         network = [ordered]@{
             internetConnected = [bool]$connectivity.Connected
             latencyMs = $connectivity.LatencyMs
@@ -278,7 +339,7 @@ $lockTaken = $false
 try {
     try { $lockTaken = $mutex.WaitOne(0, $false) } catch [Threading.AbandonedMutexException] { $lockTaken = $true }
     if (-not $lockTaken) { throw 'Another ORDA Monitor instance is already running.' }
-    Write-AgentLog -Level INFO -Message "ORDA Monitor $script:AgentVersion started in no-driver mode. once=$Once dryRun=$DryRun"
+    Write-AgentLog -Level INFO -Message "ORDA Monitor $script:AgentVersion started. Sensors are read-only; no driver installation is performed. once=$Once dryRun=$DryRun"
     do {
         $cycleStart = [DateTime]::UtcNow
         try {
@@ -293,6 +354,7 @@ try {
         Start-Sleep -Seconds $sleep
     } while ($true)
 } finally {
+    Close-HardwareSensorProvider
     if ($lockTaken) { try { $mutex.ReleaseMutex() } catch { } }
     $mutex.Dispose()
 }

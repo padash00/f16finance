@@ -132,7 +132,20 @@ type DiskData = {
   freeBytes: number
   freePercent: number
   temperatureC: number | null
+  temperatureSource: string | null
   health: string | null
+  operationalStatus: string | null
+  mediaType: string | null
+  busType: string | null
+  wearPercent: number | null
+}
+
+type NetworkData = {
+  id: string
+  name: string
+  status: 'up' | 'down' | 'unknown'
+  linkSpeedBps: number | null
+  ipAddresses: string[]
 }
 
 type SettingsForm = {
@@ -190,7 +203,25 @@ function parseDisks(value: unknown): DiskData[] {
     return [{
       id, name, totalBytes, usedBytes, freeBytes, freePercent,
       driveLetter: asText(row.driveLetter), model: asText(row.model),
-      temperatureC: asNumber(row.temperatureC), health: asText(row.health),
+      temperatureC: asNumber(row.temperatureC), temperatureSource: asText(row.temperatureSource),
+      health: asText(row.health), operationalStatus: asText(row.operationalStatus),
+      mediaType: asText(row.mediaType), busType: asText(row.busType), wearPercent: asNumber(row.wearPercent),
+    }]
+  })
+}
+
+function parseNetworks(value: unknown): NetworkData[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((item) => {
+    if (!item || typeof item !== 'object') return []
+    const row = item as Record<string, unknown>
+    const id = asText(row.id)
+    const name = asText(row.name)
+    const status = row.status === 'up' || row.status === 'down' ? row.status : 'unknown'
+    if (!id || !name) return []
+    return [{
+      id, name, status, linkSpeedBps: asNumber(row.linkSpeedBps),
+      ipAddresses: Array.isArray(row.ipAddresses) ? row.ipAddresses.filter((entry): entry is string => typeof entry === 'string') : [],
     }]
   })
 }
@@ -202,6 +233,15 @@ function formatBytes(value: number | null, rate = false): string {
   let index = 0
   while (amount >= 1024 && index < units.length - 1) { amount /= 1024; index += 1 }
   return `${amount.toLocaleString('ru-RU', { maximumFractionDigits: index >= 3 ? 1 : 0 })} ${units[index]}${rate ? '/с' : ''}`
+}
+
+function formatBitsPerSecond(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) return '—'
+  const units = ['bps', 'Kbps', 'Mbps', 'Gbps', 'Tbps']
+  let amount = value
+  let index = 0
+  while (amount >= 1000 && index < units.length - 1) { amount /= 1000; index += 1 }
+  return `${amount.toLocaleString('ru-RU', { maximumFractionDigits: 1 })} ${units[index]}`
 }
 
 function formatDateTime(value: string | null): string {
@@ -362,6 +402,8 @@ export function ServerMonitorDashboard() {
   )
   const events = data?.events.filter((item) => item.server_id === selectedServerId) || []
   const disks = parseDisks(current?.disks_data)
+  const networkInterfaces = parseNetworks(current?.network_data)
+  const activeNetworkInterfaces = networkInterfaces.filter((item) => item.status === 'up')
 
   const status = useMemo<HealthStatus>(() => {
     if (!server || !settings || !server.enabled || !server.last_seen_at) return 'offline'
@@ -375,6 +417,10 @@ export function ServerMonitorDashboard() {
   const cpuTemp = current ? Math.max(...[current.cpu_package_temp_c, current.cpu_core_max_temp_c].filter((value): value is number => value !== null), Number.NEGATIVE_INFINITY) : null
   const safeCpuTemp = cpuTemp !== null && Number.isFinite(cpuTemp) ? cpuTemp : null
   const cpuModel = asText(current?.cpu_data?.model)
+  const cpuTemperatureSource = asText(current?.cpu_data?.temperatureSource)
+  const cpuSensorErrors = Array.isArray(current?.cpu_data?.sensorErrors)
+    ? current.cpu_data.sensorErrors.filter((value): value is string => typeof value === 'string')
+    : []
   const memoryTotal = asNumber(current?.memory_data?.totalBytes)
   const memoryUsed = asNumber(current?.memory_data?.usedBytes)
 
@@ -516,7 +562,7 @@ export function ServerMonitorDashboard() {
               <div className="flex items-center justify-between"><span className="text-sm font-medium text-muted-foreground">CPU</span><Cpu className="h-5 w-5 text-sky-500" /></div>
               <div><div className="text-2xl font-semibold">{percent(current?.cpu_usage_pct ?? null)}</div><p className="truncate text-xs text-muted-foreground">{cpuModel || 'Модель CPU не получена'}</p></div>
               <MetricBar value={current?.cpu_usage_pct ?? null} tone={settings ? toneFor(current?.cpu_usage_pct ?? null, Number(settings.cpu_usage_warning_pct), Number(settings.cpu_usage_critical_pct)) : 'emerald'} />
-              <div className="flex items-center gap-2 text-sm"><Thermometer className="h-4 w-4 text-amber-500" /><span>{temperature(safeCpuTemp)}</span></div>
+              <div className="space-y-1"><div className="flex items-center gap-2 text-sm"><Thermometer className="h-4 w-4 text-amber-500" /><span>{temperature(safeCpuTemp)}</span></div><p className="truncate text-xs text-muted-foreground" title={cpuSensorErrors.join('\n')}>{cpuTemperatureSource || (cpuSensorErrors.length ? 'Датчик недоступен на этом оборудовании' : 'Источник датчика не получен')}</p></div>
             </Card>
             <Card className="gap-4 p-5">
               <div className="flex items-center justify-between"><span className="text-sm font-medium text-muted-foreground">RAM</span><MemoryStick className="h-5 w-5 text-fuchsia-500" /></div>
@@ -527,7 +573,7 @@ export function ServerMonitorDashboard() {
             <Card className="gap-4 p-5 md:col-span-2 xl:col-span-1">
               <div className="flex items-center justify-between"><span className="text-sm font-medium text-muted-foreground">STORAGE</span><HardDrive className="h-5 w-5 text-amber-500" /></div>
               <div className="max-h-28 space-y-3 overflow-y-auto pr-1">
-                {disks.length ? disks.map((disk) => <div key={disk.id}><div className="mb-1 flex justify-between gap-2 text-sm"><b>{disk.driveLetter || disk.name}</b><span>{percent(disk.freePercent)} свободно</span></div><MetricBar value={100 - disk.freePercent} tone={settings ? toneFor(disk.freePercent, Number(settings.disk_free_warning_pct), Number(settings.disk_free_critical_pct), 'low') : 'emerald'} /></div>) : <p className="text-sm text-muted-foreground">Диски не получены</p>}
+                {disks.length ? disks.map((disk) => <div key={disk.id}><div className="mb-1 flex justify-between gap-2 text-sm"><b>{disk.driveLetter || disk.name}</b><span>{percent(disk.freePercent)} свободно</span></div><MetricBar value={100 - disk.freePercent} tone={settings ? toneFor(disk.freePercent, Number(settings.disk_free_warning_pct), Number(settings.disk_free_critical_pct), 'low') : 'emerald'} /><div className="mt-1 flex flex-wrap gap-x-3 text-xs text-muted-foreground"><span>{temperature(disk.temperatureC)}</span><span>{disk.health || disk.operationalStatus || 'Health недоступен'}</span>{disk.mediaType || disk.busType ? <span>{[disk.mediaType, disk.busType].filter(Boolean).join(' · ')}</span> : null}{disk.wearPercent !== null ? <span>Износ {percent(disk.wearPercent)}</span> : null}</div></div>) : <p className="text-sm text-muted-foreground">Диски не получены</p>}
               </div>
               <p className="text-xs text-muted-foreground">{disks.length} томов · {formatBytes(disks.reduce((sum, disk) => sum + disk.totalBytes, 0))}</p>
             </Card>
@@ -535,6 +581,7 @@ export function ServerMonitorDashboard() {
               <div className="flex items-center justify-between"><span className="text-sm font-medium text-muted-foreground">NETWORK</span>{current?.internet_connected ? <Wifi className="h-5 w-5 text-emerald-500" /> : <WifiOff className="h-5 w-5 text-rose-500" />}</div>
               <div><div className="text-2xl font-semibold">{current?.internet_connected === true ? 'ONLINE' : current?.internet_connected === false ? 'OFFLINE' : '—'}</div><p className="text-xs text-muted-foreground">Ping {current?.ping_ms === null || current?.ping_ms === undefined ? '—' : `${Number(current.ping_ms).toFixed(0)} ms`}</p></div>
               <div className="grid grid-cols-2 gap-3 text-sm"><div className="rounded-lg bg-slate-100 p-2 dark:bg-white/5"><span className="block text-xs text-muted-foreground">RX</span><b>{formatBytes(current?.network_rx_bps ?? null, true)}</b></div><div className="rounded-lg bg-slate-100 p-2 dark:bg-white/5"><span className="block text-xs text-muted-foreground">TX</span><b>{formatBytes(current?.network_tx_bps ?? null, true)}</b></div></div>
+              <p className="truncate text-xs text-muted-foreground" title={activeNetworkInterfaces.flatMap((item) => item.ipAddresses).join(', ')}>{activeNetworkInterfaces.length} активных · линк {formatBitsPerSecond(activeNetworkInterfaces.reduce<number | null>((fastest, item) => item.linkSpeedBps !== null && (fastest === null || item.linkSpeedBps > fastest) ? item.linkSpeedBps : fastest, null))}</p>
             </Card>
           </section>
 
