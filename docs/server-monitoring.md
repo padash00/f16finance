@@ -75,7 +75,7 @@ CRON_SECRET=случайная-длинная-строка
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
 .\install.ps1 `
-  -Endpoint "https://ordaops.kz/api/system/server-monitor/ingest" `
+  -Endpoint "https://www.ordaops.kz/api/system/server-monitor/ingest" `
   -AgentKey "smk_..." `
   -ServerId "00000000-0000-0000-0000-000000000000"
 ```

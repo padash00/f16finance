@@ -1,5 +1,5 @@
 {
-  "Endpoint": "https://ordaops.kz/api/system/server-monitor/ingest",
+  "Endpoint": "https://www.ordaops.kz/api/system/server-monitor/ingest",
   "AgentKey": "PASTE_ONE_TIME_AGENT_KEY_HERE",
   "ServerId": "00000000-0000-0000-0000-000000000000",
   "IntervalSeconds": 30,

@@ -38,6 +38,16 @@ if ($existing) {
 }
 
 if ($PSCmdlet.ShouldProcess($resolvedInstall, 'Install and start ORDA Server Monitor')) {
+    if ($existing) {
+        Stop-ScheduledTask -TaskPath '\' -TaskName $TaskName -ErrorAction SilentlyContinue
+        for ($attempt = 0; $attempt -lt 20; $attempt++) {
+            if ((Get-ScheduledTask -TaskPath '\' -TaskName $TaskName).State -ne 'Running') { break }
+            Start-Sleep -Milliseconds 250
+        }
+        if ((Get-ScheduledTask -TaskPath '\' -TaskName $TaskName).State -eq 'Running') {
+            throw 'The existing ORDA Monitor task did not stop within 5 seconds. No files were replaced.'
+        }
+    }
     New-Item -ItemType Directory -Path $resolvedInstall -Force | Out-Null
     & icacls.exe $resolvedInstall /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Failed to restrict ACL on the installation directory.' }
@@ -58,7 +68,7 @@ if ($PSCmdlet.ShouldProcess($resolvedInstall, 'Install and start ORDA Server Mon
     Set-Content -LiteralPath (Join-Path $resolvedInstall '.orda-monitor-install') -Value 'ORDA_CONTROL_SERVER_MONITOR_V1' -Encoding ASCII
 
     $config = [ordered]@{
-        Endpoint = $Endpoint.TrimEnd('/')
+        Endpoint = if (([Uri]$Endpoint).Host -eq 'ordaops.kz') { $Endpoint.Replace('https://ordaops.kz', 'https://www.ordaops.kz').TrimEnd('/') } else { $Endpoint.TrimEnd('/') }
         AgentKey = $AgentKey
         ServerId = $ServerId.ToString()
         IntervalSeconds = 30
@@ -72,9 +82,6 @@ if ($PSCmdlet.ShouldProcess($resolvedInstall, 'Install and start ORDA Server Mon
     $config | ConvertTo-Json | Set-Content -LiteralPath $tempConfig -Encoding UTF8
     Move-Item -LiteralPath $tempConfig -Destination $configPath -Force
 
-    if ($existing) {
-        Stop-ScheduledTask -TaskPath '\' -TaskName $TaskName -ErrorAction SilentlyContinue
-    }
     $powerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
     $action = New-ScheduledTaskAction -Execute $powerShell -Argument "-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$agentPath`"" -WorkingDirectory $resolvedInstall
     $trigger = New-ScheduledTaskTrigger -AtStartup
