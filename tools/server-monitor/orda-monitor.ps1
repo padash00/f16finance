@@ -9,12 +9,16 @@ param(
 
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
-$script:AgentVersion = '1.1.2'
+$script:AgentVersion = '1.2.0'
 $script:PreviousNetwork = @{}
 
 $sensorProviderPath = Join-Path $PSScriptRoot 'sensor-provider.ps1'
 if (-not (Test-Path -LiteralPath $sensorProviderPath -PathType Leaf)) { throw "Sensor provider not found: $sensorProviderPath" }
 . $sensorProviderPath
+
+$diagnosticsPath = Join-Path $PSScriptRoot 'agent-diagnostics.ps1'
+if (-not (Test-Path -LiteralPath $diagnosticsPath -PathType Leaf)) { throw "Diagnostics provider not found: $diagnosticsPath" }
+. $diagnosticsPath
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
@@ -111,33 +115,6 @@ function Find-StorageSensor {
     return $null
 }
 
-function Get-Connectivity {
-    param([string]$HostName, [int]$TimeoutMs)
-    $connected = $false
-    $latency = $null
-    try {
-        $ping = New-Object System.Net.NetworkInformation.Ping
-        $reply = $ping.Send($HostName, $TimeoutMs)
-        if ($reply.Status -eq [System.Net.NetworkInformation.IPStatus]::Success) {
-            $connected = $true
-            $latency = [double]$reply.RoundtripTime
-        }
-        $ping.Dispose()
-    } catch { }
-    if (-not $connected) {
-        try {
-            $request = [Net.HttpWebRequest]::Create('https://www.gstatic.com/generate_204')
-            $request.Method = 'GET'
-            $request.Timeout = $TimeoutMs
-            $request.ReadWriteTimeout = $TimeoutMs
-            $response = $request.GetResponse()
-            $connected = ([int]$response.StatusCode -ge 200 -and [int]$response.StatusCode -lt 400)
-            $response.Close()
-        } catch { }
-    }
-    return @{ Connected = $connected; LatencyMs = $latency }
-}
-
 function Get-NetworkTelemetry {
     $now = [DateTime]::UtcNow
     $interfaces = @()
@@ -206,6 +183,9 @@ function Get-Telemetry {
     $sensors = Get-HardwareSensorSnapshot -LibraryPath $sensorLibraryPath
     if ($null -ne $SimulateCpuUsagePercent) { $cpuUsage = [double]$SimulateCpuUsagePercent }
     if ($null -ne $SimulateCpuTemperatureC) { $sensors.CpuPackage = [double]$SimulateCpuTemperatureC }
+    $logicalProcessorCount = [int](($processors | Measure-Object -Property NumberOfLogicalProcessors -Sum).Sum)
+    if ($logicalProcessorCount -lt 1) { $logicalProcessorCount = [Environment]::ProcessorCount }
+    $topProcesses = [object[]]@(Get-OrdaTopProcesses -LogicalProcessorCount $logicalProcessorCount -NowUtc $observedAt)
 
     $diskHardware = Get-DiskHardwareMap
     $disks = @()
@@ -247,7 +227,7 @@ function Get-Telemetry {
     }
 
     $networkInterfaces = @(Get-NetworkTelemetry)
-    $connectivity = Get-Connectivity -HostName ([string]$Config.ConnectivityHost) -TimeoutMs ([int]$Config.ConnectivityTimeoutMs)
+    $networkDiagnostics = Get-OrdaNetworkDiagnostics -Endpoint ([string]$Config.Endpoint) -ConnectivityHost ([string]$Config.ConnectivityHost) -TimeoutMs ([int]$Config.ConnectivityTimeoutMs)
     return [ordered]@{
         schemaVersion = 1
         telemetryId = [Guid]::NewGuid().ToString()
@@ -270,6 +250,7 @@ function Get-Telemetry {
             temperatureSensors = @($sensors.CpuSensors)
             thermalZones = @($sensors.ThermalZones)
             sensorErrors = @($sensors.Errors | Select-Object -First 5)
+            topProcesses = $topProcesses
         }
         memory = [ordered]@{
             totalBytes = [Math]::Round($totalMemory)
@@ -279,9 +260,10 @@ function Get-Telemetry {
         }
         disks = @($disks)
         network = [ordered]@{
-            internetConnected = [bool]$connectivity.Connected
-            latencyMs = $connectivity.LatencyMs
+            internetConnected = ([string]$networkDiagnostics.verdict -eq 'healthy')
+            latencyMs = $networkDiagnostics.external.latencyMs
             interfaces = $networkInterfaces
+            diagnostics = $networkDiagnostics
         }
     }
 }

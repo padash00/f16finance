@@ -5,6 +5,30 @@ const percentage = finiteNumber.min(0).max(100)
 const temperature = finiteNumber.min(-100).max(250)
 const byteCount = finiteNumber.min(0).max(Number.MAX_SAFE_INTEGER)
 
+const processDiagnosticSchema = z.object({
+  pid: z.number().int().min(0).max(4_294_967_295),
+  name: z.string().trim().min(1).max(260),
+  cpuPercent: percentage,
+  workingSetBytes: byteCount,
+}).strict()
+
+const networkProbeSchema = z.object({
+  target: z.string().trim().min(1).max(500).nullable(),
+  reachable: z.boolean().nullable(),
+  latencyMs: finiteNumber.min(0).max(600_000).nullable(),
+  statusCode: z.number().int().min(100).max(599).nullable().optional(),
+  addresses: z.array(z.string().trim().min(1).max(64)).max(8).optional(),
+  error: z.string().trim().min(1).max(500).nullable().optional(),
+}).strict()
+
+const networkDiagnosticsSchema = z.object({
+  verdict: z.enum(['healthy', 'gateway_unreachable', 'dns_failure', 'internet_unreachable', 'endpoint_unreachable', 'unknown']),
+  gateway: networkProbeSchema,
+  external: networkProbeSchema,
+  dns: networkProbeSchema,
+  https: networkProbeSchema,
+}).strict()
+
 const systemSchema = z.object({
   hostname: z.string().trim().min(1).max(255),
   windowsVersion: z.string().trim().min(1).max(500),
@@ -28,6 +52,7 @@ const cpuSchema = z.object({
     temperatureC: temperature,
   }).strict()).max(64).optional(),
   sensorErrors: z.array(z.string().trim().min(1).max(1000)).max(5).optional(),
+  topProcesses: z.array(processDiagnosticSchema).max(5).optional(),
 }).strict()
 
 const memorySchema = z.object({
@@ -87,6 +112,7 @@ const networkSchema = z.object({
   internetConnected: z.boolean(),
   latencyMs: finiteNumber.min(0).max(600_000).nullable().optional(),
   interfaces: z.array(monitorNetworkInterfaceSchema).max(64),
+  diagnostics: networkDiagnosticsSchema.optional(),
 }).strict()
 
 export const serverMonitorTelemetryV1Schema = z.object({
@@ -221,7 +247,8 @@ export function buildTelemetryObservations(
       ruleCode: 'cpu_usage', subjectKey: 'cpu', title: 'Загрузка CPU', metric: 'cpu_usage_pct',
       value: telemetry.cpu.usagePercent, unit: '%', direction: 'high',
       warningThreshold: settings.cpu_usage_warning_pct, criticalThreshold: settings.cpu_usage_critical_pct,
-      hysteresis: settings.cpu_usage_hysteresis_pct, context: { cpuModel: telemetry.cpu.model },
+      hysteresis: settings.cpu_usage_hysteresis_pct,
+      context: { cpuModel: telemetry.cpu.model, topProcesses: telemetry.cpu.topProcesses || [] },
     },
     {
       ruleCode: 'ram_usage', subjectKey: 'memory', title: 'Использование RAM', metric: 'memory_usage_pct',
@@ -253,7 +280,10 @@ export function buildTelemetryObservations(
     ruleCode: 'internet_connectivity', subjectKey: 'internet', title: 'Подключение к интернету',
     metric: 'internet_connected', value: telemetry.network.internetConnected ? 1 : 0, unit: '', direction: 'low',
     warningThreshold: null, criticalThreshold: 0.5, hysteresis: 0,
-    context: { latencyMs: telemetry.network.latencyMs ?? null },
+    context: {
+      latencyMs: telemetry.network.latencyMs ?? null,
+      networkDiagnostics: telemetry.network.diagnostics || null,
+    },
   })
 
   return observations

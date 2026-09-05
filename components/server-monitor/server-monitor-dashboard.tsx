@@ -20,6 +20,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { useToast } from '@/hooks/use-toast'
 import { useCapabilities } from '@/lib/client/use-capabilities'
+import { getMonitorDiagnosticSummary } from '@/lib/server-monitoring/diagnostics'
 import { cn } from '@/lib/utils'
 
 type MonitorServer = {
@@ -85,6 +86,7 @@ type MonitorAlert = {
   current_value: number | null
   value_unit: string | null
   started_at: string
+  context: Record<string, unknown>
 }
 
 type MonitorEvent = {
@@ -96,6 +98,7 @@ type MonitorEvent = {
   value: number | null
   value_unit: string | null
   occurred_at: string
+  context: Record<string, unknown>
 }
 
 type DashboardPayload = {
@@ -623,8 +626,14 @@ export function ServerMonitorDashboard() {
           </section>
 
           <section className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-            <div className="space-y-3"><div className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-amber-500" /><h2 className="text-lg font-semibold">Активные проблемы</h2><span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs dark:bg-white/10">{alerts.length}</span></div>{alerts.length ? alerts.map((alert) => <div key={alert.id} className={cn('flex items-start justify-between gap-3 rounded-lg border p-4', alert.severity === 'critical' ? 'border-rose-500/30 bg-rose-500/10' : 'border-amber-500/30 bg-amber-500/10')}><div><p className="font-medium">{alert.title}</p><p className="mt-1 text-xs text-muted-foreground">С {formatDateTime(alert.started_at)}</p></div><b>{alert.current_value === null ? '—' : `${Number(alert.current_value).toLocaleString('ru-RU', { maximumFractionDigits: 2 })}${alert.value_unit || ''}`}</b></div>) : <div className="flex items-center gap-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4 text-sm text-emerald-700 dark:text-emerald-300"><Check className="h-5 w-5" />Активных проблем нет</div>}</div>
-            <div className="space-y-3"><div className="flex items-center gap-2"><CircleGauge className="h-5 w-5 text-sky-500" /><h2 className="text-lg font-semibold">История событий</h2></div><AdminTableViewport maxHeight="24rem"><table className="w-full min-w-[680px] text-sm"><thead className={adminTableStickyTheadClass}><tr><th className="px-4 py-3 text-left">Время</th><th className="px-4 py-3 text-left">Статус</th><th className="px-4 py-3 text-left">Событие</th><th className="px-4 py-3 text-right">Значение</th></tr></thead><tbody className="divide-y divide-border">{events.map((event) => <tr key={event.id}><td className="whitespace-nowrap px-4 py-3 text-muted-foreground">{formatDateTime(event.occurred_at)}</td><td className="px-4 py-3"><span className={cn('rounded-full px-2 py-1 text-xs font-medium', event.severity === 'critical' ? 'bg-rose-500/10 text-rose-600' : event.severity === 'warning' ? 'bg-amber-500/10 text-amber-600' : 'bg-emerald-500/10 text-emerald-600')}>{event.severity.toUpperCase()}</span></td><td className="px-4 py-3"><b>{event.title}</b><span className="ml-2 text-xs text-muted-foreground">{event.transition}</span></td><td className="px-4 py-3 text-right font-medium">{event.value === null ? '—' : `${Number(event.value).toLocaleString('ru-RU', { maximumFractionDigits: 2 })}${event.value_unit || ''}`}</td></tr>)}{events.length === 0 ? <tr><td colSpan={4} className="px-4 py-10 text-center text-muted-foreground">Событий пока нет</td></tr> : null}</tbody></table></AdminTableViewport></div>
+            <div className="space-y-3"><div className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-amber-500" /><h2 className="text-lg font-semibold">Активные проблемы</h2><span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs dark:bg-white/10">{alerts.length}</span></div>{alerts.length ? alerts.map((alert) => {
+              const diagnostic = getMonitorDiagnosticSummary(alert.context)
+              return <div key={alert.id} className={cn('flex items-start justify-between gap-3 rounded-lg border p-4', alert.severity === 'critical' ? 'border-rose-500/30 bg-rose-500/10' : 'border-amber-500/30 bg-amber-500/10')}><div className="min-w-0"><p className="font-medium">{alert.title}</p>{diagnostic ? <p className="mt-1 text-xs leading-5 text-muted-foreground">{diagnostic}</p> : null}<p className="mt-1 text-xs text-muted-foreground">С {formatDateTime(alert.started_at)}</p></div><b className="shrink-0">{alert.current_value === null ? '—' : `${Number(alert.current_value).toLocaleString('ru-RU', { maximumFractionDigits: 2 })}${alert.value_unit || ''}`}</b></div>
+            }) : <div className="flex items-center gap-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4 text-sm text-emerald-700 dark:text-emerald-300"><Check className="h-5 w-5" />Активных проблем нет</div>}</div>
+            <div className="space-y-3"><div className="flex items-center gap-2"><CircleGauge className="h-5 w-5 text-sky-500" /><h2 className="text-lg font-semibold">История событий</h2></div><AdminTableViewport maxHeight="24rem"><table className="w-full min-w-[680px] text-sm"><thead className={adminTableStickyTheadClass}><tr><th className="px-4 py-3 text-left">Время</th><th className="px-4 py-3 text-left">Статус</th><th className="px-4 py-3 text-left">Событие</th><th className="px-4 py-3 text-right">Значение</th></tr></thead><tbody className="divide-y divide-border">{events.map((event) => {
+              const diagnostic = getMonitorDiagnosticSummary(event.context)
+              return <tr key={event.id}><td className="whitespace-nowrap px-4 py-3 text-muted-foreground">{formatDateTime(event.occurred_at)}</td><td className="px-4 py-3"><span className={cn('rounded-full px-2 py-1 text-xs font-medium', event.severity === 'critical' ? 'bg-rose-500/10 text-rose-600' : event.severity === 'warning' ? 'bg-amber-500/10 text-amber-600' : 'bg-emerald-500/10 text-emerald-600')}>{event.severity.toUpperCase()}</span></td><td className="px-4 py-3"><div><b>{event.title}</b><span className="ml-2 text-xs text-muted-foreground">{event.transition}</span>{diagnostic ? <p className="mt-1 max-w-xl text-xs leading-5 text-muted-foreground">{diagnostic}</p> : null}</div></td><td className="px-4 py-3 text-right font-medium">{event.value === null ? '—' : `${Number(event.value).toLocaleString('ru-RU', { maximumFractionDigits: 2 })}${event.value_unit || ''}`}</td></tr>
+            })}{events.length === 0 ? <tr><td colSpan={4} className="px-4 py-10 text-center text-muted-foreground">Событий пока нет</td></tr> : null}</tbody></table></AdminTableViewport></div>
           </section>
         </>
       )}

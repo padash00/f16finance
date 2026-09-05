@@ -7,7 +7,7 @@ Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-if (-not $OutputPath) { $OutputPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'ORDA-Server-Monitor-1.1.2.zip' }
+if (-not $OutputPath) { $OutputPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'ORDA-Server-Monitor-1.2.0.zip' }
 
 $releaseUrl = 'https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases/download/v0.9.6/LibreHardwareMonitor.zip'
 $releaseSha256 = '086D9F1B5A99E643EDC2CFAAAC16051685B551E4C5AC0B32A57C58C0E529C001'
@@ -48,7 +48,7 @@ try {
     if ($actualHash -ne $releaseSha256) { throw "LibreHardwareMonitor archive hash mismatch. Expected $releaseSha256, got $actualHash." }
     Expand-Archive -LiteralPath $download -DestinationPath $expanded
 
-    foreach ($name in @('install.ps1', 'uninstall.ps1', 'orda-monitor.ps1', 'sensor-provider.ps1', 'config.example.json')) {
+    foreach ($name in @('install.ps1', 'uninstall.ps1', 'orda-monitor.ps1', 'sensor-provider.ps1', 'agent-diagnostics.ps1', 'config.example.json')) {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination $package
     }
     foreach ($name in $allowedSensorFiles) {

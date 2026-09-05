@@ -25,6 +25,8 @@ $sourceAgent = Join-Path $PSScriptRoot 'orda-monitor.ps1'
 if (-not (Test-Path -LiteralPath $sourceAgent)) { throw "Agent source not found: $sourceAgent" }
 $sourceSensorProvider = Join-Path $PSScriptRoot 'sensor-provider.ps1'
 if (-not (Test-Path -LiteralPath $sourceSensorProvider)) { throw "Sensor provider not found: $sourceSensorProvider" }
+$sourceDiagnostics = Join-Path $PSScriptRoot 'agent-diagnostics.ps1'
+if (-not (Test-Path -LiteralPath $sourceDiagnostics)) { throw "Diagnostics provider not found: $sourceDiagnostics" }
 $taskDescription = 'ORDA Control Windows Server telemetry agent'
 $agentPath = Join-Path $resolvedInstall 'orda-monitor.ps1'
 $existing = Get-ScheduledTask -TaskPath '\' -TaskName $TaskName -ErrorAction SilentlyContinue
@@ -55,6 +57,7 @@ if ($PSCmdlet.ShouldProcess($resolvedInstall, 'Install and start ORDA Server Mon
     New-Item -ItemType Directory -Path (Join-Path $resolvedInstall 'state') -Force | Out-Null
     Copy-Item -LiteralPath $sourceAgent -Destination (Join-Path $resolvedInstall 'orda-monitor.ps1') -Force
     Copy-Item -LiteralPath $sourceSensorProvider -Destination (Join-Path $resolvedInstall 'sensor-provider.ps1') -Force
+    Copy-Item -LiteralPath $sourceDiagnostics -Destination (Join-Path $resolvedInstall 'agent-diagnostics.ps1') -Force
     $sourceSensors = Join-Path $PSScriptRoot 'sensors'
     if (Test-Path -LiteralPath $sourceSensors -PathType Container) {
         $targetSensors = Join-Path $resolvedInstall 'sensors'

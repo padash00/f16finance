@@ -2,7 +2,12 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { classifyObservation, decideAlertTransition } from '@/lib/server-monitoring/alert-engine'
-import { serverMonitorTelemetryV1Schema, type MonitorObservation } from '@/lib/server-monitoring/protocol'
+import {
+  buildTelemetryObservations,
+  normalizeMonitorSettings,
+  serverMonitorTelemetryV1Schema,
+  type MonitorObservation,
+} from '@/lib/server-monitoring/protocol'
 
 function highObservation(value: number): MonitorObservation {
   return {
@@ -117,4 +122,51 @@ test('telemetry schema accepts sensor provenance and disk reliability data', () 
     network: { internetConnected: true, latencyMs: 10, interfaces: [] },
   })
   assert.equal(result.success, true)
+})
+
+test('telemetry preserves CPU and network diagnostics in alert observations', () => {
+  const parsed = serverMonitorTelemetryV1Schema.parse({
+    schemaVersion: 1,
+    telemetryId: '40000000-0000-4000-8000-000000000003',
+    serverId: '20000000-0000-4000-8000-000000000001',
+    timestamp: '2026-09-05T10:00:00.000Z',
+    agentVersion: '1.2.0',
+    system: { hostname: 'F16-SERVER', windowsVersion: 'Windows Server 2019', uptimeSeconds: 10, lastBootAt: '2026-09-05T09:59:50.000Z', agentTime: '2026-09-05T10:00:00.000Z' },
+    cpu: {
+      model: 'CPU', usagePercent: 93,
+      topProcesses: [{ pid: 4420, name: 'Connector.App', cpuPercent: 72.5, workingSetBytes: 268435456 }],
+    },
+    memory: { totalBytes: 100, usedBytes: 50, availableBytes: 50, usagePercent: 50 },
+    disks: [],
+    network: {
+      internetConnected: false,
+      latencyMs: null,
+      interfaces: [],
+      diagnostics: {
+        verdict: 'dns_failure',
+        gateway: { target: '192.168.1.1', reachable: true, latencyMs: 1 },
+        external: { target: '1.1.1.1', reachable: true, latencyMs: 28 },
+        dns: { target: 'www.ordaops.kz', reachable: false, latencyMs: 3000, addresses: [], error: 'DNS timeout' },
+        https: { target: 'https://www.ordaops.kz', reachable: false, latencyMs: null, statusCode: null, error: 'DNS name does not exist' },
+      },
+    },
+  })
+  const settings = normalizeMonitorSettings({
+    cpu_temp_warning_c: 80, cpu_temp_critical_c: 90,
+    cpu_usage_warning_pct: 90, cpu_usage_critical_pct: 98,
+    ram_usage_warning_pct: 90, ram_usage_critical_pct: 98,
+    disk_temp_warning_c: 70, disk_temp_critical_c: 80,
+    disk_free_warning_pct: 15, disk_free_critical_pct: 7,
+    cpu_temp_hysteresis_c: 5, cpu_usage_hysteresis_pct: 5, ram_usage_hysteresis_pct: 5,
+    disk_temp_hysteresis_c: 5, disk_free_hysteresis_pct: 3,
+    recovery_samples: 2, offline_timeout_seconds: 120,
+    history_bucket_seconds: 300, history_retention_days: 30,
+    telegram_enabled: true, notify_warning: true, notify_critical: true, notify_recovery: true,
+  })
+
+  const observations = buildTelemetryObservations(parsed, settings)
+  const cpu = observations.find((item) => item.ruleCode === 'cpu_usage')
+  const internet = observations.find((item) => item.ruleCode === 'internet_connectivity')
+  assert.deepEqual(cpu?.context.topProcesses, parsed.cpu.topProcesses)
+  assert.deepEqual(internet?.context.networkDiagnostics, parsed.network.diagnostics)
 })
