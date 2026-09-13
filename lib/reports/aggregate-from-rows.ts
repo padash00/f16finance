@@ -143,6 +143,10 @@ export function aggregateReportFromRows(input: {
   prevTo: string
   dailyIncome: Map<string, number>
   dailyExpense: Map<string, number>
+  /** Итоги точек за базу сравнения */
+  companyStatsPrev: Map<string, { income: number; expense: number; profit: number }>
+  /** Дневной ряд по каждой точке (текущий период) — для мини-графиков дашборда */
+  companyDaily: Map<string, Map<string, { income: number; expense: number }>>
 } {
   const { dateFrom, dateTo, groupMode, companyName } = input
   const fallbackPrev = calculatePrevPeriod(dateFrom, dateTo)
@@ -161,6 +165,31 @@ export function aggregateReportFromRows(input: {
   const companyStats = new Map<string, CompanyStat>()
   const dailyIncome = new Map<string, number>()
   const dailyExpense = new Map<string, number>()
+  const companyStatsPrev = new Map<string, { income: number; expense: number; profit: number }>()
+  const companyDaily = new Map<string, Map<string, { income: number; expense: number }>>()
+
+  const companyDay = (companyId: string, date: string) => {
+    let days = companyDaily.get(companyId)
+    if (!days) {
+      days = new Map()
+      companyDaily.set(companyId, days)
+    }
+    let day = days.get(date)
+    if (!day) {
+      day = { income: 0, expense: 0 }
+      days.set(date, day)
+    }
+    return day
+  }
+
+  const prevCompany = (companyId: string) => {
+    let stat = companyStatsPrev.get(companyId)
+    if (!stat) {
+      stat = { income: 0, expense: 0, profit: 0 }
+      companyStatsPrev.set(companyId, stat)
+    }
+    return stat
+  }
 
   const getRangeBucket = (iso: string): 'current' | 'previous' | null => {
     if (iso >= dateFrom && iso <= dateTo) return 'current'
@@ -227,8 +256,11 @@ export function aggregateReportFromRows(input: {
     tgt.totalIncome += total
     tgt.transactionCount += 1
 
+    if (range === 'previous') prevCompany(r.company_id).income += total
+
     if (range === 'current') {
       dailyIncome.set(r.date, (dailyIncome.get(r.date) || 0) + total)
+      companyDay(r.company_id, r.date).income += total
 
       const { key, label, sortISO } = getKey(r.date)
       const bucket = ensureBucket(key, label, sortISO)
@@ -300,8 +332,11 @@ export function aggregateReportFromRows(input: {
     // transactionCount — только строки дохода: делим на него выручку (средняя
     // запись дохода). Расходы в счётчике занижали среднее в разы.
 
+    if (range === 'previous') prevCompany(r.company_id).expense += total
+
     if (range === 'current') {
       dailyExpense.set(r.date, (dailyExpense.get(r.date) || 0) + total)
+      companyDay(r.company_id, r.date).expense += total
 
       const category = r.category || 'Без категории'
       expenseByCategoryMap.set(category, (expenseByCategoryMap.get(category) || 0) + total)
@@ -335,6 +370,9 @@ export function aggregateReportFromRows(input: {
   finalize(totalsPrev)
 
   for (const [, stats] of companyStats) {
+    stats.profit = stats.income - stats.expense
+  }
+  for (const [, stats] of companyStatsPrev) {
     stats.profit = stats.income - stats.expense
   }
 
@@ -417,5 +455,7 @@ export function aggregateReportFromRows(input: {
     prevTo,
     dailyIncome,
     dailyExpense,
+    companyStatsPrev,
+    companyDaily,
   }
 }

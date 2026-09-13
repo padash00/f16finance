@@ -26,6 +26,10 @@ export type ReportBundleAggregate = {
   prevTo: string
   dailyIncome: Record<string, number>
   dailyExpense: Record<string, number>
+  /** Итоги точек за базу сравнения */
+  companyStatsPrev?: Record<string, { income: number; expense: number; profit: number }>
+  /** Дневной ряд по точкам: companyId → дата → доход/расход (текущий период) */
+  companyDaily?: Record<string, Record<string, { income: number; expense: number }>>
 }
 
 export type ProcessedReportShape = {

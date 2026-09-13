@@ -284,6 +284,8 @@ function emptyDataResponse(dateFrom: string, dateTo: string) {
     prevTo,
     dailyIncome: {} as Record<string, number>,
     dailyExpense: {} as Record<string, number>,
+    companyStatsPrev: {},
+    companyDaily: {},
   }
   return {
     asOf: new Date().toISOString().slice(0, 10),
@@ -322,5 +324,9 @@ function serializeAggregate(
     prevTo: agg.prevTo,
     dailyIncome: Object.fromEntries(agg.dailyIncome),
     dailyExpense: Object.fromEntries(agg.dailyExpense),
+    companyStatsPrev: Object.fromEntries(agg.companyStatsPrev),
+    companyDaily: Object.fromEntries(
+      Array.from(agg.companyDaily, ([companyId, days]) => [companyId, Object.fromEntries(days)] as const),
+    ),
   }
 }

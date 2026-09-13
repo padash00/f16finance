@@ -17,18 +17,21 @@ import Link from 'next/link'
 import {
   AlertTriangle,
   ArrowRight,
-  BarChart2,
+  Banknote,
   Cake,
   CalendarClock,
-  CheckCircle2,
   ClipboardList,
   Gauge,
+  History,
   LayoutDashboard,
   Package,
   Receipt,
+  Sparkles,
+  Store,
   Target,
   TrendingDown,
   TrendingUp,
+  UserRound,
 } from 'lucide-react'
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
@@ -37,6 +40,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { DatePicker } from '@/components/ui/date-picker'
 import { useApiCache } from '@/lib/client/use-api-cache'
+import { useCashlessLabels } from '@/lib/client/use-cashless-labels'
 import type { ExpenseArticle } from '@/lib/reports/expense-groups'
 import { isExtraCompany } from '@/lib/reports/extra-company'
 import { computeMonthEndForecast, type ForecastHints } from '@/lib/reports/forecast-hybrid'
@@ -117,9 +121,26 @@ type KpiPlan = {
   achievement_pct: number
 }
 
+type OnShiftPoint = {
+  open: { operatorName: string; shiftType: string; openedAt: string } | null
+  scheduled: Array<{ date: string; shiftType: string; operatorName: string }>
+}
+
 type Anomaly = { type: 'spike' | 'drop'; date: string; description: string; severity: 'low' | 'medium' | 'high' }
 
 type FeedItem = { id: string; date: string; kind: 'income' | 'expense'; title: string; subtitle: string; amount: number }
+
+type PointSummary = {
+  id: string
+  name: string
+  income: number
+  expense: number
+  profit: number
+  margin: number | null
+  prevIncome: number
+  prevProfit: number
+  daily: number[]
+}
 
 type ScoreStatus = 'excellent' | 'good' | 'warning' | 'critical'
 
@@ -143,6 +164,22 @@ function plural(n: number, one: string, few: string, many: string) {
   if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few
   return many
 }
+
+/** «к прошлой субботе» / «к прошлому понедельнику» — по дню недели сегодня */
+function sameWeekdayLabel(iso: string) {
+  const forms = [
+    'к прошлому воскресенью',
+    'к прошлому понедельнику',
+    'к прошлому вторнику',
+    'к прошлой среде',
+    'к прошлому четвергу',
+    'к прошлой пятнице',
+    'к прошлой субботе',
+  ]
+  return forms[DateUtils.fromISO(iso).getDay()]
+}
+
+const shiftLabel = (shiftType: string) => (shiftType === 'night' ? 'ночь' : shiftType === 'day' ? 'день' : 'смена')
 
 function detectAnomalies(points: ChartPoint[], threshold = 2.5): Anomaly[] {
   const vals = points.map((p) => p.income ?? 0).filter((v) => v > 0)
@@ -235,10 +272,20 @@ const STATUS_ADVICE: Record<ScoreStatus, string> = {
   critical: 'Период убыточный или резко хуже прошлого — нужен разбор расходов.',
 }
 
+/** Цвет изменения: рост хорош для дохода и прибыли и плох для расхода */
+function changeTone(current: number, previous: number, goodWhenUp: boolean) {
+  const change = Formatters.percentChange(current, previous)
+  if (change.text === '—') return { text: change.text, className: 'text-muted-foreground' }
+  const good = change.positive === goodWhenUp
+  return { text: change.text, className: good ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400' }
+}
+
 // ==================== PAGE ====================
 
 export default function DashboardPage() {
+  const cashLabels = useCashlessLabels()
   const today = DateUtils.todayISO()
+  const sameDayLastWeek = DateUtils.addDaysISO(today, -7)
   const [dateFrom, setDateFrom] = useState(() => DateUtils.monthStartISO())
   const [dateTo, setDateTo] = useState(() => DateUtils.todayISO())
   const [rangeType, setRangeType] = useState<RangeType>('month')
@@ -256,8 +303,10 @@ export default function DashboardPage() {
   const main = useApiCache<BundleData>(bundleUrl(dateFrom, dateTo))
   // Прогноз на конец месяца считается по полному месяцу — тем же расчётом, что /reports
   const monthBundle = useApiCache<BundleData>(bundleUrl(dateFrom, monthEnd), { enabled: isCurrentMonth })
-  const todayBundle = useApiCache<BundleData>(bundleUrl(today, today), { enabled: rangeType !== 'today' })
+  const todayBundle = useApiCache<BundleData>(bundleUrl(today, today))
+  const lastWeekBundle = useApiCache<BundleData>(bundleUrl(sameDayLastWeek, sameDayLastWeek))
   const companiesRes = useApiCache<Company[]>('/api/admin/companies')
+  const onShift = useApiCache<{ today: string; points: Record<string, OnShiftPoint> }>(`/api/admin/dashboard/on-shift?date=${today}`)
   // Лента: последние операции, а не тысячи строк периода
   const incomesFeed = useApiCache<IncomeFeedRow[]>(`/api/admin/incomes?from=${dateFrom}&to=${dateTo}&page_size=10`)
   const expensesFeed = useApiCache<ExpenseFeedRow[]>(`/api/admin/expenses?from=${dateFrom}&to=${dateTo}&page_size=10&page=0`)
@@ -398,21 +447,8 @@ export default function DashboardPage() {
     return points
   }, [agg, dateFrom, dateTo, forecast, monthBundle.data, monthEnd])
 
-  const anomalies = useMemo(() => detectAnomalies(chartData.filter((p) => p.income !== null)), [chartData])
-
-  const incomeByPoint = useMemo((): CategoryData[] => {
-    if (!agg) return []
-    const total = agg.totalsCur.totalIncome
-    return Object.values(agg.incomeByCompany)
-      .filter((c) => c.value > 0)
-      .sort((a, b) => b.value - a.value)
-      .map((c, idx) => ({
-        name: c.name,
-        value: c.value,
-        percentage: total ? (c.value / total) * 100 : 0,
-        color: COLORS.chart[idx % COLORS.chart.length],
-      }))
-  }, [agg])
+  const actualDays = useMemo(() => chartData.filter((p) => p.income !== null), [chartData])
+  const anomalies = useMemo(() => detectAnomalies(actualDays), [actualDays])
 
   const expenseByArticle = useMemo((): CategoryData[] => {
     const total = agg?.totalsCur.totalExpense || 0
@@ -427,20 +463,28 @@ export default function DashboardPage() {
       }))
   }, [agg, main.data])
 
-  const companyRows = useMemo(() => {
+  const points = useMemo((): PointSummary[] => {
     if (!agg) return []
+    const dates = DateUtils.rangeDates(dateFrom, dateTo)
     return Object.entries(agg.companyStats)
-      .map(([id, s]) => ({
-        id,
-        name: companyName(id),
-        income: s.income,
-        expense: s.expense,
-        profit: s.profit,
-        margin: s.income > 0 ? (s.profit / s.income) * 100 : null,
-      }))
-      .filter((r) => r.income > 0 || r.expense > 0)
+      .map(([id, s]) => {
+        const prev = agg.companyStatsPrev?.[id]
+        const days = agg.companyDaily?.[id] || {}
+        return {
+          id,
+          name: companyName(id),
+          income: s.income,
+          expense: s.expense,
+          profit: s.profit,
+          margin: s.income > 0 ? (s.profit / s.income) * 100 : null,
+          prevIncome: prev?.income || 0,
+          prevProfit: prev?.profit || 0,
+          daily: dates.map((date) => days[date]?.income || 0),
+        }
+      })
+      .filter((p) => p.income > 0 || p.expense > 0)
       .sort((a, b) => b.income - a.income || b.expense - a.expense)
-  }, [agg, companyName])
+  }, [agg, dateFrom, dateTo, companyName])
 
   const feed = useMemo((): FeedItem[] => {
     const skip = (companyId: string, date: string) =>
@@ -474,7 +518,7 @@ export default function DashboardPage() {
         amount,
       })
     }
-    return items.sort((a, b) => b.date.localeCompare(a.date) || b.amount - a.amount).slice(0, 8)
+    return items.sort((a, b) => b.date.localeCompare(a.date) || b.amount - a.amount).slice(0, 10)
   }, [incomesFeed.data, expensesFeed.data, includeExtra, extraIds, dateFrom, dateTo, companyName])
 
   // Только то, где нужно действие: пустых счётчиков вроде «Операторы: 15» здесь нет
@@ -582,10 +626,11 @@ export default function DashboardPage() {
   const current = agg.totalsCur
   const previous = agg.totalsPrev
   const score = scorePeriod(current, previous)
-  const todayTotals = todayBundle.data?.aggregate?.totalsCur
   const margin = current.totalIncome ? (current.profit / current.totalIncome) * 100 : 0
   const reportsHref = `/reports?from=${dateFrom}&to=${dateTo}&preset=custom`
   const feedDenied = !!incomesFeed.error && !!expensesFeed.error
+  const incomePoints = points.filter((p) => p.income > 0)
+  const expenseOnlyPoints = points.filter((p) => p.income <= 0)
 
   return (
     <div className="app-page-wide space-y-5">
@@ -682,6 +727,14 @@ export default function DashboardPage() {
         </Card>
       )}
 
+      {rangeType !== 'today' && todayBundle.data?.aggregate && (
+        <TodayCard
+          date={today}
+          totals={todayBundle.data.aggregate.totalsCur}
+          lastWeek={lastWeekBundle.data?.aggregate?.totalsCur ?? null}
+        />
+      )}
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
         <ScoreCard result={score} />
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3 lg:col-span-3">
@@ -724,24 +777,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {todayTotals && rangeType !== 'today' && (
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 rounded-xl border border-border bg-white/70 px-4 py-2.5 text-sm dark:bg-white/[0.02]">
-          <span className="font-semibold text-foreground">Сегодня</span>
-          <span className="text-muted-foreground">
-            выручка <b className="tabular-nums text-foreground">{Formatters.moneyDetailed(todayTotals.totalIncome)}</b>
-          </span>
-          <span className="text-muted-foreground">
-            расходы <b className="tabular-nums text-foreground">{Formatters.moneyDetailed(todayTotals.totalExpense)}</b>
-          </span>
-          <span className="text-muted-foreground">
-            прибыль{' '}
-            <b className={`tabular-nums ${todayTotals.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-              {Formatters.moneyDetailed(todayTotals.profit)}
-            </b>
-          </span>
-        </div>
-      )}
-
       <ChartCard
         data={chartData}
         metric={metric}
@@ -749,73 +784,94 @@ export default function DashboardPage() {
         onToggleMovingAvg={() => setShowMovingAvg((v) => !v)}
       />
 
-      <div className={`grid grid-cols-1 gap-4 md:grid-cols-2 ${anomalies.length ? 'xl:grid-cols-4' : 'xl:grid-cols-3'}`}>
-        <CategoryPie
-          title="Доходы по точкам"
-          data={incomeByPoint}
-          total={current.totalIncome}
-          icon={<TrendingUp className="h-4 w-4" />}
-        />
+      {incomePoints.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <Store className="h-4 w-4 text-amber-500" />
+            Точки
+          </h2>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {incomePoints.map((point) => (
+              <PointCard key={point.id} point={point} shift={onShift.data?.points?.[point.id] ?? null} today={today} />
+            ))}
+          </div>
+          {expenseOnlyPoints.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              Только расходы:{' '}
+              {expenseOnlyPoints.map((p, idx) => (
+                <span key={p.id}>
+                  {idx > 0 && ' · '}
+                  {p.name} <span className="tabular-nums text-rose-600 dark:text-rose-400">−{Formatters.moneyDetailed(p.expense)}</span>
+                </span>
+              ))}
+            </p>
+          )}
+        </section>
+      )}
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <CashCard totals={current} cashlessLabel={cashLabels.providerName} />
+        <ChangesCard articles={main.data?.expenseByGroup || []} days={actualDays} />
         <CategoryPie
           title="Расходы по статьям"
           data={expenseByArticle}
           total={current.totalExpense}
           icon={<TrendingDown className="h-4 w-4" />}
         />
-        {anomalies.length > 0 && <AnomaliesCard anomalies={anomalies} />}
-        <FeedCard feed={feed} denied={feedDenied} href={`/income?from=${dateFrom}&to=${dateTo}`} />
       </div>
 
-      {companyRows.length > 1 && (
-        <Card className="gap-0 p-5">
-          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-            <BarChart2 className="h-4 w-4 text-emerald-500" />
-            Точки за период
-          </h3>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[520px] text-sm">
-              <thead>
-                <tr className="border-b border-border text-[11px] uppercase tracking-wide text-muted-foreground">
-                  <th className="px-2 py-2 text-left font-medium">Точка</th>
-                  <th className="px-2 py-2 text-right font-medium">Выручка</th>
-                  <th className="px-2 py-2 text-right font-medium">Расходы</th>
-                  <th className="px-2 py-2 text-right font-medium">Прибыль</th>
-                  <th className="px-2 py-2 text-right font-medium">Маржа</th>
-                </tr>
-              </thead>
-              <tbody>
-                {companyRows.map((row) => (
-                  <tr key={row.id} className="border-b border-slate-100 last:border-0 dark:border-white/5">
-                    <td className="max-w-[180px] truncate px-2 py-2 font-medium text-foreground">{row.name}</td>
-                    <td className="px-2 py-2 text-right tabular-nums text-body">{Formatters.moneyDetailed(row.income)}</td>
-                    <td className="px-2 py-2 text-right tabular-nums text-body">{Formatters.moneyDetailed(row.expense)}</td>
-                    <td
-                      className={`px-2 py-2 text-right font-semibold tabular-nums ${row.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}
-                    >
-                      {Formatters.moneyDetailed(row.profit)}
-                    </td>
-                    <td className="px-2 py-2 text-right tabular-nums">
-                      {row.margin === null ? (
-                        // Точка без выручки (например, здание): маржа не определена
-                        <span className="text-xs text-muted-foreground">только расходы</span>
-                      ) : (
-                        <span className={row.margin >= 20 ? 'text-emerald-600 dark:text-emerald-400' : row.margin >= 0 ? 'text-body' : 'text-rose-600 dark:text-rose-400'}>
-                          {row.margin.toFixed(1)}%
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
+      <div className={`grid grid-cols-1 gap-4 ${anomalies.length ? 'lg:grid-cols-3' : ''}`}>
+        <div className={anomalies.length ? 'lg:col-span-2' : ''}>
+          <FeedCard feed={feed} denied={feedDenied} href={`/income?from=${dateFrom}&to=${dateTo}`} wide={!anomalies.length} />
+        </div>
+        {anomalies.length > 0 && <AnomaliesCard anomalies={anomalies} />}
+      </div>
     </div>
   )
 }
 
 // ==================== UI ====================
+
+function TodayCard({ date, totals, lastWeek }: { date: string; totals: Totals; lastWeek: Totals | null }) {
+  const title = DateUtils.fromISO(date).toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })
+  const compareLabel = sameWeekdayLabel(date)
+  const tiles = [
+    { label: 'Выручка', value: totals.totalIncome, prev: lastWeek?.totalIncome ?? 0, goodWhenUp: true, tone: 'border-emerald-500/20 bg-emerald-500/[0.06]' },
+    { label: 'Расходы', value: totals.totalExpense, prev: lastWeek?.totalExpense ?? 0, goodWhenUp: false, tone: 'border-rose-500/20 bg-rose-500/[0.06]' },
+    { label: 'Прибыль', value: totals.profit, prev: lastWeek?.profit ?? 0, goodWhenUp: true, tone: 'border-amber-500/20 bg-amber-500/[0.06]' },
+  ]
+
+  return (
+    <Card className="gap-0 p-5">
+      <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h2 className="text-sm font-semibold text-foreground">Сегодня</h2>
+        <span className="text-sm capitalize text-muted-foreground">{title}</span>
+        <span className="ml-auto text-xs text-muted-foreground">сравнение {compareLabel}</span>
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {tiles.map((tile) => {
+          const change = lastWeek ? changeTone(tile.value, tile.prev, tile.goodWhenUp) : null
+          return (
+            <div key={tile.label} className={`rounded-xl border p-3 ${tile.tone}`}>
+              <div className="text-xs text-muted-foreground">{tile.label}</div>
+              <div
+                className={`mt-1 text-xl font-bold tabular-nums ${tile.label === 'Прибыль' && tile.value < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-foreground'}`}
+              >
+                {Formatters.moneyDetailed(tile.value)}
+              </div>
+              {change && (
+                <div className="mt-0.5 text-xs">
+                  <span className={change.className}>{change.text}</span>
+                  <span className="text-muted-foreground"> · было {Formatters.moneyDetailed(tile.prev)}</span>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </Card>
+  )
+}
 
 function ScoreCard({ result }: { result: ScoreResult }) {
   return (
@@ -873,8 +929,7 @@ function MetricCard(props: {
   plan?: KpiPlan
   forecast: number | null
 }) {
-  const change = Formatters.percentChange(props.value, props.previousValue)
-  const changeGood = change.text === '—' ? null : change.positive === props.goodWhenUp
+  const change = changeTone(props.value, props.previousValue, props.goodWhenUp)
   const pct = props.plan ? Math.max(0, Number(props.plan.achievement_pct || 0)) : 0
 
   return (
@@ -888,13 +943,7 @@ function MetricCard(props: {
       </div>
       <div className="text-2xl font-bold tabular-nums text-foreground">{Formatters.moneyDetailed(props.value)}</div>
       <div className="mt-1.5 flex flex-wrap items-center gap-x-2 text-xs">
-        <span
-          className={
-            changeGood === null ? 'text-muted-foreground' : changeGood ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
-          }
-        >
-          {change.text}
-        </span>
+        <span className={change.className}>{change.text}</span>
         <span className="text-muted-foreground">к прошлому периоду</span>
         {props.sub && <span className="text-muted-foreground">· {props.sub}</span>}
       </div>
@@ -920,6 +969,206 @@ function MetricCard(props: {
       {props.forecast !== null && (
         <div className="mt-2 text-xs text-muted-foreground">
           прогноз к концу месяца: <span className="font-medium tabular-nums text-foreground">{Formatters.moneyDetailed(props.forecast)}</span>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+/** Мини-график без библиотеки: ломаная по дневной выручке точки */
+function Sparkline({ values }: { values: number[] }) {
+  if (values.length < 2 || values.every((v) => v === 0)) {
+    return <div className="h-10 rounded-md bg-slate-100 dark:bg-white/[0.04]" />
+  }
+  const max = Math.max(...values)
+  const min = Math.min(0, ...values)
+  const span = max - min || 1
+  const step = 100 / (values.length - 1)
+  const coords = values.map((v, i) => `${(i * step).toFixed(2)},${(38 - ((v - min) / span) * 34).toFixed(2)}`)
+  return (
+    <svg viewBox="0 0 100 40" preserveAspectRatio="none" className="h-10 w-full" aria-hidden>
+      <polygon points={`0,40 ${coords.join(' ')} 100,40`} className="fill-emerald-500/10" />
+      <polyline points={coords.join(' ')} fill="none" strokeWidth="1.5" vectorEffect="non-scaling-stroke" className="stroke-emerald-500" />
+    </svg>
+  )
+}
+
+function PointCard({ point, shift, today }: { point: PointSummary; shift: OnShiftPoint | null; today: string }) {
+  const incomeChange = changeTone(point.income, point.prevIncome, true)
+  const todaySchedule = shift?.scheduled.filter((s) => s.date === today) ?? []
+  const tomorrowSchedule = shift?.scheduled.filter((s) => s.date !== today) ?? []
+  const names = (list: OnShiftPoint['scheduled']) => list.map((s) => `${s.operatorName} (${shiftLabel(s.shiftType)})`).join(', ')
+
+  return (
+    <Card className="gap-0 p-5">
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="truncate text-base font-semibold text-foreground">{point.name}</h3>
+        <span className={`shrink-0 text-xs font-medium ${incomeChange.className}`}>{incomeChange.text}</span>
+      </div>
+      <div className="mt-2 text-2xl font-bold tabular-nums text-foreground">{Formatters.moneyDetailed(point.income)}</div>
+      <div className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-muted-foreground">
+        <span>
+          прибыль{' '}
+          <span className={`font-medium tabular-nums ${point.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+            {Formatters.moneyDetailed(point.profit)}
+          </span>
+        </span>
+        {point.margin !== null && <span>маржа {point.margin.toFixed(1)}%</span>}
+      </div>
+
+      <div className="mt-3">
+        <Sparkline values={point.daily} />
+      </div>
+
+      {/* Кто на смене: открытая кассовая смена или график. «Смена не открыта» не пишем —
+          на точках без кассовых смен этого не знаем */}
+      <div className="mt-3 space-y-1 border-t border-border pt-3 text-xs">
+        {shift?.open ? (
+          <div className="flex items-center gap-1.5 text-foreground">
+            <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+            <span className="truncate">
+              Сейчас на смене: <b>{shift.open.operatorName}</b>
+            </span>
+            <span className="ml-auto shrink-0 text-muted-foreground">
+              с {new Date(shift.open.openedAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          </div>
+        ) : null}
+        {todaySchedule.length > 0 && (
+          <div className="flex items-start gap-1.5 text-muted-foreground">
+            <UserRound className="mt-0.5 h-3 w-3 shrink-0" />
+            <span>
+              Сегодня по графику: <span className="text-foreground">{names(todaySchedule)}</span>
+            </span>
+          </div>
+        )}
+        {tomorrowSchedule.length > 0 && (
+          <div className="flex items-start gap-1.5 text-muted-foreground">
+            <UserRound className="mt-0.5 h-3 w-3 shrink-0" />
+            <span>
+              Завтра: <span className="text-foreground">{names(tomorrowSchedule)}</span>
+            </span>
+          </div>
+        )}
+        {!shift?.open && todaySchedule.length === 0 && tomorrowSchedule.length === 0 && (
+          <div className="text-muted-foreground">Смен по графику на сегодня и завтра нет</div>
+        )}
+      </div>
+    </Card>
+  )
+}
+
+function CashCard({ totals, cashlessLabel }: { totals: Totals; cashlessLabel: string }) {
+  const rows = [
+    { label: 'Наличные', value: totals.incomeCash, color: 'bg-amber-500' },
+    { label: cashlessLabel, value: totals.incomeKaspi, color: 'bg-blue-500' },
+    { label: 'Карта', value: totals.incomeCard, color: 'bg-violet-500' },
+    { label: 'Онлайн', value: totals.incomeOnline, color: 'bg-pink-500' },
+  ].filter((row, idx) => idx === 0 || row.value > 0)
+
+  return (
+    <Card className="gap-0 p-5">
+      <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground">
+        <Banknote className="h-4 w-4 text-amber-500" />
+        Нал и безнал
+      </h3>
+      <div className="space-y-3">
+        {rows.map((row) => {
+          const share = totals.totalIncome ? (row.value / totals.totalIncome) * 100 : 0
+          return (
+            <div key={row.label}>
+              <div className="flex items-baseline justify-between text-sm">
+                <span className="text-body">{row.label}</span>
+                <span className="font-medium tabular-nums text-foreground">
+                  {Formatters.moneyDetailed(row.value)} <span className="text-xs text-muted-foreground">{share.toFixed(0)}%</span>
+                </span>
+              </div>
+              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
+                <div className={`h-full rounded-full ${row.color}`} style={{ width: `${share}%` }} />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Сальдо за период: пришло минус ушло, без остатка на начало */}
+      <div className="mt-4 space-y-2 border-t border-border pt-3 text-xs">
+        {[
+          { label: 'Наличные', income: totals.incomeCash, expense: totals.expenseCash, balance: totals.remainingCash },
+          { label: 'Безнал', income: totals.incomeNonCash, expense: totals.expenseKaspi, balance: totals.remainingKaspi },
+        ].map((row) => (
+          <div key={row.label} className="flex items-baseline justify-between gap-2">
+            <span className="text-muted-foreground">
+              {row.label}: +{Formatters.moneyDetailed(row.income)} / −{Formatters.moneyDetailed(row.expense)}
+            </span>
+            <span className={`shrink-0 font-semibold tabular-nums ${row.balance >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+              {Formatters.moneyDetailed(row.balance)}
+            </span>
+          </div>
+        ))}
+        <p className="text-[11px] text-muted-foreground">Сальдо за период, без остатка на начало</p>
+      </div>
+    </Card>
+  )
+}
+
+function ChangesCard({ articles, days }: { articles: ExpenseArticle[]; days: ChartPoint[] }) {
+  // Статьи расходов, которые сдвинулись сильнее всего (в тенге) к прошлому периоду
+  const movers = articles
+    .map((a) => ({ label: a.label, delta: a.amount - a.prevAmount, prev: a.prevAmount }))
+    .filter((m) => Math.abs(m.delta) >= 1)
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+    .slice(0, 4)
+
+  const withData = days.filter((d) => (d.income ?? 0) > 0 || (d.expense ?? 0) > 0)
+  const best = withData.length >= 2 ? withData.reduce((a, b) => ((b.profit ?? 0) > (a.profit ?? 0) ? b : a)) : null
+  const worst = withData.length >= 2 ? withData.reduce((a, b) => ((b.profit ?? 0) < (a.profit ?? 0) ? b : a)) : null
+
+  return (
+    <Card className="gap-0 p-5">
+      <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground">
+        <History className="h-4 w-4 text-amber-500" />
+        Что изменилось
+      </h3>
+
+      {movers.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Расходы по статьям без заметных изменений.</p>
+      ) : (
+        <ul className="space-y-2 text-sm">
+          {movers.map((m) => (
+            <li key={m.label} className="flex items-baseline justify-between gap-3">
+              <span className="truncate text-body">{m.label}</span>
+              <span className={`shrink-0 tabular-nums font-medium ${m.delta > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                {m.delta > 0 ? '+' : '−'}
+                {Formatters.moneyDetailed(Math.abs(m.delta))}
+                <span className="ml-1 text-xs text-muted-foreground">
+                  {m.prev > 0 ? `${m.delta > 0 ? '+' : ''}${((m.delta / m.prev) * 100).toFixed(0)}%` : 'новая'}
+                </span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-2 text-[11px] text-muted-foreground">Расходы к прошлому периоду</p>
+
+      {best && worst && best.date !== worst.date && (
+        <div className="mt-4 space-y-1.5 border-t border-border pt-3 text-xs">
+          <div className="flex items-center justify-between gap-2">
+            <span className="flex items-center gap-1.5 text-muted-foreground">
+              <Sparkles className="h-3 w-3 text-emerald-500" />
+              Лучший день — {DateUtils.formatShort(best.date)}
+            </span>
+            <span className="font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">{Formatters.moneyDetailed(best.profit ?? 0)}</span>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="flex items-center gap-1.5 text-muted-foreground">
+              <AlertTriangle className="h-3 w-3 text-rose-500" />
+              Худший день — {DateUtils.formatShort(worst.date)}
+            </span>
+            <span className={`font-semibold tabular-nums ${(worst.profit ?? 0) >= 0 ? 'text-foreground' : 'text-rose-600 dark:text-rose-400'}`}>
+              {Formatters.moneyDetailed(worst.profit ?? 0)}
+            </span>
+          </div>
         </div>
       )}
     </Card>
@@ -958,41 +1207,44 @@ function AnomaliesCard({ anomalies }: { anomalies: Anomaly[] }) {
   )
 }
 
-function FeedCard({ feed, denied, href }: { feed: FeedItem[]; denied: boolean; href: string }) {
+function FeedCard({ feed, denied, href, wide }: { feed: FeedItem[]; denied: boolean; href: string; wide: boolean }) {
   return (
-    <Card className="gap-0 overflow-hidden py-0">
+    <Card className="h-full gap-0 overflow-hidden py-0">
       <div className="flex items-center gap-2 border-b border-border px-5 py-4">
-        <CheckCircle2 className="h-4 w-4 text-amber-500" />
+        <Receipt className="h-4 w-4 text-amber-500" />
         <h3 className="text-sm font-semibold text-foreground">Последние операции</h3>
+        <Button asChild variant="ghost" size="xs" className="ml-auto rounded-xl text-muted-foreground">
+          <Link href={href}>
+            Все операции
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </Button>
       </div>
-      <div className="max-h-[300px] flex-1 space-y-0.5 overflow-auto p-2">
+      <div className="p-2">
         {denied ? (
           <div className="py-8 text-center text-sm text-muted-foreground">Нет доступа к операциям</div>
         ) : !feed.length ? (
           <div className="py-8 text-center text-sm text-muted-foreground">Операций за период нет</div>
         ) : (
-          feed.map((item) => (
-            <div key={item.id} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 hover:bg-surface-muted">
-              <div className="min-w-0">
-                <div className="truncate text-xs font-medium text-foreground">{item.title}</div>
-                <div className="truncate text-[11px] text-muted-foreground">
-                  {item.subtitle} · {DateUtils.formatShort(item.date)}
+          <div className={`grid gap-x-4 gap-y-0.5 ${wide ? 'md:grid-cols-2' : ''}`}>
+            {feed.map((item) => (
+              <div key={item.id} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 hover:bg-surface-muted">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium text-foreground">{item.title}</div>
+                  <div className="truncate text-xs text-muted-foreground">
+                    {item.subtitle} · {DateUtils.formatShort(item.date)}
+                  </div>
+                </div>
+                <div
+                  className={`ml-2 whitespace-nowrap text-sm font-semibold tabular-nums ${item.kind === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}
+                >
+                  {item.kind === 'income' ? '+' : '−'}
+                  {Formatters.moneyDetailed(item.amount)}
                 </div>
               </div>
-              <div
-                className={`ml-2 whitespace-nowrap text-xs font-semibold tabular-nums ${item.kind === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}
-              >
-                {item.kind === 'income' ? '+' : '−'}
-                {Formatters.moneyDetailed(item.amount)}
-              </div>
-            </div>
-          ))
+            ))}
+          </div>
         )}
-      </div>
-      <div className="border-t border-border p-2">
-        <Button asChild variant="ghost" size="sm" className="w-full rounded-xl text-xs">
-          <Link href={href}>Все операции</Link>
-        </Button>
       </div>
     </Card>
   )
