@@ -405,10 +405,18 @@ const isISODate = (s: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(s)
 // MEMOIZED CHART COMPONENTS
 // =====================
 
-const MemoizedComposedChart = memo(({ data }: { data: TimeAggregation[] }) => {
+const MemoizedComposedChart = memo(({ data, onBucketClick }: { data: TimeAggregation[]; onBucketClick?: (row: TimeAggregation) => void }) => {
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <ComposedChart data={data} margin={{ top: 20, right: 20, bottom: 20, left: 0 }}>
+      <ComposedChart
+        data={data}
+        margin={{ top: 20, right: 20, bottom: 20, left: 0 }}
+        style={onBucketClick ? { cursor: 'pointer' } : undefined}
+        onClick={(state: any) => {
+          const row = state?.activePayload?.[0]?.payload as TimeAggregation | undefined
+          if (row && onBucketClick) onBucketClick(row)
+        }}
+      >
         <defs>
           <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
             <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
@@ -478,7 +486,10 @@ const MemoizedComposedChart = memo(({ data }: { data: TimeAggregation[] }) => {
 MemoizedComposedChart.displayName = 'MemoizedComposedChart'
 
 
-const MemoizedBarChart = memo(({ data }: { data: Array<{ name: string; value: number; fill: string; percentage: number }> }) => {
+const MemoizedBarChart = memo(({ data, onBarClick }: {
+  data: Array<{ companyId?: string; name: string; value: number; fill: string; percentage: number }>
+  onBarClick?: (companyId: string) => void
+}) => {
   return (
     <ResponsiveContainer width="100%" height="100%">
       <BarChart data={data} layout="vertical" margin={{ left: 20 }}>
@@ -504,7 +515,15 @@ const MemoizedBarChart = memo(({ data }: { data: Array<{ name: string; value: nu
             `${p?.payload?.percentage?.toFixed(1)}% от общей`
           ]}
         />
-        <Bar dataKey="value" radius={[0, 6, 6, 0]}>
+        <Bar
+          dataKey="value"
+          radius={[0, 6, 6, 0]}
+          cursor={onBarClick ? 'pointer' : undefined}
+          onClick={(entry: any) => {
+            const id = entry?.companyId ?? entry?.payload?.companyId
+            if (id && onBarClick) onBarClick(String(id))
+          }}
+        >
           {data.map((entry, idx) => (
             <Cell key={`bar-${idx}`} fill={entry.fill} />
           ))}
@@ -722,7 +741,12 @@ function ProfitHeatmap({ dateFrom, dateTo, dailyIncome, dailyExpense }: {
  * по тем же правилам, что /profitability. EBITDA и чистую прибыль не показываем:
  * их считает ОПиУ с ручными помесячными поправками — сюда ведёт ссылка.
  */
-function ExpenseArticlesCard({ articles, totalIncome }: { articles: ExpenseArticle[]; totalIncome: number }) {
+function ExpenseArticlesCard({ articles, totalIncome, onOpen }: {
+  articles: ExpenseArticle[]
+  totalIncome: number
+  /** Клик по статье — операции её категорий */
+  onOpen?: (article: ExpenseArticle) => void
+}) {
   const chain = articles.filter((a) => !a.offChain && a.amount > 0)
   const offChain = articles.filter((a) => a.offChain && a.amount > 0)
   const max = Math.max(1, ...articles.map((a) => a.amount))
@@ -731,7 +755,19 @@ function ExpenseArticlesCard({ articles, totalIncome }: { articles: ExpenseArtic
     const change = a.prevAmount > 0 ? ((a.amount - a.prevAmount) / a.prevAmount) * 100 : null
     const share = totalIncome > 0 ? (a.amount / totalIncome) * 100 : null
     return (
-      <div key={a.group} className="space-y-1.5">
+      <div
+        key={a.group}
+        role="button"
+        tabIndex={0}
+        onClick={() => onOpen?.(a)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            onOpen?.(a)
+          }
+        }}
+        className="-mx-2 cursor-pointer space-y-1.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-surface-muted"
+      >
         <div className="flex items-baseline justify-between gap-3 text-sm">
           <span className="font-medium text-foreground">{a.label}</span>
           <span className="tabular-nums font-semibold text-foreground">{formatMoneyFull(a.amount)}</span>
@@ -848,6 +884,18 @@ function buildDetailedRows(
 
 type DrillDownType = 'income' | 'expense' | 'profit'
 
+/** Что открыть в детализации: по умолчанию весь период, либо срез из клика по графику или статье. */
+type DrillDownState = {
+  type: DrillDownType
+  from?: string
+  to?: string
+  /** Только эти категории расходов (клик по статье) */
+  categories?: string[]
+  /** Точка, выбранная в фильтре модалки сразу (клик по столбцу компании) */
+  companyId?: string
+  title?: string
+}
+
 const DRILL_TITLES: Record<DrillDownType, string> = {
   income: 'Доходы — детализация',
   expense: 'Расходы — детализация',
@@ -871,6 +919,9 @@ function DrillDownModal({
   dateFrom,
   dateTo,
   loading,
+  categories,
+  initialCompanyId,
+  title,
   onClose,
 }: {
   type: DrillDownType
@@ -882,10 +933,14 @@ function DrillDownModal({
   dateTo: string
   /** Строки периода ещё догружаются */
   loading: boolean
+  categories?: string[]
+  initialCompanyId?: string
+  title?: string
   onClose: () => void
 }) {
   const cashLabels = useCashlessLabels()
-  const [filterCompany, setFilterCompany] = useState<'all' | string>('all')
+  const [filterCompany, setFilterCompany] = useState<'all' | string>(initialCompanyId ?? 'all')
+  const categorySet = useMemo(() => (categories ? new Set(categories) : null), [categories])
   const [sortField, setSortField] = useState<'date' | 'company' | 'amount'>('date')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [search, setSearch] = useState('')
@@ -924,6 +979,8 @@ function DrillDownModal({
     if (type === 'expense' || type === 'profit') {
       for (const r of expenses) {
         if (r.date < dateFrom || r.date > dateTo) continue // только текущий период
+        // Клик по статье: только её категории (имена — как в разбивке по статьям)
+        if (categorySet && !categorySet.has(String(r.category || '').trim() || 'Без категории')) continue
         const amount = (r.cash_amount ?? 0) + (r.kaspi_amount ?? 0)
         result.push({
           id: r.id,
@@ -940,7 +997,7 @@ function DrillDownModal({
     }
 
     return result
-  }, [type, incomes, expenses, companyName, dateFrom, dateTo])
+  }, [type, incomes, expenses, companyName, dateFrom, dateTo, categorySet])
 
   const filtered = useMemo(() => {
     let r = rows
@@ -972,7 +1029,7 @@ function DrillDownModal({
 
   // Esc, клик по фону, блокировка прокрутки и фокус — забота общего AppModal.
   return (
-    <AppModal open onClose={onClose} maxWidth="max-w-5xl" title={DRILL_TITLES[type]}>
+    <AppModal open onClose={onClose} maxWidth="max-w-5xl" title={title ?? DRILL_TITLES[type]}>
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-3">
           <NativeSelect
@@ -1166,7 +1223,9 @@ function ReportsContent() {
   // UI states
   const [showFilters, setShowFilters] = useState(false)
   const [comparisonMode, setComparisonMode] = useState(false)
-  const [drillDown, setDrillDown] = useState<DrillDownType | null>(null)
+  // База сравнения: предыдущий период той же длины или тот же период годом раньше (сезонность)
+  const [compareWith, setCompareWith] = useState<'prev' | 'year'>('prev')
+  const [drillDown, setDrillDown] = useState<DrillDownState | null>(null)
   const [exporting, setExporting] = useState(false)
   
   const reqIdRef = useRef(0)
@@ -1308,6 +1367,7 @@ function ReportsContent() {
     setCurrentPage(1)
     setActiveTab('overview')
     setComparisonMode(false)
+    setCompareWith('prev')
     setSelectedRows(new Set())
     showToast('Фильтры сброшены', 'success')
   }, [applyPreset, showToast])
@@ -1352,8 +1412,9 @@ function ReportsContent() {
     })
     if (companyFilter !== 'all') params.set('company_id', companyFilter)
     if (shiftFilter !== 'all') params.set('shift', shiftFilter)
+    if (compareWith === 'year') params.set('compare', 'year')
     return params.toString()
-  }, [dateFrom, dateTo, groupMode, includeExtraInTotals, companyFilter, shiftFilter])
+  }, [dateFrom, dateTo, groupMode, includeExtraInTotals, companyFilter, shiftFilter, compareWith])
 
   const applyBundle = useCallback((data: any) => {
     setBundleAggregate(data.aggregate as ReportBundleAggregate)
@@ -1473,13 +1534,19 @@ function ReportsContent() {
     loadData(false)
   }, [companiesLoaded, loadData])
 
+  const basisFrom = bundleAggregate?.prevFrom ?? ''
+  const basisTo = bundleAggregate?.prevTo ?? ''
+
   // =====================
   // REALTIME SUBSCRIPTION
   // =====================
   useEffect(() => {
     if (!companiesLoaded) return
 
-    const { prevFrom, prevTo } = calculatePrevPeriod(dateFrom, dateTo)
+    // База сравнения — та, что вернул сервер (при сравнении с прошлым годом она не соседняя).
+    const fallbackPrev = calculatePrevPeriod(dateFrom, dateTo)
+    const prevFrom = basisFrom || fallbackPrev.prevFrom
+    const prevTo = basisTo || fallbackPrev.prevTo
     const incomeEarliest = addDaysISO(prevFrom, -1)
 
     const incomeTouchesRange = (iso: string | undefined) =>
@@ -1516,7 +1583,7 @@ function ReportsContent() {
         supabase.removeChannel(realtimeChannel.current)
       }
     }
-  }, [companiesLoaded, dateFrom, dateTo, scheduleReportsRealtimeReload])
+  }, [companiesLoaded, dateFrom, dateTo, basisFrom, basisTo, scheduleReportsRealtimeReload])
 
   // =====================
   // URL SYNC
@@ -1556,6 +1623,7 @@ function ReportsContent() {
     if (pExtra) setIncludeExtraInTotals(true)
     if (pTab) setActiveTab(pTab)
     if (pCompare) setComparisonMode(true)
+    if (sp.get('vs') === 'year') setCompareWith('year')
 
     didInitFromUrl.current = true
   }, [companiesLoaded, companies, searchParams, applyPreset])
@@ -1574,6 +1642,7 @@ function ReportsContent() {
       params.set('extra', includeExtraInTotals ? '1' : '0')
       params.set('tab', activeTab)
       params.set('compare', comparisonMode ? '1' : '0')
+      params.set('vs', compareWith)
 
       router.replace(`${pathname}?${params.toString()}`, { scroll: false })
     }, 250)
@@ -1589,6 +1658,7 @@ function ReportsContent() {
     includeExtraInTotals,
     activeTab,
     comparisonMode,
+    compareWith,
     pathname,
     router,
   ])
@@ -1665,6 +1735,24 @@ function ReportsContent() {
       prevIncome: totalsPrev.totalIncome / prevDays,
     }
   }, [dateFrom, dateTo, totals.totalIncome, totalsPrev.totalIncome])
+
+  // Клик по точке графика: операции этого дня / недели / месяца / года (в пределах периода)
+  const openBucket = useCallback((row: TimeAggregation) => {
+    const start = row.sortISO
+    let end = start
+    if (groupMode === 'week') end = addDaysISO(start, 6)
+    else if (groupMode === 'month') {
+      const d = fromISO(start)
+      end = toISODateLocal(new Date(d.getFullYear(), d.getMonth() + 1, 0))
+    } else if (groupMode === 'year') end = `${start.slice(0, 4)}-12-31`
+
+    const from = start < dateFrom ? dateFrom : start
+    const to = end > dateTo ? dateTo : end
+    const label = from === to
+      ? fromISO(from).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })
+      : formatDateRange(from, to)
+    setDrillDown({ type: 'profit', from, to, title: `Доходы и расходы — ${label}` })
+  }, [groupMode, dateFrom, dateTo])
   const detailedRows = useMemo((): DetailedRow[] => {
     // Строки от другого среза фильтров не показываем, пока не догрузились свежие.
     if (!rowsReady) return []
@@ -1849,7 +1937,10 @@ function ReportsContent() {
   // FORECAST (гибрид: МТД + прошлый календарный месяц, иначе линейно)
   // =====================
   const forecast = useMemo(() => {
-    if (!['currentMonth', 'currentQuarter', 'currentYear'].includes(datePreset)) return null
+    // Прогноз — для любого периода, который идёт прямо сейчас (а не только для
+    // пресетов «текущий месяц/квартал/год»): начался и ещё не закончился.
+    const asOfDay = bundleAsOf || todayISO()
+    if (!(dateFrom <= asOfDay && asOfDay < dateTo)) return null
 
     const hybrid =
       bundleAggregate && forecastHints
@@ -1886,7 +1977,7 @@ function ReportsContent() {
       seasonalIncome: 0,
       note: 'Линейная экстраполяция по накопленному факту',
     }
-  }, [datePreset, dateFrom, dateTo, totals, bundleAggregate, forecastHints, bundleAsOf])
+  }, [dateFrom, dateTo, totals, bundleAggregate, forecastHints, bundleAsOf])
 
   const assistantSnapshot = useMemo<PageSnapshot>(() => {
     const profitMargin = totals.totalIncome > 0 ? (totals.profit / totals.totalIncome) * 100 : 0
@@ -2109,7 +2200,7 @@ function ReportsContent() {
           {/* Header */}
           <AdminPageHeader
             title="Финансы и отчёты"
-            description={`${formatDateRange(dateFrom, dateTo)}${comparisonMode ? ' · сравнение с прошлым периодом' : ''}`}
+            description={`${formatDateRange(dateFrom, dateTo)}${comparisonMode ? (compareWith === 'year' ? ' · сравнение с прошлым годом' : ' · сравнение с прошлым периодом') : ''}`}
             icon={<BarChart3 className="h-5 w-5" />}
             accent="amber"
             backHref="/"
@@ -2211,6 +2302,7 @@ function ReportsContent() {
             dateFrom={dateFrom}
             dateTo={dateTo}
             comparisonMode={comparisonMode}
+            compareWith={compareWith}
             impreciseNightKaspiCount={impreciseNightKaspiCount}
             companyId={companyFilter}
           />
@@ -2323,6 +2415,16 @@ function ReportsContent() {
                 <option value="week" className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">По неделям</option>
                 <option value="month" className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">По месяцам</option>
                 <option value="year" className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">По годам</option>
+              </NativeSelect>
+
+              <NativeSelect
+                value={compareWith}
+                onChange={(e) => setCompareWith(e.target.value === 'year' ? 'year' : 'prev')}
+                className="w-auto cursor-pointer"
+                aria-label="С чем сравнивать"
+              >
+                <option value="prev" className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">Сравнить с прошлым периодом</option>
+                <option value="year" className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">Сравнить с прошлым годом</option>
               </NativeSelect>
 
               <Button
@@ -2440,7 +2542,7 @@ function ReportsContent() {
                   icon={DollarSign}
                   trend={totalsPrev.totalIncome > 0 ? Number(((totals.totalIncome - totalsPrev.totalIncome) / totalsPrev.totalIncome * 100).toFixed(1)) : undefined}
                   color="green"
-                  onClick={() => setDrillDown('income')}
+                  onClick={() => setDrillDown({ type: 'income' })}
                 />
                 <StatCard
                   title="Расходы"
@@ -2449,7 +2551,7 @@ function ReportsContent() {
                   icon={TrendingDown}
                   trend={totalsPrev.totalExpense > 0 ? Number(((totals.totalExpense - totalsPrev.totalExpense) / totalsPrev.totalExpense * 100).toFixed(1)) : undefined}
                   color="red"
-                  onClick={() => setDrillDown('expense')}
+                  onClick={() => setDrillDown({ type: 'expense' })}
                 />
                 <StatCard
                   title="Чистая прибыль"
@@ -2458,7 +2560,7 @@ function ReportsContent() {
                   icon={Wallet}
                   trend={totalsPrev.profit !== 0 ? Number(((totals.profit - totalsPrev.profit) / Math.abs(totalsPrev.profit) * 100).toFixed(1)) : undefined}
                   color={totals.profit >= 0 ? 'blue' : 'red'}
-                  onClick={() => setDrillDown('profit')}
+                  onClick={() => setDrillDown({ type: 'profit' })}
                 />
                 <StatCard 
                   title="Выручка в день"
@@ -2495,6 +2597,7 @@ function ReportsContent() {
                     <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
                       <Activity className="w-5 h-5 text-amber-500 dark:text-amber-400" />
                       Динамика финансовых показателей
+                      <span className="hidden sm:inline text-xs font-normal text-muted-foreground">· нажмите на точку — операции</span>
                     </h3>
                     <div className="flex items-center gap-4 text-sm">
                       <span className="flex items-center gap-1.5">
@@ -2513,12 +2616,20 @@ function ReportsContent() {
                   </div>
 
                   <ChartShell height="h-96">
-                    {mounted && <MemoizedComposedChart data={chartData} />}
+                    {mounted && <MemoizedComposedChart data={chartData} onBucketClick={openBucket} />}
                   </ChartShell>
                 </Card>
 
                 <div className="space-y-6">
-                  <ExpenseArticlesCard articles={expenseArticles} totalIncome={totals.totalIncome} />
+                  <ExpenseArticlesCard
+                    articles={expenseArticles}
+                    totalIncome={totals.totalIncome}
+                    onOpen={(article) => setDrillDown({
+                      type: 'expense',
+                      categories: article.categories.map((c) => c.name),
+                      title: `${article.label} — операции`,
+                    })}
+                  />
                 </div>
               </div>
 
@@ -2531,7 +2642,12 @@ function ReportsContent() {
                   </h3>
                   
                   <ChartShell height="h-80">
-                    {mounted && <MemoizedBarChart data={incomeByCompanyData} />}
+                    {mounted && (
+                      <MemoizedBarChart
+                        data={incomeByCompanyData}
+                        onBarClick={(companyId) => setDrillDown({ type: 'income', companyId, title: `Доходы — ${companyName(companyId)}` })}
+                      />
+                    )}
                   </ChartShell>
                 </Card>
 
@@ -2569,7 +2685,14 @@ function ReportsContent() {
             <div className="space-y-6">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card className="gap-0 p-6">
-                  <h3 className="text-base font-semibold text-foreground mb-6">Сравнение периодов</h3>
+                  <div className="mb-6">
+                    <h3 className="text-base font-semibold text-foreground">
+                      {compareWith === 'year' ? 'Сравнение с прошлым годом' : 'Сравнение с прошлым периодом'}
+                    </h3>
+                    {processed.prevFrom && (
+                      <p className="mt-0.5 text-xs text-muted-foreground">было — {formatDateRange(processed.prevFrom, processed.prevTo)}</p>
+                    )}
+                  </div>
                   <div className="space-y-6">
                     {[
                       { label: 'Выручка', current: totals.totalIncome, previous: totalsPrev.totalIncome, color: 'bg-emerald-500' },
@@ -3027,14 +3150,17 @@ function ReportsContent() {
       {/* Drill-down modal */}
       {drillDown && (
         <DrillDownModal
-          type={drillDown}
+          type={drillDown.type}
+          categories={drillDown.categories}
+          initialCompanyId={drillDown.companyId}
+          title={drillDown.title}
           incomes={rowsReady ? incomes : []}
           expenses={rowsReady ? expenses : []}
           loading={!rowsReady}
           companies={companies}
           companyName={companyName}
-          dateFrom={dateFrom}
-          dateTo={dateTo}
+          dateFrom={drillDown.from ?? dateFrom}
+          dateTo={drillDown.to ?? dateTo}
           onClose={() => setDrillDown(null)}
         />
       )}

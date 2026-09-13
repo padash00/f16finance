@@ -6,7 +6,7 @@ import { isExtraCompany } from '@/lib/reports/extra-company'
 import { groupExpensesByArticle } from '@/lib/reports/expense-groups'
 import { countImpreciseNightKaspiInRange, splitIncomeKaspiByCalendarDay, type ReportIncomeCalendarRow } from '@/lib/reports/income-calendar-kaspi'
 import { lastMonthMtdRangeForCurrentMonth, type ForecastHints } from '@/lib/reports/forecast-hybrid'
-import { calculatePrevPeriod, isFullMonthRange, previousCalendarMonthRange } from '@/lib/reports/period'
+import { calculatePrevPeriod, isFullMonthRange, mergeDateRanges, previousCalendarMonthRange, sameRangeLastYear } from '@/lib/reports/period'
 import { sumIncomeExpenseInRange } from '@/lib/reports/sum-range-totals'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
@@ -68,6 +68,8 @@ export async function GET(req: Request) {
     //   current   — только строки выбранного периода: /reports грузит их лениво
     //               для «Деталей», модалки и PDF.
     const rowsMode = url.searchParams.get('rows')
+    // База сравнения: prev — предыдущий период той же длины (по умолчанию), year — тот же период годом раньше.
+    const compare = url.searchParams.get('compare') === 'year' ? 'year' : 'prev'
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateFrom) || !/^\d{4}-\d{2}-\d{2}$/.test(dateTo)) {
       return json({ error: 'from и to в формате YYYY-MM-DD' }, 400)
     }
@@ -82,10 +84,24 @@ export async function GET(req: Request) {
       return json({ ok: true, data: emptyDataResponse(dateFrom, dateTo) })
     }
 
-    const { prevFrom, prevTo } = calculatePrevPeriod(dateFrom, dateTo)
-    const incomeFetchFrom = addDaysISO(prevFrom, -1)
-    const expenseFetchFrom = prevFrom
-    const expenseFetchTo = dateTo
+    const { prevFrom, prevTo } =
+      compare === 'year' ? sameRangeLastYear(dateFrom, dateTo) : calculatePrevPeriod(dateFrom, dateTo)
+
+    // Тянем только нужные даты: текущий период, базу сравнения и — для прогноза
+    // полного месяца — прошлый календарный месяц. Раньше брался сплошной отрезок
+    // от начала базы до конца периода: при сравнении с прошлым годом это был бы
+    // целый год строк ради одной недели.
+    const neededRanges = [
+      { from: dateFrom, to: dateTo },
+      { from: prevFrom, to: prevTo },
+    ]
+    if (isFullMonthRange(dateFrom, dateTo)) neededRanges.push(previousCalendarMonthRange(dateFrom))
+    // Доходам нужен ещё день до начала отрезка: ночная смена переносит часть безнала за полночь.
+    const incomeRanges = mergeDateRanges(neededRanges.map((r) => ({ from: addDaysISO(r.from, -1), to: r.to })))
+    const expenseRanges = mergeDateRanges(neededRanges)
+    const incomeFetchFrom = incomeRanges[0].from
+    const expenseFetchFrom = expenseRanges[0].from
+    const expenseFetchTo = expenseRanges[expenseRanges.length - 1].to
 
     // Один билдер с условным .in(): раньше сначала БЕЗУСЛОВНО выполнялся запрос
     // по всем организациям, и только потом результат перезаписывался отскоупленным.
@@ -103,12 +119,12 @@ export async function GET(req: Request) {
 
     // Стабильная сортировка по (date, id) обязательна для чанковой пагинации,
     // иначе строки с одинаковой датой могут продублироваться/потеряться между чанками.
-    const buildIncomeQuery = () => {
+    const buildIncomeQuery = (from: string, to: string) => {
       let q = supabase
         .from('incomes')
         .select('id, date, company_id, shift, zone, cash_amount, kaspi_amount, kaspi_before_midnight, online_amount, card_amount, comment')
-        .gte('date', incomeFetchFrom)
-        .lte('date', dateTo)
+        .gte('date', from)
+        .lte('date', to)
         .order('date', { ascending: true })
         .order('id', { ascending: true })
       if (companyScope.allowedCompanyIds !== null) q = q.in('company_id', companyScope.allowedCompanyIds)
@@ -117,12 +133,12 @@ export async function GET(req: Request) {
       return q
     }
 
-    const buildExpenseQuery = () => {
+    const buildExpenseQuery = (from: string, to: string) => {
       let q = supabase
         .from('expenses')
         .select('id, date, company_id, category, cash_amount, kaspi_amount, comment')
-        .gte('date', expenseFetchFrom)
-        .lte('date', expenseFetchTo)
+        .gte('date', from)
+        .lte('date', to)
         .order('date', { ascending: true })
         .order('id', { ascending: true })
       if (companyScope.allowedCompanyIds !== null) q = q.in('company_id', companyScope.allowedCompanyIds)
@@ -138,8 +154,13 @@ export async function GET(req: Request) {
     else if (orgId) categoriesQuery = categoriesQuery.eq('organization_id', orgId)
 
     const [rowsInRaw, rowsExRaw, categoriesRes] = await Promise.all([
-      fetchAllRows<ReportIncomeCalendarRow>(buildIncomeQuery),
-      fetchAllRows<ReportExpenseRow>(buildExpenseQuery),
+      // Отрезки не пересекаются и идут по возрастанию — склейка сохраняет порядок (date, id).
+      Promise.all(
+        incomeRanges.map((r) => fetchAllRows<ReportIncomeCalendarRow>(() => buildIncomeQuery(r.from, r.to))),
+      ).then((parts) => parts.flat()),
+      Promise.all(
+        expenseRanges.map((r) => fetchAllRows<ReportExpenseRow>(() => buildExpenseQuery(r.from, r.to))),
+      ).then((parts) => parts.flat()),
       categoriesQuery,
     ])
 
@@ -161,6 +182,8 @@ export async function GET(req: Request) {
       dateTo,
       groupMode: group,
       companyName,
+      prevFrom,
+      prevTo,
     })
 
     // Справочник не открылся — статьи угадываются по названиям, отчёт не падает.

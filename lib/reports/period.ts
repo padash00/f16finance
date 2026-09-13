@@ -9,6 +9,33 @@ export function calculatePrevPeriod(dateFrom: string, dateTo: string) {
   return { prevFrom, prevTo, durationDays }
 }
 
+/** Тот же период годом раньше — для сравнения с учётом сезонности. 29 февраля → 28-е. */
+export function sameRangeLastYear(dateFrom: string, dateTo: string) {
+  return { prevFrom: shiftYears(dateFrom, -1), prevTo: shiftYears(dateTo, -1) }
+}
+
+function shiftYears(iso: string, years: number): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  const year = y + years
+  const lastDay = new Date(year, m, 0).getDate()
+  return `${year}-${String(m).padStart(2, '0')}-${String(Math.min(d, lastDay)).padStart(2, '0')}`
+}
+
+/** Склеивает пересекающиеся и соседние диапазоны дат; результат по возрастанию, без наложений. */
+export function mergeDateRanges(ranges: { from: string; to: string }[]): { from: string; to: string }[] {
+  const sorted = [...ranges].sort((a, b) => a.from.localeCompare(b.from))
+  const out: { from: string; to: string }[] = []
+  for (const range of sorted) {
+    const last = out[out.length - 1]
+    if (last && range.from <= addDaysISO(last.to, 1)) {
+      if (range.to > last.to) last.to = range.to
+    } else {
+      out.push({ from: range.from, to: range.to })
+    }
+  }
+  return out
+}
+
 /** Первый и последний день календарного месяца для даты YYYY-MM-DD. */
 export function calendarMonthRange(anchor: string): { from: string; to: string } {
   const d = parseISODate(anchor)

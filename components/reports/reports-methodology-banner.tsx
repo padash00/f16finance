@@ -10,12 +10,15 @@ type Props = {
   comparisonMode: boolean
   impreciseNightKaspiCount: number
   companyId: string
+  /** С чем сравнивается период: предыдущий той же длины или тот же годом раньше */
+  compareWith?: 'prev' | 'year'
 }
 
 export function ReportsMethodologyBanner({
   dateFrom,
   dateTo,
   comparisonMode,
+  compareWith = 'prev',
   impreciseNightKaspiCount,
   companyId,
 }: Props) {
@@ -48,7 +51,7 @@ export function ReportsMethodologyBanner({
           <ul className="list-disc pl-5 space-y-1.5 pt-3">
             <li>
               Сводка строится по строкам <strong className="text-slate-700 dark:text-gray-200">доходов</strong> и{' '}
-              <strong className="text-slate-700 dark:text-gray-200">расходов</strong> за выбранный период; при включённом сравнении второй столбец — предыдущий период той же длины
+              <strong className="text-slate-700 dark:text-gray-200">расходов</strong> за выбранный период; база сравнения — {compareWith === 'year' ? 'тот же период годом раньше' : 'предыдущий период той же длины'}
               {comparisonMode ? ' (включено).' : '.'}
             </li>
             <li>

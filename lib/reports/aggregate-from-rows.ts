@@ -125,6 +125,9 @@ export function aggregateReportFromRows(input: {
   dateTo: string
   groupMode: GroupMode
   companyName: (id: string) => string
+  /** База сравнения; по умолчанию — предыдущий период той же длины */
+  prevFrom?: string
+  prevTo?: string
 }): {
   totalsCur: FinancialTotals
   totalsPrev: FinancialTotals
@@ -142,7 +145,9 @@ export function aggregateReportFromRows(input: {
   dailyExpense: Map<string, number>
 } {
   const { dateFrom, dateTo, groupMode, companyName } = input
-  const { prevFrom, prevTo } = calculatePrevPeriod(dateFrom, dateTo)
+  const fallbackPrev = calculatePrevPeriod(dateFrom, dateTo)
+  const prevFrom = input.prevFrom ?? fallbackPrev.prevFrom
+  const prevTo = input.prevTo ?? fallbackPrev.prevTo
 
   const totalsCur = emptyTotals()
   const totalsPrev = emptyTotals()
