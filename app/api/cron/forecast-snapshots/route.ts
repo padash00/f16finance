@@ -26,6 +26,8 @@ import {
   monthTotals,
   shiftMonth,
 } from '@/lib/analysis/forecast-learning'
+import { findIncompleteMonths } from '@/lib/analysis/data-completeness'
+import { isExtraCompany } from '@/lib/reports/extra-company'
 import { describeError, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { verifyCronRequest } from '@/lib/server/cron-auth'
 import { kzTodayISO, loadForecastInputs } from '@/lib/server/forecast-inputs'
@@ -54,9 +56,16 @@ export async function GET(request: Request) {
   try {
     const { data: companies, error: companiesError } = await supabase
       .from('companies')
-      .select('id, organization_id')
+      .select('id, organization_id, name, code')
       .not('organization_id', 'is', null)
     if (companiesError) throw companiesError
+
+    // Точка-экстра не входит в прогноз по сети — как по умолчанию на /analysis и в /reports
+    const extraIds = new Set(
+      ((companies || []) as Array<{ id: string; name: string | null; code: string | null }>)
+        .filter(isExtraCompany)
+        .map((c) => String(c.id)),
+    )
 
     const byOrganization = new Map<string, string[]>()
     for (const row of (companies || []) as Array<{ id: string; organization_id: string }>) {
@@ -74,8 +83,12 @@ export async function GET(request: Request) {
           to: today,
         })
         const rowsFor = (companyId: string | null) => ({
-          incomes: companyId ? inputs.incomes.filter((r) => r.company_id === companyId) : inputs.incomes,
-          expenses: companyId ? inputs.expenses.filter((r) => r.company_id === companyId) : inputs.expenses,
+          incomes: companyId
+            ? inputs.incomes.filter((r) => r.company_id === companyId)
+            : inputs.incomes.filter((r) => !extraIds.has(r.company_id)),
+          expenses: companyId
+            ? inputs.expenses.filter((r) => r.company_id === companyId)
+            : inputs.expenses.filter((r) => !extraIds.has(r.company_id)),
         })
         const scopes = [{ key: 'all', companyId: null as string | null }, ...companyIds.map((id) => ({ key: id, companyId: id }))]
 
@@ -92,7 +105,11 @@ export async function GET(request: Request) {
         for (const scope of scopes) {
           if (frozen.has(scope.key)) continue
           const { incomes, expenses } = rowsFor(scope.companyId)
-          const points = buildMonthPoints(incomes, expenses, inputs.categoryGroups, currentMonth)
+          // Неполные месяцы (недовнесённые отчёты) в прогноз не идут — как на странице
+          const incomplete = [...new Set(findIncompleteMonths(incomes, currentMonth).map((m) => m.month))]
+          const points = buildMonthPoints(incomes, expenses, inputs.categoryGroups, currentMonth).filter(
+            (p) => !incomplete.includes(p.month),
+          )
           if (!points.length) continue
           const learned = learnForecast(points, currentMonth)
           const s = learned.scenarios
@@ -116,6 +133,7 @@ export async function GET(request: Request) {
               calibration: learned.calibration,
               accuracy: learned.accuracy,
               months_of_data: learned.monthsOfData,
+              incomplete_months: incomplete,
               created_on_day: dayOfMonth,
               // Крон пропустил начало месяца — прогноз всё равно по закрытым месяцам, но честно помечаем
               late: dayOfMonth > 1,

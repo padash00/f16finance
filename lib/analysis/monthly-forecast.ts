@@ -17,8 +17,17 @@ export type MonthAgg = {
   income: number
   cash: number; kaspi: number; card: number; online: number
   fixed: number; variable: number; oneOff: number
+  /** Распределение прибыли — в прогноз не входит, но это расход по журналу */
+  distribution: number
+  /** Регулярный расход (постоянные + переменные) — на нём строится прогноз */
   expense: number
+  /** Прибыль без разовых — для прогноза */
   profit: number
+  /** Все расходы по журналу, как в /reports: регулярные + разовые + распределение прибыли */
+  totalExpense: number
+  /** Доход − все расходы, как в /reports */
+  netProfit: number
+  /** Маржа по netProfit */
   marginPct: number
   isPartial: boolean
 }
@@ -88,7 +97,7 @@ export function buildMonthlyForecast(
   const map = new Map<string, MonthAgg>()
   const ensure = (ym: string) => {
     let e = map.get(ym)
-    if (!e) { e = { month: ym, income: 0, cash: 0, kaspi: 0, card: 0, online: 0, fixed: 0, variable: 0, oneOff: 0, expense: 0, profit: 0, marginPct: 0, isPartial: ym === curMonth }; map.set(ym, e) }
+    if (!e) { e = { month: ym, income: 0, cash: 0, kaspi: 0, card: 0, online: 0, fixed: 0, variable: 0, oneOff: 0, distribution: 0, expense: 0, profit: 0, totalExpense: 0, netProfit: 0, marginPct: 0, isPartial: ym === curMonth }; map.set(ym, e) }
     return e
   }
   for (const r of incomes) {
@@ -102,15 +111,22 @@ export function buildMonthlyForecast(
     if (!r.date) continue
     // Статья — из справочника организации, как в ОПиУ и /reports; угадывание по названию — запасной путь
     const g = resolveFinancialGroup(r.category, categoryGroups[String(r.category || '').trim().toLowerCase()] ?? null)
-    if (EXCLUDE_GROUPS.has(g)) continue
     const amt = (r.cash || 0) + (r.kaspi || 0)
     const e = ensure(monthOf(r.date))
+    // Распределение прибыли в прогноз не идёт, но итог расходов месяца должен сходиться с /reports
+    if (EXCLUDE_GROUPS.has(g)) { e.distribution += amt; continue }
     if (VARIABLE_GROUPS.has(g)) e.variable += amt
     else if (ONEOFF_GROUPS.has(g)) e.oneOff += amt
     else e.fixed += amt
     groupTotals.set(g, (groupTotals.get(g) || 0) + amt)
   }
-  for (const e of map.values()) { e.expense = e.fixed + e.variable; e.profit = e.income - e.expense; e.marginPct = e.income > 0 ? e.profit / e.income * 100 : 0 }
+  for (const e of map.values()) {
+    e.expense = e.fixed + e.variable
+    e.profit = e.income - e.expense
+    e.totalExpense = e.fixed + e.variable + e.oneOff + e.distribution
+    e.netProfit = e.income - e.totalExpense
+    e.marginPct = e.income > 0 ? e.netProfit / e.income * 100 : 0
+  }
 
   const months = [...map.values()].sort((a, b) => a.month.localeCompare(b.month))
   const complete = months.filter((m) => !m.isPartial && m.income > 0)

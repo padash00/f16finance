@@ -2,7 +2,10 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   buildMonthPoints,
+  corridorFromChecks,
   evaluateInside,
+  scenariosWithCorridor,
+  widenScenarios,
   learnForecast,
   projectRunningMonth,
   quantile,
@@ -180,6 +183,33 @@ test('расход не меньше уже потраченного, даже �
   })
   assert.equal(Math.round(o.outlook.realistic.expense), 1_800_000)
   assert.ok(o.outlook.optimistic.expense >= 1_800_000)
+})
+
+test('предварительный месяц влияет на прогноз, но не попадает в сверки', () => {
+  const closed = series('2026-01', [1_000_000, 1_000_000, 1_000_000, 1_000_000, 1_000_000, 1_000_000, 1_000_000, 1_000_000])
+  const without = learnForecast(closed, '2026-10')
+  const withProvisional = learnForecast(closed, '2026-10', {
+    provisional: { month: '2026-09', income: 1_600_000, expense: 900_000 },
+  })
+  assert.equal(withProvisional.backtest.length, without.backtest.length)
+  assert.ok(!withProvisional.backtest.some((r) => r.month === '2026-09'))
+  assert.ok(withProvisional.scenarios!.realistic.income > without.scenarios!.realistic.income)
+})
+
+test('коридор по отдельной выборке и расширение сценариев', () => {
+  const checks = [0.8, 0.9, 1, 1.1, 1.2].map((k) => ({
+    predicted: { income: 100, expense: 50, profit: 50 },
+    actual: { income: 100 * k, expense: 50, profit: 100 * k - 50 },
+  }))
+  const band = corridorFromChecks(checks)!
+  assert.ok(band.incomeLow < 1 && band.incomeHigh > 1)
+  assert.equal(corridorFromChecks(checks.slice(0, 3)), null)
+
+  const s = scenariosWithCorridor({ income: 1000, expense: 600, profit: 400 }, band)
+  assert.ok(s.pessimistic.income < 1000 && s.optimistic.income > 1000)
+  const wide = widenScenarios(s, 2)
+  assert.equal(wide.realistic.income, 1000)
+  assert.ok(Math.abs((1000 - wide.pessimistic.income) - 2 * (1000 - s.pessimistic.income)) < 1e-6)
 })
 
 test('сегодняшние записи в факт не входят: смена ещё не закрыта', () => {

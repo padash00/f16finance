@@ -33,10 +33,11 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { NativeSelect } from '@/components/ui/native-select'
 import { useCapabilities } from '@/lib/client/use-capabilities'
+import { isExtraCompany } from '@/lib/reports/extra-company'
 import { METHOD_LABELS, type Inside, type MethodId, type Scenarios, type Triple } from '@/lib/analysis/forecast-learning'
 import type { MonthlyForecastResponse } from '@/lib/analysis/forecast-scope'
 
-type Company = { id: string; name: string }
+type Company = { id: string; name: string; code?: string | null }
 
 type AccuracyRow = { month: string; scenarios: Scenarios; actual: Triple; error: number | null; inside: Inside }
 
@@ -64,6 +65,9 @@ export default function AnalysisPage() {
   const { can } = useCapabilities()
   const [companies, setCompanies] = useState<Company[]>([])
   const [companyId, setCompanyId] = useState('')
+  // Как в /reports и на дашборде: точка-экстра по умолчанию не в итогах
+  const [includeExtra, setIncludeExtra] = useState(false)
+  const hasExtraCompany = companies.some(isExtraCompany)
   const [data, setData] = useState<MonthlyForecastResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -85,6 +89,7 @@ export default function AnalysisPage() {
     try {
       const p = new URLSearchParams()
       if (companyId) p.set('company_id', companyId)
+      if (includeExtra) p.set('include_extra', '1')
       const res = await fetch(`/api/admin/monthly-forecast?${p}`, { cache: 'no-store' })
       const body = await res.json()
       if (!res.ok) throw new Error(body?.error || 'Не удалось построить прогноз')
@@ -94,7 +99,7 @@ export default function AnalysisPage() {
     } finally {
       setLoading(false)
     }
-  }, [companyId])
+  }, [companyId, includeExtra])
 
   useEffect(() => {
     void load()
@@ -179,6 +184,16 @@ export default function AnalysisPage() {
                 </option>
               ))}
             </NativeSelect>
+            {hasExtraCompany && !companyId && (
+              <Button
+                size="sm"
+                variant="outline"
+                className={`rounded-xl ${includeExtra ? 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300' : ''}`}
+                onClick={() => setIncludeExtra((v) => !v)}
+              >
+                {includeExtra ? 'Extra в итогах' : 'Extra не в итогах'}
+              </Button>
+            )}
             <Button variant="outline" size="icon-sm" className="rounded-xl" onClick={() => void load()} disabled={loading} aria-label="Обновить">
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             </Button>
@@ -210,6 +225,8 @@ export default function AnalysisPage() {
             </Card>
           )}
 
+          {data.dataQuality.length > 0 && <DataQualityCard items={data.dataQuality} />}
+
           <LearningCard data={data} />
 
           <AccuracyCard
@@ -219,6 +236,7 @@ export default function AnalysisPage() {
             frozenCount={frozenRows.length}
             backtestCount={backtestRows.length}
             trend={next.accuracy.trend}
+            incompleteMonths={new Set(data.dataQuality.map((d) => d.month))}
           />
 
           <HistoryCard data={data} />
@@ -298,7 +316,13 @@ function ForecastHero({ data }: { data: MonthlyForecastResponse }) {
       ) : next.scenarios ? (
         <>
           <p className="mb-3 text-sm text-muted-foreground">
-            Прогноз на {monthLabel(next.targetMonth)} по закрытым месяцам. {outlook ? `${monthName(outlook.month)} ещё идёт и в этот расчёт не входит.` : ''}
+            {next.basis.provisionalMonth
+              ? `Прогноз на ${monthLabel(next.targetMonth)} с учётом идущего ${monthGenitive(next.basis.provisionalMonth)} (факт за ${next.basis.knownDays} дн. и оценка остатка) — пока месяц не закрыт, коридор шире.`
+              : `Прогноз на ${monthLabel(next.targetMonth)} по закрытым месяцам.`}
+            {next.basis.midMonth?.error != null &&
+              ` Прогнозы, сделанные ${next.basis.midMonth.day}-го числа, раньше ошибались в среднем на ${pct(next.basis.midMonth.error)}${
+                next.basis.midMonth.closedError != null ? `, после закрытия месяца — на ${pct(next.basis.midMonth.closedError)}` : ''
+              }.`}
           </p>
           <ScenarioColumns scenarios={next.scenarios} />
         </>
@@ -414,6 +438,35 @@ function ScenarioLine({ label, value, strong }: { label: string; value: number; 
   )
 }
 
+function DataQualityCard({ items }: { items: MonthlyForecastResponse['dataQuality'] }) {
+  const byMonth = new Map<string, MonthlyForecastResponse['dataQuality']>()
+  for (const item of items) byMonth.set(item.month, [...(byMonth.get(item.month) || []), item])
+
+  return (
+    <Card className="gap-0 border-amber-500/30 bg-amber-500/[0.06] p-4">
+      <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-amber-800 dark:text-amber-200">
+        <AlertTriangle className="h-4 w-4" />
+        Неполные месяцы — в обучение не идут
+      </h3>
+      <ul className="space-y-1 text-sm text-body">
+        {[...byMonth]
+          .sort((a, b) => b[0].localeCompare(a[0]))
+          .map(([month, list]) => (
+            <li key={month}>
+              <span className="font-medium text-foreground">{monthLabel(month)}:</span>{' '}
+              {list
+                .map((i) => `${i.companyName} — ${i.days === 0 ? 'нет ни одной записи дохода' : `доходы за ${i.days} из ${i.daysInMonth} дн. (обычно ${i.expectedDays})`}`)
+                .join('; ')}
+            </li>
+          ))}
+      </ul>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Недовнесённый месяц выглядел бы как провал выручки и испортил бы прогноз. Когда отчёты внесут, месяц вернётся в расчёт сам.
+      </p>
+    </Card>
+  )
+}
+
 function LearningCard({ data }: { data: MonthlyForecastResponse }) {
   const calibration = data.next.calibration
   const weights = calibration
@@ -461,6 +514,7 @@ function AccuracyCard({
   frozenCount,
   backtestCount,
   trend,
+  incompleteMonths,
 }: {
   rows: AccuracyRow[]
   source: 'frozen' | 'backtest'
@@ -468,7 +522,10 @@ function AccuracyCard({
   frozenCount: number
   backtestCount: number
   trend: MonthlyForecastResponse['next']['accuracy']['trend']
+  /** Месяцы с недовнесёнными отчётами — их «промах» не ошибка модели */
+  incompleteMonths: Set<string>
 }) {
+  const usable = rows.filter((r) => !incompleteMonths.has(r.month))
   const chartData = rows.map((r) => ({
     label: monthShort(r.month),
     band: [Math.round(r.scenarios.pessimistic.income), Math.round(r.scenarios.optimistic.income)],
@@ -476,10 +533,10 @@ function AccuracyCard({
     actual: Math.round(r.actual.income),
     error: r.error === null ? null : Math.round(r.error * 100),
   }))
-  const recent = rows.slice(-6).map((r) => r.error).filter((e): e is number => e !== null)
+  const recent = usable.slice(-6).map((r) => r.error).filter((e): e is number => e !== null)
   const recentAvg = recent.length ? recent.reduce((a, b) => a + b, 0) / recent.length : null
-  const inside = rows.slice(-12).filter((r) => r.inside.income).length
-  const total = rows.slice(-12).length
+  const inside = usable.slice(-12).filter((r) => r.inside.income).length
+  const total = usable.slice(-12).length
 
   return (
     <Card className="gap-0 p-5">
@@ -572,7 +629,9 @@ function AccuracyCard({
                         {r.error === null ? '—' : pct(r.error)}
                       </td>
                       <td className="px-2 py-2 text-right text-xs">
-                        {r.inside.income ? (
+                        {incompleteMonths.has(r.month) ? (
+                          <span className="text-muted-foreground">данные неполные</span>
+                        ) : r.inside.income ? (
                           <span className="text-emerald-600 dark:text-emerald-400">внутри</span>
                         ) : below ? (
                           <span className="text-rose-600 dark:text-rose-400">ниже</span>
@@ -594,16 +653,20 @@ function AccuracyCard({
 
 function HistoryCard({ data }: { data: MonthlyForecastResponse }) {
   const months = data.forecast.months
+  // Как в /reports: все расходы по журналу, включая разовые, и прибыль после них
   const chartData = months.map((m) => ({
     label: monthShort(m.month) + (m.isPartial ? ' (тек.)' : ''),
     Доход: Math.round(m.income),
-    Расход: Math.round(m.expense),
-    Прибыль: Math.round(m.profit),
+    Расход: Math.round(m.totalExpense),
+    Прибыль: Math.round(m.netProfit),
   }))
 
   return (
     <Card className="gap-0 p-5">
-      <h3 className="mb-4 text-sm font-semibold text-foreground">История по месяцам</h3>
+      <h3 className="text-sm font-semibold text-foreground">История по месяцам</h3>
+      <p className="mb-4 mt-0.5 text-xs text-muted-foreground">
+        Цифры как в отчётах: все расходы, включая разовые. Прогноз учится на регулярных расходах — разовые (ремонт, оборудование) заранее не предсказать.
+      </p>
       {chartData.length === 0 ? (
         <div className="py-8 text-center text-sm text-muted-foreground">Нет данных</div>
       ) : (
@@ -636,6 +699,7 @@ function HistoryCard({ data }: { data: MonthlyForecastResponse }) {
                   <th className="px-2 py-2 text-right font-medium">Постоянные</th>
                   <th className="px-2 py-2 text-right font-medium">Переменные</th>
                   <th className="px-2 py-2 text-right font-medium">Разовые</th>
+                  <th className="px-2 py-2 text-right font-medium">Всего расходов</th>
                   <th className="px-2 py-2 text-right font-medium">Прибыль</th>
                   <th className="px-2 py-2 text-right font-medium">Маржа</th>
                 </tr>
@@ -650,9 +714,10 @@ function HistoryCard({ data }: { data: MonthlyForecastResponse }) {
                     <td className="px-2 py-2 text-right tabular-nums text-body">{money(m.income)}</td>
                     <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">{money(m.fixed)}</td>
                     <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">{money(m.variable)}</td>
-                    <td className="px-2 py-2 text-right tabular-nums text-faint">{m.oneOff > 0 ? money(m.oneOff) : '—'}</td>
-                    <td className={`px-2 py-2 text-right font-semibold tabular-nums ${m.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                      {money(m.profit)}
+                    <td className="px-2 py-2 text-right tabular-nums text-faint">{m.oneOff + m.distribution > 0 ? money(m.oneOff + m.distribution) : '—'}</td>
+                    <td className="px-2 py-2 text-right tabular-nums text-body">{money(m.totalExpense)}</td>
+                    <td className={`px-2 py-2 text-right font-semibold tabular-nums ${m.netProfit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                      {money(m.netProfit)}
                     </td>
                     <td className="px-2 py-2 text-right tabular-nums text-body">{m.marginPct.toFixed(0)}%</td>
                   </tr>

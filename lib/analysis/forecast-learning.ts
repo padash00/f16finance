@@ -140,6 +140,64 @@ export function evaluateInside(scenarios: Scenarios, actual: Triple): Inside {
   }
 }
 
+export type CorridorBand = {
+  incomeLow: number
+  incomeHigh: number
+  expenseLow: number
+  expenseHigh: number
+  /** Сдвиги прибыли в тенге */
+  profitLow: number
+  profitHigh: number
+}
+
+/**
+ * Коридор, измеренный на отдельной выборке прогнозов (например, сделанных в
+ * середине месяца): квантили 10/90% отношений факт/прогноз. Меньше 4 сверок — null.
+ */
+export function corridorFromChecks(checks: Array<{ predicted: Triple; actual: Triple }>): CorridorBand | null {
+  const incomeRatios = checks.filter((c) => c.predicted.income > 0 && c.actual.income > 0).map((c) => c.actual.income / c.predicted.income)
+  if (incomeRatios.length < MIN_CHECKS_FOR_CORRIDOR) return null
+  const expenseRatios = checks.filter((c) => c.predicted.expense > 0 && c.actual.expense > 0).map((c) => c.actual.expense / c.predicted.expense)
+  const profitShifts = checks.map((c) => c.actual.profit - c.predicted.profit)
+  const hasExpense = expenseRatios.length >= MIN_CHECKS_FOR_CORRIDOR
+  return {
+    incomeLow: Math.min(1, quantile(incomeRatios, CORRIDOR_LOW_Q)),
+    incomeHigh: Math.max(1, quantile(incomeRatios, CORRIDOR_HIGH_Q)),
+    expenseLow: hasExpense ? Math.min(1, quantile(expenseRatios, CORRIDOR_LOW_Q)) : 1,
+    expenseHigh: hasExpense ? Math.max(1, quantile(expenseRatios, CORRIDOR_HIGH_Q)) : 1,
+    profitLow: Math.min(0, quantile(profitShifts, CORRIDOR_LOW_Q)),
+    profitHigh: Math.max(0, quantile(profitShifts, CORRIDOR_HIGH_Q)),
+  }
+}
+
+/** Сценарии вокруг реального по заданному коридору. Для расхода пессимистичный — верхняя граница */
+export function scenariosWithCorridor(realistic: Triple, band: CorridorBand): Scenarios {
+  return {
+    pessimistic: {
+      income: realistic.income * band.incomeLow,
+      expense: realistic.expense * band.expenseHigh,
+      profit: realistic.profit + band.profitLow,
+    },
+    realistic,
+    optimistic: {
+      income: realistic.income * band.incomeHigh,
+      expense: realistic.expense * band.expenseLow,
+      profit: realistic.profit + band.profitHigh,
+    },
+  }
+}
+
+/** Раздвинуть коридор в `factor` раз относительно реального сценария */
+export function widenScenarios(s: Scenarios, factor: number): Scenarios {
+  const move = (realistic: number, bound: number) => realistic + (bound - realistic) * factor
+  const edge = (bound: Triple): Triple => ({
+    income: move(s.realistic.income, bound.income),
+    expense: move(s.realistic.expense, bound.expense),
+    profit: move(s.realistic.profit, bound.profit),
+  })
+  return { pessimistic: edge(s.pessimistic), realistic: s.realistic, optimistic: edge(s.optimistic) }
+}
+
 // ==================== data ====================
 
 export type LearnIncomeRow = { date: string; cash?: number; kaspi?: number; card?: number; online?: number }
@@ -371,8 +429,21 @@ function summarize(records: BacktestRecord[]): AccuracySummary {
  * Прогноз на `targetMonth` по закрытым месяцам до него.
  * Попутно — сверки «как если бы модель работала с начала истории».
  */
-export function learnForecast(points: MonthPoint[], targetMonth: string): LearnedForecast {
-  const history = points.filter((p) => p.month < targetMonth).sort((a, b) => a.month.localeCompare(b.month))
+export function learnForecast(
+  points: MonthPoint[],
+  targetMonth: string,
+  options: {
+    /**
+     * Идущий месяц, достроенный оценкой. Входит в историю для прогноза, но не
+     * в сверки: факта у него ещё нет, и учиться на оценке нельзя.
+     */
+    provisional?: MonthPoint | null
+  } = {},
+): LearnedForecast {
+  const provisional = options.provisional && options.provisional.month < targetMonth ? options.provisional : null
+  const history = points
+    .filter((p) => p.month < targetMonth && p.month !== provisional?.month)
+    .sort((a, b) => a.month.localeCompare(b.month))
   const records: BacktestRecord[] = []
 
   for (let i = MIN_HISTORY; i < history.length; i++) {
@@ -393,7 +464,8 @@ export function learnForecast(points: MonthPoint[], targetMonth: string): Learne
     })
   }
 
-  const final = history.length ? predictAt(history, targetMonth, records) : null
+  const basis = provisional ? [...history, provisional].sort((a, b) => a.month.localeCompare(b.month)) : history
+  const final = basis.length ? predictAt(basis, targetMonth, records) : null
   return {
     targetMonth,
     scenarios: final?.scenarios ?? null,

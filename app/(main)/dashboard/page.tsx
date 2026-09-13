@@ -20,6 +20,7 @@ import {
   Banknote,
   Cake,
   CalendarClock,
+  CalendarX,
   ClipboardList,
   Gauge,
   History,
@@ -312,6 +313,11 @@ export default function DashboardPage() {
   const expensesFeed = useApiCache<ExpenseFeedRow[]>(`/api/admin/expenses?from=${dateFrom}&to=${dateTo}&page_size=10&page=0`)
   const notifications = useApiCache<{ groups?: NotificationGroup[] }>('/api/admin/notifications')
   const overdue = useApiCache<{ overdue?: number }>('/api/admin/tasks?overdue_count=1')
+  // Прошлый месяц не закрыт: у точек не внесены отчёты за часть дней
+  const completeness = useApiCache<{
+    month: string
+    companies: Array<{ companyId: string; companyName: string; days: number; daysInMonth: number }>
+  }>('/api/admin/data-completeness')
   const plansRes = useApiCache<{ plans?: KpiPlan[] }>(`/api/admin/kpi-plans?year=${today.slice(0, 4)}`, {
     enabled: isCurrentMonth,
   })
@@ -537,6 +543,23 @@ export default function DashboardPage() {
         tone: 'rose',
       })
     }
+    const unclosed = completeness.data?.companies || []
+    if (completeness.data && unclosed.length) {
+      const { month } = completeness.data
+      const monthTitle = DateUtils.fromISO(`${month}-01`).toLocaleDateString('ru-RU', { month: 'long' })
+      const title = monthTitle.charAt(0).toUpperCase() + monthTitle.slice(1)
+      const [first] = unclosed
+      out.push({
+        key: 'unclosed-month',
+        icon: <CalendarX className="h-3.5 w-3.5" />,
+        text:
+          unclosed.length === 1
+            ? `${title} не закрыт: ${first.companyName} — ${first.days === 0 ? 'нет доходов' : `доходы за ${first.days} дн. из ${first.daysInMonth}`}`
+            : `${title} не закрыт у ${unclosed.length} ${plural(unclosed.length, 'точки', 'точек', 'точек')}`,
+        href: `/income?from=${month}-01&to=${monthEndISO(`${month}-01`)}`,
+        tone: 'amber',
+      })
+    }
     const requests = group('requests')
     if (requests?.count) {
       out.push({
@@ -585,7 +608,7 @@ export default function DashboardPage() {
       })
     }
     return out
-  }, [notifications.data, overdue.data])
+  }, [notifications.data, overdue.data, completeness.data])
 
   const plans = useMemo(() => {
     const list = plansRes.data?.plans || []

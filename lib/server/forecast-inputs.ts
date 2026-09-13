@@ -23,7 +23,7 @@ export function kzTodayISO(now = new Date()): string {
   return new Date(now.getTime() + 5 * 3_600_000).toISOString().slice(0, 10)
 }
 
-async function fetchAllRows<T>(buildQuery: () => any): Promise<T[]> {
+export async function fetchAllRows<T>(buildQuery: () => any): Promise<T[]> {
   const rows: T[] = []
   for (let from = 0; ; from += CHUNK) {
     const { data, error } = await buildQuery().range(from, from + CHUNK - 1)
