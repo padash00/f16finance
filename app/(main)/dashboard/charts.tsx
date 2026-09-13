@@ -16,8 +16,6 @@ import type { ReactNode } from 'react'
 import { LineChart } from 'lucide-react'
 import {
   Area,
-  Bar,
-  BarChart,
   CartesianGrid,
   Cell,
   ComposedChart,
@@ -44,6 +42,8 @@ export function ChartCard(props: {
 }) {
   const metricName = props.metric === 'income' ? 'Доход' : props.metric === 'expense' ? 'Расход' : 'Прибыль'
   const metricColor = props.metric === 'income' ? COLORS.income : props.metric === 'expense' ? COLORS.expense : COLORS.profit
+  const forecastKey = props.metric === 'income' ? 'forecastIncome' : props.metric === 'expense' ? 'forecastExpense' : 'forecastProfit'
+  const hasForecast = props.data.some((p) => p[forecastKey] != null)
 
   return (
     <Card className="p-6 border border-slate-200 bg-white dark:border-0 dark:bg-slate-800/50 backdrop-blur-sm">
@@ -96,7 +96,7 @@ export function ChartCard(props: {
                 contentStyle={{ backgroundColor: '#111827', border: '1px solid rgba(139,92,246,.25)', borderRadius: 12 }}
                 itemStyle={{ color: '#fff' }}
                 labelStyle={{ color: '#9ca3af', fontSize: 12 }}
-                formatter={(val: any) => [Formatters.moneyDetailed(Number(val)), '']}
+                formatter={(val: any, name: any) => [val == null ? '—' : Formatters.moneyDetailed(Number(val)), name]}
               />
               <Legend />
 
@@ -118,6 +118,20 @@ export function ChartCard(props: {
                   strokeWidth={2}
                   dot={false}
                   strokeDasharray="5 5"
+                />
+              )}
+
+              {hasForecast && (
+                <Line
+                  type="monotone"
+                  dataKey={forecastKey}
+                  name="Прогноз"
+                  stroke={metricColor}
+                  strokeWidth={2}
+                  strokeDasharray="6 4"
+                  strokeOpacity={0.7}
+                  dot={false}
+                  connectNulls
                 />
               )}
             </ComposedChart>
@@ -185,31 +199,3 @@ export function CategoryPie(props: { title: string; data: CategoryData[]; total:
   )
 }
 
-/**
- * Способы оплаты — столбики.
- *
- * Вынесен из блока «Подробно» той же страницы: иначе библиотека графиков
- * осталась бы в ней и весь смысл разделения пропал бы.
- */
-export function PaymentBars({ data }: { data: { name: string; value: number; color: string }[] }) {
-  return (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={data}>
-                    <CartesianGrid strokeDasharray="3 3" opacity={0.4} stroke="#94a3b8" />
-                    <XAxis dataKey="name" stroke="#6b7280" fontSize={10} />
-                    <YAxis stroke="#6b7280" fontSize={10} tickFormatter={(v) => Formatters.moneyDetailed(v)} />
-                    <Tooltip
-                      contentStyle={{ backgroundColor: '#111827', border: '1px solid rgba(139,92,246,.25)', borderRadius: 12 }}
-                      itemStyle={{ color: '#fff' }}
-                      labelStyle={{ color: '#9ca3af', fontSize: 12 }}
-                      formatter={(v: any) => Formatters.moneyDetailed(Number(v))}
-                    />
-                    <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                      {data.map((e, i) => (
-                        <Cell key={i} fill={e.color} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-  )
-}

@@ -8,11 +8,16 @@
 
 export type ChartPoint = {
   date: string
-  income: number
-  expense: number
-  profit: number
-  movingAvg: number
+  /** null — день ещё не наступил (часть графика с прогнозом) */
+  income: number | null
+  expense: number | null
+  profit: number | null
+  movingAvg: number | null
   label: string
+  /** Пунктир прогноза до конца месяца */
+  forecastIncome?: number
+  forecastExpense?: number
+  forecastProfit?: number
 }
 
 export type CategoryData = {

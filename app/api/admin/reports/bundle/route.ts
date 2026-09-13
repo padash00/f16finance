@@ -9,7 +9,7 @@ import { lastMonthMtdRangeForCurrentMonth, type ForecastHints } from '@/lib/repo
 import { calculatePrevPeriod, isFullMonthRange, mergeDateRanges, previousCalendarMonthRange, sameRangeLastYear } from '@/lib/reports/period'
 import { sumIncomeExpenseInRange } from '@/lib/reports/sum-range-totals'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
-import { requireCapability } from '@/lib/server/capabilities'
+import { requireAnyCapability, requireCapability } from '@/lib/server/capabilities'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -51,10 +51,15 @@ export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
-    const denied = await requireCapability(access, 'reports.view')
-    if (denied) return denied
 
     const url = new URL(req.url)
+    // Итоги без сырых строк (rows=0) нужны и главному дашборду — у него своё право
+    // dashboard.view. Строки операций (суммы, комментарии) — только с правом на отчёты.
+    const denied =
+      url.searchParams.get('rows') === '0'
+        ? await requireAnyCapability(access, ['reports.view', 'dashboard.view'])
+        : await requireCapability(access, 'reports.view')
+    if (denied) return denied
     const dateFrom = url.searchParams.get('from') || ''
     const dateTo = url.searchParams.get('to') || ''
     const asOf = url.searchParams.get('as_of') || new Date().toISOString().slice(0, 10)
