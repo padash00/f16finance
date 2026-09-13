@@ -177,7 +177,7 @@ export function ProfitHeatmap({ dateFrom, dateTo, dailyIncome, dailyExpense, onC
   return (
     <div>
       {/* Компактная сетка по центру: на всю ширину карточки клетки выходили огромными */}
-      <div className={byMonth ? 'mx-auto grid max-w-2xl grid-cols-3 gap-1.5 sm:grid-cols-4 lg:grid-cols-6' : 'mx-auto grid max-w-2xl grid-cols-7 gap-1.5'}>
+      <div className={byMonth ? 'mx-auto grid max-w-2xl grid-cols-3 gap-1.5 sm:grid-cols-4 lg:grid-cols-6' : 'mx-auto grid max-w-5xl grid-cols-7 gap-1.5 sm:gap-2'}>
         {!byMonth && WEEKDAY_LABELS.map((d) => (
           <div key={d} className="text-center text-[10px] font-medium text-muted-foreground">{d}</div>
         ))}
@@ -191,13 +191,13 @@ export function ProfitHeatmap({ dateFrom, dateTo, dailyIncome, dailyExpense, onC
               style={cellStyle(profit)}
               disabled={!onCellClick || (cell.income === 0 && cell.expense === 0)}
               onClick={() => onCellClick?.(cell.from, cell.to)}
-              className={`${byMonth ? 'py-2.5' : 'aspect-square'} flex flex-col items-center justify-center rounded-md text-xs transition-shadow enabled:cursor-pointer enabled:hover:ring-2 enabled:hover:ring-amber-500/60 disabled:cursor-default ${profit === 0 ? 'bg-slate-100 dark:bg-slate-800/50' : ''}`}
+              className={`${byMonth ? 'py-3' : 'h-14 sm:h-20'} flex flex-col items-center justify-center gap-0.5 rounded-lg text-xs transition-shadow enabled:cursor-pointer enabled:hover:ring-2 enabled:hover:ring-amber-500/60 disabled:cursor-default ${profit === 0 ? 'bg-slate-100 dark:bg-slate-800/50' : ''}`}
               title={`${cell.title}: доход ${formatMoneyFull(cell.income)}, расход ${formatMoneyFull(cell.expense)}, прибыль ${formatMoneyFull(profit)}`}
             >
-              <span className={`tabular-nums ${byMonth ? 'text-[10px] text-muted-foreground' : 'text-[11px] font-medium text-foreground'}`}>{cell.label}</span>
+              <span className={`tabular-nums ${byMonth ? 'text-xs text-muted-foreground' : 'text-xs sm:text-sm font-semibold text-foreground'}`}>{cell.label}</span>
               {/* Сумма дня — со среднего экрана; на телефоне клетка узкая, сумму покажет клик */}
               {profit !== 0 && (
-                <span className={`tabular-nums font-medium text-foreground ${byMonth ? '' : 'hidden sm:block text-[10px]'}`}>
+                <span className={`tabular-nums font-medium text-foreground ${byMonth ? 'text-sm' : 'hidden sm:block text-xs'}`}>
                   {formatMoneyCompact(profit)}
                 </span>
               )}
