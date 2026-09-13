@@ -122,7 +122,7 @@ AnomalyCard.displayName = 'AnomalyCard'
 export const HEATMAP_DAILY_MAX_DAYS = 93
 export const WEEKDAY_LABELS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
 
-export type HeatCell = { key: string; label: string; title: string; income: number; expense: number }
+export type HeatCell = { key: string; label: string; title: string; from: string; to: string; income: number; expense: number }
 
 /**
  * Прибыль по дням (период до 3 месяцев) или по месяцам (дольше) — на весь период.
@@ -130,11 +130,13 @@ export type HeatCell = { key: string; label: string; title: string; income: numb
  * (`bg-emerald-500/${n}`), поэтому раньше все клетки были серыми, а карта
  * всегда показывала только 35 дней от начала периода.
  */
-export function ProfitHeatmap({ dateFrom, dateTo, dailyIncome, dailyExpense }: {
+export function ProfitHeatmap({ dateFrom, dateTo, dailyIncome, dailyExpense, onCellClick }: {
   dateFrom: string
   dateTo: string
   dailyIncome: Map<string, number>
   dailyExpense: Map<string, number>
+  /** Клик по дню или месяцу — доходы и расходы этого отрезка */
+  onCellClick?: (from: string, to: string) => void
 }) {
   const totalDays = Math.max(0, Math.round((fromISO(dateTo).getTime() - fromISO(dateFrom).getTime()) / 86400000) + 1)
   const byMonth = totalDays > HEATMAP_DAILY_MAX_DAYS
@@ -147,19 +149,20 @@ export function ProfitHeatmap({ dateFrom, dateTo, dailyIncome, dailyExpense }: {
     const expense = dailyExpense.get(date) || 0
     if (!byMonth) {
       const title = fromISO(date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })
-      cells.push({ key: date, label: String(Number(date.slice(8))), title, income, expense })
+      cells.push({ key: date, label: String(Number(date.slice(8))), title, from: date, to: date, income, expense })
       continue
     }
     const key = date.slice(0, 7)
     let cell = monthIndex.get(key)
     if (!cell) {
       const name = fromISO(`${key}-01`).toLocaleDateString('ru-RU', { month: 'short', year: 'numeric' })
-      cell = { key, label: name, title: name, income: 0, expense: 0 }
+      cell = { key, label: name, title: name, from: date, to: date, income: 0, expense: 0 }
       monthIndex.set(key, cell)
       cells.push(cell)
     }
     cell.income += income
     cell.expense += expense
+    cell.to = date
   }
 
   const maxAbs = cells.reduce((m, c) => Math.max(m, Math.abs(c.income - c.expense)), 0)
@@ -173,7 +176,8 @@ export function ProfitHeatmap({ dateFrom, dateTo, dailyIncome, dailyExpense }: {
 
   return (
     <div>
-      <div className={byMonth ? 'grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2' : 'grid grid-cols-7 gap-1.5 sm:gap-2'}>
+      {/* Компактная сетка по центру: на всю ширину карточки клетки выходили огромными */}
+      <div className={byMonth ? 'mx-auto grid max-w-2xl grid-cols-3 gap-1.5 sm:grid-cols-4 lg:grid-cols-6' : 'mx-auto grid max-w-sm grid-cols-7 gap-1'}>
         {!byMonth && WEEKDAY_LABELS.map((d) => (
           <div key={d} className="text-center text-[10px] font-medium text-muted-foreground">{d}</div>
         ))}
@@ -181,17 +185,21 @@ export function ProfitHeatmap({ dateFrom, dateTo, dailyIncome, dailyExpense }: {
         {cells.map((cell) => {
           const profit = cell.income - cell.expense
           return (
-            <div
+            <button
+              type="button"
               key={cell.key}
               style={cellStyle(profit)}
-              className={`${byMonth ? 'py-3' : 'aspect-square'} rounded-lg flex flex-col items-center justify-center text-xs ${profit === 0 ? 'bg-slate-100 dark:bg-slate-800/50' : ''}`}
+              disabled={!onCellClick || (cell.income === 0 && cell.expense === 0)}
+              onClick={() => onCellClick?.(cell.from, cell.to)}
+              className={`${byMonth ? 'py-2.5' : 'aspect-square'} flex flex-col items-center justify-center rounded-md text-xs transition-shadow enabled:cursor-pointer enabled:hover:ring-2 enabled:hover:ring-amber-500/60 disabled:cursor-default ${profit === 0 ? 'bg-slate-100 dark:bg-slate-800/50' : ''}`}
               title={`${cell.title}: доход ${formatMoneyFull(cell.income)}, расход ${formatMoneyFull(cell.expense)}, прибыль ${formatMoneyFull(profit)}`}
             >
-              <span className="text-[10px] text-muted-foreground">{cell.label}</span>
-              {profit !== 0 && (
-                <span className="hidden sm:block tabular-nums font-medium text-foreground">{formatMoneyCompact(profit)}</span>
+              <span className={`tabular-nums ${byMonth ? 'text-[10px] text-muted-foreground' : 'text-[11px] font-medium text-foreground'}`}>{cell.label}</span>
+              {/* В маленькой клетке дня сумма не помещается — её покажет клик; у месяца места хватает */}
+              {byMonth && profit !== 0 && (
+                <span className="tabular-nums font-medium text-foreground">{formatMoneyCompact(profit)}</span>
               )}
-            </div>
+            </button>
           )
         })}
       </div>
@@ -200,6 +208,7 @@ export function ProfitHeatmap({ dateFrom, dateTo, dailyIncome, dailyExpense }: {
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-slate-200 dark:bg-slate-800" /> Ноль</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ backgroundColor: 'rgba(16, 185, 129, 0.5)' }} /> Прибыль</span>
         {byMonth && <span>период длиннее 3 месяцев — по месяцам</span>}
+        {onCellClick && <span>нажмите на {byMonth ? 'месяц' : 'день'} — доходы и расходы</span>}
       </div>
     </div>
   )

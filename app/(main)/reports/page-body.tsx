@@ -625,6 +625,14 @@ function ReportsContent() {
     }
   }, [dateFrom, dateTo, totals.totalIncome, totalsPrev.totalIncome])
 
+  // Доходы и расходы за отрезок дат — по клику на график или клетку тепловой карты
+  const openRange = useCallback((from: string, to: string) => {
+    const label = from === to
+      ? fromISO(from).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })
+      : formatDateRange(from, to)
+    setDrillDown({ type: 'profit', from, to, title: `Доходы и расходы — ${label}` })
+  }, [])
+
   // Клик по точке графика: операции этого дня / недели / месяца / года (в пределах периода)
   const openBucket = useCallback((row: TimeAggregation) => {
     const start = row.sortISO
@@ -635,13 +643,8 @@ function ReportsContent() {
       end = toISODateLocal(new Date(d.getFullYear(), d.getMonth() + 1, 0))
     } else if (groupMode === 'year') end = `${start.slice(0, 4)}-12-31`
 
-    const from = start < dateFrom ? dateFrom : start
-    const to = end > dateTo ? dateTo : end
-    const label = from === to
-      ? fromISO(from).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })
-      : formatDateRange(from, to)
-    setDrillDown({ type: 'profit', from, to, title: `Доходы и расходы — ${label}` })
-  }, [groupMode, dateFrom, dateTo])
+    openRange(start < dateFrom ? dateFrom : start, end > dateTo ? dateTo : end)
+  }, [groupMode, dateFrom, dateTo, openRange])
   const detailedRows = useMemo((): DetailedRow[] => {
     // Строки от другого среза фильтров не показываем, пока не догрузились свежие.
     if (!rowsReady) return []
@@ -1653,7 +1656,7 @@ function ReportsContent() {
 
               <Card className="gap-0 p-6">
                 <h3 className="text-base font-semibold text-foreground mb-6">Тепловая карта прибыли</h3>
-                <ProfitHeatmap dateFrom={dateFrom} dateTo={dateTo} dailyIncome={dailyIncome} dailyExpense={dailyExpense} />
+                <ProfitHeatmap dateFrom={dateFrom} dateTo={dateTo} dailyIncome={dailyIncome} dailyExpense={dailyExpense} onCellClick={openRange} />
               </Card>
             </div>
           )}
