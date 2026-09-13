@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { fetchInChunks } from '@/lib/server/fetch-in-chunks'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { requireCapability } from '@/lib/server/capabilities'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
@@ -139,7 +140,7 @@ export async function GET(req: Request) {
     const operatorNull = url.searchParams.get('operator_null') === 'true'
     const payFilter = url.searchParams.get('pay_filter') as 'cash' | 'kaspi' | 'online' | 'card' | null
     const page = Math.max(0, parseInt(url.searchParams.get('page') || '0', 10))
-    const pageSize = Math.min(5000, Math.max(1, parseInt(url.searchParams.get('page_size') || '2000', 10)))
+    const pageSize = Math.min(50000, Math.max(1, parseInt(url.searchParams.get('page_size') || '2000', 10)))
 
     const supabase = hasAdminSupabaseCredentials()
       ? createAdminSupabaseClient()
@@ -149,33 +150,46 @@ export async function GET(req: Request) {
       requestedCompanyId: companyId,
       isSuperAdmin: access.isSuperAdmin,
     })
-
-    let query = supabase
-      .from('incomes')
-      .select('id, date, company_id, operator_id, shift, zone, cash_amount, kaspi_amount, kaspi_before_midnight, online_amount, card_amount, comment')
-      .order('date', { ascending: false })
-      .range(page * pageSize, page * pageSize + pageSize - 1)
-
-    if (from) query = query.gte('date', from)
-    if (to) query = query.lte('date', to)
-    if (companyScope.allowedCompanyIds !== null) {
-      if (companyScope.allowedCompanyIds.length === 0) {
-        return json({ data: [] })
-      }
-      query = query.in('company_id', companyScope.allowedCompanyIds)
+    if (companyScope.allowedCompanyIds !== null && companyScope.allowedCompanyIds.length === 0) {
+      return json({ data: [] })
     }
-    if (shift) query = query.eq('shift', shift)
-    if (operatorNull) query = query.is('operator_id', null)
-    else if (operatorId) query = query.eq('operator_id', operatorId)
-    if (payFilter === 'cash') query = query.gt('cash_amount', 0)
-    else if (payFilter === 'kaspi') query = query.gt('kaspi_amount', 0)
-    else if (payFilter === 'online') query = query.gt('online_amount', 0)
-    else if (payFilter === 'card') query = query.gt('card_amount', 0)
 
-    const { data, error } = await query
-    if (error) throw error
+    const buildQuery = () => {
+      let query = supabase
+        .from('incomes')
+        .select('id, date, company_id, operator_id, shift, zone, cash_amount, kaspi_amount, kaspi_before_midnight, online_amount, card_amount, comment')
+        // id — вторым ключом: без стабильного порядка строки одной даты
+        // задваивались бы или терялись на стыке кусков
+        .order('date', { ascending: false })
+        .order('id', { ascending: false })
 
-    return json({ data: data ?? [] })
+      if (from) query = query.gte('date', from)
+      if (to) query = query.lte('date', to)
+      if (companyScope.allowedCompanyIds !== null) query = query.in('company_id', companyScope.allowedCompanyIds)
+      if (shift) query = query.eq('shift', shift)
+      if (operatorNull) query = query.is('operator_id', null)
+      else if (operatorId) query = query.eq('operator_id', operatorId)
+      if (payFilter === 'cash') query = query.gt('cash_amount', 0)
+      else if (payFilter === 'kaspi') query = query.gt('kaspi_amount', 0)
+      else if (payFilter === 'online') query = query.gt('online_amount', 0)
+      else if (payFilter === 'card') query = query.gt('card_amount', 0)
+      return query
+    }
+
+    // Сервер отдаёт не больше 1000 строк на запрос: page_size=5000 раньше молча
+    // возвращал 1000, и мобильные «Движение денег» / «Прибыльность» за длинный
+    // период считали неполную выручку. Читаем кусками.
+    const data = await fetchInChunks({
+      page,
+      pageSize,
+      fetchRange: async (rangeFrom, rangeTo) => {
+        const { data: batch, error } = await buildQuery().range(rangeFrom, rangeTo)
+        if (error) throw error
+        return batch ?? []
+      },
+    })
+
+    return json({ data })
   } catch (error: any) {
     await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/incomes GET', message: error?.message || 'error' })
     return json({

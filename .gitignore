@@ -38,3 +38,6 @@ apple/Config.local.xcconfig
 tools/arena-probe/probe-settings.local.json
 tools/arena-probe/arena-probe.log
 tools/arena-probe/senet-scan-report.txt
+# Собранные пакеты (DLL, архивы) — результат prepare-package.ps1, исходники уже в tools/
+tools/*.zip
+tools/*.rar
