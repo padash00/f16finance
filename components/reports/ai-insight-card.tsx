@@ -19,6 +19,8 @@ interface Props {
   topIncome?: { name: string; value: number }[]
   topExpense?: { name: string; value: number }[]
   cashlessLabel?: string
+  /** Внутри другой карточки: без своей рамки и градиента */
+  embedded?: boolean
 }
 
 /**
@@ -27,7 +29,7 @@ interface Props {
  * фильтра и тратил деньги на срезы, которые никто не читал.
  * При смене среза старый комментарий сбрасывается — он был про другие цифры.
  */
-export function AIInsightCard({ dateFrom, dateTo, totals, totalsPrev, topIncome, topExpense, cashlessLabel }: Props) {
+export function AIInsightCard({ dateFrom, dateTo, totals, totalsPrev, topIncome, topExpense, cashlessLabel, embedded = false }: Props) {
   const [text, setText] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -60,10 +62,10 @@ export function AIInsightCard({ dateFrom, dateTo, totals, totalsPrev, topIncome,
   if (!totals.incomeTotal && !totals.expenseTotal) return null
 
   return (
-    <div className="rounded-2xl border border-violet-500/20 bg-gradient-to-br from-violet-500/10 via-fuchsia-500/5 to-transparent p-4">
+    <div className={embedded ? '' : 'rounded-2xl border border-violet-500/20 bg-gradient-to-br from-violet-500/10 via-fuchsia-500/5 to-transparent p-4'}>
       <div className="flex items-start gap-3">
-        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 shadow-lg shadow-violet-500/30">
-          <Sparkles className="h-5 w-5 text-white" />
+        <div className={`grid shrink-0 place-items-center bg-gradient-to-br from-violet-500 to-fuchsia-500 ${embedded ? 'h-8 w-8 rounded-lg' : 'h-10 w-10 rounded-xl shadow-lg shadow-violet-500/30'}`}>
+          <Sparkles className={embedded ? 'h-4 w-4 text-white' : 'h-5 w-5 text-white'} />
         </div>
         <div className="flex-1 min-w-0">
           <div className="mb-1 flex items-center justify-between gap-2">

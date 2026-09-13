@@ -61,6 +61,12 @@ export async function GET(req: Request) {
     const shift = url.searchParams.get('shift') as 'day' | 'night' | null
     const group = (url.searchParams.get('group') || 'day') as 'day' | 'week' | 'month' | 'year'
     const includeExtra = url.searchParams.get('include_extra') === '1' || url.searchParams.get('include_extra') === 'true'
+    // Сырые строки в ответе:
+    //   (нет)     — все строки за оба периода, как раньше (/tax, мобильное приложение);
+    //   0         — без строк: /reports для итогов и графиков, ответ в разы легче;
+    //   current   — только строки выбранного периода: /reports грузит их лениво
+    //               для «Деталей», модалки и PDF.
+    const rowsMode = url.searchParams.get('rows')
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateFrom) || !/^\d{4}-\d{2}-\d{2}$/.test(dateTo)) {
       return json({ error: 'from и to в формате YYYY-MM-DD' }, 400)
     }
@@ -180,8 +186,14 @@ export async function GET(req: Request) {
       data: {
         asOf,
         impreciseNightKaspiCount: impreciseNight,
-        incomes: splitIncomes,
-        expenses: rowsEx,
+        incomes:
+          rowsMode === '0' ? [] :
+          rowsMode === 'current' ? splitIncomes.filter((r) => r.date >= dateFrom && r.date <= dateTo) :
+          splitIncomes,
+        expenses:
+          rowsMode === '0' ? [] :
+          rowsMode === 'current' ? rowsEx.filter((r) => r.date >= dateFrom && r.date <= dateTo) :
+          rowsEx,
         aggregate: serializeAggregate(agg, dateFrom, dateTo),
         forecastHints,
         meta: { prevFrom, prevTo, incomeFetchFrom, expenseFetchFrom, expenseFetchTo },

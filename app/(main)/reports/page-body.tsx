@@ -33,6 +33,7 @@ import type { PageSnapshot } from '@/lib/ai/types'
 import { supabase } from '@/lib/supabaseClient'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { usePersistentState } from '@/lib/client/use-persistent-state'
+import { invalidateApiCache, readApiCache, writeApiCache } from '@/lib/client/use-api-cache'
 import { useCashlessLabels } from '@/lib/client/use-cashless-labels'
 
 import {
@@ -607,7 +608,7 @@ const InsightCard = memo(({ insight }: { insight: AIInsight }) => {
   
   return (
     <div
-      className={`rounded-2xl border p-4 ${styles.bg} ${styles.border}`}
+      className={`rounded-xl border px-3 py-2.5 ${styles.bg} ${styles.border}`}
     >
       <div className="flex items-start gap-3">
         <div className={`grid place-items-center h-8 w-8 shrink-0 rounded-lg ${styles.bg.replace('/5', '/20')} ${styles.text}`}>
@@ -617,7 +618,7 @@ const InsightCard = memo(({ insight }: { insight: AIInsight }) => {
           <p className="text-sm font-semibold text-foreground">{insight.title}</p>
           <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2 leading-relaxed">{insight.description}</p>
           {insight.metric && (
-            <p className={`text-lg font-bold tabular-nums mt-2 ${styles.text}`}>{insight.metric}</p>
+            <p className={`text-sm font-bold tabular-nums mt-1 ${styles.text}`}>{insight.metric}</p>
           )}
         </div>
       </div>
@@ -745,6 +746,62 @@ function ProfitHeatmap({ dateFrom, dateTo, dailyIncome, dailyExpense }: {
 // DRILL-DOWN MODAL
 // =====================
 
+/** Строки дохода и расхода выбранного периода в один список — для «Деталей» и PDF. */
+function buildDetailedRows(
+  incomes: IncomeRow[],
+  expenses: ExpenseRow[],
+  opts: { dateFrom: string; dateTo: string; min: number; max: number; companyName: (id: string) => string },
+): DetailedRow[] {
+  const { dateFrom, dateTo, min, max, companyName } = opts
+  const rows: DetailedRow[] = []
+
+  for (const r of incomes) {
+    if (r.date < dateFrom || r.date > dateTo) continue
+    const cash = safeNumber(r.cash_amount)
+    const kaspi = safeNumber(r.kaspi_amount)
+    const online = safeNumber(r.online_amount)
+    const card = safeNumber(r.card_amount)
+    const total = cash + kaspi + online + card
+    if (total === 0 || total < min || total > max) continue
+    rows.push({
+      id: r.id,
+      date: r.date,
+      type: 'income',
+      companyId: r.company_id,
+      companyName: companyName(r.company_id),
+      amount: total,
+      cashAmount: cash,
+      kaspiAmount: kaspi,
+      onlineAmount: online,
+      cardAmount: card,
+      shift: r.shift,
+      zone: r.zone,
+    })
+  }
+
+  for (const r of expenses) {
+    if (r.date < dateFrom || r.date > dateTo) continue
+    const cash = safeNumber(r.cash_amount)
+    const kaspi = safeNumber(r.kaspi_amount)
+    const total = cash + kaspi
+    if (total === 0 || total < min || total > max) continue
+    rows.push({
+      id: r.id,
+      date: r.date,
+      type: 'expense',
+      companyId: r.company_id,
+      companyName: companyName(r.company_id),
+      amount: total,
+      cashAmount: cash,
+      kaspiAmount: kaspi,
+      category: r.category || 'Без категории',
+      comment: r.comment,
+    })
+  }
+
+  return rows
+}
+
 type DrillDownType = 'income' | 'expense' | 'profit'
 
 const DRILL_TITLES: Record<DrillDownType, string> = {
@@ -769,6 +826,7 @@ function DrillDownModal({
   companyName,
   dateFrom,
   dateTo,
+  loading,
   onClose,
 }: {
   type: DrillDownType
@@ -778,6 +836,8 @@ function DrillDownModal({
   companyName: (id: string) => string
   dateFrom: string
   dateTo: string
+  /** Строки периода ещё догружаются */
+  loading: boolean
   onClose: () => void
 }) {
   const cashLabels = useCashlessLabels()
@@ -940,8 +1000,8 @@ function DrillDownModal({
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={type === 'profit' ? 7 : 6} className="text-center py-16 text-slate-500">
-                    Нет данных
+                  <td colSpan={type === 'profit' ? 7 : 6} className="text-center py-16 text-muted-foreground">
+                    {loading ? 'Загружаю операции…' : 'Нет данных'}
                   </td>
                 </tr>
               ) : (
@@ -1019,6 +1079,11 @@ function ReportsContent() {
   // Data states
   const [incomes, setIncomes] = useState<IncomeRow[]>([])
   const [expenses, setExpenses] = useState<ExpenseRow[]>([])
+  // Строки операций грузятся лениво — для «Деталей», модалки и PDF. rowsKey
+  // помнит, к какому срезу фильтров относятся загруженные строки.
+  const [rowsKey, setRowsKey] = useState<string | null>(null)
+  const [rowsLoading, setRowsLoading] = useState(false)
+  const rowsReqRef = useRef(0)
   const [companies, setCompanies] = useState<Company[]>([])
   const [companiesLoaded, setCompaniesLoaded] = useState(false)
 
@@ -1232,45 +1297,68 @@ function ReportsContent() {
   return () => { alive = false }
 }, [])
 
+  // Срез фильтров без as_of: по нему ключ кэша и принадлежность загруженных строк.
+  const bundleQuery = useMemo(() => {
+    const params = new URLSearchParams({
+      from: dateFrom,
+      to: dateTo,
+      group: groupMode,
+      include_extra: includeExtraInTotals ? '1' : '0',
+    })
+    if (companyFilter !== 'all') params.set('company_id', companyFilter)
+    if (shiftFilter !== 'all') params.set('shift', shiftFilter)
+    return params.toString()
+  }, [dateFrom, dateTo, groupMode, includeExtraInTotals, companyFilter, shiftFilter])
+
+  const applyBundle = useCallback((data: any) => {
+    setBundleAggregate(data.aggregate as ReportBundleAggregate)
+    setForecastHints((data.forecastHints as ForecastHints | null) ?? null)
+    setBundleAsOf(String(data.asOf || todayISO()))
+    setImpreciseNightKaspiCount(Number(data.impreciseNightKaspiCount || 0))
+  }, [])
+
   const loadData = useCallback(async (isRefresh = false) => {
     if (!companiesLoaded) return
 
     const myReqId = ++reqIdRef.current
+    // Только итоги и графики — сырые строки (до 200 000) больше не едут на каждый заход.
+    const url = `/api/admin/reports/bundle?${bundleQuery}&as_of=${todayISO()}&rows=0`
 
-    if (isRefresh) setRefreshing(true)
-    else setLoading(true)
+    if (isRefresh) invalidateApiCache(`/api/admin/reports/bundle?${bundleQuery}`)
+
+    // Повторный заход на тот же срез: прошлые цифры сразу, свежие догружаются фоном.
+    const cached = isRefresh ? null : readApiCache<any>(url)
+    if (cached?.aggregate) {
+      applyBundle(cached)
+      setLoading(false)
+    } else if (isRefresh) {
+      setRefreshing(true)
+    } else {
+      setLoading(true)
+    }
 
     setError(null)
 
     try {
-      const params = new URLSearchParams({
-        from: dateFrom,
-        to: dateTo,
-        as_of: todayISO(),
-        group: groupMode,
-        include_extra: includeExtraInTotals ? '1' : '0',
-      })
-      if (companyFilter !== 'all') params.set('company_id', companyFilter)
-      if (shiftFilter !== 'all') params.set('shift', shiftFilter)
-
-      const bundleResp = await fetch(`/api/admin/reports/bundle?${params.toString()}`)
+      const bundleResp = await fetch(url, { cache: 'no-store' })
       if (myReqId !== reqIdRef.current) return
 
       const bundleJson = await bundleResp.json()
       if (!bundleResp.ok || bundleJson.error) throw new Error(bundleJson.error || 'Ошибка загрузки отчёта')
       const data = bundleJson.data
       if (!data?.aggregate) throw new Error('Пустой ответ')
+      if (myReqId !== reqIdRef.current) return
 
-      setBundleAggregate(data.aggregate as ReportBundleAggregate)
-      setForecastHints((data.forecastHints as ForecastHints | null) ?? null)
-      setBundleAsOf(String(data.asOf || todayISO()))
-      setImpreciseNightKaspiCount(Number(data.impreciseNightKaspiCount || 0))
-      setIncomes((data.incomes || []) as IncomeRow[])
-      setExpenses((data.expenses || []) as ExpenseRow[])
-
-      if (isRefresh) showToast('Данные обновлены', 'success')
+      writeApiCache(url, data)
+      applyBundle(data)
+      if (isRefresh) {
+        // Данные поменялись — загруженные строки перечитаются при следующем обращении.
+        setRowsKey(null)
+        showToast('Данные обновлены', 'success')
+      }
     } catch (err) {
-      if (myReqId === reqIdRef.current) {
+      // Если на экране цифры из кэша — не затираем их ошибкой фоновой догрузки.
+      if (myReqId === reqIdRef.current && !cached) {
         setBundleAggregate(null)
         setForecastHints(null)
         setError('Ошибка загрузки данных')
@@ -1283,7 +1371,46 @@ function ReportsContent() {
         setRefreshing(false)
       }
     }
-  }, [companiesLoaded, dateFrom, dateTo, companyFilter, shiftFilter, includeExtraInTotals, groupMode, showToast])
+  }, [companiesLoaded, bundleQuery, applyBundle, showToast])
+
+  // Строки выбранного периода — отдельным запросом, только когда они реально нужны.
+  const ensureRows = useCallback(async (): Promise<{ incomes: IncomeRow[]; expenses: ExpenseRow[] } | null> => {
+    const url = `/api/admin/reports/bundle?${bundleQuery}&as_of=${todayISO()}&rows=current`
+    const myReqId = ++rowsReqRef.current
+    setRowsLoading(true)
+    try {
+      let data = readApiCache<any>(url)
+      if (!data) {
+        const resp = await fetch(url, { cache: 'no-store' })
+        const json = await resp.json()
+        if (!resp.ok || json.error) throw new Error(json.error || 'Ошибка загрузки операций')
+        data = json.data
+        writeApiCache(url, data)
+      }
+      if (myReqId !== rowsReqRef.current) return null
+      const next = {
+        incomes: (data.incomes || []) as IncomeRow[],
+        expenses: (data.expenses || []) as ExpenseRow[],
+      }
+      setIncomes(next.incomes)
+      setExpenses(next.expenses)
+      setRowsKey(bundleQuery)
+      return next
+    } catch (err) {
+      console.error(err)
+      if (myReqId === rowsReqRef.current) showToast('Не удалось загрузить операции', 'error')
+      return null
+    } finally {
+      if (myReqId === rowsReqRef.current) setRowsLoading(false)
+    }
+  }, [bundleQuery, showToast])
+
+  const rowsReady = rowsKey === bundleQuery
+  const rowsNeeded = activeTab === 'details' || drillDown !== null
+  useEffect(() => {
+    if (!companiesLoaded || !rowsNeeded || rowsReady) return
+    void ensureRows()
+  }, [companiesLoaded, rowsNeeded, rowsReady, ensureRows])
 
   const scheduleReportsRealtimeReload = useCallback(() => {
     if (realtimeReloadTimerRef.current !== null) {
@@ -1493,64 +1620,16 @@ function ReportsContent() {
     }
   }, [dateFrom, dateTo, totals.totalIncome, totalsPrev.totalIncome])
   const detailedRows = useMemo((): DetailedRow[] => {
-    const rows: DetailedRow[] = []
-    const min = minAmountFilter ? parseFloat(minAmountFilter) : 0
-    const max = maxAmountFilter ? parseFloat(maxAmountFilter) : Infinity
-    
-    for (const r of incomes) {
-      if (r.date < dateFrom || r.date > dateTo) continue
-      
-      const cash = safeNumber(r.cash_amount)
-      const kaspi = safeNumber(r.kaspi_amount)
-      const online = safeNumber(r.online_amount)
-      const card = safeNumber(r.card_amount)
-      const total = cash + kaspi + online + card
-      
-      if (total === 0) continue
-      if (total < min || total > max) continue
-
-      rows.push({
-        id: r.id,
-        date: r.date,
-        type: 'income',
-        companyId: r.company_id,
-        companyName: companyName(r.company_id),
-        amount: total,
-        cashAmount: cash,
-        kaspiAmount: kaspi,
-        onlineAmount: online,
-        cardAmount: card,
-        shift: r.shift,
-        zone: r.zone,
-      })
-    }
-
-    for (const r of expenses) {
-      if (r.date < dateFrom || r.date > dateTo) continue
-      
-      const cash = safeNumber(r.cash_amount)
-      const kaspi = safeNumber(r.kaspi_amount)
-      const total = cash + kaspi
-      
-      if (total === 0) continue
-      if (total < min || total > max) continue
-
-      rows.push({
-        id: r.id,
-        date: r.date,
-        type: 'expense',
-        companyId: r.company_id,
-        companyName: companyName(r.company_id),
-        amount: total,
-        cashAmount: cash,
-        kaspiAmount: kaspi,
-        category: r.category || 'Без категории',
-        comment: r.comment,
-      })
-    }
-
-    return rows
-  }, [incomes, expenses, dateFrom, dateTo, companyName, minAmountFilter, maxAmountFilter])
+    // Строки от другого среза фильтров не показываем, пока не догрузились свежие.
+    if (!rowsReady) return []
+    return buildDetailedRows(incomes, expenses, {
+      dateFrom,
+      dateTo,
+      min: minAmountFilter ? parseFloat(minAmountFilter) : 0,
+      max: maxAmountFilter ? parseFloat(maxAmountFilter) : Infinity,
+      companyName,
+    })
+  }, [rowsReady, incomes, expenses, dateFrom, dateTo, companyName, minAmountFilter, maxAmountFilter])
 
   const filteredRows = useMemo(() => {
     let result = [...detailedRows]
@@ -1850,6 +1929,14 @@ function ReportsContent() {
         ? 'Все компании'
         : `Все компании (${includeExtraInTotals ? 'включая' : 'без'} ${extraCompany.name})`
     const period = `${dateFrom} — ${dateTo}`
+    // Операции грузятся лениво: если «Детали» ещё не открывали, дочитываем их сейчас.
+    let pdfRows = filteredRows
+    if (!rowsReady) {
+      const loaded = await ensureRows()
+      if (!loaded) throw new Error('Не удалось загрузить операции')
+      pdfRows = buildDetailedRows(loaded.incomes, loaded.expenses, { dateFrom, dateTo, min: 0, max: Infinity, companyName })
+        .sort((a, b) => b.date.localeCompare(a.date))
+    }
     const finData = {
       meta: { title: 'Финансовый отчёт', period, company: companyLabel, generated: new Date().toLocaleString('ru-RU') },
       kpi: {
@@ -1883,7 +1970,7 @@ function ReportsContent() {
         txns: c.count,
       })),
       expenses: expenseByCategoryData.map((e) => ({ name: e.name, amount: e.amount })),
-      operations: filteredRows.map((r) => ({
+      operations: pdfRows.map((r) => ({
         date: r.date,
         type: r.type === 'income' ? 'Доход' : 'Расход',
         company: r.companyName,
@@ -1904,7 +1991,7 @@ function ReportsContent() {
     } finally {
       setExporting(false)
     }
-  }, [exporting, companyFilter, includeExtraInTotals, extraCompany, companyName, dateFrom, dateTo, totals, totalsPrev, incomeByCompanyData, expenseByCategoryData, filteredRows, showToast])
+  }, [exporting, companyFilter, includeExtraInTotals, extraCompany, companyName, dateFrom, dateTo, totals, totalsPrev, incomeByCompanyData, expenseByCategoryData, filteredRows, rowsReady, ensureRows, showToast])
 
   const handlePrintPDF = useCallback(() => {
     window.print()
@@ -2082,14 +2169,46 @@ function ReportsContent() {
             companyId={companyFilter}
           />
 
-          {/* AI Insights */}
-          {aiInsights.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-              {aiInsights.map((insight, idx) => (
-                <InsightCard key={idx} insight={insight} />
-              ))}
+          {/* Одна карточка вместо трёх блоков подряд: сигналы по правилам + разбор ИИ по кнопке */}
+          <Card className="gap-0 p-4 sm:p-5">
+            <div className="mb-3 flex items-center gap-2">
+              <Lightbulb className="h-4 w-4 text-amber-500" />
+              <h3 className="text-sm font-semibold text-foreground">На что обратить внимание</h3>
             </div>
-          )}
+            {aiInsights.length > 0 ? (
+              <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+                {aiInsights.map((insight, idx) => (
+                  <InsightCard key={idx} insight={insight} />
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">Резких отклонений за период нет.</p>
+            )}
+            <div className="mt-4 border-t border-border pt-4">
+              <AIInsightCard
+                embedded
+                dateFrom={dateFrom}
+                dateTo={dateTo}
+                totals={{
+                  incomeTotal: totals.totalIncome,
+                  expenseTotal: totals.totalExpense,
+                  profit: totals.profit,
+                  incomeCash: totals.incomeCash,
+                  incomeKaspi: totals.incomeKaspi,
+                  incomeOnline: totals.incomeOnline,
+                  incomeCard: totals.incomeCard,
+                }}
+                totalsPrev={{
+                  incomeTotal: totalsPrev.totalIncome,
+                  expenseTotal: totalsPrev.totalExpense,
+                  profit: totalsPrev.profit,
+                }}
+                topIncome={incomeByCompanyData.slice(0, 3).map((c) => ({ name: c.name, value: c.value }))}
+                topExpense={expenseByCategoryData.slice(0, 3).map((e) => ({ name: e.name, value: e.amount }))}
+                cashlessLabel={cashLabels.providerName}
+              />
+            </div>
+          </Card>
 
           <FloatingAssistant
             page="reports"
@@ -2100,27 +2219,6 @@ function ReportsContent() {
               'Где самый слабый участок?',
               'С чем сравнить этот период?',
             ]}
-          />
-
-          {/* AI insight */}
-          <AIInsightCard
-            dateFrom={dateFrom}
-            dateTo={dateTo}
-            totals={{
-              incomeTotal: totals.totalIncome,
-              expenseTotal: totals.totalExpense,
-              profit: totals.profit,
-              incomeCash: totals.incomeCash,
-              incomeKaspi: totals.incomeKaspi,
-              incomeOnline: totals.incomeOnline,
-              incomeCard: totals.incomeCard,
-            }}
-            totalsPrev={{
-              incomeTotal: totalsPrev.totalIncome,
-              expenseTotal: totalsPrev.totalExpense,
-              profit: totalsPrev.profit,
-            }}
-            cashlessLabel={cashLabels.providerName}
           />
 
           {/* Filters Bar (sticky) */}
@@ -2707,8 +2805,14 @@ function ReportsContent() {
                 {filteredRows.length === 0 && (
                   <div className="text-center py-12 text-slate-500">
                     <Search className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                    <p>Записи не найдены</p>
-                    <p className="text-sm mt-1">Попробуйте изменить фильтры</p>
+                    {!rowsReady || rowsLoading ? (
+                      <p>Загружаю операции…</p>
+                    ) : (
+                      <>
+                        <p>Записи не найдены</p>
+                        <p className="text-sm mt-1">Попробуйте изменить фильтры</p>
+                      </>
+                    )}
                   </div>
                 )}
 
@@ -2905,8 +3009,9 @@ function ReportsContent() {
       {drillDown && (
         <DrillDownModal
           type={drillDown}
-          incomes={incomes}
-          expenses={expenses}
+          incomes={rowsReady ? incomes : []}
+          expenses={rowsReady ? expenses : []}
+          loading={!rowsReady}
           companies={companies}
           companyName={companyName}
           dateFrom={dateFrom}
