@@ -4,6 +4,7 @@ import {
   buildMonthPoints,
   evaluateInside,
   learnForecast,
+  projectRunningMonth,
   quantile,
   shiftMonth,
   type MonthPoint,
@@ -117,4 +118,77 @@ test('мало данных: прогноз есть, сверок нет, ко�
   assert.ok(learned.scenarios)
   assert.equal(learned.backtest.length, 0)
   assert.equal(learned.calibration!.corridor.income.source, 'volatility')
+})
+
+// ─── Идущий месяц ──────────────────────────────────────────────────────────
+
+const startScenarios = {
+  pessimistic: { income: 2_400_000, expense: 1_650_000, profit: 750_000 },
+  realistic: { income: 3_000_000, expense: 1_500_000, profit: 1_500_000 },
+  optimistic: { income: 3_600_000, expense: 1_400_000, profit: 2_200_000 },
+}
+
+// Сентябрь 2026: 30 дней; доход 100 000 в день всё лето и в сентябре
+const dailyIncomes = (from: string, to: string, amount: number) => {
+  const rows = []
+  for (let d = new Date(from); d <= new Date(to); d.setDate(d.getDate() + 1)) {
+    rows.push({ date: d.toISOString().slice(0, 10), cash: amount })
+  }
+  return rows
+}
+
+test('1-е число: факта нет — прогноз к концу месяца совпадает с прогнозом на начало', () => {
+  const o = projectRunningMonth({
+    incomes: dailyIncomes('2026-07-01', '2026-08-31', 100_000),
+    expenses: [],
+    categoryGroups: {},
+    today: '2026-09-01',
+    start: startScenarios,
+  })
+  assert.equal(o.knownDays, 0)
+  assert.equal(Math.round(o.outlook.realistic.income), 3_000_000)
+  assert.equal(Math.round(o.outlook.pessimistic.income), 2_400_000)
+  assert.equal(Math.round(o.outlook.realistic.expense), 1_500_000)
+})
+
+test('середина месяца: факт входит в прогноз, коридор уже, чем на начало', () => {
+  const o = projectRunningMonth({
+    incomes: dailyIncomes('2026-07-01', '2026-09-13', 100_000),
+    expenses: [{ date: '2026-09-05', category: 'Аренда', cash: 400_000 }],
+    categoryGroups: {},
+    today: '2026-09-14',
+    start: startScenarios,
+  })
+  assert.equal(o.knownDays, 13)
+  assert.equal(o.fact.income, 1_300_000)
+  assert.equal(o.fact.expense, 400_000)
+  // Темп 100 000 × 30 дней = 3 000 000 — совпадает с прогнозом на начало
+  assert.equal(Math.round(o.outlook.realistic.income), 3_000_000)
+  const startSpread = startScenarios.optimistic.income - startScenarios.pessimistic.income
+  const nowSpread = o.outlook.optimistic.income - o.outlook.pessimistic.income
+  assert.ok(nowSpread < startSpread * 0.7, `коридор ${nowSpread} против ${startSpread}`)
+  assert.ok(o.outlook.pessimistic.income >= o.fact.income, 'пессимистичный не ниже уже заработанного')
+})
+
+test('расход не меньше уже потраченного, даже если потратили больше прогноза', () => {
+  const o = projectRunningMonth({
+    incomes: dailyIncomes('2026-07-01', '2026-09-13', 100_000),
+    expenses: [{ date: '2026-09-03', category: 'ФОТ', cash: 1_800_000 }],
+    categoryGroups: {},
+    today: '2026-09-14',
+    start: startScenarios,
+  })
+  assert.equal(Math.round(o.outlook.realistic.expense), 1_800_000)
+  assert.ok(o.outlook.optimistic.expense >= 1_800_000)
+})
+
+test('сегодняшние записи в факт не входят: смена ещё не закрыта', () => {
+  const o = projectRunningMonth({
+    incomes: [...dailyIncomes('2026-07-01', '2026-09-13', 100_000), { date: '2026-09-14', cash: 5_000 }],
+    expenses: [],
+    categoryGroups: {},
+    today: '2026-09-14',
+    start: startScenarios,
+  })
+  assert.equal(o.fact.income, 1_300_000)
 })

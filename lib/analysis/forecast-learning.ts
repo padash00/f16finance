@@ -404,6 +404,126 @@ export function learnForecast(points: MonthPoint[], targetMonth: string): Learne
   }
 }
 
+// ==================== идущий месяц ====================
+
+export type RunningMonthOutlook = {
+  /** YYYY-MM */
+  month: string
+  dayOfMonth: number
+  daysInMonth: number
+  /** Дней с фактом: по вчера — сегодняшние отчёты смен обычно ещё не внесены */
+  knownDays: number
+  knownShare: number
+  fact: Triple
+  /** Прогноз на начало месяца (зафиксированный 1-го числа или расчёт модели) */
+  start: Scenarios
+  /** Прогноз к концу месяца с учётом факта */
+  outlook: Scenarios
+  /** Доход к концу месяца, если остаток пойдёт темпом последних 8 недель по дням недели */
+  paceIncome: number | null
+}
+
+const pad2 = (n: number) => String(n).padStart(2, '0')
+const dateOf = (iso: string) => {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+const addDaysIso = (iso: string, days: number) => {
+  const d = dateOf(iso)
+  d.setDate(d.getDate() + days)
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+}
+
+/**
+ * Сколько выйдет к концу идущего месяца: факт по вчерашний день плюс оценка
+ * оставшихся дней. Коридор сценариев применяется только к оставшейся части,
+ * поэтому с каждым днём он сужается сам.
+ *
+ * - доход остатка — смесь прогноза на начало месяца и свежего темпа по дням
+ *   недели (у клуба выходные сильнее будней); чем больше месяца прошло, тем
+ *   больше веса темпу;
+ * - расход — не меньше прогноза на начало месяца: аренда и ФОТ известны
+ *   заранее и платятся в определённые дни, растягивать факт на месяц нельзя.
+ *   Уже потратили больше — считаем по факту.
+ */
+export function projectRunningMonth(input: {
+  incomes: LearnIncomeRow[]
+  expenses: LearnExpenseRow[]
+  categoryGroups: Record<string, string | null>
+  today: string
+  start: Scenarios
+}): RunningMonthOutlook {
+  const { today, start } = input
+  const month = today.slice(0, 7)
+  const monthStart = `${month}-01`
+  const [year, monthNum] = month.split('-').map(Number)
+  const daysInMonth = new Date(year, monthNum, 0).getDate()
+  const dayOfMonth = Number(today.slice(8, 10))
+  const knownDays = Math.max(0, dayOfMonth - 1)
+  const remainingDays = daysInMonth - knownDays
+  const knownShare = knownDays / daysInMonth
+
+  const paceFrom = addDaysIso(today, -56)
+  const daily = new Map<string, number>()
+  let factIncome = 0
+  for (const r of input.incomes) {
+    if (!r.date || r.date >= today) continue
+    const amount = (r.cash || 0) + (r.kaspi || 0) + (r.card || 0) + (r.online || 0)
+    if (r.date >= monthStart) factIncome += amount
+    if (r.date >= paceFrom) daily.set(r.date, (daily.get(r.date) || 0) + amount)
+  }
+
+  let factExpense = 0
+  for (const r of input.expenses) {
+    if (!r.date || r.date < monthStart || r.date >= today) continue
+    const group = groupOf(r.category, input.categoryGroups)
+    if (EXCLUDED_GROUPS.has(group) || ONE_OFF_GROUPS.has(group)) continue
+    factExpense += (r.cash || 0) + (r.kaspi || 0)
+  }
+
+  // Средний доход по дням недели за 8 недель. Дни без записей не считаем
+  // нулём — это чаще невнесённый отчёт, чем закрытая точка.
+  const byWeekday = Array.from({ length: 7 }, () => [] as number[])
+  for (const [date, amount] of daily) if (amount > 0) byWeekday[dateOf(date).getDay()].push(amount)
+  const workedDays = [...daily.values()].filter((v) => v > 0)
+  let pace: number | null = null
+  if (workedDays.length >= 7) {
+    const overall = mean(workedDays)
+    pace = 0
+    for (let i = 0; i < remainingDays; i++) {
+      const samples = byWeekday[dateOf(addDaysIso(today, i)).getDay()]
+      pace += samples.length >= 2 ? mean(samples) : overall
+    }
+  }
+
+  const modelRemainingIncome = start.realistic.income * (remainingDays / daysInMonth)
+  const remainingIncome = pace === null ? modelRemainingIncome : knownShare * pace + (1 - knownShare) * modelRemainingIncome
+  const remainingExpense = Math.max(0, start.realistic.expense - factExpense)
+
+  const ratio = (a: number, b: number) => (b > 0 ? a / b : 1)
+  const scenario = (incomeK: number, expenseK: number): Triple => {
+    const income = factIncome + remainingIncome * incomeK
+    const expense = factExpense + remainingExpense * expenseK
+    return { income, expense, profit: income - expense }
+  }
+
+  return {
+    month,
+    dayOfMonth,
+    daysInMonth,
+    knownDays,
+    knownShare,
+    fact: { income: factIncome, expense: factExpense, profit: factIncome - factExpense },
+    start,
+    outlook: {
+      pessimistic: scenario(ratio(start.pessimistic.income, start.realistic.income), ratio(start.pessimistic.expense, start.realistic.expense)),
+      realistic: scenario(1, 1),
+      optimistic: scenario(ratio(start.optimistic.income, start.realistic.income), ratio(start.optimistic.expense, start.realistic.expense)),
+    },
+    paceIncome: pace === null ? null : factIncome + pace,
+  }
+}
+
 const pct = (share: number) => `${Math.round(share * 100)}%`
 
 /** Человеческое объяснение: как модель пришла к прогнозу и чему научилась */

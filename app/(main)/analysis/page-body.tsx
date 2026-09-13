@@ -198,8 +198,8 @@ export default function AnalysisPage() {
         </div>
       ) : data && next ? (
         <>
-          {scenarios ? (
-            <ScenariosCard targetMonth={next.targetMonth} scenarios={scenarios} accuracy={next.accuracy} />
+          {scenarios || data.current.outlook ? (
+            <ForecastHero data={data} />
           ) : (
             <Card className="p-6 text-sm text-muted-foreground">Закрытых месяцев с выручкой пока нет — прогнозу не на чем строиться.</Card>
           )}
@@ -210,10 +210,7 @@ export default function AnalysisPage() {
             </Card>
           )}
 
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <CurrentMonthCard data={data} />
-            <LearningCard data={data} />
-          </div>
+          <LearningCard data={data} />
 
           <AccuracyCard
             rows={rows}
@@ -258,34 +255,134 @@ export default function AnalysisPage() {
 
 // ==================== blocks ====================
 
-function ScenariosCard({
-  targetMonth,
-  scenarios,
-  accuracy,
-}: {
-  targetMonth: string
-  scenarios: Scenarios
-  accuracy: MonthlyForecastResponse['next']['accuracy']
-}) {
-  const columns = [
-    { key: 'pessimistic', title: 'Пессимистичный', hint: 'если месяц пойдёт хуже обычного', value: scenarios.pessimistic, tone: 'border-rose-500/25 bg-rose-500/[0.04]', title_tone: 'text-rose-600 dark:text-rose-400' },
-    { key: 'realistic', title: 'Реальный', hint: 'самый вероятный исход', value: scenarios.realistic, tone: 'border-violet-500/40 bg-violet-500/[0.06] ring-1 ring-violet-500/30', title_tone: 'text-violet-600 dark:text-violet-400' },
-    { key: 'optimistic', title: 'Оптимистичный', hint: 'если месяц пойдёт лучше обычного', value: scenarios.optimistic, tone: 'border-emerald-500/25 bg-emerald-500/[0.04]', title_tone: 'text-emerald-600 dark:text-emerald-400' },
-  ]
-  const recent = accuracy.recentError.income
-  const cover = accuracy.coverage.income
+const MONTH_GENITIVE = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
+const monthName = (ym: string) => {
+  const name = MONTH_NAMES[(Number(ym.slice(5, 7)) - 1) % 12]
+  return name.charAt(0).toUpperCase() + name.slice(1)
+}
+const monthGenitive = (ym: string) => MONTH_GENITIVE[(Number(ym.slice(5, 7)) - 1) % 12]
+
+/** Верх страницы: идущий месяц (сколько выйдет к концу) и следующий — вкладками */
+function ForecastHero({ data }: { data: MonthlyForecastResponse }) {
+  const outlook = data.current.outlook
+  const next = data.next
+  const [tab, setTab] = useState<'current' | 'next'>(outlook ? 'current' : 'next')
+  const recent = next.accuracy.recentError.income
+  const cover = next.accuracy.coverage.income
+  const showCurrent = tab === 'current' && outlook
 
   return (
     <Card className="gap-0 p-5 sm:p-6">
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Target className="h-4 w-4 text-violet-500" />
-        <h2 className="text-base font-semibold text-foreground">Прогноз на {monthLabel(targetMonth)}</h2>
+        <h2 className="mr-1 text-base font-semibold text-foreground">Прогноз</h2>
+        {outlook && (
+          <Button size="sm" className="rounded-xl" variant={tab === 'current' ? 'default' : 'outline'} onClick={() => setTab('current')}>
+            {monthName(outlook.month)} · идёт
+          </Button>
+        )}
+        {next.scenarios && (
+          <Button size="sm" className="rounded-xl" variant={tab === 'next' ? 'default' : 'outline'} onClick={() => setTab('next')}>
+            {monthName(next.targetMonth)} · следующий
+          </Button>
+        )}
         <span className="ml-auto rounded-full border border-border bg-white/70 px-3 py-1 text-xs text-muted-foreground dark:bg-white/[0.03]">
           {recent !== null
-            ? `средняя ошибка ${pct(recent)} · факт в коридоре ${cover.inside} из ${cover.total}`
+            ? `средняя ошибка модели ${pct(recent)} · факт в коридоре ${cover.inside} из ${cover.total}`
             : 'точность появится после первых сверок'}
         </span>
       </div>
+
+      {showCurrent ? (
+        <CurrentMonthOutlook outlook={outlook} snapshot={data.current.snapshot} />
+      ) : next.scenarios ? (
+        <>
+          <p className="mb-3 text-sm text-muted-foreground">
+            Прогноз на {monthLabel(next.targetMonth)} по закрытым месяцам. {outlook ? `${monthName(outlook.month)} ещё идёт и в этот расчёт не входит.` : ''}
+          </p>
+          <ScenarioColumns scenarios={next.scenarios} />
+        </>
+      ) : null}
+    </Card>
+  )
+}
+
+function CurrentMonthOutlook({
+  outlook,
+  snapshot,
+}: {
+  outlook: NonNullable<MonthlyForecastResponse['current']['outlook']>
+  snapshot: MonthlyForecastResponse['current']['snapshot']
+}) {
+  const remaining = outlook.daysInMonth - outlook.knownDays
+  const start = outlook.start
+
+  return (
+    <>
+      <p className="mb-3 text-sm text-muted-foreground">
+        Сколько выйдет к концу {monthGenitive(outlook.month)}: факт за {outlook.knownDays} дн. плюс оценка оставшихся {remaining} дн. Коридор сужается с каждым днём.
+      </p>
+      <ScenarioColumns scenarios={outlook.outlook} />
+
+      <div className="mt-4 space-y-2 text-sm">
+        <div>
+          <div className="flex items-baseline justify-between text-xs text-muted-foreground">
+            <span>
+              Прошло {outlook.knownDays} из {outlook.daysInMonth} дней
+            </span>
+            <span className="tabular-nums">{pct(outlook.knownShare)}</span>
+          </div>
+          <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
+            <div className="h-full rounded-full bg-violet-500" style={{ width: `${Math.round(outlook.knownShare * 100)}%` }} />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-x-5 gap-y-1">
+          <span className="text-muted-foreground">Факт на вчера:</span>
+          <span className="text-muted-foreground">
+            доход <b className="tabular-nums text-foreground">{money(outlook.fact.income)}</b>
+          </span>
+          <span className="text-muted-foreground">
+            расход <b className="tabular-nums text-foreground">{money(outlook.fact.expense)}</b>
+          </span>
+          <span className="text-muted-foreground">
+            прибыль{' '}
+            <b className={`tabular-nums ${outlook.fact.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+              {money(outlook.fact.profit)}
+            </b>
+          </span>
+        </div>
+
+        <p className="text-muted-foreground">
+          <CalendarCheck className="mr-1 inline h-3.5 w-3.5 align-[-2px]" />
+          На начало месяца прогнозировали доход <b className="tabular-nums text-foreground">{money(start.realistic.income)}</b>{' '}
+          <span className="tabular-nums">
+            ({moneyShort(start.pessimistic.income)} … {moneyShort(start.optimistic.income)})
+          </span>
+          {snapshot
+            ? ` — зафиксирован ${new Date(snapshot.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}${snapshot.late ? ', не 1-го числа' : ''}.`
+            : ' — расчёт модели, фиксация на этот месяц ещё не велась.'}
+        </p>
+
+        {outlook.paceIncome !== null && (
+          <p className="text-muted-foreground">
+            Если остаток месяца пойдёт темпом последних 8 недель — доход около{' '}
+            <b className="tabular-nums text-foreground">{money(outlook.paceIncome)}</b>.
+          </p>
+        )}
+      </div>
+    </>
+  )
+}
+
+function ScenarioColumns({ scenarios }: { scenarios: Scenarios }) {
+  const columns = [
+    { key: 'pessimistic', title: 'Пессимистичный', hint: 'если пойдёт хуже обычного', value: scenarios.pessimistic, tone: 'border-rose-500/25 bg-rose-500/[0.04]', title_tone: 'text-rose-600 dark:text-rose-400' },
+    { key: 'realistic', title: 'Реальный', hint: 'самый вероятный исход', value: scenarios.realistic, tone: 'border-violet-500/40 bg-violet-500/[0.06] ring-1 ring-violet-500/30', title_tone: 'text-violet-600 dark:text-violet-400' },
+    { key: 'optimistic', title: 'Оптимистичный', hint: 'если пойдёт лучше обычного', value: scenarios.optimistic, tone: 'border-emerald-500/25 bg-emerald-500/[0.04]', title_tone: 'text-emerald-600 dark:text-emerald-400' },
+  ]
+
+  return (
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         {columns.map((col) => (
           <div key={col.key} className={`rounded-2xl border p-4 ${col.tone}`}>
@@ -301,7 +398,6 @@ function ScenariosCard({
           </div>
         ))}
       </div>
-    </Card>
   )
 }
 
@@ -315,75 +411,6 @@ function ScenarioLine({ label, value, strong }: { label: string; value: number; 
         {money(value)}
       </dd>
     </div>
-  )
-}
-
-function CurrentMonthCard({ data }: { data: MonthlyForecastResponse }) {
-  const { snapshot, model, month } = data.current
-  const scenarios = snapshot?.scenarios ?? model.scenarios
-  const fact = data.forecast.current
-
-  let status: { text: string; tone: string } | null = null
-  if (scenarios && fact?.projected != null) {
-    const p = fact.projected
-    if (p < scenarios.pessimistic.income) status = { text: 'идёт ниже пессимистичного сценария', tone: 'text-rose-600 dark:text-rose-400' }
-    else if (p > scenarios.optimistic.income) status = { text: 'идёт выше оптимистичного сценария', tone: 'text-emerald-600 dark:text-emerald-400' }
-    else if (p >= scenarios.realistic.income) status = { text: 'в коридоре, выше реального', tone: 'text-emerald-600 dark:text-emerald-400' }
-    else status = { text: 'в коридоре, ниже реального', tone: 'text-amber-600 dark:text-amber-400' }
-  }
-
-  return (
-    <Card className="gap-0 p-5">
-      <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold text-foreground">
-        <CalendarCheck className="h-4 w-4 text-violet-500" />
-        Идёт {monthLabel(month)}
-      </h3>
-      <p className="mb-4 text-xs text-muted-foreground">
-        {snapshot
-          ? `Прогноз зафиксирован ${new Date(snapshot.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}${snapshot.late ? ' (не 1-го числа)' : ''} — его уже не пересчитать, по нему и сверим.`
-          : 'Прогноз на этот месяц ещё не фиксировался — показан расчёт модели. Фиксация идёт 1-го числа каждого месяца.'}
-      </p>
-
-      {!scenarios ? (
-        <p className="text-sm text-muted-foreground">Недостаточно истории для прогноза.</p>
-      ) : (
-        <>
-          <div className="grid grid-cols-3 gap-2 text-center">
-            {(
-              [
-                ['Пессим.', scenarios.pessimistic.income, 'text-rose-600 dark:text-rose-400'],
-                ['Реальный', scenarios.realistic.income, 'text-foreground'],
-                ['Оптим.', scenarios.optimistic.income, 'text-emerald-600 dark:text-emerald-400'],
-              ] as const
-            ).map(([label, value, tone]) => (
-              <div key={label} className="rounded-xl border border-border py-2">
-                <div className="text-[11px] text-muted-foreground">{label}</div>
-                <div className={`text-sm font-bold tabular-nums ${tone}`}>{moneyShort(value)}</div>
-              </div>
-            ))}
-          </div>
-          {fact && (
-            <div className="mt-4 space-y-1 text-sm">
-              <div className="flex items-baseline justify-between">
-                <span className="text-muted-foreground">
-                  Факт дохода на сегодня (день {fact.dayOfMonth} из {fact.daysInMonth})
-                </span>
-                <span className="font-semibold tabular-nums text-foreground">{money(fact.factToDate)}</span>
-              </div>
-              {fact.projected !== null ? (
-                <div className="flex items-baseline justify-between">
-                  <span className="text-muted-foreground">Текущим темпом к концу месяца</span>
-                  <span className="font-semibold tabular-nums text-foreground">{money(fact.projected)}</span>
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground">Темп месяца покажем с 7-го числа — раньше он слишком случаен.</p>
-              )}
-              {status && <p className={`pt-1 text-sm font-medium ${status.tone}`}>Сейчас месяц {status.text}.</p>}
-            </div>
-          )}
-        </>
-      )}
-    </Card>
   )
 }
 

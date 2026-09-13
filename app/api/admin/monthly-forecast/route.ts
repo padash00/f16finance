@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { projectRunningMonth } from '@/lib/analysis/forecast-learning'
 import {
   forecastForScope,
   snapshotFromRow,
@@ -111,13 +112,30 @@ export async function GET(req: Request) {
       if (byCompany.length < 2) byCompany = null
     }
 
+    // Идущий месяц: от прогноза, зафиксированного 1-го числа (или расчёта модели,
+    // пока фиксации не было), к тому, что выйдет к концу месяца с учётом факта
+    const currentSnapshot = snapshots.find((s) => s.targetMonth === currentMonth) ?? null
+    const startScenarios = currentSnapshot?.scenarios ?? main.current.scenarios
+    const inScope = <T extends { company_id: string }>(rows: T[]) =>
+      selectedCompanyId ? rows.filter((r) => r.company_id === selectedCompanyId) : rows
+    const outlook = startScenarios
+      ? projectRunningMonth({
+          incomes: inScope(inputs.incomes),
+          expenses: inScope(inputs.expenses),
+          categoryGroups: inputs.categoryGroups,
+          today,
+          start: startScenarios,
+        })
+      : null
+
     const payload: MonthlyForecastResponse = {
       forecast: main.monthly,
       next: main.next,
       current: {
         month: currentMonth,
         model: main.current,
-        snapshot: snapshots.find((s) => s.targetMonth === currentMonth) ?? null,
+        snapshot: currentSnapshot,
+        outlook,
       },
       snapshots,
       snapshotsWarning,

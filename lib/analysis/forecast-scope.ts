@@ -7,6 +7,7 @@ import {
   type LearnedForecast,
   type LearnExpenseRow,
   type LearnIncomeRow,
+  type RunningMonthOutlook,
   type Scenarios,
   type Triple,
   type Inside,
@@ -109,7 +110,13 @@ export type ForecastByCompany = {
 export type MonthlyForecastResponse = {
   forecast: ForecastResult
   next: ScopeForecast['next']
-  current: { month: string; model: LearnedForecast; snapshot: ForecastSnapshotView | null }
+  current: {
+    month: string
+    model: LearnedForecast
+    snapshot: ForecastSnapshotView | null
+    /** Сколько выйдет к концу идущего месяца с учётом факта */
+    outlook: RunningMonthOutlook | null
+  }
   snapshots: ForecastSnapshotView[]
   /** Таблица снимков не создана — миграцию ещё не применили */
   snapshotsWarning: string | null
