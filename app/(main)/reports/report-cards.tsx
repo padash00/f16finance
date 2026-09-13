@@ -177,7 +177,7 @@ export function ProfitHeatmap({ dateFrom, dateTo, dailyIncome, dailyExpense, onC
   return (
     <div>
       {/* Компактная сетка по центру: на всю ширину карточки клетки выходили огромными */}
-      <div className={byMonth ? 'mx-auto grid max-w-2xl grid-cols-3 gap-1.5 sm:grid-cols-4 lg:grid-cols-6' : 'mx-auto grid max-w-sm grid-cols-7 gap-1'}>
+      <div className={byMonth ? 'mx-auto grid max-w-2xl grid-cols-3 gap-1.5 sm:grid-cols-4 lg:grid-cols-6' : 'mx-auto grid max-w-2xl grid-cols-7 gap-1.5'}>
         {!byMonth && WEEKDAY_LABELS.map((d) => (
           <div key={d} className="text-center text-[10px] font-medium text-muted-foreground">{d}</div>
         ))}
@@ -195,9 +195,11 @@ export function ProfitHeatmap({ dateFrom, dateTo, dailyIncome, dailyExpense, onC
               title={`${cell.title}: доход ${formatMoneyFull(cell.income)}, расход ${formatMoneyFull(cell.expense)}, прибыль ${formatMoneyFull(profit)}`}
             >
               <span className={`tabular-nums ${byMonth ? 'text-[10px] text-muted-foreground' : 'text-[11px] font-medium text-foreground'}`}>{cell.label}</span>
-              {/* В маленькой клетке дня сумма не помещается — её покажет клик; у месяца места хватает */}
-              {byMonth && profit !== 0 && (
-                <span className="tabular-nums font-medium text-foreground">{formatMoneyCompact(profit)}</span>
+              {/* Сумма дня — со среднего экрана; на телефоне клетка узкая, сумму покажет клик */}
+              {profit !== 0 && (
+                <span className={`tabular-nums font-medium text-foreground ${byMonth ? '' : 'hidden sm:block text-[10px]'}`}>
+                  {formatMoneyCompact(profit)}
+                </span>
               )}
             </button>
           )
