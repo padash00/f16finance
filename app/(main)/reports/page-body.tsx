@@ -12,11 +12,16 @@ import {
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { downloadReportPdf } from '@/lib/client/download-pdf'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { createPortal } from 'react-dom'
 import { computeMonthEndForecast, type ForecastHints } from '@/lib/reports/forecast-hybrid'
 import { emptyProcessedReport, processedFromBundleAggregate, type ReportBundleAggregate } from '@/lib/reports/from-api-aggregate'
+import { isExtraCompany } from '@/lib/reports/extra-company'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { DatePicker } from '@/components/ui/date-picker'
+import { AppModal } from '@/components/ui/app-modal'
+import { Card } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
+import { NativeSelect } from '@/components/ui/native-select'
+import { toast } from '@/components/ui/use-toast'
 import { ReportsMethodologyBanner } from '@/components/reports/reports-methodology-banner'
 import { ReportsPageSkeleton } from '@/components/reports/reports-page-skeleton'
 import { AIInsightCard } from '@/components/reports/ai-insight-card'
@@ -35,14 +40,12 @@ import {
   AlertTriangle,
   ArrowUpDown,
   BarChart3,
-  Building2,
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   DollarSign,
   Download,
-  FileSpreadsheet,
   FileText,
   Filter,
   Lightbulb,
@@ -576,9 +579,9 @@ const StatCard = memo(({ title, value, subValue, icon: Icon, trend, color = 'blu
   }
 
   return (
-    <div
+    <Card
       onClick={onClick}
-      className={`group rounded-2xl bg-white dark:bg-[#111113] border border-border p-4 sm:p-5 transition-all hover:border-slate-300 dark:hover:border-white/20 hover:shadow-sm ${onClick ? 'cursor-pointer' : ''}`}
+      className={`group gap-0 p-4 sm:p-5 ${onClick ? 'cursor-pointer' : ''}`}
     >
       <div className="flex items-center justify-between mb-4">
         <div className={`grid place-items-center h-9 w-9 rounded-xl ${iconTone[color]}`}>
@@ -593,7 +596,7 @@ const StatCard = memo(({ title, value, subValue, icon: Icon, trend, color = 'blu
       <p className="text-muted-foreground text-xs font-medium">{title}</p>
       <p className="mt-1 text-lg sm:text-2xl font-bold tabular-nums text-foreground">{value}</p>
       {subValue && <p className="mt-1.5 text-xs text-muted-foreground">{subValue}</p>}
-    </div>
+    </Card>
   )
 })
 StatCard.displayName = 'StatCard'
@@ -647,6 +650,96 @@ const AnomalyCard = memo(({ anomaly }: { anomaly: Anomaly }) => {
   )
 })
 AnomalyCard.displayName = 'AnomalyCard'
+
+// =====================
+// PROFIT HEATMAP
+// =====================
+
+const HEATMAP_DAILY_MAX_DAYS = 93
+const WEEKDAY_LABELS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+
+type HeatCell = { key: string; label: string; title: string; income: number; expense: number }
+
+/**
+ * Прибыль по дням (период до 3 месяцев) или по месяцам (дольше) — на весь период.
+ * Цвет задан inline: Tailwind не генерирует классы, собранные из строки
+ * (`bg-emerald-500/${n}`), поэтому раньше все клетки были серыми, а карта
+ * всегда показывала только 35 дней от начала периода.
+ */
+function ProfitHeatmap({ dateFrom, dateTo, dailyIncome, dailyExpense }: {
+  dateFrom: string
+  dateTo: string
+  dailyIncome: Map<string, number>
+  dailyExpense: Map<string, number>
+}) {
+  const totalDays = Math.max(0, Math.round((fromISO(dateTo).getTime() - fromISO(dateFrom).getTime()) / 86400000) + 1)
+  const byMonth = totalDays > HEATMAP_DAILY_MAX_DAYS
+
+  const cells: HeatCell[] = []
+  const monthIndex = new Map<string, HeatCell>()
+  for (let i = 0; i < totalDays; i++) {
+    const date = addDaysISO(dateFrom, i)
+    const income = dailyIncome.get(date) || 0
+    const expense = dailyExpense.get(date) || 0
+    if (!byMonth) {
+      const title = fromISO(date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })
+      cells.push({ key: date, label: String(Number(date.slice(8))), title, income, expense })
+      continue
+    }
+    const key = date.slice(0, 7)
+    let cell = monthIndex.get(key)
+    if (!cell) {
+      const name = fromISO(`${key}-01`).toLocaleDateString('ru-RU', { month: 'short', year: 'numeric' })
+      cell = { key, label: name, title: name, income: 0, expense: 0 }
+      monthIndex.set(key, cell)
+      cells.push(cell)
+    }
+    cell.income += income
+    cell.expense += expense
+  }
+
+  const maxAbs = cells.reduce((m, c) => Math.max(m, Math.abs(c.income - c.expense)), 0)
+  const leadingBlanks = byMonth ? 0 : (fromISO(dateFrom).getDay() + 6) % 7
+
+  const cellStyle = (profit: number): React.CSSProperties | undefined => {
+    if (profit === 0 || maxAbs === 0) return undefined
+    const alpha = 0.12 + 0.55 * (Math.abs(profit) / maxAbs)
+    return { backgroundColor: profit > 0 ? `rgba(16, 185, 129, ${alpha})` : `rgba(244, 63, 94, ${alpha})` }
+  }
+
+  return (
+    <div>
+      <div className={byMonth ? 'grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2' : 'grid grid-cols-7 gap-1.5 sm:gap-2'}>
+        {!byMonth && WEEKDAY_LABELS.map((d) => (
+          <div key={d} className="text-center text-[10px] font-medium text-muted-foreground">{d}</div>
+        ))}
+        {Array.from({ length: leadingBlanks }, (_, i) => <div key={`blank-${i}`} />)}
+        {cells.map((cell) => {
+          const profit = cell.income - cell.expense
+          return (
+            <div
+              key={cell.key}
+              style={cellStyle(profit)}
+              className={`${byMonth ? 'py-3' : 'aspect-square'} rounded-lg flex flex-col items-center justify-center text-xs ${profit === 0 ? 'bg-slate-100 dark:bg-slate-800/50' : ''}`}
+              title={`${cell.title}: доход ${formatMoneyFull(cell.income)}, расход ${formatMoneyFull(cell.expense)}, прибыль ${formatMoneyFull(profit)}`}
+            >
+              <span className="text-[10px] text-muted-foreground">{cell.label}</span>
+              {profit !== 0 && (
+                <span className="hidden sm:block tabular-nums font-medium text-foreground">{formatMoneyCompact(profit)}</span>
+              )}
+            </div>
+          )
+        })}
+      </div>
+      <div className="flex flex-wrap items-center justify-center gap-4 mt-4 text-xs text-muted-foreground">
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ backgroundColor: 'rgba(244, 63, 94, 0.5)' }} /> Убыток</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-slate-200 dark:bg-slate-800" /> Ноль</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ backgroundColor: 'rgba(16, 185, 129, 0.5)' }} /> Прибыль</span>
+        {byMonth && <span>период длиннее 3 месяцев — по месяцам</span>}
+      </div>
+    </div>
+  )
+}
 
 // =====================
 // DRILL-DOWN MODAL
@@ -773,78 +866,48 @@ function DrillDownModal({
     else { setSortField(f); setSortDir('desc') }
   }
 
-  // Close on Escape + lock body scroll
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', handler)
-    const prevOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      window.removeEventListener('keydown', handler)
-      document.body.style.overflow = prevOverflow
-    }
-  }, [onClose])
-
-  if (typeof window === 'undefined') return null
-  return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center p-4 py-8" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-      <div
-        className="relative z-10 w-full max-w-5xl max-h-[90vh] flex flex-col rounded-2xl bg-card border border-border shadow-2xl my-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border flex-shrink-0">
-          <h2 className="text-lg font-semibold text-foreground">{DRILL_TITLES[type]}</h2>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-surface-hover transition-colors">
-            <X className="w-5 h-5 text-muted-foreground" />
-          </button>
-        </div>
-
-        {/* Filters */}
-        <div className="flex flex-wrap items-center gap-3 px-6 py-3 border-b border-slate-200 dark:border-white/5 flex-shrink-0">
-          {/* Company filter */}
-          <select
+  // Esc, клик по фону, блокировка прокрутки и фокус — забота общего AppModal.
+  return (
+    <AppModal open onClose={onClose} maxWidth="max-w-5xl" title={DRILL_TITLES[type]}>
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <NativeSelect
             value={filterCompany}
             onChange={(e) => setFilterCompany(e.target.value)}
-            className="h-9 rounded-lg bg-card border border-border text-sm text-foreground px-3 focus:outline-none focus:ring-1 focus:ring-amber-500"
+            className="w-auto min-w-[180px]"
           >
             <option value="all">Все компании</option>
             {companies.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
-          </select>
+          </NativeSelect>
 
-          {/* Search */}
           <div className="relative flex-1 min-w-[180px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-            <input
+            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Поиск по компании, категории…"
-              className="w-full h-9 pl-9 pr-3 rounded-lg bg-card border border-border text-sm text-foreground placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+              className="pl-9"
             />
           </div>
 
-          {/* Row count */}
-          <span className="text-xs text-slate-500 ml-auto">{filtered.length} записей</span>
+          <span className="text-xs text-muted-foreground ml-auto">{filtered.length} записей</span>
         </div>
 
-        {/* Totals bar */}
-        <div className="flex gap-6 px-6 py-2.5 bg-slate-50 dark:bg-slate-800/30 border-b border-slate-200 dark:border-white/5 flex-shrink-0 text-sm">
+        <div className="flex flex-wrap gap-x-6 gap-y-1 rounded-xl border border-border bg-slate-50 px-4 py-2.5 text-sm dark:bg-white/[0.03]">
           {(type === 'income' || type === 'profit') && (
-            <span>Доходы: <span className="font-semibold text-emerald-400">{formatMoneyFull(totalIncome)}</span></span>
+            <span>Доходы: <span className="font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">{formatMoneyFull(totalIncome)}</span></span>
           )}
           {(type === 'expense' || type === 'profit') && (
-            <span>Расходы: <span className="font-semibold text-rose-400">{formatMoneyFull(totalExpense)}</span></span>
+            <span>Расходы: <span className="font-semibold tabular-nums text-rose-600 dark:text-rose-400">{formatMoneyFull(totalExpense)}</span></span>
           )}
           {type === 'profit' && (
-            <span>Прибыль: <span className={`font-semibold ${totalIncome - totalExpense >= 0 ? 'text-amber-400' : 'text-rose-400'}`}>{formatMoneyFull(totalIncome - totalExpense)}</span></span>
+            <span>Прибыль: <span className={`font-semibold tabular-nums ${totalIncome - totalExpense >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{formatMoneyFull(totalIncome - totalExpense)}</span></span>
           )}
         </div>
 
-        {/* Table */}
-        <div className="overflow-auto flex-1 min-h-0">
+        <div className="overflow-x-auto rounded-xl border border-border">
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm z-10">
               <tr className="text-muted-foreground border-b border-slate-200 dark:border-white/5">
@@ -917,8 +980,7 @@ function DrillDownModal({
           </table>
         </div>
       </div>
-    </div>,
-    document.body
+    </AppModal>
   )
 }
 
@@ -992,12 +1054,11 @@ function ReportsContent() {
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
 
   // UI states
-  const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null)
   const [showFilters, setShowFilters] = useState(false)
   const [comparisonMode, setComparisonMode] = useState(false)
   const [drillDown, setDrillDown] = useState<DrillDownType | null>(null)
+  const [exporting, setExporting] = useState(false)
   
-  const toastTimer = useRef<number | null>(null)
   const reqIdRef = useRef(0)
   const didInitFromUrl = useRef(false)
   const realtimeChannel = useRef<ReturnType<typeof supabase.channel> | null>(null)
@@ -1006,10 +1067,9 @@ function ReportsContent() {
   // Virtual list ref for table
   const tableContainerRef = useRef<HTMLDivElement>(null)
 
+  // Общий Toaster портала (смонтирован в app/layout.tsx) вместо своего всплывающего блока.
   const showToast = useCallback((msg: string, type: 'success' | 'error' | 'info' = 'info') => {
-    setToast({ message: msg, type })
-    if (toastTimer.current) window.clearTimeout(toastTimer.current)
-    toastTimer.current = window.setTimeout(() => setToast(null), 3000)
+    toast({ description: msg, variant: type === 'error' ? 'destructive' : 'default' })
   }, [])
 
   // =====================
@@ -1022,6 +1082,9 @@ function ReportsContent() {
   }, [companies])
 
   const companyName = useCallback((id: string) => companyById.get(id)?.name ?? 'Неизвестно', [companyById])
+
+  // Та же точка, которую сервер по умолчанию не складывает в итоги. Нет её — нет и переключателя.
+  const extraCompany = useMemo(() => companies.find(isExtraCompany) ?? null, [companies])
 
   // Сохранённая точка могла быть удалена/недоступна — тихо откатываемся на «все»
   useEffect(() => {
@@ -1134,6 +1197,8 @@ function ReportsContent() {
     setSortDirection('desc')
     setCurrentPage(1)
     setActiveTab('overview')
+    setComparisonMode(false)
+    setSelectedRows(new Set())
     showToast('Фильтры сброшены', 'success')
   }, [applyPreset, showToast])
 
@@ -1412,6 +1477,21 @@ function ReportsContent() {
   // =====================
   // DETAILED ROWS
   // =====================
+
+  // Выручка в среднем за день. Для периода, который ещё идёт (текущий месяц),
+  // делим на прошедшие дни, а не на весь период — иначе середина месяца «проседает».
+  const perDay = useMemo(() => {
+    const today = todayISO()
+    const elapsedTo = dateTo < today ? dateTo : today
+    if (elapsedTo < dateFrom) return null
+    const days = calculatePrevPeriod(dateFrom, elapsedTo).durationDays
+    const prevDays = calculatePrevPeriod(dateFrom, dateTo).durationDays
+    return {
+      days,
+      income: totals.totalIncome / days,
+      prevIncome: totalsPrev.totalIncome / prevDays,
+    }
+  }, [dateFrom, dateTo, totals.totalIncome, totalsPrev.totalIncome])
   const detailedRows = useMemo((): DetailedRow[] => {
     const rows: DetailedRow[] = []
     const min = minAmountFilter ? parseFloat(minAmountFilter) : 0
@@ -1555,15 +1635,17 @@ function ReportsContent() {
     const insights: AIInsight[] = []
     const profitMargin = totals.totalIncome > 0 ? (totals.profit / totals.totalIncome) * 100 : 0
 
-    if (profitMargin < 10) {
-      insights.push({ 
-        type: 'danger', 
+    // Без выручки маржа не определена — пустой период не должен «гореть красным».
+    const hasIncome = totals.totalIncome > 0
+    if (hasIncome && profitMargin < 10) {
+      insights.push({
+        type: 'danger',
         title: 'Критически низкая маржинальность', 
         description: `Маржа ${profitMargin.toFixed(1)}% требует немедленного внимания. Проверьте операционные расходы.`,
         metric: `${profitMargin.toFixed(1)}%`,
         trend: 'down'
       })
-    } else if (profitMargin < 20) {
+    } else if (hasIncome && profitMargin < 20) {
       insights.push({ 
         type: 'warning', 
         title: 'Низкая маржинальность', 
@@ -1578,17 +1660,6 @@ function ReportsContent() {
         description: `Маржа ${profitMargin.toFixed(1)}% — значительно выше среднерыночной.`,
         metric: `${profitMargin.toFixed(1)}%`,
         trend: 'up'
-      })
-    }
-
-    const cashRatio = totals.totalIncome > 0 ? totals.incomeCash / totals.totalIncome : 0
-    if (cashRatio < 0.2) {
-      insights.push({ 
-        type: 'opportunity', 
-        title: 'Высокая доля безнала', 
-        description: 'Рассмотрите стимулирование наличных платежей (скидки/бонусы).',
-        metric: `${((1 - cashRatio) * 100).toFixed(0)}% безнал`,
-        trend: 'neutral'
       })
     }
 
@@ -1643,15 +1714,6 @@ function ReportsContent() {
         title: 'Выявлены риски', 
         description: 'Обнаружены аномалии, требующие внимания.',
         metric: `${high} высок.`
-      })
-    }
-
-    if (totals.transactionCount > 0 && totals.avgTransaction < 5000) {
-      insights.push({
-        type: 'info',
-        title: 'Низкий средний чек',
-        description: `Средняя транзакция ${formatMoneyFull(totals.avgTransaction)}. Возможен апселл.`,
-        metric: formatMoneyFull(totals.avgTransaction)
       })
     }
 
@@ -1728,7 +1790,7 @@ function ReportsContent() {
             { label: 'Расходы', value: formatMoneyFull(totals.totalExpense) },
             { label: 'Прибыль', value: formatMoneyFull(totals.profit) },
             { label: 'Маржа', value: `${profitMargin.toFixed(1)}%` },
-            { label: 'Средний чек', value: formatMoneyFull(totals.avgTransaction) },
+            { label: 'Выручка на запись дохода', value: formatMoneyFull(totals.avgTransaction) },
           ],
         },
         {
@@ -1778,10 +1840,15 @@ function ReportsContent() {
     }
   }, [showToast])
 
-  const handleDownloadCSV = useCallback(async () => {
-    const companyLabel = companyFilter === 'all'
-      ? (includeExtraInTotals ? 'Все компании (включая Extra)' : 'Все компании (без Extra)')
-      : companyName(companyFilter)
+  const handleDownloadPdf = useCallback(async () => {
+    if (exporting) return
+    setExporting(true)
+    try {
+    const companyLabel = companyFilter !== 'all'
+      ? companyName(companyFilter)
+      : !extraCompany
+        ? 'Все компании'
+        : `Все компании (${includeExtraInTotals ? 'включая' : 'без'} ${extraCompany.name})`
     const period = `${dateFrom} — ${dateTo}`
     const finData = {
       meta: { title: 'Финансовый отчёт', period, company: companyLabel, generated: new Date().toLocaleString('ru-RU') },
@@ -1831,9 +1898,13 @@ function ReportsContent() {
     }
     await downloadReportPdf('finreport', finData, `Finansovyy_otchet_${dateFrom}_${dateTo}`)
     showToast('PDF отчёт скачан', 'success')
-  }, [companyFilter, includeExtraInTotals, companyName, dateFrom, dateTo, groupMode, totals, totalsPrev, incomeByCompanyData, expenseByCategoryData, filteredRows, showToast])
-
-  const handleDownloadExcel = handleDownloadCSV
+    } catch (err) {
+      console.error(err)
+      showToast('Не удалось сформировать PDF', 'error')
+    } finally {
+      setExporting(false)
+    }
+  }, [exporting, companyFilter, includeExtraInTotals, extraCompany, companyName, dateFrom, dateTo, totals, totalsPrev, incomeByCompanyData, expenseByCategoryData, filteredRows, showToast])
 
   const handlePrintPDF = useCallback(() => {
     window.print()
@@ -1902,17 +1973,6 @@ function ReportsContent() {
             refreshing ? 'opacity-80 ring-1 ring-amber-500/20 rounded-3xl' : ''
           }`}
         >
-          {/* Toast */}
-          {toast && (
-            <div className={`fixed top-5 right-5 z-50 max-w-[calc(100vw-2.5rem)] px-4 py-3 rounded-2xl border backdrop-blur-xl shadow-xl animate-in slide-in-from-top-2 ${
-              toast.type === 'success' ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400' :
-              toast.type === 'error' ? 'bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400' :
-              'bg-white dark:bg-slate-900/80 border-border text-foreground'
-            }`}>
-              <div className="text-sm font-medium">{toast.message}</div>
-            </div>
-          )}
-
           {/* Header */}
           <AdminPageHeader
             title="Финансы и отчёты"
@@ -1925,7 +1985,7 @@ function ReportsContent() {
                 <Button
                   variant="outline"
                   size="icon"
-                  className={`rounded-xl border-border bg-white dark:bg-[#111113] hover:bg-slate-100 dark:hover:bg-white/[0.06] ${comparisonMode ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/40' : ''}`}
+                  className={`rounded-xl ${comparisonMode ? 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400' : ''}`}
                   onClick={() => setComparisonMode(!comparisonMode)}
                   title="Режим сравнения"
                 >
@@ -1935,36 +1995,30 @@ function ReportsContent() {
                 <Button
                   variant="outline"
                   size="icon"
-                  className={`rounded-xl border-border bg-white dark:bg-[#111113] hover:bg-slate-100 dark:hover:bg-white/[0.06] ${refreshing ? 'animate-spin' : ''}`}
+                  className={`rounded-xl ${refreshing ? 'animate-spin' : ''}`}
                   onClick={() => loadData(true)}
                   title="Обновить"
                 >
                   <RefreshCw className="w-4 h-4" />
                 </Button>
 
+                {/* Одна кнопка вместо меню по наведению: на телефоне и планшете hover нет */}
                 {can('reports.export') && (
-                  <div className="relative group">
-                    <Button
-                      variant="outline"
-                      className="rounded-xl border-border bg-white dark:bg-[#111113] hover:bg-slate-100 dark:hover:bg-white/[0.06]"
-                    >
-                      <Download className="w-4 h-4 mr-2" />
-                      Экспорт
-                      <ChevronDown className="w-4 h-4 ml-2" />
-                    </Button>
-                    <div className="absolute right-0 top-full mt-2 w-56 py-2 bg-white dark:bg-[#111113] border border-border rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-                      <button onClick={handleDownloadExcel} className="w-full px-4 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-white/5 flex items-center gap-2">
-                        <FileSpreadsheet className="w-4 h-4" />
-                        Скачать PDF
-                      </button>
-                    </div>
-                  </div>
+                  <Button
+                    variant="outline"
+                    className="rounded-xl"
+                    onClick={handleDownloadPdf}
+                    disabled={exporting}
+                  >
+                    <Download className={`w-4 h-4 mr-2 ${exporting ? 'animate-pulse' : ''}`} />
+                    {exporting ? 'Готовлю…' : 'PDF'}
+                  </Button>
                 )}
 
                 <Button
                   variant="outline"
                   size="icon"
-                  className="rounded-xl border-border bg-white dark:bg-[#111113] hover:bg-slate-100 dark:hover:bg-white/[0.06]"
+                  className="rounded-xl"
                   onClick={handleShare}
                   title="Поделиться"
                 >
@@ -2070,22 +2124,22 @@ function ReportsContent() {
           />
 
           {/* Filters Bar (sticky) */}
-          <div className="sticky top-2 z-30 rounded-2xl bg-white/95 dark:bg-[#111113]/95 backdrop-blur-sm border border-border p-4 space-y-4 shadow-sm">
+          <Card className="sticky top-2 z-30 gap-4 p-4">
             <div className="flex flex-wrap items-center gap-2.5">
               <div className="flex items-center gap-2 mr-1">
                 <Filter className="w-4 h-4 text-muted-foreground" />
                 <span className="text-sm font-medium text-muted-foreground">Фильтры</span>
               </div>
 
-              <select
+              <NativeSelect
                 value={datePreset}
                 onChange={(e) => handlePresetChange(e.target.value as DatePreset)}
-                className="cursor-pointer bg-white dark:bg-white/[0.04] border border-border rounded-lg px-3 py-1.5 text-sm font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-amber-500/40"
+                className="w-auto cursor-pointer"
               >
                 {Object.entries(PRESET_LABELS).map(([key, label]) => (
                   <option key={key} value={key} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">{label}</option>
                 ))}
-              </select>
+              </NativeSelect>
 
               <div className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white dark:bg-white/[0.04] px-2 py-1">
                 <DatePicker
@@ -2105,59 +2159,64 @@ function ReportsContent() {
                 />
               </div>
 
-              <select
+              <NativeSelect
                 value={companyFilter}
                 onChange={(e) => setCompanyFilter(e.target.value)}
-                className="cursor-pointer bg-white dark:bg-white/[0.04] border border-border rounded-lg px-3 py-1.5 text-sm font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-amber-500/40"
+                className="w-auto cursor-pointer"
               >
                 <option value="all" className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">Все компании</option>
                 {companies.map(c => (
                   <option key={c.id} value={c.id} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">{c.name}</option>
                 ))}
-              </select>
+              </NativeSelect>
 
-              <select
+              <NativeSelect
                 value={groupMode}
                 onChange={(e) => setGroupMode(e.target.value as GroupMode)}
-                className="cursor-pointer bg-white dark:bg-white/[0.04] border border-border rounded-lg px-3 py-1.5 text-sm font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-amber-500/40"
+                className="w-auto cursor-pointer"
               >
                 <option value="day" className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">По дням</option>
                 <option value="week" className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">По неделям</option>
                 <option value="month" className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">По месяцам</option>
                 <option value="year" className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">По годам</option>
-              </select>
+              </NativeSelect>
 
-              <button
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => setShowFilters(!showFilters)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors ${showFilters ? 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400' : 'bg-white dark:bg-white/[0.04] border-border text-body hover:bg-slate-100 dark:hover:bg-white/[0.06]'}`}
+                className={`rounded-xl ${showFilters ? 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400' : ''}`}
               >
                 <Filter className="w-4 h-4" />
                 Расширенные
                 <ChevronDown className={`w-4 h-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
-              </button>
+              </Button>
 
-              <button
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 onClick={resetFilters}
-                className="ml-auto p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 text-muted-foreground hover:text-slate-900 dark:hover:text-white transition-colors"
+                className="ml-auto rounded-xl text-muted-foreground"
                 title="Сбросить фильтры"
+                aria-label="Сбросить фильтры"
               >
                 <X className="w-4 h-4" />
-              </button>
+              </Button>
             </div>
 
             {showFilters && (
               <div className="pt-4 border-t border-border grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
                   <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Смена</label>
-                  <select
+                  <NativeSelect
                     value={shiftFilter}
                     onChange={(e) => setShiftFilter(e.target.value as 'all' | Shift)}
-                    className="w-full bg-white dark:bg-white/[0.04] border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-amber-500/40"
+                    className="cursor-pointer"
                   >
                     <option value="all" className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">Все смены</option>
                     <option value="day" className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">День</option>
                     <option value="night" className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">Ночь</option>
-                  </select>
+                  </NativeSelect>
                 </div>
 
                 <div>
@@ -2182,20 +2241,20 @@ function ReportsContent() {
                   />
                 </div>
 
+                {extraCompany && (
                 <div className="flex items-end">
                   <label className="flex items-center gap-2 cursor-pointer">
-                    <input 
-                      type="checkbox"
+                    <Checkbox
                       checked={includeExtraInTotals}
-                      onChange={(e) => setIncludeExtraInTotals(e.target.checked)}
-                      className="rounded border-border bg-white dark:bg-slate-800/50 text-amber-500 focus:ring-amber-500/20"
+                      onCheckedChange={(v) => setIncludeExtraInTotals(v === true)}
                     />
-                    <span className="text-sm text-body">Включить F16 Extra</span>
+                    <span className="text-sm text-body">Включить {extraCompany.name} в итоги</span>
                   </label>
                 </div>
+                )}
               </div>
             )}
-          </div>
+          </Card>
 
           {/* Forecast Banner */}
           {forecast && (
@@ -2242,7 +2301,7 @@ function ReportsContent() {
                 <StatCard
                   title="Расходы"
                   value={formatMoneyFull(totals.totalExpense)}
-                  subValue={comparisonMode ? `было ${formatMoneyFull(totalsPrev.totalExpense)}` : `${formatMoneyCompact(totals.expenseCash)} нал / ${formatMoneyCompact(totals.expenseKaspi)} Безналичный`}
+                  subValue={comparisonMode ? `было ${formatMoneyFull(totalsPrev.totalExpense)}` : `${formatMoneyCompact(totals.expenseCash)} нал / ${formatMoneyCompact(totals.expenseKaspi)} безнал`}
                   icon={TrendingDown}
                   trend={totalsPrev.totalExpense > 0 ? Number(((totals.totalExpense - totalsPrev.totalExpense) / totalsPrev.totalExpense * 100).toFixed(1)) : undefined}
                   color="red"
@@ -2258,10 +2317,13 @@ function ReportsContent() {
                   onClick={() => setDrillDown('profit')}
                 />
                 <StatCard 
-                  title="Остаток средств"
-                  value={formatMoneyFull(totals.totalBalance)}
-                  subValue={`Нал: ${formatMoneyCompact(totals.remainingCash)} | Безнал: ${formatMoneyCompact(totals.remainingKaspi)}`}
-                  icon={Building2}
+                  title="Выручка в день"
+                  value={perDay ? formatMoneyFull(perDay.income) : '—'}
+                  subValue={perDay
+                    ? `за ${perDay.days} дн. · сальдо нал ${formatMoneyCompact(totals.remainingCash)} / безнал ${formatMoneyCompact(totals.remainingKaspi)}`
+                    : 'период ещё не начался'}
+                  trend={perDay && perDay.prevIncome > 0 ? Number(((perDay.income - perDay.prevIncome) / perDay.prevIncome * 100).toFixed(1)) : undefined}
+                  icon={Activity}
                   color="amber"
                 />
               </div>
@@ -2274,17 +2336,17 @@ function ReportsContent() {
                   { label: 'Онлайн', value: totals.incomeOnline, color: 'text-amber-600 dark:text-amber-400' },
                   { label: 'Карта', value: totals.incomeCard, color: 'text-amber-600 dark:text-amber-400' },
                 ].map((item) => (
-                  <div key={item.label} className="rounded-2xl bg-white dark:bg-[#111113] border border-border p-4">
+                  <Card key={item.label} className="gap-0 p-4">
                     <p className="text-xs font-medium text-muted-foreground mb-1">{item.label}</p>
                     <p className={`text-xl font-bold tabular-nums ${item.color}`}>{formatMoneyFull(item.value)}</p>
                     <p className="text-xs text-muted-foreground mt-1">{totals.totalIncome > 0 ? ((item.value / totals.totalIncome) * 100).toFixed(1) : 0}%</p>
-                  </div>
+                  </Card>
                 ))}
               </div>
 
               {/* Charts */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 rounded-2xl bg-white dark:bg-[#111113] border border-border p-6">
+                <Card className="lg:col-span-2 gap-0 p-6">
                   <div className="flex items-center justify-between mb-6">
                     <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
                       <Activity className="w-5 h-5 text-amber-500 dark:text-amber-400" />
@@ -2309,10 +2371,10 @@ function ReportsContent() {
                   <ChartShell height="h-96">
                     {mounted && <MemoizedComposedChart data={chartData} />}
                   </ChartShell>
-                </div>
+                </Card>
 
                 <div className="space-y-6">
-                  <div className="rounded-2xl bg-white dark:bg-[#111113] border border-border p-6">
+                  <Card className="gap-0 p-6">
                     <h3 className="text-base font-semibold text-foreground mb-6 flex items-center gap-2">
                       <PieChartIcon className="w-5 h-5 text-rose-500 dark:text-rose-400" />
                       Структура расходов
@@ -2339,13 +2401,13 @@ function ReportsContent() {
                         </div>
                       ))}
                     </div>
-                  </div>
+                  </Card>
                 </div>
               </div>
 
               {/* Bottom Charts */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="rounded-2xl bg-white dark:bg-[#111113] border border-border p-6">
+                <Card className="gap-0 p-6">
                   <h3 className="text-base font-semibold text-foreground mb-6 flex items-center gap-2">
                     <Store className="w-5 h-5 text-amber-500 dark:text-amber-400" />
                     Выручка по компаниям
@@ -2354,9 +2416,9 @@ function ReportsContent() {
                   <ChartShell height="h-80">
                     {mounted && <MemoizedBarChart data={incomeByCompanyData} />}
                   </ChartShell>
-                </div>
+                </Card>
 
-                <div className="rounded-2xl bg-white dark:bg-[#111113] border border-border p-6">
+                <Card className="gap-0 p-6">
                   <h3 className="text-base font-semibold text-foreground mb-6 flex items-center gap-2">
                     <AlertTriangle className="w-5 h-5 text-amber-500 dark:text-amber-400" />
                     Аномалии и рекомендации
@@ -2380,7 +2442,7 @@ function ReportsContent() {
                       <p className="text-sm text-slate-600 mt-1">Все показатели в норме</p>
                     </div>
                   )}
-                </div>
+                </Card>
               </div>
             </div>
           )}
@@ -2389,7 +2451,7 @@ function ReportsContent() {
           {activeTab === 'analytics' && (
             <div className="space-y-6">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="rounded-2xl bg-white dark:bg-[#111113] border border-border p-6">
+                <Card className="gap-0 p-6">
                   <h3 className="text-base font-semibold text-foreground mb-6">Сравнение периодов</h3>
                   <div className="space-y-6">
                     {[
@@ -2397,8 +2459,11 @@ function ReportsContent() {
                       { label: 'Расходы', current: totals.totalExpense, previous: totalsPrev.totalExpense, color: 'bg-rose-500' },
                       { label: 'Прибыль', current: totals.profit, previous: totalsPrev.profit, color: 'bg-amber-500' },
                     ].map((item) => {
-                      const change = item.previous > 0 ? ((item.current - item.previous) / item.previous) * 100 : 0
-                      const max = Math.max(item.current, item.previous, 1)
+                      // Прибыль бывает отрицательной: база изменения — модуль, ширина полос — тоже.
+                      const change = item.previous !== 0 ? ((item.current - item.previous) / Math.abs(item.previous)) * 100 : null
+                      // Рост расходов — плохо, рост выручки и прибыли — хорошо.
+                      const good = change === null || change === 0 ? null : (change > 0) === (item.label !== 'Расходы')
+                      const max = Math.max(Math.abs(item.current), Math.abs(item.previous), 1)
                       
                       return (
                         <div key={item.label} className="space-y-2">
@@ -2409,32 +2474,30 @@ function ReportsContent() {
                               <span className="text-foreground font-medium">Сейчас: {formatMoneyFull(item.current)}</span>
                             </div>
                           </div>
-                          <div className="h-8 bg-slate-100 dark:bg-slate-800/50 rounded-lg overflow-hidden flex">
+                          <div className="space-y-1">
                             <div 
-                              className={`${item.color} opacity-60 flex items-center justify-end px-2 text-xs text-foreground font-medium transition-all duration-500`}
-                              style={{ width: `${(item.previous / max) * 100}%` }}
+                              className={`${item.previous < 0 ? 'bg-rose-500' : item.color} opacity-40 h-3.5 rounded-md transition-all duration-500`}
+                              style={{ width: `${(Math.abs(item.previous) / max) * 100}%` }}
                             >
-                              {item.previous > max * 0.15 && formatMoneyCompact(item.previous)}
-                            </div>
+                                                          </div>
                             <div 
-                              className={`${item.color} flex items-center justify-end px-2 text-xs text-foreground font-medium transition-all duration-500`}
-                              style={{ width: `${(item.current / max) * 100}%` }}
+                              className={`${item.current < 0 ? 'bg-rose-500' : item.color} h-3.5 rounded-md transition-all duration-500`}
+                              style={{ width: `${(Math.abs(item.current) / max) * 100}%` }}
                             >
-                              {formatMoneyCompact(item.current)}
-                            </div>
+                                                          </div>
                           </div>
                           <div className="flex justify-end">
-                            <span className={`text-sm font-semibold tabular-nums ${change > 0 ? 'text-emerald-600 dark:text-emerald-400' : change < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-muted-foreground'}`}>
-                              {change > 0 ? '+' : ''}{change.toFixed(1)}%
+                            <span className={`text-sm font-semibold tabular-nums ${good === true ? 'text-emerald-600 dark:text-emerald-400' : good === false ? 'text-rose-600 dark:text-rose-400' : 'text-muted-foreground'}`}>
+                              {change === null ? '—' : `${change > 0 ? '+' : ''}${change.toFixed(1)}%`}
                             </span>
                           </div>
                         </div>
                       )
                     })}
                   </div>
-                </div>
+                </Card>
 
-                <div className="rounded-2xl bg-white dark:bg-[#111113] border border-border p-6">
+                <Card className="gap-0 p-6">
                   <h3 className="text-base font-semibold text-foreground mb-6">Распределение по типам платежей</h3>
                   <div className="space-y-4">
                     {[
@@ -2460,50 +2523,13 @@ function ReportsContent() {
                       )
                     })}
                   </div>
-                </div>
+                </Card>
               </div>
 
-              <div className="rounded-2xl bg-white dark:bg-[#111113] border border-border p-6">
-                <h3 className="text-base font-semibold text-foreground mb-6">Тепловая карта активности</h3>
-                <div className="grid grid-cols-7 gap-2">
-                  {Array.from({ length: 35 }, (_, i) => {
-                    const date = addDaysISO(dateFrom, i)
-                    if (date > dateTo) return <div key={i} className="aspect-square rounded-lg bg-slate-100 dark:bg-slate-800/30" />
-                    
-                    const income = dailyIncome.get(date) || 0
-                    const expense = dailyExpense.get(date) || 0
-                    const profit = income - expense
-                    
-                    let intensity = 0
-                    if (profit > 0) intensity = Math.min(1, profit / (totals.profit / 7 + 1))
-                    else if (profit < 0) intensity = -Math.min(1, Math.abs(profit) / (totals.totalExpense / 7 + 1))
-                    
-                    return (
-                      <div 
-                        key={i}
-                        className={`aspect-square rounded-lg flex flex-col items-center justify-center text-xs cursor-pointer hover:scale-110 transition-transform ${
-                          intensity > 0 ? `bg-emerald-500/${Math.round(intensity * 40)}` :
-                          intensity < 0 ? `bg-rose-500/${Math.round(Math.abs(intensity) * 40)}` :
-                          'bg-slate-100 dark:bg-slate-800/50'
-                        }`}
-                        title={`${date}: Доход ${formatMoneyFull(income)}, Расход ${formatMoneyFull(expense)}`}
-                      >
-                        <span className="text-slate-500 text-[10px]">{date.slice(8)}</span>
-                        {profit !== 0 && (
-                          <span className={`tabular-nums ${profit > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                            {formatMoneyCompact(profit)}
-                          </span>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-                <div className="flex items-center justify-center gap-4 mt-4 text-xs text-slate-500">
-                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-rose-500/40" /> Убыток</span>
-                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-slate-200 dark:bg-slate-800" /> Нейтрально</span>
-                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-emerald-500/40" /> Прибыль</span>
-                </div>
-              </div>
+              <Card className="gap-0 p-6">
+                <h3 className="text-base font-semibold text-foreground mb-6">Тепловая карта прибыли</h3>
+                <ProfitHeatmap dateFrom={dateFrom} dateTo={dateTo} dailyIncome={dailyIncome} dailyExpense={dailyExpense} />
+              </Card>
             </div>
           )}
 
@@ -2526,19 +2552,19 @@ function ReportsContent() {
                 
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-slate-500">Показать:</span>
-                  <select 
+                  <NativeSelect 
                     value={itemsPerPage}
                     onChange={(e) => {
                       setItemsPerPage(Number(e.target.value))
                       setCurrentPage(1)
                     }}
-                    className="bg-white dark:bg-slate-900/40 border border-border rounded-lg px-3 py-1.5 text-sm"
+                    className="w-auto cursor-pointer"
                   >
                     <option value={10} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">10</option>
                     <option value={25} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">25</option>
                     <option value={50} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">50</option>
                     <option value={100} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">100</option>
-                  </select>
+                  </NativeSelect>
                   <span className="text-sm text-slate-500">записей</span>
                   {useVirtualization && (
                     <span className="text-xs font-medium text-amber-600 dark:text-amber-400 flex items-center gap-1">
@@ -2549,17 +2575,16 @@ function ReportsContent() {
                 </div>
               </div>
 
-              <div className="rounded-2xl bg-white dark:bg-[#111113] border border-border overflow-hidden">
+              <Card className="gap-0 py-0 overflow-hidden">
                 <div className="overflow-x-auto" ref={tableContainerRef}>
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-slate-800/30">
                         <th className="px-4 py-3 text-left">
-                          <input 
-                            type="checkbox"
+                          <Checkbox
+                            aria-label="Выбрать все строки"
                             checked={selectedRows.size === (useVirtualization ? filteredRows.length : paginatedRows.length) && (useVirtualization ? filteredRows.length : paginatedRows.length) > 0}
-                            onChange={selectAllRows}
-                            className="rounded border-border bg-card text-amber-500"
+                            onCheckedChange={selectAllRows}
                           />
                         </th>
                         {[
@@ -2606,11 +2631,10 @@ function ReportsContent() {
                                   className="flex items-center px-4 hover:bg-surface-muted transition-colors"
                                 >
                                   <div className="w-8">
-                                    <input 
-                                      type="checkbox"
+                                    <Checkbox
+                                      aria-label="Выбрать строку"
                                       checked={selectedRows.has(row.id)}
-                                      onChange={() => toggleRowSelection(row.id)}
-                                      className="rounded border-border bg-card text-amber-500"
+                                      onCheckedChange={() => toggleRowSelection(row.id)}
                                     />
                                   </div>
                                   <div className="flex-1 px-4 text-sm text-body whitespace-nowrap">{row.date}</div>
@@ -2642,11 +2666,10 @@ function ReportsContent() {
                             className={`hover:bg-surface-muted transition-colors ${selectedRows.has(row.id) ? 'bg-amber-500/10' : ''}`}
                           >
                             <td className="px-4 py-3">
-                              <input 
-                                type="checkbox"
+                              <Checkbox
+                                aria-label="Выбрать строку"
                                 checked={selectedRows.has(row.id)}
-                                onChange={() => toggleRowSelection(row.id)}
-                                className="rounded border-border bg-card text-amber-500"
+                                onCheckedChange={() => toggleRowSelection(row.id)}
                               />
                             </td>
                             <td className="px-4 py-3 text-sm text-body whitespace-nowrap">{row.date}</td>
@@ -2696,27 +2719,31 @@ function ReportsContent() {
                       Показано {(currentPage - 1) * itemsPerPage + 1}–{Math.min(currentPage * itemsPerPage, filteredRows.length)} из {filteredRows.length}
                     </div>
                     <div className="flex items-center gap-2">
-                      <button 
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
                         onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                         disabled={currentPage === 1}
-                        className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed"
+                        aria-label="Предыдущая страница"
                       >
                         <ChevronLeft className="w-4 h-4" />
-                      </button>
+                      </Button>
                       <span className="text-sm text-muted-foreground">
                         Страница {currentPage} из {totalPages}
                       </span>
-                      <button
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
                         onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                         disabled={currentPage === totalPages}
-                        className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed"
+                        aria-label="Следующая страница"
                       >
                         <ChevronRight className="w-4 h-4" />
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 )}
-              </div>
+              </Card>
 
               {selectedRows.size > 0 && (
                 <div className="flex items-center justify-between p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
@@ -2762,9 +2789,9 @@ function ReportsContent() {
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {companyComparisonData.map((company) => (
-                  <div 
-                    key={company.id} 
-                    className="rounded-2xl bg-white dark:bg-[#111113] border border-border p-6 hover:border-slate-300 dark:hover:border-white/10 transition-all cursor-pointer group"
+                  <Card
+                    key={company.id}
+                    className="gap-0 p-6 cursor-pointer group"
                     onClick={() => {
                       setCompanyFilter(company.id)
                       setActiveTab('overview')
@@ -2819,11 +2846,11 @@ function ReportsContent() {
                         <span className="text-foreground">+{formatMoneyCompact(company.kaspiIncome + company.onlineIncome + company.cardIncome)} / -{formatMoneyCompact(company.kaspiExpense)}</span>
                       </div>
                     </div>
-                  </div>
+                  </Card>
                 ))}
               </div>
 
-              <div className="rounded-2xl bg-white dark:bg-[#111113] border border-border p-6">
+              <Card className="gap-0 p-6">
                 <h3 className="text-base font-semibold text-foreground mb-6">Сравнительная таблица</h3>
                 <div className="overflow-x-auto">
                   <table className="w-full">
@@ -2869,7 +2896,7 @@ function ReportsContent() {
                     </tbody>
                   </table>
                 </div>
-              </div>
+              </Card>
             </div>
           )}
         </div>

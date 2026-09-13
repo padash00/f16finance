@@ -292,7 +292,8 @@ export function aggregateReportFromRows(input: {
     tgt.expenseCash += cash
     tgt.expenseKaspi += kaspi
     tgt.totalExpense += total
-    tgt.transactionCount += 1
+    // transactionCount — только строки дохода: делим на него выручку (средняя
+    // запись дохода). Расходы в счётчике занижали среднее в разы.
 
     if (range === 'current') {
       dailyExpense.set(r.date, (dailyExpense.get(r.date) || 0) + total)

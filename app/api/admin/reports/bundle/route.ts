@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { addDaysISO } from '@/lib/core/date'
 import { aggregateReportFromRows } from '@/lib/reports/aggregate-from-rows'
+import { isExtraCompany } from '@/lib/reports/extra-company'
 import { countImpreciseNightKaspiInRange, splitIncomeKaspiByCalendarDay, type ReportIncomeCalendarRow } from '@/lib/reports/income-calendar-kaspi'
 import { lastMonthMtdRangeForCurrentMonth, type ForecastHints } from '@/lib/reports/forecast-hybrid'
 import { calculatePrevPeriod, isFullMonthRange, previousCalendarMonthRange } from '@/lib/reports/period'
@@ -89,14 +90,7 @@ export async function GET(req: Request) {
     if (companiesRes.error) throw companiesRes.error
     const companies = (companiesRes.data || []) as { id: string; name: string; code: string | null }[]
     const nameById = new Map(companies.map((c) => [c.id, c.name || 'Точка'] as const))
-    let extraCompanyId: string | null = null
-    for (const c of companies) {
-      const code = (c.code || '').toLowerCase()
-      if (code === 'extra' || (c.name || '').toLowerCase().includes('extra')) {
-        extraCompanyId = c.id
-        break
-      }
-    }
+    const extraCompanyId = companies.find(isExtraCompany)?.id ?? null
 
     const companyName = (id: string) => nameById.get(id) ?? 'Неизвестно'
 

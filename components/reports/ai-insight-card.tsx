@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Sparkles, RefreshCw } from 'lucide-react'
 
 interface Props {
@@ -23,20 +23,22 @@ interface Props {
 
 /**
  * AI-инсайт для текущего среза /reports.
- * Запрашивается один раз при изменении периода (с дебаунсом 500ms).
- * Показывает короткий комментарий ассистента и кнопку «обновить».
+ * Запрашивается только по кнопке: раньше вызов уходил при каждой смене
+ * фильтра и тратил деньги на срезы, которые никто не читал.
+ * При смене среза старый комментарий сбрасывается — он был про другие цифры.
  */
 export function AIInsightCard({ dateFrom, dateTo, totals, totalsPrev, topIncome, topExpense, cashlessLabel }: Props) {
   const [text, setText] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const requestKey = `${dateFrom}|${dateTo}|${totals.incomeTotal}|${totals.expenseTotal}`
-  const lastKeyRef = useRef<string>('')
 
-  async function load(force = false) {
-    if (!force && requestKey === lastKeyRef.current) return
-    if (!totals.incomeTotal && !totals.expenseTotal) return
-    lastKeyRef.current = requestKey
+  useEffect(() => {
+    setText(null)
+    setError(null)
+  }, [requestKey])
+
+  async function load() {
     setLoading(true)
     setError(null)
     try {
@@ -55,12 +57,7 @@ export function AIInsightCard({ dateFrom, dateTo, totals, totalsPrev, topIncome,
     }
   }
 
-  useEffect(() => {
-    const t = setTimeout(() => void load(false), 500)
-    return () => clearTimeout(t)
-  }, [requestKey])
-
-  if (!text && !loading && !error) return null
+  if (!totals.incomeTotal && !totals.expenseTotal) return null
 
   return (
     <div className="rounded-2xl border border-violet-500/20 bg-gradient-to-br from-violet-500/10 via-fuchsia-500/5 to-transparent p-4">
@@ -73,13 +70,12 @@ export function AIInsightCard({ dateFrom, dateTo, totals, totalsPrev, topIncome,
             <h3 className="text-sm font-semibold text-violet-700 dark:text-violet-200">AI-комментарий</h3>
             <button
               type="button"
-              onClick={() => void load(true)}
+              onClick={() => void load()}
               disabled={loading}
               className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-violet-600 dark:text-violet-300 hover:bg-violet-500/20 disabled:opacity-50"
-              title="Перегенерировать"
             >
               <RefreshCw className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} />
-              {loading ? 'думаю…' : 'обновить'}
+              {loading ? 'думаю…' : text ? 'обновить' : 'получить'}
             </button>
           </div>
           {error ? (
@@ -89,8 +85,10 @@ export function AIInsightCard({ dateFrom, dateTo, totals, totalsPrev, topIncome,
               <div className="h-3 w-3/4 animate-pulse rounded bg-violet-500/20" />
               <div className="h-3 w-2/3 animate-pulse rounded bg-violet-500/20" />
             </div>
-          ) : (
+          ) : text ? (
             <p className="whitespace-pre-line text-sm leading-relaxed text-slate-800 dark:text-slate-100">{text}</p>
+          ) : (
+            <p className="text-xs text-muted-foreground">Короткий разбор выбранного периода: что выросло, что просело и на что обратить внимание.</p>
           )}
         </div>
       </div>

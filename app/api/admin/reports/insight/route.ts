@@ -79,10 +79,13 @@ export async function POST(request: Request) {
     'НЕ начинай с "Привет"/"Здравствуйте". Начни сразу с эмодзи и сути.',
   ].filter(Boolean).join('\n')
 
+  const model = process.env.OPENAI_MODEL || 'gpt-4o-mini'
   try {
     const result = await generateAiText({
-      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-      maxTokens: 250,
+      model,
+      // Reasoning-модели (gpt-5*) тратят бюджет на внутреннее размышление:
+      // с лимитом 250 на сам ответ ничего не оставалось → «OpenAI не вернул текст».
+      maxTokens: model.startsWith('gpt-5') ? 2500 : 300,
       messages: [
         { role: 'system', content: 'Ты — финансовый ассистент владельца сети игровых клубов в Казахстане. Пиши кратко, по делу, на русском.' },
         { role: 'user', content: prompt },
