@@ -1,13 +1,18 @@
 import { NextResponse } from 'next/server'
 
 import { generateAiText } from '@/lib/ai/provider'
-import { requireCapability } from '@/lib/server/capabilities'
-import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { requireAnyCapability } from '@/lib/server/capabilities'
 import { requireAddon } from '@/lib/server/entitlements'
+import { getRequestAccessContext } from '@/lib/server/request-auth'
 
-function fmt(n: number) {
-  return Math.round(Number(n) || 0).toLocaleString('ru-RU') + ' ₸'
-}
+/**
+ * AI-вывод по прогнозу /analysis. ИИ здесь не учится и не считает прогноз —
+ * он объясняет владельцу цифры модели: насколько им верить (по истории
+ * промахов), что стоит за разбросом сценариев и что сделать.
+ */
+
+const fmt = (n: unknown) => Math.round(Number(n) || 0).toLocaleString('ru-RU') + ' ₸'
+const pct = (share: unknown) => (share === null || share === undefined ? '—' : `${Math.round(Number(share) * 100)}%`)
 
 export async function POST(req: Request) {
   try {
@@ -15,32 +20,54 @@ export async function POST(req: Request) {
     if ('response' in access) return access.response
     const addonDenied = await requireAddon(access, 'addon.ai')
     if (addonDenied) return addonDenied
-    const denied = await requireCapability(access, 'forecast.generate')
+    const denied = await requireAnyCapability(access, ['forecast.generate', 'analysis.refresh'])
     if (denied) return denied
 
     const b = await req.json().catch(() => null)
-    if (!b) return NextResponse.json({ error: 'invalid-body' }, { status: 400 })
+    if (!b?.scenarios) return NextResponse.json({ error: 'invalid-body' }, { status: 400 })
+    const s = b.scenarios
 
-    const sys =
-      'Ты финансовый аналитик. По цифрам месячного прогноза дай КОРОТКИЙ вывод для владельца бизнеса: ' +
-      '1-2 абзаца, простым языком, без воды и без выдумывания цифр сверх данных. ' +
-      'Скажи главное: реалистичен ли прогноз, на что обратить внимание (доход/постоянные/переменные расходы), 1-2 конкретных действия. ' +
-      'Если уверенность низкая или мало данных — честно предупреди. Не используй markdown-заголовки.'
+    const system =
+      'Ты финансовый аналитик. По месячному прогнозу в трёх сценариях и истории его точности дай КОРОТКИЙ вывод владельцу: ' +
+      '2 абзаца простым языком, без воды и без цифр сверх данных. ' +
+      'Первый — насколько верить прогнозу: опирайся на среднюю ошибку и попадание в коридор, если сверок мало — прямо скажи. ' +
+      'Второй — что двигает разброс между пессимистичным и оптимистичным сценарием и 1–2 конкретных действия, чтобы месяц ушёл ближе к оптимистичному. ' +
+      'Если модель стабильно промахивалась в одну сторону — упомяни. Без markdown-заголовков.'
 
-    const user =
-      `Прогноз на ${b.targetMonthLabel}.\n` +
-      `Доход: ожидаемый ${fmt(b.income?.expected)} (диапазон ${fmt(b.income?.low)}–${fmt(b.income?.high)}), ` +
-      `средний за последние месяцы ${fmt(b.income?.recentAvg)}, тренд ${Number(b.income?.momGrowthPct || 0).toFixed(1)}%/мес, ` +
-      `сезонность ${b.confidence?.seasonalityAvailable ? `×${Number(b.income?.seasonalIndex).toFixed(2)}` : 'недоступна (<13 мес)'}.\n` +
-      `Расход: ожидаемый ${fmt(b.expense?.expected)} = постоянные ${fmt(b.expense?.fixed)} + переменные ${fmt(b.expense?.variable)} ` +
-      `(${Number(b.expense?.variableRatePct || 0).toFixed(0)}% от дохода). Разовые в среднем ${fmt(b.expense?.oneOffAvg)}/мес (вне прогноза).\n` +
-      `Прибыль ожидаемая ${fmt(b.profit?.expected)} (худший ${fmt(b.scenarios?.worst)}, лучший ${fmt(b.scenarios?.best)}).\n` +
-      `Уверенность ${b.confidence?.score}/100, месяцев данных ${b.confidence?.monthsOfData}, волатильность ${Number(b.confidence?.volatilityPct || 0).toFixed(0)}%.`
+    const misses = Array.isArray(b.misses)
+      ? b.misses
+          .slice(-6)
+          .map((m: any) => `${m.month}: прогноз ${fmt(m.forecast)}, факт ${fmt(m.actual)}, ошибка ${pct(m.error)}${m.inside ? '' : ' (вне коридора)'}`)
+          .join('\n')
+      : ''
 
+    const user = [
+      `Прогноз на ${b.targetMonthLabel}.`,
+      `Доход: пессимистичный ${fmt(s.pessimistic?.income)}, реальный ${fmt(s.realistic?.income)}, оптимистичный ${fmt(s.optimistic?.income)}.`,
+      `Расход: пессимистичный ${fmt(s.pessimistic?.expense)}, реальный ${fmt(s.realistic?.expense)}, оптимистичный ${fmt(s.optimistic?.expense)}.`,
+      `Прибыль: пессимистичный ${fmt(s.pessimistic?.profit)}, реальный ${fmt(s.realistic?.profit)}, оптимистичный ${fmt(s.optimistic?.profit)}.`,
+      `Точность модели: сверок ${b.accuracy?.checks ?? 0}, средняя ошибка дохода за последние месяцы ${pct(b.accuracy?.recentError?.income)}, ` +
+        `факт в коридоре ${b.accuracy?.coverage?.income?.inside ?? 0} из ${b.accuracy?.coverage?.income?.total ?? 0}.`,
+      Array.isArray(b.explanation) && b.explanation.length ? `Как модель считала:\n${b.explanation.join('\n')}` : '',
+      misses ? `Последние сверки:\n${misses}` : '',
+      b.expense
+        ? `Структура расхода: постоянные ${fmt(b.expense.fixed)}, переменные ${Number(b.expense.variableRatePct || 0).toFixed(0)}% от дохода, разовые в среднем ${fmt(b.expense.oneOffAvg)}/мес (в прогноз не входят).`
+        : '',
+      b.breakeven ? `Безубыточность при доходе ${fmt(b.breakeven)}.` : '',
+    ]
+      .filter(Boolean)
+      .join('\n')
+
+    const model = process.env.OPENAI_MODEL || 'gpt-4o-mini'
     const { text } = await generateAiText({
-      messages: [{ role: 'system', content: sys }, { role: 'user', content: user }],
+      model,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: user },
+      ],
       temperature: 0.4,
-      maxTokens: 500,
+      // Reasoning-модели (gpt-5*) тратят часть бюджета на размышление
+      maxTokens: model.startsWith('gpt-5') ? 3000 : 600,
     })
     return NextResponse.json({ text })
   } catch (error: any) {

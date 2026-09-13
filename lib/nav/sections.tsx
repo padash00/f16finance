@@ -38,7 +38,6 @@ import {
   PackagePlus,
   PackageSearch,
   PieChart,
-  Radar,
   RotateCcw,
   Settings2,
   Shield,
@@ -103,8 +102,7 @@ export const navSections: NavSection[] = [
     icon: Gauge,
     items: [
       { href: '/dashboard', label: 'Главная панель', icon: LayoutDashboard, note: 'Общий статус бизнеса' },
-      { href: '/analysis', label: 'AI Разбор', icon: BrainCircuit, note: 'Диагностика и выводы', badge: 'AI', badgeColor: 'purple', isNew: true },
-      { href: '/forecast', label: 'AI Прогноз', icon: Radar, note: 'Прогноз 30/60/90 дней', badge: 'AI', badgeColor: 'purple', isNew: true },
+      { href: '/analysis', label: 'Прогноз и точность', icon: BrainCircuit, note: '3 сценария на месяц, учится на ошибках', badge: 'AI', badgeColor: 'purple', isNew: true },
       { href: '/business-intelligence', label: 'Бизнес-аналитика', icon: Brain, note: 'Формулы Amazon/Six Sigma на твоих данных', badge: 'new', badgeColor: 'purple', isNew: true },
       { href: '/ai-cfo', label: 'AI Финдиректор', icon: Briefcase, note: 'Карточки: вывод → причина → действие', badge: 'AI', badgeColor: 'purple', isNew: true, feature: 'ai.cfo' },
       { href: '/goals', label: 'Цели и план', icon: Target, note: 'Плановые показатели', badge: 'new', badgeColor: 'blue' },

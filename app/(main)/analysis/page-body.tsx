@@ -1,64 +1,73 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+/**
+ * /analysis — прогноз на следующий месяц в трёх сценариях и история его точности.
+ *
+ * Модель (lib/analysis/forecast-learning) сверяет свои прошлые прогнозы с фактом
+ * и по этим сверкам поправляется: веса способов, перекос, ширина коридора.
+ * 1-го числа крон фиксирует прогноз на месяц — после закрытия месяца видно,
+ * что обещали и что вышло. Раньше здесь и на /forecast жили два разных прогноза;
+ * теперь он один.
+ */
+
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine, Cell, Legend,
+  Area,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ComposedChart,
+  Legend,
+  Line,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
 } from 'recharts'
-import { Brain, TrendingUp, TrendingDown, Wallet, RefreshCw, Sparkles, Info, AlertTriangle } from 'lucide-react'
-import { useCapabilities } from '@/lib/client/use-capabilities'
+import { AlertTriangle, Brain, CalendarCheck, GraduationCap, Info, RefreshCw, Sparkles, Store, Target } from 'lucide-react'
 
-import { Card } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { NativeSelect } from '@/components/ui/native-select'
+import { useCapabilities } from '@/lib/client/use-capabilities'
+import { METHOD_LABELS, type Inside, type MethodId, type Scenarios, type Triple } from '@/lib/analysis/forecast-learning'
+import type { MonthlyForecastResponse } from '@/lib/analysis/forecast-scope'
 
-type Company = { id: string; name: string; code?: string | null }
+type Company = { id: string; name: string }
 
-type MonthAgg = { month: string; income: number; cash: number; kaspi: number; card: number; online: number; fixed: number; variable: number; oneOff: number; expense: number; profit: number; marginPct: number; isPartial: boolean }
-type Forecast = {
-  months: MonthAgg[]
-  targetMonth: string
-  targetMonthLabel: string
-  income: { expected: number; low: number; high: number; recentAvg: number; momGrowthPct: number; seasonalIndex: number; runRate: number | null }
-  channels: { cash: number; kaspi: number; card: number; online: number }
-  expense: { expected: number; fixed: number; variable: number; variableRatePct: number; oneOffAvg: number }
-  profit: { expected: number; low: number; high: number; marginPct: number }
-  scenarios: { best: number; expected: number; worst: number }
-  breakeven: { revenue: number; safetyMarginPct: number }
-  current: { month: string; factToDate: number; projected: number | null; dayOfMonth: number; daysInMonth: number } | null
-  backtest: { month: string; predictedIncome: number; actualIncome: number; incomeErrorPct: number } | null
-  expenseByGroup: Array<{ group: string; label: string; amount: number; bucket: 'fixed' | 'variable' }>
-  explanation: string[]
-  confidence: { score: number; monthsOfData: number; seasonalityAvailable: boolean; volatilityPct: number; notes: string[] }
-}
-type ByCompany = Array<{ id: string; name: string; income: number; expense: number; profit: number; marginPct: number }>
+type AccuracyRow = { month: string; scenarios: Scenarios; actual: Triple; error: number | null; inside: Inside }
 
-function monthLabelFull(ym: string) {
-  const names = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь']
+const MONTH_NAMES = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь']
+const MONTH_SHORT = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек']
+
+const monthLabel = (ym: string) => {
   const [y, m] = ym.split('-').map(Number)
-  return `${names[(m - 1) % 12]} ${y}`
+  return `${MONTH_NAMES[(m - 1) % 12]} ${y}`
 }
-
-function money(n: number) { return Math.round(Number(n) || 0).toLocaleString('ru-RU') + ' ₸' }
-function moneyShort(n: number) {
+const monthShort = (ym: string) => {
+  const [y, m] = ym.split('-').map(Number)
+  return `${MONTH_SHORT[(m - 1) % 12]} ${String(y).slice(2)}`
+}
+const money = (n: number) => Math.round(Number(n) || 0).toLocaleString('ru-RU') + ' ₸'
+const moneyShort = (n: number) => {
   const a = Math.abs(n)
   if (a >= 1_000_000) return (n / 1_000_000).toFixed(1) + ' млн'
-  if (a >= 1_000) return Math.round(n / 1_000) + 'k'
+  if (a >= 1_000) return Math.round(n / 1_000) + ' тыс'
   return String(Math.round(n))
 }
-function monthShort(ym: string) {
-  const names = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек']
-  const [y, m] = ym.split('-').map(Number)
-  return `${names[(m - 1) % 12]} ${String(y).slice(2)}`
-}
+const pct = (share: number) => `${Math.round(share * 100)}%`
 
 export default function AnalysisPage() {
   const { can } = useCapabilities()
   const [companies, setCompanies] = useState<Company[]>([])
   const [companyId, setCompanyId] = useState('')
-  const [data, setData] = useState<Forecast | null>(null)
-  const [byCompany, setByCompany] = useState<ByCompany | null>(null)
+  const [data, setData] = useState<MonthlyForecastResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [source, setSource] = useState<'frozen' | 'backtest'>('frozen')
   const [ai, setAi] = useState<string | null>(null)
   const [aiLoading, setAiLoading] = useState(false)
 
@@ -70,15 +79,16 @@ export default function AnalysisPage() {
   }, [])
 
   const load = useCallback(async () => {
-    setLoading(true); setError(null); setAi(null)
+    setLoading(true)
+    setError(null)
+    setAi(null)
     try {
       const p = new URLSearchParams()
       if (companyId) p.set('company_id', companyId)
       const res = await fetch(`/api/admin/monthly-forecast?${p}`, { cache: 'no-store' })
       const body = await res.json()
       if (!res.ok) throw new Error(body?.error || 'Не удалось построить прогноз')
-      setData(body.forecast as Forecast)
-      setByCompany((body.byCompany as ByCompany) || null)
+      setData(body as MonthlyForecastResponse)
     } catch (e: any) {
       setError(e?.message || 'Ошибка загрузки')
     } finally {
@@ -86,325 +96,158 @@ export default function AnalysisPage() {
     }
   }, [companyId])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  const frozenRows = useMemo<AccuracyRow[]>(
+    () =>
+      (data?.snapshots || [])
+        .filter((s) => s.actual && s.inside)
+        .map((s) => ({ month: s.targetMonth, scenarios: s.scenarios, actual: s.actual!, error: s.error?.income ?? null, inside: s.inside! })),
+    [data],
+  )
+  const backtestRows = useMemo<AccuracyRow[]>(
+    () =>
+      (data?.next.backtest || []).map((r) => ({
+        month: r.month,
+        scenarios: r.scenarios,
+        actual: r.actual,
+        error: r.error.income,
+        inside: r.inside,
+      })),
+    [data],
+  )
+
+  // Пока зафиксированных сверок нет — показываем расчёт задним числом
+  useEffect(() => {
+    if (data && frozenRows.length === 0) setSource('backtest')
+  }, [data, frozenRows.length])
+
+  const rows = source === 'frozen' ? frozenRows : backtestRows
 
   const askAi = useCallback(async () => {
-    if (!data) return
+    if (!data?.next.scenarios) return
     setAiLoading(true)
     try {
       const res = await fetch('/api/admin/monthly-forecast/ai', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetMonthLabel: monthLabel(data.next.targetMonth),
+          scenarios: data.next.scenarios,
+          accuracy: data.next.accuracy,
+          explanation: data.next.explanation,
+          misses: rows.map((r) => ({
+            month: monthLabel(r.month),
+            forecast: r.scenarios.realistic.income,
+            actual: r.actual.income,
+            error: r.error,
+            inside: r.inside.income,
+          })),
+          expense: data.forecast.expense,
+          breakeven: data.forecast.breakeven.revenue,
+        }),
       })
       const j = await res.json()
-      setAi(res.ok ? (j.text || 'Пусто.') : (j.error || 'AI недоступен.'))
+      setAi(res.ok ? j.text || 'Пусто.' : j.error || 'AI недоступен.')
     } catch {
       setAi('Не удалось получить AI-вывод.')
     } finally {
       setAiLoading(false)
     }
-  }, [data])
+  }, [data, rows])
 
-  const chartData = useMemo(() => (data?.months || []).map((m) => ({
-    label: monthShort(m.month) + (m.isPartial ? ' (тек.)' : ''),
-    'Доход': Math.round(m.income), 'Расход': Math.round(m.expense), 'Прибыль': Math.round(m.profit),
-  })), [data])
+  const next = data?.next
+  const scenarios = next?.scenarios ?? null
 
   return (
     <div className="app-page-wide space-y-6">
       <AdminPageHeader
-        title="Прогноз на следующий месяц"
-        description="Доход, расход и прибыль по закономерностям прошлых месяцев — честно и прозрачно"
+        title="Прогноз и точность"
+        description="Три сценария на следующий месяц — модель сверяет свои прогнозы с фактом и поправляется"
         icon={<Brain className="h-5 w-5" />}
         accent="violet"
         backHref="/"
         actions={
           <>
-            <select
-              value={companyId}
-              onChange={(e) => setCompanyId(e.target.value)}
-              className="bg-slate-100 dark:bg-zinc-900/50 border border-border rounded-xl px-3 py-1.5 text-xs font-medium text-foreground outline-none cursor-pointer"
-            >
-              <option value="" className="bg-white dark:bg-zinc-900">📍 Все точки</option>
-              {companies.map((c) => <option key={c.id} value={c.id} className="bg-white dark:bg-zinc-900">📍 {c.name}</option>)}
-            </select>
-            <Button variant="ghost" size="sm" onClick={load} disabled={loading} className="rounded-xl border border-border" title="Обновить">
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <NativeSelect value={companyId} onChange={(e) => setCompanyId(e.target.value)} className="w-auto min-w-[160px]">
+              <option value="">Все точки</option>
+              {companies.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </NativeSelect>
+            <Button variant="outline" size="icon-sm" className="rounded-xl" onClick={() => void load()} disabled={loading} aria-label="Обновить">
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             </Button>
           </>
         }
       />
 
       {error && (
-        <Card className="p-4 border-rose-500/30 bg-rose-500/10 text-sm text-rose-700 dark:text-rose-300 flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 shrink-0" /> {error}
+        <Card className="flex-row items-center gap-2 border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-700 dark:text-rose-300">
+          <AlertTriangle className="h-4 w-4 shrink-0" /> {error}
         </Card>
       )}
 
       {loading && !data ? (
-        <div className="flex min-h-[40vh] items-center justify-center gap-2 text-slate-500">
-          <RefreshCw className="w-4 h-4 animate-spin" /> Считаю прогноз…
+        <div className="flex min-h-[40vh] items-center justify-center gap-2 text-muted-foreground">
+          <RefreshCw className="h-4 w-4 animate-spin" /> Считаю прогноз и сверяю прошлые месяцы…
         </div>
-      ) : data ? (
+      ) : data && next ? (
         <>
-          {/* Вердикт */}
-          <Card className="p-6 bg-gradient-to-br from-violet-50 via-white to-white dark:from-violet-900/20 dark:via-gray-900/40 dark:to-gray-900/40 border-border">
-            <div className="flex items-center gap-2 mb-4">
-              <Sparkles className="w-4 h-4 text-violet-500" />
-              <h2 className="text-sm font-semibold text-foreground">Прогноз на {data.targetMonthLabel}</h2>
-              <span className="ml-auto inline-flex items-center gap-1 rounded-md border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[11px] font-medium text-violet-700 dark:text-violet-300">
-                уверенность {data.confidence.score}/100
-              </span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <Verdict label="Доход" value={data.income.expected} range={[data.income.low, data.income.high]} tone="emerald" icon={<TrendingUp className="w-4 h-4" />} />
-              <Verdict label="Расход" value={data.expense.expected} tone="rose" icon={<TrendingDown className="w-4 h-4" />} />
-              <Verdict label="Прибыль" value={data.profit.expected} range={[data.scenarios.worst, data.scenarios.best]} tone={data.profit.expected >= 0 ? 'violet' : 'rose'} icon={<Wallet className="w-4 h-4" />} />
-            </div>
-            <div className="mt-4 grid grid-cols-1 gap-2 text-center sm:grid-cols-3">
-              {([['Худший', data.scenarios.worst, 'rose'], ['Ожидаемый', data.scenarios.expected, 'slate'], ['Лучший', data.scenarios.best, 'emerald']] as const).map(([l, v, t]) => (
-                <div key={l} className="rounded-xl border border-border bg-white/60 dark:bg-white/[0.02] py-2">
-                  <div className="text-[11px] text-muted-foreground">{l}</div>
-                  <div className={`text-sm font-bold tabular-nums ${t === 'rose' ? 'text-rose-600 dark:text-rose-400' : t === 'emerald' ? 'text-emerald-600 dark:text-emerald-400' : 'text-foreground'}`}>{money(v)}</div>
-                </div>
-              ))}
-            </div>
-          </Card>
+          {scenarios ? (
+            <ScenariosCard targetMonth={next.targetMonth} scenarios={scenarios} accuracy={next.accuracy} />
+          ) : (
+            <Card className="p-6 text-sm text-muted-foreground">Закрытых месяцев с выручкой пока нет — прогнозу не на чем строиться.</Card>
+          )}
 
-          {/* Почему такой прогноз */}
-          <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
-            <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2"><Info className="w-4 h-4 text-blue-400" />Почему такой прогноз</h3>
-            <ul className="space-y-1.5">
-              {data.explanation.map((e, i) => (
-                <li key={i} className={`text-sm leading-relaxed flex gap-2 ${e.startsWith('→') ? 'font-semibold text-foreground' : 'text-body'}`}>
-                  {!e.startsWith('→') && <span className="text-slate-300 dark:text-slate-600 mt-1.5 w-1 h-1 rounded-full bg-current shrink-0" />}
-                  <span>{e}</span>
-                </li>
-              ))}
-            </ul>
-          </Card>
-
-          {/* Текущий месяц: факт vs прогноз + Backtest + Безубыточность */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {data.current && (
-              <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
-                <div className="text-xs text-muted-foreground mb-1">Текущий месяц (день {data.current.dayOfMonth}/{data.current.daysInMonth})</div>
-                <div className="text-xl font-bold text-foreground tabular-nums">{money(data.current.factToDate)}</div>
-                <div className="text-xs text-muted-foreground mt-0.5">факт на сегодня</div>
-                {data.current.projected !== null && (
-                  <div className="mt-2 text-sm text-emerald-600 dark:text-emerald-400">→ к концу ~{money(data.current.projected)} <span className="text-slate-400">(run-rate)</span></div>
-                )}
-              </Card>
-            )}
-            <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
-              <div className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><TrendingUp className="w-3.5 h-3.5" />Точка безубыточности</div>
-              <div className="text-xl font-bold text-foreground tabular-nums">{money(data.breakeven.revenue)}</div>
-              <div className={`text-xs mt-0.5 ${data.breakeven.safetyMarginPct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                запас прочности {data.breakeven.safetyMarginPct >= 0 ? '+' : ''}{data.breakeven.safetyMarginPct.toFixed(0)}%
-              </div>
+          {data.snapshotsWarning && (
+            <Card className="flex-row items-start gap-2 border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-200">
+              <Info className="mt-0.5 h-4 w-4 shrink-0" /> {data.snapshotsWarning}
             </Card>
-            {data.backtest && (
-              <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
-                <div className="text-xs text-muted-foreground mb-1">Точность (backtest, {monthLabelFull(data.backtest.month).split(' ')[0]})</div>
-                <div className={`text-xl font-bold tabular-nums ${data.backtest.incomeErrorPct <= 15 ? 'text-emerald-600 dark:text-emerald-400' : data.backtest.incomeErrorPct <= 30 ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                  ошибка {data.backtest.incomeErrorPct.toFixed(0)}%
-                </div>
-                <div className="text-xs text-muted-foreground mt-0.5">прогноз {moneyShort(data.backtest.predictedIncome)} / факт {moneyShort(data.backtest.actualIncome)}</div>
-              </Card>
-            )}
+          )}
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <CurrentMonthCard data={data} />
+            <LearningCard data={data} />
           </div>
 
-          {/* История по месяцам */}
-          <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
-            <h3 className="text-sm font-semibold text-foreground mb-4">История по месяцам</h3>
-            {chartData.length === 0 ? (
-              <div className="text-sm text-slate-500 py-8 text-center">Нет данных</div>
-            ) : (
-              <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.4} vertical={false} />
-                    <XAxis dataKey="label" fontSize={11} tickLine={false} axisLine={false} />
-                    <YAxis fontSize={10} tickLine={false} axisLine={false} tickFormatter={moneyShort} />
-                    <Tooltip formatter={(v: any) => money(Number(v))} />
-                    <Legend />
-                    <ReferenceLine y={0} stroke="currentColor" className="text-slate-300 dark:text-white/20" />
-                    <Bar dataKey="Доход" fill="#10b981" radius={[3, 3, 0, 0]} />
-                    <Bar dataKey="Расход" fill="#ef4444" radius={[3, 3, 0, 0]} />
-                    <Bar dataKey="Прибыль" radius={[3, 3, 0, 0]}>
-                      {chartData.map((d, i) => <Cell key={i} fill={d['Прибыль'] >= 0 ? '#8b5cf6' : '#f59e0b'} />)}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </Card>
+          <AccuracyCard
+            rows={rows}
+            source={source}
+            onSource={setSource}
+            frozenCount={frozenRows.length}
+            backtestCount={backtestRows.length}
+            trend={next.accuracy.trend}
+          />
 
-          {/* Таблица по месяцам */}
-          {data.months.length > 0 && (
-            <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
-              <h3 className="text-sm font-semibold text-foreground mb-4">Детали по месяцам</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[640px] text-sm">
-                  <thead>
-                    <tr className="text-[11px] uppercase tracking-wide text-muted-foreground border-b border-border">
-                      <th className="px-2 py-2 text-left font-medium">Месяц</th>
-                      <th className="px-2 py-2 text-right font-medium">Доход</th>
-                      <th className="px-2 py-2 text-right font-medium">Постоянные</th>
-                      <th className="px-2 py-2 text-right font-medium">Переменные</th>
-                      <th className="px-2 py-2 text-right font-medium">Разовые</th>
-                      <th className="px-2 py-2 text-right font-medium">Прибыль</th>
-                      <th className="px-2 py-2 text-right font-medium">Маржа</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[...data.months].reverse().map((m) => (
-                      <tr key={m.month} className="border-b border-slate-100 dark:border-white/5 last:border-0">
-                        <td className="px-2 py-2 text-foreground whitespace-nowrap">{monthLabelFull(m.month)}{m.isPartial && <span className="ml-1 text-[10px] text-amber-600 dark:text-amber-400">тек.</span>}</td>
-                        <td className="px-2 py-2 text-right tabular-nums text-body">{money(m.income)}</td>
-                        <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">{money(m.fixed)}</td>
-                        <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">{money(m.variable)}</td>
-                        <td className="px-2 py-2 text-right tabular-nums text-faint">{m.oneOff > 0 ? money(m.oneOff) : '—'}</td>
-                        <td className={`px-2 py-2 text-right tabular-nums font-semibold ${m.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{money(m.profit)}</td>
-                        <td className={`px-2 py-2 text-right tabular-nums ${m.marginPct >= 20 ? 'text-emerald-600 dark:text-emerald-400' : m.marginPct >= 0 ? 'text-body' : 'text-rose-600 dark:text-rose-400'}`}>{m.marginPct.toFixed(0)}%</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
-          )}
+          <HistoryCard data={data} />
 
-          {/* Как собран прогноз */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
-              <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2"><Info className="w-4 h-4 text-blue-400" />Как собран ДОХОД</h3>
-              <div className="space-y-2 text-sm">
-                <Row label="Средний за последние месяцы" value={money(data.income.recentAvg)} />
-                <Row label="Тренд по месяцам" value={`${data.income.momGrowthPct >= 0 ? '+' : ''}${data.income.momGrowthPct.toFixed(1)}% / мес`} tone={data.income.momGrowthPct >= 0 ? 'emerald' : 'rose'} />
-                <Row label="Сезонность месяца" value={data.confidence.seasonalityAvailable ? `×${data.income.seasonalIndex.toFixed(2)}` : 'нет данных (<13 мес)'} muted={!data.confidence.seasonalityAvailable} />
-                {data.income.runRate !== null && <Row label="Run-rate текущего месяца" value={money(data.income.runRate)} />}
-                <div className="pt-2 border-t border-border flex items-center justify-between">
-                  <span className="font-semibold text-foreground">Прогноз дохода</span>
-                  <span className="font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{money(data.income.expected)}</span>
-                </div>
-              </div>
-            </Card>
+          {data.byCompany && data.byCompany.length > 0 && <ByCompanyCard data={data} />}
 
-            <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
-              <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2"><Info className="w-4 h-4 text-blue-400" />Как собран РАСХОД</h3>
-              <div className="space-y-2 text-sm">
-                <Row label="Постоянные (аренда, ФОТ, налоги)" value={money(data.expense.fixed)} />
-                <Row label={`Переменные (${data.expense.variableRatePct.toFixed(0)}% от дохода)`} value={money(data.expense.variable)} />
-                <Row label="Разовые (CAPEX, штрафы) — вне прогноза" value={`~${money(data.expense.oneOffAvg)} / мес`} muted />
-                <div className="pt-2 border-t border-border flex items-center justify-between">
-                  <span className="font-semibold text-foreground">Прогноз расхода</span>
-                  <span className="font-bold text-rose-600 dark:text-rose-400 tabular-nums">{money(data.expense.expected)}</span>
-                </div>
-              </div>
-            </Card>
-          </div>
+          <ExpenseCard data={data} />
 
-          {/* Расход по категориям */}
-          {data.expenseByGroup.length > 0 && (
-            <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
-              <h3 className="text-sm font-semibold text-foreground mb-4">Расход по категориям (в среднем за месяц)</h3>
-              <div className="space-y-2">
-                {data.expenseByGroup.slice(0, 8).map((g) => {
-                  const max = data.expenseByGroup[0].amount || 1
-                  return (
-                    <div key={g.group} className="flex items-center gap-3">
-                      <div className="w-28 sm:w-40 shrink-0 text-xs text-body truncate">{g.label}</div>
-                      <div className="flex-1 h-2 rounded-full bg-surface-hover overflow-hidden">
-                        <div className={`h-full rounded-full ${g.bucket === 'variable' ? 'bg-amber-500' : 'bg-violet-500'}`} style={{ width: `${Math.min(100, g.amount / max * 100)}%` }} />
-                      </div>
-                      <div className="w-24 shrink-0 text-right text-xs font-semibold tabular-nums text-foreground">{money(g.amount)}</div>
-                    </div>
-                  )
-                })}
-              </div>
-              <div className="mt-3 flex gap-4 text-[11px] text-slate-500">
-                <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-violet-500" />постоянные</span>
-                <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" />переменные (% от дохода)</span>
-              </div>
-            </Card>
-          )}
-
-          {/* Прогноз дохода по каналам */}
-          <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
-            <h3 className="text-sm font-semibold text-foreground mb-4">Прогноз дохода по каналам</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {([['Наличные', data.channels.cash], ['Безнал (Kaspi)', data.channels.kaspi], ['Карта', data.channels.card], ['Онлайн', data.channels.online]] as const).map(([l, v]) => {
-                const pct = data.income.expected > 0 ? v / data.income.expected * 100 : 0
-                return (
-                  <div key={l} className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] p-3">
-                    <div className="text-[11px] text-muted-foreground">{l}</div>
-                    <div className="mt-1 text-sm font-bold text-foreground tabular-nums">{money(v)}</div>
-                    <div className="text-[11px] text-slate-400">{pct.toFixed(0)}%</div>
-                  </div>
-                )
-              })}
-            </div>
-          </Card>
-
-          {/* Прогноз по точкам */}
-          {byCompany && byCompany.length > 0 && (
-            <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
-              <h3 className="text-sm font-semibold text-foreground mb-4">Прогноз по точкам ({data.targetMonthLabel})</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[520px] text-sm">
-                  <thead>
-                    <tr className="text-[11px] uppercase tracking-wide text-muted-foreground border-b border-border">
-                      <th className="px-2 py-2 text-left font-medium">Точка</th>
-                      <th className="px-2 py-2 text-right font-medium">Доход</th>
-                      <th className="px-2 py-2 text-right font-medium">Расход</th>
-                      <th className="px-2 py-2 text-right font-medium">Прибыль</th>
-                      <th className="px-2 py-2 text-right font-medium">Маржа</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {byCompany.map((c) => (
-                      <tr key={c.id} className="border-b border-slate-100 dark:border-white/5 last:border-0">
-                        <td className="px-2 py-2 font-medium text-foreground truncate max-w-[160px]">{c.name}</td>
-                        <td className="px-2 py-2 text-right tabular-nums text-body">{money(c.income)}</td>
-                        <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">{money(c.expense)}</td>
-                        <td className={`px-2 py-2 text-right tabular-nums font-semibold ${c.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{money(c.profit)}</td>
-                        <td className={`px-2 py-2 text-right tabular-nums ${c.marginPct >= 20 ? 'text-emerald-600 dark:text-emerald-400' : c.marginPct >= 0 ? 'text-body' : 'text-rose-600 dark:text-rose-400'}`}>{c.marginPct.toFixed(0)}%</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
-          )}
-
-          {/* AI-вывод */}
-          <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
-            <div className="flex items-center justify-between gap-2 mb-3">
-              <h3 className="text-sm font-semibold text-foreground flex items-center gap-2"><Sparkles className="w-4 h-4 text-violet-500" />AI-вывод</h3>
-              {can('analysis.refresh') && (
-              <Button size="sm" variant="outline" onClick={askAi} disabled={aiLoading} className="rounded-xl">
-                {aiLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : 'Получить вывод'}
-              </Button>
+          <Card className="gap-0 p-5">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <Sparkles className="h-4 w-4 text-violet-500" />
+                AI-вывод
+              </h3>
+              {(can('analysis.refresh') || can('forecast.generate')) && scenarios && (
+                <Button size="sm" variant="outline" onClick={() => void askAi()} disabled={aiLoading} className="rounded-xl">
+                  {aiLoading ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : 'Получить вывод'}
+                </Button>
               )}
             </div>
             {ai ? (
               <p className="whitespace-pre-line text-sm leading-relaxed text-body">{ai}</p>
             ) : (
-              <p className="text-sm text-muted-foreground">Нажми «Получить вывод» — AI прокомментирует прогноз и подскажет действия.</p>
-            )}
-          </Card>
-
-          {/* Честность */}
-          <Card className="p-4 bg-slate-50 dark:bg-white/[0.02] border-border">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-              <Info className="w-3.5 h-3.5 shrink-0" />
-              <span>Месяцев данных: <strong className="text-body">{data.confidence.monthsOfData}</strong></span>
-              <span>· Волатильность: <strong className="text-body">{data.confidence.volatilityPct.toFixed(0)}%</strong></span>
-            </div>
-            {data.confidence.notes.length > 0 && (
-              <ul className="mt-2 space-y-1 text-xs text-muted-foreground list-disc pl-4">
-                {data.confidence.notes.map((n, i) => <li key={i}>{n}</li>)}
-              </ul>
+              <p className="text-sm text-muted-foreground">
+                AI объяснит, насколько верить прогнозу по истории промахов, и подскажет, как приблизить месяц к оптимистичному сценарию.
+              </p>
             )}
           </Card>
         </>
@@ -413,22 +256,483 @@ export default function AnalysisPage() {
   )
 }
 
-function Verdict({ label, value, range, tone, icon }: { label: string; value: number; range?: [number, number]; tone: 'emerald' | 'rose' | 'violet'; icon: React.ReactNode }) {
-  const col = tone === 'emerald' ? 'text-emerald-600 dark:text-emerald-400' : tone === 'rose' ? 'text-rose-600 dark:text-rose-400' : 'text-violet-600 dark:text-violet-400'
+// ==================== blocks ====================
+
+function ScenariosCard({
+  targetMonth,
+  scenarios,
+  accuracy,
+}: {
+  targetMonth: string
+  scenarios: Scenarios
+  accuracy: MonthlyForecastResponse['next']['accuracy']
+}) {
+  const columns = [
+    { key: 'pessimistic', title: 'Пессимистичный', hint: 'если месяц пойдёт хуже обычного', value: scenarios.pessimistic, tone: 'border-rose-500/25 bg-rose-500/[0.04]', title_tone: 'text-rose-600 dark:text-rose-400' },
+    { key: 'realistic', title: 'Реальный', hint: 'самый вероятный исход', value: scenarios.realistic, tone: 'border-violet-500/40 bg-violet-500/[0.06] ring-1 ring-violet-500/30', title_tone: 'text-violet-600 dark:text-violet-400' },
+    { key: 'optimistic', title: 'Оптимистичный', hint: 'если месяц пойдёт лучше обычного', value: scenarios.optimistic, tone: 'border-emerald-500/25 bg-emerald-500/[0.04]', title_tone: 'text-emerald-600 dark:text-emerald-400' },
+  ]
+  const recent = accuracy.recentError.income
+  const cover = accuracy.coverage.income
+
   return (
-    <div className="rounded-2xl border border-border bg-white dark:bg-white/[0.02] p-4">
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">{icon}{label}</div>
-      <div className={`mt-1.5 text-2xl font-bold tabular-nums ${col}`}>{money(value)}</div>
-      {range && <div className="mt-1 text-[11px] text-faint tabular-nums">{money(range[0])} … {money(range[1])}</div>}
+    <Card className="gap-0 p-5 sm:p-6">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <Target className="h-4 w-4 text-violet-500" />
+        <h2 className="text-base font-semibold text-foreground">Прогноз на {monthLabel(targetMonth)}</h2>
+        <span className="ml-auto rounded-full border border-border bg-white/70 px-3 py-1 text-xs text-muted-foreground dark:bg-white/[0.03]">
+          {recent !== null
+            ? `средняя ошибка ${pct(recent)} · факт в коридоре ${cover.inside} из ${cover.total}`
+            : 'точность появится после первых сверок'}
+        </span>
+      </div>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        {columns.map((col) => (
+          <div key={col.key} className={`rounded-2xl border p-4 ${col.tone}`}>
+            <div className={`text-sm font-semibold ${col.title_tone}`}>{col.title}</div>
+            <div className="text-xs text-muted-foreground">{col.hint}</div>
+            <dl className="mt-3 space-y-1.5 text-sm">
+              <ScenarioLine label="Доход" value={col.value.income} />
+              <ScenarioLine label="Расход" value={col.value.expense} />
+              <div className="border-t border-border pt-1.5">
+                <ScenarioLine label="Прибыль" value={col.value.profit} strong />
+              </div>
+            </dl>
+          </div>
+        ))}
+      </div>
+    </Card>
+  )
+}
+
+function ScenarioLine({ label, value, strong }: { label: string; value: number; strong?: boolean }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd
+        className={`tabular-nums ${strong ? `text-lg font-bold ${value >= 0 ? 'text-foreground' : 'text-rose-600 dark:text-rose-400'}` : 'font-medium text-foreground'}`}
+      >
+        {money(value)}
+      </dd>
     </div>
   )
 }
 
-function Row({ label, value, tone, muted }: { label: string; value: string; tone?: 'emerald' | 'rose'; muted?: boolean }) {
+function CurrentMonthCard({ data }: { data: MonthlyForecastResponse }) {
+  const { snapshot, model, month } = data.current
+  const scenarios = snapshot?.scenarios ?? model.scenarios
+  const fact = data.forecast.current
+
+  let status: { text: string; tone: string } | null = null
+  if (scenarios && fact?.projected != null) {
+    const p = fact.projected
+    if (p < scenarios.pessimistic.income) status = { text: 'идёт ниже пессимистичного сценария', tone: 'text-rose-600 dark:text-rose-400' }
+    else if (p > scenarios.optimistic.income) status = { text: 'идёт выше оптимистичного сценария', tone: 'text-emerald-600 dark:text-emerald-400' }
+    else if (p >= scenarios.realistic.income) status = { text: 'в коридоре, выше реального', tone: 'text-emerald-600 dark:text-emerald-400' }
+    else status = { text: 'в коридоре, ниже реального', tone: 'text-amber-600 dark:text-amber-400' }
+  }
+
   return (
-    <div className="flex items-center justify-between gap-2">
-      <span className={`text-xs ${muted ? 'text-faint' : 'text-slate-600 dark:text-slate-400'}`}>{label}</span>
-      <span className={`text-sm font-medium tabular-nums ${tone === 'emerald' ? 'text-emerald-600 dark:text-emerald-400' : tone === 'rose' ? 'text-rose-600 dark:text-rose-400' : muted ? 'text-faint' : 'text-foreground'}`}>{value}</span>
+    <Card className="gap-0 p-5">
+      <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold text-foreground">
+        <CalendarCheck className="h-4 w-4 text-violet-500" />
+        Идёт {monthLabel(month)}
+      </h3>
+      <p className="mb-4 text-xs text-muted-foreground">
+        {snapshot
+          ? `Прогноз зафиксирован ${new Date(snapshot.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}${snapshot.late ? ' (не 1-го числа)' : ''} — его уже не пересчитать, по нему и сверим.`
+          : 'Прогноз на этот месяц ещё не фиксировался — показан расчёт модели. Фиксация идёт 1-го числа каждого месяца.'}
+      </p>
+
+      {!scenarios ? (
+        <p className="text-sm text-muted-foreground">Недостаточно истории для прогноза.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            {(
+              [
+                ['Пессим.', scenarios.pessimistic.income, 'text-rose-600 dark:text-rose-400'],
+                ['Реальный', scenarios.realistic.income, 'text-foreground'],
+                ['Оптим.', scenarios.optimistic.income, 'text-emerald-600 dark:text-emerald-400'],
+              ] as const
+            ).map(([label, value, tone]) => (
+              <div key={label} className="rounded-xl border border-border py-2">
+                <div className="text-[11px] text-muted-foreground">{label}</div>
+                <div className={`text-sm font-bold tabular-nums ${tone}`}>{moneyShort(value)}</div>
+              </div>
+            ))}
+          </div>
+          {fact && (
+            <div className="mt-4 space-y-1 text-sm">
+              <div className="flex items-baseline justify-between">
+                <span className="text-muted-foreground">
+                  Факт дохода на сегодня (день {fact.dayOfMonth} из {fact.daysInMonth})
+                </span>
+                <span className="font-semibold tabular-nums text-foreground">{money(fact.factToDate)}</span>
+              </div>
+              {fact.projected !== null ? (
+                <div className="flex items-baseline justify-between">
+                  <span className="text-muted-foreground">Текущим темпом к концу месяца</span>
+                  <span className="font-semibold tabular-nums text-foreground">{money(fact.projected)}</span>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">Темп месяца покажем с 7-го числа — раньше он слишком случаен.</p>
+              )}
+              {status && <p className={`pt-1 text-sm font-medium ${status.tone}`}>Сейчас месяц {status.text}.</p>}
+            </div>
+          )}
+        </>
+      )}
+    </Card>
+  )
+}
+
+function LearningCard({ data }: { data: MonthlyForecastResponse }) {
+  const calibration = data.next.calibration
+  const weights = calibration
+    ? (Object.entries(calibration.weights.income) as Array<[MethodId, number | undefined]>).sort((a, b) => (b[1] || 0) - (a[1] || 0))
+    : []
+
+  return (
+    <Card className="gap-0 p-5">
+      <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
+        <GraduationCap className="h-4 w-4 text-violet-500" />
+        Как модель учится
+      </h3>
+
+      {weights.length > 0 && (
+        <div className="mb-4 space-y-2">
+          <div className="text-xs text-muted-foreground">Вес способов прогноза дохода — больше у того, кто меньше ошибался</div>
+          {weights.map(([method, weight]) => (
+            <div key={method} className="flex items-center gap-3">
+              <div className="w-40 shrink-0 truncate text-xs text-body">{METHOD_LABELS[method]}</div>
+              <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
+                <div className="h-full rounded-full bg-violet-500" style={{ width: `${Math.round((weight || 0) * 100)}%` }} />
+              </div>
+              <div className="w-10 shrink-0 text-right text-xs font-semibold tabular-nums text-foreground">{pct(weight || 0)}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <ul className="space-y-1.5 border-t border-border pt-3">
+        {data.next.explanation.map((line, i) => (
+          <li key={i} className="flex gap-2 text-sm leading-relaxed text-body">
+            <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-slate-400" />
+            <span>{line}</span>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  )
+}
+
+function AccuracyCard({
+  rows,
+  source,
+  onSource,
+  frozenCount,
+  backtestCount,
+  trend,
+}: {
+  rows: AccuracyRow[]
+  source: 'frozen' | 'backtest'
+  onSource: (s: 'frozen' | 'backtest') => void
+  frozenCount: number
+  backtestCount: number
+  trend: MonthlyForecastResponse['next']['accuracy']['trend']
+}) {
+  const chartData = rows.map((r) => ({
+    label: monthShort(r.month),
+    band: [Math.round(r.scenarios.pessimistic.income), Math.round(r.scenarios.optimistic.income)],
+    forecast: Math.round(r.scenarios.realistic.income),
+    actual: Math.round(r.actual.income),
+    error: r.error === null ? null : Math.round(r.error * 100),
+  }))
+  const recent = rows.slice(-6).map((r) => r.error).filter((e): e is number => e !== null)
+  const recentAvg = recent.length ? recent.reduce((a, b) => a + b, 0) / recent.length : null
+  const inside = rows.slice(-12).filter((r) => r.inside.income).length
+  const total = rows.slice(-12).length
+
+  return (
+    <Card className="gap-0 p-5">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <h3 className="text-sm font-semibold text-foreground">Точность: прогноз против факта</h3>
+        <div className="ml-auto flex flex-wrap gap-2">
+          <Button size="xs" className="rounded-xl" variant={source === 'frozen' ? 'default' : 'outline'} disabled={frozenCount === 0} onClick={() => onSource('frozen')}>
+            Зафиксированные ({frozenCount})
+          </Button>
+          <Button size="xs" className="rounded-xl" variant={source === 'backtest' ? 'default' : 'outline'} onClick={() => onSource('backtest')}>
+            Расчёт задним числом ({backtestCount})
+          </Button>
+        </div>
+      </div>
+      <p className="mb-4 text-xs text-muted-foreground">
+        {source === 'frozen'
+          ? 'Прогнозы, сохранённые 1-го числа и не менявшиеся после — самая честная проверка.'
+          : 'Модель прогнана по истории так, будто работала с первого месяца: каждый прогноз построен только по данным до него. Зафиксированные прогнозы начнут копиться с 1-го числа.'}
+      </p>
+
+      {rows.length === 0 ? (
+        <div className="py-10 text-center text-sm text-muted-foreground">Сверок пока нет — нужно хотя бы 4 закрытых месяца.</div>
+      ) : (
+        <>
+          <div className="mb-3 flex flex-wrap gap-x-5 gap-y-1 text-sm">
+            {recentAvg !== null && (
+              <span className="text-muted-foreground">
+                средняя ошибка за последние {recent.length} мес: <b className="tabular-nums text-foreground">{pct(recentAvg)}</b>
+              </span>
+            )}
+            <span className="text-muted-foreground">
+              факт в коридоре: <b className="tabular-nums text-foreground">{inside} из {total}</b>
+            </span>
+            {source === 'backtest' && trend && (
+              <span className={trend === 'improving' ? 'text-emerald-600 dark:text-emerald-400' : trend === 'worsening' ? 'text-rose-600 dark:text-rose-400' : 'text-muted-foreground'}>
+                {trend === 'improving' ? 'ошибка снижается' : trend === 'worsening' ? 'ошибка растёт' : 'ошибка стабильна'}
+              </span>
+            )}
+          </div>
+
+          <div className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.35} vertical={false} />
+                <XAxis dataKey="label" fontSize={11} tickLine={false} axisLine={false} />
+                <YAxis yAxisId="money" fontSize={10} tickLine={false} axisLine={false} tickFormatter={moneyShort} width={60} />
+                <YAxis yAxisId="error" orientation="right" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} width={40} />
+                <Tooltip
+                  formatter={(value: any, name: any) => {
+                    if (name === 'Ошибка') return [`${value}%`, name]
+                    if (Array.isArray(value)) return [`${money(value[0])} … ${money(value[1])}`, name]
+                    return [money(Number(value)), name]
+                  }}
+                />
+                <Legend />
+                <Area yAxisId="money" dataKey="band" name="Коридор" fill="#8b5cf6" fillOpacity={0.12} stroke="none" />
+                <Line yAxisId="money" dataKey="forecast" name="Прогноз (реальный)" stroke="#8b5cf6" strokeWidth={2} strokeDasharray="6 4" dot={false} />
+                <Line yAxisId="money" dataKey="actual" name="Факт" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
+                <Bar yAxisId="error" dataKey="error" name="Ошибка" fill="#f59e0b" fillOpacity={0.35} barSize={10} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[720px] text-sm">
+              <thead>
+                <tr className="border-b border-border text-[11px] uppercase tracking-wide text-muted-foreground">
+                  <th className="px-2 py-2 text-left font-medium">Месяц</th>
+                  <th className="px-2 py-2 text-right font-medium">Пессим.</th>
+                  <th className="px-2 py-2 text-right font-medium">Реальный</th>
+                  <th className="px-2 py-2 text-right font-medium">Оптим.</th>
+                  <th className="px-2 py-2 text-right font-medium">Факт</th>
+                  <th className="px-2 py-2 text-right font-medium">Ошибка</th>
+                  <th className="px-2 py-2 text-right font-medium">Коридор</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...rows].reverse().map((r) => {
+                  const below = r.actual.income < Math.min(r.scenarios.pessimistic.income, r.scenarios.optimistic.income)
+                  return (
+                    <tr key={r.month} className="border-b border-slate-100 last:border-0 dark:border-white/5">
+                      <td className="whitespace-nowrap px-2 py-2 text-foreground">{monthLabel(r.month)}</td>
+                      <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">{money(r.scenarios.pessimistic.income)}</td>
+                      <td className="px-2 py-2 text-right tabular-nums text-body">{money(r.scenarios.realistic.income)}</td>
+                      <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">{money(r.scenarios.optimistic.income)}</td>
+                      <td className="px-2 py-2 text-right font-semibold tabular-nums text-foreground">{money(r.actual.income)}</td>
+                      <td
+                        className={`px-2 py-2 text-right tabular-nums ${r.error === null ? 'text-muted-foreground' : r.error <= 0.1 ? 'text-emerald-600 dark:text-emerald-400' : r.error <= 0.25 ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400'}`}
+                      >
+                        {r.error === null ? '—' : pct(r.error)}
+                      </td>
+                      <td className="px-2 py-2 text-right text-xs">
+                        {r.inside.income ? (
+                          <span className="text-emerald-600 dark:text-emerald-400">внутри</span>
+                        ) : below ? (
+                          <span className="text-rose-600 dark:text-rose-400">ниже</span>
+                        ) : (
+                          <span className="text-amber-600 dark:text-amber-400">выше</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </Card>
+  )
+}
+
+function HistoryCard({ data }: { data: MonthlyForecastResponse }) {
+  const months = data.forecast.months
+  const chartData = months.map((m) => ({
+    label: monthShort(m.month) + (m.isPartial ? ' (тек.)' : ''),
+    Доход: Math.round(m.income),
+    Расход: Math.round(m.expense),
+    Прибыль: Math.round(m.profit),
+  }))
+
+  return (
+    <Card className="gap-0 p-5">
+      <h3 className="mb-4 text-sm font-semibold text-foreground">История по месяцам</h3>
+      {chartData.length === 0 ? (
+        <div className="py-8 text-center text-sm text-muted-foreground">Нет данных</div>
+      ) : (
+        <>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.35} vertical={false} />
+                <XAxis dataKey="label" fontSize={11} tickLine={false} axisLine={false} />
+                <YAxis fontSize={10} tickLine={false} axisLine={false} tickFormatter={moneyShort} />
+                <Tooltip formatter={(v: any) => money(Number(v))} />
+                <Legend />
+                <ReferenceLine y={0} stroke="#94a3b8" />
+                <Bar dataKey="Доход" fill="#10b981" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="Расход" fill="#ef4444" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="Прибыль" radius={[3, 3, 0, 0]}>
+                  {chartData.map((d, i) => (
+                    <Cell key={i} fill={d['Прибыль'] >= 0 ? '#8b5cf6' : '#f59e0b'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[640px] text-sm">
+              <thead>
+                <tr className="border-b border-border text-[11px] uppercase tracking-wide text-muted-foreground">
+                  <th className="px-2 py-2 text-left font-medium">Месяц</th>
+                  <th className="px-2 py-2 text-right font-medium">Доход</th>
+                  <th className="px-2 py-2 text-right font-medium">Постоянные</th>
+                  <th className="px-2 py-2 text-right font-medium">Переменные</th>
+                  <th className="px-2 py-2 text-right font-medium">Разовые</th>
+                  <th className="px-2 py-2 text-right font-medium">Прибыль</th>
+                  <th className="px-2 py-2 text-right font-medium">Маржа</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...months].reverse().map((m) => (
+                  <tr key={m.month} className="border-b border-slate-100 last:border-0 dark:border-white/5">
+                    <td className="whitespace-nowrap px-2 py-2 text-foreground">
+                      {monthLabel(m.month)}
+                      {m.isPartial && <span className="ml-1 text-[10px] text-amber-600 dark:text-amber-400">тек.</span>}
+                    </td>
+                    <td className="px-2 py-2 text-right tabular-nums text-body">{money(m.income)}</td>
+                    <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">{money(m.fixed)}</td>
+                    <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">{money(m.variable)}</td>
+                    <td className="px-2 py-2 text-right tabular-nums text-faint">{m.oneOff > 0 ? money(m.oneOff) : '—'}</td>
+                    <td className={`px-2 py-2 text-right font-semibold tabular-nums ${m.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                      {money(m.profit)}
+                    </td>
+                    <td className="px-2 py-2 text-right tabular-nums text-body">{m.marginPct.toFixed(0)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </Card>
+  )
+}
+
+function ByCompanyCard({ data }: { data: MonthlyForecastResponse }) {
+  return (
+    <Card className="gap-0 p-5">
+      <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground">
+        <Store className="h-4 w-4 text-violet-500" />
+        По точкам — {monthLabel(data.next.targetMonth)}
+      </h3>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[640px] text-sm">
+          <thead>
+            <tr className="border-b border-border text-[11px] uppercase tracking-wide text-muted-foreground">
+              <th className="px-2 py-2 text-left font-medium">Точка</th>
+              <th className="px-2 py-2 text-right font-medium">Доход (реальный)</th>
+              <th className="px-2 py-2 text-right font-medium">Коридор дохода</th>
+              <th className="px-2 py-2 text-right font-medium">Прибыль</th>
+              <th className="px-2 py-2 text-right font-medium">Ошибка модели</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.byCompany!.map((c) => (
+              <tr key={c.id} className="border-b border-slate-100 last:border-0 dark:border-white/5">
+                <td className="max-w-[180px] truncate px-2 py-2 font-medium text-foreground">{c.name}</td>
+                <td className="px-2 py-2 text-right tabular-nums text-body">{money(c.scenarios.realistic.income)}</td>
+                <td className="px-2 py-2 text-right text-xs tabular-nums text-muted-foreground">
+                  {moneyShort(c.scenarios.pessimistic.income)} … {moneyShort(c.scenarios.optimistic.income)}
+                </td>
+                <td className={`px-2 py-2 text-right font-semibold tabular-nums ${c.scenarios.realistic.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                  {money(c.scenarios.realistic.profit)}
+                </td>
+                <td className="px-2 py-2 text-right text-xs tabular-nums text-muted-foreground">
+                  {c.recentError === null ? 'мало сверок' : `${pct(c.recentError)} · ${c.checks} сверок`}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  )
+}
+
+function ExpenseCard({ data }: { data: MonthlyForecastResponse }) {
+  const { forecast, next } = data
+  const realisticIncome = next.scenarios?.realistic.income ?? 0
+  const breakeven = forecast.breakeven.revenue
+  const safety = realisticIncome > 0 ? ((realisticIncome - breakeven) / realisticIncome) * 100 : null
+  const groups = forecast.expenseByGroup.slice(0, 8)
+  const max = groups[0]?.amount || 1
+
+  return (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <Card className="gap-0 p-5">
+        <div className="mb-1 text-xs text-muted-foreground">Точка безубыточности</div>
+        <div className="text-xl font-bold tabular-nums text-foreground">{money(breakeven)}</div>
+        <p className="mt-1 text-xs text-muted-foreground">доход, при котором месяц выходит в ноль</p>
+        {safety !== null && (
+          <p className={`mt-2 text-sm font-medium ${safety >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+            запас прочности по реальному сценарию {safety >= 0 ? '+' : ''}
+            {safety.toFixed(0)}%
+          </p>
+        )}
+      </Card>
+
+      <Card className="gap-0 p-5 lg:col-span-2">
+        <h3 className="mb-4 text-sm font-semibold text-foreground">Расход по статьям (в среднем за месяц)</h3>
+        {groups.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Расходов пока нет.</p>
+        ) : (
+          <div className="space-y-2">
+            {groups.map((g) => (
+              <div key={g.group} className="flex items-center gap-3">
+                <div className="w-32 shrink-0 truncate text-xs text-body sm:w-44">{g.label}</div>
+                <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
+                  <div className={`h-full rounded-full ${g.bucket === 'variable' ? 'bg-amber-500' : 'bg-violet-500'}`} style={{ width: `${Math.min(100, (g.amount / max) * 100)}%` }} />
+                </div>
+                <div className="w-24 shrink-0 text-right text-xs font-semibold tabular-nums text-foreground">{money(g.amount)}</div>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="mt-3 flex gap-4 text-[11px] text-muted-foreground">
+          <Legendary color="bg-violet-500">постоянные</Legendary>
+          <Legendary color="bg-amber-500">переменные (% от дохода)</Legendary>
+        </div>
+      </Card>
     </div>
+  )
+}
+
+function Legendary({ color, children }: { color: string; children: ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span className={`h-2 w-2 rounded-full ${color}`} />
+      {children}
+    </span>
   )
 }

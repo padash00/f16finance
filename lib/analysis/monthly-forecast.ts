@@ -3,7 +3,7 @@
 // (сезонность только при ≥13 мес данных). Расход разложен на постоянные /
 // переменные (% от дохода) / разовые (вне прогноза). Чистая логика, без сети.
 
-import { inferFinancialGroup, type FinancialGroup } from '@/lib/core/financial-groups'
+import { resolveFinancialGroup, type FinancialGroup } from '@/lib/core/financial-groups'
 
 export type ForecastIncomeRow = { date: string; cash?: number; kaspi?: number; card?: number; online?: number }
 export type ForecastExpenseRow = { date: string; category: string | null; cash?: number; kaspi?: number }
@@ -75,7 +75,13 @@ function projectIncome(history: MonthAgg[], targetMonthNum: number): { value: nu
   return { value: Math.max(0, recentAvg * (1 + momGrowth) * seasonalIndex), recentAvg, momGrowthPct: momGrowth * 100, seasonalIndex, seasonalityAvailable }
 }
 
-export function buildMonthlyForecast(incomes: ForecastIncomeRow[], expenses: ForecastExpenseRow[], todayISO: string): ForecastResult {
+export function buildMonthlyForecast(
+  incomes: ForecastIncomeRow[],
+  expenses: ForecastExpenseRow[],
+  todayISO: string,
+  /** Категория (trim + lower) → accounting_group организации; без неё статья угадывается по названию */
+  categoryGroups: Record<string, string | null> = {},
+): ForecastResult {
   const curMonth = monthOf(todayISO)
   const dayOfMonth = Number(todayISO.slice(8, 10))
 
@@ -94,7 +100,8 @@ export function buildMonthlyForecast(incomes: ForecastIncomeRow[], expenses: For
   const groupTotals = new Map<FinancialGroup, number>()
   for (const r of expenses) {
     if (!r.date) continue
-    const g = inferFinancialGroup(r.category)
+    // Статья — из справочника организации, как в ОПиУ и /reports; угадывание по названию — запасной путь
+    const g = resolveFinancialGroup(r.category, categoryGroups[String(r.category || '').trim().toLowerCase()] ?? null)
     if (EXCLUDE_GROUPS.has(g)) continue
     const amt = (r.cash || 0) + (r.kaspi || 0)
     const e = ensure(monthOf(r.date))
