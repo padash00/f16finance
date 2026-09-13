@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { addDaysISO } from '@/lib/core/date'
 import { aggregateReportFromRows } from '@/lib/reports/aggregate-from-rows'
 import { isExtraCompany } from '@/lib/reports/extra-company'
+import { groupExpensesByArticle } from '@/lib/reports/expense-groups'
 import { countImpreciseNightKaspiInRange, splitIncomeKaspiByCalendarDay, type ReportIncomeCalendarRow } from '@/lib/reports/income-calendar-kaspi'
 import { lastMonthMtdRangeForCurrentMonth, type ForecastHints } from '@/lib/reports/forecast-hybrid'
 import { calculatePrevPeriod, isFullMonthRange, previousCalendarMonthRange } from '@/lib/reports/period'
@@ -129,9 +130,17 @@ export async function GET(req: Request) {
       return q
     }
 
-    const [rowsInRaw, rowsExRaw] = await Promise.all([
+    // Справочник статей — только своей организации: чужая категория с тем же
+    // именем перетёрла бы статью (тот же скоуп, что в /api/admin/profitability/summary).
+    const orgId = access.activeOrganization?.id || null
+    let categoriesQuery: any = supabase.from('expense_categories').select('name, accounting_group')
+    if (!access.isSuperAdmin) categoriesQuery = categoriesQuery.eq('organization_id', orgId || '00000000-0000-0000-0000-000000000000')
+    else if (orgId) categoriesQuery = categoriesQuery.eq('organization_id', orgId)
+
+    const [rowsInRaw, rowsExRaw, categoriesRes] = await Promise.all([
       fetchAllRows<ReportIncomeCalendarRow>(buildIncomeQuery),
       fetchAllRows<ReportExpenseRow>(buildExpenseQuery),
+      categoriesQuery,
     ])
 
     let rowsIn = rowsInRaw
@@ -153,6 +162,14 @@ export async function GET(req: Request) {
       groupMode: group,
       companyName,
     })
+
+    // Справочник не открылся — статьи угадываются по названиям, отчёт не падает.
+    const categoryGroups: Record<string, string | null> = {}
+    for (const row of ((categoriesRes as any)?.data || []) as { name: string | null; accounting_group: string | null }[]) {
+      const key = String(row.name || '').trim().toLowerCase()
+      if (key) categoryGroups[key] = row.accounting_group ?? null
+    }
+    const expenseByGroup = groupExpensesByArticle({ expenses: rowsEx, dateFrom, dateTo, prevFrom, prevTo, categoryGroups })
 
     let forecastHints: ForecastHints | null = null
     if (isFullMonthRange(dateFrom, dateTo)) {
@@ -195,6 +212,7 @@ export async function GET(req: Request) {
           rowsMode === 'current' ? rowsEx.filter((r) => r.date >= dateFrom && r.date <= dateTo) :
           rowsEx,
         aggregate: serializeAggregate(agg, dateFrom, dateTo),
+        expenseByGroup,
         forecastHints,
         meta: { prevFrom, prevTo, incomeFetchFrom, expenseFetchFrom, expenseFetchTo },
       },
@@ -246,6 +264,7 @@ function emptyDataResponse(dateFrom: string, dateTo: string) {
     expenses: [],
     aggregate,
     forecastHints: null,
+    expenseByGroup: [],
     meta: {
       prevFrom,
       prevTo,
