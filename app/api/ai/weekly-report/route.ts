@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 
 import { logAiUsageSafe } from '@/lib/ai/usage-tracker'
 import { generateAiText, streamAiText, type AiMessage } from '@/lib/ai/provider'
+import { requireCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
@@ -42,6 +43,9 @@ export async function POST(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+    // Раньше отчёт мог запустить любой вошедший: кнопка пряталась только в интерфейсе
+    const denied = await requireCapability(access, 'weekly-report.ai_generate')
+    if (denied) return denied
 
     const ip = getClientIp(request)
     const rl = checkRateLimit(`ai-weekly-report:${access.user?.id || ip}`, 30, 60_000)
@@ -84,12 +88,15 @@ export async function POST(request: Request) {
       '- Каждый раздел — 2–4 конкретных пункта с цифрами из данных',
       '- Тон деловой, без воды и общих фраз',
       '- Опирайся только на данные ниже — не выдумывай',
+      '- Безналичные оплаты называй «Безналичный», а не Kaspi или другим названием банка',
+      '- Заголовки — строками «## », пункты — строками «- »; таблицы не используй',
       '- В конце добавь одну главную метрику которую нужно улучшить на следующей неделе',
     ].join('\n')
 
     const aiPayload: { model: string; maxTokens: number; messages: AiMessage[] } = {
       model: OPENAI_MODEL,
-      maxTokens: 1500,
+      // gpt-5 тратит часть бюджета на рассуждение: при 1500 отчёт обрывался
+      maxTokens: 4000,
       messages: [
         { role: 'system', content: systemPrompt },
         {
