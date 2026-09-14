@@ -13,6 +13,11 @@ const ORG_MEMBER_ROLE_RU: Record<string, string> = {
   marketer: 'Маркетолог',
 }
 
+/** Как в «Зарплате» (api/admin/staff-salary): регистр и пробелы не важны */
+function normalizePersonName(value: unknown): string {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
 function orgRoleLabel(role: string | null | undefined): string | null {
   if (!role) return null
   return ORG_MEMBER_ROLE_RU[String(role)] || null
@@ -90,6 +95,8 @@ export async function GET(request: Request) {
     const staffIdToOperatorId = new Map<string, string>()
     /** user_id (Supabase) → operator_id из operator_auth */
     const userIdToOperatorId = new Map<string, string>()
+    /** staff:<id> → имена и Telegram сотрудника, чтобы узнать его среди операторов */
+    const staffMatch = new Map<string, { names: string[]; telegram: string }>()
 
     let members: any[] = []
     if (orgIds.length > 0) {
@@ -152,11 +159,11 @@ export async function GET(request: Request) {
 
       const staffIds = [...staffIdsForOrgRoles]
 
-      const staffByStaffId = new Map<string, { full_name: string | null; short_name: string | null; email: string | null; is_active: boolean | null; role: string | null }>()
+      const staffByStaffId = new Map<string, { full_name: string | null; short_name: string | null; email: string | null; is_active: boolean | null; role: string | null; telegram_chat_id: string | number | null }>()
       if (staffIds.length > 0) {
         const { data: staffData, error: staffErr } = await supabase
           .from('staff')
-          .select('id, full_name, short_name, email, is_active, role')
+          .select('id, full_name, short_name, email, is_active, role, telegram_chat_id')
           .in('id', staffIds)
 
         if (staffErr) throw staffErr
@@ -208,6 +215,10 @@ export async function GET(request: Request) {
                 kind: 'staff' as const,
                 role_label: realPosition || roleLabel,
               })
+              staffMatch.set(rowId, {
+                names: [s.full_name, s.short_name].map(normalizePersonName).filter(Boolean),
+                telegram: String(s.telegram_chat_id || '').trim(),
+              })
             }
           } else {
             addOrgMemberByEmail()
@@ -221,7 +232,7 @@ export async function GET(request: Request) {
     const allowedOperatorIds = [...allowedOperatorIdSet]
     const { data, error } = await supabase
       .from('operators')
-      .select('id, name, short_name, is_active, operator_profiles(full_name)')
+      .select('id, name, short_name, is_active, telegram_chat_id, operator_profiles(full_name)')
       .eq('is_active', true)
       .in('id', allowedOperatorIds.length > 0 ? allowedOperatorIds : ['00000000-0000-0000-0000-000000000000'])
 
@@ -239,16 +250,38 @@ export async function GET(request: Request) {
           short_name: op.short_name || null,
           full_name: profile?.full_name || null,
           kind: 'operator' as const,
+          role_label: null as string | null,
         }
       })
       .filter(Boolean)
 
-    const operatorIdsInResponse = new Set(operators.map((o: any) => String(o.id)))
+    // Один человек бывает и оператором, и административным сотрудником (два
+    // «Сергея» в кассе). «Зарплата» ведёт долги таких людей на сотруднике: по
+    // имени должника без operator_id. Если кассир выберет строку оператора, долг
+    // уйдёт в зарплату операторов и в «Административных сотрудниках» не
+    // появится. Поэтому при совпадении — связь, Telegram или имя, те же правила,
+    // что в «Зарплате» — оставляем сотрудника, а оператора из списка убираем.
+    const staffNames = new Set<string>()
+    const staffTelegrams = new Set<string>()
+    for (const [rowId, match] of staffMatch) {
+      if (!staffDebtors.has(rowId)) continue
+      for (const n of match.names) staffNames.add(n)
+      if (match.telegram) staffTelegrams.add(match.telegram)
+    }
+    const hiddenOperatorIds = new Set<string>()
     for (const [staffId, opId] of staffIdToOperatorId) {
-      if (operatorIdsInResponse.has(opId)) {
-        staffDebtors.delete(`staff:${staffId}`)
+      if (staffDebtors.has(`staff:${staffId}`)) hiddenOperatorIds.add(opId)
+    }
+    for (const op of (data || []) as any[]) {
+      const telegram = String(op?.telegram_chat_id || '').trim()
+      const nameKey = normalizePersonName(op?.name || op?.short_name)
+      if ((telegram && staffTelegrams.has(telegram)) || (nameKey && staffNames.has(nameKey))) {
+        hiddenOperatorIds.add(String(op.id))
       }
     }
+    const visibleOperators = operators.filter((o: any) => !hiddenOperatorIds.has(String(o.id)))
+
+    const operatorIdsInResponse = new Set(visibleOperators.map((o: any) => String(o.id)))
     for (const m of members) {
       const mid = String((m as any).id || '')
       const uid = (m as any).user_id
@@ -259,9 +292,25 @@ export async function GET(request: Request) {
       }
     }
 
-    const combined = [...operators, ...staffDebtors.values()].sort((a: any, b: any) =>
+    const combined: any[] = [...visibleOperators, ...staffDebtors.values()].sort((a: any, b: any) =>
       String(a.name || '').localeCompare(String(b.name || ''), 'ru'),
     )
+
+    // Касса показывает короткое имя и должность. Если короткие имена всё равно
+    // совпали (два разных Олжаса), дописываем, кто есть кто: иначе оператор не
+    // отличит строки и запишет долг не тому. short_name не трогаем — из него
+    // берётся имя должника-сотрудника.
+    const norm = normalizePersonName
+    const labelOf = (o: any) => norm(o.short_name || o.full_name || o.name)
+    const sameLabel = new Map<string, number>()
+    for (const o of combined) sameLabel.set(labelOf(o), (sameLabel.get(labelOf(o)) || 0) + 1)
+    for (const o of combined) {
+      if ((sameLabel.get(labelOf(o)) || 0) < 2) continue
+      const parts = [String(o.role_label || '').trim() || (o.kind === 'operator' ? 'оператор' : 'сотрудник')]
+      const full = String(o.full_name || '').trim()
+      if (full && norm(full) !== labelOf(o)) parts.push(full)
+      o.role_label = parts.join(' · ')
+    }
 
     return json({ ok: true, operators: combined })
   } catch (error: any) {
