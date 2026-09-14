@@ -89,6 +89,20 @@ export type MonthlyPnl = {
   /** Вне P&L, справочно. */
   capex: number
   profitDistribution: number
+  /** Налог из журнала расходов — уплаченный; при расчёте по ставке не вычитается второй раз */
+  incomeTaxPaid: number
+  /** Откуда налог: ручной ввод, ставка с выручки или журнал */
+  incomeTaxSource: 'manual' | 'rate' | 'journal' | 'mixed'
+}
+
+export type PnlOptions = {
+  /**
+   * Ставка налога с выручки, в процентах (упрощёнка, как на /tax).
+   * Задана — налог = выручка × ставка (если нет ручного ввода), а налог из
+   * журнала считается уплатой того же налога и из прибыли не вычитается.
+   * Не задана — налог берётся из журнала, как раньше.
+   */
+  taxRate?: number | null
 }
 
 function num(value: unknown): number {
@@ -96,8 +110,10 @@ function num(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
+export type JournalSplit = ReturnType<typeof splitJournal>
+
 /** Разбор журнала расходов месяца по финансовым группам. */
-function splitJournal(
+export function splitJournal(
   rows: ProfitabilityExpenseRow[],
   month: string,
   categoryGroups: Record<string, string | null>,
@@ -201,9 +217,23 @@ export function computeMonthlyPnl(
   expenses: ProfitabilityExpenseRow[],
   inputs: ProfitabilityInputs | null | undefined,
   categoryGroups: Record<string, string | null> = {},
+  options: PnlOptions = {},
+): MonthlyPnl {
+  return computeMonthlyPnlFromParts(month, income, splitJournal(expenses, month, categoryGroups), inputs, options)
+}
+
+/**
+ * То же по уже разобранному журналу — чтобы экран мог показать «что будет
+ * после сохранения» той же формулой, не таская сырые строки расходов.
+ */
+export function computeMonthlyPnlFromParts(
+  month: string,
+  income: ProfitabilityIncome,
+  journal: JournalSplit,
+  inputs: ProfitabilityInputs | null | undefined,
+  options: PnlOptions = {},
 ): MonthlyPnl {
   const manual = inputs || {}
-  const journal = splitJournal(expenses, month, categoryGroups)
 
   const journalRevenue = income.cash + income.kaspi + income.card + income.online
   const journalCashless = income.kaspi + income.card + income.online
@@ -223,7 +253,19 @@ export function computeMonthlyPnl(
   const payroll = num(manual.payroll_amount) > 0 ? num(manual.payroll_amount) : journal.payroll
   const payrollTaxes =
     num(manual.payroll_taxes_amount) > 0 ? num(manual.payroll_taxes_amount) : journal.payrollTaxes
-  const incomeTax = num(manual.income_tax_amount) > 0 ? num(manual.income_tax_amount) : journal.incomeTax
+  const rate = options.taxRate
+  let incomeTax: number
+  let incomeTaxSource: MonthlyPnl['incomeTaxSource']
+  if (num(manual.income_tax_amount) > 0) {
+    incomeTax = num(manual.income_tax_amount)
+    incomeTaxSource = 'manual'
+  } else if (rate != null && Number.isFinite(rate)) {
+    incomeTax = 0 // досчитывается ниже, когда известна выручка
+    incomeTaxSource = 'rate'
+  } else {
+    incomeTax = journal.incomeTax
+    incomeTaxSource = 'journal'
+  }
   const depreciation =
     num(manual.depreciation_amount) > 0 ? num(manual.depreciation_amount) : journal.depreciation
   const amortization = num(manual.amortization_amount)
@@ -233,6 +275,8 @@ export function computeMonthlyPnl(
   // сложение дало бы двойной счёт одной и той же комиссии.
   const manualCommission = posCommissionFromInputs(manual)
   const posCommission = manualCommission > 0 ? manualCommission : journal.posCommission
+
+  if (incomeTaxSource === 'rate') incomeTax = (revenue * Number(rate)) / 100
 
   const cogs = journal.cogs
   const grossProfit = revenue - cogs
@@ -267,5 +311,7 @@ export function computeMonthlyPnl(
     netMargin: revenue > 0 ? (netProfit / revenue) * 100 : 0,
     capex: journal.capex,
     profitDistribution: journal.profitDistribution,
+    incomeTaxPaid: journal.incomeTax,
+    incomeTaxSource,
   }
 }

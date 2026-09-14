@@ -54,6 +54,11 @@ export async function GET(req: Request) {
     brUrl.searchParams.set('company_id', companyId)
     brUrl.searchParams.set('from', monthFrom)
     brUrl.searchParams.set('to', monthTo)
+    // Ставка налога и Extra — те же, что на экране: иначе прибыль PDF разойдётся
+    for (const key of ['tax_rate', 'include_extra']) {
+      const value = url.searchParams.get(key)
+      if (value) brUrl.searchParams.set(key, value)
+    }
     const brRes = await fetch(brUrl.toString(), {
       headers: cookieHeader ? { cookie: cookieHeader } : {},
       cache: 'no-store',

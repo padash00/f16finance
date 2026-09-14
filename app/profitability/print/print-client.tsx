@@ -62,6 +62,9 @@ export default function PrintClient() {
   const companyId = params.get('company_id') || ''
   const monthFrom = params.get('from') || ''
   const monthTo = params.get('to') || ''
+  // Ставка налога и Extra — как на экране ОПиУ, иначе прибыль разойдётся
+  const taxRate = params.get('tax_rate') || ''
+  const includeExtra = params.get('include_extra') || ''
   const partnersRaw = params.get('partners') || ''
   const includeCapex = params.get('capex') !== '0'
   // Ручной override ФОТ — если в URL пришёл ?payroll_staff или ?payroll_ops,
@@ -107,7 +110,7 @@ export default function PrintClient() {
     const load = async () => {
       try {
         const res = await fetch(
-          `/api/admin/profitability/branch-report?company_id=${encodeURIComponent(companyId)}&from=${encodeURIComponent(monthFrom)}&to=${encodeURIComponent(monthTo)}`,
+          `/api/admin/profitability/branch-report?company_id=${encodeURIComponent(companyId)}&from=${encodeURIComponent(monthFrom)}&to=${encodeURIComponent(monthTo)}${taxRate ? `&tax_rate=${encodeURIComponent(taxRate)}` : ''}${includeExtra ? `&include_extra=${encodeURIComponent(includeExtra)}` : ''}`,
           { cache: 'no-store' },
         )
         const json = await res.json()
@@ -120,7 +123,7 @@ export default function PrintClient() {
       }
     }
     void load()
-  }, [companyId, monthFrom, monthTo])
+  }, [companyId, monthFrom, monthTo, taxRate, includeExtra])
 
   useEffect(() => {
     if (report && !loading && params.get('auto') === '1') {
