@@ -206,7 +206,8 @@ export async function GET(request: Request) {
                 'Сотрудник'
               // Реальная должность из Кадров (staff.role, напр. «технический
               // директор») важнее общего ярлыка org-роли («Руководитель»).
-              const realPosition = (s.role || '').trim()
+              // В staff.role бывают и коды ролей (owner, manager) — их по-русски
+              const realPosition = orgRoleLabel(s.role) || (s.role || '').trim()
               staffDebtors.set(rowId, {
                 id: rowId,
                 name: display,
