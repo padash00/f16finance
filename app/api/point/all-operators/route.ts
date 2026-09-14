@@ -159,11 +159,11 @@ export async function GET(request: Request) {
 
       const staffIds = [...staffIdsForOrgRoles]
 
-      const staffByStaffId = new Map<string, { full_name: string | null; short_name: string | null; email: string | null; is_active: boolean | null; role: string | null; telegram_chat_id: string | number | null }>()
+      const staffByStaffId = new Map<string, { full_name: string | null; short_name: string | null; email: string | null; is_active: boolean | null; role: string | null; telegram_chat_id: string | number | null; dismissed_at: string | null }>()
       if (staffIds.length > 0) {
         const { data: staffData, error: staffErr } = await supabase
           .from('staff')
-          .select('id, full_name, short_name, email, is_active, role, telegram_chat_id')
+          .select('id, full_name, short_name, email, is_active, role, telegram_chat_id, dismissed_at')
           .in('id', staffIds)
 
         if (staffErr) throw staffErr
@@ -196,6 +196,11 @@ export async function GET(request: Request) {
         if (staffIdRaw) {
           const sid = String(staffIdRaw)
           const s = staffByStaffId.get(sid)
+          // Уволенного в «Кадрах» в должники не предлагаем. Увольнение гасит и
+          // участника организации, но только в той организации, где увольняли, —
+          // поэтому смотрим на саму отметку. Выключенный без увольнения (например,
+          // владелец без карточки) по-прежнему в списке.
+          if (s?.dismissed_at) continue
           // Members here are owner/manager/marketer — list them for debts even if staff.is_active is false
           // (no separate operators row needed; debt uses client_name via staff: id on the client).
           if (s) {
