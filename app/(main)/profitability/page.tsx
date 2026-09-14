@@ -463,6 +463,104 @@ export default function ProfitabilityPage() {
   )
 }
 
+// ─── Почему изменилась прибыль ──────────────────────────────────────────────
+
+const plain = (v: number) => `${Math.abs(Math.round(v)).toLocaleString('ru-RU')} ₸`
+
+/** Что не заполнено в месяце, хотя в прошлом было, — иначе рост прибыли ложный */
+function missingVsPrevious(current: MonthlyPnl, previous: MonthlyPnl): string[] {
+  const out: string[] = []
+  const checks: Array<[string, (p: MonthlyPnl) => number]> = [
+    ['комиссия банка', (p) => p.posCommission],
+    ['износ и амортизация', (p) => p.depreciation + p.amortization],
+    ['зарплаты', (p) => p.payroll],
+    ['налоги на зарплату', (p) => p.payrollTaxes],
+    ['прочие операционные', (p) => p.otherOperating],
+  ]
+  for (const [label, get] of checks) {
+    if (get(previous) > 0 && get(current) === 0) out.push(`${label} — 0 (в прошлом месяце ${plain(get(previous))})`)
+  }
+  const expensesOf = (p: MonthlyPnl) => p.cogs + p.operatingExpenses
+  if (expensesOf(previous) > 0 && expensesOf(current) < expensesOf(previous) * 0.5) {
+    out.push(`расходы по журналу ${plain(expensesOf(current))} — меньше половины прошлого месяца (${plain(expensesOf(previous))})`)
+  }
+  return out
+}
+
+function BridgeList({ current, previous }: { current: MonthlyPnl; previous: MonthlyPnl }) {
+  const lines = profitBridge(current, previous)
+  const revenue = lines.filter((l) => l.key === 'revenue')
+  const rest = lines.filter((l) => l.key !== 'revenue').sort((a, b) => Math.abs(b.effect) - Math.abs(a.effect))
+  const helped = lines.filter((l) => l.effect > 0).reduce((s, l) => s + l.effect, 0)
+  const hurt = lines.filter((l) => l.effect < 0).reduce((s, l) => s + l.effect, 0)
+  const diff = current.netProfit - previous.netProfit
+  const missing = missingVsPrevious(current, previous)
+
+  const explain = (key: string, delta: number) => {
+    if (Math.round(delta) === 0) return 'не изменилась'
+    if (key === 'revenue') return `${delta > 0 ? 'выросла' : 'упала'} на ${plain(delta)}`
+    return `${delta > 0 ? 'потратили больше' : 'потратили меньше'} на ${plain(delta)}`
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-2 text-sm">
+        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/[0.06] p-3">
+          <p className="text-xs text-muted-foreground">Добавило прибыли</p>
+          <p className="mt-0.5 font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">+{plain(helped)}</p>
+        </div>
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/[0.06] p-3">
+          <p className="text-xs text-muted-foreground">Отняло прибыли</p>
+          <p className="mt-0.5 font-semibold tabular-nums text-rose-600 dark:text-rose-400">−{plain(hurt)}</p>
+        </div>
+        <div className="rounded-xl border border-border p-3">
+          <p className="text-xs text-muted-foreground">Итог</p>
+          <p className={`mt-0.5 font-semibold tabular-nums ${tone(diff)}`}>
+            {diff >= 0 ? 'выросла на' : 'упала на'} {plain(diff)}
+          </p>
+        </div>
+      </div>
+
+      {missing.length ? (
+        <div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <p className="font-medium">Похоже, месяц заполнен не до конца — рост прибыли может быть ненастоящим:</p>
+            <ul className="mt-1 list-disc space-y-0.5 pl-4">
+              {missing.map((m) => (
+                <li key={m}>{m}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="divide-y divide-border rounded-xl border border-border">
+        {[...revenue, ...rest].map((line) => {
+          const delta = line.current - line.previous
+          return (
+            <div key={line.key} className="grid grid-cols-[1fr_auto] items-center gap-3 px-3 py-2.5">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">
+                  {line.label} <span className="font-normal text-muted-foreground">{explain(line.key, delta)}</span>
+                </p>
+                <p className="text-xs text-muted-foreground tabular-nums">
+                  было {plain(line.previous)} → стало {plain(line.current)}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className={`text-sm font-semibold tabular-nums ${tone(line.effect)}`}>{signed(line.effect)}</p>
+                <p className="text-[11px] text-muted-foreground">{line.effect >= 0 ? 'к прибыли' : 'из прибыли'}</p>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      <p className="text-xs text-muted-foreground">Зелёное — из-за этой строки прибыль выросла, красное — уменьшилась. Если расходов стало меньше, прибыли от этого больше.</p>
+    </div>
+  )
+}
+
 // ─── Обзор ──────────────────────────────────────────────────────────────────
 
 function OverviewTab({
@@ -480,8 +578,6 @@ function OverviewTab({
   posLabel: string
   labels: ReturnType<typeof useCashlessLabels>
 }) {
-  const bridge = previous ? profitBridge(selected, previous) : []
-  const maxEffect = Math.max(1, ...bridge.map((l) => Math.abs(l.effect)))
   const categories = (report.categoriesByMonth[selected.month] || []).slice(0, 6)
   const maxCategory = categories[0]?.amount || 1
   const incomplete = report.incompleteMonths.filter((m) => m.month === selected.month)
@@ -557,31 +653,14 @@ function OverviewTab({
         <div className="xl:col-span-3">
           <Section
             title="Почему изменилась прибыль"
-            subtitle={previous ? `${monthLabel(selected.month)} против ${monthLabel(previous.month).toLowerCase()}: ${signed(selected.netProfit - previous.netProfit)}` : 'Нет прошлого месяца для сравнения.'}
+            subtitle={
+              previous
+                ? `Чистая прибыль за ${monthLabel(selected.month).toLowerCase()} — ${money(selected.netProfit)}, за ${monthLabel(previous.month).toLowerCase()} было ${money(previous.netProfit)}`
+                : 'Нет прошлого месяца для сравнения.'
+            }
             icon={<Scale className="h-4 w-4 text-violet-500" />}
           >
-            {previous ? (
-              <div className="space-y-2.5">
-                {bridge.map((line) => (
-                  <div key={line.key}>
-                    <div className="flex items-baseline justify-between gap-3 text-sm">
-                      <span className="truncate">
-                        {line.label}
-                        <span className="ml-1.5 text-xs text-muted-foreground">
-                          {money(line.previous)} → {money(line.current)}
-                        </span>
-                      </span>
-                      <span className={`shrink-0 font-semibold tabular-nums ${tone(line.effect)}`}>{signed(line.effect)}</span>
-                    </div>
-                    <div className="mt-1 h-1.5 rounded-full bg-surface-muted">
-                      <div className={`h-1.5 rounded-full ${line.effect >= 0 ? 'bg-emerald-500' : 'bg-rose-500'}`} style={{ width: `${Math.max(2, (Math.abs(line.effect) / maxEffect) * 100)}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">Выберите период, в котором есть предыдущий месяц.</p>
-            )}
+            {previous ? <BridgeList current={selected} previous={previous} /> : <p className="text-sm text-muted-foreground">Выберите период, в котором есть предыдущий месяц.</p>}
           </Section>
         </div>
         <div className="xl:col-span-2">
@@ -833,30 +912,16 @@ function PointsTab({ report, posLabel }: { report: ProfitabilityReport; posLabel
 function CompanyDetail({ company, posLabel }: { company: CompanyPnl; posLabel: string }) {
   const last = company.months[company.months.length - 1]
   const prev = company.months.length > 1 ? company.months[company.months.length - 2] : null
-  const bridge = last && prev ? profitBridge(last, prev) : []
   return (
     <div className="grid gap-5 xl:grid-cols-2">
       <Section title={`${company.name} — ОПиУ за период`}>
         <PnlTable pnl={company.total} posLabel={posLabel} />
       </Section>
-      <Section title="Что изменилось в последнем месяце" subtitle={last && prev ? `${monthLabel(last.month)} против ${monthLabel(prev.month).toLowerCase()}: ${signed(last.netProfit - prev.netProfit)}` : 'В периоде один месяц.'}>
-        {bridge.length ? (
-          <div className="space-y-2">
-            {bridge.map((l) => (
-              <div key={l.key} className="flex items-baseline justify-between gap-3 text-sm">
-                <span className="truncate">
-                  {l.label}
-                  <span className="ml-1.5 text-xs text-muted-foreground">
-                    {money(l.previous)} → {money(l.current)}
-                  </span>
-                </span>
-                <span className={`shrink-0 font-semibold tabular-nums ${tone(l.effect)}`}>{signed(l.effect)}</span>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">Нужно хотя бы два месяца в периоде.</p>
-        )}
+      <Section
+        title="Почему изменилась прибыль точки"
+        subtitle={last && prev ? `${monthLabel(last.month)} к ${monthLabel(prev.month).toLowerCase()}` : 'В периоде один месяц.'}
+      >
+        {last && prev ? <BridgeList current={last} previous={prev} /> : <p className="text-sm text-muted-foreground">Нужно хотя бы два месяца в периоде.</p>}
       </Section>
     </div>
   )
