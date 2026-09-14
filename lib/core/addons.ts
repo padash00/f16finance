@@ -52,7 +52,8 @@ export const ADDON_CATALOG: AddonDef[] = [
     code: 'addon.arena',
     name: 'Арена / Игровой клуб',
     description: 'Станции, зоны, тарифы, игровые сессии, зал.',
-    pages: ['/stations'],
+    // /stations — старый адрес (на него смотрит iOS), /arena — разделы в меню
+    pages: ['/stations', '/arena'],
     grants: ['addon.arena'],
     price_kzt: 0,
     billing: 'flat',

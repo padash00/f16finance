@@ -49,6 +49,9 @@ import {
   Target,
   Tags,
   Warehouse,
+  Gamepad2,
+  Map as MapIcon,
+  Paintbrush,
   TrendingDown,
   TrendingUp,
   Trophy,
@@ -92,6 +95,19 @@ export type NavSection = {
   /** Любая из фич (any-of). Если задано и у орг нет НИ ОДНОЙ — секция скрыта. */
   featuresAny?: string[]
 }
+
+// Игровая зона. Раньше была одной страницей с вкладками, куда попадали через
+// «Точки и устройства» → проект → «Станции». Теперь каждый раздел — свой пункт
+// меню; точка выбирается переключателем на странице и запоминается.
+const ARENA_ITEMS: NavItem[] = [
+  { href: '/arena/hall', label: 'Игровой зал', icon: Activity, note: 'Занятость, старт и стоп сессий, баланс клиента' },
+  { href: '/arena/bookings', label: 'Брони станций', icon: CalendarDays, note: 'Брони по дням' },
+  { href: '/arena/stations', label: 'Станции и тарифы', icon: Monitor, note: 'Зоны, станции, тарифы, железо' },
+  { href: '/arena/map', label: 'Карта зала', icon: MapIcon, note: 'Расстановка станций' },
+  { href: '/arena/games', label: 'Каталог игр', icon: Gamepad2, note: 'Игры и пути запуска на станциях' },
+  { href: '/arena/analytics', label: 'Аналитика зала', icon: BarChart3, note: 'Выручка, сессии и часы пик' },
+  { href: '/arena/kiosk', label: 'Киоск и брендинг', icon: Paintbrush, note: 'Оформление киоска и ключ подключения' },
+]
 
 export const navSections: NavSection[] = [
   {
@@ -228,6 +244,7 @@ export const navSections: NavSection[] = [
       { href: '/telegram', label: 'Telegram Bot', icon: MessageSquareText, note: 'Уведомления и команды', badge: 'new', badgeColor: 'blue' },
       { href: '/server-monitor', label: 'Мониторинг сервера', icon: Activity, note: 'Состояние Windows Server и аварии', badge: 'live', badgeColor: 'green', isNew: true },
       { href: '/point-devices', label: 'Точки и устройства', icon: Building2, note: 'Токены и программы точек' },
+      ...ARENA_ITEMS,
       { href: '/logs', label: 'Логирование', icon: Logs, note: 'Аудит, уведомления и события' },
       { href: '/debug', label: 'Диагностика', icon: Wrench, note: 'Проверки и отладка' },
     ],
@@ -353,7 +370,7 @@ export function buildOwnerNavSections(): NavSection[] {
       accentColor: 'slate',
       icon: Settings2,
       // /access («Права и пароли») — управление доступом, доступно только владельцу.
-      items: [settingsItem, serverMonitorItem, accessItem].filter(Boolean) as NavItem[],
+      items: [settingsItem, ...ARENA_ITEMS, serverMonitorItem, accessItem].filter(Boolean) as NavItem[],
     })
   }
 

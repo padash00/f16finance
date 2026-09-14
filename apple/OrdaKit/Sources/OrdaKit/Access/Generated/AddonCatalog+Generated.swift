@@ -32,7 +32,7 @@ extension AddonCatalog {
             code: "addon.arena",
             name: "Арена / Игровой клуб",
             description: "Станции, зоны, тарифы, игровые сессии, зал.",
-            pages: ["/stations"],
+            pages: ["/stations", "/arena"],
             grants: ["addon.arena"],
             priceKzt: 0,
             billing: .flat

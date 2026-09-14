@@ -508,6 +508,7 @@ export const ACCESS_PAGE_GROUPS: readonly AccessPageGroup[] = [
       { path: '/ratings', label: 'Рейтинг операторов' },
       { path: '/birthdays', label: 'Дни рождения' },
       { path: '/stations/*', label: 'Станции проекта' },
+      { path: '/arena/*', label: 'Игровая зона: зал, брони, станции, карта, игры, аналитика, киоск' },
     ],
   },
   {
@@ -666,6 +667,15 @@ const MOVED_PATHS: Record<string, string> = {
   '/regulations/guide': '/knowledge-admin',
   '/regulations/exams': '/operator-exams',
   '/regulations/setup': '/knowledge-setup',
+  // Игровая зона переехала со страницы проекта /stations/<id> в разделы меню
+  '/arena': '/stations/arena',
+  '/arena/hall': '/stations/arena',
+  '/arena/bookings': '/stations/arena',
+  '/arena/stations': '/stations/arena',
+  '/arena/map': '/stations/arena',
+  '/arena/games': '/stations/arena',
+  '/arena/analytics': '/stations/arena',
+  '/arena/kiosk': '/stations/arena',
 }
 
 export function canStaffRoleAccessPath(

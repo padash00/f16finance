@@ -859,7 +859,7 @@ export default function PointDevicesPage() {
                         )}
                         {project.companies.some((c) => (c.feature_flags as any)?.arena_enabled === true) ? (
                           <Button size="sm" variant="outline" asChild className="gap-2">
-                            <Link href={`/stations/${project.id}`}>
+                            <Link href={`/arena/stations?company=${project.companies.find((c) => (c.feature_flags as any)?.arena_enabled === true)?.id || ''}`}>
                               <Monitor className="h-4 w-4" />
                               Станции
                             </Link>

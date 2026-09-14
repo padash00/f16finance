@@ -3651,7 +3651,8 @@
       "name": "Арена / Игровой клуб",
       "description": "Станции, зоны, тарифы, игровые сессии, зал.",
       "pages": [
-        "/stations"
+        "/stations",
+        "/arena"
       ],
       "grants": [
         "addon.arena"
