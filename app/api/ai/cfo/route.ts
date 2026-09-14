@@ -2,17 +2,28 @@ import { NextResponse } from 'next/server'
 
 import { logAiUsageSafe } from '@/lib/ai/usage-tracker'
 import { generateAiText, type AiMessage } from '@/lib/ai/provider'
-import { getRequestAccessContext } from '@/lib/server/request-auth'
-import { requireOrgFeature } from '@/lib/server/entitlements'
-import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
-import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
-import { resolveCompanyScope } from '@/lib/server/organizations'
-import { resolveFinancialGroup } from '@/lib/core/financial-groups'
+import { buildCfoReview, type CfoHealth } from '@/lib/analysis/cfo-review'
+import { addDaysISO } from '@/lib/core/date'
+import { isExtraCompany } from '@/lib/reports/extra-company'
+import { splitIncomeKaspiByCalendarDay, type ReportIncomeCalendarRow } from '@/lib/reports/income-calendar-kaspi'
+import { calculatePrevPeriod, isFullMonthRange, previousCalendarMonthRange } from '@/lib/reports/period'
+import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireStaffCapability } from '@/lib/server/capabilities'
+import { requireOrgFeature } from '@/lib/server/entitlements'
+import { fetchAllRows, kzTodayISO } from '@/lib/server/forecast-inputs'
+import { resolveCompanyScope } from '@/lib/server/organizations'
+import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
+import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
-// AI CFO — виртуальный финансовый директор.
-// Точные цифры (выручка/расходы/прибыль/маржа по компаниям + дельты к прошлому периоду) считаются КОДОМ.
-// AI получает готовые цифры и даёт АНАЛИЗ: причины, проблемы, возможности, рекомендации, прогноз.
+// Финдиректор — разбор периода.
+// Цифры считает код (lib/analysis/cfo-review) так же, как /reports: Extra по
+// умолчанию исключена, безнал ночной смены перенесён на следующий день, статьи —
+// из справочника своей организации. ИИ получает готовый разбор и только
+// объясняет его. Запуск ИИ — отдельным запросом и по праву ai-cfo.generate.
+//
+// Ответ читают веб, мобильное приложение (mobile/app/(tabs)/ai.tsx) и iOS
+// (apple/OrdaKit, CfoReport) — старые поля сохранены.
 
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini'
 export const dynamic = 'force-dynamic'
@@ -20,34 +31,15 @@ export const dynamic = 'force-dynamic'
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
-function todayISO() {
-  const now = new Date()
-  const t = now.getTime() - now.getTimezoneOffset() * 60_000
-  return new Date(t).toISOString().slice(0, 10)
-}
-function addDaysISO(iso: string, diff: number) {
-  const [y, m, d] = iso.split('-').map(Number)
-  const dt = new Date(y, (m || 1) - 1, d || 1)
-  dt.setDate(dt.getDate() + diff)
-  const t = dt.getTime() - dt.getTimezoneOffset() * 60_000
-  return new Date(t).toISOString().slice(0, 10)
-}
-function daysBetweenISO(from: string, to: string) {
-  const [fy, fm, fd] = from.split('-').map(Number)
-  const [ty, tm, td] = to.split('-').map(Number)
-  const a = Date.UTC(fy, (fm || 1) - 1, fd || 1)
-  const b = Date.UTC(ty, (tm || 1) - 1, td || 1)
-  return Math.round((b - a) / 86_400_000) + 1
-}
-const n = (v: any) => Number(v || 0)
-const incomeOf = (r: any) => n(r.cash_amount) + n(r.kaspi_amount) + n(r.online_amount) + n(r.card_amount)
-const expenseOf = (r: any) => n(r.cash_amount) + n(r.kaspi_amount)
-const pct = (cur: number, prev: number) => (!prev ? (cur ? 100 : 0) : ((cur - prev) / Math.abs(prev)) * 100)
-const r0 = (v: number) => Math.round(v)
-const r1 = (v: number) => Math.round(v * 10) / 10
 
 function parseJsonLoose(text: string): any {
-  const tryParse = (s: string) => { try { return JSON.parse(s) } catch { return null } }
+  const tryParse = (s: string) => {
+    try {
+      return JSON.parse(s)
+    } catch {
+      return null
+    }
+  }
   const direct = tryParse(text)
   if (direct) return direct
   const cleaned = text.replace(/```json/gi, '').replace(/```/g, '').trim()
@@ -59,20 +51,45 @@ function parseJsonLoose(text: string): any {
   return null
 }
 
+// Оценка здоровья в старом формате ответа модели — для приложения
+function healthForApps(health: CfoHealth) {
+  const breakdown: Record<string, number> = {}
+  for (const item of health.items) breakdown[item.key] = item.points
+  return { score: health.score, band: health.band, breakdown, missing: health.missing }
+}
+
+const isISO = (s: unknown): s is string => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s)
+
+/**
+ * База сравнения. Период с 1-го числа внутри одного месяца (весь месяц или
+ * идущий по вчера) сравниваем с теми же днями прошлого месяца: 1–13 сентября
+ * против 1–13 августа, сентябрь против всего августа. Отрезок той же длины
+ * тут врёт — для сентября это 2–31 августа. Остальное — такой же отрезок
+ * сразу перед выбранным.
+ */
+function previousPeriod(dateFrom: string, dateTo: string): { prevFrom: string; prevTo: string } {
+  if (dateFrom.endsWith('-01') && dateFrom.slice(0, 7) === dateTo.slice(0, 7)) {
+    const prev = previousCalendarMonthRange(dateFrom)
+    const fullMonth = isFullMonthRange(dateFrom, dateTo)
+    const day = Number(dateTo.slice(8, 10))
+    const prevLastDay = Number(prev.to.slice(8, 10))
+    const prevTo = fullMonth ? prev.to : `${prev.from.slice(0, 8)}${String(Math.min(day, prevLastDay)).padStart(2, '0')}`
+    return { prevFrom: prev.from, prevTo }
+  }
+  const { prevFrom, prevTo } = calculatePrevPeriod(dateFrom, dateTo)
+  return { prevFrom, prevTo }
+}
+
 export async function POST(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
     if (!access.isSuperAdmin && !access.staffMember) return json({ error: 'forbidden' }, 403)
 
-    // Раздел закрыт своим правом, а не просто «любой сотрудник»: разбор
-    // уносит наружу то, что видят не все, — деньги и людей поимённо. Права у
-    // сотрудника есть все, пока владелец их не отнял, поэтому проверка ничего
-    // не ломает у тех, кому раздел и предназначен.
     const denied = await requireStaffCapability(access, 'ai-cfo.view')
     if (denied) return denied
 
-    // Платная фича AI CFO: при ENTITLEMENTS_ENFORCE=true вернёт 402, если не куплена.
+    // Платная фича: при ENTITLEMENTS_ENFORCE=true вернёт 402, если не куплена.
     const gate = await requireOrgFeature(access, 'ai.cfo')
     if (gate) return gate
 
@@ -82,265 +99,194 @@ export async function POST(request: Request) {
     if (!hasAdminSupabaseCredentials()) return json({ error: 'supabase-unavailable' }, 500)
 
     const body = await request.json().catch(() => ({}))
-    const isISO = (s: any) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s)
 
+    // ── Период. Сегодняшние отчёты смен ещё не внесены — период кончается вчера ──
+    const yesterday = addDaysISO(kzTodayISO(), -1)
     let dateFrom: string
     let dateTo: string
-    let days: number
     if (isISO(body?.dateFrom) && isISO(body?.dateTo) && body.dateFrom <= body.dateTo) {
-      // Явный период: конкретный месяц или произвольный диапазон
       dateFrom = body.dateFrom
-      dateTo = body.dateTo
-      days = daysBetweenISO(dateFrom, dateTo)
+      dateTo = body.dateTo < yesterday ? body.dateTo : yesterday
+      if (dateFrom > dateTo) dateFrom = dateTo
     } else {
-      // Пресет: последние N дней
-      days = [7, 30, 90, 365].includes(Number(body?.days)) ? Number(body.days) : 90
-      dateTo = body?.dateTo && isISO(body.dateTo) ? body.dateTo : todayISO()
-      dateFrom = addDaysISO(dateTo, -(days - 1))
+      const presetDays = [7, 30, 90, 365].includes(Number(body?.days)) ? Number(body.days) : 90
+      dateTo = isISO(body?.dateTo) && body.dateTo < yesterday ? body.dateTo : yesterday
+      dateFrom = addDaysISO(dateTo, -(presetDays - 1))
     }
-    // Предыдущий период такой же длины — непосредственно перед текущим
-    const prevTo = addDaysISO(dateFrom, -1)
-    const prevFrom = addDaysISO(prevTo, -(days - 1))
+    const { prevFrom, prevTo } = previousPeriod(dateFrom, dateTo)
+    const days = Math.round((Date.parse(`${dateTo}T00:00:00Z`) - Date.parse(`${dateFrom}T00:00:00Z`)) / 86_400_000) + 1
 
     const supabase = createAdminSupabaseClient()
     const scope = await resolveCompanyScope({
       activeOrganizationId: access.activeOrganization?.id || null,
       isSuperAdmin: access.isSuperAdmin,
     })
+    if (scope.allowedCompanyIds && scope.allowedCompanyIds.length === 0) return json({ error: 'no-companies' }, 200)
+
+    const companyId = typeof body?.company_id === 'string' && body.company_id ? String(body.company_id) : null
+    if (companyId && scope.allowedCompanyIds && !scope.allowedCompanyIds.includes(companyId)) {
+      return json({ error: 'forbidden' }, 403)
+    }
+    const includeExtra = body?.include_extra === true || body?.include_extra === '1'
 
     let companiesQ = supabase.from('companies').select('id, name, code')
-    if (scope.allowedCompanyIds) {
-      if (scope.allowedCompanyIds.length === 0) return json({ error: 'no-companies' }, 200)
-      companiesQ = companiesQ.in('id', scope.allowedCompanyIds)
-    }
+    if (scope.allowedCompanyIds) companiesQ = companiesQ.in('id', scope.allowedCompanyIds)
+    const { data: companyRows, error: companiesError } = await companiesQ
+    if (companiesError) throw companiesError
+    const allCompanies = ((companyRows || []) as Array<{ id: string; name: string | null; code: string | null }>).map((c) => ({
+      id: String(c.id),
+      name: String(c.name || c.code || '—'),
+      code: c.code,
+    }))
+    const extraIds = new Set(allCompanies.filter(isExtraCompany).map((c) => c.id))
+    // Как в /reports: Extra не входит в «все точки», если её не включили явно
+    const excluded = (id: string) => (companyId ? id !== companyId : !includeExtra && extraIds.has(id))
+    const companies = allCompanies.filter((c) => !excluded(c.id))
+    const scopeIds = companyId ? [companyId] : scope.allowedCompanyIds
 
-    // Полная постраничная выборка (как reports/bundle) — БЕЗ обрезки на 10k строк.
-    // У расходов записей много (мелкие траты), поэтому range(0,9999) их сильно занижал.
-    const PAGE = 1000
-    const fetchAll = async (table: 'incomes' | 'expenses', columns: string) => {
-      const all: any[] = []
-      let from = 0
-      for (;;) {
+    // Справочник статей — только своей организации: чужая статья с тем же
+    // названием перетёрла бы группу (как в /reports и ОПиУ)
+    const orgId = access.activeOrganization?.id || null
+    let categoriesQuery: any = supabase.from('expense_categories').select('name, accounting_group')
+    if (!access.isSuperAdmin) categoriesQuery = categoriesQuery.eq('organization_id', orgId || '00000000-0000-0000-0000-000000000000')
+    else if (orgId) categoriesQuery = categoriesQuery.eq('organization_id', orgId)
+
+    const [incomeRows, expenseRows, categoriesRes] = await Promise.all([
+      // День до начала: ночная смена переносит часть безнала за полночь
+      fetchAllRows<ReportIncomeCalendarRow>(() => {
         let q = supabase
-          .from(table)
-          .select(columns)
+          .from('incomes')
+          .select('id, date, company_id, shift, zone, cash_amount, kaspi_amount, kaspi_before_midnight, online_amount, card_amount')
+          .gte('date', addDaysISO(prevFrom, -1))
+          .lte('date', dateTo)
+          .order('date', { ascending: true })
+          .order('id', { ascending: true })
+        if (scopeIds) q = q.in('company_id', scopeIds)
+        return q
+      }),
+      fetchAllRows<any>(() => {
+        let q = supabase
+          .from('expenses')
+          .select('id, date, company_id, category, cash_amount, kaspi_amount')
           .gte('date', prevFrom)
           .lte('date', dateTo)
           .order('date', { ascending: true })
           .order('id', { ascending: true })
-          .range(from, from + PAGE - 1)
-        if (scope.allowedCompanyIds) q = q.in('company_id', scope.allowedCompanyIds)
-        const { data, error } = await q
-        if (error) throw error
-        const batch = data || []
-        all.push(...batch)
-        if (batch.length < PAGE) break
-        from += PAGE
-      }
-      return all
-    }
-
-    const [companiesR, catsR, incomeRows, expenseRows] = await Promise.all([
-      companiesQ,
-      supabase.from('expense_categories').select('name, accounting_group'),
-      fetchAll('incomes', 'id, date, company_id, cash_amount, kaspi_amount, online_amount, card_amount'),
-      fetchAll('expenses', 'id, date, company_id, category, cash_amount, kaspi_amount'),
+        if (scopeIds) q = q.in('company_id', scopeIds)
+        return q
+      }),
+      categoriesQuery,
     ])
-    if (companiesR.error) throw companiesR.error
 
-    const companies = (companiesR.data || []) as any[]
-    const catGroup = new Map<string, string>(
-      (((catsR as any)?.data || []) as any[]).map((c) => [String(c.name || '').toLowerCase(), String(c.accounting_group || '')]),
-    )
-    const nameById = new Map(companies.map((c) => [String(c.id), c.name || c.code || '—']))
-
-    // Агрегация по компаниям (текущий/прошлый) + категории расходов
-    type Agg = { revCur: number; revPrev: number; expCur: number; expPrev: number }
-    const byCompany = new Map<string, Agg>()
-    const ensure = (id: string) => {
-      if (!byCompany.has(id)) byCompany.set(id, { revCur: 0, revPrev: 0, expCur: 0, expPrev: 0 })
-      return byCompany.get(id)!
-    }
-    let revCur = 0, revPrev = 0, expCur = 0, expPrev = 0
-    const catCur = new Map<string, number>()
-    const catPrev = new Map<string, number>()
-    const salesDays = new Set<string>()
-    const expenseDays = new Set<string>()
-    const FOT_KEYS = ['зарплат', 'оклад', 'фот', 'преми', 'бонус', 'salary', ' зп']
-    let fotCur = 0
-    let varExpCur = 0, fixExpCur = 0, capexCur = 0, taxCur = 0, distCur = 0
-
-    for (const row of incomeRows) {
-      const v = incomeOf(row)
-      if (!v) continue
-      const cur = String(row.date) >= dateFrom
-      const a = ensure(String(row.company_id))
-      if (cur) { a.revCur += v; revCur += v; salesDays.add(String(row.date)) } else { a.revPrev += v; revPrev += v }
-    }
-    for (const row of expenseRows) {
-      const v = expenseOf(row)
-      if (!v) continue
-      const cur = String(row.date) >= dateFrom
-      const a = ensure(String(row.company_id))
-      const cat = String(row.category || 'Прочее')
-      if (cur) {
-        a.expCur += v; expCur += v; catCur.set(cat, (catCur.get(cat) || 0) + v); expenseDays.add(String(row.date))
-        const lc = cat.toLowerCase()
-        if (FOT_KEYS.some((k) => lc.includes(k))) fotCur += v
-        const grp = resolveFinancialGroup(cat, catGroup.get(lc) || null)
-        if (grp === 'cogs' || grp === 'pos_commission') varExpCur += v
-        else if (grp === 'capex') capexCur += v
-        else if (grp === 'profit_distribution') distCur += v
-        else if (grp === 'income_tax') taxCur += v
-        else fixExpCur += v
-      } else { a.expPrev += v; expPrev += v; catPrev.set(cat, (catPrev.get(cat) || 0) + v) }
+    const categoryGroups: Record<string, string | null> = {}
+    for (const row of ((categoriesRes as any)?.data || []) as Array<{ name: string | null; accounting_group: string | null }>) {
+      const key = String(row.name || '').trim().toLowerCase()
+      if (key) categoryGroups[key] = row.accounting_group ?? null
     }
 
-    const profitCur = revCur - expCur
-    const profitPrev = revPrev - expPrev
-    const marginCur = revCur ? (profitCur / revCur) * 100 : 0
-    const marginPrev = revPrev ? (profitPrev / revPrev) * 100 : 0
-
-    const executive = {
-      revenue: r0(revCur), revenueDeltaPct: r1(pct(revCur, revPrev)),
-      expenses: r0(expCur), expensesDeltaPct: r1(pct(expCur, expPrev)),
-      profit: r0(profitCur), profitDeltaPct: r1(pct(profitCur, profitPrev)),
-      margin: r1(marginCur), marginDeltaPp: r1(marginCur - marginPrev),
-      cashflow: r0(profitCur),
-    }
-
-    const companyRows = Array.from(byCompany.entries()).map(([id, a]) => {
-      const profit = a.revCur - a.expCur
-      const margin = a.revCur ? (profit / a.revCur) * 100 : 0
-      return {
-        name: nameById.get(id) || '—',
-        revenue: r0(a.revCur), expenses: r0(a.expCur), profit: r0(profit), margin: r1(margin),
-        profitShare: r1(profitCur ? (profit / profitCur) * 100 : 0),
-        revenueDeltaPct: r1(pct(a.revCur, a.revPrev)),
-        profitDeltaPct: r1(pct(profit, a.revPrev - a.expPrev)),
-      }
-    }).sort((x, y) => y.profit - x.profit)
-
-    const ranking = companyRows.length
-      ? {
-          profitLeader: companyRows[0]?.name || null,
-          worst: companyRows[companyRows.length - 1]?.name || null,
-          efficiencyLeader: [...companyRows].filter((c) => c.revenue > 0).sort((a, b) => b.margin - a.margin)[0]?.name || null,
-          growthLeader: [...companyRows].sort((a, b) => b.profitDeltaPct - a.profitDeltaPct)[0]?.name || null,
-        }
-      : null
-
-    const changes = Array.from(catCur.entries())
-      .map(([cat, cur]) => ({ label: cat, current: r0(cur), prev: r0(catPrev.get(cat) || 0), deltaPct: r1(pct(cur, catPrev.get(cat) || 0)) }))
-      .sort((a, b) => Math.abs(b.current - b.prev) - Math.abs(a.current - a.prev))
-      .slice(0, 8)
-
-    const salesCompleteness = days ? Math.min(100, (salesDays.size / days) * 100) : 0
-    const expenseCompleteness = days ? Math.min(100, (expenseDays.size / days) * 100) : 0
-    const dataQuality = {
-      percent: Math.round((salesCompleteness + expenseCompleteness) / 2),
-      daysInPeriod: days,
-      daysWithSales: salesDays.size,
-      salesCompleteness: r1(salesCompleteness),
-      daysWithExpenses: expenseDays.size,
-      expenseCompleteness: r1(expenseCompleteness),
-    }
-    const fotShare = revCur ? (fotCur / revCur) * 100 : 0
-    const topRev = companyRows.length ? Math.max(...companyRows.map((c) => c.revenue)) : 0
-    const concentrationPct = revCur ? r1((topRev / revCur) * 100) : 0
-
-    // Структура затрат → безубыточность и запас прочности (постоянные/переменные = группы P&L)
-    const contributionMargin = revCur - varExpCur
-    const contributionRate = revCur ? contributionMargin / revCur : 0
-    const breakevenRevenue = contributionRate > 0 ? fixExpCur / contributionRate : 0
-    const safetyMarginPct = revCur && breakevenRevenue ? ((revCur - breakevenRevenue) / revCur) * 100 : 0
-    const costStructure = {
-      variableExpenses: r0(varExpCur),
-      fixedExpenses: r0(fixExpCur),
-      capex: r0(capexCur),
-      incomeTax: r0(taxCur),
-      profitDistribution: r0(distCur),
-      contributionRatePct: r1(contributionRate * 100),
-      breakevenRevenue: r0(breakevenRevenue),
-      safetyMarginPct: r1(safetyMarginPct),
-      operatingProfit: r0(revCur - varExpCur - fixExpCur),
-    }
+    const review = buildCfoReview({
+      incomes: (splitIncomeKaspiByCalendarDay(incomeRows) as any[]).filter((r) => !excluded(String(r.company_id))),
+      expenses: expenseRows.filter((r) => !excluded(String(r.company_id))),
+      categoryGroups,
+      companies,
+      current: { from: dateFrom, to: dateTo },
+      previous: { from: prevFrom, to: prevTo },
+    })
 
     const computed = {
-      days, dateFrom, dateTo, prevFrom, prevTo,
-      executive,
-      fot: r0(fotCur),
-      fotShare: r1(fotShare),
-      concentrationPct,
-      costStructure,
-      companies: companyRows,
-      ranking,
-      expenseChanges: changes,
-      dataQuality,
+      days,
+      dateFrom,
+      dateTo,
+      prevFrom,
+      prevTo,
+      companyId,
+      includeExtra,
+      hasExtra: extraIds.size > 0,
+      // Мобильное приложение читает итоги с верхнего уровня
+      revenue: review.executive.revenue,
+      expense: review.executive.expenses,
+      profit: review.executive.profit,
+      ...review,
     }
 
-    // ---- AI анализ (режим AUDIT) ----
-    const systemPrompt = [
-      'Ты — AI CFO платформы Orda Control: цифровой финансовый директор собственника. Система поддержки управленческих решений, не бухгалтер и не коуч. Цель — рост ЧИСТОЙ ПРИБЫЛИ, снижение рисков, поиск потерь и упущенной прибыли, доведение анализа до конкретного действия.',
-      '',
-      'ГЛАВНЫЙ ПРИНЦИП: никогда не выдумывай цифры. Каждое число — либо из данных, либо явная оценка с допущением. Честный вывод важнее впечатляющего. Если за числом нет вычисления — его не должно быть в ответе.',
-      '',
-      'СТАТУСЫ (помечай каждое утверждение): [ФАКТ] — из данных; [ОЦЕНКА] — расчёт на допущении (допущение указать); [ГИПОТЕЗА] — данных не хватает, не подставляй числа, скажи что проверить. Любой прогноз ≥ [ОЦЕНКА]. Деньги — целые ₸, проценты — 1 знак.',
-      '',
-      'ТОН: для собственника, простой язык, термины — с расшифровкой. Без воды и лозунгов. Плохие новости — прямо, но с тем, что делать.',
-      '',
-      'ФОРМУЛЫ (применяй к данным; чего нет — [ГИПОТЕЗА], не выдумывай): Прибыль=Выручка−Расходы; Маржа%=Прибыль/Выручка×100; Доля ФОТ%=ФОТ/Выручка (дано fotShare; ориентир услуги/клубы 15–25%, общепит 25–35%); Точка безубыточности и Запас прочности ДАНЫ в costStructure (breakevenRevenue, safetyMarginPct; постоянные fixedExpenses/переменные variableExpenses) — это [ФАКТ], используй их; costStructure.operatingProfit — операц. прибыль до CAPEX/налога, costStructure.capex — разовые вложения: ОБЪЯСНИ, почему чистая прибыль ниже операционной (разовые/инвестиц. статьи); EBITDA — амортизации нет → реальная прибыль ниже на износ [ГИПОТЕЗА]; Концентрация (дано concentrationPct) >30% = риск зависимости; деньги≠прибыль, runway только при убытке; Темп роста — дельты даны.',
-      '',
-      'HEALTH SCORE (0–100, это [ФАКТ] из метрик; ВСЕГДА показывай разбивку). Компоненты: Рентабельность(25): запас прочности + тренд маржи. Деньги(25): денежный поток + runway + дебиторка. Риски(20): концентрация (concentrationPct: <20%→12, 20–35%→8, 35–50%→4, >50%→0) + долг. Динамика(20): тренд выручки + тренд прибыли (по дельтам). Данные(10)=dataQuality.percent×0,1. Если компонента нет данных — ИСКЛЮЧИ его, пересчитай по доступным и укажи в "missing". Итог: ≥80 healthy, 60–79 attention, <60 problem.',
-      '',
-      'КАЧЕСТВО ДАННЫХ: бери dataQuality.percent. ≥90 надёжно; 70–89 есть пробелы (перечисли, ограничь выводы); <70 ненадёжно — глубокий анализ не делай.',
-      '',
-      'ПОТЕРИ vs УПУЩЕННАЯ ПРИБЫЛЬ — разделяй. ПОТЕРИ (деньги утекают): раздутые расходы, убыточные направления, простаивающие активы, избыточный ФОТ — сумма с расчётом, [ФАКТ] если из данных. УПУЩЕННАЯ ПРИБЫЛЬ (не захватываешь): простой мощности, низкая маржа, недопродажи — реалистичный достижимый прирост, [ОЦЕНКА]/[ГИПОТЕЗА]. НЕ раздувай упущенную прибыль.',
-      '',
-      'КОРНЕВОЙ АНАЛИЗ: не останавливайся на первом уровне (что→почему→корневая причина→последствие→действие). Нет причины в данных → [ГИПОТЕЗА] + что проверить.',
-      'ПРОГНОЗ — полоса уверенности (НЕ выдуманный %): high ≥90 дн и стабильно; medium 30–89 дн или аномалия; low <30 дн или волатильность. Дай 3 полосы: базовый/оптимистичный/пессимистичный прогноз прибыли.',
-      'СЦЕНАРИИ «что если»: посчитай 3-4 сценария (напр. цены +5%, расходы −10%, рост среднего чека/загрузки, закрытие убыточного направления) ЧЕРЕЗ costStructure — постоянные расходы не меняются, переменные масштабируются пропорционально выручке. Каждый — эффект на прибыль ₸ с допущением [ОЦЕНКА], не раздувай. Если данных мало — [ГИПОТЕЗА] + предложи тест.',
-      'ЗАПРЕЩЕНО: выдумывать цифры, гарантировать результат, выдавать гипотезу за факт, скрывать риски, раздувать эффект, число без расчёта.',
-      '',
-      'Тебе дают УЖЕ ПОСЧИТАННЫЕ точные цифры (JSON, [ФАКТ]). НЕ пересчитывай их. Верни СТРОГО валидный JSON без markdown (в текстах ставь статус-теги):',
-      '{',
-      '"state": "состояние бизнеса 2-3 предложения",',
-      '"healthScore": {"score": 0-100, "band": "healthy|attention|problem", "breakdown": {"profitability": n, "money": n, "risks": n, "dynamics": n, "data": n}, "missing": ["компоненты без данных"]},',
-      '"dataQuality": {"percent": n, "band": "high|medium|low", "notes": ["..."], "limitations": ["..."]},',
-      '"changes": [{"text": "с цифрами", "status": "ФАКТ|ОЦЕНКА|ГИПОТЕЗА"}],',
-      '"rootCauses": [{"text": "...", "status": "..."}],',
-      '"risks": [{"risk": "...", "probability": "Высокая|Средняя|Низкая", "impact": "Высокое|Среднее|Низкое", "level": "critical|high|medium|low"}],',
-      '"losses": [{"text": "что утекает", "amount": "сумма ₸/мес", "status": "..."}],',
-      '"missedProfit": [{"text": "что недозарабатываем", "potential": "потенциал ₸/мес", "status": "..."}],',
-      '"opportunities": [{"title": "...", "action": "...", "effect": "финэффект ₸/мес", "status": "..."}],',
-      '"forecast": {"band": "high|medium|low", "text": "прогноз прибыли на 30 дней [ОЦЕНКА]", "base": "базовый прогноз прибыли ₸", "optimistic": "оптимистичный ₸", "pessimistic": "пессимистичный ₸", "warning": "или null"},',
-      '"scenarios": [{"name": "напр. Цены +5%", "assumption": "допущение", "effect": "эффект на прибыль ₸/мес со знаком", "note": "комментарий", "status": "ОЦЕНКА|ГИПОТЕЗА"}],',
-      '"actionPlan": {"today": ["..."], "week": ["..."], "month": ["..."]},',
-      '"summary": {"where_losing": "...", "where_earn": "...", "main_risk": "...", "main_opportunity": "...", "extra_profit": "₸", "three_actions": ["...","...","..."]}',
-      '}',
-      'Правила: 3-6 изменений, 2-4 причины, 3-5 рисков, 2-4 потери, 2-4 упущенных, 3-5 возможностей. Показывай расчёт. Конкретика и цифры. Русский.',
-    ].join('\n')
-
-    const messages: AiMessage[] = [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: `Посчитанные финансы [ФАКТ] за ${days} дней (${dateFrom} — ${dateTo}), сравнение с предыдущим периодом такой же длины:\n\n${JSON.stringify(computed)}\n\nСделай полный аудит (AUDIT) в JSON по структуре. Health Score обязателен с разбивкой.` },
-    ]
-
+    // ── ИИ: только по явному запросу (веб грузит цифры с ai:false) и по праву ──
+    const wantsAi = body?.ai !== false
     let ai: any = null
-    try {
-      const result = await generateAiText({ model: OPENAI_MODEL, maxTokens: 8000, messages })
-      await logAiUsageSafe(access.supabase, { userId: access.user?.id || null, endpoint: '/api/ai/cfo', provider: result.provider, model: result.model, usage: result.usage })
-      ai = parseJsonLoose(result.text)
-      // Если AI вернул не-JSON (или обрезался) — НЕ вываливаем сырой текст на экран.
-      if (!ai || typeof ai !== 'object' || (!ai.state && !ai.summary && !ai.changes)) {
-        ai = { error: 'Ответ AI не распознан (возможно, слишком длинный). Цифры посчитаны верно — обновите страницу.' }
+    if (wantsAi) {
+      const generateDenied = await requireStaffCapability(access, 'ai-cfo.generate')
+      if (generateDenied) {
+        ai = { error: 'Нет права запускать разбор ИИ' }
+      } else if (review.executive.revenue === 0 && review.executive.expenses === 0) {
+        ai = { error: 'За период нет доходов и расходов — разбирать нечего' }
+      } else {
+        ai = await runAi(access, computed)
       }
-    } catch (e: any) {
-      ai = { error: e?.message || 'AI недоступен' }
     }
 
     return json({ ok: true, ...computed, ai })
   } catch (error: any) {
+    await writeSystemErrorLogSafe({ scope: 'server', area: 'api/ai/cfo.POST', message: error?.message || 'ai cfo error' })
     return json({ error: error?.message || 'Ошибка сервера' }, 500)
+  }
+}
+
+async function runAi(access: any, computed: any) {
+  const systemPrompt = [
+    'Ты — финансовый директор собственника игрового клуба и магазина. Цель — рост чистой прибыли и конкретные действия.',
+    '',
+    'Тебе дают УЖЕ ПОСЧИТАННЫЙ разбор периода (JSON). Цифры в нём точные — не пересчитывай и не спорь с ними.',
+    '- bridge — почему прибыль изменилась к прошлому периоду: строки с effect (+ добавило прибыль, − отняло). Сумма effect = изменение прибыли.',
+    '- companies — точки, profitDelta — вклад точки в изменение прибыли.',
+    '- costStructure — постоянные/переменные, breakevenRevenue (выручка безубыточности), safetyMarginPct (запас прочности), oneOffExpenses (разовые и оборудование), profitDistribution (выплаты партнёрам — не расход бизнеса).',
+    '- fotShare — зарплаты в % выручки. health — оценка здоровья (посчитана, не меняй). dataQuality.gaps — точки с недовнесёнными отчётами.',
+    '',
+    'ГЛАВНОЕ ПРАВИЛО ДЕНЕГ: любая сумма в ответе — либо число из JSON, либо простой расчёт из чисел JSON, и тогда расчёт пишется рядом («360 000 − 300 000 = 60 000 ₸»). Никаких «≈150 000 ₸/мес» без расчёта. Нечем посчитать — пиши без суммы и помечай ГИПОТЕЗА с тем, что проверить.',
+    'Если dataQuality.percent < 80 — начни state с предупреждения, какие точки недовнесли отчёты, и не делай уверенных выводов по ним.',
+    'Статусы: ФАКТ — прямо из данных; ОЦЕНКА — расчёт на явном допущении; ГИПОТЕЗА — данных не хватает.',
+    'Язык: для собственника, простыми словами, без англицизмов (не «EBITDA», не «CAPEX» — «разовые покупки оборудования»). Без воды.',
+    '',
+    'Верни СТРОГО валидный JSON без markdown и без тегов в тексте:',
+    '{',
+    '"state": "2-3 предложения: что с прибылью и главная причина из bridge",',
+    '"changes": [{"text": "что изменилось, с цифрами из bridge", "status": "ФАКТ|ОЦЕНКА|ГИПОТЕЗА"}],',
+    '"rootCauses": [{"text": "почему — причина за строкой bridge и что проверить", "status": "..."}],',
+    '"risks": [{"risk": "...", "probability": "Высокая|Средняя|Низкая", "impact": "Высокое|Среднее|Низкое", "level": "critical|high|medium|low"}],',
+    '"losses": [{"text": "где утекают деньги", "amount": "сумма из данных или пусто", "status": "..."}],',
+    '"missedProfit": [{"text": "что недозарабатываем", "potential": "только с расчётом, иначе пусто", "status": "..."}],',
+    '"opportunities": [{"title": "...", "action": "что сделать", "effect": "только с расчётом, иначе пусто", "status": "..."}],',
+    '"actionPlan": {"today": ["..."], "week": ["..."], "month": ["..."]},',
+    '"summary": {"where_losing": "...", "where_earn": "...", "main_risk": "...", "main_opportunity": "...", "extra_profit": "сумма с расчётом или пусто", "three_actions": ["...","...","..."]}',
+    '}',
+    'Объём: 3-5 изменений, 2-4 причины, 2-4 риска, до 3 потерь, до 3 упущенных, 2-4 возможности. Русский.',
+  ].join('\n')
+
+  const messages: AiMessage[] = [
+    { role: 'system', content: systemPrompt },
+    {
+      role: 'user',
+      content: `Разбор за ${computed.dateFrom} — ${computed.dateTo} против ${computed.prevFrom} — ${computed.prevTo}:\n\n${JSON.stringify(computed)}`,
+    },
+  ]
+
+  try {
+    const result = await generateAiText({ model: OPENAI_MODEL, maxTokens: 8000, messages })
+    await logAiUsageSafe(access.supabase, {
+      userId: access.user?.id || null,
+      endpoint: '/api/ai/cfo',
+      provider: result.provider,
+      model: result.model,
+      usage: result.usage,
+    })
+    const ai = parseJsonLoose(result.text)
+    if (!ai || typeof ai !== 'object' || (!ai.state && !ai.summary && !ai.changes)) {
+      return { error: 'Ответ ИИ не распознан. Цифры посчитаны верно — попробуйте ещё раз.' }
+    }
+    // Оценка здоровья — формула кода, а не мнение модели; прогноз живёт в /analysis
+    ai.healthScore = healthForApps(computed.health)
+    ai.forecast = null
+    ai.scenarios = []
+    return ai
+  } catch (e: any) {
+    return { error: e?.message || 'ИИ недоступен' }
   }
 }
