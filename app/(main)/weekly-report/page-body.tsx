@@ -3,9 +3,10 @@
 /**
  * Недельный баланс — вкладками.
  *
- *  Итоги    — выручка, расходы, прибыль, сальдо и что изменилось к тем же дням
- *             прошлой недели;
+ *  Итоги    — выручка, расходы, прибыль, сальдо, неделя против плана месяца и
+ *             что изменилось к базе сравнения;
  *  Касса    — наличные и безналичный: доход, расход, сальдо по дням;
+ *  Смены    — день и ночь, какие отчёты смен не внесены;
  *  Точки    — точки таблицей, по клику — расходы по статьям;
  *  Расходы  — статьи с изменением и крупные расходы;
  *  Закуп    — план закупа на следующую неделю;
@@ -18,10 +19,12 @@
  */
 
 import { Fragment, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertTriangle,
   ArrowDownRight,
+  ArrowRight,
   ArrowUpRight,
   CalendarDays,
   CheckCircle2,
@@ -33,12 +36,15 @@ import {
   Download,
   Info,
   Loader2,
+  Moon,
   Printer,
   RefreshCw,
   Scale,
   Share2,
   Sparkles,
   Square,
+  Sun,
+  Target,
 } from 'lucide-react'
 import { Bar, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 
@@ -49,6 +55,7 @@ import { PageSkeleton } from '@/components/skeleton'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
+import { NativeSelect } from '@/components/ui/native-select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from '@/components/ui/use-toast'
 import { useCompanies } from '@/hooks/use-companies'
@@ -56,13 +63,26 @@ import { useExpenses } from '@/hooks/use-expenses'
 import { useIncome } from '@/hooks/use-income'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { downloadReportPdf } from '@/lib/client/download-pdf'
-import { buildWeeklyBalance, deltaPct, type PeriodSums, type WeeklyBalance } from '@/lib/reports/weekly-balance'
+import {
+  COMPARE_MODES,
+  buildWeeklyBalance,
+  deltaPct,
+  weekPlanStatus,
+  type CompareMode,
+  type PeriodSums,
+  type PlanRow,
+  type WeekPlanStatus,
+  type WeeklyBalance,
+} from '@/lib/reports/weekly-balance'
 
 // ─── Даты и форматирование ──────────────────────────────────────────────────
 
 const DAY_LABELS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
-const TABS = ['summary', 'cash', 'points', 'expenses', 'purchase', 'report'] as const
+const MONTH_GEN = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь']
+const TABS = ['summary', 'cash', 'shifts', 'points', 'expenses', 'purchase', 'report'] as const
 type TabKey = (typeof TABS)[number]
+/** Истории нужно 8 недель — для сравнения со средним и привычного графика смен */
+const HISTORY_DAYS = 56
 
 const toISODateLocal = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 10)
 const fromISO = (iso: string) => {
@@ -85,16 +105,17 @@ const rangeTitle = (start: string, end: string) => {
   return `${fromISO(start).toLocaleDateString('ru-RU', opts)} — ${fromISO(end).toLocaleDateString('ru-RU', opts)}`
 }
 const dm = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}`
+const weekdayOf = (iso: string) => (fromISO(iso).getDay() + 6) % 7
 
 const money = (n: number) => `${Math.round(n || 0).toLocaleString('ru-RU')} ₸`
-const signed = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(Math.round(n)).toLocaleString('ru-RU')} ₸`
+const signed = (n: number) => `${Math.round(n) > 0 ? '+' : Math.round(n) < 0 ? '−' : ''}${Math.abs(Math.round(n)).toLocaleString('ru-RU')} ₸`
 const compact = (n: number) => {
   const a = Math.abs(n)
   if (a >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
   if (a >= 1_000) return `${Math.round(n / 1_000)}k`
   return String(Math.round(n))
 }
-const tone = (n: number) => (n < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-700 dark:text-emerald-400')
+const tone = (n: number) => (Math.round(n) < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-700 dark:text-emerald-400')
 
 const CHART_TOOLTIP = { background: 'var(--popover)', color: 'var(--popover-foreground)', border: '1px solid var(--border)', borderRadius: 10, fontSize: 12 }
 
@@ -114,7 +135,7 @@ function Delta({ cur, prev, goodWhenUp = true }: { cur: number; prev: number; go
   )
 }
 
-function Tile({ label, value, hint, children, valueClass = '' }: { label: string; value: string; hint?: string; children?: ReactNode; valueClass?: string }) {
+function Tile({ label, value, hint, children, valueClass = '' }: { label: string; value: string; hint?: ReactNode; children?: ReactNode; valueClass?: string }) {
   return (
     <Card className="gap-1 p-4">
       <p className="text-xs text-muted-foreground">{label}</p>
@@ -125,7 +146,7 @@ function Tile({ label, value, hint, children, valueClass = '' }: { label: string
   )
 }
 
-function SectionCard({ title, subtitle, icon, children, action }: { title: string; subtitle?: string; icon?: ReactNode; children: ReactNode; action?: ReactNode }) {
+function SectionCard({ title, subtitle, icon, children, action }: { title: string; subtitle?: ReactNode; icon?: ReactNode; children: ReactNode; action?: ReactNode }) {
   return (
     <Card className="gap-0 p-5">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
@@ -224,57 +245,73 @@ function WeeklyReportContent() {
     return p && /^\d{4}-\d{2}-\d{2}$/.test(p) ? mondayOf(p) : currentMonday
   })
   const [includeExtra, setIncludeExtra] = useState(() => searchParams.get('extra') === '1')
+  const [compare, setCompare] = useState<CompareMode>(() => {
+    const p = searchParams.get('cmp') as CompareMode | null
+    return p && p in COMPARE_MODES ? p : 'week'
+  })
   const [tab, setTab] = useState<TabKey>(() => {
     const p = searchParams.get('tab') as TabKey | null
     return p && TABS.includes(p) ? p : 'summary'
   })
   const [showActPrint, setShowActPrint] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [plans, setPlans] = useState<PlanRow[]>([])
   const weekEnd = addDaysISO(weekStart, 6)
-  const prevStart = addDaysISO(weekStart, -7)
 
-  // Ссылка всегда ведёт на ту же неделю и вкладку
+  // Ссылка всегда ведёт на ту же неделю, вкладку и сравнение
   useEffect(() => {
     const t = setTimeout(() => {
       const params = new URLSearchParams()
       params.set('start', weekStart)
       params.set('end', weekEnd)
       if (includeExtra) params.set('extra', '1')
+      if (compare !== 'week') params.set('cmp', compare)
       if (tab !== 'summary') params.set('tab', tab)
       router.replace(`${pathname}?${params.toString()}`, { scroll: false })
     }, 200)
     return () => clearTimeout(t)
-  }, [weekStart, weekEnd, includeExtra, tab, pathname, router])
+  }, [weekStart, weekEnd, includeExtra, compare, tab, pathname, router])
 
   const { companies, loading: companiesLoading, error: companiesError } = useCompanies()
-  // День до начала прошлой недели — ночная смена переносит безнал за полночь
+  // 8 недель истории + день на перенос безнала ночной смены за полночь
   const { rows: incomeRows, loading: incomeLoading, error: incomeError, reload: reloadIncome } = useIncome({
-    from: addDaysISO(prevStart, -1),
+    from: addDaysISO(weekStart, -HISTORY_DAYS - 1),
     to: weekEnd,
     fetchAll: true,
     pageSize: 2000,
   })
   const { rows: expenseRows, loading: expenseLoading, error: expenseError, reload: reloadExpenses } = useExpenses({
-    from: prevStart,
+    from: addDaysISO(weekStart, -HISTORY_DAYS),
     to: weekEnd,
     fetchAll: true,
     pageSize: 2000,
   })
+
+  // Цели месяца (/goals) — без них блок плана просто не показывается
+  const planYear = weekEnd.slice(0, 4)
+  useEffect(() => {
+    let active = true
+    fetch(`/api/admin/kpi-plans?year=${planYear}&plans_only=1`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => active && setPlans(Array.isArray(j?.data?.plans) ? j.data.plans : []))
+      .catch(() => active && setPlans([]))
+    return () => {
+      active = false
+    }
+  }, [planYear])
 
   const loading = companiesLoading || incomeLoading || expenseLoading
   const error = companiesError || incomeError || expenseError || null
 
   const balance = useMemo<WeeklyBalance | null>(() => {
     if (!companies.length) return null
-    return buildWeeklyBalance({
-      incomes: incomeRows as any,
-      expenses: expenseRows as any,
-      companies,
-      weekStart,
-      today: todayISO,
-      includeExtra,
-    })
-  }, [companies, incomeRows, expenseRows, weekStart, todayISO, includeExtra])
+    return buildWeeklyBalance({ incomes: incomeRows as any, expenses: expenseRows as any, companies, weekStart, today: todayISO, includeExtra, compare })
+  }, [companies, incomeRows, expenseRows, weekStart, todayISO, includeExtra, compare])
+
+  const planStatus = useMemo<WeekPlanStatus | null>(() => {
+    if (!companies.length || !plans.length) return null
+    return weekPlanStatus({ plans, incomes: incomeRows as any, companies, weekStart, today: todayISO })
+  }, [plans, incomeRows, companies, weekStart, todayISO])
 
   const isCurrentWeek = weekStart === currentMonday
   const canGoNext = weekStart < currentMonday
@@ -323,10 +360,10 @@ function WeeklyReportContent() {
 
   const hasExtra = Boolean(balance?.extra.names.length)
   const compareNote =
-    balance && balance.compareUntil && balance.prevUntil
+    balance && balance.compareUntil
       ? balance.comparedDays === 7
-        ? 'сравнение с прошлой неделей'
-        : `сравнение с теми же днями прошлой недели: пн–${DAY_LABELS[balance.comparedDays - 1].toLowerCase()}`
+        ? `сравнение: ${balance.compareLabel.replace('те же дни ', '')}`
+        : `сравнение пн–${DAY_LABELS[balance.comparedDays - 1].toLowerCase()}: ${balance.compareLabel}`
       : null
 
   return (
@@ -366,6 +403,13 @@ function WeeklyReportContent() {
             ) : (
               <span className="text-xs text-muted-foreground">текущая неделя</span>
             )}
+            <NativeSelect className="h-8 w-auto" value={compare} onChange={(e) => setCompare(e.target.value as CompareMode)} aria-label="С чем сравнивать">
+              {(Object.keys(COMPARE_MODES) as CompareMode[]).map((key) => (
+                <option key={key} value={key}>
+                  Сравнить: {COMPARE_MODES[key].short.toLowerCase()}
+                </option>
+              ))}
+            </NativeSelect>
             {hasExtra ? (
               <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
                 <Checkbox checked={includeExtra} onCheckedChange={(v) => setIncludeExtra(v === true)} /> с {balance!.extra.names.join(', ')}
@@ -382,6 +426,12 @@ function WeeklyReportContent() {
             <TabsList className="h-10">
               <TabsTrigger value="summary" className="px-3">Итоги</TabsTrigger>
               <TabsTrigger value="cash" className="px-3">Касса</TabsTrigger>
+              <TabsTrigger value="shifts" className="px-3">
+                Смены
+                {balance.missingShifts.length ? (
+                  <span className="rounded-full bg-amber-500/20 px-1.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">{balance.missingShifts.length}</span>
+                ) : null}
+              </TabsTrigger>
               <TabsTrigger value="points" className="px-3">Точки</TabsTrigger>
               <TabsTrigger value="expenses" className="px-3">Расходы</TabsTrigger>
               <TabsTrigger value="purchase" className="px-3">Закуп</TabsTrigger>
@@ -390,10 +440,13 @@ function WeeklyReportContent() {
           </div>
 
           <TabsContent value="summary">
-            <SummaryTab balance={balance} loading={loading} />
+            <SummaryTab balance={balance} plan={planStatus} loading={loading} onOpenShifts={() => setTab('shifts')} />
           </TabsContent>
           <TabsContent value="cash">
             <CashTab balance={balance} />
+          </TabsContent>
+          <TabsContent value="shifts">
+            <ShiftsTab balance={balance} />
           </TabsContent>
           <TabsContent value="points">
             <PointsTab balance={balance} />
@@ -425,13 +478,76 @@ function WeeklyReportContent() {
 
 // ─── Итоги ──────────────────────────────────────────────────────────────────
 
-function SummaryTab({ balance, loading }: { balance: WeeklyBalance; loading: boolean }) {
-  const { current: c, previous: p } = balance
+function PlanCard({ plan }: { plan: WeekPlanStatus }) {
+  const month = MONTH_GEN[Number(plan.month.slice(5, 7)) - 1]
+  const donePct = Math.round((plan.fact / plan.target) * 100)
+  const weekDiff = plan.weekFact - plan.weekExpectedToDate
+  const ahead = plan.pace.gap >= 0
+  return (
+    <SectionCard
+      title={`План на ${month}`}
+      subtitle={`${plan.source === 'org' ? 'Общая цель организации' : 'Сумма целей точек'} · выручка без F16 Extra, по ${dm(plan.lastFactDate)}`}
+      icon={<Target className="h-4 w-4 text-emerald-500" />}
+      action={
+        <Button asChild variant="outline" size="sm">
+          <Link href="/goals">
+            Цели <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </Button>
+      }
+    >
+      <div className="grid gap-3 md:grid-cols-3">
+        <div className="rounded-xl border border-border p-3">
+          <p className="text-xs text-muted-foreground">Выполнено за месяц</p>
+          <p className="mt-1 text-lg font-semibold tabular-nums">
+            {money(plan.fact)} <span className="text-sm font-normal text-muted-foreground">из {money(plan.target)}</span>
+          </p>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-muted">
+            <div className={`h-full ${donePct >= Math.round(plan.pace.timeShare * 100) ? 'bg-emerald-500' : 'bg-amber-500'}`} style={{ width: `${Math.min(100, donePct)}%` }} />
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {donePct}% плана · по ритму должно быть {Math.round(plan.pace.timeShare * 100)}%
+          </p>
+        </div>
+        <div className="rounded-xl border border-border p-3">
+          <p className="text-xs text-muted-foreground">
+            Эта неделя ({dm(plan.weekFrom)}–{dm(plan.weekTo)})
+          </p>
+          <p className="mt-1 text-lg font-semibold tabular-nums">
+            {money(plan.weekFact)} <span className="text-sm font-normal text-muted-foreground">из {money(plan.weekExpectedToDate)}</span>
+          </p>
+          <p className={`mt-1 text-xs font-medium ${tone(weekDiff)}`}>
+            {Math.round(weekDiff) >= 0 ? `опережаем ритм на ${money(weekDiff)}` : `отстаём от ритма на ${money(-weekDiff)}`}
+          </p>
+          <p className="text-xs text-muted-foreground">за всю неделю по плану — {money(plan.weekExpected)}</p>
+        </div>
+        <div className={`rounded-xl border p-3 ${ahead ? 'border-emerald-500/30 bg-emerald-500/[0.05]' : 'border-amber-500/30 bg-amber-500/[0.05]'}`}>
+          <p className="text-xs text-muted-foreground">До конца месяца</p>
+          {plan.pace.daysLeft > 0 ? (
+            <>
+              <p className="mt-1 text-lg font-semibold tabular-nums">
+                {money(plan.pace.requiredPerDay)} <span className="text-sm font-normal text-muted-foreground">в день</span>
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                осталось {plan.pace.daysLeft} дн. · сейчас в среднем {money(plan.pace.currentPerDay)}
+              </p>
+            </>
+          ) : (
+            <p className="mt-1 text-sm">{plan.fact >= plan.target ? 'План месяца выполнен' : `Месяц закрыт, недобор ${money(plan.target - plan.fact)}`}</p>
+          )}
+        </div>
+      </div>
+    </SectionCard>
+  )
+}
+
+function SummaryTab({ balance, plan, loading, onOpenShifts }: { balance: WeeklyBalance; plan: WeekPlanStatus | null; loading: boolean; onOpenShifts: () => void }) {
+  const { current: c, previous: p, compared } = balance
   const maxAbs = Math.max(1, ...balance.changes.map((x) => Math.abs(x.effect)))
   const chartData = balance.days.map((d) => ({
     label: DAY_LABELS[d.weekday],
     'Выручка': d.future ? null : Math.round(d.current.income.total),
-    'Прошлая неделя': Math.round(d.previous.income.total),
+    [balance.compareShort]: Math.round(d.previous.income.total),
     'Прибыль': d.future ? null : Math.round(d.current.profit),
   }))
 
@@ -439,15 +555,19 @@ function SummaryTab({ balance, loading }: { balance: WeeklyBalance; loading: boo
     <div className={`space-y-5 ${loading ? 'opacity-60' : ''}`}>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Tile label="Выручка" value={money(c.income.total)}>
-          <Delta cur={c.income.total} prev={p.income.total} />
+          <Delta cur={compared.income.total} prev={p.income.total} />
         </Tile>
-        <Tile label="Расходы" value={money(c.expense.total)}>
-          <Delta cur={c.expense.total} prev={p.expense.total} goodWhenUp={false} />
+        <Tile
+          label="Расходы"
+          value={money(c.expense.total)}
+          hint={balance.pending.count ? `из них ждут согласования: ${balance.pending.count} на ${money(balance.pending.total)}` : undefined}
+        >
+          <Delta cur={compared.expense.total} prev={p.expense.total} goodWhenUp={false} />
         </Tile>
         <Tile label="Прибыль" value={money(c.profit)} valueClass={c.profit < 0 ? 'text-rose-600 dark:text-rose-400' : ''}>
-          <Delta cur={c.profit} prev={p.profit} />
+          <Delta cur={compared.profit} prev={p.profit} />
         </Tile>
-        <Tile label="Маржа" value={`${c.margin.toFixed(1)}%`} hint={p.income.total ? `было ${p.margin.toFixed(1)}%` : undefined} />
+        <Tile label="Маржа" value={`${c.margin.toFixed(1)}%`} hint={p.income.total ? `база сравнения ${p.margin.toFixed(1)}%` : undefined} />
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -467,12 +587,18 @@ function SummaryTab({ balance, loading }: { balance: WeeklyBalance; loading: boo
                     ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200'
                     : 'border-border bg-surface-muted text-foreground'
             const Icon = a.tone === 'success' ? CheckCircle2 : a.tone === 'info' ? Info : AlertTriangle
+            const isShifts = a.title.startsWith('Не внесены отчёты смен')
             return (
               <div key={i} className={`flex gap-2 rounded-xl border p-3 text-sm ${cls}`}>
                 <Icon className="mt-0.5 h-4 w-4 shrink-0" />
-                <div>
+                <div className="min-w-0">
                   <p className="font-medium">{a.title}</p>
                   <p className="text-xs opacity-90">{a.text}</p>
+                  {isShifts ? (
+                    <button type="button" onClick={onOpenShifts} className="mt-1 text-xs font-medium underline underline-offset-2">
+                      Все пропуски
+                    </button>
+                  ) : null}
                 </div>
               </div>
             )
@@ -480,9 +606,11 @@ function SummaryTab({ balance, loading }: { balance: WeeklyBalance; loading: boo
         </div>
       ) : null}
 
+      {plan ? <PlanCard plan={plan} /> : null}
+
       <div className="grid gap-5 xl:grid-cols-5">
         <div className="xl:col-span-3">
-          <SectionCard title="По дням" subtitle="Выручка против того же дня прошлой недели и прибыль дня">
+          <SectionCard title="По дням" subtitle={`Выручка против базы сравнения (${balance.compareShort.toLowerCase()}) и прибыль дня`}>
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
@@ -491,7 +619,7 @@ function SummaryTab({ balance, loading }: { balance: WeeklyBalance; loading: boo
                   <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} tickFormatter={compact} width={48} />
                   <Tooltip contentStyle={CHART_TOOLTIP} formatter={(v: any) => (v == null ? '—' : money(Number(v)))} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <Bar dataKey="Прошлая неделя" fill="#94a3b8" fillOpacity={0.35} radius={[4, 4, 0, 0]} />
+                  <Bar dataKey={balance.compareShort} fill="#94a3b8" fillOpacity={0.35} radius={[4, 4, 0, 0]} />
                   <Bar dataKey="Выручка" fill="#10b981" radius={[4, 4, 0, 0]} />
                   <Line type="monotone" dataKey="Прибыль" stroke="#8b5cf6" strokeWidth={2.5} dot={{ r: 3 }} connectNulls={false} />
                 </ComposedChart>
@@ -503,11 +631,7 @@ function SummaryTab({ balance, loading }: { balance: WeeklyBalance; loading: boo
         <div className="xl:col-span-2">
           <SectionCard
             title="Что изменилось"
-            subtitle={
-              balance.compareUntil
-                ? `Прибыль ${signed(balance.compared.profit - p.profit)} к тем же дням прошлой недели. Что добавило и что отняло:`
-                : 'На этой неделе ещё нет данных.'
-            }
+            subtitle={balance.compareUntil ? `Прибыль ${signed(compared.profit - p.profit)} к базе: ${balance.compareLabel}. Что добавило и что отняло:` : 'На этой неделе ещё нет данных.'}
             icon={<Scale className="h-4 w-4 text-violet-500" />}
           >
             {balance.changes.length === 0 ? (
@@ -545,7 +669,7 @@ function CashTab({ balance }: { balance: WeeklyBalance }) {
   const { current: c } = balance
   const shareOf = (v: number) => (c.income.total ? `${((v / c.income.total) * 100).toFixed(1)}%` : '—')
   const chartData = balance.cumulative.map((d) => ({
-    label: DAY_LABELS[(fromISO(d.date).getDay() + 6) % 7],
+    label: DAY_LABELS[weekdayOf(d.date)],
     'Наличные': Math.round(d.netCash),
     'Безналичный': Math.round(d.netCashless),
     'Всего': Math.round(d.net),
@@ -555,7 +679,7 @@ function CashTab({ balance }: { balance: WeeklyBalance }) {
     <div className="space-y-5">
       <SectionCard title="Наличные и безналичный" icon={<Coins className="h-4 w-4 text-emerald-500" />}>
         <div className="overflow-x-auto rounded-xl border border-border">
-          <table className="min-w-[520px] w-full">
+          <table className="w-full min-w-[520px]">
             <thead className="bg-surface-muted">
               <tr>
                 <th className={th}>Тип</th>
@@ -595,16 +719,18 @@ function CashTab({ balance }: { balance: WeeklyBalance }) {
           </table>
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-4">
-          {[
-            ['Наличные', c.income.cash],
-            ['Безналичный: терминал и переводы', c.income.terminal],
-            ['Безналичный: онлайн', c.income.online],
-            ['Безналичный: карта', c.income.card],
-          ].map(([label, value]) => (
-            <div key={label as string} className="rounded-xl border border-border p-3">
+          {(
+            [
+              ['Наличные', c.income.cash],
+              ['Безналичный: терминал и переводы', c.income.terminal],
+              ['Безналичный: онлайн', c.income.online],
+              ['Безналичный: карта', c.income.card],
+            ] as const
+          ).map(([label, value]) => (
+            <div key={label} className="rounded-xl border border-border p-3">
               <p className="text-xs text-muted-foreground">{label}</p>
-              <p className="mt-1 font-semibold tabular-nums">{money(value as number)}</p>
-              <p className="text-xs text-muted-foreground">{shareOf(value as number)} выручки</p>
+              <p className="mt-1 font-semibold tabular-nums">{money(value)}</p>
+              <p className="text-xs text-muted-foreground">{shareOf(value)} выручки</p>
             </div>
           ))}
         </div>
@@ -629,7 +755,7 @@ function CashTab({ balance }: { balance: WeeklyBalance }) {
 
       <SectionCard title="По дням">
         <div className="overflow-x-auto rounded-xl border border-border">
-          <table className="min-w-[720px] w-full">
+          <table className="w-full min-w-[720px]">
             <thead className="bg-surface-muted">
               <tr>
                 <th className={th}>День</th>
@@ -664,6 +790,125 @@ function CashTab({ balance }: { balance: WeeklyBalance }) {
   )
 }
 
+// ─── Смены ──────────────────────────────────────────────────────────────────
+
+function ShiftsTab({ balance }: { balance: WeeklyBalance }) {
+  const { current: c, compared, previous: p } = balance
+  const nightShare = c.income.total ? (c.income.night / c.income.total) * 100 : 0
+  const chartData = balance.days.map((d) => ({
+    label: DAY_LABELS[d.weekday],
+    'День': d.future ? null : Math.round(d.current.income.day),
+    'Ночь': d.future ? null : Math.round(d.current.income.night),
+    [balance.compareShort]: Math.round(d.previous.income.total),
+  }))
+
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Tile label="Дневные смены" value={money(c.income.day)}>
+          <Delta cur={compared.income.day} prev={p.income.day} />
+        </Tile>
+        <Tile label="Ночные смены" value={money(c.income.night)}>
+          <Delta cur={compared.income.night} prev={p.income.night} />
+        </Tile>
+        <Tile label="Доля ночи" value={`${nightShare.toFixed(0)}%`} hint={p.income.total ? `база сравнения ${((p.income.night / p.income.total) * 100).toFixed(0)}%` : undefined} />
+      </div>
+
+      <SectionCard
+        title="Отчёты смен"
+        subtitle="Смена считается обязательной, если точка сдавала её в большинстве дней за 4 недели до этой. Проверяем по вчерашний день."
+        icon={<AlertTriangle className="h-4 w-4 text-amber-500" />}
+      >
+        {balance.missingShifts.length === 0 ? (
+          <p className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400">
+            <CheckCircle2 className="h-4 w-4" /> Все привычные отчёты смен внесены.
+          </p>
+        ) : (
+          <div className="overflow-x-auto rounded-xl border border-border">
+            <table className="w-full min-w-[420px]">
+              <thead className="bg-surface-muted">
+                <tr>
+                  <th className={th}>День</th>
+                  <th className={th}>Точка</th>
+                  <th className={th}>Смена</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {balance.missingShifts.map((m) => (
+                  <tr key={`${m.companyId}-${m.date}-${m.shift}`}>
+                    <td className={td}>
+                      {DAY_LABELS[weekdayOf(m.date)]} {dm(m.date)}
+                    </td>
+                    <td className={td}>{m.company}</td>
+                    <td className={td}>
+                      <span className="inline-flex items-center gap-1.5">
+                        {m.shift === 'night' ? <Moon className="h-3.5 w-3.5 text-indigo-500" /> : <Sun className="h-3.5 w-3.5 text-amber-500" />}
+                        {m.shift === 'night' ? 'Ночь' : 'День'} — отчёта нет
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </SectionCard>
+
+      <SectionCard title="День и ночь по дням" subtitle="Ночь — выручка ночных смен; безналичный после полуночи учтён на следующий день.">
+        <div className="h-72">
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.3} vertical={false} />
+              <XAxis dataKey="label" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
+              <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} tickFormatter={compact} width={48} />
+              <Tooltip contentStyle={CHART_TOOLTIP} formatter={(v: any) => (v == null ? '—' : money(Number(v)))} />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Bar dataKey="День" stackId="shift" fill="#f59e0b" />
+              <Bar dataKey="Ночь" stackId="shift" fill="#6366f1" radius={[4, 4, 0, 0]} />
+              <Line type="monotone" dataKey={balance.compareShort} stroke="#94a3b8" strokeDasharray="5 5" strokeWidth={2} dot={false} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      </SectionCard>
+
+      <SectionCard title="По точкам" subtitle={`Изменение — к базе: ${balance.compareLabel}`}>
+        <div className="overflow-x-auto rounded-xl border border-border">
+          <table className="w-full min-w-[640px]">
+            <thead className="bg-surface-muted">
+              <tr>
+                <th className={th}>Точка</th>
+                <th className={thr}>День</th>
+                <th className={thr}>Изм.</th>
+                <th className={thr}>Ночь</th>
+                <th className={thr}>Изм.</th>
+                <th className={thr}>Доля ночи</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {balance.companies
+                .filter((co) => co.current.income.total || co.previous.income.total)
+                .map((co) => {
+                  const dayDiff = co.currentCompared.income.day - co.previous.income.day
+                  const nightDiff = co.currentCompared.income.night - co.previous.income.night
+                  return (
+                    <tr key={co.id} className={co.inTotals ? '' : 'text-muted-foreground'}>
+                      <td className={`${td} font-medium`}>{co.name}</td>
+                      <td className={tdr}>{money(co.current.income.day)}</td>
+                      <td className={`${tdr} ${balance.compareUntil ? tone(dayDiff) : ''}`}>{balance.compareUntil ? signed(dayDiff) : '—'}</td>
+                      <td className={tdr}>{money(co.current.income.night)}</td>
+                      <td className={`${tdr} ${balance.compareUntil ? tone(nightDiff) : ''}`}>{balance.compareUntil ? signed(nightDiff) : '—'}</td>
+                      <td className={tdr}>{co.current.income.total ? `${((co.current.income.night / co.current.income.total) * 100).toFixed(0)}%` : '—'}</td>
+                    </tr>
+                  )
+                })}
+            </tbody>
+          </table>
+        </div>
+      </SectionCard>
+    </div>
+  )
+}
+
 // ─── Точки ──────────────────────────────────────────────────────────────────
 
 function PointsTab({ balance }: { balance: WeeklyBalance }) {
@@ -672,9 +917,9 @@ function PointsTab({ balance }: { balance: WeeklyBalance }) {
   const sum = (key: (s: PeriodSums) => number) => inTotals.reduce((s, c) => s + key(c.current), 0)
 
   return (
-    <SectionCard title="Точки" subtitle="Нажмите на точку, чтобы увидеть расходы по статьям. Изменение прибыли — к тем же дням прошлой недели.">
+    <SectionCard title="Точки" subtitle={`Нажмите на точку, чтобы увидеть расходы по статьям. Изменение прибыли — к базе: ${balance.compareLabel}.`}>
       <div className="overflow-x-auto rounded-xl border border-border">
-        <table className="min-w-[860px] w-full">
+        <table className="w-full min-w-[860px]">
           <thead className="bg-surface-muted">
             <tr>
               <th className={th}>Точка</th>
@@ -692,10 +937,7 @@ function PointsTab({ balance }: { balance: WeeklyBalance }) {
               const change = co.currentCompared.profit - co.previous.profit
               return (
                 <Fragment key={co.id}>
-                  <tr
-                    className={`cursor-pointer hover:bg-surface-muted ${co.inTotals ? '' : 'text-muted-foreground'}`}
-                    onClick={() => setOpen(expanded ? null : co.id)}
-                  >
+                  <tr className={`cursor-pointer hover:bg-surface-muted ${co.inTotals ? '' : 'text-muted-foreground'}`} onClick={() => setOpen(expanded ? null : co.id)}>
                     <td className={`${td} font-medium`}>
                       <span className="inline-flex items-center gap-1.5">
                         <ChevronDown className={`h-3.5 w-3.5 transition-transform ${expanded ? 'rotate-180' : ''}`} />
@@ -706,18 +948,23 @@ function PointsTab({ balance }: { balance: WeeklyBalance }) {
                     <td className={tdr}>{money(co.current.income.total)}</td>
                     <td className={tdr}>{money(co.current.expense.total)}</td>
                     <td className={`${tdr} font-semibold ${tone(co.current.profit)}`}>{money(co.current.profit)}</td>
-                    <td className={`${tdr} ${balance.compareUntil ? tone(change) : ''}`}>{balance.compareUntil && (co.previous.income.total || co.previous.expense.total) ? signed(change) : '—'}</td>
+                    <td className={`${tdr} ${balance.compareUntil ? tone(change) : ''}`}>
+                      {balance.compareUntil && (co.previous.income.total || co.previous.expense.total) ? signed(change) : '—'}
+                    </td>
                     <td className={`${tdr} ${tone(co.current.netCash)}`}>{signed(co.current.netCash)}</td>
                     <td className={`${tdr} ${tone(co.current.netCashless)}`}>{signed(co.current.netCashless)}</td>
                   </tr>
                   {expanded ? (
-                    <tr key={`${co.id}-details`}>
+                    <tr>
                       <td colSpan={7} className="bg-surface-muted/50 px-4 py-3">
                         <div className="grid gap-4 md:grid-cols-2">
                           <div className="text-sm">
                             <p className="mb-1.5 text-xs font-semibold text-muted-foreground">Доход</p>
                             <p>Наличные: {money(co.current.income.cash)}</p>
                             <p>Безналичный: {money(co.current.income.cashless)}</p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              день {money(co.current.income.day)} · ночь {money(co.current.income.night)}
+                            </p>
                           </div>
                           <div>
                             <p className="mb-1.5 text-xs font-semibold text-muted-foreground">Расходы по статьям</p>
@@ -772,18 +1019,23 @@ function ExpensesTab({ balance }: { balance: WeeklyBalance }) {
     <div className="space-y-5">
       <SectionCard
         title="Статьи расходов"
-        subtitle={balance.compareUntil ? `«Было» — те же дни прошлой недели (${dm(balance.prevStart)}–${dm(balance.prevUntil!)})` : undefined}
+        subtitle={
+          <>
+            {balance.compareUntil ? `«База» — ${balance.compareLabel}. ` : ''}
+            {balance.pending.count ? `Ждут согласования: ${balance.pending.count} на ${money(balance.pending.total)} — уже учтены.` : ''}
+          </>
+        }
       >
         {balance.categories.length === 0 ? (
           <p className="text-sm text-muted-foreground">Расходов за неделю нет.</p>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-border">
-            <table className="min-w-[760px] w-full">
+            <table className="w-full min-w-[760px]">
               <thead className="bg-surface-muted">
                 <tr>
                   <th className={th}>Статья</th>
                   <th className={thr}>Неделя</th>
-                  <th className={thr}>Было</th>
+                  <th className={thr}>База</th>
                   <th className={thr}>Изменение</th>
                   <th className={thr}>Нал</th>
                   <th className={thr}>Безнал</th>
@@ -823,7 +1075,7 @@ function ExpensesTab({ balance }: { balance: WeeklyBalance }) {
           <p className="text-sm text-muted-foreground">Расходов нет.</p>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-border">
-            <table className="min-w-[720px] w-full">
+            <table className="w-full min-w-[720px]">
               <thead className="bg-surface-muted">
                 <tr>
                   <th className={th}>Дата</th>
@@ -838,7 +1090,12 @@ function ExpensesTab({ balance }: { balance: WeeklyBalance }) {
                   <tr key={i}>
                     <td className={td}>{dm(e.date)}</td>
                     <td className={td}>{e.company}</td>
-                    <td className={td}>{e.category}</td>
+                    <td className={td}>
+                      {e.category}
+                      {e.pending ? (
+                        <span className="ml-1.5 rounded bg-amber-500/15 px-1.5 py-px text-[10px] font-medium text-amber-700 dark:text-amber-300">на согласовании</span>
+                      ) : null}
+                    </td>
                     <td className={`${td} max-w-[280px] truncate text-muted-foreground`}>{e.payee || '—'}</td>
                     <td className={tdr}>
                       {money(e.total)}
@@ -957,6 +1214,8 @@ function ReportTab({
             { section: 'СТРУКТУРА ДОХОДОВ' },
             { label: 'Наличные', cur: c.income.cash, prev: p.income.cash },
             { label: 'Безналичный доход', cur: c.income.cashless, prev: p.income.cashless },
+            { label: 'Дневные смены', cur: c.income.day, prev: p.income.day },
+            { label: 'Ночные смены', cur: c.income.night, prev: p.income.night },
             { section: 'САЛЬДО' },
             { label: 'Сальдо наличных', cur: c.netCash, prev: p.netCash },
             { label: 'Сальдо безналичного', cur: c.netCashless, prev: p.netCashless },
@@ -1079,9 +1338,7 @@ function ReportTab({
         ) : null}
         {aiText ? <MarkdownLite text={aiText} /> : null}
         {!aiText && !aiLoading && !aiError ? (
-          <p className="text-sm text-muted-foreground">
-            {can('weekly-report.ai_generate') ? 'Нажмите «Сгенерировать» — отчёт появится здесь.' : 'Нет права на генерацию ИИ-отчёта.'}
-          </p>
+          <p className="text-sm text-muted-foreground">{can('weekly-report.ai_generate') ? 'Нажмите «Сгенерировать» — отчёт появится здесь.' : 'Нет права на генерацию ИИ-отчёта.'}</p>
         ) : null}
       </SectionCard>
     </div>

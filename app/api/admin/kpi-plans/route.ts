@@ -144,6 +144,18 @@ export async function GET(req: Request) {
     if (plansRes.error) throw plansRes.error
     const plans = (plansRes.data || []) as any[]
 
+    // Только цели, без факта — например, для недельного баланса: считать
+    // доходы за два года ради сумм целей незачем
+    if (url.searchParams.get('plans_only') === '1') {
+      return json({
+        ok: true,
+        data: {
+          year,
+          plans: plans.map((p) => ({ id: p.id, company_id: p.company_id ?? null, kind: p.kind, target_amount: Number(p.target_amount || 0), period_start: p.period_start, period_end: p.period_end })),
+        },
+      })
+    }
+
     const companies = (companiesData || []) as Array<{ id: string; name: string; code: string | null }>
     const extraIds = new Set(companies.filter(isExtraCompany).map((c) => String(c.id)))
     const inNetwork = (companyId: string | null) => !companyId || !extraIds.has(companyId)
