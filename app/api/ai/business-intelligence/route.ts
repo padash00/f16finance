@@ -8,6 +8,7 @@ import { resolveCompanyScope } from '@/lib/server/organizations'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { requireAddon } from '@/lib/server/entitlements'
+import { requireCapability } from '@/lib/server/capabilities'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 export const dynamic = 'force-dynamic'
@@ -29,6 +30,9 @@ export async function POST(request: Request) {
     const addonDenied = await requireAddon(access, 'addon.ai')
     if (addonDenied) return addonDenied
     if (!canView(access)) return json({ error: 'forbidden' }, 403)
+    // То же право, что у самих данных страницы: ИИ пересказывает их целиком
+    const denied = await requireCapability(access, 'analytics.view')
+    if (denied) return denied as any
 
     const ip = getClientIp(request)
     const rl = checkRateLimit(`ai-business-intelligence:${access.user?.id || ip}`, 15, 60_000)
@@ -69,44 +73,64 @@ export async function POST(request: Request) {
       return json({ ok: false })
     }
 
-    // ── Компактная сводка всех секций для промпта (топ-факты) ─────────────────
-    const lines: string[] = []
-    lines.push(`Оценка здоровья бизнеса: ${data.healthScore.score}/100 (${data.healthScore.factors.map((f) => `${f.label} ${f.score0to100}`).join(', ')}).`)
+    // ── Компактная сводка разделов страницы для промпта ───────────────────────
+    const lines: string[] = [`Период: ${data.anomalies.from} — ${data.anomalies.to}.`]
 
-    const below = data.safetyStock.rows.filter((r) => r.belowReorder)
-    lines.push(
-      below.length
-        ? `Ниже точки дозаказа (нужно ЗАКАЗАТЬ): ${below.slice(0, 8).map((r) => `${r.name} (остаток ${r.stock}, дозаказ при ${r.reorderPoint})`).join('; ')}`
-        : 'Все топ-товары выше точки дозаказа.',
-    )
+    if (data.restock.lines.length) {
+      lines.push(
+        `Заказать (план закупа на 2 недели): ${data.restock.itemsCount} товаров на ${m(data.restock.totalAmount)}; кончатся за 3 дня: ${data.restock.urgentCount}. ` +
+          data.restock.lines
+            .slice(0, 8)
+            .map((l) => `${l.name} (${l.company}; остаток ${l.stock}, ${l.daysLeft === 0 ? 'уже нет' : `хватит на ${l.daysLeft} дн`}; взять ${l.order} шт на ${m(l.amount)})`)
+            .join('; '),
+      )
+    } else if (data.hasStore) {
+      lines.push('Заказывать ничего не нужно: всего хватает на 2 недели.')
+    }
 
-    const eoqTop = data.eoq.rows.filter((r) => r.eoq > 0).slice(0, 6)
-    if (eoqTop.length) lines.push(`Оптимальный заказ EOQ: ${eoqTop.map((r) => `${r.name} ≈ ${r.eoq} шт`).join('; ')}`)
-
-    const classA = data.abc.vital.slice(0, 6)
-    if (classA.length) lines.push(`Класс A (кормильцы, ${data.abc.classes.find((c) => c.cls === 'A')?.revenueSharePct || 0}% выручки): ${classA.map((v) => `${v.name} (${m(v.revenue)})`).join('; ')}`)
-    const classC = data.abc.classes.find((c) => c.cls === 'C')
-    if (classC) lines.push(`Класс C (балласт): ${classC.itemCount} позиций, лишь ${classC.revenueSharePct}% выручки — кандидаты на распродажу/вывод.`)
+    if (data.idleStock.noSalesCount) {
+      lines.push(
+        `Без единой продажи за период: ${data.idleStock.noSalesCount} товаров, заморожено ${m(data.idleStock.noSalesValue)}: ` +
+          data.idleStock.noSales.slice(0, 6).map((r) => `${r.name} (${m(r.value)})`).join('; '),
+      )
+    }
+    if (data.idleStock.overstock.length) {
+      lines.push(
+        `Затоварено (запаса больше чем на 4 недели) на ${m(data.idleStock.overstockValue)}: ` +
+          data.idleStock.overstock.slice(0, 5).map((r) => `${r.name} (хватит на ${r.weeksLeft} нед)`).join('; '),
+      )
+    }
 
     if (data.anomalies.anomalies.length) {
-      lines.push(`Аномальные дни выручки: ${data.anomalies.anomalies.slice(0, 5).map((a) => `${a.company} ${a.date} ${m(a.revenue)} (${a.direction === 'above' ? 'выше' : 'ниже'} нормы, z=${a.z})`).join('; ')}`)
+      lines.push(
+        `Странные дни выручки (сравнение с обычным днём той же недели): ` +
+          data.anomalies.anomalies
+            .slice(0, 5)
+            .map((a) => `${a.company} ${a.date}: ${m(a.revenue)} при обычных ${m(a.expected)} (${a.deviation > 0 ? '+' : ''}${Math.round(a.deviation * 100)}%)`)
+            .join('; '),
+      )
     }
 
     if (data.cashierRisk.available && data.cashierRisk.rows.length) {
-      lines.push(`Риск недостач по кассирам: ${data.cashierRisk.rows.slice(0, 5).map((r) => `${r.cashier} ${r.posteriorPct}% (${r.shortfallEvents}/${r.totalEvents})`).join('; ')}`)
+      lines.push(
+        `Недостачи по ревизиям (${data.cashierRisk.actsAnalyzed} ревизий, всего ${m(data.cashierRisk.totalShortage)}): ` +
+          data.cashierRisk.rows
+            .filter((r) => r.shortageAmount > 0)
+            .slice(0, 5)
+            .map((r) => `${r.cashier} — ${m(r.shortageAmount)}, недостача в ${r.shortfallEvents} из ${r.totalEvents} ревизий`)
+            .join('; '),
+      )
     }
 
-    if (data.rfm.available) {
-      const risky = data.rfm.customers.filter((c) => c.segment === 'В зоне риска' || c.segment === 'Потеряны').slice(0, 5)
-      lines.push(`Сегменты клиентов: ${data.rfm.segments.map((s) => `${s.segment} ${s.count} (${m(s.monetary)})`).join('; ')}.`)
-      if (risky.length) lines.push(`Под угрозой ухода (вернуть): ${risky.map((c) => `${c.name} (${m(c.monetary)}, не был ${c.recencyDays >= 9999 ? 'никогда' : c.recencyDays + ' дн'})`).join('; ')}`)
-    }
-    if (data.clv.available && data.clv.rows.length) {
-      lines.push(`Самые ценные клиенты (CLV): ${data.clv.rows.slice(0, 5).map((c) => `${c.name} (${m(c.clv)})`).join('; ')}`)
+    if (data.rfm.atRisk.length) {
+      lines.push(
+        `Постоянные клиенты, которые давно не приходили: ` +
+          data.rfm.atRisk.slice(0, 5).map((c) => `${c.name} (потратил ${m(c.monetary)}, не был ${c.recencyDays >= 9999 ? 'давно' : `${c.recencyDays} дн`})`).join('; '),
+      )
     }
 
     const systemPrompt =
-      'Ты опытный бизнес-аналитик игрового клуба. По данным формул дай 3-5 КОНКРЕТНЫХ приоритетных действий на сегодня (что заказать, что не брать/распродать, на кого из кассиров смотреть, кого из клиентов вернуть). Каждое действие — одна короткая строка с конкретикой (название товара/кассира/клиента и цифра). По-русски, по делу, без воды. Не выдумывай — бери только из данных. Верни просто список строк, без нумерации и заголовков.'
+      'Ты опытный управляющий игрового клуба и магазина. По данным дай 3-5 КОНКРЕТНЫХ действий на сегодня в порядке важности: что заказать, что распродать или не брать, какой день выручки проверить, с кем из сотрудников разобраться по недостачам, кого из клиентов вернуть. Каждое действие — одна короткая строка с названием и цифрой. По-русски, простыми словами, без терминов. Не выдумывай — бери только из данных. Верни просто список строк, без нумерации и заголовков.'
 
     const messages: AiMessage[] = [
       { role: 'system', content: systemPrompt },
@@ -115,7 +139,7 @@ export async function POST(request: Request) {
 
     let actions: string[] = []
     try {
-      const result = await generateAiText({ messages, maxTokens: 400 })
+      const result = await generateAiText({ messages, maxTokens: 3000 })
       actions = String(result.text || '')
         .split('\n')
         .map((s) => s.replace(/^\s*(?:\d+[.)]|[-•*👉▶►])\s*/, '').trim())

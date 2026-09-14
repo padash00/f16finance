@@ -1,784 +1,788 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+/**
+ * /business-intelligence — «что требует внимания» простыми словами.
+ *
+ * Страница отвечает на пять вопросов владельца: что заказать, что лежит без
+ * дела, где выручка странная, кто из клиентов уходит, где недостачи. Формулы
+ * спрятаны под «Как считается». Каждый блок ведёт в раздел, где с этим работают.
+ * Данные — lib/server/business-intelligence.ts.
+ */
+
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Brain, Loader2, RefreshCw, Sparkles } from 'lucide-react'
+import {
+  AlertTriangle,
+  ArrowRight,
+  Brain,
+  ClipboardList,
+  Info,
+  Loader2,
+  PackageX,
+  RefreshCw,
+  ShoppingCart,
+  Sparkles,
+  TrendingDown,
+  Users,
+} from 'lucide-react'
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 import { DatePicker } from '@/components/ui/date-picker'
-
-// ── Типы ответа движка ───────────────────────────────────────────────────────
-type AnomalyDay = { company: string; date: string; revenue: number; z: number; direction: 'above' | 'below' }
-type AnomalyPoint = { company: string; mean: number; stddev: number; ucl: number; lcl: number; daysAnalyzed: number }
-type AnomalySection = { available: boolean; note?: string; days: number; points: AnomalyPoint[]; anomalies: AnomalyDay[] }
-type EoqRow = { item_id: string; name: string; annualDemand: number; eoq: number; stock: number; purchase: number }
-type EoqSection = { available: boolean; note?: string; orderCost: number; holdingRate: number; rows: EoqRow[] }
-type SafetyRow = { item_id: string; name: string; avgWeeklyDemand: number; sigmaWeekly: number; safetyStock: number; reorderPoint: number; stock: number; belowReorder: boolean }
-type SafetySection = { available: boolean; note?: string; serviceZ: number; leadTimeWeeks: number; rows: SafetyRow[] }
-type NewsvendorRow = { item_id: string; name: string; cu: number; co: number; criticalFractilePct: number; recommendedStock: number; stock: number }
-type NewsvendorSection = { available: boolean; note?: string; rows: NewsvendorRow[] }
-type AbcClassStat = { cls: 'A' | 'B' | 'C'; itemCount: number; itemSharePct: number; revenue: number; revenueSharePct: number }
-type AbcVitalItem = { item_id: string; name: string; revenue: number; cumulativePct: number }
-type AbcSection = { available: boolean; note?: string; totalRevenue: number; totalItems: number; classes: AbcClassStat[]; vital: AbcVitalItem[] }
-type CashierRisk = { cashier: string; shortfallEvents: number; totalEvents: number; posterior: number; posteriorPct: number }
-type BayesSection = { available: boolean; note?: string; source: 'audit' | 'writeoff' | 'none'; rows: CashierRisk[] }
-type RfmCustomer = { customer_id: string; name: string; recencyDays: number; frequency: number; monetary: number; rScore: number; fScore: number; mScore: number; segment: string }
-type RfmSegmentStat = { segment: string; count: number; monetary: number }
-type RfmSection = { available: boolean; note?: string; segments: RfmSegmentStat[]; customers: RfmCustomer[] }
-type HealthFactor = { label: string; score0to100: number; note: string }
-type HealthSection = { score: number; factors: HealthFactor[] }
-type ClvRow = { customer_id: string; name: string; clv: number; avgOrder: number; frequency: number }
-type ClvSection = { available: boolean; note?: string; rows: ClvRow[] }
-type BI = {
-  organizationId: string | null
-  generatedAt: string
-  anomalies: AnomalySection
-  eoq: EoqSection
-  safetyStock: SafetySection
-  newsvendor: NewsvendorSection
-  abc: AbcSection
-  cashierRisk: BayesSection
-  rfm: RfmSection
-  healthScore: HealthSection
-  clv: ClvSection
-}
-
-const money = (n: number) => Math.round(n || 0).toLocaleString('ru-RU') + ' ₸'
-const num = (n: number) => Math.round(n || 0).toLocaleString('ru-RU')
-
-const cardCls = 'rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900/40'
-const sub = 'text-muted-foreground'
-const thCls = 'px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground'
-const tdCls = 'px-3 py-2 text-sm text-body tabular-nums'
-
-function SectionCard({
-  emoji,
-  title,
-  formula,
-  how,
-  action,
-  available,
-  unavailableNote,
-  headerExtra,
-  children,
-}: {
-  emoji: string
-  title: string
-  formula: string
-  how: string
-  action?: string
-  available: boolean
-  unavailableNote?: string
-  headerExtra?: React.ReactNode
-  children?: React.ReactNode
-}) {
-  return (
-    <div className={available ? cardCls : `${cardCls} opacity-60`}>
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
-            <span aria-hidden>{emoji}</span> {title}
-          </h2>
-          <p className="mt-1">
-            <span className="inline-block rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-500 dark:bg-white/[0.06] dark:text-slate-400">
-              {formula}
-            </span>
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {headerExtra}
-          {!available ? (
-            <span className="rounded-md border border-slate-300 px-2 py-0.5 text-[11px] text-slate-500 dark:border-white/15 dark:text-slate-400">
-              нужны данные
-            </span>
-          ) : null}
-        </div>
-      </div>
-      <div className="mt-3 rounded-lg bg-violet-500/[0.06] px-3 py-2">
-        <p className="flex items-start gap-1.5 text-sm text-body">
-          <span aria-hidden>💡</span>
-          <span className="leading-relaxed"><span className="font-medium">Что это:</span> {how}</span>
-        </p>
-        {action ? (
-          <p className="mt-1.5 flex items-start gap-1.5 text-sm font-semibold text-violet-700 dark:text-violet-300">
-            <span aria-hidden>👉</span>
-            <span className="leading-relaxed">{action}</span>
-          </p>
-        ) : null}
-      </div>
-      <div className="mt-4">
-        {available ? children : <p className="text-sm text-faint">{unavailableNote || 'Недостаточно данных для расчёта.'}</p>}
-      </div>
-    </div>
-  )
-}
-
-function Table({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="overflow-x-auto rounded-xl border border-border">
-      <table className="min-w-full">{children}</table>
-    </div>
-  )
-}
-
-// Маленькая кнопка-ссылка (deep-link) для секции.
-function DeepLink({ href, children }: { href: string; children: React.ReactNode }) {
-  return (
-    <Link
-      href={href}
-      className="inline-flex items-center gap-1 rounded-lg border border-violet-300 bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-700 transition hover:bg-violet-100 dark:border-violet-400/30 dark:bg-violet-500/10 dark:text-violet-300 dark:hover:bg-violet-500/20"
-    >
-      {children}
-    </Link>
-  )
-}
+import { NativeSelect } from '@/components/ui/native-select'
+import { readApiCache, writeApiCache } from '@/lib/client/use-api-cache'
+import type { BusinessIntelligenceResult, RfmCustomer } from '@/lib/server/business-intelligence'
 
 type Company = { id: string; name: string }
 
+const money = (n: number) => Math.round(n || 0).toLocaleString('ru-RU') + ' ₸'
+const num = (n: number) => (Math.round((n || 0) * 10) / 10).toLocaleString('ru-RU')
+const WEEKDAYS = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб']
+const dayLabel = (iso: string) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
+  if (!m) return iso
+  return `${m[3]}.${m[2]}, ${WEEKDAYS[new Date(`${iso}T00:00:00Z`).getUTCDay()]}`
+}
+const daysWord = (n: number) => {
+  const a = Math.abs(n) % 100
+  const b = a % 10
+  if (a > 10 && a < 20) return 'дней'
+  if (b === 1) return 'день'
+  if (b >= 2 && b <= 4) return 'дня'
+  return 'дней'
+}
+
+// Сегменты клиентов простыми словами
+const SEGMENT_LABELS: Record<string, string> = {
+  Чемпионы: 'Лучшие',
+  Лояльные: 'Постоянные',
+  Новички: 'Новые',
+  'В зоне риска': 'Уходят',
+  Потеряны: 'Ушли',
+  Обычные: 'Обычные',
+}
+
+const th = 'px-3 py-2 text-left text-xs font-medium text-muted-foreground'
+const td = 'px-3 py-2 text-sm tabular-nums text-foreground'
+
+function Table({ head, children }: { head: ReactNode; children: ReactNode }) {
+  return (
+    <div className="overflow-x-auto rounded-xl border border-border">
+      <table className="min-w-full">
+        <thead className="bg-surface-muted">
+          <tr>{head}</tr>
+        </thead>
+        <tbody className="divide-y divide-border">{children}</tbody>
+      </table>
+    </div>
+  )
+}
+
+function HowCalculated({ children }: { children: ReactNode }) {
+  return (
+    <details className="group mt-4 text-sm">
+      <summary className="inline-flex cursor-pointer select-none items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground">
+        <Info className="h-3.5 w-3.5" /> Как считается
+      </summary>
+      <div className="mt-2 space-y-1.5 rounded-lg bg-surface-muted px-3 py-2 text-xs leading-relaxed text-muted-foreground">{children}</div>
+    </details>
+  )
+}
+
+function Section({
+  id,
+  icon,
+  title,
+  subtitle,
+  link,
+  children,
+}: {
+  id: string
+  icon: ReactNode
+  title: string
+  subtitle: string
+  link?: { href: string; label: string }
+  children: ReactNode
+}) {
+  return (
+    <Card id={id} className="scroll-mt-24 gap-0 p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
+            {icon}
+            {title}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
+        </div>
+        {link ? (
+          <Button asChild variant="outline" size="sm">
+            <Link href={link.href}>
+              {link.label} <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </Button>
+        ) : null}
+      </div>
+      <div className="mt-4">{children}</div>
+    </Card>
+  )
+}
+
+function Empty({ children }: { children: ReactNode }) {
+  return <p className="rounded-lg bg-surface-muted px-3 py-3 text-sm text-muted-foreground">{children}</p>
+}
+
+function Tile({
+  href,
+  icon,
+  label,
+  value,
+  hint,
+  tone = 'neutral',
+}: {
+  href: string
+  icon: ReactNode
+  label: string
+  value: string
+  hint: string
+  tone?: 'neutral' | 'warn' | 'bad' | 'good'
+}) {
+  const toneCls = {
+    neutral: 'text-foreground',
+    warn: 'text-amber-600 dark:text-amber-400',
+    bad: 'text-rose-600 dark:text-rose-400',
+    good: 'text-emerald-600 dark:text-emerald-400',
+  }[tone]
+  return (
+    <a href={href} className="block rounded-xl border border-border bg-card p-4 transition hover:bg-surface-muted">
+      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        {icon}
+        {label}
+      </p>
+      <p className={`mt-1.5 text-xl font-semibold tabular-nums ${toneCls}`}>{value}</p>
+      <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>
+    </a>
+  )
+}
+
 export default function BusinessIntelligencePage() {
-  const [data, setData] = useState<BI | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [loaded, setLoaded] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [companies, setCompanies] = useState<Company[]>([])
-  const [companyId, setCompanyId] = useState<string>('') // '' = все точки
-  const [days, setDays] = useState<number>(90) // период анализа (пресет)
-  const [period, setPeriod] = useState<number | 'custom'>(90) // выбор в селекте
-  const [customFrom, setCustomFrom] = useState<string>('') // YYYY-MM-DD
-  const [customTo, setCustomTo] = useState<string>('') // YYYY-MM-DD
-  // Произвольный период активен только когда выбран «custom» и обе даты заданы.
-  const customActive = period === 'custom' && !!customFrom && !!customTo
-
-  // AI-сводка «Главное сегодня».
-  const [aiActions, setAiActions] = useState<string[] | null>(null)
+  const [companyId, setCompanyId] = useState('')
+  const [period, setPeriod] = useState<string>('90')
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
+  const [data, setData] = useState<BusinessIntelligenceResult | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [ai, setAi] = useState<string[] | null>(null)
   const [aiLoading, setAiLoading] = useState(false)
-  const [aiUnavailable, setAiUnavailable] = useState(false)
+  const [aiError, setAiError] = useState(false)
 
-  // Параметры периода для запроса: либо {from,to}, либо {days}.
-  const periodParams = (): { from?: string; to?: string; days?: number } =>
-    customActive ? { from: customFrom, to: customTo } : { days }
+  const customActive = period === 'custom' && !!customFrom && !!customTo
+  const waitingForDates = period === 'custom' && !customActive
 
-  const runAi = async (cid: string = companyId, pp: { from?: string; to?: string; days?: number } = periodParams()) => {
+  useEffect(() => {
+    fetch('/api/admin/companies', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : { data: [] }))
+      .then((j) => setCompanies(Array.isArray(j?.data) ? j.data : []))
+      .catch(() => setCompanies([]))
+  }, [])
+
+  const query = useCallback(() => {
+    const p = new URLSearchParams()
+    if (companyId) p.set('company_id', companyId)
+    if (customActive) {
+      p.set('from', customFrom)
+      p.set('to', customTo)
+    } else if (period !== 'custom') {
+      p.set('days', period)
+    }
+    return p
+  }, [companyId, customActive, customFrom, customTo, period])
+
+  const load = useCallback(
+    async (force = false) => {
+      if (waitingForDates) return
+      const url = `/api/admin/business-intelligence?${query()}`
+      const cached = force ? null : readApiCache<BusinessIntelligenceResult>(url)
+      if (cached) setData(cached)
+      setLoading(!cached)
+      setError(null)
+      setAi(null)
+      setAiError(false)
+      try {
+        const res = await fetch(url, { cache: 'no-store' })
+        const body = await res.json().catch(() => null)
+        if (!res.ok || !body?.ok) throw new Error(body?.error || 'Не удалось загрузить')
+        setData(body.data)
+        writeApiCache(url, body.data)
+      } catch (e: any) {
+        setError(e?.message || 'Ошибка загрузки')
+      } finally {
+        setLoading(false)
+      }
+    },
+    [query, waitingForDates],
+  )
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  // ИИ — только по кнопке: каждый запуск стоит денег
+  const askAi = async () => {
     setAiLoading(true)
-    setAiUnavailable(false)
-    setAiActions(null)
+    setAiError(false)
     try {
+      const p = query()
       const res = await fetch('/api/ai/business-intelligence', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          company_id: cid || null,
-          days: pp.days || null,
-          from: pp.from || null,
-          to: pp.to || null,
+          company_id: p.get('company_id'),
+          days: p.get('days') ? Number(p.get('days')) : null,
+          from: p.get('from'),
+          to: p.get('to'),
         }),
       })
-      const j = await res.json().catch(() => ({}))
-      if (res.ok && j?.ok && Array.isArray(j.actions) && j.actions.length) {
-        setAiActions(j.actions as string[])
-      } else {
-        setAiUnavailable(true)
-      }
+      const body = await res.json().catch(() => null)
+      if (res.ok && body?.ok && Array.isArray(body.actions) && body.actions.length) setAi(body.actions)
+      else setAiError(true)
     } catch {
-      setAiUnavailable(true)
+      setAiError(true)
     } finally {
       setAiLoading(false)
     }
   }
 
-  const run = async (cid: string = companyId, pp: { from?: string; to?: string; days?: number } = periodParams()) => {
-    setLoading(true)
-    setError(null)
-    try {
-      const params = new URLSearchParams()
-      if (cid) params.set('company_id', cid)
-      if (pp.from && pp.to) {
-        params.set('from', pp.from)
-        params.set('to', pp.to)
-      } else if (pp.days) {
-        params.set('days', String(pp.days))
-      }
-      const qs = params.toString()
-      const url = qs ? `/api/admin/business-intelligence?${qs}` : '/api/admin/business-intelligence'
-      const res = await fetch(url, { cache: 'no-store' })
-      const j = await res.json()
-      if (!res.ok || j?.error) throw new Error(j?.error || 'Ошибка')
-      setData(j.data as BI)
-      setLoaded(true)
-    } catch (e: any) {
-      setError(e?.message || 'Ошибка загрузки')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Список точек.
-  useEffect(() => {
-    let active = true
-    fetch('/api/admin/companies', { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((j) => {
-        if (!active) return
-        setCompanies((Array.isArray(j?.data) ? j.data : []) as Company[])
-      })
-      .catch(() => { if (active) setCompanies([]) })
-    return () => { active = false }
-  }, [])
-
-  // Первичная загрузка + перезапуск при смене точки или периода.
-  // При «своём периоде» ждём, пока заданы ОБЕ даты (иначе не дёргаем сервер).
-  useEffect(() => {
-    if (period === 'custom' && !customActive) return
-    const pp = customActive ? { from: customFrom, to: customTo } : { days }
-    run(companyId, pp)
-    runAi(companyId, pp)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyId, days, period, customFrom, customTo])
-
-  // Подпись периода (учитывает «свой период»: «с DD.MM по DD.MM»).
-  const dmShort = (iso: string) => {
-    const m2 = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
-    return m2 ? `${m2[3]}.${m2[2]}` : iso
-  }
-  const periodLabel = customActive
-    ? `с ${dmShort(customFrom)} по ${dmShort(customTo)}`
-    : `за ${days} дней`
+  const periodText = data?.anomalies.from ? `${dayLabel(data.anomalies.from)} — ${dayLabel(data.anomalies.to)}` : ''
 
   return (
     <div className="app-page-wide space-y-5 text-foreground">
       <AdminPageHeader
         title="Бизнес-аналитика"
-        description="Формулы Amazon, Walmart, Six Sigma на твоих данных"
+        description="Что заказать, что лежит без дела, где выручка странная, кто уходит и где недостачи"
         icon={<Brain className="h-5 w-5" />}
         accent="violet"
         backHref="/"
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={period === 'custom' ? 'custom' : String(period)}
-              onChange={(e) => {
-                const v = e.target.value
-                if (v === 'custom') {
-                  setPeriod('custom')
-                } else {
-                  const n = Number(v)
-                  setPeriod(n)
-                  setDays(n)
-                }
-              }}
-              disabled={loading}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-white/10 dark:bg-slate-900/40 dark:text-slate-200 dark:hover:bg-white/[0.04]"
-              title="Период анализа"
-            >
-              <option value={30}>Месяц</option>
-              <option value={90}>Квартал</option>
-              <option value={180}>Полгода</option>
-              <option value={365}>Год</option>
+            <NativeSelect className="w-auto" value={period} onChange={(e) => setPeriod(e.target.value)} aria-label="Период">
+              <option value="30">Месяц</option>
+              <option value="90">Квартал</option>
+              <option value="180">Полгода</option>
+              <option value="365">Год</option>
               <option value="custom">Свой период</option>
-            </select>
+            </NativeSelect>
             {period === 'custom' ? (
               <>
-                <DatePicker
-                  value={customFrom}
-                  max={customTo || undefined}
-                  onChange={setCustomFrom}
-                  disabled={loading}
-                />
-                <span className={`text-sm ${sub}`}>—</span>
-                <DatePicker
-                  value={customTo}
-                  min={customFrom || undefined}
-                  onChange={setCustomTo}
-                  disabled={loading}
-                />
+                <DatePicker value={customFrom} max={customTo || undefined} onChange={setCustomFrom} />
+                <span className="text-sm text-muted-foreground">—</span>
+                <DatePicker value={customTo} min={customFrom || undefined} onChange={setCustomTo} />
               </>
             ) : null}
-            <select
-              value={companyId}
-              onChange={(e) => setCompanyId(e.target.value)}
-              disabled={loading}
-              className={`rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-white/10 dark:bg-slate-900/40 dark:text-slate-200 dark:hover:bg-white/[0.04]`}
-            >
+            <NativeSelect className="w-auto" value={companyId} onChange={(e) => setCompanyId(e.target.value)} aria-label="Точка">
               <option value="">Все точки</option>
               {companies.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
               ))}
-            </select>
-            <button
-              onClick={() => { run(); runAi() }}
-              disabled={loading}
-              className={`inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm ${sub} transition hover:bg-slate-100 disabled:opacity-50 dark:border-white/10 dark:hover:bg-white/[0.04]`}
-            >
-              <RefreshCw className="h-3.5 w-3.5" /> Обновить
-            </button>
+            </NativeSelect>
+            <Button variant="outline" size="sm" onClick={() => void load(true)} disabled={loading || waitingForDates}>
+              <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} /> Обновить
+            </Button>
           </div>
         }
       />
 
-      <p className={`text-xs ${sub}`}>
-        {companyId
-          ? `Показано по точке: ${companies.find((c) => c.id === companyId)?.name || '—'}`
-          : 'По всем точкам (детектор аномалий — по каждой отдельно)'}
-      </p>
+      {waitingForDates ? <Empty>Выберите обе даты периода.</Empty> : null}
 
-      {error ? <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p> : null}
-
-      {/* AI-сводка «Главное сегодня» + Оценка здоровья */}
-      {(aiLoading || aiActions || (data && data.healthScore.factors.length > 0)) ? (
-        <div className="grid gap-4 lg:grid-cols-3">
-          {/* AI-сводка */}
-          {(aiLoading || aiActions) ? (
-            <div className="lg:col-span-2 rounded-2xl border border-violet-300 bg-gradient-to-br from-violet-50 to-white p-5 dark:border-violet-400/30 dark:from-violet-500/10 dark:to-slate-900/40">
-              <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
-                <span aria-hidden>🧠</span> Главное сегодня
-                <Sparkles className="h-4 w-4 text-violet-500" aria-hidden />
-              </h2>
-              {aiLoading ? (
-                <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin text-violet-500" /> ИИ анализирует…
-                </div>
-              ) : aiActions && aiActions.length ? (
-                <ol className="mt-3 space-y-2">
-                  {aiActions.map((a, i) => (
-                    <li key={i} className="flex items-start gap-2.5 text-sm text-slate-800 dark:text-slate-100">
-                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-600 text-[11px] font-bold text-white">
-                        {i + 1}
-                      </span>
-                      <span className="leading-relaxed">{a}</span>
-                    </li>
-                  ))}
-                </ol>
-              ) : null}
-            </div>
-          ) : null}
-
-          {/* Оценка здоровья */}
-          {data && data.healthScore.factors.length > 0 ? (
-            <div className={`${cardCls} ${aiLoading || aiActions ? '' : 'lg:col-span-3'}`}>
-              <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
-                <span aria-hidden>❤️‍🩹</span> Здоровье бизнеса
-              </h2>
-              <div className="mt-2 flex items-end gap-2">
-                <span
-                  className={`text-4xl font-bold tabular-nums ${
-                    data.healthScore.score >= 80
-                      ? 'text-emerald-600 dark:text-emerald-400'
-                      : data.healthScore.score >= 60
-                      ? 'text-amber-600 dark:text-amber-400'
-                      : 'text-rose-600 dark:text-rose-400'
-                  }`}
-                >
-                  {data.healthScore.score}
-                </span>
-                <span className={`pb-1 text-sm ${sub}`}>/ 100</span>
-              </div>
-              <div className="mt-3 space-y-2.5">
-                {data.healthScore.factors.map((f) => (
-                  <div key={f.label}>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-medium text-body">{f.label}</span>
-                      <span className="tabular-nums text-muted-foreground">{f.score0to100}</span>
-                    </div>
-                    <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
-                      <div
-                        className={`h-full rounded-full ${
-                          f.score0to100 >= 80 ? 'bg-emerald-500' : f.score0to100 >= 60 ? 'bg-amber-500' : 'bg-rose-500'
-                        }`}
-                        style={{ width: `${Math.max(0, Math.min(100, f.score0to100))}%` }}
-                      />
-                    </div>
-                    <p className={`mt-0.5 text-[11px] ${sub}`}>{f.note}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-        </div>
-      ) : aiUnavailable && !aiActions ? (
-        <p className={`text-xs ${sub}`}>AI-сводка недоступна.</p>
+      {error ? (
+        <Card className="flex-row items-center gap-2 border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-700 dark:text-rose-300">
+          <AlertTriangle className="h-4 w-4 shrink-0" /> {error}
+        </Card>
       ) : null}
 
-      {loading && !loaded ? (
+      {loading && !data ? (
         <div className="flex flex-col items-center justify-center gap-3 py-24 text-muted-foreground">
           <Loader2 className="h-7 w-7 animate-spin text-violet-500" />
-          <p className="text-sm">Считаем формулы по данным {periodLabel}…</p>
+          <p className="text-sm">Собираем продажи, остатки, ревизии и клиентов…</p>
         </div>
-      ) : !data ? null : (
-        <div className={loading ? 'space-y-5 opacity-50 transition-opacity' : 'space-y-5'}>
-          {/* A. Аномалии */}
-          <SectionCard
-            emoji="📈"
-            title="Детектор аномалий (Six Sigma)"
-            formula={`z = (x − μ) / σ · аномалия при |z| > 2 · границы μ ± 3σ`}
-            how="Система знает твою обычную выручку по дням. Если день резко выбился из нормы — подсвечивает."
-            action="Проверь выделенные дни: сбой кассы, забыли пробить, или воровство."
-            available={data.anomalies.available}
-            unavailableNote={data.anomalies.note}
-          >
-            <div className="space-y-4">
-              {data.anomalies.points.length ? (
-                <Table>
-                  <thead className="bg-surface-muted">
-                    <tr>
-                      <th className={thCls}>Точка</th>
-                      <th className={thCls}>Средняя выручка/день</th>
-                      <th className={thCls}>σ</th>
-                      <th className={thCls}>Нижняя граница</th>
-                      <th className={thCls}>Верхняя граница</th>
-                      <th className={thCls}>Дней</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                    {data.anomalies.points.map((p, i) => (
-                      <tr key={i}>
-                        <td className={`${tdCls} font-medium`}>{p.company}</td>
-                        <td className={tdCls}>{money(p.mean)}</td>
-                        <td className={tdCls}>{money(p.stddev)}</td>
-                        <td className={tdCls}>{money(p.lcl)}</td>
-                        <td className={tdCls}>{money(p.ucl)}</td>
-                        <td className={tdCls}>{p.daysAnalyzed}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </Table>
-              ) : null}
-              {data.anomalies.anomalies.length ? (
-                <div>
-                  <p className={`mb-2 text-xs font-medium uppercase tracking-wide ${sub}`}>Аномальные дни</p>
-                  <Table>
-                    <thead className="bg-surface-muted">
-                      <tr>
-                        <th className={thCls}>Точка</th>
-                        <th className={thCls}>Дата</th>
-                        <th className={thCls}>Выручка</th>
-                        <th className={thCls}>z</th>
-                        <th className={thCls}>Отклонение</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                      {data.anomalies.anomalies.map((a, i) => (
-                        <tr key={i}>
-                          <td className={`${tdCls} font-medium`}>{a.company}</td>
-                          <td className={tdCls}>{a.date}</td>
-                          <td className={tdCls}>{money(a.revenue)}</td>
-                          <td className={`${tdCls} font-semibold`}>{a.z.toFixed(2)}</td>
-                          <td className={tdCls}>
-                            <span className={a.direction === 'above' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}>
-                              {a.direction === 'above' ? '▲ выше нормы' : '▼ ниже нормы'}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </Table>
-                </div>
-              ) : (
-                <p className={`text-sm ${sub}`}>Аномальных дней не обнаружено — выручка стабильна.</p>
-              )}
-            </div>
-          </SectionCard>
+      ) : data ? (
+        <div className={loading ? 'space-y-5 opacity-60 transition-opacity' : 'space-y-5'}>
+          <Summary data={data} />
 
-          {/* B. EOQ */}
-          <SectionCard
-            emoji="📦"
-            title="EOQ — оптимальный размер заказа (формула Уилсона)"
-            formula="EOQ = √(2·D·S / H)"
-            how="Сколько штук брать за один заказ: слишком часто заказывать — переплата за доставку и время; слишком много разом — деньги застряли на складе."
-            action="Заказывай примерно по EOQ — это золотая середина."
-            available={data.eoq.available}
-            unavailableNote={data.eoq.note}
-            headerExtra={<DeepLink href="/store/purchase-plan">📦 Запланировать закуп</DeepLink>}
-          >
-            <Table>
-              <thead className="bg-surface-muted">
-                <tr>
-                  <th className={thCls}>Товар</th>
-                  <th className={thCls}>Годовой спрос (D)</th>
-                  <th className={thCls}>EOQ (шт. за заказ)</th>
-                  <th className={thCls}>Текущий остаток</th>
-                  <th className={thCls}>Закупка</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                {data.eoq.rows.map((r) => (
-                  <tr key={r.item_id}>
-                    <td className={`${tdCls} font-medium`}>{r.name}</td>
-                    <td className={tdCls}>{num(r.annualDemand)}</td>
-                    <td className={`${tdCls} font-semibold text-violet-600 dark:text-violet-300`}>{num(r.eoq)}</td>
-                    <td className={tdCls}>{num(r.stock)}</td>
-                    <td className={tdCls}>{money(r.purchase)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-          </SectionCard>
-
-          {/* C. Страховой запас */}
-          <SectionCard
-            emoji="🛡️"
-            title="Страховой запас и точка дозаказа"
-            formula={`SS = Z·σ_d·√L · ROP = спрос·L + SS · (Z=${data.safetyStock.serviceZ}, L=${data.safetyStock.leadTimeWeeks} нед)`}
-            how="Сколько держать «про запас», чтобы не остаться без ходового товара."
-            action="Когда остаток падает до «точки дозаказа» — пора заказывать."
-            available={data.safetyStock.available}
-            unavailableNote={data.safetyStock.note}
-            headerExtra={<DeepLink href="/store/purchase-plan">📦 Запланировать закуп</DeepLink>}
-          >
-            <Table>
-              <thead className="bg-surface-muted">
-                <tr>
-                  <th className={thCls}>Товар</th>
-                  <th className={thCls}>Спрос/нед</th>
-                  <th className={thCls}>σ недели</th>
-                  <th className={thCls}>Страх. запас</th>
-                  <th className={thCls}>Точка дозаказа</th>
-                  <th className={thCls}>Остаток</th>
-                  <th className={thCls}>Статус</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                {data.safetyStock.rows.map((r) => (
-                  <tr key={r.item_id}>
-                    <td className={`${tdCls} font-medium`}>{r.name}</td>
-                    <td className={tdCls}>{r.avgWeeklyDemand}</td>
-                    <td className={tdCls}>{r.sigmaWeekly}</td>
-                    <td className={tdCls}>{num(r.safetyStock)}</td>
-                    <td className={`${tdCls} font-semibold`}>{num(r.reorderPoint)}</td>
-                    <td className={tdCls}>{num(r.stock)}</td>
-                    <td className={tdCls}>
-                      {r.belowReorder ? (
-                        <span className="rounded-md bg-rose-500/10 px-2 py-0.5 text-xs font-medium text-rose-600 dark:text-rose-400">заказать</span>
-                      ) : (
-                        <span className="rounded-md bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">хватает</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-          </SectionCard>
-
-          {/* D. Newsvendor */}
-          <SectionCard
-            emoji="🥡"
-            title="Newsvendor — заказ скоропорта (critical fractile)"
-            formula="CF = Cu / (Cu + Co) · Q* = μ + z(CF)·σ"
-            how="Для товара, который может залежаться/испортиться: сколько брать, чтобы и не кончилось, и не списывать."
-            action="Держи запас близко к рекомендованному."
-            available={data.newsvendor.available}
-            unavailableNote={data.newsvendor.note}
-          >
-            {data.newsvendor.note ? <p className={`mb-3 text-xs ${sub}`}>{data.newsvendor.note}</p> : null}
-            <Table>
-              <thead className="bg-surface-muted">
-                <tr>
-                  <th className={thCls}>Товар</th>
-                  <th className={thCls}>Cu (маржа)</th>
-                  <th className={thCls}>Co (закупка)</th>
-                  <th className={thCls}>Крит. фрактиль</th>
-                  <th className={thCls}>Реком. запас Q*</th>
-                  <th className={thCls}>Остаток</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                {data.newsvendor.rows.map((r) => (
-                  <tr key={r.item_id}>
-                    <td className={`${tdCls} font-medium`}>{r.name}</td>
-                    <td className={tdCls}>{money(r.cu)}</td>
-                    <td className={tdCls}>{money(r.co)}</td>
-                    <td className={`${tdCls} font-semibold text-violet-600 dark:text-violet-300`}>{r.criticalFractilePct}%</td>
-                    <td className={`${tdCls} font-semibold`}>{num(r.recommendedStock)}</td>
-                    <td className={tdCls}>{num(r.stock)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-          </SectionCard>
-
-          {/* E. ABC */}
-          <SectionCard
-            emoji="🔤"
-            title="ABC-анализ (Парето 80/20)"
-            formula="накопит.% выручки · A ≤ 80% · B ≤ 95% · C — остальное"
-            how="Обычно 20% товаров дают 80% выручки. Класс A — твои кормильцы, класс C — мелочь."
-            action="За классом A следи в первую очередь: не допускай, чтобы он кончался."
-            available={data.abc.available}
-            unavailableNote={data.abc.note}
-          >
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                {data.abc.classes.map((c) => (
-                  <div key={c.cls} className="rounded-xl border border-slate-200 p-3 dark:border-white/10">
-                    <p className="text-sm font-semibold text-foreground">
-                      Класс {c.cls}
-                      <span className={`ml-2 text-xs font-normal ${sub}`}>
-                        {c.cls === 'A' ? 'жизненно важные' : c.cls === 'B' ? 'важные' : 'второстепенные'}
-                      </span>
-                    </p>
-                    <p className="mt-1 text-xl font-bold tabular-nums text-foreground">{c.itemCount} тов.</p>
-                    <p className={`text-xs ${sub} tabular-nums`}>
-                      {c.itemSharePct}% позиций · {c.revenueSharePct}% выручки
-                    </p>
-                    <p className={`mt-1 text-xs ${sub} tabular-nums`}>{money(c.revenue)}</p>
-                  </div>
-                ))}
+          <Card className="gap-0 p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="flex items-center gap-2 text-base font-semibold">
+                  <Sparkles className="h-4 w-4 text-violet-500" /> С чего начать
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">ИИ прочитает всё ниже и назовёт 3–5 дел по важности.</p>
               </div>
-              {data.abc.vital.length ? (
-                <div>
-                  <p className={`mb-2 text-xs font-medium uppercase tracking-wide ${sub}`}>Жизненно важные (класс A)</p>
-                  <Table>
-                    <thead className="bg-surface-muted">
-                      <tr>
-                        <th className={thCls}>Товар</th>
-                        <th className={thCls}>Выручка</th>
-                        <th className={thCls}>Накопит. %</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                      {data.abc.vital.map((v) => (
-                        <tr key={v.item_id}>
-                          <td className={`${tdCls} font-medium`}>{v.name}</td>
-                          <td className={tdCls}>{money(v.revenue)}</td>
-                          <td className={tdCls}>{v.cumulativePct}%</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </Table>
-                </div>
-              ) : null}
+              <Button size="sm" onClick={askAi} disabled={aiLoading || loading}>
+                {aiLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                {ai ? 'Спросить заново' : 'Спросить ИИ'}
+              </Button>
             </div>
-          </SectionCard>
-
-          {/* F. Байес-риск кассиров */}
-          <SectionCard
-            emoji="🎲"
-            title="Байес-риск недостач по кассирам"
-            formula="P = (1 + недостачи) / (5 + всего событий) · Beta(α=1, β=4)"
-            how="По ревизиям считает, у кого недостачи СИСТЕМАТИЧЕСКИ, а не разово (случайная ошибка бывает у всех)."
-            action="Высокий % — присмотрись к кассиру лично."
-            available={data.cashierRisk.available}
-            unavailableNote={data.cashierRisk.note}
-            headerExtra={<DeepLink href="/shifts/reports">🔍 Смотреть смены</DeepLink>}
-          >
-            {data.cashierRisk.note ? <p className={`mb-3 text-xs ${sub}`}>{data.cashierRisk.note}</p> : null}
-            <Table>
-              <thead className="bg-surface-muted">
-                <tr>
-                  <th className={thCls}>Кассир</th>
-                  <th className={thCls}>Недостачи</th>
-                  <th className={thCls}>Всего событий</th>
-                  <th className={thCls}>Риск недостачи</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                {data.cashierRisk.rows.map((r, i) => (
-                  <tr key={i}>
-                    <td className={`${tdCls} font-medium`}>{r.cashier}</td>
-                    <td className={tdCls}>{r.shortfallEvents}</td>
-                    <td className={tdCls}>{r.totalEvents}</td>
-                    <td className={`${tdCls} font-semibold`}>
-                      <span className={r.posteriorPct >= 30 ? 'text-rose-600 dark:text-rose-400' : r.posteriorPct >= 20 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}>
-                        {r.posteriorPct}%
-                      </span>
-                    </td>
-                  </tr>
+            {ai ? (
+              <ol className="mt-4 space-y-2">
+                {ai.map((line, i) => (
+                  <li key={i} className="flex items-start gap-2.5 text-sm">
+                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-600 text-[11px] font-semibold text-white">
+                      {i + 1}
+                    </span>
+                    <span className="leading-relaxed">{line}</span>
+                  </li>
                 ))}
-              </tbody>
-            </Table>
-          </SectionCard>
+              </ol>
+            ) : aiError ? (
+              <p className="mt-3 text-sm text-muted-foreground">ИИ сейчас недоступен — попробуйте позже.</p>
+            ) : null}
+          </Card>
 
-          {/* G. RFM */}
-          <SectionCard
-            emoji="👥"
-            title="RFM — сегментация клиентов"
-            formula="R = давность · F = частота · M = сумма · квинтили 1–5"
-            how="Делит клиентов по поведению: кто ходит часто и много, а кто давно пропал."
-            action="«В зоне риска» и «Уходят» — верни акцией/сообщением, пока не потеряли."
-            available={data.rfm.available}
-            unavailableNote={data.rfm.note}
-            headerExtra={<DeepLink href="/customers">✉️ К клиентам</DeepLink>}
-          >
-            <div className="space-y-4">
-              {data.rfm.segments.length ? (
-                <div className="flex flex-wrap gap-2">
-                  {data.rfm.segments.map((s) => (
-                    <div key={s.segment} className="rounded-xl border border-slate-200 px-3 py-2 dark:border-white/10">
-                      <p className="text-sm font-semibold text-foreground">{s.segment}</p>
-                      <p className={`text-xs ${sub} tabular-nums`}>
-                        {s.count} клиентов · {money(s.monetary)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-              {data.rfm.customers.length ? (
-                <Table>
-                  <thead className="bg-surface-muted">
-                    <tr>
-                      <th className={thCls}>Клиент</th>
-                      <th className={thCls}>Сегмент</th>
-                      <th className={thCls}>R (дней)</th>
-                      <th className={thCls}>F</th>
-                      <th className={thCls}>M</th>
-                      <th className={thCls}>R/F/M</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                    {data.rfm.customers.map((c) => (
-                      <tr key={c.customer_id}>
-                        <td className={`${tdCls} font-medium`}>{c.name}</td>
-                        <td className={tdCls}>{c.segment}</td>
-                        <td className={tdCls}>{c.recencyDays >= 9999 ? '—' : c.recencyDays}</td>
-                        <td className={tdCls}>{c.frequency}</td>
-                        <td className={tdCls}>{money(c.monetary)}</td>
-                        <td className={`${tdCls} ${sub}`}>{c.rScore}/{c.fScore}/{c.mScore}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </Table>
-              ) : null}
-            </div>
-          </SectionCard>
+          <RestockCard data={data} />
+          <IdleCard data={data} />
+          <RevenueCard data={data} periodText={periodText} />
+          <CustomersCard data={data} />
+          <ShortagesCard data={data} periodText={periodText} />
 
-          {/* CLV — ценность клиента */}
-          <SectionCard
-            emoji="💎"
-            title="Ценность клиента (CLV)"
-            formula="CLV ≈ средний чек · частота · 2"
-            how="Сколько денег приносит клиент за всё время. Видно, на кого тратить силы и кого нельзя терять."
-            action="Береги клиентов с высоким CLV: персональное внимание, бонусы — потеря одного дороже десяти случайных."
-            available={data.clv.available}
-            unavailableNote={data.clv.note}
-            headerExtra={<DeepLink href="/customers">✉️ К клиентам</DeepLink>}
-          >
-            <Table>
-              <thead className="bg-surface-muted">
-                <tr>
-                  <th className={thCls}>Клиент</th>
-                  <th className={thCls}>Средний чек</th>
-                  <th className={thCls}>Покупок</th>
-                  <th className={thCls}>CLV</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                {data.clv.rows.map((c) => (
-                  <tr key={c.customer_id}>
-                    <td className={`${tdCls} font-medium`}>{c.name}</td>
-                    <td className={tdCls}>{money(c.avgOrder)}</td>
-                    <td className={tdCls}>{c.frequency}</td>
-                    <td className={`${tdCls} font-semibold text-violet-600 dark:text-violet-300`}>{money(c.clv)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-          </SectionCard>
-
-          <p className={`pt-2 text-center text-xs ${sub}`}>
-            Расчёт по данным {periodLabel} · обновлено {new Date(data.generatedAt).toLocaleString('ru-RU')}
+          <p className="pt-1 text-center text-xs text-muted-foreground">
+            {periodText ? `Период: ${periodText} · ` : ''}обновлено {new Date(data.generatedAt).toLocaleString('ru-RU')}
           </p>
         </div>
-      )}
+      ) : null}
     </div>
+  )
+}
+
+// ── Сводка наверху: пять вопросов, каждый ведёт к своему блоку ──────────────
+
+function Summary({ data }: { data: BusinessIntelligenceResult }) {
+  const { restock, idleStock, anomalies, rfm, cashierRisk } = data
+  const atRiskSpent = rfm.atRisk.reduce((s, c) => s + c.monetary, 0)
+  const drops = anomalies.anomalies.filter((a) => a.direction === 'below').length
+  return (
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+      <Tile
+        href="#restock"
+        icon={<ShoppingCart className="h-3.5 w-3.5" />}
+        label="Заказать"
+        value={!data.hasStore ? '—' : restock.itemsCount ? `${restock.itemsCount} ${restock.itemsCount === 1 ? 'товар' : 'товаров'}` : 'ничего'}
+        hint={!data.hasStore ? 'нет склада' : restock.itemsCount ? `${money(restock.totalAmount)}${restock.urgentCount ? ` · срочно ${restock.urgentCount}` : ''}` : 'хватает на 2 недели'}
+        tone={restock.urgentCount ? 'bad' : restock.itemsCount ? 'warn' : 'good'}
+      />
+      <Tile
+        href="#idle"
+        icon={<PackageX className="h-3.5 w-3.5" />}
+        label="Лежит без продаж"
+        value={data.hasStore ? money(idleStock.noSalesValue) : '—'}
+        hint={data.hasStore ? `${idleStock.noSalesCount} товаров за период` : 'нет склада'}
+        tone={idleStock.noSalesValue > 0 ? 'warn' : 'neutral'}
+      />
+      <Tile
+        href="#revenue"
+        icon={<TrendingDown className="h-3.5 w-3.5" />}
+        label="Странные дни"
+        value={anomalies.available ? String(anomalies.anomalies.length) : '—'}
+        hint={anomalies.available ? (drops ? `из них провалов: ${drops}` : 'провалов нет') : 'нет доходов'}
+        tone={drops ? 'warn' : 'neutral'}
+      />
+      <Tile
+        href="#customers"
+        icon={<Users className="h-3.5 w-3.5" />}
+        label="Уходят клиенты"
+        value={rfm.available ? String(rfm.atRisk.length) : '—'}
+        hint={rfm.available ? (rfm.atRisk.length ? `тратили ${money(atRiskSpent)}` : 'постоянные на месте') : 'нет клиентской базы'}
+        tone={rfm.atRisk.length ? 'warn' : 'neutral'}
+      />
+      <Tile
+        href="#shortages"
+        icon={<ClipboardList className="h-3.5 w-3.5" />}
+        label="Недостачи"
+        value={cashierRisk.available ? money(cashierRisk.totalShortage) : '—'}
+        hint={cashierRisk.available ? `по ${cashierRisk.actsAnalyzed} ревизиям` : 'ревизий не было'}
+        tone={cashierRisk.totalShortage > 0 ? 'bad' : 'neutral'}
+      />
+    </div>
+  )
+}
+
+// ── Что заказать ────────────────────────────────────────────────────────────
+
+function RestockCard({ data }: { data: BusinessIntelligenceResult }) {
+  const { restock } = data
+  const multiCompany = new Set(restock.lines.map((l) => l.companyId)).size > 1
+  return (
+    <Section
+      id="restock"
+      icon={<ShoppingCart className="h-4 w-4 text-violet-500" />}
+      title="Что заказать"
+      subtitle="Товары, которых не хватит на ближайшие 2 недели. Сначала те, что кончатся раньше."
+      link={data.hasStore ? { href: '/store/purchase-plan', label: 'План закупа' } : undefined}
+    >
+      {!data.hasStore ? (
+        <Empty>У выбранной точки нет склада — товарный учёт не ведётся.</Empty>
+      ) : restock.lines.length === 0 ? (
+        <Empty>Заказывать ничего не нужно: всего хватает на 2 недели вперёд.</Empty>
+      ) : (
+        <Table
+          head={
+            <>
+              <th className={th}>Товар</th>
+              {multiCompany ? <th className={th}>Точка</th> : null}
+              <th className={th}>Остаток</th>
+              <th className={th}>Хватит на</th>
+              <th className={th}>Взять</th>
+              <th className={th}>Сумма</th>
+            </>
+          }
+        >
+          {restock.lines.map((l) => (
+            <tr key={`${l.companyId}:${l.item_id}`}>
+              <td className={`${td} font-medium`}>
+                {l.name}
+                <span className="block text-xs font-normal text-muted-foreground">{l.supplier !== '—' ? l.supplier : 'поставщик не указан'}</span>
+              </td>
+              {multiCompany ? <td className={td}>{l.company}</td> : null}
+              <td className={td}>{num(l.stock)}</td>
+              <td className={td}>
+                {l.daysLeft === 0 ? (
+                  <span className="font-medium text-rose-600 dark:text-rose-400">уже нет</span>
+                ) : (
+                  <span className={l.daysLeft <= 3 ? 'font-medium text-rose-600 dark:text-rose-400' : l.daysLeft <= 7 ? 'text-amber-600 dark:text-amber-400' : ''}>
+                    {l.daysLeft} {daysWord(l.daysLeft)}
+                  </span>
+                )}
+              </td>
+              <td className={`${td} font-semibold`}>{num(l.order)} шт</td>
+              <td className={td}>{money(l.amount)}</td>
+            </tr>
+          ))}
+        </Table>
+      )}
+      {restock.itemsCount > restock.lines.length ? (
+        <p className="mt-2 text-xs text-muted-foreground">
+          Показаны {restock.lines.length} из {restock.itemsCount}. Весь список с разбивкой по поставщикам — в плане закупа.
+        </p>
+      ) : null}
+      <HowCalculated>
+        <p>Тот же расчёт, что в «Плане закупа», поэтому цифры совпадают.</p>
+        <p>Спрос в неделю — продажи за последние 4 недели, делённые на 4. Держим запас на 2 недели: взять = 2 недели спроса − остаток, с округлением до целых упаковок.</p>
+        <p>«Хватит на» — остаток, делённый на дневной спрос. Сумма — по цене последней приёмки.</p>
+      </HowCalculated>
+    </Section>
+  )
+}
+
+// ── Что лежит без дела + главные товары ─────────────────────────────────────
+
+function IdleCard({ data }: { data: BusinessIntelligenceResult }) {
+  const { idleStock, abc } = data
+  const classA = abc.classes.find((c) => c.cls === 'A')
+  return (
+    <Section
+      id="idle"
+      icon={<PackageX className="h-4 w-4 text-amber-500" />}
+      title="Что лежит без дела"
+      subtitle="Деньги, замороженные в товаре: он не продаётся или его взяли слишком много."
+      link={data.hasStore ? { href: '/store/abc', label: 'ABC-анализ' } : undefined}
+    >
+      {!data.hasStore ? (
+        <Empty>У выбранной точки нет склада — товарный учёт не ведётся.</Empty>
+      ) : (
+        <div className="space-y-5">
+          {abc.available && classA ? (
+            <div className="rounded-xl border border-border p-4">
+              <p className="text-sm">
+                <span className="font-semibold">{classA.itemCount} товаров</span> приносят{' '}
+                <span className="font-semibold">{Math.round(classA.revenueSharePct)}% выручки</span> магазина из {abc.totalItems} продававшихся.
+                Их нельзя допускать до нуля.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {abc.vital.slice(0, 12).map((v) => (
+                  <span key={v.item_id} className="rounded-md bg-surface-muted px-2 py-0.5 text-xs">
+                    {v.name} · {money(v.revenue)}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="grid gap-5 lg:grid-cols-2">
+            <div>
+              <p className="mb-2 text-sm font-medium">
+                Ни одной продажи за период <span className="text-muted-foreground">· {money(idleStock.noSalesValue)}</span>
+              </p>
+              {idleStock.noSales.length === 0 ? (
+                <Empty>Всё, что лежит на остатке, продавалось.</Empty>
+              ) : (
+                <Table
+                  head={
+                    <>
+                      <th className={th}>Товар</th>
+                      <th className={th}>Остаток</th>
+                      <th className={th}>Заморожено</th>
+                    </>
+                  }
+                >
+                  {idleStock.noSales.slice(0, 12).map((r) => (
+                    <tr key={r.item_id}>
+                      <td className={`${td} font-medium`}>{r.name}</td>
+                      <td className={td}>{num(r.stock)}</td>
+                      <td className={td}>{money(r.value)}</td>
+                    </tr>
+                  ))}
+                </Table>
+              )}
+            </div>
+            <div>
+              <p className="mb-2 text-sm font-medium">
+                Взяли с запасом больше чем на месяц <span className="text-muted-foreground">· {money(idleStock.overstockValue)}</span>
+              </p>
+              {idleStock.overstock.length === 0 ? (
+                <Empty>Перезатоваренных товаров нет.</Empty>
+              ) : (
+                <Table
+                  head={
+                    <>
+                      <th className={th}>Товар</th>
+                      <th className={th}>Хватит на</th>
+                      <th className={th}>Стоит</th>
+                    </>
+                  }
+                >
+                  {idleStock.overstock.slice(0, 12).map((r) => (
+                    <tr key={`${r.company}:${r.item_id}`}>
+                      <td className={`${td} font-medium`}>{r.name}</td>
+                      <td className={td}>{r.weeksLeft >= 99 ? 'не продаётся' : `${num(r.weeksLeft)} нед`}</td>
+                      <td className={td}>{money(r.value)}</td>
+                    </tr>
+                  ))}
+                </Table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      <HowCalculated>
+        <p>«Ни одной продажи» — товар есть на остатке, но за выбранный период не продан ни разу. Заморожено = остаток × закупочная цена из карточки.</p>
+        <p>«С запасом больше чем на месяц» — из плана закупа: остатка хватит больше чем на 4 недели при текущем спросе. Такое не докупать.</p>
+        <p>Главные товары — отсортированы по выручке за период; сверху те, что вместе дают 80% выручки (класс A в ABC-анализе).</p>
+      </HowCalculated>
+    </Section>
+  )
+}
+
+// ── Где выручка странная ────────────────────────────────────────────────────
+
+function RevenueCard({ data, periodText }: { data: BusinessIntelligenceResult; periodText: string }) {
+  const { anomalies } = data
+  return (
+    <Section
+      id="revenue"
+      icon={<TrendingDown className="h-4 w-4 text-sky-500" />}
+      title="Где выручка странная"
+      subtitle="Дни, когда точка заработала заметно больше или меньше, чем обычно в этот день недели."
+      link={{ href: '/income', label: 'Доходы' }}
+    >
+      {!anomalies.available ? (
+        <Empty>За период нет доходов в отчётах смен.</Empty>
+      ) : (
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {anomalies.points.map((p) => (
+              <span key={p.companyId} className="rounded-lg border border-border px-2.5 py-1 text-xs">
+                {p.company}: обычный день <span className="font-semibold tabular-nums">{money(p.typicalDay)}</span>
+              </span>
+            ))}
+          </div>
+          {anomalies.anomalies.length === 0 ? (
+            <Empty>Странных дней нет — выручка шла в своём обычном ритме.</Empty>
+          ) : (
+            <Table
+              head={
+                <>
+                  <th className={th}>Точка</th>
+                  <th className={th}>День</th>
+                  <th className={th}>Выручка</th>
+                  <th className={th}>Обычно</th>
+                  <th className={th}>Разница</th>
+                  <th className={th} />
+                </>
+              }
+            >
+              {anomalies.anomalies.map((a) => (
+                <tr key={`${a.companyId}:${a.date}`}>
+                  <td className={`${td} font-medium`}>{a.company}</td>
+                  <td className={td}>{dayLabel(a.date)}</td>
+                  <td className={td}>{money(a.revenue)}</td>
+                  <td className={`${td} text-muted-foreground`}>{money(a.expected)}</td>
+                  <td className={td}>
+                    <span className={a.direction === 'above' ? 'text-emerald-600 dark:text-emerald-400' : 'font-medium text-rose-600 dark:text-rose-400'}>
+                      {a.deviation > 0 ? '+' : ''}
+                      {Math.round(a.deviation * 100)}%
+                    </span>
+                  </td>
+                  <td className={td}>
+                    <Link
+                      href={`/income?from=${a.date}&to=${a.date}&company_id=${a.companyId}`}
+                      className="text-xs text-violet-600 hover:underline dark:text-violet-400"
+                    >
+                      смены
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </Table>
+          )}
+        </div>
+      )}
+      <HowCalculated>
+        <p>Берём доходы из отчётов смен по каждой точке{periodText ? ` (${periodText})` : ''}. Безнал ночной смены после полуночи относим к следующему дню — как в отчётах.</p>
+        <p>
+          «Обычно» — средняя (медианная) выручка этой точки в тот же день недели за период (не меньше чем за 8 недель), не считая сам день. Поэтому
+          загруженные выходные клуба не считаются странными.
+        </p>
+        <p>
+          День попадает в список, если отличается от обычного минимум на 25% и это отклонение втрое больше привычных колебаний точки.
+          Провал — повод проверить смену: сбой кассы, не пробили, не внесли безнал.
+        </p>
+        <p>Дни без отчёта не оцениваются — это недовнесённые данные, а не провал.</p>
+      </HowCalculated>
+    </Section>
+  )
+}
+
+// ── Кто из клиентов уходит ──────────────────────────────────────────────────
+
+function CustomersCard({ data }: { data: BusinessIntelligenceResult }) {
+  const { rfm } = data
+  const lastVisit = (c: RfmCustomer) => (c.recencyDays >= 9999 ? 'покупок нет' : `${c.recencyDays} ${daysWord(c.recencyDays)} назад`)
+  return (
+    <Section
+      id="customers"
+      icon={<Users className="h-4 w-4 text-emerald-500" />}
+      title="Кто из клиентов уходит"
+      subtitle="Постоянные клиенты, которые раньше приходили часто и тратили много, а сейчас давно не появлялись."
+      link={{ href: '/customers', label: 'Клиенты' }}
+    >
+      {!rfm.available ? (
+        <Empty>{rfm.note ? `${rfm.note[0].toUpperCase()}${rfm.note.slice(1)}.` : 'Нет данных о клиентах.'}</Empty>
+      ) : (
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {rfm.segments.map((s) => (
+              <span
+                key={s.segment}
+                className={`rounded-lg border px-2.5 py-1 text-xs ${
+                  s.segment === 'В зоне риска' ? 'border-amber-500/40 bg-amber-500/10' : 'border-border'
+                }`}
+              >
+                <span className="font-semibold">{SEGMENT_LABELS[s.segment] || s.segment}</span> · {s.count} · {money(s.monetary)}
+              </span>
+            ))}
+          </div>
+          {rfm.atRisk.length === 0 ? (
+            <Empty>Уходящих постоянных клиентов нет.</Empty>
+          ) : (
+            <Table
+              head={
+                <>
+                  <th className={th}>Клиент</th>
+                  <th className={th}>Потратил всего</th>
+                  <th className={th}>Визитов</th>
+                  <th className={th}>Последний раз</th>
+                </>
+              }
+            >
+              {rfm.atRisk.map((c) => (
+                <tr key={c.customer_id}>
+                  <td className={`${td} font-medium`}>{c.name}</td>
+                  <td className={td}>{money(c.monetary)}</td>
+                  <td className={td}>{c.frequency}</td>
+                  <td className={`${td} text-amber-600 dark:text-amber-400`}>{lastVisit(c)}</td>
+                </tr>
+              ))}
+            </Table>
+          )}
+        </div>
+      )}
+      <HowCalculated>
+        <p>Каждому клиенту — три оценки от 1 до 5 относительно остальных клиентов: как давно была последняя покупка, сколько визитов, сколько потратил.</p>
+        <p>
+          «Уходят» — давно не был (оценка 1–2), но по визитам и деньгам в верхней половине. «Ушли» — давно не был и тратил мало.
+          «Лучшие» — недавно, часто и много. «Новые» — были недавно, но пока редко.
+        </p>
+        <p>Учитываются только клиенты, которых пробивают на кассе. Сообщение или бонус уходящему обычно дешевле, чем найти нового.</p>
+      </HowCalculated>
+    </Section>
+  )
+}
+
+// ── Недостачи по ревизиям ───────────────────────────────────────────────────
+
+function ShortagesCard({ data, periodText }: { data: BusinessIntelligenceResult; periodText: string }) {
+  const { cashierRisk } = data
+  const riskLabel = (pct: number, acts: number) => {
+    if (acts < 3) return { text: 'мало ревизий', cls: 'text-muted-foreground' }
+    if (pct >= 50) return { text: 'часто', cls: 'font-medium text-rose-600 dark:text-rose-400' }
+    if (pct >= 30) return { text: 'иногда', cls: 'text-amber-600 dark:text-amber-400' }
+    return { text: 'редко', cls: 'text-emerald-600 dark:text-emerald-400' }
+  }
+  return (
+    <Section
+      id="shortages"
+      icon={<ClipboardList className="h-4 w-4 text-rose-500" />}
+      title="Недостачи по ревизиям"
+      subtitle="У кого при пересчёте товара не хватает — и насколько это систематично."
+      link={{ href: '/store/revisions', label: 'Ревизии' }}
+    >
+      {!cashierRisk.available ? (
+        <Empty>
+          {cashierRisk.note ? `${cashierRisk.note[0].toUpperCase()}${cashierRisk.note.slice(1)}.` : 'Нет данных.'} Проведите ревизию с назначением
+          сотрудников — тогда появится разбор.
+        </Empty>
+      ) : (
+        <Table
+          head={
+            <>
+              <th className={th}>Сотрудник</th>
+              <th className={th}>Ревизий</th>
+              <th className={th}>С недостачей</th>
+              <th className={th}>Сумма недостач</th>
+              <th className={th}>Как часто</th>
+            </>
+          }
+        >
+          {cashierRisk.rows.map((r) => {
+            const risk = riskLabel(r.posteriorPct, r.totalEvents)
+            return (
+              <tr key={r.operatorId}>
+                <td className={`${td} font-medium`}>{r.cashier}</td>
+                <td className={td}>{r.totalEvents}</td>
+                <td className={td}>
+                  {r.shortfallEvents}
+                  {r.shortagePositions ? <span className="text-xs text-muted-foreground"> · {r.shortagePositions} поз.</span> : null}
+                </td>
+                <td className={`${td} ${r.shortageAmount > 0 ? 'font-semibold' : 'text-muted-foreground'}`}>{money(r.shortageAmount)}</td>
+                <td className={td}>
+                  <span className={risk.cls}>{risk.text}</span>
+                </td>
+              </tr>
+            )
+          })}
+        </Table>
+      )}
+      <HowCalculated>
+        <p>Берём закрытые ревизии{periodText ? ` за период ${periodText}` : ''}. Недостача позиции — сколько не хватило к моменту подсчёта: ожидалось на открытии плюс движения до подсчёта, минус посчитано. Продажи во время ревизии недостачей не считаются — так же, как при закрытии акта.</p>
+        <p>Недостача относится к сотруднику, который считал позицию. Сумма — по закупочной цене из карточки товара.</p>
+        <p>
+          «Как часто» — доля ревизий с недостачей, сглаженная на малом числе ревизий: одна неудачная ревизия из одной не делает человека
+          «вором». Меньше 3 ревизий — судить рано.
+        </p>
+      </HowCalculated>
+    </Section>
   )
 }

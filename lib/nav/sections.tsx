@@ -103,7 +103,7 @@ export const navSections: NavSection[] = [
     items: [
       { href: '/dashboard', label: 'Главная панель', icon: LayoutDashboard, note: 'Общий статус бизнеса' },
       { href: '/analysis', label: 'Прогноз и точность', icon: BrainCircuit, note: '3 сценария на месяц, учится на ошибках', badge: 'AI', badgeColor: 'purple', isNew: true },
-      { href: '/business-intelligence', label: 'Бизнес-аналитика', icon: Brain, note: 'Формулы Amazon/Six Sigma на твоих данных', badge: 'new', badgeColor: 'purple', isNew: true },
+      { href: '/business-intelligence', label: 'Бизнес-аналитика', icon: Brain, note: 'Что заказать, где странная выручка, кто уходит, где недостачи', badge: 'new', badgeColor: 'purple', isNew: true },
       { href: '/ai-cfo', label: 'AI Финдиректор', icon: Briefcase, note: 'Карточки: вывод → причина → действие', badge: 'AI', badgeColor: 'purple', isNew: true, feature: 'ai.cfo' },
       { href: '/goals', label: 'Цели и план', icon: Target, note: 'Плановые показатели', badge: 'new', badgeColor: 'blue' },
       { href: '/reports', label: 'Отчеты', icon: BarChart3, note: 'Сводные метрики' },
