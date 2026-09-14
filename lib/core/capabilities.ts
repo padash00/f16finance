@@ -123,8 +123,8 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         path: '/cashflow',
         label: 'Денежные потоки',
         capabilities: [
-          { id: 'cashflow.view', label: 'Просмотр прогноза', severity: 'low' },
-          { id: 'cashflow.export', label: 'Выгрузка в Excel', severity: 'low' },
+          { id: 'cashflow.view', label: 'Просмотр', severity: 'low' },
+          { id: 'cashflow.export', label: 'Выгрузка в PDF', severity: 'low' },
           { id: 'cashflow.ai_analysis', label: 'AI-анализ потоков', severity: 'low' },
         ],
       },

@@ -2,8 +2,8 @@
   "version": 1,
   "summary": {
     "groups": 9,
-    "pages": 85,
-    "capabilities": 400
+    "pages": 86,
+    "capabilities": 405
   },
   "groups": [
     {
@@ -199,14 +199,14 @@
           "capabilities": [
             {
               "id": "cashflow.view",
-              "label": "Просмотр прогноза",
+              "label": "Просмотр",
               "description": null,
               "severity": "low",
               "deps": []
             },
             {
               "id": "cashflow.export",
-              "label": "Выгрузка в Excel",
+              "label": "Выгрузка в PDF",
               "description": null,
               "severity": "low",
               "deps": []
@@ -2997,6 +2997,49 @@
               "label": "Управление категориями расходов",
               "description": null,
               "severity": "medium",
+              "deps": []
+            }
+          ]
+        },
+        {
+          "id": "server-monitor",
+          "path": "/server-monitor",
+          "extraPaths": [],
+          "label": "Мониторинг сервера",
+          "capabilities": [
+            {
+              "id": "server-monitor.view",
+              "label": "Просмотр состояния и истории",
+              "description": null,
+              "severity": "low",
+              "deps": []
+            },
+            {
+              "id": "server-monitor.edit",
+              "label": "Изменение карточки сервера",
+              "description": null,
+              "severity": "medium",
+              "deps": []
+            },
+            {
+              "id": "server-monitor.edit_settings",
+              "label": "Изменение порогов и уведомлений",
+              "description": null,
+              "severity": "high",
+              "deps": []
+            },
+            {
+              "id": "server-monitor.test_notifications",
+              "label": "Тест Telegram-уведомлений",
+              "description": null,
+              "severity": "medium",
+              "deps": []
+            },
+            {
+              "id": "server-monitor.manage_keys",
+              "label": "Создание и ротация ключей агента",
+              "description": null,
+              "severity": "high",
               "deps": []
             }
           ]

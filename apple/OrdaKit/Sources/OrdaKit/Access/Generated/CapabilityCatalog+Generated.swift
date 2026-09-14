@@ -72,8 +72,8 @@ extension CapabilityCatalog {
                     extraPaths: [],
                     label: "Денежные потоки",
                     capabilities: [
-                        Capability(id: "cashflow.view", label: "Просмотр прогноза", description: nil, severity: .low, deps: []),
-                        Capability(id: "cashflow.export", label: "Выгрузка в Excel", description: nil, severity: .low, deps: []),
+                        Capability(id: "cashflow.view", label: "Просмотр", description: nil, severity: .low, deps: []),
+                        Capability(id: "cashflow.export", label: "Выгрузка в PDF", description: nil, severity: .low, deps: []),
                         Capability(id: "cashflow.ai_analysis", label: "AI-анализ потоков", description: nil, severity: .low, deps: []),
                     ]
                 ),
@@ -937,6 +937,19 @@ extension CapabilityCatalog {
                         Capability(id: "settings.manage_companies", label: "Создание/изменение точек", description: nil, severity: .high, deps: []),
                         Capability(id: "settings.delete_company", label: "Удалить точку", description: nil, severity: .high, deps: []),
                         Capability(id: "settings.manage_categories", label: "Управление категориями расходов", description: nil, severity: .medium, deps: []),
+                    ]
+                ),
+                CapabilityPage(
+                    id: "server-monitor",
+                    path: "/server-monitor",
+                    extraPaths: [],
+                    label: "Мониторинг сервера",
+                    capabilities: [
+                        Capability(id: "server-monitor.view", label: "Просмотр состояния и истории", description: nil, severity: .low, deps: []),
+                        Capability(id: "server-monitor.edit", label: "Изменение карточки сервера", description: nil, severity: .medium, deps: []),
+                        Capability(id: "server-monitor.edit_settings", label: "Изменение порогов и уведомлений", description: nil, severity: .high, deps: []),
+                        Capability(id: "server-monitor.test_notifications", label: "Тест Telegram-уведомлений", description: nil, severity: .medium, deps: []),
+                        Capability(id: "server-monitor.manage_keys", label: "Создание и ротация ключей агента", description: nil, severity: .high, deps: []),
                     ]
                 ),
                 CapabilityPage(
