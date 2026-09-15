@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server'
 
-import { buildProfitabilityReport, companyExpenseLines, sumPnl } from '@/lib/domain/profitability-report'
+import { buildProfitabilityReport, companyExpenseLines, sumMonths } from '@/lib/domain/profitability-report'
 import { calculateOperatorSalarySummary } from '@/lib/domain/salary'
 import type { SalaryAdjustmentRow, SalaryDebtRow, SalaryIncomeRow, SalaryOperatorMeta } from '@/lib/domain/salary'
 import { calculateStaffAccrualForMonth } from '@/lib/domain/staff-payroll'
-import { DEFAULT_TAX_RATE, normalizeRate } from '@/lib/domain/tax'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
 import { fetchAllRows } from '@/lib/server/forecast-inputs'
@@ -17,9 +16,8 @@ import { createAdminSupabaseClient } from '@/lib/server/supabase'
  * Управленческий отчёт по точке (PDF и печатная форма).
  *
  * Считается тем же расчётом, что /profitability (lib/domain/profitability-report):
- * налог — ставкой с выручки, ручные вводы месяца разнесены по выручке точки,
- * отклонённые расходы не считаются, безнал ночной смены — на следующий день.
- * Поэтому прибыль точки в PDF совпадает с экраном.
+ * только журналы точки, налог из журнала расходов, отклонённые расходы не
+ * считаются. Поэтому прибыль точки в PDF совпадает с экраном.
  *
  * Формат ответа прежний (BranchData): turnover − turnoverTax − expensesTotal = netProfit.
  */
@@ -56,7 +54,6 @@ export async function GET(req: Request) {
     const companyId = (url.searchParams.get('company_id') || '').trim()
     const monthFrom = normalizeMonth(url.searchParams.get('from'))
     const monthTo = normalizeMonth(url.searchParams.get('to'))
-    const taxRate = normalizeRate(url.searchParams.get('tax_rate') ?? DEFAULT_TAX_RATE)
     const includeExtra = url.searchParams.get('include_extra') === '1'
 
     if (!companyId) return json({ error: 'company_id обязателен' }, 400)
@@ -87,22 +84,18 @@ export async function GET(req: Request) {
     let categoriesQuery: any = supabase.from('expense_categories').select('name, accounting_group')
     if (!access.isSuperAdmin) categoriesQuery = categoriesQuery.eq('organization_id', orgFilterId)
     else if (orgId) categoriesQuery = categoriesQuery.eq('organization_id', orgId)
-    let inputsQuery: any = supabase.from('monthly_profitability_inputs').select('*').gte('month', fromDate).lte('month', `${monthTo}-01`)
-    if (!access.isSuperAdmin) inputsQuery = inputsQuery.eq('organization_id', orgFilterId)
-    else if (orgId) inputsQuery = inputsQuery.eq('organization_id', orgId)
     let companiesQuery: any = supabase.from('companies').select('id, name, code')
     if (scope.allowedCompanyIds) companiesQuery = companiesQuery.in('id', scope.allowedCompanyIds)
 
-    // Выручка всех точек нужна для разнесения ручных вводов и адм. ФОТ по доле точки
-    const [companiesRes, incomes, expenses, categoriesRes, inputsRes, staffRes, staffPeriodsRes, salaryAdjustmentsRes, salaryReference] = await Promise.all([
+    // Выручка всех точек нужна для разнесения адм. ФОТ по доле точки (справочный блок)
+    const [companiesRes, incomes, expenses, categoriesRes, staffRes, staffPeriodsRes, salaryAdjustmentsRes, salaryReference] = await Promise.all([
       companiesQuery,
       fetchAllRows<any>(() =>
         scopeIn(
           supabase
             .from('incomes')
             .select('id, date, company_id, shift, zone, cash_amount, kaspi_amount, kaspi_before_midnight, online_amount, card_amount, operator_id, operator_name')
-            // День до периода: ночная смена переносит безнал за полночь
-            .gte('date', new Date(Date.parse(`${fromDate}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10))
+            .gte('date', fromDate)
             .lte('date', toDate)
             .order('date', { ascending: true })
             .order('id', { ascending: true }),
@@ -120,7 +113,6 @@ export async function GET(req: Request) {
         ),
       ),
       categoriesQuery,
-      inputsQuery,
       staffQuery,
       staffPeriodsQuery,
       // company_id IS NULL — «неразнесённые» премии/штрафы оператора; учитывались и раньше
@@ -134,7 +126,6 @@ export async function GET(req: Request) {
     ])
     if (companiesRes.error) throw companiesRes.error
     if (categoriesRes.error) throw categoriesRes.error
-    if (inputsRes.error) throw inputsRes.error
     if (staffRes.error) throw staffRes.error
     if (salaryAdjustmentsRes.error) throw salaryAdjustmentsRes.error
 
@@ -147,18 +138,14 @@ export async function GET(req: Request) {
       const key = String(row.name || '').trim().toLowerCase()
       if (key) categoryGroups[key] = row.accounting_group ?? null
     }
-    const inputsByMonth: Record<string, any> = {}
-    for (const row of (inputsRes.data || []) as any[]) inputsByMonth[String(row.month).slice(0, 7)] = row
-
     const months: string[] = []
     for (let m = monthFrom, guard = 0; m <= monthTo && guard < 120; m = shiftMonth(m, 1), guard++) months.push(m)
 
-    const report = buildProfitabilityReport({ incomes, expenses, companies, categoryGroups, inputsByMonth, months, includeExtra, taxRate })
+    const report = buildProfitabilityReport({ incomes, expenses, companies, categoryGroups, months, includeExtra })
     const entry = report.companies.find((c) => c.id === companyId)
-    const companyMonths = entry?.months || []
-    const total = entry?.total || sumPnl('total', [])
+    const total = entry?.total || sumMonths('total', [])
     const companyExpenses = expenses.filter((r: any) => String(r.company_id) === companyId)
-    const lines = companyExpenseLines({ months: companyMonths, expenses: companyExpenses, categoryGroups })
+    const lines = companyExpenseLines({ months, expenses: companyExpenses, categoryGroups })
 
     // ===== Начисления зарплаты (справочно, для блока ФОТ в отчёте) =====
     const staffRows = (staffRes.data || []) as Array<{ id: string; created_at: string | null; dismissed_at: string | null }>
@@ -213,7 +200,8 @@ export async function GET(req: Request) {
         period: { from: monthFrom, to: monthTo, fromDate, toDate },
         turnover: round2(total.revenue),
         turnoverTax: round2(total.incomeTax),
-        turnoverTaxRate: taxRate / 100,
+        // Налог из журнала — доля от оборота фактическая, а не ставка
+        turnoverTaxRate: total.revenue > 0 ? total.incomeTax / total.revenue : 0,
         afterTax: round2(total.revenue - total.incomeTax),
         expenses: lines.lines.map((line) => ({
           category: line.category,
@@ -239,8 +227,6 @@ export async function GET(req: Request) {
           items: line.items.slice().sort((a, b) => a.date.localeCompare(b.date)).map((i) => ({ ...i, amount: round2(i.amount) })),
         })),
         capexTotal: round2(lines.capexTotal),
-        incomeTaxSource: total.incomeTaxSource,
-        manualShare: Math.round((entry?.share || 0) * 1000) / 10,
       },
     })
   } catch (error: any) {

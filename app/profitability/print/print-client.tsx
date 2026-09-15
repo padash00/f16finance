@@ -62,8 +62,7 @@ export default function PrintClient() {
   const companyId = params.get('company_id') || ''
   const monthFrom = params.get('from') || ''
   const monthTo = params.get('to') || ''
-  // Ставка налога и Extra — как на экране ОПиУ, иначе прибыль разойдётся
-  const taxRate = params.get('tax_rate') || ''
+  // Extra — как на экране ОПиУ, иначе прибыль разойдётся
   const includeExtra = params.get('include_extra') || ''
   const partnersRaw = params.get('partners') || ''
   const includeCapex = params.get('capex') !== '0'
@@ -110,7 +109,7 @@ export default function PrintClient() {
     const load = async () => {
       try {
         const res = await fetch(
-          `/api/admin/profitability/branch-report?company_id=${encodeURIComponent(companyId)}&from=${encodeURIComponent(monthFrom)}&to=${encodeURIComponent(monthTo)}${taxRate ? `&tax_rate=${encodeURIComponent(taxRate)}` : ''}${includeExtra ? `&include_extra=${encodeURIComponent(includeExtra)}` : ''}`,
+          `/api/admin/profitability/branch-report?company_id=${encodeURIComponent(companyId)}&from=${encodeURIComponent(monthFrom)}&to=${encodeURIComponent(monthTo)}${includeExtra ? `&include_extra=${encodeURIComponent(includeExtra)}` : ''}`,
           { cache: 'no-store' },
         )
         const json = await res.json()
@@ -123,7 +122,7 @@ export default function PrintClient() {
       }
     }
     void load()
-  }, [companyId, monthFrom, monthTo, taxRate, includeExtra])
+  }, [companyId, monthFrom, monthTo, includeExtra])
 
   useEffect(() => {
     if (report && !loading && params.get('auto') === '1') {
@@ -335,7 +334,7 @@ export default function PrintClient() {
                 <div className="mt-0.5 text-[8.5px] text-slate-400">{expensesShare.toFixed(1)}% от оборота</div>
               </div>
               <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-                <div className="text-[8.5px] font-bold uppercase tracking-wider text-rose-600">Налог {(report.turnoverTaxRate * 100).toFixed(0)}%</div>
+                <div className="text-[8.5px] font-bold uppercase tracking-wider text-rose-600">Налог {(report.turnoverTaxRate * 100).toFixed(1)}%</div>
                 <div className="mt-1 text-lg font-extrabold tabular-nums leading-tight text-rose-600">{fmtMoney(report.turnoverTax)} <span className="text-xs font-semibold">₸</span></div>
                 <div className="mt-0.5 text-[8.5px] text-slate-400">{taxShare.toFixed(1)}% нагрузка</div>
               </div>
