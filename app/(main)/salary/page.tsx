@@ -2108,6 +2108,11 @@ export default function SalaryPage() {
                                     {canEditStaffSalary ? (
                                       adj.id.startsWith('operator-debt:') ? (
                                         <button type="button" title="Аннулировать долг из кассы" className="shrink-0 text-slate-500 transition hover:text-rose-600 dark:hover:text-rose-300" onClick={() => void voidOperatorDebt(adj as any)}><X className="h-3.5 w-3.5" /></button>
+                                      ) : adj.kind === 'advance' && (adj as any).source_payment_id ? (
+                                        // Переплату ведёт расчётный регистр (staff_salary_settlements): триггер
+                                        // пересчитывает её из выплаты и возвращает активной. Крестик здесь
+                                        // всегда упирался в отказ базы — вместо него объяснение.
+                                        <span className="shrink-0 text-[10px] text-muted-foreground" title="Эту строку ведёт расчётный регистр: она считается из выплаты. Убрать её можно, аннулировав саму выплату.">из выплаты</span>
                                       ) : (
                                         <button type="button" title="Аннулировать" className="shrink-0 text-slate-500 transition hover:text-rose-600 dark:hover:text-rose-300" onClick={() => void removeStaffAdjustment(adj.id)}><X className="h-3.5 w-3.5" /></button>
                                       )
