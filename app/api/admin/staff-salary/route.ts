@@ -826,6 +826,15 @@ export async function POST(req: Request) {
       if (!voidedRow) {
         return json({ error: 'Строка не изменилась: возможно, корректировка уже аннулирована или закрыта выплатой' }, 409)
       }
+      // База вернула строку, но статус остался прежним — значит запись изменение
+      // не приняла (триггер/правило на таблице). Успехом это называть нельзя:
+      // страница показывала «аннулировано», а корректировка продолжала вычитаться.
+      if (String(voidedRow.status || '') !== 'voided') {
+        return json(
+          { error: `База не приняла аннулирование: статус остался «${voidedRow.status}». Похоже, на таблице staff_adjustments стоит триггер или правило.` },
+          409,
+        )
+      }
 
       await writeAuditLog(supabase, { entityType: 'staff-adjustment', entityId: String(id), action: 'void' })
       return json({ ok: true, data: voidedRow })
