@@ -681,7 +681,9 @@ export default function SalaryPage() {
   const [eventsLimit, setEventsLimit] = useState(100)
   const staffPayPreview = useMemo(() => {
     if (!staffPayModal || !staffSalary) return null
-    const period = getStaffPaymentAdjustmentPeriod(staffPayDate, staffPaySlot)
+    // Отсечка «по сегодня» — как на сервере: выплату проводят и задним числом,
+    // но считают всё, что накопилось к моменту выплаты.
+    const period = getStaffPaymentAdjustmentPeriod(staffPayDate, staffPaySlot, todayISO())
     const closingAdjustments = filterStaffAdjustmentsForSlot(
       staffSalary.adjustments,
       staffPayModal.id,
@@ -861,7 +863,7 @@ export default function SalaryPage() {
         staffPayModal,
         staffSalary?.adjustments || [],
         staffSalary?.payments || [],
-        getStaffPaymentAdjustmentPeriod(staffPayDate, staffPaySlot),
+        getStaffPaymentAdjustmentPeriod(staffPayDate, staffPaySlot, todayISO()),
       ).toPay
       const res = await fetch('/api/admin/staff-salary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'createPayment', staff_id: staffPayModal.id, pay_date: staffPayDate, slot: staffPaySlot, company_id: staffPayCompanyId, cash_amount: cash, kaspi_amount: kaspi, expected_amount: expectedAmount, comment: staffPayComment.trim() || null }) })
       const json = await res.json().catch(() => null)

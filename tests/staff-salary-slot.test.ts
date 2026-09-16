@@ -5,6 +5,7 @@ import {
   calcStaffToPay,
   filterStaffAdjustmentsForSlot,
   getSalarySlotRange,
+  getStaffPaymentAdjustmentPeriod,
   slotForDate,
 } from '@/lib/domain/staff-salary-slot'
 
@@ -254,6 +255,26 @@ test('снятая корректировка не считается выход
     meStaffId: null,
   })
   assert.equal(summary.rows[0].extra_days.length, 0)
+})
+
+// ─── Выплата задним числом считает всё, что накопилось к сегодня ────────────
+
+test('окно выплаты задним числом тянется до сегодня, а не до даты выплаты', () => {
+  const period = getStaffPaymentAdjustmentPeriod('2026-09-01', 'first', '2026-09-16')
+  assert.deepEqual(period, { from: '2026-09-01', to: '2026-09-16' })
+
+  // Долг, взятый 6-го, попадает в выплату, датированную первым числом
+  const calc = calcStaffToPay(
+    staff({ monthly_salary: 650_000 }),
+    [adj({ id: 'd', kind: 'debt', amount: 42_690, date: '2026-09-06', source_payment_id: null })],
+    [],
+    period,
+  )
+  assert.equal(calc.toPay, 325_000 - 42_690)
+
+  // Без отсечки — как было: долг после даты выплаты в расчёт не попадал
+  const onPayDate = getStaffPaymentAdjustmentPeriod('2026-09-01', 'first')
+  assert.deepEqual(onPayDate, { from: '2026-09-01', to: '2026-09-01' })
 })
 
 // ─── Остаток неполной выплаты доплачивается следующей выплатой ──────────────

@@ -65,12 +65,25 @@ export function getSalarySlotRange(payDate: string, slot: StaffSlot): SlotRange 
  * Отсечка именно по дню выплаты, а не по концу слота: штраф, выписанный
  * послезавтра, не должен уменьшать сегодняшнюю сумму в руках.
  */
-export function getStaffPaymentAdjustmentPeriod(payDate: string, slot: StaffSlot): SlotRange | null {
+export function getStaffPaymentAdjustmentPeriod(
+  payDate: string,
+  slot: StaffSlot,
+  /**
+   * День, по который реально считаем (обычно сегодня). Выплату часто проводят
+   * задним числом — из-за задержки. Считать при этом «как было на дату
+   * выплаты» нельзя: долги и авансы, взятые после неё, не попали бы в расчёт и
+   * не закрылись бы, а разница превратилась бы в фантомный остаток
+   * (случай Олжаса, 2026-09-16). Поэтому окно тянем до этого дня.
+   */
+  cutoffISO?: string | null,
+): SlotRange | null {
   const slotRange = getSalarySlotRange(payDate, slot)
   if (!slotRange) return null
   const payDateValue = String(payDate || '')
-  const cutoff = /^\d{4}-\d{2}-\d{2}$/.test(payDateValue) ? payDateValue : slotRange.to
-  return { from: slotRange.from, to: cutoff }
+  const base = /^\d{4}-\d{2}-\d{2}$/.test(payDateValue) ? payDateValue : slotRange.to
+  const cutoff = String(cutoffISO || '')
+  const to = /^\d{4}-\d{2}-\d{2}$/.test(cutoff) && cutoff > base ? cutoff : base
+  return { from: slotRange.from, to }
 }
 
 /** В какую половину месяца попадает дата. */

@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server'
 import { requireAnyCapability, requireCapability } from '@/lib/server/capabilities'
+
+// Ответ никогда не кэшируем: после аннулирования корректировки страница
+// перезагружает список и должна увидеть свежие данные, а не снимок до правки.
+export const dynamic = 'force-dynamic'
+
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { requireAddon } from '@/lib/server/entitlements'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
@@ -1111,7 +1116,13 @@ export async function POST(req: Request) {
       const previousPayDate = previousPayments?.[0]?.pay_date ? String(previousPayments[0].pay_date) : null
       const previousPayCreatedAt = previousPayments?.[0]?.created_at ? String(previousPayments[0].created_at) : null
       const slotLabel = salaryPaymentSlotLabel(normalizedSlot)
-      const closingPeriodLabel = salaryPaymentClosingPeriodLabel(pay_date, previousPayDate)
+      // Отсечка расчёта — сегодня, даже если выплату проводят задним числом
+      // (задержали на несколько дней). Иначе долги и авансы, появившиеся после
+      // даты выплаты, не войдут в сумму и не закроются, а разница станет
+      // «остатком» — так и получилось у Олжаса 16.09.
+      const todayForPayment = new Date().toISOString().slice(0, 10)
+      const cutoffDate = String(pay_date) > todayForPayment ? String(pay_date) : todayForPayment
+      const closingPeriodLabel = salaryPaymentClosingPeriodLabel(cutoffDate, previousPayDate)
 
       // 1. Create expense record (required for consistency with salary expenses flow)
       const expenseComment = `Зарплата: ${staffMember?.full_name || 'сотрудник'} (${slotLabel}, период ${closingPeriodLabel})`
@@ -1153,7 +1164,7 @@ export async function POST(req: Request) {
         .select('id, kind, amount, date, created_at, source_payment_id')
         .eq('staff_id', staff_id)
         .eq('status', 'active')
-        .lte('date', pay_date)
+        .lte('date', cutoffDate)
       if (adjFetchError) throw adjFetchError
 
       const adjustmentsToClose = (candidateAdjustments || [])
@@ -1204,7 +1215,7 @@ export async function POST(req: Request) {
         allowedCompanyIds: scope.allowedCompanyIds,
         allowedStaffIds,
         allowedOperatorIds: allowedOperatorIdsForDebts,
-        payDate: String(pay_date),
+        payDate: cutoffDate,
         previousPay: previousPayDate ? { payDate: previousPayDate, createdAt: previousPayCreatedAt } : null,
       })
       let scannerAdjustmentId: string | null = null
@@ -1280,6 +1291,7 @@ export async function POST(req: Request) {
           dismissed_at: (staffMember as any)?.dismissed_at || null,
           dismissal_date: (staffMember as any)?.dismissal_date || null,
         },
+        // Начисление — за половину месяца самой выплаты, отсечка сюда не влияет
         getStaffPaymentAdjustmentPeriod(String(pay_date), normalizedSlot),
       )
       const adjustmentTotals = adjustmentsToClose.reduce(
