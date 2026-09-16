@@ -1960,9 +1960,10 @@ export default function SalaryPage() {
                               </div>
                             </td>
                             <td className="px-3 py-2.5 text-right text-sm tabular-nums">{money(r.calc.half)}</td>
-                            <td className="px-3 py-2.5 text-right text-sm tabular-nums text-emerald-700 dark:text-emerald-300">{r.calc.bonuses ? `+${money(r.calc.bonuses)}` : '—'}</td>
-                            <td className="px-3 py-2.5 text-right text-sm tabular-nums text-rose-600 dark:text-rose-300">{r.calc.fines + r.calc.debts ? `−${money(r.calc.fines + r.calc.debts)}` : '—'}</td>
-                            <td className="px-3 py-2.5 text-right text-sm tabular-nums text-amber-700 dark:text-amber-300">{r.calc.advances ? `−${money(r.calc.advances)}` : '—'}</td>
+                            {/* Пусто — серый прочерк: цветной прочерк читался как «тут что-то есть» */}
+                            <td className={`px-3 py-2.5 text-right text-sm tabular-nums ${r.calc.bonuses ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-300 dark:text-white/20'}`}>{r.calc.bonuses ? `+${money(r.calc.bonuses)}` : '—'}</td>
+                            <td className={`px-3 py-2.5 text-right text-sm tabular-nums ${r.calc.fines + r.calc.debts ? 'text-rose-600 dark:text-rose-300' : 'text-slate-300 dark:text-white/20'}`}>{r.calc.fines + r.calc.debts ? `−${money(r.calc.fines + r.calc.debts)}` : '—'}</td>
+                            <td className={`px-3 py-2.5 text-right text-sm tabular-nums ${r.calc.advances ? 'text-amber-700 dark:text-amber-300' : 'text-slate-300 dark:text-white/20'}`}>{r.calc.advances ? `−${money(r.calc.advances)}` : '—'}</td>
                             <td className="px-3 py-2.5 text-right text-sm font-semibold tabular-nums text-foreground">{money(r.calc.toPay)}</td>
                             <td className="px-3 py-2.5 text-right text-sm tabular-nums text-sky-700 dark:text-sky-300">{r.paid ? money(r.paid) : '—'}</td>
                             <td className="px-3 py-2.5 text-center">
@@ -2019,7 +2020,16 @@ export default function SalaryPage() {
                   const s = selected.s
                   const calc = selected.calc
                   const debtAdj = (sal.adjustments as any[]).find((a) => a.id === `operator-debt:${s.id}`)
-                  const debtItems = (debtAdj?.items || []) as Array<{ id: string; name: string; quantity: number; unitPrice: number; amount: number; createdAt: string; companyId: string | null; comment: string | null }>
+                  const allDebtItems = (debtAdj?.items || []) as Array<{ id: string; name: string; quantity: number; unitPrice: number; amount: number; createdAt: string; companyId: string | null; comment: string | null }>
+                  // Только позиции выбранной половины месяца: иначе в августе
+                  // показывались сентябрьские долги, да ещё с суммой 0 ₸
+                  const debtItems = period
+                    ? allDebtItems.filter((i) => {
+                        const day = String(i.createdAt || '').slice(0, 10)
+                        return day >= period.from && day <= period.to
+                      })
+                    : allDebtItems
+                  const debtItemsTotal = debtItems.reduce((sum, i) => sum + Number(i.amount || 0), 0)
                   const debtPays = (sal.debtPayments || []).filter((p) => p.staff_id === s.id)
                   const isMonthClosed = selected.hasFirst && selected.hasSecond
                   const line = (label: string, value: string, cls = '') => (
@@ -2112,11 +2122,11 @@ export default function SalaryPage() {
                         {/* Что взял в долг и когда */}
                         <div>
                           <div className="mb-2 text-sm font-medium text-foreground">
-                            Долги из кассы {debtItems.length ? <span className="font-normal text-muted-foreground">· {debtItems.length} шт. на {money(calc.debts)}</span> : null}
+                            Долги из кассы {debtItems.length ? <span className="font-normal text-muted-foreground">· {debtItems.length} шт. на {money(debtItemsTotal)}</span> : null}
                           </div>
                           {debtItems.length === 0 ? (
                             <div className="rounded-xl border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
-                              Непогашенных долгов из операторской программы нет.
+                              За этот период долгов из кассы нет.
                             </div>
                           ) : (
                             <div className="divide-y divide-border rounded-xl border border-border">
