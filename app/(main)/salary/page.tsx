@@ -891,7 +891,13 @@ export default function SalaryPage() {
       const json = await res.json().catch(() => null)
       if (!res.ok) throw new Error(json?.error || json?.message || `Ошибка ${res.status}`)
       await loadStaffSalary()
-      toast({ title: 'Корректировка аннулирована' })
+      // Показываем, что именно изменилось: «успех» без изменений уже вводил в
+      // заблуждение — строка оставалась на экране
+      const changed = json?.data
+      toast({
+        title: 'Корректировка аннулирована',
+        description: changed ? `${staffAdjustmentKindLabel(changed.kind)} ${money(Number(changed.amount || 0))} · статус ${changed.status}` : undefined,
+      })
     } catch (e: any) {
       toast({ title: 'Не удалось аннулировать корректировку', description: e?.message, variant: 'destructive' })
     }

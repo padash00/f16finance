@@ -813,10 +813,22 @@ export async function POST(req: Request) {
         if (expensesDeleteError) throw expensesDeleteError
       }
 
-      const { error: adjVoidError } = await supabase.from('staff_adjustments').update({ status: 'voided' }).eq('id', id)
+      // `.select()` возвращает реально изменённые строки. Без него update,
+      // не затронувший ничего, выглядел как успех: страница показывала
+      // «аннулировано», а корректировка оставалась на месте.
+      const { data: voided, error: adjVoidError } = await supabase
+        .from('staff_adjustments')
+        .update({ status: 'voided' })
+        .eq('id', id)
+        .select('id, kind, amount, status')
       if (adjVoidError) throw adjVoidError
+      const voidedRow = (voided || [])[0]
+      if (!voidedRow) {
+        return json({ error: 'Строка не изменилась: возможно, корректировка уже аннулирована или закрыта выплатой' }, 409)
+      }
+
       await writeAuditLog(supabase, { entityType: 'staff-adjustment', entityId: String(id), action: 'void' })
-      return json({ ok: true })
+      return json({ ok: true, data: voidedRow })
     }
 
     // ── Pay debt: закрыть долги сотрудника ──────────────────────────────────
