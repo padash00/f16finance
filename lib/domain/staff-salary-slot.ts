@@ -82,10 +82,15 @@ export function slotForDate(isoDate: string): StaffSlot {
 /**
  * Автоматический остаток от неполной выплаты зарплаты.
  *
- * Исторически он хранится как `bonus`, чтобы не менять схему БД, но это не
- * премия нового периода. `source_payment_id` связывает остаток с выплатой,
- * которая его породила. Переплата тоже имеет source_payment_id, но kind=advance
- * и по-прежнему должна уменьшать следующую выплату.
+ * Исторически он хранится как `bonus`, чтобы не менять схему БД.
+ * `source_payment_id` связывает остаток с выплатой, которая его породила.
+ * Переплата тоже имеет source_payment_id, но kind=advance и уменьшает
+ * следующую выплату.
+ *
+ * Это недоплаченные человеку деньги, поэтому остаток ПРИБАВЛЯЕТСЯ к следующей
+ * выплате и закрывается ею (2026-09-16, по решению владельца). Раньше он висел
+ * справочно и не влиял на сумму: владелец выдавал меньше расчёта, вычитая аванс
+ * и долги в уме, а следующая половина месяца вычитала их второй раз.
  */
 export function isSalaryUnderpaymentRemainder(
   adjustment: Pick<SlotAdjustment, 'kind' | 'source_payment_id'>,
@@ -98,7 +103,7 @@ export function isSalaryUnderpaymentRemainder(
  *
  * Всё, что было до последней выплаты, уже удержано или выдано — показывать это
  * снова значит вычесть один штраф дважды. Исключение — остаток неполной выплаты:
- * он остаётся видимым до погашения, но в новый зарплатный слот не начисляется.
+ * он виден и начисляется, пока его не доплатят.
  */
 export function filterStaffAdjustmentsForSlot<A extends SlotAdjustment, P extends SlotPayment>(
   adjs: A[],
@@ -201,7 +206,18 @@ export function calcStaffToPay(
   const debts = sumOf('debt')
   const fines = sumOf('fine')
   const advances = sumOf('advance')
-  return { half, bonuses, debts, fines, advances, remainder, toPay: half + bonuses - debts - fines - advances }
+  // Остаток прошлой выплаты — долг компании перед человеком, поэтому он в сумме
+  // к выплате, а не только в списке. Отдельным полем — чтобы экран показал,
+  // из чего сумма сложилась.
+  return {
+    half,
+    bonuses,
+    debts,
+    fines,
+    advances,
+    remainder,
+    toPay: half + bonuses + remainder - debts - fines - advances,
+  }
 }
 
 export type StaffSalaryRow = StaffSlotCalc & {

@@ -256,9 +256,9 @@ test('снятая корректировка не считается выход
   assert.equal(summary.rows[0].extra_days.length, 0)
 })
 
-// ─── Остаток неполной выплаты живёт отдельно от нового слота ────────────────
+// ─── Остаток неполной выплаты доплачивается следующей выплатой ──────────────
 
-test('остаток 88 000 виден, но не превращает следующие 250 000 в 338 000', () => {
+test('остаток 88 000 прибавляется к следующим 250 000', () => {
   const member = staff({ monthly_salary: 500_000 })
   const remainder = adj({
     id: 'remainder-1',
@@ -286,7 +286,7 @@ test('остаток 88 000 виден, но не превращает след�
   assert.equal(calc.half, 250_000)
   assert.equal(calc.remainder, 88_000)
   assert.equal(calc.bonuses, 0)
-  assert.equal(calc.toPay, 250_000)
+  assert.equal(calc.toPay, 338_000)
 })
 
 test('обычный бонус считается, а автоматическая переплата-аванс всё ещё вычитается', () => {
@@ -325,5 +325,5 @@ test('непогашенный остаток не исчезает после �
 
   assert.deepEqual(rows.map((row) => row.id), ['remainder-old'])
   assert.equal(calc.remainder, 88_000)
-  assert.equal(calc.toPay, 250_000)
+  assert.equal(calc.toPay, 338_000)
 })

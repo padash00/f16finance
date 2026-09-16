@@ -1158,9 +1158,10 @@ export async function POST(req: Request) {
 
       const adjustmentsToClose = (candidateAdjustments || [])
         .filter((row: any) => {
-          // Остаток прошлой зарплаты — отдельное обязательство, а не бонус
-          // следующего периода. Не закрываем и не включаем его в новый расчёт.
-          if (String(row?.kind || '') === 'bonus' && row?.source_payment_id) return false
+          // Остаток прошлой зарплаты (bonus + source_payment_id) — недоплаченные
+          // деньги. Эта выплата их отдаёт: остаток входит в расчёт как бонус и
+          // закрывается вместе с остальными корректировками окна. Раньше он
+          // исключался и висел вечно, а человек получал меньше дважды.
           if (!previousPayDate) return true
           const rowDate = String(row?.date || '')
           if (rowDate < previousPayDate) return false

@@ -2068,7 +2068,7 @@ export default function SalaryPage() {
                             {calc.fines ? line('Штрафы', `−${money(calc.fines)}`, 'text-rose-600 dark:text-rose-300') : null}
                             {calc.debts ? line('Долги', `−${money(calc.debts)}`, 'text-rose-600 dark:text-rose-300') : null}
                             {calc.advances ? line('Авансы выданы', `−${money(calc.advances)}`, 'text-amber-700 dark:text-amber-300') : null}
-                            {calc.remainder ? line('Остаток прошлой выплаты', money(calc.remainder), 'text-sky-700 dark:text-sky-300') : null}
+                            {calc.remainder ? line('Остаток прошлой выплаты (доплата)', `+${money(calc.remainder)}`, 'text-sky-700 dark:text-sky-300') : null}
                             <div className="flex items-baseline justify-between gap-3 bg-surface-muted/60 px-3 py-2 text-sm font-semibold">
                               <span>К выплате</span>
                               <span className="shrink-0 tabular-nums">{money(calc.toPay)}</span>
