@@ -233,6 +233,36 @@ export async function GET(request: Request) {
           addOrgMemberByEmail()
         }
       }
+
+      // Сотрудники из «Кадров» — тоже должники, даже без учётки в портале.
+      // Раньше список строился только из organization_members, и человек,
+      // заведённый в Кадрах (маркетолог, техдиректор), в кассе не выбирался
+      // вовсе: долг записать было не на кого.
+      const { data: orgStaff, error: orgStaffErr } = await supabase
+        .from('staff')
+        .select('id, full_name, short_name, email, role, telegram_chat_id, dismissed_at')
+        .in('organization_id', orgIds)
+
+      if (orgStaffErr) throw orgStaffErr
+      for (const s of (orgStaff || []) as any[]) {
+        if (!s?.id || s.dismissed_at) continue
+        const rowId = `staff:${String(s.id)}`
+        if (staffDebtors.has(rowId)) continue
+        const display =
+          [s.full_name, s.short_name, s.email].map((x: string | null) => (x || '').trim()).find(Boolean) || 'Сотрудник'
+        staffDebtors.set(rowId, {
+          id: rowId,
+          name: display,
+          short_name: s.short_name || null,
+          full_name: s.full_name || null,
+          kind: 'staff' as const,
+          role_label: orgRoleLabel(s.role) || (s.role || '').trim() || null,
+        })
+        staffMatch.set(rowId, {
+          names: [s.full_name, s.short_name].map(normalizePersonName).filter(Boolean),
+          telegram: String(s.telegram_chat_id || '').trim(),
+        })
+      }
     }
 
     const allowedOperatorIds = [...allowedOperatorIdSet]

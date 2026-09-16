@@ -657,6 +657,9 @@ export default function SalaryPage() {
   const [staffAdjDate, setStaffAdjDate] = useState(todayISO())
   const [staffAdjComment, setStaffAdjComment] = useState('')
   const [staffAdjSaving, setStaffAdjSaving] = useState(false)
+  // Ошибка сохранения — в самом окне: общая карточка ошибок висит наверху
+  // страницы, за открытым окном её не видно, и отказ выглядел как «не работает».
+  const [staffAdjError, setStaffAdjError] = useState<string | null>(null)
   const [staffPayDate, setStaffPayDate] = useState(todayISO())
   const [staffPaySlot, setStaffPaySlot] = useState<'first' | 'second'>('first')
   const [staffPayCompanyId, setStaffPayCompanyId] = useState('')
@@ -795,21 +798,41 @@ export default function SalaryPage() {
 
   const canEditStaffSalary = staffSalary?.can_edit === true
 
+  /** Аннулировать долг из кассы: позиции сканера убираются без оплаты */
+  const voidOperatorDebt = async (adj: { staff_id: string; item_ids?: string[]; amount: number }) => {
+    if (!canEditStaffSalary) return setError('Доступ только для просмотра')
+    const items = adj.item_ids || []
+    if (items.length === 0) return setError('Нечего аннулировать: позиции долга не найдены')
+    const ok = await confirmDialog({
+      title: 'Аннулировать долг из кассы?',
+      description: `${money(adj.amount)} уйдут из расчёта зарплаты, позиции уберутся со сканера — как записанные по ошибке. Деньги при этом не считаются возвращёнными. Отменить можно в «Оплаченных долгах».`,
+      confirmLabel: 'Аннулировать',
+      destructive: true,
+    })
+    if (!ok) return
+    try {
+      const res = await fetch('/api/admin/staff-salary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'voidOperatorDebt', staff_id: adj.staff_id, item_ids: items }) })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || 'Ошибка')
+      await loadStaffSalary()
+    } catch (e: any) { setError(e?.message || 'Не удалось аннулировать долг') }
+  }
+
   const submitStaffAdjustment = async (e: FormEvent) => {
     e.preventDefault()
-    if (!canEditStaffSalary) return setError('Доступ только для просмотра')
+    if (!canEditStaffSalary) return setStaffAdjError('Доступ только для просмотра')
     if (!staffAdjModal) return
     const amount = parseMoney(staffAdjAmount)
-    if (amount <= 0) return setError('Сумма должна быть > 0')
-    if (staffAdjKind === 'advance' && !staffAdjCompanyId) return setError('Для аванса выберите компанию')
-    setStaffAdjSaving(true); setError(null)
+    if (amount <= 0) return setStaffAdjError('Сумма должна быть > 0')
+    if (staffAdjKind === 'advance' && !staffAdjCompanyId) return setStaffAdjError('Для аванса выберите компанию')
+    setStaffAdjSaving(true); setError(null); setStaffAdjError(null)
     try {
       const res = await fetch('/api/admin/staff-salary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'addAdjustment', staff_id: staffAdjModal.id, kind: staffAdjKind, amount, date: staffAdjDate, company_id: staffAdjKind === 'advance' ? staffAdjCompanyId : null, comment: staffAdjComment.trim() || null }) })
       const json = await res.json().catch(() => null)
       if (!res.ok) throw new Error(json?.error || 'Ошибка')
       setStaffAdjModal(null); setStaffAdjAmount(''); setStaffAdjComment(''); setStaffAdjCompanyId('')
       await loadStaffSalary()
-    } catch (e: any) { setError(e?.message || 'Не удалось сохранить') }
+    } catch (e: any) { setStaffAdjError(e?.message || 'Не удалось сохранить') }
     finally { setStaffAdjSaving(false) }
   }
 
@@ -1955,8 +1978,12 @@ export default function SalaryPage() {
                                         </div>
                                         <div className="flex shrink-0 items-center gap-2">
                                           <span className="font-medium tabular-nums text-foreground">{money(adj.amount)}</span>
-                                          {!adj.id.startsWith('operator-debt:') && canEditStaffSalary ? (
-                                            <button type="button" className="text-slate-500 transition hover:text-rose-600 dark:hover:text-rose-300" onClick={() => void removeStaffAdjustment(adj.id)}><X className="h-3.5 w-3.5" /></button>
+                                          {canEditStaffSalary ? (
+                                            adj.id.startsWith('operator-debt:') ? (
+                                              <button type="button" title="Аннулировать долг из кассы" className="text-slate-500 transition hover:text-rose-600 dark:hover:text-rose-300" onClick={() => void voidOperatorDebt(adj as any)}><X className="h-3.5 w-3.5" /></button>
+                                            ) : (
+                                              <button type="button" className="text-slate-500 transition hover:text-rose-600 dark:hover:text-rose-300" onClick={() => void removeStaffAdjustment(adj.id)}><X className="h-3.5 w-3.5" /></button>
+                                            )
                                           ) : null}
                                         </div>
                                       </div>
@@ -2077,8 +2104,12 @@ export default function SalaryPage() {
                                 <span className="text-slate-500">{adj.date}</span>
                                 {adj.comment ? <span className="text-muted-foreground">{adj.comment}</span> : null}
                               </div>
-                              {!adj.id.startsWith('operator-debt:') && canEditStaffSalary ? (
-                                <button type="button" className="ml-3 shrink-0 text-slate-500 transition hover:text-rose-600 dark:hover:text-rose-300" onClick={() => void removeStaffAdjustment(adj.id)}><X className="h-3.5 w-3.5" /></button>
+                              {canEditStaffSalary ? (
+                                adj.id.startsWith('operator-debt:') ? (
+                                  <button type="button" title="Аннулировать долг из кассы" className="ml-3 shrink-0 text-slate-500 transition hover:text-rose-600 dark:hover:text-rose-300" onClick={() => void voidOperatorDebt(adj as any)}><X className="h-3.5 w-3.5" /></button>
+                                ) : (
+                                  <button type="button" className="ml-3 shrink-0 text-slate-500 transition hover:text-rose-600 dark:hover:text-rose-300" onClick={() => void removeStaffAdjustment(adj.id)}><X className="h-3.5 w-3.5" /></button>
+                                )
                               ) : null}
                             </div>
                           ))}
@@ -2488,6 +2519,9 @@ export default function SalaryPage() {
               </div>
             </div>
             <textarea className={textarea} placeholder="Комментарий" value={staffAdjComment} onChange={e => setStaffAdjComment(e.target.value)} />
+            {staffAdjError ? (
+              <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-200">{staffAdjError}</div>
+            ) : null}
             <div className="flex justify-end gap-3">
               <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover" onClick={() => setStaffAdjModal(null)}>Отмена</Button>
               <Button type="submit" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400">{staffAdjSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Сохранить'}</Button>

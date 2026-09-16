@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireCapability } from '@/lib/server/capabilities'
+import { requireAnyCapability, requireCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { requireAddon } from '@/lib/server/entitlements'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
@@ -679,10 +679,23 @@ export async function POST(req: Request) {
       deletePayment: 'salary.void_payment',
       updateStaffSalary: 'staff.edit',
     }
-    const denied = await requireCapability(
-      access,
-      capabilityByAction[String(action || '')] || 'salary.create_payment',
-    )
+    // Корректировка админ-сотрудника живёт под двумя правами: кнопку на
+    // странице показывает «staff.add_adjustment», а сервер требовал
+    // «salary.create_adjustment» (право операторской зарплаты). Если второе
+    // снято или выключено рубильником организации, кнопка видна, окно
+    // открывается, а сохранение молча отбивается 403. Пускаем по любому из них.
+    const capabilityAlternatives: Record<string, string[]> = {
+      addAdjustment: ['salary.create_adjustment', 'staff.add_adjustment'],
+      removeAdjustment: ['salary.void_adjustment', 'staff.add_adjustment'],
+      voidOperatorDebt: ['salary.void_adjustment', 'staff.add_adjustment'],
+    }
+    const alternatives = capabilityAlternatives[String(action || '')]
+    const denied = alternatives
+      ? await requireAnyCapability(access, alternatives)
+      : await requireCapability(
+          access,
+          capabilityByAction[String(action || '')] || 'salary.create_payment',
+        )
     if (denied) return denied as any
 
     // Multi-tenant scoping for mutations. While LEGACY_SINGLE_TENANT_MODE is true,
@@ -880,6 +893,62 @@ export async function POST(req: Request) {
 
       await writeAuditLog(supabase, { entityType: 'staff-debt-payment', entityId: String(rec.id), action: 'create', payload: { staff_id, total, count: debtIds.length + adjIds.length } })
       return json({ ok: true, data: { id: rec.id, count: debtIds.length + adjIds.length, total } })
+    }
+
+    // ── Аннулировать долг из операторской программы (записан ошибочно) ──────
+    // Строка «Долги из операторской программы» в карточке синтетическая: живые
+    // позиции сканера. Удалять её было нечем — крестика у неё нет, а «Оплата
+    // долга» означает, что деньги вернули. Здесь деньги не возвращались:
+    // позиции убираются со сканера как ошибочные, запись остаётся в «оплаченных»
+    // с пометкой, чтобы действие можно было отменить.
+    if (action === 'voidOperatorDebt') {
+      const { staff_id } = body
+      if (!staff_id) return json({ error: 'staff_id обязателен' }, 400)
+      if (staffOutOfScope(staff_id)) return json({ error: 'forbidden' }, 403)
+
+      let itemIds: string[] = Array.isArray(body.item_ids) ? body.item_ids.map((x: any) => String(x)) : []
+      if (itemIds.length === 0) return json({ error: 'Нет позиций для аннулирования' }, 400)
+
+      // IDOR: id из body фильтруем по скоупу арендатора, как в payStaffDebt
+      let iq = supabase
+        .from('point_debt_items')
+        .select('id, total_amount, company_id, week_start, operator_id, client_name')
+        .in('id', itemIds)
+        .eq('status', 'active')
+      if (scope.allowedCompanyIds) iq = iq.in('company_id', scope.allowedCompanyIds)
+      const { data: rows, error: rowsError } = await iq
+      if (rowsError) throw rowsError
+      const activeRows = (rows || []) as any[]
+      itemIds = activeRows.map((i: any) => String(i.id))
+      if (itemIds.length === 0) return json({ error: 'Эти долги уже закрыты' }, 400)
+
+      const total = activeRows.reduce((s: number, i: any) => s + Number(i.total_amount || 0), 0)
+      const voidedAt = new Date().toISOString()
+      const reason = typeof body.comment === 'string' && body.comment.trim() ? body.comment.trim() : null
+
+      await supabase.from('point_debt_items').update({ status: 'deleted', deleted_at: voidedAt }).in('id', itemIds)
+      await recomputeDebtMirrors(supabase, activeRows)
+
+      const { data: rec, error: recErr } = await supabase
+        .from('staff_debt_payments')
+        .insert({
+          staff_id,
+          amount: Math.round(total),
+          comment: reason ? `Аннулировано: ${reason}` : 'Аннулировано: долг записан ошибочно',
+          debt_ids: [],
+          item_ids: itemIds,
+          adjustment_ids: [],
+          status: 'active',
+          organization_id: access.activeOrganization?.id || null,
+          paid_at: voidedAt,
+          paid_by: access.user?.id || null,
+        })
+        .select('id')
+        .single()
+      if (recErr) throw recErr
+
+      await writeAuditLog(supabase, { entityType: 'staff-debt-payment', entityId: String(rec.id), action: 'create', payload: { staff_id, total, voided: true, items: itemIds.length } })
+      return json({ ok: true, data: { id: rec.id, total, count: itemIds.length } })
     }
 
     // ── Void debt payment (аннулировать оплату долга → вернуть долги активными) ─
