@@ -18,6 +18,7 @@ import { Card } from '@/components/ui/card'
 import { confirmDialog } from '@/components/ui/confirm-dialog'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Skeleton } from '@/components/ui/skeleton'
+import { toast } from '@/components/ui/use-toast'
 import { addDaysISO, formatRuDate, mondayOfDate, toISODateLocal, todayISO } from '@/lib/core/date'
 import { formatMoney } from '@/lib/core/format'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
@@ -660,6 +661,10 @@ export default function SalaryPage() {
   // Ошибка сохранения — в самом окне: общая карточка ошибок висит наверху
   // страницы, за открытым окном её не видно, и отказ выглядел как «не работает».
   const [staffAdjError, setStaffAdjError] = useState<string | null>(null)
+  // Ведомость: какой месяц и половину смотрим и чья карточка раскрыта
+  const [staffMonth, setStaffMonth] = useState<string>(() => todayISO().slice(0, 7))
+  const [staffSlot, setStaffSlot] = useState<'first' | 'second'>(() => (Number(todayISO().slice(8, 10)) <= 15 ? 'first' : 'second'))
+  const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null)
   const [staffPayDate, setStaffPayDate] = useState(todayISO())
   const [staffPaySlot, setStaffPaySlot] = useState<'first' | 'second'>('first')
   const [staffPayCompanyId, setStaffPayCompanyId] = useState('')
@@ -674,12 +679,6 @@ export default function SalaryPage() {
   const [eventsDateFrom, setEventsDateFrom] = useState('')
   const [eventsDateTo, setEventsDateTo] = useState('')
   const [eventsLimit, setEventsLimit] = useState(100)
-  const currentStaffSalarySlot = useMemo<'first' | 'second'>(() => {
-    const day = Number(todayISO().slice(8, 10))
-    return day <= 15 ? 'first' : 'second'
-  }, [])
-  const currentStaffSalaryPeriod = useMemo(() => getSalarySlotRange(todayISO(), currentStaffSalarySlot), [currentStaffSalarySlot])
-  const currentStaffSalaryMonthPrefix = useMemo(() => monthPrefixFromIsoDate(todayISO()), [])
   const staffPayPreview = useMemo(() => {
     if (!staffPayModal || !staffSalary) return null
     const period = getStaffPaymentAdjustmentPeriod(staffPayDate, staffPaySlot)
@@ -813,9 +812,12 @@ export default function SalaryPage() {
     try {
       const res = await fetch('/api/admin/staff-salary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'voidOperatorDebt', staff_id: adj.staff_id, item_ids: items }) })
       const json = await res.json().catch(() => null)
-      if (!res.ok) throw new Error(json?.error || 'Ошибка')
+      if (!res.ok) throw new Error(json?.error || json?.message || `Ошибка ${res.status}`)
       await loadStaffSalary()
-    } catch (e: any) { setError(e?.message || 'Не удалось аннулировать долг') }
+      toast({ title: 'Долг из кассы аннулирован' })
+    } catch (e: any) {
+      toast({ title: 'Не удалось аннулировать долг', description: e?.message, variant: 'destructive' })
+    }
   }
 
   const submitStaffAdjustment = async (e: FormEvent) => {
@@ -880,9 +882,17 @@ export default function SalaryPage() {
     })
     if (!ok) return
     try {
-      await fetch('/api/admin/staff-salary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'removeAdjustment', id }) })
+      // Ответ обязательно проверяем: раньше отказ сервера (нет права, чужая
+      // организация) молча проглатывался, список перезагружался, строка
+      // оставалась на месте — и выглядело это как «кнопка не работает».
+      const res = await fetch('/api/admin/staff-salary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'removeAdjustment', id }) })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || json?.message || `Ошибка ${res.status}`)
       await loadStaffSalary()
-    } catch (e: any) { setError(e?.message || 'Ошибка') }
+      toast({ title: 'Корректировка аннулирована' })
+    } catch (e: any) {
+      toast({ title: 'Не удалось аннулировать корректировку', description: e?.message, variant: 'destructive' })
+    }
   }
 
   const openPayDebt = (s: StaffMember, amount: number) => {
@@ -923,9 +933,12 @@ export default function SalaryPage() {
     try {
       const res = await fetch('/api/admin/staff-salary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'voidStaffDebtPayment', id }) })
       const json = await res.json().catch(() => null)
-      if (!res.ok) throw new Error(json?.error || 'Ошибка')
+      if (!res.ok) throw new Error(json?.error || json?.message || `Ошибка ${res.status}`)
       await loadStaffSalary()
-    } catch (e: any) { setError(e?.message || 'Не удалось аннулировать') }
+      toast({ title: 'Оплата долга аннулирована', description: 'Долг снова активен' })
+    } catch (e: any) {
+      toast({ title: 'Не удалось аннулировать оплату долга', description: e?.message, variant: 'destructive' })
+    }
     finally { setVoidDebtPayId(null) }
   }
 
@@ -941,9 +954,12 @@ export default function SalaryPage() {
     try {
       const res = await fetch('/api/admin/staff-salary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'deletePayment', id }) })
       const json = await res.json().catch(() => null)
-      if (!res.ok) throw new Error(json?.error || 'Ошибка')
+      if (!res.ok) throw new Error(json?.error || json?.message || `Ошибка ${res.status}`)
       await loadStaffSalary()
-    } catch (e: any) { setError(e?.message || 'Не удалось аннулировать выплату') }
+      toast({ title: 'Выплата аннулирована' })
+    } catch (e: any) {
+      toast({ title: 'Не удалось аннулировать выплату', description: e?.message, variant: 'destructive' })
+    }
   }
 
   const markDebtsPaid = async (item: WeeklyOperator) => {
@@ -1772,435 +1788,422 @@ export default function SalaryPage() {
           )}
 
           {/* ── STAFF TAB ───────────────────────────────────────────────────── */}
-          {tab === 'staff' && canViewStaffSalary && (
-          <Card className="overflow-hidden border-border bg-white dark:bg-white/[0.04]">
-            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border p-5">
-              <div className="flex items-center gap-3">
-                <div className="rounded-2xl bg-violet-500/15 p-3 text-violet-700 dark:text-violet-300"><Users className="h-5 w-5" /></div>
-                <div>
-                  <h2 className="text-lg font-semibold text-foreground">Зарплатная ведомость Административных сотрудников</h2>
-                  <p className="text-sm text-muted-foreground">Фиксированный оклад, выплата 1-го и 15-го. Бонусы, штрафы, долги, авансы, доп. выходы.</p>
-                  {staffSalary?.consistency?.has_issues ? (
-                    <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
-                      Проверка консистентности: отсутствуют/лишние расходы по зарплате ({staffSalary.consistency.missing_payment_expense_count}
-                      /{staffSalary.consistency.orphan_payment_expense_count}) и авансам ({staffSalary.consistency.missing_advance_expense_count}
-                      /{staffSalary.consistency.orphan_advance_expense_count}).
-                    </p>
-                  ) : (
-                    <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">Проверка консистентности: выплаты и авансы синхронизированы с расходами.</p>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className={
-                    'rounded-xl border-border text-xs ' +
-                    (showStaffArchived ? 'bg-amber-400/20 text-amber-700 dark:text-amber-100 hover:bg-amber-400/30' : 'bg-white dark:bg-white/5 text-body hover:bg-surface-hover')
-                  }
-                  onClick={() => setShowStaffArchived((v) => !v)}
-                  title={showStaffArchived ? 'Скрыть уволенных' : 'Показать архив'}
-                >
-                  {showStaffArchived ? 'Архив открыт' : 'Архив'}
-                </Button>
-                <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover" onClick={() => void loadStaffSalary()} disabled={staffRefreshing} title="Обновить" aria-label="Обновить"><RefreshCw className={`h-4 w-4 ${staffRefreshing ? 'animate-spin' : ''}`} /></Button>
-              </div>
-            </div>
-            {staffSalaryLoading ? (
-              <div className="space-y-4 p-5">
-                {Array.from({ length: 4 }).map((_, idx) => (
-                  <div key={idx} className="rounded-2xl border border-border bg-white dark:bg-white/[0.03] p-4">
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-3">
-                        <Skeleton className="h-11 w-11 rounded-2xl" />
-                        <div className="space-y-2">
-                          <Skeleton className="h-4 w-40" />
-                          <Skeleton className="h-3 w-28" />
-                        </div>
+          {/* Ведомость: месяц + половина, все сотрудники строками, под таблицей — */}
+          {/* карточка выбранного человека с расчётом, долгами и историей. */}
+          {tab === 'staff' && canViewStaffSalary && (() => {
+            const sal = staffSalary
+            if (staffSalaryLoading && !sal) {
+              return (
+                <Card className="overflow-hidden border-border bg-white dark:bg-white/[0.04] p-5">
+                  <div className="space-y-2">
+                    {Array.from({ length: 6 }).map((_, idx) => <Skeleton key={idx} className="h-11 w-full rounded-xl" />)}
+                  </div>
+                </Card>
+              )
+            }
+            if (!sal || (sal.staff || []).length === 0) {
+              return (
+                <Card className="overflow-hidden border-border bg-white dark:bg-white/[0.04] p-10 text-center text-sm text-slate-500">
+                  Нет административных сотрудников. Добавьте их в «Кадрах».
+                </Card>
+              )
+            }
+
+            const monthNames = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь']
+            const monthLabel = (prefix: string) => {
+              const [y, m] = prefix.split('-').map(Number)
+              const name = monthNames[(m || 1) - 1] || prefix
+              return `${name.charAt(0).toUpperCase()}${name.slice(1)} ${y}`
+            }
+            const months = Array.from({ length: 18 }, (_, i) => {
+              const d = new Date()
+              d.setDate(1)
+              d.setMonth(d.getMonth() - i)
+              return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+            })
+            const period = getSalarySlotRange(`${staffMonth}-10`, staffSlot)
+            const companyName = (id: string | null | undefined) =>
+              (data?.companies || []).find((c) => c.id === String(id || ''))?.name || ''
+            const dateTime = (iso: string) => {
+              const d = new Date(String(iso || ''))
+              if (Number.isNaN(d.getTime())) return String(iso || '').slice(0, 16).replace('T', ' ')
+              return d.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+            }
+
+            const rows = (sal.staff || []).map((s) => {
+              const calc = calcStaffToPay(s, sal.adjustments, sal.payments, period)
+              const monthPayments = sal.payments.filter(
+                (p) => p.staff_id === s.id && monthPrefixFromPaymentDate(p.pay_date) === staffMonth,
+              )
+              return {
+                s,
+                calc,
+                monthPayments,
+                activeAdjs: filterStaffAdjustmentsForSlot(sal.adjustments, s.id, sal.payments, period),
+                paid: monthPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0),
+                hasFirst: monthPayments.some((p) => p.slot === 'first'),
+                hasSecond: monthPayments.some((p) => p.slot === 'second'),
+                dismissed: s.is_active === false,
+                fromOperators: s.source_type === 'operator',
+              }
+            })
+            const totals = rows.reduce(
+              (acc, r) => ({
+                half: acc.half + r.calc.half,
+                bonuses: acc.bonuses + r.calc.bonuses,
+                deductions: acc.deductions + r.calc.fines + r.calc.debts,
+                advances: acc.advances + r.calc.advances,
+                toPay: acc.toPay + r.calc.toPay,
+                paid: acc.paid + r.paid,
+              }),
+              { half: 0, bonuses: 0, deductions: 0, advances: 0, toPay: 0, paid: 0 },
+            )
+            const selected = rows.find((r) => r.s.id === selectedStaffId) || null
+            const slotButton = (value: 'first' | 'second', label: string) => (
+              <button
+                type="button"
+                onClick={() => setStaffSlot(value)}
+                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${staffSlot === value ? 'bg-white dark:bg-white/10 text-foreground shadow-sm' : 'text-muted-foreground hover:text-slate-700 dark:hover:text-slate-200'}`}
+              >
+                {label}
+              </button>
+            )
+            const payMark = (paid: boolean) => (
+              <span className={`inline-block h-2 w-2 rounded-full ${paid ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-white/20'}`} />
+            )
+
+            return (
+              <div className="space-y-4">
+                <Card className="overflow-hidden border-border bg-white dark:bg-white/[0.04]">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4 sm:p-5">
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-2xl bg-violet-500/15 p-2.5 text-violet-700 dark:text-violet-300"><Users className="h-5 w-5" /></div>
+                      <div>
+                        <h2 className="text-base font-semibold text-foreground">Ведомость административных сотрудников</h2>
+                        <p className="text-xs text-muted-foreground">
+                          Оклад пополам: 1–15 и 16–конец месяца. {sal.consistency?.has_issues ? (
+                            <span className="text-amber-700 dark:text-amber-300">
+                              Расходы по зарплате разошлись с выплатами ({sal.consistency.missing_payment_expense_count}/{sal.consistency.orphan_payment_expense_count}).
+                            </span>
+                          ) : 'Выплаты и авансы сходятся с расходами.'}
+                        </p>
                       </div>
-                      <Skeleton className="h-9 w-28 rounded-xl" />
                     </div>
-                    <div className="mt-4 grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-5">
-                      {Array.from({ length: 5 }).map((__, i) => (
-                        <Skeleton key={i} className="h-16 rounded-2xl" />
-                      ))}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <select
+                        className="h-9 rounded-xl border border-border bg-card px-3 text-sm text-foreground focus:border-emerald-400/40 focus:outline-none [color-scheme:light] dark:[color-scheme:dark]"
+                        value={staffMonth}
+                        onChange={(e) => setStaffMonth(e.target.value)}
+                        aria-label="Месяц"
+                      >
+                        {months.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
+                      </select>
+                      <div className="flex items-center gap-1 rounded-xl bg-slate-100 dark:bg-white/5 p-1">
+                        {slotButton('first', '1–15')}
+                        {slotButton('second', '16–конец')}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className={'h-9 rounded-xl border-border text-xs ' + (showStaffArchived ? 'bg-amber-400/20 text-amber-700 dark:text-amber-100 hover:bg-amber-400/30' : 'bg-white dark:bg-white/5 text-body hover:bg-surface-hover')}
+                        onClick={() => setShowStaffArchived((v) => !v)}
+                      >
+                        {showStaffArchived ? 'Архив открыт' : 'Архив'}
+                      </Button>
+                      <Button type="button" variant="outline" className="h-9 rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover" onClick={() => void loadStaffSalary()} disabled={staffRefreshing} aria-label="Обновить">
+                        <RefreshCw className={`h-4 w-4 ${staffRefreshing ? 'animate-spin' : ''}`} />
+                      </Button>
                     </div>
                   </div>
-                ))}
-              </div>
-            ) : !staffSalary || (staffSalary.staff || []).length === 0 ? (
-              <div className="p-10 text-center text-sm text-slate-500">Нет административных сотрудников. Добавьте записи в таблицу <code className="rounded bg-surface-hover px-1">staff</code>.</div>
-            ) : (
-              <div className="divide-y divide-slate-200 dark:divide-white/5">
-                {(staffSalary.staff || []).map((s) => {
-                  const calc = calcStaffToPay(s, staffSalary.adjustments, staffSalary.payments, currentStaffSalaryPeriod)
-                  const activeAdjs = filterStaffAdjustmentsForSlot(
-                    staffSalary.adjustments,
-                    s.id,
-                    staffSalary.payments,
-                    currentStaffSalaryPeriod,
-                  )
-                  const currentMonthPayments = staffSalary.payments.filter(
-                    (p) => p.staff_id === s.id && monthPrefixFromPaymentDate(p.pay_date) === currentStaffSalaryMonthPrefix,
-                  )
-                  const hasFirstPayoutThisMonth = currentMonthPayments.some((p) => p.slot === 'first')
-                  const hasSecondPayoutThisMonth = currentMonthPayments.some((p) => p.slot === 'second')
-                  const isMonthClosed = hasFirstPayoutThisMonth && hasSecondPayoutThisMonth
-                  const recentPayments = staffSalary.payments
-                    .filter((p) => p.staff_id === s.id && String(p.pay_date || '').startsWith(currentStaffSalaryMonthPrefix))
-                    .slice(0, 3)
-                  const recentPaymentDetails = recentPayments.map((payment) => {
-                    const closingWindow = getStaffPaymentClosingWindow(s.id, staffSalary.payments, payment.pay_date, payment.id)
-                    const closedAdjustments = getStaffPaymentClosedAdjustments({
-                      staffId: s.id,
-                      adjustments: staffSalary.adjustments,
-                      payment,
-                      closingWindow,
-                    })
-                    const generatedAdjustments = getStaffPaymentGeneratedAdjustments({
-                      staffId: s.id,
-                      adjustments: staffSalary.adjustments,
-                      payment,
-                    })
-                    return { payment, closedAdjustments, generatedAdjustments, closingWindow }
-                  })
-                  const recentlyClosedAdjustmentsCount = recentPaymentDetails.reduce(
-                    (sum, item) => sum + item.closedAdjustments.length,
-                    0,
-                  )
-                  const isOperatorBased = s.source_type === 'operator'
-                  const isDismissed = s.is_active === false
-                  const dismissedDateLabel = isDismissed
-                    ? String(s.dismissal_date || s.dismissed_at || '').slice(0, 10)
-                    : null
-                  const debtPays = (staffSalary.debtPayments || []).filter((p) => p.staff_id === s.id)
-                  const paidThisMonth = currentMonthPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0)
-                  return (
-                    <div key={s.id} className={'p-4 sm:p-5 ' + (isDismissed ? 'opacity-60' : '')}>
-                      {/* Мобильная версия: карточка сотрудника вместо широкой строки */}
-                      <div className="sm:hidden">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex min-w-0 items-center gap-3">
-                            <div className={'flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-sm font-semibold dark:text-white ' + (isDismissed ? 'bg-gradient-to-br from-slate-300 to-slate-400 dark:from-slate-600 dark:to-slate-700 text-slate-700' : 'bg-gradient-to-br from-violet-500 to-purple-600 text-white')}>
-                              {(s.short_name || s.full_name).charAt(0).toUpperCase()}
-                            </div>
-                            <div className="min-w-0">
-                              <div className="truncate font-semibold text-foreground">{s.full_name}</div>
-                              <div className="mt-0.5 text-[11px] text-slate-400">
-                                {formatRoleLabel(s.role)}
-                                {isOperatorBased ? ' · из operators' : null}
+
+                  {/* Таблица — основной вид */}
+                  <div className="hidden overflow-x-auto sm:block">
+                    <table className="w-full min-w-[860px]">
+                      <thead className="bg-surface-muted">
+                        <tr>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Сотрудник</th>
+                          <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">Пол-оклада</th>
+                          <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">Бонусы</th>
+                          <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">Штрафы и долги</th>
+                          <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">Авансы</th>
+                          <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">К выплате</th>
+                          <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">Выплачено за месяц</th>
+                          <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground">1-е · 15-е</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {rows.map((r) => (
+                          <tr
+                            key={r.s.id}
+                            onClick={() => setSelectedStaffId(selectedStaffId === r.s.id ? null : r.s.id)}
+                            className={`cursor-pointer transition hover:bg-surface-muted ${selectedStaffId === r.s.id ? 'bg-violet-500/[0.06]' : ''} ${r.dismissed ? 'opacity-60' : ''}`}
+                          >
+                            <td className="px-4 py-2.5 text-sm">
+                              <div className="flex items-center gap-2">
+                                <ChevronRight className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${selectedStaffId === r.s.id ? 'rotate-90' : ''}`} />
+                                <div className="min-w-0">
+                                  <div className="truncate font-medium text-foreground">{r.s.full_name}</div>
+                                  <div className="truncate text-[11px] text-slate-400">
+                                    {formatRoleLabel(r.s.role)}
+                                    {r.fromOperators ? ' · из операторов' : ` · ${money(r.s.monthly_salary)}/мес`}
+                                    {r.dismissed ? ' · уволен' : ''}
+                                  </div>
+                                </div>
                               </div>
-                            </div>
-                          </div>
-                          {isDismissed ? (
-                            <span className="shrink-0 rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-200">
-                              Уволен{dismissedDateLabel ? ` · ${dismissedDateLabel}` : ''}
-                            </span>
-                          ) : isMonthClosed ? (
-                            <span className="shrink-0 rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-[11px] font-medium text-sky-700 dark:text-sky-300">месяц закрыт</span>
-                          ) : null}
-                        </div>
+                            </td>
+                            <td className="px-3 py-2.5 text-right text-sm tabular-nums">{money(r.calc.half)}</td>
+                            <td className="px-3 py-2.5 text-right text-sm tabular-nums text-emerald-700 dark:text-emerald-300">{r.calc.bonuses ? `+${money(r.calc.bonuses)}` : '—'}</td>
+                            <td className="px-3 py-2.5 text-right text-sm tabular-nums text-rose-600 dark:text-rose-300">{r.calc.fines + r.calc.debts ? `−${money(r.calc.fines + r.calc.debts)}` : '—'}</td>
+                            <td className="px-3 py-2.5 text-right text-sm tabular-nums text-amber-700 dark:text-amber-300">{r.calc.advances ? `−${money(r.calc.advances)}` : '—'}</td>
+                            <td className="px-3 py-2.5 text-right text-sm font-semibold tabular-nums text-foreground">{money(r.calc.toPay)}</td>
+                            <td className="px-3 py-2.5 text-right text-sm tabular-nums text-sky-700 dark:text-sky-300">{r.paid ? money(r.paid) : '—'}</td>
+                            <td className="px-3 py-2.5 text-center">
+                              <span className="inline-flex items-center gap-1.5">{payMark(r.hasFirst)}{payMark(r.hasSecond)}</span>
+                            </td>
+                          </tr>
+                        ))}
+                        <tr className="bg-surface-muted/60 font-semibold">
+                          <td className="px-4 py-2.5 text-sm">Итого · {rows.length}</td>
+                          <td className="px-3 py-2.5 text-right text-sm tabular-nums">{money(totals.half)}</td>
+                          <td className="px-3 py-2.5 text-right text-sm tabular-nums">{totals.bonuses ? `+${money(totals.bonuses)}` : '—'}</td>
+                          <td className="px-3 py-2.5 text-right text-sm tabular-nums">{totals.deductions ? `−${money(totals.deductions)}` : '—'}</td>
+                          <td className="px-3 py-2.5 text-right text-sm tabular-nums">{totals.advances ? `−${money(totals.advances)}` : '—'}</td>
+                          <td className="px-3 py-2.5 text-right text-sm tabular-nums">{money(totals.toPay)}</td>
+                          <td className="px-3 py-2.5 text-right text-sm tabular-nums">{money(totals.paid)}</td>
+                          <td />
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
 
-                        <div className="mt-3 flex items-end justify-between gap-3">
-                          <div>
-                            <div className="text-[10px] uppercase tracking-wider text-slate-500">К выплате</div>
-                            <div className="text-2xl font-semibold tabular-nums text-foreground">{money(calc.toPay)}</div>
-                          </div>
-                          {!isOperatorBased ? <div className="pb-1 text-xs text-slate-500">Оклад: {money(s.monthly_salary)}/мес</div> : null}
-                        </div>
-
-                        <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-                          <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
-                            <div className="text-[10px] text-slate-500">Пол-оклада</div>
-                            <div className="mt-0.5 text-xs font-medium tabular-nums text-foreground">{money(calc.half)}</div>
-                          </div>
-                          <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
-                            <div className="text-[10px] text-slate-500">Бонусы</div>
-                            <div className="mt-0.5 text-xs font-medium tabular-nums text-emerald-700 dark:text-emerald-300">+{money(calc.bonuses)}</div>
-                          </div>
-                          <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
-                            <div className="text-[10px] text-slate-500">Штрафы</div>
-                            <div className="mt-0.5 text-xs font-medium tabular-nums text-rose-700 dark:text-rose-300">−{money(calc.fines)}</div>
-                          </div>
-                          <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
-                            <div className="text-[10px] text-slate-500">Долги</div>
-                            <div className="mt-0.5 text-xs font-medium tabular-nums text-rose-700 dark:text-rose-300">−{money(calc.debts)}</div>
-                          </div>
-                          <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
-                            <div className="text-[10px] text-slate-500">Авансы</div>
-                            <div className="mt-0.5 text-xs font-medium tabular-nums text-amber-700 dark:text-amber-300">−{money(calc.advances)}</div>
-                          </div>
-                          <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
-                            <div className="text-[10px] text-slate-500">Выплачено</div>
-                            <div className="mt-0.5 text-xs font-medium tabular-nums text-sky-700 dark:text-sky-300">{money(paidThisMonth)}</div>
+                  {/* Телефон: та же ведомость короткими строками */}
+                  <div className="divide-y divide-border sm:hidden">
+                    {rows.map((r) => (
+                      <button
+                        key={r.s.id}
+                        type="button"
+                        onClick={() => setSelectedStaffId(selectedStaffId === r.s.id ? null : r.s.id)}
+                        className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left ${r.dismissed ? 'opacity-60' : ''}`}
+                      >
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium text-foreground">{r.s.full_name}</div>
+                          <div className="truncate text-[11px] text-slate-400">
+                            {formatRoleLabel(r.s.role)} · выплачено {money(r.paid)}
                           </div>
                         </div>
-
-                        {isMonthClosed ? (
-                          <div className="mt-2 text-[11px] text-amber-700 dark:text-amber-300">Месяц закрыт: оба слота выплаты уже проведены. Следующая выплата доступна в следующем месяце.</div>
-                        ) : null}
-
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {!isDismissed && canStaffAddAdjustment && (
-                            <Button type="button" disabled={!canEditStaffSalary || isOperatorBased} variant="outline" className="h-9 flex-1 rounded-xl border-border bg-white dark:bg-white/5 text-xs text-body hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffAdjModal(s); setStaffAdjKind('fine'); setStaffAdjCompanyId(data?.companies?.[0]?.id || ''); setStaffAdjAmount(''); setStaffAdjDate(todayISO()); setStaffAdjComment('') }}><Plus className="mr-1 h-3.5 w-3.5" />Корректировка</Button>
-                          )}
-                          {!isDismissed && canStaffAddExtraDay && (
-                            <Button type="button" disabled={!canEditStaffSalary || isOperatorBased} variant="outline" className="h-9 flex-1 rounded-xl border-border bg-white dark:bg-white/5 text-xs text-body hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50" onClick={() => void submitStaffExtraDay(s.id)}><CalendarDays className="mr-1 h-3.5 w-3.5" />Доп. выход</Button>
-                          )}
-                          {!isDismissed && !isOperatorBased && canEditStaffSalary && calc.debts > 0 && (
-                            <Button type="button" variant="outline" className="h-9 flex-1 rounded-xl border-rose-400/30 bg-rose-500/10 text-xs text-rose-700 dark:text-rose-200 hover:bg-rose-500/20" onClick={() => openPayDebt(s, calc.debts)}>
-                              <Wallet className="mr-1 h-3.5 w-3.5" />Долг ({money(calc.debts)})
-                            </Button>
-                          )}
-                          {!isDismissed && canStaffCreatePayment && (
-                            <Button type="button" disabled={!canEditStaffSalary || isOperatorBased || isMonthClosed} className="h-9 flex-1 rounded-xl bg-emerald-500 text-xs text-white hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffPayModal(s); setStaffPayDate(todayISO()); setStaffPaySlot(hasFirstPayoutThisMonth ? 'second' : 'first'); setStaffPayCash(calc.toPay > 0 ? String(calc.toPay) : ''); setStaffPayKaspi(''); setStaffPayComment(''); setStaffPayCompanyId(data?.companies?.[0]?.id || '') }}><Wallet className="mr-1 h-3.5 w-3.5" />Выплатить</Button>
-                          )}
+                        <div className="flex shrink-0 items-center gap-2">
+                          <div className="text-right">
+                            <div className="text-sm font-semibold tabular-nums text-foreground">{money(r.calc.toPay)}</div>
+                            <div className="flex items-center justify-end gap-1">{payMark(r.hasFirst)}{payMark(r.hasSecond)}</div>
+                          </div>
+                          <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform ${selectedStaffId === r.s.id ? 'rotate-90' : ''}`} />
                         </div>
+                      </button>
+                    ))}
+                    <div className="flex items-center justify-between px-4 py-3 text-sm font-semibold">
+                      <span>Итого</span>
+                      <span className="tabular-nums">{money(totals.toPay)}</span>
+                    </div>
+                  </div>
+                </Card>
 
-                        {activeAdjs.length > 0 || debtPays.length > 0 || recentPayments.length > 0 ? (
-                          <details className="group mt-2">
-                            <summary className="flex cursor-pointer list-none items-center justify-center gap-1 rounded-xl border border-dashed border-border py-1.5 text-[11px] text-slate-500 [&::-webkit-details-marker]:hidden">
-                              <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
-                              Корректировки и выплаты
-                            </summary>
-                            <div className="mt-3 space-y-4 border-t border-border pt-3">
-                              {activeAdjs.length > 0 ? (
-                                <div>
-                                  <div className="mb-2 text-xs font-medium text-foreground">Активные корректировки</div>
-                                  <div className="space-y-1.5">
-                                    {activeAdjs.map((adj) => (
-                                      <div key={adj.id} className="flex items-center justify-between gap-2 text-xs">
-                                        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                                          <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${staffAdjustmentTone(adj.kind)}`}>{staffAdjustmentKindLabel(adj.kind)}</span>
-                                          <span className="text-slate-500">{adj.date}</span>
-                                          {adj.comment ? <span className="truncate text-muted-foreground">{adj.comment}</span> : null}
-                                        </div>
-                                        <div className="flex shrink-0 items-center gap-2">
-                                          <span className="font-medium tabular-nums text-foreground">{money(adj.amount)}</span>
-                                          {canEditStaffSalary ? (
-                                            adj.id.startsWith('operator-debt:') ? (
-                                              <button type="button" title="Аннулировать долг из кассы" className="text-slate-500 transition hover:text-rose-600 dark:hover:text-rose-300" onClick={() => void voidOperatorDebt(adj as any)}><X className="h-3.5 w-3.5" /></button>
-                                            ) : (
-                                              <button type="button" className="text-slate-500 transition hover:text-rose-600 dark:hover:text-rose-300" onClick={() => void removeStaffAdjustment(adj.id)}><X className="h-3.5 w-3.5" /></button>
-                                            )
-                                          ) : null}
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              ) : recentlyClosedAdjustmentsCount > 0 ? (
-                                <div className="rounded-xl border border-sky-500/20 bg-sky-500/[0.06] px-3 py-2 text-xs text-sky-700 dark:text-sky-200">
-                                  Корректировки закрыты выплатой — см. последние выплаты ниже.
-                                </div>
-                              ) : null}
-                              {debtPays.length > 0 ? (
-                                <div>
-                                  <div className="mb-2 text-xs font-medium text-foreground">Оплаченные долги</div>
-                                  <div className="space-y-1.5">
-                                    {debtPays.map((p) => (
-                                      <div key={p.id} className="flex items-center justify-between gap-2 text-xs">
-                                        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                                          <span className="text-slate-500">{String(p.paid_at || '').slice(0, 10)}</span>
-                                          {p.comment ? <span className="truncate text-muted-foreground">{p.comment}</span> : null}
-                                        </div>
-                                        <div className="flex shrink-0 items-center gap-2">
-                                          <span className="font-medium tabular-nums text-emerald-700 dark:text-emerald-300">{money(p.amount)}</span>
-                                          {canEditStaffSalary ? (
-                                            <button type="button" title="Аннулировать оплату долга" disabled={voidDebtPayId === p.id} className="text-slate-500 transition hover:text-rose-600 dark:hover:text-rose-300 disabled:opacity-50" onClick={() => void voidStaffDebtPayment(p.id)}>
-                                              {voidDebtPayId === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
-                                            </button>
-                                          ) : null}
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              ) : null}
-                              {recentPayments.length > 0 ? (
-                                <div>
-                                  <div className="mb-2 text-xs font-medium text-foreground">Последние выплаты</div>
-                                  <div className="space-y-1.5">
-                                    {recentPayments.map((p) => (
-                                      <div key={p.id} className="flex items-center justify-between gap-2 text-xs">
-                                        <span className="min-w-0 truncate text-body">{p.pay_date} · {staffPaymentSlotLabel(p.slot)}</span>
-                                        <div className="flex shrink-0 items-center gap-2">
-                                          <span className="font-medium tabular-nums text-foreground">{money(p.amount)}</span>
-                                          {canEditStaffSalary ? (
-                                            <button type="button" title="Аннулировать" onClick={() => void deleteStaffPayment(p.id, p.amount)} className="text-slate-600 transition hover:text-rose-400"><X className="h-3.5 w-3.5" /></button>
-                                          ) : null}
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              ) : null}
-                            </div>
-                          </details>
-                        ) : null}
-                      </div>
-
-                      {/* Десктоп: прежняя раскладка */}
-                      <div className="hidden sm:block">
-                      <div className="flex flex-wrap items-start justify-between gap-4">
+                {selected ? (() => {
+                  const s = selected.s
+                  const calc = selected.calc
+                  const debtAdj = (sal.adjustments as any[]).find((a) => a.id === `operator-debt:${s.id}`)
+                  const debtItems = (debtAdj?.items || []) as Array<{ id: string; name: string; quantity: number; unitPrice: number; amount: number; createdAt: string; companyId: string | null; comment: string | null }>
+                  const debtPays = (sal.debtPayments || []).filter((p) => p.staff_id === s.id)
+                  const isMonthClosed = selected.hasFirst && selected.hasSecond
+                  const line = (label: string, value: string, cls = '') => (
+                    <div className="flex items-baseline justify-between gap-3 px-3 py-2 text-sm">
+                      <span className="text-muted-foreground">{label}</span>
+                      <span className={`shrink-0 tabular-nums ${cls}`}>{value}</span>
+                    </div>
+                  )
+                  return (
+                    <Card className="overflow-hidden border-border bg-white dark:bg-white/[0.04]">
+                      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border p-4 sm:p-5">
                         <div className="flex items-center gap-3">
-                          <div className={'flex h-11 w-11 items-center justify-center rounded-2xl text-sm font-semibold dark:text-white ' + (isDismissed ? 'bg-gradient-to-br from-slate-300 to-slate-400 dark:from-slate-600 dark:to-slate-700 text-slate-700' : 'bg-gradient-to-br from-violet-500 to-purple-600 text-white')}>
+                          <div className={'flex h-11 w-11 items-center justify-center rounded-2xl text-sm font-semibold ' + (selected.dismissed ? 'bg-gradient-to-br from-slate-300 to-slate-400 text-slate-700 dark:from-slate-600 dark:to-slate-700 dark:text-white' : 'bg-gradient-to-br from-violet-500 to-purple-600 text-white')}>
                             {(s.short_name || s.full_name).charAt(0).toUpperCase()}
                           </div>
                           <div>
-                            <div className="flex items-center gap-2">
-                              <div className="font-semibold text-foreground">{s.full_name}</div>
-                              {isDismissed ? (
-                                <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-200">
-                                  Уволен{dismissedDateLabel ? ` · ${dismissedDateLabel}` : ''}
-                                </span>
-                              ) : null}
-                            </div>
+                            <div className="font-semibold text-foreground">{s.full_name}</div>
                             <div className="text-xs text-slate-400">
                               {formatRoleLabel(s.role)}
-                              {isOperatorBased ? ' · из operators' : ` · Оклад: ${money(s.monthly_salary)}/мес`}
+                              {selected.fromOperators ? ' · из операторов' : ` · Оклад: ${money(s.monthly_salary)}/мес`}
+                              {selected.dismissed ? ' · уволен' : ''}
                             </div>
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-2">
-                          {!isDismissed && canStaffAddAdjustment && (
-                            <Button type="button" disabled={!canEditStaffSalary || isOperatorBased} variant="outline" className="h-9 rounded-xl border-border bg-white dark:bg-white/5 text-xs text-body hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffAdjModal(s); setStaffAdjKind('fine'); setStaffAdjCompanyId(data?.companies?.[0]?.id || ''); setStaffAdjAmount(''); setStaffAdjDate(todayISO()); setStaffAdjComment('') }}><Plus className="mr-1.5 h-3.5 w-3.5" />Корректировка</Button>
+                          {!selected.dismissed && canStaffAddAdjustment && (
+                            <Button type="button" disabled={!canEditStaffSalary || selected.fromOperators} variant="outline" className="h-9 rounded-xl border-border bg-white dark:bg-white/5 text-xs text-body hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffAdjModal(s); setStaffAdjKind('fine'); setStaffAdjCompanyId(data?.companies?.[0]?.id || ''); setStaffAdjAmount(''); setStaffAdjDate(todayISO()); setStaffAdjComment(''); setStaffAdjError(null) }}><Plus className="mr-1.5 h-3.5 w-3.5" />Корректировка</Button>
                           )}
-                          {!isDismissed && canStaffAddExtraDay && (
-                            <Button type="button" disabled={!canEditStaffSalary || isOperatorBased} variant="outline" className="h-9 rounded-xl border-border bg-white dark:bg-white/5 text-xs text-body hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50" onClick={() => void submitStaffExtraDay(s.id)}><CalendarDays className="mr-1.5 h-3.5 w-3.5" />Доп. выход</Button>
+                          {!selected.dismissed && canStaffAddExtraDay && (
+                            <Button type="button" disabled={!canEditStaffSalary || selected.fromOperators} variant="outline" className="h-9 rounded-xl border-border bg-white dark:bg-white/5 text-xs text-body hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50" onClick={() => void submitStaffExtraDay(s.id)}><CalendarDays className="mr-1.5 h-3.5 w-3.5" />Доп. выход</Button>
                           )}
-                          {!isDismissed && !isOperatorBased && canEditStaffSalary && calc.debts > 0 && (
-                            <Button type="button" variant="outline" className="h-9 rounded-xl border-rose-400/30 bg-rose-500/10 text-xs text-rose-700 dark:text-rose-200 hover:bg-rose-500/20" onClick={() => openPayDebt(s, calc.debts)}>
-                              <Wallet className="mr-1.5 h-3.5 w-3.5" />
-                              Оплата долга ({money(calc.debts)})
-                            </Button>
+                          {!selected.dismissed && !selected.fromOperators && canEditStaffSalary && calc.debts > 0 && (
+                            <Button type="button" variant="outline" className="h-9 rounded-xl border-rose-400/30 bg-rose-500/10 text-xs text-rose-700 dark:text-rose-200 hover:bg-rose-500/20" onClick={() => openPayDebt(s, calc.debts)}><Wallet className="mr-1.5 h-3.5 w-3.5" />Оплата долга ({money(calc.debts)})</Button>
                           )}
-                          {!isDismissed && canStaffCreatePayment && (
-                            <Button type="button" disabled={!canEditStaffSalary || isOperatorBased || isMonthClosed} className="h-9 rounded-xl bg-emerald-500 text-xs text-white hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffPayModal(s); setStaffPayDate(todayISO()); setStaffPaySlot(hasFirstPayoutThisMonth ? 'second' : 'first'); setStaffPayCash(calc.toPay > 0 ? String(calc.toPay) : ''); setStaffPayKaspi(''); setStaffPayComment(''); setStaffPayCompanyId(data?.companies?.[0]?.id || '') }}><Wallet className="mr-1.5 h-3.5 w-3.5" />Выплатить</Button>
+                          {!selected.dismissed && canStaffCreatePayment && (
+                            <Button type="button" disabled={!canEditStaffSalary || selected.fromOperators || isMonthClosed} className="h-9 rounded-xl bg-emerald-500 text-xs text-white hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffPayModal(s); setStaffPayDate(todayISO()); setStaffPaySlot(selected.hasFirst ? 'second' : 'first'); setStaffPayCash(calc.toPay > 0 ? String(calc.toPay) : ''); setStaffPayKaspi(''); setStaffPayComment(''); setStaffPayCompanyId(data?.companies?.[0]?.id || '') }}><Wallet className="mr-1.5 h-3.5 w-3.5" />Выплатить</Button>
                           )}
                         </div>
                       </div>
+
                       {isMonthClosed ? (
-                        <div className="mt-2 text-xs text-amber-700 dark:text-amber-300">Месяц закрыт: оба слота выплаты уже проведены. Следующая выплата доступна в следующем месяце.</div>
+                        <div className="border-b border-border bg-amber-500/[0.06] px-4 py-2 text-xs text-amber-700 dark:text-amber-300 sm:px-5">
+                          {monthLabel(staffMonth)}: обе выплаты проведены. Следующая — в следующем месяце.
+                        </div>
                       ) : null}
-                      <div className="mt-4 grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-5">
-                        <div className="rounded-2xl border border-border bg-white dark:bg-white/[0.03] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-slate-500">Пол-оклада</div><div className="mt-1 text-sm font-semibold text-foreground">{money(calc.half)}</div></div>
-                        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-emerald-700 dark:text-emerald-400/70">Бонусы</div><div className="mt-1 text-sm font-semibold text-emerald-700 dark:text-emerald-300">+{money(calc.bonuses)}</div></div>
-                        <div className="rounded-2xl border border-rose-500/20 bg-rose-500/[0.06] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-rose-700 dark:text-rose-400/70">Штрафы / долги</div><div className="mt-1 text-sm font-semibold text-rose-700 dark:text-rose-300">−{money(calc.fines + calc.debts)}</div></div>
-                        <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-amber-700 dark:text-amber-400/70">Авансы</div><div className="mt-1 text-sm font-semibold text-amber-700 dark:text-amber-300">−{money(calc.advances)}</div></div>
-                        <div className="rounded-2xl border border-slate-200 dark:border-white/15 bg-slate-50 dark:bg-white/[0.06] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-muted-foreground">К выплате</div><div className="mt-1 text-base font-bold text-foreground">{money(calc.toPay)}</div></div>
-                      </div>
-                      {activeAdjs.length > 0 ? (
-                        <div className="mt-3 space-y-1.5">
-                          <div className="mb-1 text-xs text-slate-500">Активные корректировки:</div>
-                          {activeAdjs.map(adj => (
-                            <div key={adj.id} className="flex items-center justify-between rounded-xl border border-border bg-white dark:bg-white/[0.03] px-3 py-2 text-xs">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${adj.kind === 'bonus' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : adj.kind === 'advance' ? 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300' : 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300'}`}>
-                                  {staffAdjustmentKindLabel(adj.kind)}
-                                </span>
-                                <span className="font-medium text-foreground">{money(adj.amount)}</span>
-                                <span className="text-slate-500">{adj.date}</span>
-                                {adj.comment ? <span className="text-muted-foreground">{adj.comment}</span> : null}
-                              </div>
-                              {canEditStaffSalary ? (
-                                adj.id.startsWith('operator-debt:') ? (
-                                  <button type="button" title="Аннулировать долг из кассы" className="ml-3 shrink-0 text-slate-500 transition hover:text-rose-600 dark:hover:text-rose-300" onClick={() => void voidOperatorDebt(adj as any)}><X className="h-3.5 w-3.5" /></button>
-                                ) : (
-                                  <button type="button" className="ml-3 shrink-0 text-slate-500 transition hover:text-rose-600 dark:hover:text-rose-300" onClick={() => void removeStaffAdjustment(adj.id)}><X className="h-3.5 w-3.5" /></button>
-                                )
-                              ) : null}
+
+                      <div className="grid gap-4 p-4 sm:p-5 xl:grid-cols-2">
+                        {/* Откуда сумма */}
+                        <div>
+                          <div className="mb-2 text-sm font-medium text-foreground">Как получилась сумма · {staffSlot === 'first' ? '1–15' : '16–конец'} {monthLabel(staffMonth).toLowerCase()}</div>
+                          <div className="divide-y divide-border rounded-xl border border-border">
+                            {line('Половина оклада', money(calc.half))}
+                            {calc.bonuses ? line('Бонусы', `+${money(calc.bonuses)}`, 'text-emerald-700 dark:text-emerald-300') : null}
+                            {calc.fines ? line('Штрафы', `−${money(calc.fines)}`, 'text-rose-600 dark:text-rose-300') : null}
+                            {calc.debts ? line('Долги', `−${money(calc.debts)}`, 'text-rose-600 dark:text-rose-300') : null}
+                            {calc.advances ? line('Авансы выданы', `−${money(calc.advances)}`, 'text-amber-700 dark:text-amber-300') : null}
+                            {calc.remainder ? line('Остаток прошлой выплаты', money(calc.remainder), 'text-sky-700 dark:text-sky-300') : null}
+                            <div className="flex items-baseline justify-between gap-3 bg-surface-muted/60 px-3 py-2 text-sm font-semibold">
+                              <span>К выплате</span>
+                              <span className="shrink-0 tabular-nums">{money(calc.toPay)}</span>
                             </div>
-                          ))}
-                        </div>
-                      ) : recentlyClosedAdjustmentsCount > 0 ? (
-                        <div className="mt-3 rounded-xl border border-sky-500/20 bg-sky-500/[0.06] px-3 py-2 text-xs text-sky-700 dark:text-sky-200">
-                          Долги и другие корректировки не пропали: они закрыты выплатой и показаны ниже в последних выплатах.
-                        </div>
-                      ) : null}
-                      {(() => {
-                        const debtPays = (staffSalary.debtPayments || []).filter((p) => p.staff_id === s.id)
-                        if (debtPays.length === 0) return null
-                        return (
-                          <div className="mt-3">
-                            <div className="mb-1 text-xs text-slate-500">Оплаченные долги:</div>
-                            <div className="space-y-1.5">
-                              {debtPays.map((p) => (
-                                <div key={p.id} className="flex items-center justify-between rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] px-3 py-2 text-xs">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">оплата долга</span>
-                                    <span className="font-medium text-foreground">{money(p.amount)}</span>
-                                    <span className="text-slate-500">{String(p.paid_at || '').slice(0, 10)}</span>
-                                    {p.comment ? <span className="text-slate-400">{p.comment}</span> : null}
+                          </div>
+
+                          {selected.activeAdjs.length > 0 ? (
+                            <div className="mt-4">
+                              <div className="mb-2 text-sm font-medium text-foreground">Активные корректировки</div>
+                              <div className="space-y-1.5">
+                                {selected.activeAdjs.map((adj) => (
+                                  <div key={adj.id} className="flex items-center justify-between gap-2 rounded-xl border border-border px-3 py-2 text-xs">
+                                    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                                      <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${staffAdjustmentTone(adj.kind)}`}>{staffAdjustmentKindLabel(adj.kind)}</span>
+                                      <span className="font-medium text-foreground">{money(adj.amount)}</span>
+                                      <span className="text-slate-500">{adj.date}</span>
+                                      {adj.comment ? <span className="truncate text-muted-foreground">{adj.comment}</span> : null}
+                                    </div>
+                                    {canEditStaffSalary ? (
+                                      adj.id.startsWith('operator-debt:') ? (
+                                        <button type="button" title="Аннулировать долг из кассы" className="shrink-0 text-slate-500 transition hover:text-rose-600 dark:hover:text-rose-300" onClick={() => void voidOperatorDebt(adj as any)}><X className="h-3.5 w-3.5" /></button>
+                                      ) : (
+                                        <button type="button" title="Аннулировать" className="shrink-0 text-slate-500 transition hover:text-rose-600 dark:hover:text-rose-300" onClick={() => void removeStaffAdjustment(adj.id)}><X className="h-3.5 w-3.5" /></button>
+                                      )
+                                    ) : null}
                                   </div>
-                                  {canEditStaffSalary ? (
-                                    <button type="button" title="Аннулировать оплату долга" disabled={voidDebtPayId === p.id} className="ml-3 shrink-0 text-slate-500 transition hover:text-rose-600 dark:hover:text-rose-300 disabled:opacity-50" onClick={() => void voidStaffDebtPayment(p.id)}>
-                                      {voidDebtPayId === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
-                                    </button>
-                                  ) : null}
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+
+                        {/* Что взял в долг и когда */}
+                        <div>
+                          <div className="mb-2 text-sm font-medium text-foreground">
+                            Долги из кассы {debtItems.length ? <span className="font-normal text-muted-foreground">· {debtItems.length} шт. на {money(calc.debts)}</span> : null}
+                          </div>
+                          {debtItems.length === 0 ? (
+                            <div className="rounded-xl border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
+                              Непогашенных долгов из операторской программы нет.
+                            </div>
+                          ) : (
+                            <div className="divide-y divide-border rounded-xl border border-border">
+                              {debtItems.map((item) => (
+                                <div key={item.id} className="flex items-start justify-between gap-3 px-3 py-2">
+                                  <div className="min-w-0">
+                                    <div className="truncate text-sm text-foreground">{item.name}</div>
+                                    <div className="truncate text-[11px] text-slate-500">
+                                      {dateTime(item.createdAt)}
+                                      {item.quantity ? ` · ${item.quantity} шт. × ${money(item.unitPrice)}` : ''}
+                                      {companyName(item.companyId) ? ` · ${companyName(item.companyId)}` : ''}
+                                      {item.comment ? ` · ${item.comment}` : ''}
+                                    </div>
+                                  </div>
+                                  <span className="shrink-0 text-sm font-medium tabular-nums text-rose-600 dark:text-rose-300">{money(item.amount)}</span>
                                 </div>
                               ))}
                             </div>
-                          </div>
-                        )
-                      })()}
-                      {recentPayments.length > 0 ? (
-                        <div className="mt-3">
-                          <div className="mb-1 text-xs text-slate-500">Последние выплаты:</div>
-                          <div className="flex flex-wrap gap-2">
-                            {recentPaymentDetails.map(({ payment, closedAdjustments, generatedAdjustments, closingWindow }) => (
-                              <div key={payment.id} className="min-w-[260px] max-w-full rounded-xl border border-border bg-white dark:bg-white/[0.03] px-3 py-2 text-xs text-body">
-                                <div className="flex items-center justify-between gap-2">
-                                  <span>{payment.pay_date} · {money(payment.amount)} · {staffPaymentSlotLabel(payment.slot)}</span>
-                                  {canEditStaffSalary ? (
-                                    <button type="button" title="Аннулировать" onClick={() => void deleteStaffPayment(payment.id, payment.amount)} className="ml-1 shrink-0 text-slate-600 transition hover:text-rose-400"><X className="h-3.5 w-3.5" /></button>
-                                  ) : null}
-                                </div>
-                                <div className="mt-1 text-[11px] text-slate-500">Период закрытия: {closingWindow.label}</div>
-                                {closedAdjustments.length > 0 ? (
-                                  <div className="mt-2 space-y-1 border-t border-border pt-2">
-                                    {closedAdjustments.slice(0, 4).map((adj) => (
-                                      <div key={adj.id} className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-                                        <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${staffAdjustmentTone(adj.kind)}`}>
-                                          закрыто: {staffAdjustmentKindLabel(adj.kind)}
-                                        </span>
-                                        <span className="font-medium text-foreground">{money(adj.amount)}</span>
-                                        <span>{adj.date}</span>
-                                        {adj.comment ? <span className="truncate">{adj.comment}</span> : null}
+                          )}
+
+                          {selected.monthPayments.length > 0 ? (
+                            <div className="mt-4">
+                              <div className="mb-2 text-sm font-medium text-foreground">Выплаты · {monthLabel(staffMonth).toLowerCase()}</div>
+                              <div className="space-y-2">
+                                {selected.monthPayments.map((payment) => {
+                                  const closingWindow = getStaffPaymentClosingWindow(s.id, sal.payments, payment.pay_date, payment.id)
+                                  const closedAdjustments = getStaffPaymentClosedAdjustments({ staffId: s.id, adjustments: sal.adjustments, payment, closingWindow })
+                                  const generatedAdjustments = getStaffPaymentGeneratedAdjustments({ staffId: s.id, adjustments: sal.adjustments, payment })
+                                  return (
+                                    <div key={payment.id} className="rounded-xl border border-border px-3 py-2 text-xs">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="text-body">{payment.pay_date} · {money(payment.amount)} · {staffPaymentSlotLabel(payment.slot)}</span>
+                                        {canEditStaffSalary ? (
+                                          <button type="button" title="Аннулировать выплату" onClick={() => void deleteStaffPayment(payment.id, payment.amount)} className="shrink-0 text-slate-500 transition hover:text-rose-600 dark:hover:text-rose-300"><X className="h-3.5 w-3.5" /></button>
+                                        ) : null}
                                       </div>
-                                    ))}
-                                    {closedAdjustments.length > 4 ? (
-                                      <div className="text-[11px] text-slate-500">Ещё закрыто: {closedAdjustments.length - 4}</div>
+                                      <div className="mt-1 text-[11px] text-slate-500">Период закрытия: {closingWindow.label}</div>
+                                      {closedAdjustments.slice(0, 4).map((adj) => (
+                                        <div key={adj.id} className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                                          <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${staffAdjustmentTone(adj.kind)}`}>закрыто: {staffAdjustmentKindLabel(adj.kind)}</span>
+                                          <span className="font-medium text-foreground">{money(adj.amount)}</span>
+                                          <span>{adj.date}</span>
+                                        </div>
+                                      ))}
+                                      {closedAdjustments.length > 4 ? <div className="mt-1 text-[11px] text-slate-500">Ещё закрыто: {closedAdjustments.length - 4}</div> : null}
+                                      {generatedAdjustments.map((adj) => (
+                                        <div key={adj.id} className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-200">
+                                          <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${staffAdjustmentTone(adj.kind)}`}>создано: {staffAdjustmentKindLabel(adj.kind)}</span>
+                                          <span className="font-medium text-foreground">{money(adj.amount)}</span>
+                                          <span>на следующую выплату</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          ) : null}
+
+                          {debtPays.length > 0 ? (
+                            <details className="group mt-4">
+                              <summary className="flex cursor-pointer list-none items-center gap-1.5 text-sm font-medium text-foreground [&::-webkit-details-marker]:hidden">
+                                <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
+                                Погашенные и аннулированные долги · {debtPays.length}
+                              </summary>
+                              <div className="mt-2 space-y-1.5">
+                                {debtPays.map((p) => (
+                                  <div key={p.id} className="flex items-center justify-between gap-2 rounded-xl border border-border px-3 py-2 text-xs">
+                                    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                                      <span className="font-medium tabular-nums text-foreground">{money(p.amount)}</span>
+                                      <span className="text-slate-500">{String(p.paid_at || '').slice(0, 10)}</span>
+                                      {p.comment ? <span className="truncate text-muted-foreground">{p.comment}</span> : null}
+                                    </div>
+                                    {canEditStaffSalary ? (
+                                      <button type="button" title="Вернуть долг активным" disabled={voidDebtPayId === p.id} className="shrink-0 text-slate-500 transition hover:text-rose-600 dark:hover:text-rose-300 disabled:opacity-50" onClick={() => void voidStaffDebtPayment(p.id)}>
+                                        {voidDebtPayId === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
+                                      </button>
                                     ) : null}
                                   </div>
-                                ) : null}
-                                {generatedAdjustments.length > 0 ? (
-                                  <div className="mt-2 space-y-1 border-t border-border pt-2">
-                                    {generatedAdjustments.map((adj) => (
-                                      <div key={adj.id} className="flex flex-wrap items-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-200">
-                                        <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${staffAdjustmentTone(adj.kind)}`}>
-                                          создано: {staffAdjustmentKindLabel(adj.kind)}
-                                        </span>
-                                        <span className="font-medium text-foreground">{money(adj.amount)}</span>
-                                        <span>на следующую выплату</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : null}
+                                ))}
                               </div>
-                            ))}
-                          </div>
+                            </details>
+                          ) : null}
                         </div>
-                      ) : null}
                       </div>
-                    </div>
+                    </Card>
                   )
-                })}
+                })() : (
+                  <Card className="border-dashed border-border bg-transparent p-6 text-center text-sm text-muted-foreground">
+                    Нажмите на сотрудника, чтобы увидеть расчёт, долги из кассы и историю выплат.
+                  </Card>
+                )}
               </div>
-            )}
-          </Card>
-          )}
+            )
+          })()}
 
           {/* ── EVENTS TAB ─────────────────────────────────────────────────── */}
           {tab === 'events' && (

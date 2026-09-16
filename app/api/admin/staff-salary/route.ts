@@ -207,7 +207,9 @@ async function fetchActiveScannerItems(supabase: any, allowedCompanyIds: string[
   for (let page = 0; page < 20; page++) {
     let query = supabase
       .from('point_debt_items')
-      .select('id, operator_id, total_amount, client_name, week_start, created_at, comment, company_id')
+      // item_name/quantity/unit_price — чтобы в карточке было видно, что человек
+      // взял и когда, а не только итоговая сумма долга
+      .select('id, operator_id, total_amount, client_name, week_start, created_at, comment, company_id, item_name, quantity, unit_price')
       .eq('status', 'active')
       .order('created_at', { ascending: false })
       .range(page * pageSize, page * pageSize + pageSize - 1)
@@ -448,7 +450,8 @@ export async function GET(req: Request) {
     if (scannerHorizonISO === '9999-12-31') scannerHorizonISO = null
     const scannerItems = await fetchActiveScannerItems(supabase, scope.allowedCompanyIds, scannerHorizonISO)
 
-    type DebtAccum = { amount: number; latestCreatedAt: string; comments: string[]; debtIds: string[]; itemIds: string[] }
+    type DebtItem = { id: string; name: string; quantity: number; unitPrice: number; amount: number; createdAt: string; companyId: string | null; comment: string | null }
+    type DebtAccum = { amount: number; latestCreatedAt: string; comments: string[]; debtIds: string[]; itemIds: string[]; items: DebtItem[] }
     const debtByStaff = new Map<string, DebtAccum>()
 
     // Долг сотрудника = живые позиции сканера, взятые ПОСЛЕ последней выплаты
@@ -476,11 +479,21 @@ export async function GET(req: Request) {
           continue
         }
       }
-      const existing = debtByStaff.get(staffId) || { amount: 0, latestCreatedAt: createdAt, comments: [] as string[], debtIds: [] as string[], itemIds: [] as string[] }
+      const existing = debtByStaff.get(staffId) || { amount: 0, latestCreatedAt: createdAt, comments: [] as string[], debtIds: [] as string[], itemIds: [] as string[], items: [] as DebtItem[] }
       existing.amount += amount
       if (createdAt > existing.latestCreatedAt) existing.latestCreatedAt = createdAt
       if (row.comment) existing.comments.push(String(row.comment))
       existing.itemIds.push(String(row.id))
+      existing.items.push({
+        id: String(row.id),
+        name: String(row.item_name || 'Товар'),
+        quantity: Number(row.quantity || 0),
+        unitPrice: Number(row.unit_price || 0),
+        amount,
+        createdAt,
+        companyId: row.company_id ? String(row.company_id) : null,
+        comment: row.comment ? String(row.comment) : null,
+      })
       debtByStaff.set(staffId, existing)
       if (debugMode) debugTrace.push({ src: 'items', client: row.client_name, staffId, amount, take: 'item' })
     }
@@ -499,6 +512,8 @@ export async function GET(req: Request) {
       status: 'active',
       debt_ids: accum.debtIds,
       item_ids: accum.itemIds,
+      // Позиции по одной, свежие сверху: что взял, сколько, когда и на какой точке
+      items: accum.items.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     }))
 
     // Сводка для телефона: те же деньги, но уже посчитанные.
