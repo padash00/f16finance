@@ -953,6 +953,11 @@ function MetricCard(props: {
   forecast: number | null
 }) {
   const change = changeTone(props.value, props.previousValue, props.goodWhenUp)
+  // Словами, куда сдвинулось: «+49%» у расхода не должно читаться как успех
+  const diff = props.value - props.previousValue
+  const noun = props.label.toLowerCase()
+  const upWord = props.goodWhenUp ? `${noun} вырос${noun.endsWith('ль') ? 'ла' : ''}` : `${noun} вырос`
+  const downWord = `${noun} ${noun.endsWith('ль') ? 'упала' : props.goodWhenUp ? 'упал' : 'снизился'}`
   const pct = props.plan ? Math.max(0, Number(props.plan.achievement_pct || 0)) : 0
 
   return (
@@ -966,9 +971,16 @@ function MetricCard(props: {
       </div>
       <div className="text-2xl font-bold tabular-nums text-foreground">{Formatters.moneyDetailed(props.value)}</div>
       <div className="mt-1.5 flex flex-wrap items-center gap-x-2 text-xs">
-        <span className={change.className}>{change.text}</span>
+        <span className={change.className}>
+          {change.text}
+          {diff !== 0 && props.previousValue !== 0 ? ` — ${diff > 0 ? upWord : downWord}` : ''}
+        </span>
         <span className="text-muted-foreground">к прошлому периоду</span>
         {props.sub && <span className="text-muted-foreground">· {props.sub}</span>}
+      </div>
+      <div className="mt-0.5 text-xs tabular-nums text-muted-foreground">
+        было {Formatters.moneyDetailed(props.previousValue)}
+        {diff !== 0 ? ` · ${diff > 0 ? '+' : '−'}${Formatters.moneyDetailed(Math.abs(diff))}` : ''}
       </div>
 
       {props.plan && (
