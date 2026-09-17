@@ -13,6 +13,10 @@
 --   остаток   (bonus)   = по расчёту − выдано
 --
 -- diff ≠ 0 — строку переписал регистр. Исправлять точечно, по id, после проверки.
+--
+-- Ищем по комментарию, а не по source_payment_id: если выплату-источник
+-- аннулировали, внешний ключ обнуляет ссылку (on delete set null), и такая
+-- строка из выборки пропадала (так случилось с авансом 6 490 ₸ от 15.09).
 
 with bridge as (
   select
@@ -22,12 +26,12 @@ with bridge as (
     a.amount,
     a.status,
     a.date,
+    a.source_payment_id,
     a.comment,
     nullif(regexp_replace(substring(a.comment from 'выдано ([0-9[:space:] ]+) ₸'), '[^0-9]', '', 'g'), '')::int as paid,
     nullif(regexp_replace(substring(a.comment from 'по расч[её]ту ([0-9[:space:] ]+) ₸'), '[^0-9]', '', 'g'), '')::int as calculated
   from public.staff_adjustments a
-  where a.source_payment_id is not null
-    and (a.comment like 'Переплата по выплате %' or a.comment like 'Остаток по выплате %')
+  where a.comment like 'Переплата по выплате %' or a.comment like 'Остаток по выплате %'
 )
 select
   s.full_name as сотрудник,
@@ -35,6 +39,7 @@ select
   b.kind,
   b.status,
   b.date,
+  b.source_payment_id as выплата_источник,
   b.amount as сейчас,
   case when b.kind = 'advance' then b.paid - b.calculated else b.calculated - b.paid end as по_комментарию,
   b.amount - (case when b.kind = 'advance' then b.paid - b.calculated else b.calculated - b.paid end) as diff,
