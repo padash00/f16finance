@@ -121,17 +121,24 @@ const CHART_TOOLTIP = { background: 'var(--popover)', color: 'var(--popover-fore
 
 // ─── Мелкие компоненты ──────────────────────────────────────────────────────
 
-function Delta({ cur, prev, goodWhenUp = true }: { cur: number; prev: number; goodWhenUp?: boolean }) {
+/**
+ * Изменение к базе сравнения: стрелка и процент (цвет по смыслу — рост расходов красный),
+ * словами куда сдвинулось и «было X · ±разница», чтобы процент не приходилось толковать.
+ */
+function Delta({ cur, prev, goodWhenUp = true, words }: { cur: number; prev: number; goodWhenUp?: boolean; words?: [up: string, down: string] }) {
   const pct = deltaPct(cur, prev)
   if (pct == null) return <span className="text-xs text-muted-foreground">не с чем сравнить</span>
-  if (Math.abs(pct) < 0.05) return <span className="text-xs text-muted-foreground">без изменений</span>
+  if (Math.abs(pct) < 0.05) return <span className="text-xs text-muted-foreground">без изменений · было {money(prev)}</span>
   const up = pct > 0
   const Icon = up ? ArrowUpRight : ArrowDownRight
   return (
-    <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${up === goodWhenUp ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-      <Icon className="h-3 w-3" />
-      {Math.abs(pct).toFixed(1)}%
-    </span>
+    <div className="space-y-0.5">
+      <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${up === goodWhenUp ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+        <Icon className="h-3 w-3" />
+        {Math.abs(pct).toFixed(1)}%{words ? ` — ${up ? words[0] : words[1]}` : ''}
+      </span>
+      <p className="text-[11px] tabular-nums text-muted-foreground">было {money(prev)} · {signed(cur - prev)}</p>
+    </div>
   )
 }
 
@@ -555,17 +562,17 @@ function SummaryTab({ balance, plan, loading, onOpenShifts }: { balance: WeeklyB
     <div className={`space-y-5 ${loading ? 'opacity-60' : ''}`}>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Tile label="Выручка" value={money(c.income.total)}>
-          <Delta cur={compared.income.total} prev={p.income.total} />
+          <Delta cur={compared.income.total} prev={p.income.total} words={['выручка выросла', 'выручка упала']} />
         </Tile>
         <Tile
           label="Расходы"
           value={money(c.expense.total)}
           hint={balance.pending.count ? `из них ждут согласования: ${balance.pending.count} на ${money(balance.pending.total)}` : undefined}
         >
-          <Delta cur={compared.expense.total} prev={p.expense.total} goodWhenUp={false} />
+          <Delta cur={compared.expense.total} prev={p.expense.total} goodWhenUp={false} words={['расходы выросли', 'расходы снизились']} />
         </Tile>
         <Tile label="Прибыль" value={money(c.profit)} valueClass={c.profit < 0 ? 'text-rose-600 dark:text-rose-400' : ''}>
-          <Delta cur={compared.profit} prev={p.profit} />
+          <Delta cur={compared.profit} prev={p.profit} words={['прибыль выросла', 'прибыль упала']} />
         </Tile>
         <Tile label="Маржа" value={`${c.margin.toFixed(1)}%`} hint={p.income.total ? `база сравнения ${p.margin.toFixed(1)}%` : undefined} />
       </div>
@@ -806,10 +813,10 @@ function ShiftsTab({ balance }: { balance: WeeklyBalance }) {
     <div className="space-y-5">
       <div className="grid gap-3 sm:grid-cols-3">
         <Tile label="Дневные смены" value={money(c.income.day)}>
-          <Delta cur={compared.income.day} prev={p.income.day} />
+          <Delta cur={compared.income.day} prev={p.income.day} words={['больше', 'меньше']} />
         </Tile>
         <Tile label="Ночные смены" value={money(c.income.night)}>
-          <Delta cur={compared.income.night} prev={p.income.night} />
+          <Delta cur={compared.income.night} prev={p.income.night} words={['больше', 'меньше']} />
         </Tile>
         <Tile label="Доля ночи" value={`${nightShare.toFixed(0)}%`} hint={p.income.total ? `база сравнения ${((p.income.night / p.income.total) * 100).toFixed(0)}%` : undefined} />
       </div>
