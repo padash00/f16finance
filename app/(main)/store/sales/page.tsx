@@ -537,7 +537,7 @@ function StatCard({ label, icon, color, amount, count, delta }: { label: string;
         <div className="flex items-center gap-2 text-sm font-semibold text-foreground"><span className={color}>{icon}</span> {label}</div>
         {delta != null && (
           <span className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-xs font-medium ${delta >= 0 ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'bg-rose-500/15 text-rose-700 dark:text-rose-300'}`}>
-            {delta >= 0 ? '↑' : '↓'} {Math.abs(delta)}%
+            {delta >= 0 ? '↑' : '↓'} {Math.abs(delta)}% <span className="font-normal opacity-80">к прошлому периоду</span>
           </span>
         )}
       </div>

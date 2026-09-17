@@ -240,7 +240,7 @@ export default function RatingsPage() {
                       <th className="text-right py-2 pr-4 font-medium">Смены</th>
                       <th className="text-right py-2 pr-4 font-medium">Рабочих дней</th>
                       <th className="text-right py-2 pr-4 font-medium">Средний чек</th>
-                      <th className="text-right py-2 font-medium">Δ период</th>
+                      <th className="text-right py-2 font-medium" title="Выручка оператора к такому же предыдущему периоду">К прошлому периоду</th>
                     </tr>
                   </thead>
                   <tbody>

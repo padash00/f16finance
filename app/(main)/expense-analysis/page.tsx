@@ -180,7 +180,7 @@ export default function ExpenseAnalysisPage() {
               <div className="shrink-0">
                 <p className={`text-xs ${sub}`}>Расходы за период</p>
                 <p className="text-3xl font-bold tabular-nums text-foreground">{money(metrics?.total || 0)}</p>
-                <div className="mt-1"><ChangeBadge value={metrics?.totalPrevPct || 0} /></div>
+                <div className="mt-1 flex items-center gap-1.5"><ChangeBadge value={metrics?.totalPrevPct || 0} /><span className={`text-xs ${sub}`}>к прошлому периоду</span></div>
               </div>
               <p className="min-w-[240px] flex-1 text-sm leading-relaxed text-body">
                 {data.summary
@@ -234,7 +234,7 @@ export default function ExpenseAnalysisPage() {
                       <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Категория</th>
                       <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Сумма</th>
                       <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Доля</th>
-                      <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Изменение</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">К прошлому периоду</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-white/5">

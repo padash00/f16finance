@@ -594,12 +594,14 @@ function SafetyCard({ data }: { data: CfoResponse }) {
 
 // ── Что если ────────────────────────────────────────────────────────────────
 
-function Slider({ label, value, onChange, hint }: { label: string; value: number; onChange: (v: number) => void; hint: string }) {
+function Slider({ label, value, onChange, hint, goodWhenUp = true }: { label: string; value: number; onChange: (v: number) => void; hint: string; goodWhenUp?: boolean }) {
+  // Цвет по смыслу: рост постоянных расходов — плохо, не зелёный
+  const good = value === 0 ? null : (value > 0) === goodWhenUp
   return (
     <div>
       <div className="flex items-center justify-between text-sm">
         <span>{label}</span>
-        <span className={`font-semibold tabular-nums ${value > 0 ? 'text-emerald-600 dark:text-emerald-400' : value < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-muted-foreground'}`}>
+        <span className={`font-semibold tabular-nums ${good === true ? 'text-emerald-600 dark:text-emerald-400' : good === false ? 'text-rose-600 dark:text-rose-400' : 'text-muted-foreground'}`}>
           {value > 0 ? '+' : ''}
           {value}%
         </span>
@@ -644,7 +646,7 @@ function WhatIfCard({ data }: { data: CfoResponse }) {
       <div className="space-y-4">
         <Slider label="Цены" value={pricePct} onChange={setPricePct} hint="подняли прайс — выручка растёт, себестоимость та же" />
         <Slider label="Гостей и продаж" value={volumePct} onChange={setVolumePct} hint="больше продаж — растут и выручка, и себестоимость" />
-        <Slider label="Постоянные расходы" value={fixedPct} onChange={setFixedPct} hint="аренда, зарплаты, коммуналка" />
+        <Slider label="Постоянные расходы" value={fixedPct} onChange={setFixedPct} hint="аренда, зарплаты, коммуналка" goodWhenUp={false} />
       </div>
       <div className="mt-5 rounded-xl border border-border p-4">
         <p className="text-xs text-muted-foreground">Операционная прибыль</p>
