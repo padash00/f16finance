@@ -413,6 +413,23 @@ export async function POST(request: Request) {
         }
       }
 
+      // Товар из запроса должен быть своей организации: иначе долг списывал бы
+      // остаток и цеплял товар другого арендатора по присланному item_id.
+      const requestedItemId = payload.item_id?.trim() || null
+      if (requestedItemId) {
+        const [{ data: pointCompany }, { data: requestedItem }] = await Promise.all([
+          supabase.from('companies').select('organization_id').eq('id', device.company_id).maybeSingle(),
+          supabase.from('inventory_items').select('organization_id').eq('id', requestedItemId).maybeSingle(),
+        ])
+        const pointOrgId = (pointCompany as { organization_id?: string | null } | null)?.organization_id || null
+        const itemOrgId = (requestedItem as { organization_id?: string | null } | null)?.organization_id || null
+        // Товар без organization_id (старые записи) пока не блокируем — касса не должна
+        // встать; строгая проверка — в SQL-функции после миграции 20260917.
+        if (!requestedItem || (itemOrgId && pointOrgId && itemOrgId !== pointOrgId)) {
+          return json({ error: 'Товар не найден в каталоге точки' }, 404)
+        }
+      }
+
       const note = payload.comment?.trim() || null
       const commentLine = `${itemName} x${quantity} = ${totalAmount} ₸`
       const { data: createdRpc, error: insertError } = await supabase.rpc('inventory_create_point_debt', {
@@ -431,7 +448,7 @@ export async function POST(request: Request) {
         p_source: 'point-client',
         p_local_ref: payload.local_ref?.trim() || null,
         p_created_by_operator_id: createdByOperatorId,
-        p_item_id: payload.item_id?.trim() || null,
+        p_item_id: requestedItemId,
       })
 
       if (insertError) {
@@ -442,6 +459,9 @@ export async function POST(request: Request) {
           const have = match?.[1] ?? '?'
           const want = match?.[2] ?? '?'
           return json({ error: `На витрине ${have} шт., запрошено ${want}. Сначала добавьте товар на витрину.` }, 409)
+        }
+        if (msg.includes('inventory-debt-item-out-of-scope')) {
+          return json({ error: 'Товар не найден в каталоге точки' }, 404)
         }
         if (msg.includes('inventory-debt-quantity-invalid')) {
           return json({ error: 'Количество в долге должно быть больше 0' }, 400)

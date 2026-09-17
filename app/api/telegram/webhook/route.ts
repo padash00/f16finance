@@ -1854,14 +1854,17 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
       callerContext,
       longTermMemory,
       pagesContext,
-      teamContext,
+      // Оператору — без состава команды и финансов организации (только про себя)
+      teamContext: botUser?.role === 'operator' ? '' : teamContext,
       birthdayContext,
       actionFlags,
     }),
     'ВАЖНО: если пользователь спрашивает кто сейчас на смене, кто работает сейчас, кто дежурит, или на какой точке кто в смене — ОБЯЗАТЕЛЬНО вызови инструмент get_current_on_shift. Для вопроса про расписание на сегодня (день+ночь) вызывай get_today_shifts.',
     'ВАЖНО: если пользователь спрашивает кто из операторов заходил на сайт, когда заходил оператор, или "кто заходил за последние дни" — ОБЯЗАТЕЛЬНО вызывай инструмент get_operator_site_logins.',
     'ВАЖНО: если пользователь просит выполнить действие в системе (поставить смену, назначить оператора, создать задачу оператору или всем операторам точки) — ОБЯЗАТЕЛЬНО вызывай соответствующий инструмент, не отвечай общими словами.',
-    wrapDataBlock(dataBlock),
+    // Финансовый снимок организации (выручка, расходы, прибыль по точкам) —
+    // только руководству. Раньше он уходил в контекст и оператору.
+    ...(botUser?.role === 'operator' ? [] : [wrapDataBlock(dataBlock)]),
   ].join('\n\n')
 
   // ─── Agent tools definition ───────────────────────────────────────────────
@@ -2072,6 +2075,17 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
   // ─── Tool executor ────────────────────────────────────────────────────────
   async function executeTool(name: string, args: any): Promise<string> {
     const canManageOps = ['super_admin', 'owner', 'manager'].includes(botUser?.role || 'unknown')
+    // Оператор спрашивает только про себя: свою зарплату и смены. Финансы точки,
+    // карточки и зарплаты коллег, входы на сайт — не для него.
+    const OPERATOR_TOOLS = new Set(['get_operator_salary', 'get_today_shifts', 'get_current_on_shift', 'save_to_memory'])
+    if (botUser?.role === 'operator' && !OPERATOR_TOOLS.has(name)) {
+      return '⛔ Эта информация доступна только руководству.'
+    }
+    if (botUser?.role === 'operator' && name === 'get_operator_salary') {
+      if (!botUser.operatorId) return 'Не удалось определить вас как оператора.'
+      // Только своя зарплата, что бы ни попросили в аргументах
+      args = { ...args, operator_id: botUser.operatorId, operator_name: undefined }
+    }
     const isIsoDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || '').trim())
     const normalize = (v: string | null | undefined) => String(v || '').trim().toLowerCase()
     const pickTopNames = (rows: any[], mapper: (row: any) => string) => {

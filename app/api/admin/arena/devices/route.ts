@@ -27,6 +27,18 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status, headers: { 'Cache-Control': 'no-store' } })
 }
 
+/**
+ * Проект точки принадлежит организации пользователя? Через point_project_companies.
+ * null в allowedCompanyIds = суперадмин без ограничений.
+ */
+async function projectInScope(supabase: any, projectId: string, allowedCompanyIds: string[] | null): Promise<boolean> {
+  if (!allowedCompanyIds) return true
+  if (!projectId) return false
+  const { data, error } = await supabase.from('point_project_companies').select('company_id').eq('project_id', projectId)
+  if (error) throw error
+  return (data || []).some((row: any) => allowedCompanyIds.includes(String(row.company_id || '')))
+}
+
 const Body = z.discriminatedUnion('action', [
   z.object({ action: z.literal('approve'), deviceId: z.string().uuid(), stationId: z.string().uuid() }),
   z.object({ action: z.literal('revoke'), deviceId: z.string().uuid(), reason: z.string().max(300).optional() }),
@@ -56,6 +68,16 @@ export async function POST(request: Request) {
       .eq('id', body.deviceId)
       .maybeSingle()
     if (!device) return json({ error: 'device-not-found' }, 404)
+
+    // Изоляция: раньше любое действие шло по одному deviceId — можно было отозвать
+    // или перевыпустить (и получить новые ключи) устройство чужой организации.
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+    if (!(await projectInScope(supabase, String(device.point_project_id || ''), companyScope.allowedCompanyIds))) {
+      return json({ error: 'device-not-found' }, 404)
+    }
 
     // ── Отзыв ─────────────────────────────────────────────────────────────
     if (body.action === 'revoke') {
@@ -181,10 +203,7 @@ export async function POST(request: Request) {
       return json({ error: 'project-mismatch' }, 403)
     }
 
-    const companyScope = await resolveCompanyScope({
-      activeOrganizationId: access.activeOrganization?.id || null,
-      isSuperAdmin: access.isSuperAdmin,
-    })
+    // Станция без company_id: проект уже проверен выше (свой, и совпадает с проектом устройства)
     if (
       companyScope.allowedCompanyIds &&
       station.company_id &&

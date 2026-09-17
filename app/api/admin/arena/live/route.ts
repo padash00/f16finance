@@ -28,6 +28,18 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status, headers: { 'Cache-Control': 'no-store' } })
 }
 
+/**
+ * Проект точки принадлежит организации пользователя? Через point_project_companies.
+ * null в allowedCompanyIds = суперадмин без ограничений.
+ */
+async function projectInScope(supabase: any, projectId: string, allowedCompanyIds: string[] | null): Promise<boolean> {
+  if (!allowedCompanyIds) return true
+  if (!projectId) return false
+  const { data, error } = await supabase.from('point_project_companies').select('company_id').eq('project_id', projectId)
+  if (error) throw error
+  return (data || []).some((row: any) => allowedCompanyIds.includes(String(row.company_id || '')))
+}
+
 export async function GET(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
@@ -49,6 +61,12 @@ export async function GET(request: Request) {
       requestedCompanyId: url.searchParams.get('company_id') || null,
       isSuperAdmin: access.isSuperAdmin,
     })
+
+    // Зоны, устройства (MAC, hostname) и runtime читаются по project_id —
+    // сначала убеждаемся, что проект свой, иначе чужой отдавался по прямой ссылке.
+    if (!(await projectInScope(supabase, projectId, companyScope.allowedCompanyIds))) {
+      return json({ error: 'forbidden-project' }, 403)
+    }
 
     let stationsQuery = supabase
       .from('arena_stations')
