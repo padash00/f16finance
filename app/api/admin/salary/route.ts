@@ -781,6 +781,9 @@ export async function GET(req: Request) {
         .from('operators')
         .select('id,name,short_name,is_active,telegram_chat_id,operator_profiles(*)')
         .eq('is_active', true)
+        // Уволенный через Кадры получает dismissed_at (восстановление его чистит).
+        // Если is_active где-то остался true — всё равно не считаем действующим.
+        .is('dismissed_at', null)
         .eq('is_admin_staff', false)
         .order('name')
       if (allowedOperatorIds) activeOperatorsQuery = activeOperatorsQuery.in('id', allowedOperatorIds)
@@ -818,9 +821,17 @@ export async function GET(req: Request) {
       if (documentsError) throw documentsError
 
       const activeOperatorIds = new Set(((activeOperators || []) as any[]).map((row) => String(row.id)))
+      // Уволенного (is_active=false) показываем, только если по нему в этой неделе
+      // есть деньги: начислено, выплачено, остаток, долг или аванс. Раньше хватало
+      // одной строки недели — даже пустой, — и уволенные висели в ведомости.
+      const weekHasMoney = (row: any) =>
+        ['gross_amount', 'net_amount', 'paid_amount', 'remaining_amount', 'bonus_amount', 'fine_amount', 'debt_amount', 'advance_amount'].some(
+          (key) => Math.round(Number(row?.[key] || 0)) !== 0,
+        )
       const persistedOperatorIds = Array.from(
         new Set(
           ((existingWeeks || []) as any[])
+            .filter(weekHasMoney)
             .map((row) => String(row.operator_id || ''))
             .filter(Boolean),
         ),
