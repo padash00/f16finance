@@ -46,6 +46,8 @@ function fmtMoney(n: number) {
 }
 
 const MAX_PERIODS = 24
+// Дни — до месяца: «оплата за 30 дней» не влезла бы в 24 (как seriesMaxPeriods в lib/domain/expense-series)
+const MAX_DAY_PERIODS = 31
 
 type WizardPayload = {
   date?: string
@@ -107,10 +109,10 @@ function validateCard(p: WizardPayload): string | null {
   return null
 }
 
-function validatePeriods(periods: SeriesPeriod[], backdatedConfirmed: boolean): string | null {
+function validatePeriods(periods: SeriesPeriod[], backdatedConfirmed: boolean, maxPeriods: number): string | null {
   if (!Array.isArray(periods) || periods.length === 0) return 'Список периодов пуст'
   if (periods.length < 2) return 'В серии должно быть минимум 2 периода'
-  if (periods.length > MAX_PERIODS) return `Слишком много периодов (максимум ${MAX_PERIODS})`
+  if (periods.length > maxPeriods) return `Слишком много периодов (максимум ${maxPeriods})`
 
   const seenDates = new Set<string>()
   let hasBackdated = false
@@ -156,14 +158,17 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => null) as {
       session_id?: string
       periods?: SeriesPeriod[]
-      period_kind?: 'month' | 'quarter' | 'week'
+      period_kind?: 'day' | 'week' | 'month' | 'quarter'
     } | null
 
     const sessionId = String(body?.session_id || '').trim()
     if (!sessionId) return json({ error: 'session_id обязателен' }, 400)
 
     const periods = Array.isArray(body?.periods) ? body!.periods! : []
-    const periodKind = body?.period_kind === 'quarter' || body?.period_kind === 'week' ? body.period_kind : 'month'
+    const periodKind =
+      body?.period_kind === 'day' || body?.period_kind === 'week' || body?.period_kind === 'quarter'
+        ? body.period_kind
+        : 'month'
 
     const supabase = hasAdminSupabaseCredentials()
       ? createAdminSupabaseClient()
@@ -186,7 +191,11 @@ export async function POST(request: Request) {
 
     const cardError = validateCard(payload)
     if (cardError) return json({ error: cardError }, 400)
-    const periodsError = validatePeriods(periods, Boolean(payload.backdated_confirmed))
+    const periodsError = validatePeriods(
+      periods,
+      Boolean(payload.backdated_confirmed),
+      periodKind === 'day' ? MAX_DAY_PERIODS : MAX_PERIODS,
+    )
     if (periodsError) return json({ error: periodsError }, 400)
 
     await assertCompanyInScope(access, payload.company_id || null)

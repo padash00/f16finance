@@ -26,12 +26,15 @@ import { DatePicker } from '@/components/ui/date-picker'
 import { getFinancialGroupLabel, type FinancialGroup } from '@/lib/core/financial-groups'
 import {
   SERIES_KIND_LABELS,
-  SERIES_MAX_PERIODS,
   addDaysISO,
   addMonthsClamped,
   buildSeriesRows,
-  isDateInSeriesPeriod,
+  matchExistingExpenses,
+  seriesMaxPeriods,
+  seriesPresets,
   splitPeriodAmount,
+  splitTotalAcrossPeriods,
+  type ExistingExpense,
   type SeriesKind,
   type SeriesRow,
 } from '@/lib/domain/expense-series'
@@ -154,8 +157,16 @@ function ExpenseWizardPageContent() {
   const [seriesCount, setSeriesCount] = useState(6)
   const [seriesStart, setSeriesStart] = useState('')
   const [seriesRows, setSeriesRows] = useState<SeriesRow[]>([])
-  const [seriesDuplicates, setSeriesDuplicates] = useState<Record<string, number>>({})
+  // Расходы этой статьи и точки, уже лежащие в периодах серии: показываем их
+  // самих, а не голое «есть расход (2)» — иначе дубль не отличить от обычной закупки
+  const [seriesExisting, setSeriesExisting] = useState<ExistingExpense[]>([])
   const [seriesDupLoading, setSeriesDupLoading] = useState(false)
+  // Сумма в карточке — за каждый период или за все сразу (тогда делим поровну)
+  const [seriesAmountMode, setSeriesAmountMode] = useState<'per_period' | 'total'>('per_period')
+  // Строка, где только что правили сумму: рядом с ней кнопка «ко всем»
+  const [seriesLastEdited, setSeriesLastEdited] = useState<number | null>(null)
+  // Строка (по дате периода), у которой раскрыт список уже существующих расходов
+  const [seriesOpenRow, setSeriesOpenRow] = useState<string | null>(null)
   const [aiHint, setAiHint] = useState<AiCategoryHint | null>(null)
   const [aiHintLoading, setAiHintLoading] = useState(false)
   const [aiHintError, setAiHintError] = useState<string | null>(null)
@@ -443,6 +454,7 @@ function ExpenseWizardPageContent() {
       if (prev) return prev
       const base = payload.date || todayISO()
       const firstOfMonth = `${base.slice(0, 7)}-01`
+      if (seriesKind === 'day') return addDaysISO(base, -(seriesCount - 1))
       if (seriesKind === 'week') return addDaysISO(base, -7 * (seriesCount - 1))
       return addMonthsClamped(firstOfMonth, -((seriesKind === 'quarter' ? 3 : 1) * (seriesCount - 1)))
     })
@@ -454,8 +466,17 @@ function ExpenseWizardPageContent() {
       return
     }
     if (!seriesStart) return
-    setSeriesRows(buildSeriesRows(seriesStart, seriesKind, seriesCount, payload.amount_cash, payload.amount_kaspi))
-  }, [seriesEnabled, seriesStart, seriesKind, seriesCount, payload.amount_cash, payload.amount_kaspi])
+    const rows = buildSeriesRows(seriesStart, seriesKind, seriesCount, payload.amount_cash, payload.amount_kaspi)
+    if (seriesAmountMode === 'total') {
+      // Сумма карточки — за всё: делим поровну, остаток в последний период,
+      // соотношение нал/безнал берём из карточки
+      const amounts = splitTotalAcrossPeriods(payload.amount_cash + payload.amount_kaspi, rows.length)
+      setSeriesRows(rows.map((row, i) => ({ ...row, ...splitPeriodAmount(amounts[i], payload.amount_cash, payload.amount_kaspi) })))
+    } else {
+      setSeriesRows(rows)
+    }
+    setSeriesLastEdited(null)
+  }, [seriesEnabled, seriesStart, seriesKind, seriesCount, seriesAmountMode, payload.amount_cash, payload.amount_kaspi])
 
   // Проверка дублей: если за этот период по той же точке и категории расход уже
   // есть — подсвечиваем строку. Двойной налог в отчётах здесь самая дорогая ошибка.
@@ -465,7 +486,7 @@ function ExpenseWizardPageContent() {
   useEffect(() => {
     const dates = seriesDatesKey ? seriesDatesKey.split(',') : []
     if (!seriesEnabled || step !== 3 || dates.length === 0 || !payload.company_id || !payload.category_name) {
-      setSeriesDuplicates({})
+      setSeriesExisting([])
       return
     }
     let cancelled = false
@@ -475,9 +496,11 @@ function ExpenseWizardPageContent() {
         const sorted = [...dates].sort()
         const from = `${sorted[0].slice(0, 7)}-01`
         const lastDate = sorted[sorted.length - 1]
-        const to = seriesKind === 'week'
-          ? addDaysISO(lastDate, 6)
-          : addDaysISO(addMonthsClamped(`${lastDate.slice(0, 7)}-01`, seriesKind === 'quarter' ? 3 : 1), -1)
+        const to = seriesKind === 'day'
+          ? lastDate
+          : seriesKind === 'week'
+            ? addDaysISO(lastDate, 6)
+            : addDaysISO(addMonthsClamped(`${lastDate.slice(0, 7)}-01`, seriesKind === 'quarter' ? 3 : 1), -1)
         const params = new URLSearchParams({
           from,
           to,
@@ -487,16 +510,13 @@ function ExpenseWizardPageContent() {
         })
         const response = await fetch(`/api/admin/expenses?${params.toString()}`, { cache: 'no-store' })
         if (!response.ok) throw new Error('check failed')
-        const existing = ((await response.json()).data || []) as Array<{ date: string }>
+        const existing = ((await response.json()).data || []) as ExistingExpense[]
         if (cancelled) return
-        const map: Record<string, number> = {}
-        for (const date of dates) {
-          const hits = existing.filter((item) => isDateInSeriesPeriod(String(item.date || ''), date, seriesKind))
-          if (hits.length > 0) map[date] = hits.length
-        }
-        setSeriesDuplicates(map)
+        // Храним сами расходы: совпадение по сумме считается при отрисовке, от
+        // текущей суммы строки — её можно править, не перезапрашивая сервер
+        setSeriesExisting(existing)
       } catch {
-        if (!cancelled) setSeriesDuplicates({})
+        if (!cancelled) setSeriesExisting([])
       } finally {
         if (!cancelled) setSeriesDupLoading(false)
       }
@@ -514,6 +534,25 @@ function ExpenseWizardPageContent() {
         ? { ...row, ...splitPeriodAmount(value, payload.amount_cash, payload.amount_kaspi) }
         : row
     )))
+    setSeriesLastEdited(index)
+  }
+
+  /** Сумму строки — во все строки серии: чтобы не перебивать одну цифру N раз. */
+  function applySeriesAmountToAll(index: number) {
+    setSeriesRows((prev) => {
+      const source = prev[index]
+      if (!source) return prev
+      return prev.map((row) => ({ ...row, amount_cash: source.amount_cash, amount_kaspi: source.amount_kaspi }))
+    })
+    setSeriesLastEdited(null)
+  }
+
+  const pluralExpenses = (n: number) => {
+    const mod10 = n % 10
+    const mod100 = n % 100
+    if (mod10 === 1 && mod100 !== 11) return 'расход'
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'расхода'
+    return 'расходов'
   }
 
   async function patchSession(nextStep: number, partial: Partial<WizardPayload>) {
@@ -598,7 +637,7 @@ function ExpenseWizardPageContent() {
   const seriesErrors: string[] = []
   if (seriesEnabled) {
     if (seriesRows.length < 2) seriesErrors.push('В серии должно быть минимум 2 периода')
-    if (seriesRows.length > SERIES_MAX_PERIODS) seriesErrors.push(`Максимум ${SERIES_MAX_PERIODS} периодов за раз`)
+    if (seriesRows.length > seriesMaxPeriods(seriesKind)) seriesErrors.push(`Максимум ${seriesMaxPeriods(seriesKind)} периодов за раз`)
     if (seriesRows.some((row) => row.amount_cash + row.amount_kaspi <= 0)) {
       seriesErrors.push('У каждого периода сумма должна быть больше 0')
     }
@@ -1380,7 +1419,9 @@ function ExpenseWizardPageContent() {
                     <select
                       value={seriesKind}
                       onChange={(e) => {
-                        setSeriesKind(e.target.value as SeriesKind)
+                        const next = e.target.value as SeriesKind
+                        setSeriesKind(next)
+                        setSeriesCount((count) => Math.min(count, seriesMaxPeriods(next)))
                         setSeriesStart('')
                       }}
                       className={inputBaseClass}
@@ -1395,10 +1436,10 @@ function ExpenseWizardPageContent() {
                     <input
                       type="number"
                       min={2}
-                      max={SERIES_MAX_PERIODS}
+                      max={seriesMaxPeriods(seriesKind)}
                       value={seriesCount}
                       onChange={(e) => {
-                        const next = Math.max(2, Math.min(SERIES_MAX_PERIODS, Number(e.target.value) || 2))
+                        const next = Math.max(2, Math.min(seriesMaxPeriods(seriesKind), Number(e.target.value) || 2))
                         setSeriesCount(next)
                       }}
                       className={inputBaseClass}
@@ -1414,6 +1455,57 @@ function ExpenseWizardPageContent() {
                   </div>
                 </div>
 
+                {/* Быстрые даты: начало и количество одним нажатием */}
+                {seriesPresets(seriesKind, todayISO()).length > 0 ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Быстро:</span>
+                    {seriesPresets(seriesKind, todayISO()).map((preset) => {
+                      const active = seriesStart === preset.start && seriesCount === preset.count
+                      return (
+                        <button
+                          key={preset.key}
+                          type="button"
+                          onClick={() => {
+                            setSeriesStart(preset.start)
+                            setSeriesCount(preset.count)
+                          }}
+                          className={`rounded-full border px-3 py-1 text-xs transition ${
+                            active
+                              ? 'border-primary bg-primary/10 text-foreground'
+                              : 'border-border text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                          }`}
+                        >
+                          {preset.label} · {preset.count}
+                        </button>
+                      )
+                    })}
+                  </div>
+                ) : null}
+
+                {/* Что значит сумма в карточке: за период или за всё */}
+                <div className="space-y-1.5">
+                  <div className="text-xs text-muted-foreground">
+                    Сумма в карточке — {fmtMoney(payload.amount_cash + payload.amount_kaspi)}. Это сумма:
+                  </div>
+                  <div className="inline-flex flex-wrap rounded-lg border p-0.5">
+                    {([
+                      ['per_period', 'за каждый период'],
+                      ['total', 'за все периоды — разделить поровну'],
+                    ] as const).map(([mode, label]) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setSeriesAmountMode(mode)}
+                        className={`rounded-md px-3 py-1.5 text-xs transition ${
+                          seriesAmountMode === mode ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="rounded-md border overflow-hidden">
                   <div className="grid grid-cols-[1fr_auto_auto] gap-2 px-3 py-2 bg-muted/40 text-[11px] uppercase tracking-wide text-muted-foreground">
                     <div>Период</div>
@@ -1422,36 +1514,88 @@ function ExpenseWizardPageContent() {
                   </div>
                   <div className="divide-y">
                     {seriesRows.map((row, index) => {
-                      const duplicateCount = seriesDuplicates[row.date] || 0
+                      const rowAmount = row.amount_cash + row.amount_kaspi
+                      const match = matchExistingExpenses(seriesExisting, row.date, seriesKind, rowAmount)
+                      // Тревога — только когда сумма та же: регулярная закупка той же
+                      // статьи на другую сумму дублем не является
+                      const likelyDuplicate = match.sameAmountCount > 0
+                      const isOpen = seriesOpenRow === row.date
                       return (
                         <div
                           key={`${row.date}-${index}`}
-                          className={`grid grid-cols-[1fr_auto_auto] gap-2 items-center px-3 py-2 ${
-                            duplicateCount > 0 ? 'bg-amber-500/10' : ''
-                          }`}
+                          className={`px-3 py-2 ${likelyDuplicate ? 'bg-rose-500/10' : ''}`}
                         >
-                          <div className="min-w-0">
-                            <div className="text-sm truncate">{row.label}</div>
-                            <div className="text-[11px] text-muted-foreground">{row.date}</div>
-                            {duplicateCount > 0 ? (
-                              <div className="text-[11px] text-amber-700 dark:text-amber-300 mt-0.5">
-                                Уже есть расход в этом периоде ({duplicateCount}) — проверьте, не задвоите
-                              </div>
-                            ) : null}
+                          <div className="grid grid-cols-[1fr_auto_auto] gap-2 items-center">
+                            <div className="min-w-0">
+                              <div className="text-sm truncate">{row.label}</div>
+                              {seriesKind !== 'day' ? (
+                                <div className="text-[11px] text-muted-foreground">{row.date}</div>
+                              ) : null}
+                              {match.items.length > 0 ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setSeriesOpenRow(isOpen ? null : row.date)}
+                                  className={`mt-0.5 text-left text-[11px] underline-offset-2 hover:underline ${
+                                    likelyDuplicate ? 'font-medium text-rose-700 dark:text-rose-300' : 'text-muted-foreground'
+                                  }`}
+                                >
+                                  {likelyDuplicate
+                                    ? `Похоже на дубль: уже есть расход на ${fmtMoney(rowAmount)}`
+                                    : `Уже есть ${match.items.length} ${pluralExpenses(match.items.length)} этой статьи`}
+                                  {isOpen ? ' · скрыть' : ' · показать'}
+                                </button>
+                              ) : null}
+                            </div>
+                            <div className="flex flex-col items-end gap-1">
+                              <MoneyInput
+                                value={String(rowAmount || '')}
+                                onValueChange={(value) => setSeriesRowAmount(index, value)}
+                                className="w-32 text-right"
+                              />
+                              {seriesLastEdited === index && seriesRows.length > 1 ? (
+                                <button
+                                  type="button"
+                                  onClick={() => applySeriesAmountToAll(index)}
+                                  className="text-[11px] text-primary hover:underline"
+                                >
+                                  Эту сумму — ко всем
+                                </button>
+                              ) : null}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSeriesRows((prev) => prev.filter((_, i) => i !== index))
+                                setSeriesLastEdited(null)
+                              }}
+                              className="text-muted-foreground hover:text-destructive p-1"
+                              title="Убрать период"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                           </div>
-                          <MoneyInput
-                            value={String(row.amount_cash + row.amount_kaspi || '')}
-                            onValueChange={(value) => setSeriesRowAmount(index, value)}
-                            className="w-32 text-right"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setSeriesRows((prev) => prev.filter((_, i) => i !== index))}
-                            className="text-muted-foreground hover:text-destructive p-1"
-                            title="Убрать период"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {isOpen && match.items.length > 0 ? (
+                            <div className="mt-2 space-y-1 rounded-md border bg-background/60 p-2">
+                              {match.items.map((item, i) => (
+                                <div
+                                  key={item.id || `${item.date}-${i}`}
+                                  className="flex items-baseline justify-between gap-3 text-[11px]"
+                                >
+                                  <span className="min-w-0 truncate text-muted-foreground">
+                                    {item.date}
+                                    {item.comment ? ` · ${item.comment}` : ''}
+                                  </span>
+                                  <span
+                                    className={`shrink-0 tabular-nums ${
+                                      item.sameAmount ? 'font-semibold text-rose-700 dark:text-rose-300' : 'text-foreground'
+                                    }`}
+                                  >
+                                    {fmtMoney(item.amount)}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
                         </div>
                       )
                     })}
@@ -1461,13 +1605,22 @@ function ExpenseWizardPageContent() {
                       </div>
                     ) : null}
                   </div>
-                  <div className="flex items-center justify-between px-3 py-2 bg-muted/20 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-muted/20 text-sm">
                     <span className="text-muted-foreground">
                       Записей: {seriesRows.length}
-                      {seriesDupLoading ? ' · проверяем дубли...' : ''}
+                      {seriesDupLoading ? ' · проверяем, что уже есть...' : ''}
                     </span>
                     <span className="font-semibold">Итого: {fmtMoney(seriesTotal)}</span>
                   </div>
+                  {seriesAmountMode === 'total' &&
+                  seriesRows.length > 0 &&
+                  Math.round(seriesTotal) !== Math.round(payload.amount_cash + payload.amount_kaspi) ? (
+                    <div className="border-t px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300">
+                      Итого отличается от суммы в карточке на{' '}
+                      {fmtMoney(Math.abs(seriesTotal - (payload.amount_cash + payload.amount_kaspi)))} — строки правили вручную
+                      или убрали период.
+                    </div>
+                  ) : null}
                 </div>
 
                 {seriesHasBackdated && !payload.backdated_confirmed ? (

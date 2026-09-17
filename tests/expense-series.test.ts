@@ -5,8 +5,12 @@ import {
   addMonthsClamped,
   buildSeriesRows,
   isDateInSeriesPeriod,
+  matchExistingExpenses,
   splitPeriodAmount,
+  splitTotalAcrossPeriods,
+  seriesMaxPeriods,
   seriesPeriodLabel,
+  seriesPresets,
   SERIES_MAX_PERIODS,
 } from '@/lib/domain/expense-series'
 
@@ -103,4 +107,78 @@ test('splitPeriodAmount: отрицательное и мусорное знач
 
 test('seriesPeriodLabel: неделя подписана датой начала', () => {
   assert.equal(seriesPeriodLabel('2026-03-02', 'week'), 'неделя с 02.03.2026')
+})
+
+// ─── По дням ───
+test('buildSeriesRows: день шагает по одному дню через конец месяца', () => {
+  const days = buildSeriesRows('2026-08-30', 'day', 4, 1500, 0)
+  assert.deepEqual(days.map((r) => r.date), ['2026-08-30', '2026-08-31', '2026-09-01', '2026-09-02'])
+  assert.equal(days.every((r) => r.amount_cash === 1500), true)
+})
+
+test('seriesPeriodLabel: день подписан датой и днём недели', () => {
+  // 17.09.2026 — четверг
+  assert.equal(seriesPeriodLabel('2026-09-17', 'day'), '17.09.2026, чт')
+  assert.equal(seriesPeriodLabel('2026-09-20', 'day'), '20.09.2026, вс')
+})
+
+test('seriesMaxPeriods: дней до 31, остальных периодов до 24', () => {
+  assert.equal(seriesMaxPeriods('day'), 31)
+  assert.equal(seriesMaxPeriods('week'), SERIES_MAX_PERIODS)
+  assert.equal(buildSeriesRows('2026-08-01', 'day', 100, 1, 0).length, 31)
+})
+
+// ─── Общая сумма на все периоды ───
+test('splitTotalAcrossPeriods: делит поровну, остаток — в последний период', () => {
+  assert.deepEqual(splitTotalAcrossPeriods(84_000, 6), [14_000, 14_000, 14_000, 14_000, 14_000, 14_000])
+  assert.deepEqual(splitTotalAcrossPeriods(100_000, 3), [33_333, 33_333, 33_334])
+  assert.equal(splitTotalAcrossPeriods(100_001, 7).reduce((s, v) => s + v, 0), 100_001)
+  assert.deepEqual(splitTotalAcrossPeriods(500, 0), [])
+})
+
+// ─── Быстрые даты ───
+test('seriesPresets: по дням — неделя с понедельника, с 1-го числа, прошлый месяц', () => {
+  // 17.09.2026 — четверг
+  const presets = seriesPresets('day', '2026-09-17')
+  const byKey = Object.fromEntries(presets.map((p) => [p.key, p]))
+  assert.deepEqual(byKey['this-week'], { key: 'this-week', label: 'Эта неделя', start: '2026-09-14', count: 4 })
+  assert.deepEqual(byKey['this-month'], { key: 'this-month', label: 'С 1-го числа', start: '2026-09-01', count: 17 })
+  assert.deepEqual(byKey['last-month'], { key: 'last-month', label: 'Прошлый месяц', start: '2026-08-01', count: 31 })
+})
+
+test('seriesPresets: вариант меньше двух периодов не предлагается', () => {
+  // 01.09.2026 — вторник: «с 1-го числа» дал бы один день
+  assert.equal(seriesPresets('day', '2026-09-01').some((p) => p.key === 'this-month'), false)
+  // январь: «с января» — один месяц
+  assert.equal(seriesPresets('month', '2026-01-20').some((p) => p.key === 'this-year'), false)
+})
+
+test('seriesPresets: месяцы и кварталы', () => {
+  const months = Object.fromEntries(seriesPresets('month', '2026-09-17').map((p) => [p.key, p]))
+  assert.equal(months['this-year'].start, '2026-01-01')
+  assert.equal(months['this-year'].count, 9)
+  assert.equal(months['last-6'].start, '2026-04-01')
+  const quarters = Object.fromEntries(seriesPresets('quarter', '2026-09-17').map((p) => [p.key, p]))
+  assert.equal(quarters['this-year'].count, 3)
+  assert.equal(quarters['last-4'].start, '2025-10-01')
+})
+
+// ─── Что уже лежит в периоде ───
+test('matchExistingExpenses: показывает расходы периода, та же сумма — признак дубля', () => {
+  const existing = [
+    { id: 'a', date: '2026-08-11', cash_amount: 14_000, kaspi_amount: 0, comment: 'Аренда', status: 'approved' },
+    { id: 'b', date: '2026-08-12', cash_amount: 3_000, kaspi_amount: 500, comment: 'Вода', status: null },
+    { id: 'c', date: '2026-08-13', cash_amount: 14_000, kaspi_amount: 0, comment: 'Отклонён', status: 'declined' },
+    { id: 'd', date: '2026-08-20', cash_amount: 14_000, kaspi_amount: 0, comment: 'Другая неделя', status: null },
+  ]
+  const match = matchExistingExpenses(existing, '2026-08-10', 'week', 14_000)
+  assert.deepEqual(match.items.map((i) => i.id), ['a', 'b'])
+  assert.equal(match.sameAmountCount, 1)
+  assert.equal(match.items[0].sameAmount, true)
+  assert.equal(match.items[1].amount, 3_500)
+})
+
+test('isDateInSeriesPeriod: день — только тот же день', () => {
+  assert.equal(isDateInSeriesPeriod('2026-09-17', '2026-09-17', 'day'), true)
+  assert.equal(isDateInSeriesPeriod('2026-09-18', '2026-09-17', 'day'), false)
 })
