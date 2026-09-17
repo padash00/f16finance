@@ -83,14 +83,38 @@ type StaffAdjustment = {
   closed_at?: string | null
 }
 type StaffPayment = { id: string; staff_id: string; pay_date: string; slot: string; amount: number; comment: string | null; created_at?: string | null }
+/**
+ * Событие ленты административных сотрудников.
+ * remainder / overpayment — авто-корректировки выплаты (bonus/advance с source_payment_id);
+ * debt_item — позиция долга из кассы; debt_payment — оплата/удержание/аннулирование долга.
+ */
+type StaffTimelineKind = 'payment' | 'advance' | 'bonus' | 'remainder' | 'fine' | 'debt' | 'overpayment' | 'debt_item' | 'debt_payment'
 type StaffTimelineEvent = {
   id: string
+  staff_id: string
+  staff_name: string
   date: string
   created_at?: string | null
-  kind: 'payment' | 'bonus' | 'fine' | 'debt' | 'advance'
+  kind: StaffTimelineKind
   amount: number
   comment: string | null
-  status?: string
+  /** paid — корректировка закрыта выплатой (это не аннулирование) */
+  status: 'active' | 'paid' | 'voided'
+}
+type StaffEventSortKey = 'date' | 'staff' | 'kind' | 'amount' | 'status' | 'comment'
+const STAFF_EVENT_SORT_INITIAL = { key: 'date' as StaffEventSortKey, dir: 'desc' as const }
+const STAFF_EVENT_KINDS: StaffTimelineKind[] = ['payment', 'advance', 'bonus', 'remainder', 'fine', 'debt', 'overpayment', 'debt_item', 'debt_payment']
+const STAFF_EVENT_KIND_RANK = Object.fromEntries(STAFF_EVENT_KINDS.map((kind, idx) => [kind, idx])) as Record<StaffTimelineKind, number>
+const STAFF_EVENT_KIND_META: Record<StaffTimelineKind, { label: string; plural: string; tone: string }> = {
+  payment: { label: 'выплата', plural: 'Выплаты', tone: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' },
+  advance: { label: 'аванс', plural: 'Авансы', tone: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300' },
+  bonus: { label: 'бонус', plural: 'Бонусы', tone: 'border-teal-500/30 bg-teal-500/10 text-teal-700 dark:text-teal-300' },
+  remainder: { label: 'остаток по выплате', plural: 'Остатки по выплатам', tone: 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300' },
+  fine: { label: 'штраф', plural: 'Штрафы', tone: 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300' },
+  debt: { label: 'долг', plural: 'Долги', tone: 'border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-300' },
+  overpayment: { label: 'переплата по выплате', plural: 'Переплаты', tone: 'border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300' },
+  debt_item: { label: 'из кассы', plural: 'Долги из кассы', tone: 'border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-300' },
+  debt_payment: { label: 'оплата долга', plural: 'Оплаты долгов', tone: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300' },
 }
 type StaffDebtPayment = { id: string; staff_id: string; amount: number; comment: string | null; paid_at: string; status: string }
 type StaffSalaryData = {
@@ -228,43 +252,6 @@ function staffAdjustmentTone(kind: StaffAdjustment['kind']) {
   if (kind === 'bonus') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
   if (kind === 'advance') return 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300'
   return 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300'
-}
-
-function buildStaffTimelineEvents(params: {
-  staffId: string
-  adjustments: StaffAdjustment[]
-  payments: StaffPayment[]
-}) {
-  const adjustmentEvents: StaffTimelineEvent[] = params.adjustments
-    .filter((a) => a.staff_id === params.staffId)
-    .map((a) => ({
-      id: `adj:${a.id}`,
-      date: a.date,
-      created_at: a.created_at || null,
-      kind: a.kind,
-      amount: Number(a.amount || 0),
-      comment: a.comment || null,
-      status: a.status || 'active',
-    }))
-  const paymentEvents: StaffTimelineEvent[] = params.payments
-    .filter((p) => p.staff_id === params.staffId)
-    .map((p) => ({
-      id: `pay:${p.id}`,
-      date: p.pay_date,
-      created_at: p.created_at || null,
-      kind: 'payment',
-      amount: Number(p.amount || 0),
-      comment: p.comment || null,
-      status: 'active',
-    }))
-
-  return [...adjustmentEvents, ...paymentEvents]
-    .sort((a, b) => {
-      const byDate = String(b.date || '').localeCompare(String(a.date || ''))
-      if (byDate !== 0) return byDate
-      return String(b.created_at || '').localeCompare(String(a.created_at || ''))
-    })
-    .slice(0, 12)
 }
 
 // Лейблы ролей идут из STAFF_ROLE_MATRIX. super_admin спецкейс (нет в матрице).
@@ -707,12 +694,10 @@ export default function SalaryPage() {
   const [staffPayComment, setStaffPayComment] = useState('')
   const [staffPaySaving, setStaffPaySaving] = useState(false)
   const [eventsStaffId, setEventsStaffId] = useState<'all' | string>('all')
-  const [eventsKind, setEventsKind] = useState<'all' | StaffTimelineEvent['kind']>('all')
+  const [eventsKind, setEventsKind] = useState<'all' | StaffTimelineKind>('all')
   const [eventsStatus, setEventsStatus] = useState<'all' | 'active' | 'paid' | 'voided'>('all')
   const [eventsQuery, setEventsQuery] = useState('')
-  const [eventsDateFrom, setEventsDateFrom] = useState('')
-  const [eventsDateTo, setEventsDateTo] = useState('')
-  const [eventsLimit, setEventsLimit] = useState(100)
+  const [eventsMonth, setEventsMonth] = useState<string>(() => todayISO().slice(0, 7))
   const staffPayPreview = useMemo(() => {
     if (!staffPayModal || !staffSalary) return null
     // Отсечка «по сегодня» — как на сервере: выплату проводят и задним числом,
@@ -745,91 +730,129 @@ export default function SalaryPage() {
       companyName,
     }
   }, [staffPayModal, staffSalary, staffPayDate, staffPaySlot, staffPayCash, staffPayKaspi, staffPayCompanyId, data?.companies])
+  // ─── Лента событий административных сотрудников ─────────────────────────────
+  // Настоящие записи поштучно: выплаты, корректировки (остаток и переплата по
+  // выплате — отдельными типами, а не «бонус» и «аванс»), оплаты долгов и позиции
+  // долгов из кассы со временем. Синтетическая строка «Долги из операторской
+  // программы» (сумма позиций с сегодняшней датой) событием не считается — вместо
+  // неё сами позиции. Раньше лента резалась до 300 событий ДО фильтров, и фильтр
+  // по старому периоду молча терял события — теперь режется только фильтрами.
   const staffGlobalTimeline = useMemo(() => {
-    if (!staffSalary) return [] as Array<StaffTimelineEvent & { staff_id: string; staff_name: string }>
-    const staffNameById = new Map<string, string>(
-      (staffSalary.staff || []).map((s) => [s.id, s.full_name || s.short_name || s.id]),
-    )
-    const items: Array<StaffTimelineEvent & { staff_id: string; staff_name: string }> = []
+    if (!staffSalary) return [] as StaffTimelineEvent[]
+    const staffNameById = new Map<string, string>((staffSalary.staff || []).map((s) => [s.id, s.full_name || s.short_name || s.id]))
+    const nameOf = (id: string) => staffNameById.get(id) || id
+    const companyTitle = (id: string | null | undefined) => (data?.companies || []).find((c) => c.id === id)?.name || ''
+    const items: StaffTimelineEvent[] = []
+
     for (const adj of staffSalary.adjustments || []) {
+      if (String(adj.id).startsWith('operator-debt:')) {
+        const debtItems = ((adj as any).items || []) as Array<{ id: string; name: string; quantity: number; unitPrice: number; amount: number; createdAt: string; companyId: string | null; comment: string | null }>
+        for (const d of debtItems) {
+          items.push({
+            id: `debt-item:${d.id}`,
+            staff_id: adj.staff_id,
+            staff_name: nameOf(adj.staff_id),
+            date: String(d.createdAt || '').slice(0, 10),
+            created_at: d.createdAt || null,
+            kind: 'debt_item',
+            amount: Number(d.amount || 0),
+            comment: [d.name, d.quantity ? `${d.quantity} шт. × ${money(d.unitPrice)}` : '', companyTitle(d.companyId), d.comment].filter(Boolean).join(' · ') || null,
+            status: 'active',
+          })
+        }
+        continue
+      }
+      const kind: StaffTimelineKind =
+        adj.kind === 'bonus' && adj.source_payment_id ? 'remainder' : adj.kind === 'advance' && adj.source_payment_id ? 'overpayment' : adj.kind
       items.push({
         id: `adj:${adj.id}`,
+        staff_id: adj.staff_id,
+        staff_name: nameOf(adj.staff_id),
         date: adj.date,
         created_at: adj.created_at || null,
-        kind: adj.kind,
+        kind,
         amount: Number(adj.amount || 0),
         comment: adj.comment || null,
-        status: adj.status || 'active',
-        staff_id: adj.staff_id,
-        staff_name: staffNameById.get(adj.staff_id) || adj.staff_id,
+        status: adj.status === 'voided' ? 'voided' : adj.status === 'paid' ? 'paid' : 'active',
       })
     }
+
     for (const pay of staffSalary.payments || []) {
       items.push({
         id: `pay:${pay.id}`,
+        staff_id: pay.staff_id,
+        staff_name: nameOf(pay.staff_id),
         date: pay.pay_date,
         created_at: pay.created_at || null,
         kind: 'payment',
         amount: Number(pay.amount || 0),
-        comment: pay.comment || null,
+        comment: [staffPaymentSlotLabel(pay.slot), pay.comment].filter(Boolean).join(' · ') || null,
         status: 'active',
-        staff_id: pay.staff_id,
-        staff_name: staffNameById.get(pay.staff_id) || pay.staff_id,
       })
     }
-    return items
-      .sort((a, b) => {
-        const byDate = String(b.date || '').localeCompare(String(a.date || ''))
-        if (byDate !== 0) return byDate
-        return String(b.created_at || '').localeCompare(String(a.created_at || ''))
+
+    for (const dp of staffSalary.debtPayments || []) {
+      items.push({
+        id: `debt-pay:${dp.id}`,
+        staff_id: dp.staff_id,
+        staff_name: nameOf(dp.staff_id),
+        date: String(dp.paid_at || '').slice(0, 10),
+        created_at: dp.paid_at || null,
+        kind: 'debt_payment',
+        amount: Number(dp.amount || 0),
+        comment: dp.comment || null,
+        status: dp.status === 'voided' ? 'voided' : 'active',
       })
-      .slice(0, 300)
-  }, [staffSalary])
+    }
+
+    return items
+  }, [staffSalary, data?.companies])
   const filteredStaffGlobalTimeline = useMemo(() => {
     const query = eventsQuery.trim().toLowerCase()
     return staffGlobalTimeline
-      .filter((ev) => (eventsStaffId === 'all' ? true : ev.staff_id === eventsStaffId))
-      .filter((ev) => (eventsKind === 'all' ? true : ev.kind === eventsKind))
-      .filter((ev) => {
-        if (eventsStatus === 'all') return true
-        return String(ev.status || 'active') === eventsStatus
-      })
-      .filter((ev) => (eventsDateFrom ? ev.date >= eventsDateFrom : true))
-      .filter((ev) => (eventsDateTo ? ev.date <= eventsDateTo : true))
-      .filter((ev) => {
-        if (!query) return true
-        return (
+      .filter((ev) => eventsStaffId === 'all' || ev.staff_id === eventsStaffId)
+      .filter((ev) => eventsKind === 'all' || ev.kind === eventsKind)
+      .filter((ev) => eventsStatus === 'all' || ev.status === eventsStatus)
+      .filter((ev) => eventsMonth === 'all' || ev.date.startsWith(eventsMonth))
+      .filter(
+        (ev) =>
+          !query ||
           ev.staff_name.toLowerCase().includes(query) ||
           String(ev.comment || '').toLowerCase().includes(query) ||
-          ev.kind.toLowerCase().includes(query)
-        )
-      })
-  }, [staffGlobalTimeline, eventsStaffId, eventsKind, eventsStatus, eventsDateFrom, eventsDateTo, eventsQuery])
-  const visibleStaffGlobalTimeline = useMemo(
-    () => filteredStaffGlobalTimeline.slice(0, eventsLimit),
-    [filteredStaffGlobalTimeline, eventsLimit],
+          STAFF_EVENT_KIND_META[ev.kind].label.includes(query),
+      )
+  }, [staffGlobalTimeline, eventsStaffId, eventsKind, eventsStatus, eventsMonth, eventsQuery])
+  // Сортировка по заголовку — общий хук, как в остальных таблицах зарплаты
+  const staffEventSortColumns = useMemo<SortColumns<StaffTimelineEvent, StaffEventSortKey>>(
+    () => ({
+      date: { get: (ev) => `${ev.date}|${ev.created_at || ''}`, defaultDir: 'desc' },
+      staff: { get: (ev) => ev.staff_name },
+      kind: { get: (ev) => STAFF_EVENT_KIND_RANK[ev.kind] ?? 99 },
+      amount: { get: (ev) => ev.amount || null, defaultDir: 'desc' },
+      status: { get: (ev) => (ev.status === 'active' ? 0 : ev.status === 'paid' ? 1 : 2) },
+      comment: { get: (ev) => ev.comment || null },
+    }),
+    [],
   )
-  const groupedVisibleEvents = useMemo(() => {
-    const groups = new Map<string, typeof visibleStaffGlobalTimeline>()
-    for (const ev of visibleStaffGlobalTimeline) {
-      const dateKey = String(ev.date || '')
-      const list = groups.get(dateKey) || []
-      list.push(ev)
-      groups.set(dateKey, list)
+  const { sort: staffEventSort, toggle: toggleStaffEventSort, sortedRows: sortedStaffEvents } = useTableSort<StaffTimelineEvent, StaffEventSortKey>({
+    storageKey: 'salary.staffEventsSort',
+    columns: staffEventSortColumns,
+    initial: STAFF_EVENT_SORT_INITIAL,
+    rows: filteredStaffGlobalTimeline,
+  })
+  // Итоги по типам без аннулированных: аннулированное — уже не деньги
+  const staffEventsTotals = useMemo(() => {
+    const totals = Object.fromEntries(STAFF_EVENT_KINDS.map((kind) => [kind, 0])) as Record<StaffTimelineKind, number>
+    for (const ev of filteredStaffGlobalTimeline) {
+      if (ev.status !== 'voided') totals[ev.kind] += Number(ev.amount || 0)
     }
-    return Array.from(groups.entries())
-  }, [visibleStaffGlobalTimeline])
-  const eventsSummary = useMemo(() => {
-    const total = filteredStaffGlobalTimeline.length
-    const payments = filteredStaffGlobalTimeline
-      .filter((ev) => ev.kind === 'payment' && ev.status !== 'voided')
-      .reduce((sum, ev) => sum + Number(ev.amount || 0), 0)
-    const deductions = filteredStaffGlobalTimeline
-      .filter((ev) => ev.kind === 'debt' || ev.kind === 'fine' || ev.kind === 'advance')
-      .filter((ev) => ev.status !== 'voided')
-      .reduce((sum, ev) => sum + Number(ev.amount || 0), 0)
-    return { total, payments, deductions }
+    return totals
   }, [filteredStaffGlobalTimeline])
+  // Месяцы, в которых есть события — для выбора периода (свежие сверху)
+  const staffEventMonths = useMemo(
+    () => Array.from(new Set([todayISO().slice(0, 7), ...staffGlobalTimeline.map((ev) => ev.date.slice(0, 7))].filter(Boolean))).sort().reverse(),
+    [staffGlobalTimeline],
+  )
 
   const canEditStaffSalary = staffSalary?.can_edit === true
 
@@ -2406,149 +2429,202 @@ export default function SalaryPage() {
           })()}
 
           {/* ── EVENTS TAB ─────────────────────────────────────────────────── */}
-          {tab === 'events' && (
-            <Card className="overflow-hidden border-border bg-white dark:bg-white/[0.04]">
-              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border p-5">
-                <div className="flex items-center gap-3">
-                  <div className="rounded-2xl bg-cyan-500/15 p-3 text-cyan-700 dark:text-cyan-300">
-                    <CalendarDays className="h-5 w-5" />
+          {/* Лента событий административных сотрудников: настоящие записи поштучно, */}
+          {/* таблица с сортировкой; клик — карточка сотрудника в ведомости. */}
+          {tab === 'events' && (() => {
+            const monthNames = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь']
+            const monthLabel = (prefix: string) => {
+              const [y, m] = prefix.split('-').map(Number)
+              const name = monthNames[(m || 1) - 1] || prefix
+              return `${name.charAt(0).toUpperCase()}${name.slice(1)} ${y}`
+            }
+            const hasFilters = eventsStaffId !== 'all' || eventsKind !== 'all' || eventsStatus !== 'all' || eventsQuery.trim() !== ''
+            const eventDate = (ev: StaffTimelineEvent) => {
+              // У позиций из кассы и оплат долгов есть точное время — показываем его
+              if ((ev.kind === 'debt_item' || ev.kind === 'debt_payment') && ev.created_at) {
+                const d = new Date(ev.created_at)
+                if (!Number.isNaN(d.getTime())) {
+                  return d.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+                }
+              }
+              return formatRuDate(ev.date)
+            }
+            const statusLabel = (ev: StaffTimelineEvent) => (ev.status === 'voided' ? 'аннулировано' : ev.status === 'paid' ? 'закрыто выплатой' : 'активно')
+            const openStaff = (ev: StaffTimelineEvent) => {
+              setSelectedStaffId(ev.staff_id)
+              if (/^\d{4}-\d{2}/.test(ev.date)) {
+                setStaffMonth(ev.date.slice(0, 7))
+                setStaffSlot(Number(ev.date.slice(8, 10)) <= 15 ? 'first' : 'second')
+              }
+              setTab('staff')
+            }
+            const head = (label: string, key: StaffEventSortKey, align: 'left' | 'right' | 'center' = 'left', cls = 'px-3 py-2') => (
+              <SortableTh label={label} sortKey={key} sort={staffEventSort} onSort={toggleStaffEventSort} align={align} className={cls} />
+            )
+            // В итогах только типы, по которым что-то есть, — девять пустых плашек не нужны
+            const visibleKinds = STAFF_EVENT_KINDS.filter((kind) => staffEventsTotals[kind] > 0 || eventsKind === kind)
+
+            return (
+              <Card className="overflow-hidden border-border bg-white dark:bg-white/[0.04]">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4 sm:p-5">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-2xl bg-cyan-500/15 p-2.5 text-cyan-700 dark:text-cyan-300"><CalendarDays className="h-5 w-5" /></div>
+                    <div>
+                      <h2 className="text-base font-semibold text-foreground">Лента событий административных сотрудников</h2>
+                      <p className="text-xs text-muted-foreground">
+                        Все события по отдельности: выплаты, авансы, бонусы, штрафы, долги, оплаты долгов и позиции из кассы. Нажмите на строку — откроется карточка сотрудника.
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h2 className="text-lg font-semibold text-foreground">Лента событий</h2>
-                    <p className="text-sm text-muted-foreground">Общий поток выплат и корректировок по административным сотрудникам.</p>
+                  <div className="text-xs text-muted-foreground">
+                    Событий: <span className="font-semibold text-foreground">{sortedStaffEvents.length}</span>
                   </div>
                 </div>
-                <div className="text-xs text-muted-foreground">
-                  Событий: <span className="font-semibold text-foreground">{staffGlobalTimeline.length}</span>
-                </div>
-              </div>
-              <div className="p-5">
-                <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-                  <input
-                    className={input}
-                    type="text"
-                    value={eventsQuery}
-                    onChange={(e) => setEventsQuery(e.target.value)}
-                    placeholder="Поиск: сотрудник, комментарий, тип"
-                  />
-                  <select className={selectCls} value={eventsStaffId} onChange={(e) => setEventsStaffId(e.target.value as any)}>
-                    <option value="all">Все сотрудники</option>
-                    {(staffSalary?.staff || []).map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.full_name || s.short_name || s.id}
-                      </option>
-                    ))}
-                  </select>
-                  <select className={selectCls} value={eventsKind} onChange={(e) => setEventsKind(e.target.value as any)}>
-                    <option value="all">Все типы</option>
-                    <option value="payment">Выплаты</option>
-                    <option value="bonus">Бонусы</option>
-                    <option value="fine">Штрафы</option>
-                    <option value="debt">Долги</option>
-                    <option value="advance">Авансы</option>
-                  </select>
-                  <select className={selectCls} value={eventsStatus} onChange={(e) => setEventsStatus(e.target.value as any)}>
-                    <option value="all">Любой статус</option>
-                    <option value="active">Активные</option>
-                    <option value="paid">Закрытые выплатой</option>
-                    <option value="voided">Аннулированные</option>
-                  </select>
-                  <DatePicker className="h-11" placeholder="С даты" value={eventsDateFrom} onChange={setEventsDateFrom} />
-                  <DatePicker className="h-11" placeholder="По дату" value={eventsDateTo} onChange={setEventsDateTo} />
-                </div>
-                <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-body">
-                  <span className="rounded-full border border-border bg-white dark:bg-white/[0.03] px-3 py-1">
-                    Событий: <span className="font-semibold text-foreground">{eventsSummary.total}</span>
-                  </span>
-                  <span className="rounded-full border border-sky-500/20 bg-sky-500/10 px-3 py-1 text-sky-700 dark:text-sky-200">
-                    Выплаты: <span className="font-semibold text-foreground">{money(eventsSummary.payments)}</span>
-                  </span>
-                  <span className="rounded-full border border-rose-500/20 bg-rose-500/10 px-3 py-1 text-rose-700 dark:text-rose-200">
-                    Удержания: <span className="font-semibold text-foreground">{money(eventsSummary.deductions)}</span>
-                  </span>
-                  <button
-                    type="button"
-                    className="rounded-full border border-border bg-white dark:bg-white/[0.03] px-3 py-1 text-body hover:bg-slate-100 dark:hover:bg-white/[0.08]"
-                    onClick={() => {
-                      setEventsQuery('')
-                      setEventsStaffId('all')
-                      setEventsKind('all')
-                      setEventsStatus('all')
-                      setEventsDateFrom('')
-                      setEventsDateTo('')
-                      setEventsLimit(100)
-                    }}
-                  >
-                    Сбросить фильтры
-                  </button>
-                </div>
-                {staffSalaryLoading ? (
-                  <div className="space-y-2">
-                    {Array.from({ length: 8 }).map((_, idx) => (
-                      <Skeleton key={idx} className="h-10 rounded-xl" />
-                    ))}
+
+                <div className="space-y-3 border-b border-border p-4 sm:p-5">
+                  {visibleKinds.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {visibleKinds.map((kind) => {
+                        const meta = STAFF_EVENT_KIND_META[kind]
+                        const active = eventsKind === kind
+                        return (
+                          <button
+                            key={kind}
+                            type="button"
+                            onClick={() => setEventsKind(active ? 'all' : kind)}
+                            className={`rounded-full border px-3 py-1 text-xs transition ${active ? meta.tone : 'border-border bg-white dark:bg-white/[0.03] text-body hover:bg-surface-hover'}`}
+                          >
+                            {meta.plural}: <span className="font-semibold tabular-nums">{money(staffEventsTotals[kind])}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  ) : null}
+                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+                    <select className={selectCls} value={eventsMonth} onChange={(e) => setEventsMonth(e.target.value)} aria-label="Месяц">
+                      <option value="all">Все месяцы</option>
+                      {staffEventMonths.map((m) => (
+                        <option key={m} value={m}>{monthLabel(m)}</option>
+                      ))}
+                    </select>
+                    <select className={selectCls} value={eventsStaffId} onChange={(e) => setEventsStaffId(e.target.value)} aria-label="Сотрудник">
+                      <option value="all">Все сотрудники</option>
+                      {(staffSalary?.staff || []).map((s) => (
+                        <option key={s.id} value={s.id}>{s.full_name || s.short_name || s.id}</option>
+                      ))}
+                    </select>
+                    <select className={selectCls} value={eventsKind} onChange={(e) => setEventsKind(e.target.value as 'all' | StaffTimelineKind)} aria-label="Тип">
+                      <option value="all">Все типы</option>
+                      {STAFF_EVENT_KINDS.map((kind) => (
+                        <option key={kind} value={kind}>{STAFF_EVENT_KIND_META[kind].plural}</option>
+                      ))}
+                    </select>
+                    <select className={selectCls} value={eventsStatus} onChange={(e) => setEventsStatus(e.target.value as 'all' | 'active' | 'paid' | 'voided')} aria-label="Статус">
+                      <option value="all">Любой статус</option>
+                      <option value="active">Активные</option>
+                      <option value="paid">Закрытые выплатой</option>
+                      <option value="voided">Аннулированные</option>
+                    </select>
+                    <input className={input} type="text" value={eventsQuery} onChange={(e) => setEventsQuery(e.target.value)} placeholder="Поиск: сотрудник, товар, комментарий" />
                   </div>
-                ) : filteredStaffGlobalTimeline.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-border bg-surface-muted p-8 text-center text-sm text-slate-500">
-                    Пока нет событий для отображения.
+                  {hasFilters ? (
+                    <button
+                      type="button"
+                      className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                      onClick={() => {
+                        setEventsStaffId('all')
+                        setEventsKind('all')
+                        setEventsStatus('all')
+                        setEventsQuery('')
+                      }}
+                    >
+                      Сбросить фильтры
+                    </button>
+                  ) : null}
+                </div>
+
+                {staffSalaryLoading && !staffSalary ? (
+                  <div className="space-y-2 p-4 sm:p-5">
+                    {Array.from({ length: 8 }).map((_, idx) => <Skeleton key={idx} className="h-9 rounded-xl" />)}
+                  </div>
+                ) : sortedStaffEvents.length === 0 ? (
+                  <div className="p-10 text-center text-sm text-slate-500">
+                    {staffGlobalTimeline.length === 0 ? 'Событий пока нет.' : 'По фильтрам ничего не найдено — попробуйте другой месяц.'}
                   </div>
                 ) : (
-                  <div className="max-h-[65vh] space-y-2 overflow-y-auto pr-1">
-                    {groupedVisibleEvents.map(([dateKey, events]) => (
-                      <div key={dateKey} className="space-y-2">
-                        <div className="sticky top-0 z-10 rounded-lg bg-white/90 dark:bg-slate-900/90 px-2 py-1 text-[11px] text-muted-foreground backdrop-blur">
-                          {formatRuDate(dateKey)}
-                        </div>
-                        {events.map((ev) => {
-                          const isPayment = ev.kind === 'payment'
-                          const tone = isPayment
-                            ? 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300'
-                            : ev.kind === 'bonus'
-                              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-                              : ev.kind === 'advance'
-                                ? 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300'
-                                : 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300'
-                          const label = isPayment
-                            ? 'выплата'
-                            : ev.kind === 'bonus'
-                              ? 'бонус'
-                              : ev.kind === 'advance'
-                                ? 'аванс'
-                                : ev.kind === 'fine'
-                                  ? 'штраф'
-                                  : 'долг'
-                          return (
-                            <div key={ev.id} className="flex items-center justify-between rounded-xl border border-border bg-white dark:bg-white/[0.03] px-3 py-2 text-xs">
-                              <div className="flex min-w-0 items-center gap-2">
-                                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${tone}`}>{label}</span>
-                                <span className="text-body">{ev.staff_name}</span>
-                                {ev.status === 'paid' ? <span className="text-sky-600 dark:text-sky-400">(закрыто выплатой)</span> : null}
-                                {ev.status === 'voided' ? <span className="text-slate-500">(аннулировано)</span> : null}
-                                {ev.comment ? <span className="truncate text-muted-foreground">{ev.comment}</span> : null}
+                  <>
+                    {/* Компьютер: таблица */}
+                    <div className="hidden max-h-[70vh] overflow-auto sm:block">
+                      <table className="w-full min-w-[900px]">
+                        <thead className="sticky top-0 z-10 bg-surface-muted">
+                          <tr className="text-[11px] font-medium text-muted-foreground">
+                            {head('Дата', 'date', 'left', 'px-4 py-2')}
+                            {head('Сотрудник', 'staff')}
+                            {head('Тип', 'kind')}
+                            {head('Сумма', 'amount', 'right')}
+                            {head('Статус', 'status', 'center')}
+                            {head('Комментарий', 'comment')}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border">
+                          {sortedStaffEvents.map((ev) => {
+                            const meta = STAFF_EVENT_KIND_META[ev.kind]
+                            return (
+                              <tr
+                                key={ev.id}
+                                onClick={() => openStaff(ev)}
+                                title="Открыть карточку сотрудника"
+                                className={`cursor-pointer transition hover:bg-surface-muted ${ev.status === 'active' ? '' : 'opacity-60'}`}
+                              >
+                                <td className="whitespace-nowrap px-4 py-2 text-xs tabular-nums text-body">{eventDate(ev)}</td>
+                                <td className="whitespace-nowrap px-3 py-2 text-sm text-foreground">{ev.staff_name}</td>
+                                <td className="px-3 py-2">
+                                  <span className={`inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-medium ${meta.tone}`}>{meta.label}</span>
+                                </td>
+                                <td className={`whitespace-nowrap px-3 py-2 text-right text-sm font-medium tabular-nums ${ev.status === 'voided' ? 'text-slate-400 line-through' : 'text-foreground'}`}>
+                                  {money(ev.amount)}
+                                </td>
+                                <td className="whitespace-nowrap px-3 py-2 text-center text-[11px] text-muted-foreground">{statusLabel(ev)}</td>
+                                <td className="max-w-[380px] truncate px-3 py-2 text-xs text-muted-foreground" title={ev.comment || undefined}>{ev.comment || '—'}</td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Телефон: короткие строки в том же порядке */}
+                    <div className="max-h-[70vh] divide-y divide-border overflow-y-auto sm:hidden">
+                      {sortedStaffEvents.map((ev) => {
+                        const meta = STAFF_EVENT_KIND_META[ev.kind]
+                        return (
+                          <button
+                            key={ev.id}
+                            type="button"
+                            onClick={() => openStaff(ev)}
+                            className={`flex w-full items-start justify-between gap-3 px-4 py-3 text-left ${ev.status === 'active' ? '' : 'opacity-60'}`}
+                          >
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className={`inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${meta.tone}`}>{meta.label}</span>
+                                <span className="truncate text-sm text-foreground">{ev.staff_name}</span>
                               </div>
-                              <span className="ml-3 shrink-0 font-medium text-foreground">{money(ev.amount)}</span>
+                              <div className="mt-0.5 truncate text-[11px] text-slate-500">
+                                {eventDate(ev)}
+                                {ev.status !== 'active' ? ` · ${statusLabel(ev)}` : ''}
+                                {ev.comment ? ` · ${ev.comment}` : ''}
+                              </div>
                             </div>
-                          )
-                        })}
-                      </div>
-                    ))}
-                    {visibleStaffGlobalTimeline.length < filteredStaffGlobalTimeline.length ? (
-                      <div className="flex justify-center pt-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover"
-                          onClick={() => setEventsLimit((prev) => prev + 100)}
-                        >
-                          Показать ещё
-                        </Button>
-                      </div>
-                    ) : null}
-                  </div>
+                            <span className={`shrink-0 text-sm font-medium tabular-nums ${ev.status === 'voided' ? 'text-slate-400 line-through' : 'text-foreground'}`}>{money(ev.amount)}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </>
                 )}
-              </div>
-            </Card>
-          )}
+              </Card>
+            )
+          })()}
 
         </div>
 
