@@ -7,6 +7,9 @@ import { useApiCache } from '@/lib/client/use-api-cache'
 import { useToday } from '@/lib/client/use-today'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useCashlessLabels } from '@/lib/client/use-cashless-labels'
+import { useTableSort } from '@/lib/client/use-table-sort'
+import type { SortColumns } from '@/lib/core/table-sort'
+import { SortableTh } from '@/components/ui/sortable-th'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -55,6 +58,9 @@ type OperatorTimelineEvent = {
   status: 'active' | 'voided'
 }
 type ShiftBreakdown = { id: string; date: string; shift: string; companyCode: string | null; companyName: string | null; totalIncome: number; baseSalary: number; seniorityBonus?: number; seniorityPercent?: number; autoBonus: number; roleBonus: number; salary: number }
+
+/** Позиция долга из кассы за неделю (API /api/admin/salary, view=weekly). После выплаты недели status='deleted'. */
+type OperatorDebtItem = { id: string; name: string; quantity: number; unitPrice: number; amount: number; createdAt: string; companyId: string | null; comment: string | null; status: string }
 
 // ─── Admin staff salary types ─────────────────────────────────────────────────
 type StaffMember = { id: string; full_name: string; short_name: string | null; role: string; monthly_salary: number; extra_day_company_code: string | null; extra_day_shift_type: string | null; telegram_chat_id: string | null; source_type?: 'staff' | 'operator'; is_active?: boolean; dismissed_at?: string | null; dismissal_date?: string | null }
@@ -260,7 +266,7 @@ function buildStaffTimelineEvents(params: {
 const formatRoleLabel = (code: string): string => code === 'super_admin' ? 'Супер-админ' : getStaffRoleLabel(code)
 type WeeklyOperator = {
   operator: { id: string; name: string; short_name: string | null; full_name: string | null; is_active: boolean; telegram_chat_id: string | null; photo_url: string | null; position: string | null; documents_count: number; expiring_documents: number }
-  week: { id: string; weekStart: string; weekEnd: string; grossAmount: number; bonusAmount: number; fineAmount: number; debtAmount: number; debtActiveAmount?: number; advanceAmount: number; netAmount: number; paidAmount: number; remainingAmount: number; status: 'draft' | 'partial' | 'paid'; companyAllocations: Allocation[]; payments: Payment[]; shiftsCount: number; autoBonusTotal: number; seniorityBonusTotal?: number; shifts: ShiftBreakdown[] }
+  week: { id: string; weekStart: string; weekEnd: string; grossAmount: number; bonusAmount: number; fineAmount: number; debtAmount: number; debtActiveAmount?: number; advanceAmount: number; netAmount: number; paidAmount: number; remainingAmount: number; status: 'draft' | 'partial' | 'paid'; companyAllocations: Allocation[]; payments: Payment[]; shiftsCount: number; autoBonusTotal: number; seniorityBonusTotal?: number; shifts: ShiftBreakdown[]; debtItems?: OperatorDebtItem[] }
   hasActivity: boolean
 }
 type SalaryData = { weekStart: string; weekEnd: string; companies: CompanyOption[]; operators: WeeklyOperator[]; totals: { netAmount: number; paidAmount: number; advanceAmount: number; remainingAmount: number; paidOperators: number; totalOperators: number } }
@@ -282,6 +288,13 @@ const openDebtAmount = (week: WeeklyOperator['week']) =>
   week.debtActiveAmount === undefined ? week.debtAmount : week.debtActiveAmount
 
 const statusMeta = (s: WeeklyOperator['week']['status']) => s === 'paid' ? { label: 'Выплачено', className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' } : s === 'partial' ? { label: 'Частично', className: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300' } : { label: 'Не выплачено', className: 'border-slate-500/30 bg-slate-500/10 text-body' }
+
+// ─── Ведомость операторов: сортировка по нажатию на заголовок ─────────────────
+type OperatorSortKey = 'name' | 'shifts' | 'accrued' | 'bonuses' | 'deductions' | 'advance' | 'net' | 'paid' | 'remaining' | 'status'
+// По смыслу, а не по алфавиту: сначала те, кому ещё платить
+const OPERATOR_STATUS_RANK: Record<string, number> = { draft: 0, partial: 1, paid: 2 }
+// Как сервер сортировал раньше: сначала самый большой остаток
+const OPERATOR_SORT_INITIAL = { key: 'remaining', dir: 'desc' } as const
 
 function Modal(props: { title: string; subtitle?: string; onClose: () => void; children: React.ReactNode }) {
   useModalEscape(true, props.onClose)
@@ -401,6 +414,32 @@ export default function SalaryPage() {
     if (statusFilter !== 'all') list = list.filter((i) => i.week.status === statusFilter)
     return list
   }, [data?.operators, showZero, statusFilter])
+
+  // Ведомость операторов: сортировка по заголовку (общий хук), выбранная строка
+  // раскрывает карточку, корректировка открывается у конкретного оператора
+  const operatorSortColumns = useMemo<SortColumns<WeeklyOperator, OperatorSortKey>>(
+    () => ({
+      name: { get: (i) => getOperatorDisplayName(i.operator) },
+      shifts: { get: (i) => i.week.shiftsCount || null, defaultDir: 'desc' },
+      accrued: { get: (i) => i.week.grossAmount || null, defaultDir: 'desc' },
+      bonuses: { get: (i) => i.week.bonusAmount + i.week.autoBonusTotal || null, defaultDir: 'desc' },
+      deductions: { get: (i) => i.week.fineAmount + i.week.debtAmount || null, defaultDir: 'desc' },
+      advance: { get: (i) => i.week.advanceAmount || null, defaultDir: 'desc' },
+      net: { get: (i) => i.week.netAmount, defaultDir: 'desc' },
+      paid: { get: (i) => i.week.paidAmount || null, defaultDir: 'desc' },
+      remaining: { get: (i) => i.week.remainingAmount || null, defaultDir: 'desc' },
+      status: { get: (i) => OPERATOR_STATUS_RANK[i.week.status] ?? 0 },
+    }),
+    [],
+  )
+  const { sort: operatorSort, toggle: toggleOperatorSort, sortedRows: sortedOperators } = useTableSort<WeeklyOperator, OperatorSortKey>({
+    storageKey: 'salary.operatorsSort',
+    columns: operatorSortColumns,
+    initial: OPERATOR_SORT_INITIAL,
+    rows: operators,
+  })
+  const [selectedOperatorId, setSelectedOperatorId] = useState<string | null>(null)
+  const [operatorAdjTarget, setOperatorAdjTarget] = useState<WeeklyOperator | null>(null)
   const totalShifts = useMemo(
     () => (data?.operators || []).reduce((sum, item) => sum + item.week.shiftsCount, 0),
     [data?.operators],
@@ -632,9 +671,51 @@ export default function SalaryPage() {
       setPaySaving(false)
     }
   }
-  const submitAdjustment = async (e: FormEvent) => { e.preventDefault(); const amount = parseMoney(adjAmount); if (!adjOperatorId) return setError('Выберите оператора'); if (amount <= 0) return setError('Сумма корректировки должна быть больше 0'); setAdjSaving(true); setError(null); try { await post({ action: 'createAdjustment', payload: { operator_id: adjOperatorId, date: adjDate, amount, kind: adjKind, comment: adjComment.trim() || null, company_id: adjCompanyId || null } }); setAdjAmount(''); setAdjComment(''); setAdjSuccess(true); setTimeout(() => setAdjSuccess(false), 3000); await load() } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось сохранить корректировку') } finally { setAdjSaving(false) } }
+  // Корректировка оператора — из окна в его карточке. Итог показываем уведомлением:
+  // карточка ошибок висит вверху страницы, за открытым окном её не видно
+  const submitAdjustment = async (e: FormEvent) => {
+    e.preventDefault()
+    const amount = parseMoney(adjAmount)
+    if (!adjOperatorId) {
+      toast({ title: 'Выберите оператора', variant: 'destructive' })
+      return
+    }
+    if (amount <= 0) {
+      toast({ title: 'Сумма корректировки должна быть больше 0', variant: 'destructive' })
+      return
+    }
+    setAdjSaving(true)
+    try {
+      await post({ action: 'createAdjustment', payload: { operator_id: adjOperatorId, date: adjDate, amount, kind: adjKind, comment: adjComment.trim() || null, company_id: adjCompanyId || null } })
+      setAdjAmount('')
+      setAdjComment('')
+      setOperatorAdjTarget(null)
+      toast({ title: 'Корректировка сохранена' })
+      await load()
+    } catch (e: any) {
+      console.error(e)
+      toast({ title: 'Не удалось сохранить корректировку', description: e?.message, variant: 'destructive' })
+    } finally {
+      setAdjSaving(false)
+    }
+  }
   const saveChatId = async (e: FormEvent) => { e.preventDefault(); if (!chatTarget) return; const trimmed = chatValue.trim(); if (trimmed && !/^-?\d+$/.test(trimmed)) return setError('telegram_chat_id должен быть числом'); setChatSaving(true); setError(null); try { await post({ action: 'updateOperatorChatId', operatorId: chatTarget.operator.id, telegram_chat_id: trimmed || null }); setChatTarget(null); await load() } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось сохранить Telegram chat_id') } finally { setChatSaving(false) } }
-  const sendOne = async (operatorId: string) => { setSendingId(operatorId); setError(null); try { const res = await fetch('/api/telegram/salary-snapshot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ operatorId, dateFrom: weekStart, dateTo: weekEnd, weekStart }) }); const json = await res.json().catch(() => null); if (!res.ok) throw new Error(json?.error || `Ошибка отправки (${res.status})`) } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось отправить расчёт в Telegram') } finally { setSendingId(null) } }
+  // Отправка расчёта одному оператору — кнопка в его карточке. Уведомляем и об
+  // успехе: раньше отправка проходила молча, и было непонятно, ушло ли сообщение
+  const sendOne = async (operatorId: string) => {
+    setSendingId(operatorId)
+    try {
+      const res = await fetch('/api/telegram/salary-snapshot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ operatorId, dateFrom: weekStart, dateTo: weekEnd, weekStart }) })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || `Ошибка отправки (${res.status})`)
+      toast({ title: 'Расчёт отправлен в Telegram' })
+    } catch (e: any) {
+      console.error(e)
+      toast({ title: 'Не удалось отправить расчёт в Telegram', description: e?.message, variant: 'destructive' })
+    } finally {
+      setSendingId(null)
+    }
+  }
   const sendAll = async () => { if (loading || broadcastSending || !broadcastTargets.length) return; setBroadcastSending(true); setBroadcastDone(0); setBroadcastTotal(broadcastTargets.length); setBroadcastErrors([]); setError(null); try { for (let i = 0; i < broadcastTargets.length; i += 1) { const item = broadcastTargets[i]; try { const res = await fetch('/api/telegram/salary-snapshot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ operatorId: item.operator.id, dateFrom: weekStart, dateTo: weekEnd, weekStart }) }); const json = await res.json().catch(() => null); if (!res.ok) setBroadcastErrors((prev) => [...prev, `${getOperatorDisplayName(item.operator)}: ${json?.error || `HTTP ${res.status}`}`]) } catch (e: any) { setBroadcastErrors((prev) => [...prev, `${getOperatorDisplayName(item.operator)}: ${e?.message || 'ошибка'}`]) } setBroadcastDone(i + 1); await new Promise((r) => setTimeout(r, 250)) } } finally { setBroadcastSending(false) } }
   const [tab, setTab] = useState<'operators' | 'operator-events' | 'staff' | 'events'>('operators')
   const [markDebtId, setMarkDebtId] = useState<string | null>(null)
@@ -1254,348 +1335,508 @@ export default function SalaryPage() {
           {(error || loadError) ? <Card className="border-red-500/30 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-200">{error || loadError}</Card> : null}
 
           {/* ── OPERATORS TAB ───────────────────────────────────────────────── */}
-          {tab === 'operators' && (<>
+          {/* Ведомость операторов за неделю — как у административных сотрудников: */}
+          {/* таблица с сортировкой по заголовкам и строкой «Итого», по клику — карточка */}
+          {/* оператора: расчёт построчно, долги из кассы позициями, смены, выплаты. */}
+          {tab === 'operators' && (() => {
+            const selectedOperator = sortedOperators.find((i) => i.operator.id === selectedOperatorId) || null
+            const selectRow = (id: string) => setSelectedOperatorId(selectedOperatorId === id ? null : id)
+            const weekTotals = sortedOperators.reduce(
+              (acc, i) => ({
+                shifts: acc.shifts + i.week.shiftsCount,
+                accrued: acc.accrued + i.week.grossAmount,
+                bonuses: acc.bonuses + i.week.bonusAmount + i.week.autoBonusTotal,
+                deductions: acc.deductions + i.week.fineAmount + i.week.debtAmount,
+                advance: acc.advance + i.week.advanceAmount,
+                net: acc.net + i.week.netAmount,
+                paid: acc.paid + i.week.paidAmount,
+                remaining: acc.remaining + i.week.remainingAmount,
+              }),
+              { shifts: 0, accrued: 0, bonuses: 0, deductions: 0, advance: 0, net: 0, paid: 0, remaining: 0 },
+            )
+            const muted = 'text-slate-300 dark:text-white/20'
+            // Ноль — серый прочерк: цветной прочерк читался как «тут что-то есть»
+            const moneyCell = (value: number, cls: string, sign = '') =>
+              Math.round(value) ? <span className={cls}>{sign}{money(value)}</span> : <span className={muted}>—</span>
+            const companyTitle = (id: string | null) => (data?.companies || []).find((c) => c.id === id)?.name || ''
+            const dateTime = (iso: string) => {
+              const d = new Date(String(iso || ''))
+              if (Number.isNaN(d.getTime())) return String(iso || '').slice(0, 16).replace('T', ' ')
+              return d.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+            }
+            const sortHead = (label: string, key: OperatorSortKey, align: 'left' | 'right' | 'center' = 'right', cls = 'px-3 py-2') => (
+              <SortableTh label={label} sortKey={key} sort={operatorSort} onSort={toggleOperatorSort} align={align} className={cls} />
+            )
 
-          <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-5">
-            <Card className="border-border bg-white dark:bg-white/[0.04] p-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-violet-500/15 p-2 text-violet-700 dark:text-violet-300"><CalendarDays className="h-4 w-4" /></div><div><div className="text-[11px] uppercase tracking-wide text-slate-500">Смен</div><div className="mt-0.5 text-xl font-semibold text-foreground">{loading ? '—' : totalShifts}</div></div></div></Card>
-            <Card className="border-border bg-white dark:bg-white/[0.04] p-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-emerald-500/15 p-2 text-emerald-700 dark:text-emerald-300"><DollarSign className="h-4 w-4" /></div><div><div className="text-[11px] uppercase tracking-wide text-slate-500">К выплате</div><div className="mt-0.5 text-xl font-semibold text-foreground">{data ? money(data.totals.netAmount) : '—'}</div></div></div></Card>
-            <Card className="border-border bg-white dark:bg-white/[0.04] p-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-blue-500/15 p-2 text-blue-700 dark:text-blue-300"><CheckCircle2 className="h-4 w-4" /></div><div><div className="text-[11px] uppercase tracking-wide text-slate-500">Выплачено</div><div className="mt-0.5 text-xl font-semibold text-foreground">{data ? money(data.totals.paidAmount) : '—'}</div></div></div></Card>
-            <Card className="border-border bg-white dark:bg-white/[0.04] p-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-amber-500/15 p-2 text-amber-700 dark:text-amber-300"><CreditCard className="h-4 w-4" /></div><div><div className="text-[11px] uppercase tracking-wide text-slate-500">Авансы</div><div className="mt-0.5 text-xl font-semibold text-foreground">{data ? money(data.totals.advanceAmount) : '—'}</div></div></div></Card>
-            <Card className="border-border bg-white dark:bg-white/[0.04] p-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-red-500/15 p-2 text-red-700 dark:text-red-300"><TrendingDown className="h-4 w-4" /></div><div><div className="text-[11px] uppercase tracking-wide text-slate-500">Остаток</div><div className="mt-0.5 text-xl font-semibold text-foreground">{data ? money(data.totals.remainingAmount) : '—'}</div></div></div></Card>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-white dark:bg-white/[0.04] px-4 py-3 text-sm text-body">
-            <div className="min-w-0 flex-1 text-xs">{summaryText}</div>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex flex-wrap rounded-xl border border-border bg-slate-100 dark:bg-black/20 p-0.5 text-xs">
-                {(['all', 'draft', 'partial', 'paid'] as const).map((s) => (
-                  <button key={s} type="button" onClick={() => setStatusFilter(s)} className={`rounded-lg px-3 py-1.5 transition ${statusFilter === s ? 'bg-white dark:bg-white/10 text-foreground' : 'text-muted-foreground hover:text-slate-700 dark:hover:text-slate-200'}`}>
-                    {s === 'all' ? 'Все' : s === 'draft' ? 'Не выплачено' : s === 'partial' ? 'Частично' : 'Выплачено'}
-                  </button>
-                ))}
-              </div>
-              <Button type="button" variant="outline" className="h-8 rounded-xl border-border bg-white dark:bg-white/5 text-xs text-body hover:bg-surface-hover" onClick={() => setShowZero((v) => !v)}>{showZero ? 'Скрыть пустые' : 'Все строки'}</Button>
-            </div>
-          </div>
-
-          {/* Мобильная версия: карточки операторов вместо 12-колоночной таблицы */}
-          <div className="space-y-3 sm:hidden">
-            {loading && operators.length === 0 ? (
-              Array.from({ length: 4 }).map((_, idx) => (
-                <Card key={idx} className="border-border bg-white dark:bg-white/[0.03] p-4">
-                  <div className="flex items-center gap-3">
-                    <Skeleton className="h-10 w-10 rounded-2xl" />
-                    <div className="flex-1 space-y-2">
-                      <Skeleton className="h-4 w-32" />
-                      <Skeleton className="h-3 w-20" />
-                    </div>
-                  </div>
-                  <Skeleton className="mt-3 h-8 w-36" />
-                  <div className="mt-3 grid grid-cols-3 gap-2">
-                    {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12" />)}
-                  </div>
-                </Card>
-              ))
-            ) : operators.length === 0 ? (
-              <Card className="border-border bg-white dark:bg-white/[0.03] p-8 text-center text-sm text-slate-400">В этой неделе пока нет строк для отображения.</Card>
-            ) : (
-              operators.map((item) => {
-                const st = statusMeta(item.week.status)
-                const open = Boolean(expanded[item.operator.id])
-                const canPay = item.week.remainingAmount > 0.009
-                const title = getOperatorDisplayName(item.operator)
-                return (
-                  <Card key={item.operator.id} className="border-border bg-white dark:bg-white/[0.03] p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <Link href={`/operators/${item.operator.id}/profile`} className="flex min-w-0 items-center gap-3">
-                        <div className="h-10 w-10 shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-500 to-cyan-500">
-                          {item.operator.photo_url ? <Image src={item.operator.photo_url} alt={title} width={40} height={40} className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center text-sm font-semibold text-white">{title.charAt(0).toUpperCase()}</div>}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="truncate font-medium text-foreground">{title}</div>
-                          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
-                            {item.operator.position ? <span>{item.operator.position}</span> : null}
-                            {!item.operator.is_active ? <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-700 dark:text-amber-300">неактивен</span> : null}
-                          </div>
-                        </div>
-                      </Link>
-                      <span className={`inline-flex shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${st.className}`}>{st.label}</span>
-                    </div>
-
-                    <div className="mt-3 flex items-end justify-between gap-3">
+            return (
+              <div className="space-y-4">
+                <Card className="overflow-hidden border-border bg-white dark:bg-white/[0.04]">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4 sm:p-5">
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-2xl bg-emerald-500/15 p-2.5 text-emerald-700 dark:text-emerald-300"><Users className="h-5 w-5" /></div>
                       <div>
-                        <div className="text-[10px] uppercase tracking-wider text-slate-500">К выплате</div>
-                        <div className="text-2xl font-semibold tabular-nums text-foreground">{money(item.week.remainingAmount)}</div>
+                        <h2 className="text-base font-semibold text-foreground">Ведомость операторов за неделю</h2>
+                        <p className="text-xs text-muted-foreground">Оплата за смены. {summaryText}</p>
                       </div>
-                      <div className="pb-1 text-xs text-slate-500">{item.week.shiftsCount} смен</div>
                     </div>
-
-                    <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-                      <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
-                        <div className="text-[10px] text-slate-500">Начислено</div>
-                        <div className="mt-0.5 text-xs font-medium tabular-nums text-foreground">{money(item.week.grossAmount)}</div>
-                      </div>
-                      <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
-                        <div className="text-[10px] text-slate-500">Бонусы</div>
-                        <div className="mt-0.5 text-xs font-medium tabular-nums text-emerald-700 dark:text-emerald-300">{money(item.week.bonusAmount + item.week.autoBonusTotal)}</div>
-                      </div>
-                      <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
-                        <div className="text-[10px] text-slate-500">Штрафы</div>
-                        <div className="mt-0.5 text-xs font-medium tabular-nums text-rose-700 dark:text-rose-300">{money(item.week.fineAmount)}</div>
-                      </div>
-                      <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
-                        <div className="text-[10px] text-slate-500">Аванс</div>
-                        <div className="mt-0.5 text-xs font-medium tabular-nums text-amber-700 dark:text-amber-300">{money(item.week.advanceAmount)}</div>
-                      </div>
-                      <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
-                        <div className="text-[10px] text-slate-500">Выплачено</div>
-                        <div className="mt-0.5 text-xs font-medium tabular-nums text-sky-700 dark:text-sky-300">{money(item.week.paidAmount)}</div>
-                      </div>
-                      <div className="rounded-xl border border-border bg-slate-50 dark:bg-white/[0.02] px-1 py-2">
-                        <div className="text-[10px] text-slate-500">Долг</div>
-                        <div className="mt-0.5 text-xs font-medium tabular-nums text-rose-700 dark:text-rose-300">{money(item.week.debtAmount)}</div>
-                        {openDebtAmount(item.week) > 0 && can('salary.mark_debt_paid') ? (
-                          <button
-                            type="button"
-                            disabled={markDebtSaving && markDebtId === item.operator.id}
-                            onClick={() => void markDebtsPaid(item)}
-                            className="mt-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-700 dark:text-emerald-300 disabled:opacity-50"
-                          >
-                            {markDebtSaving && markDebtId === item.operator.id ? '...' : 'Оплатил долг'}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex flex-wrap rounded-xl border border-border bg-slate-100 dark:bg-black/20 p-0.5 text-xs">
+                        {(['all', 'draft', 'partial', 'paid'] as const).map((s) => (
+                          <button key={s} type="button" onClick={() => setStatusFilter(s)} className={`rounded-lg px-3 py-1.5 transition ${statusFilter === s ? 'bg-white dark:bg-white/10 text-foreground' : 'text-muted-foreground hover:text-slate-700 dark:hover:text-slate-200'}`}>
+                            {s === 'all' ? 'Все' : s === 'draft' ? 'Не выплачено' : s === 'partial' ? 'Частично' : 'Выплачено'}
                           </button>
-                        ) : null}
+                        ))}
                       </div>
+                      <Button type="button" variant="outline" className="h-8 rounded-xl border-border bg-white dark:bg-white/5 text-xs text-body hover:bg-surface-hover" onClick={() => setShowZero((v) => !v)}>{showZero ? 'Скрыть пустые' : 'Все строки'}</Button>
                     </div>
+                  </div>
 
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {canCreateAdvance && (
-                        <Button type="button" variant="outline" className="h-9 flex-1 rounded-xl border-border bg-white dark:bg-white/5 text-xs text-body hover:bg-surface-hover" onClick={() => setAdvanceTarget(item)}>
-                          <Plus className="mr-1 h-3.5 w-3.5" />Аванс
-                        </Button>
-                      )}
-                      {canCreatePayment && (
-                        <Button type="button" className="h-9 flex-1 rounded-xl bg-emerald-500 text-xs text-white hover:bg-emerald-400 disabled:opacity-50" disabled={!canPay} onClick={() => setPayTarget(item)}>
-                          <Wallet className="mr-1 h-3.5 w-3.5" />Выплатить
-                        </Button>
-                      )}
-                      <Link href={`/salary/${item.operator.id}?weekStart=${weekStart}`} className="inline-flex h-9 flex-1 items-center justify-center rounded-xl border border-border bg-white dark:bg-white/5 px-3 text-xs text-body transition hover:bg-surface-hover">Детали</Link>
-                    </div>
-
-                    <button
-                      type="button"
-                      className="mt-2 flex w-full items-center justify-center gap-1 rounded-xl border border-dashed border-border py-1.5 text-[11px] text-slate-500"
-                      onClick={() => setExpanded((p) => ({ ...p, [item.operator.id]: !p[item.operator.id] }))}
-                    >
-                      {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                      {open ? 'Скрыть смены и платежи' : 'Смены и платежи'}
-                    </button>
-
-                    {open ? (
-                      <div className="mt-3 space-y-4 border-t border-border pt-3">
-                        <div>
-                          <div className="mb-2 text-xs font-medium text-foreground">Смены ({item.week.shiftsCount})</div>
-                          {item.week.shifts.length === 0 ? (
-                            <div className="text-xs text-muted-foreground">Смен за эту неделю нет.</div>
-                          ) : (
-                            <div className="space-y-1.5">
-                              {item.week.shifts.map((s) => (
-                                <div key={s.id} className="flex items-center justify-between gap-2 text-xs">
-                                  <div className="flex min-w-0 items-center gap-1.5">
-                                    <span className="tabular-nums text-body">{formatRuDate(s.date)}</span>
-                                    <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-medium ${s.shift === 'day' ? 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300' : 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300'}`}>{s.shift === 'day' ? 'день' : 'ночь'}</span>
-                                    <span className="truncate text-slate-500">{s.companyName || s.companyCode || ''}</span>
-                                  </div>
-                                  <span className="shrink-0 font-medium tabular-nums text-foreground">{money(s.salary)}</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        <div>
-                          <div className="mb-2 text-xs font-medium text-foreground">Платежи недели</div>
-                          {item.week.payments.length === 0 ? (
-                            <div className="text-xs text-muted-foreground">По этой неделе ещё нет платежей.</div>
-                          ) : (
-                            <div className="space-y-1.5">
-                              {item.week.payments.map((p) => (
-                                <div key={p.id} className="flex items-center justify-between gap-2 text-xs">
-                                  <span className="tabular-nums text-body">{formatRuDate(p.payment_date)}</span>
-                                  <span className={`shrink-0 font-medium tabular-nums ${p.status === 'voided' ? 'text-slate-400 line-through' : 'text-emerald-700 dark:text-emerald-300'}`}>{money(p.total_amount)}</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        {item.week.companyAllocations.length > 1 ? (
-                          <div>
-                            <div className="mb-2 text-xs font-medium text-foreground">По компаниям</div>
-                            <div className="space-y-1.5">
-                              {item.week.companyAllocations.map((a) => (
-                                <div key={a.companyId} className="flex items-center justify-between gap-2 text-xs">
-                                  <span className="truncate text-body">{a.companyName || a.companyCode || a.companyId}</span>
-                                  <span className="shrink-0 font-medium tabular-nums text-foreground">{money(a.netAmount)}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
+                  {/* Компьютер: таблица с сортировкой */}
+                  <div className="hidden overflow-x-auto sm:block">
+                    <table className="w-full min-w-[1040px]">
+                      <thead className="bg-surface-muted">
+                        <tr className="text-[11px] font-medium text-muted-foreground">
+                          {sortHead('Оператор', 'name', 'left', 'px-4 py-2')}
+                          {sortHead('Смен', 'shifts')}
+                          {sortHead('Начислено', 'accrued')}
+                          {sortHead('Бонусы', 'bonuses')}
+                          {sortHead('Штрафы и долги', 'deductions')}
+                          {sortHead('Аванс', 'advance')}
+                          {sortHead('К выплате', 'net')}
+                          {sortHead('Выплачено', 'paid')}
+                          {sortHead('Остаток', 'remaining')}
+                          {sortHead('Статус', 'status', 'center')}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {loading && sortedOperators.length === 0
+                          ? Array.from({ length: 6 }).map((_, idx) => (
+                              <tr key={`skeleton-${idx}`}>
+                                <td colSpan={10} className="px-4 py-2"><Skeleton className="h-9 w-full rounded-xl" /></td>
+                              </tr>
+                            ))
+                          : null}
+                        {!loading && sortedOperators.length === 0 ? (
+                          <tr><td colSpan={10} className="px-4 py-12 text-center text-sm text-slate-400">В этой неделе пока нет строк для отображения.</td></tr>
                         ) : null}
+                        {sortedOperators.map((item) => {
+                          const w = item.week
+                          const st = statusMeta(w.status)
+                          const title = getOperatorDisplayName(item.operator)
+                          const active = selectedOperatorId === item.operator.id
+                          return (
+                            <tr
+                              key={item.operator.id}
+                              onClick={() => selectRow(item.operator.id)}
+                              className={`cursor-pointer transition hover:bg-surface-muted ${active ? 'bg-emerald-500/[0.06]' : ''} ${item.operator.is_active ? '' : 'opacity-60'}`}
+                            >
+                              <td className="px-4 py-2.5 text-sm">
+                                <div className="flex items-center gap-2">
+                                  <ChevronRight className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${active ? 'rotate-90' : ''}`} />
+                                  <div className="min-w-0">
+                                    <div className="truncate font-medium text-foreground">{title}</div>
+                                    <div className="truncate text-[11px] text-slate-400">
+                                      {item.operator.position || 'оператор'}
+                                      {!item.operator.is_active ? ' · неактивен' : ''}
+                                      {item.operator.expiring_documents > 0 ? <span className="text-amber-700 dark:text-amber-300"> · документы истекают</span> : null}
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-3 py-2.5 text-right text-sm tabular-nums">{w.shiftsCount || <span className={muted}>—</span>}</td>
+                              <td className="px-3 py-2.5 text-right text-sm tabular-nums">{moneyCell(w.grossAmount, 'text-foreground')}</td>
+                              <td className="px-3 py-2.5 text-right text-sm tabular-nums">{moneyCell(w.bonusAmount + w.autoBonusTotal, 'text-emerald-700 dark:text-emerald-300', '+')}</td>
+                              <td className="px-3 py-2.5 text-right text-sm tabular-nums">{moneyCell(w.fineAmount + w.debtAmount, 'text-rose-600 dark:text-rose-300', '−')}</td>
+                              <td className="px-3 py-2.5 text-right text-sm tabular-nums">{moneyCell(w.advanceAmount, 'text-amber-700 dark:text-amber-300', '−')}</td>
+                              <td className="px-3 py-2.5 text-right text-sm font-semibold tabular-nums text-foreground">{money(w.netAmount)}</td>
+                              <td className="px-3 py-2.5 text-right text-sm tabular-nums">{moneyCell(w.paidAmount, 'text-sky-700 dark:text-sky-300')}</td>
+                              <td className="px-3 py-2.5 text-right text-sm font-semibold tabular-nums">{moneyCell(w.remainingAmount, 'text-foreground')}</td>
+                              <td className="px-3 py-2.5 text-center"><span className={`inline-flex rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${st.className}`}>{st.label}</span></td>
+                            </tr>
+                          )
+                        })}
+                        {sortedOperators.length > 0 ? (
+                          <tr className="bg-surface-muted/60 font-semibold">
+                            <td className="px-4 py-2.5 text-sm">Итого · {sortedOperators.length}</td>
+                            <td className="px-3 py-2.5 text-right text-sm tabular-nums">{weekTotals.shifts}</td>
+                            <td className="px-3 py-2.5 text-right text-sm tabular-nums">{money(weekTotals.accrued)}</td>
+                            <td className="px-3 py-2.5 text-right text-sm tabular-nums">{weekTotals.bonuses ? `+${money(weekTotals.bonuses)}` : '—'}</td>
+                            <td className="px-3 py-2.5 text-right text-sm tabular-nums">{weekTotals.deductions ? `−${money(weekTotals.deductions)}` : '—'}</td>
+                            <td className="px-3 py-2.5 text-right text-sm tabular-nums">{weekTotals.advance ? `−${money(weekTotals.advance)}` : '—'}</td>
+                            <td className="px-3 py-2.5 text-right text-sm tabular-nums">{money(weekTotals.net)}</td>
+                            <td className="px-3 py-2.5 text-right text-sm tabular-nums">{money(weekTotals.paid)}</td>
+                            <td className="px-3 py-2.5 text-right text-sm tabular-nums">{money(weekTotals.remaining)}</td>
+                            <td />
+                          </tr>
+                        ) : null}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Телефон: та же ведомость короткими строками */}
+                  <div className="divide-y divide-border sm:hidden">
+                    {loading && sortedOperators.length === 0
+                      ? Array.from({ length: 4 }).map((_, idx) => (
+                          <div key={`m-skeleton-${idx}`} className="px-4 py-3"><Skeleton className="h-10 w-full rounded-xl" /></div>
+                        ))
+                      : null}
+                    {!loading && sortedOperators.length === 0 ? (
+                      <div className="px-4 py-8 text-center text-sm text-slate-400">В этой неделе пока нет строк для отображения.</div>
+                    ) : null}
+                    {sortedOperators.map((item) => {
+                      const w = item.week
+                      const active = selectedOperatorId === item.operator.id
+                      return (
+                        <button
+                          key={item.operator.id}
+                          type="button"
+                          onClick={() => selectRow(item.operator.id)}
+                          className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left ${item.operator.is_active ? '' : 'opacity-60'}`}
+                        >
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-medium text-foreground">{getOperatorDisplayName(item.operator)}</div>
+                            <div className="truncate text-[11px] text-slate-400">{w.shiftsCount} смен · {statusMeta(w.status).label}</div>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <div className="text-right">
+                              <div className="text-sm font-semibold tabular-nums text-foreground">{money(w.remainingAmount)}</div>
+                              <div className="text-[10px] text-slate-400">остаток</div>
+                            </div>
+                            <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform ${active ? 'rotate-90' : ''}`} />
+                          </div>
+                        </button>
+                      )
+                    })}
+                    {sortedOperators.length > 0 ? (
+                      <div className="flex items-center justify-between px-4 py-3 text-sm font-semibold">
+                        <span>Итого остаток</span>
+                        <span className="tabular-nums">{money(weekTotals.remaining)}</span>
                       </div>
                     ) : null}
-                  </Card>
-                )
-              })
-            )}
-          </div>
+                  </div>
+                </Card>
 
-          <div className="hidden sm:block">
-          <AdminTableViewport maxHeight="min(70vh, 40rem)">
-              <table className="min-w-[900px] text-sm">
-                <thead className={adminTableStickyTheadClass}>
-                  <tr>
-                    <th className="px-4 py-3 text-left">Оператор</th>
-                    <th className="px-4 py-3 text-center">Смен</th>
-                    <th className="px-4 py-3 text-right">Начислено</th>
-                    <th className="px-4 py-3 text-right">Авто-бонус</th>
-                    <th className="px-4 py-3 text-right">Бонусы</th>
-                    <th className="px-4 py-3 text-right">Штрафы</th>
-                    <th className="px-4 py-3 text-right">Долги</th>
-                    <th className="px-4 py-3 text-right">Аванс</th>
-                    <th className="px-4 py-3 text-right">Выплачено</th>
-                    <th className="px-4 py-3 text-right">Остаток</th>
-                    <th className="px-4 py-3 text-center">Статус</th>
-                    <th className="px-4 py-3 text-center">Действия</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading && operators.length === 0 ? (
-                    <tr>
-                      <td colSpan={13} className="px-4 py-6">
-                        <div className="space-y-3">
-                          {Array.from({ length: 6 }).map((_, idx) => (
-                            <div key={idx} className="flex gap-2">
-                              <Skeleton className="h-10 w-48" />
-                              <Skeleton className="h-10 w-16" />
-                              <Skeleton className="h-10 w-24" />
-                              <Skeleton className="h-10 w-24" />
-                              <Skeleton className="h-10 w-24" />
-                              <Skeleton className="h-10 w-24" />
-                              <Skeleton className="h-10 w-24" />
-                              <Skeleton className="h-10 w-24" />
-                              <Skeleton className="h-10 w-24" />
-                              <Skeleton className="h-10 w-24" />
-                              <Skeleton className="h-10 w-24" />
+                {selectedOperator ? (() => {
+                  const item = selectedOperator
+                  const w = item.week
+                  const title = getOperatorDisplayName(item.operator)
+                  const canPay = w.remainingAmount > 0.009
+                  const openDebt = openDebtAmount(w)
+                  const debtItems = w.debtItems || []
+                  const debtItemsTotal = debtItems.reduce((sum, d) => sum + Number(d.amount || 0), 0)
+                  const line = (label: string, value: string, cls = '') => (
+                    <div className="flex items-baseline justify-between gap-3 px-3 py-2 text-sm">
+                      <span className="text-muted-foreground">{label}</span>
+                      <span className={`shrink-0 tabular-nums ${cls}`}>{value}</span>
+                    </div>
+                  )
+                  const outlineBtn = 'h-9 rounded-xl border-border bg-white dark:bg-white/5 text-xs text-body hover:bg-surface-hover disabled:opacity-50'
+                  return (
+                    <Card className="overflow-hidden border-border bg-white dark:bg-white/[0.04]">
+                      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border p-4 sm:p-5">
+                        <Link href={`/operators/${item.operator.id}/profile`} className="flex min-w-0 items-center gap-3">
+                          <div className="h-11 w-11 shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-500 to-cyan-500">
+                            {item.operator.photo_url ? (
+                              <Image src={item.operator.photo_url} alt={title} width={44} height={44} className="h-full w-full object-cover" />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center text-sm font-semibold text-white">{title.charAt(0).toUpperCase()}</div>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="truncate font-semibold text-foreground">{title}</div>
+                            <div className="text-xs text-slate-400">
+                              {item.operator.position || 'оператор'} · {w.shiftsCount} смен · {item.operator.documents_count} док.
+                              {item.operator.expiring_documents > 0 ? <span className="text-amber-700 dark:text-amber-300"> · {item.operator.expiring_documents} скоро истекут</span> : null}
                             </div>
-                          ))}
+                          </div>
+                        </Link>
+                        <div className="flex flex-wrap gap-2">
+                          {canCreateAdvance ? (
+                            <Button type="button" variant="outline" className={outlineBtn} onClick={() => setAdvanceTarget(item)}><Plus className="mr-1.5 h-3.5 w-3.5" />Аванс</Button>
+                          ) : null}
+                          {canCreateAdjustment ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className={outlineBtn}
+                              onClick={() => {
+                                setAdjOperatorId(item.operator.id)
+                                setAdjCompanyId('')
+                                setAdjKind('fine')
+                                setAdjDate(todayISO())
+                                setAdjAmount('')
+                                setAdjComment('')
+                                setOperatorAdjTarget(item)
+                              }}
+                            >
+                              <Plus className="mr-1.5 h-3.5 w-3.5" />Корректировка
+                            </Button>
+                          ) : null}
+                          {openDebt > 0 && can('salary.mark_debt_paid') ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="h-9 rounded-xl border-emerald-500/30 bg-emerald-500/10 text-xs text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50"
+                              disabled={markDebtSaving && markDebtId === item.operator.id}
+                              onClick={() => void markDebtsPaid(item)}
+                            >
+                              {markDebtSaving && markDebtId === item.operator.id ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />}
+                              Оплатил долг ({money(openDebt)})
+                            </Button>
+                          ) : null}
+                          {can('salary.send_telegram') && item.operator.telegram_chat_id ? (
+                            <Button type="button" variant="outline" className={outlineBtn} disabled={sendingId === item.operator.id} onClick={() => void sendOne(item.operator.id)}>
+                              {sendingId === item.operator.id ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Send className="mr-1.5 h-3.5 w-3.5" />}
+                              Telegram
+                            </Button>
+                          ) : null}
+                          {canUpdateChatId ? (
+                            <Button type="button" variant="outline" className={outlineBtn} onClick={() => setChatTarget(item)} title="Telegram chat_id оператора">
+                              <Pencil className="mr-1.5 h-3.5 w-3.5" />{item.operator.telegram_chat_id ? 'chat_id' : 'Привязать Telegram'}
+                            </Button>
+                          ) : null}
+                          <Link href={`/salary/${item.operator.id}?weekStart=${weekStart}`} className="inline-flex h-9 items-center justify-center rounded-xl border border-border bg-white dark:bg-white/5 px-3 text-xs text-body transition hover:bg-surface-hover">
+                            Детали
+                          </Link>
+                          {canCreatePayment ? (
+                            <Button type="button" className="h-9 rounded-xl bg-emerald-500 text-xs text-white hover:bg-emerald-400 disabled:opacity-50" disabled={!canPay} onClick={() => setPayTarget(item)}>
+                              <Wallet className="mr-1.5 h-3.5 w-3.5" />Выплатить
+                            </Button>
+                          ) : null}
                         </div>
-                      </td>
-                    </tr>
-                  ) : null}
-                  {operators.length === 0 && !loading ? <tr><td colSpan={13} className="px-4 py-16 text-center text-slate-400">В этой неделе пока нет строк для отображения.</td></tr> : null}
-                  {operators.map((item) => {
-                    const st = statusMeta(item.week.status)
-                    const open = Boolean(expanded[item.operator.id])
-                    const canPay = item.week.remainingAmount > 0.009
-                    const hasChat = Boolean(item.operator.telegram_chat_id)
-                    const title = getOperatorDisplayName(item.operator)
-                    return (
-                      <Fragment key={item.operator.id}>
-                        <tr key={item.operator.id} className="border-t border-slate-200 dark:border-white/5 align-top">
-                          <td className="px-4 py-4">
-                            <div className="flex items-start gap-3">
-                              <button type="button" className="mt-1 rounded-lg border border-border bg-white dark:bg-white/5 p-1.5 text-body transition hover:bg-surface-hover" onClick={() => setExpanded((p) => ({ ...p, [item.operator.id]: !p[item.operator.id] }))}>
-                                {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                              </button>
-                              <Link href={`/operators/${item.operator.id}/profile`} className="flex min-w-0 items-start gap-3">
-                                <div className="h-11 w-11 overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-500 to-cyan-500">
-                                  {item.operator.photo_url ? <Image src={item.operator.photo_url} alt={title} width={44} height={44} className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center text-sm font-semibold text-white">{title.charAt(0).toUpperCase()}</div>}
-                                </div>
-                                <div className="min-w-0">
-                                  <div className="truncate font-medium text-foreground">{title}</div>
-                                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                                    {item.operator.position ? <span>{item.operator.position}</span> : null}
-                                    {!item.operator.is_active ? <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-700 dark:text-amber-300">неактивен</span> : null}
-                                    <span>{item.operator.documents_count} док.</span>
-                                    {item.operator.expiring_documents > 0 ? <span className="text-amber-700 dark:text-amber-300">{item.operator.expiring_documents} скоро истекут</span> : null}
+                      </div>
+
+                      <div className="grid gap-4 p-4 sm:p-5 xl:grid-cols-2">
+                        <div className="space-y-4">
+                          {/* Откуда сумма — та же формула, что в lib/domain/salary.ts */}
+                          <div>
+                            <div className="mb-2 text-sm font-medium text-foreground">
+                              Как получилась сумма · {weekStart ? `${formatRuDate(weekStart)} — ${formatRuDate(weekEnd)}` : 'неделя'}
+                            </div>
+                            <div className="divide-y divide-border rounded-xl border border-border">
+                              {line(`Смены (${w.shiftsCount})${w.seniorityBonusTotal ? `, в т.ч. стаж ${money(w.seniorityBonusTotal)}` : ''}`, money(w.grossAmount))}
+                              {w.autoBonusTotal ? line('Авто-бонус', `+${money(w.autoBonusTotal)}`, 'text-violet-700 dark:text-violet-300') : null}
+                              {w.bonusAmount ? line('Бонусы', `+${money(w.bonusAmount)}`, 'text-emerald-700 dark:text-emerald-300') : null}
+                              {w.fineAmount ? line('Штрафы', `−${money(w.fineAmount)}`, 'text-rose-600 dark:text-rose-300') : null}
+                              {w.debtAmount ? line('Долги', `−${money(w.debtAmount)}`, 'text-rose-600 dark:text-rose-300') : null}
+                              {w.advanceAmount ? line('Аванс', `−${money(w.advanceAmount)}`, 'text-amber-700 dark:text-amber-300') : null}
+                              <div className="flex items-baseline justify-between gap-3 bg-surface-muted/60 px-3 py-2 text-sm font-semibold">
+                                <span>К выплате</span>
+                                <span className="shrink-0 tabular-nums">{money(w.netAmount)}</span>
+                              </div>
+                              {w.paidAmount ? line('Уже выплачено', `−${money(w.paidAmount)}`, 'text-sky-700 dark:text-sky-300') : null}
+                              <div className="flex items-baseline justify-between gap-3 px-3 py-2 text-sm font-semibold">
+                                <span>Остаток</span>
+                                <span className={`shrink-0 tabular-nums ${w.remainingAmount > 0.009 ? 'text-foreground' : 'text-emerald-700 dark:text-emerald-300'}`}>{money(w.remainingAmount)}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div>
+                            <div className="mb-2 text-sm font-medium text-foreground">Смены · {w.shiftsCount}</div>
+                            {w.shifts.length === 0 ? (
+                              <div className="rounded-xl border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">Смен за эту неделю нет.</div>
+                            ) : (
+                              <div className="overflow-x-auto rounded-xl border border-border">
+                                <table className="w-full min-w-[520px] text-xs">
+                                  <thead className="bg-surface-muted text-muted-foreground">
+                                    <tr>
+                                      <th className="px-3 py-2 text-left font-medium">Дата</th>
+                                      <th className="px-3 py-2 text-left font-medium">Точка</th>
+                                      <th className="px-3 py-2 text-right font-medium">Выручка</th>
+                                      <th className="px-3 py-2 text-right font-medium">База</th>
+                                      <th className="px-3 py-2 text-right font-medium">Надбавки</th>
+                                      <th className="px-3 py-2 text-right font-medium">Итого</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-border">
+                                    {w.shifts.map((s) => {
+                                      const extras = (s.seniorityBonus || 0) + s.autoBonus + s.roleBonus
+                                      return (
+                                        <tr key={s.id}>
+                                          <td className="whitespace-nowrap px-3 py-2">
+                                            <span className="tabular-nums">{formatRuDate(s.date)}</span>
+                                            <span className={`ml-1.5 rounded-full border px-1.5 py-0.5 text-[10px] ${s.shift === 'day' ? 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300' : 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300'}`}>{s.shift === 'day' ? 'день' : 'ночь'}</span>
+                                          </td>
+                                          <td className="px-3 py-2 text-muted-foreground">{s.companyName || s.companyCode || '—'}</td>
+                                          <td className="px-3 py-2 text-right tabular-nums">{money(s.totalIncome)}</td>
+                                          <td className="px-3 py-2 text-right tabular-nums">{money(s.baseSalary)}</td>
+                                          <td
+                                            className="px-3 py-2 text-right tabular-nums text-violet-700 dark:text-violet-300"
+                                            title={`стаж ${money(s.seniorityBonus || 0)} · авто ${money(s.autoBonus)} · роль ${money(s.roleBonus)}`}
+                                          >
+                                            {extras ? `+${money(extras)}` : <span className={muted}>—</span>}
+                                          </td>
+                                          <td className="px-3 py-2 text-right font-medium tabular-nums">{money(s.salary)}</td>
+                                        </tr>
+                                      )
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="space-y-4">
+                          {/* Что взял в долг и когда */}
+                          <div>
+                            <div className="mb-2 text-sm font-medium text-foreground">
+                              Долги из кассы {debtItems.length ? <span className="font-normal text-muted-foreground">· {debtItems.length} шт. на {money(debtItemsTotal)}</span> : null}
+                            </div>
+                            {debtItems.length === 0 ? (
+                              <div className="rounded-xl border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">За эту неделю долгов из кассы нет.</div>
+                            ) : (
+                              <div className="divide-y divide-border rounded-xl border border-border">
+                                {debtItems.map((d) => {
+                                  // После выплаты недели позиции закрываются — показываем их приглушённо
+                                  const closed = d.status !== 'active'
+                                  return (
+                                    <div key={d.id} className={`flex items-start justify-between gap-3 px-3 py-2 ${closed ? 'opacity-60' : ''}`}>
+                                      <div className="min-w-0">
+                                        <div className="truncate text-sm text-foreground">
+                                          {d.name}
+                                          {closed ? <span className="ml-2 rounded-full border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">закрыта</span> : null}
+                                        </div>
+                                        <div className="truncate text-[11px] text-slate-500">
+                                          {dateTime(d.createdAt)}
+                                          {d.quantity ? ` · ${d.quantity} шт. × ${money(d.unitPrice)}` : ''}
+                                          {companyTitle(d.companyId) ? ` · ${companyTitle(d.companyId)}` : ''}
+                                          {d.comment ? ` · ${d.comment}` : ''}
+                                        </div>
+                                      </div>
+                                      <span className={`shrink-0 text-sm font-medium tabular-nums ${closed ? 'text-muted-foreground' : 'text-rose-600 dark:text-rose-300'}`}>{money(d.amount)}</span>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+
+                          <div>
+                            <div className="mb-2 text-sm font-medium text-foreground">Выплаты недели</div>
+                            {w.payments.length === 0 ? (
+                              <div className="rounded-xl border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">По этой неделе ещё нет выплат.</div>
+                            ) : (
+                              <div className="space-y-2">
+                                {w.payments.map((p) => (
+                                  <div key={p.id} className={`rounded-xl border border-border px-3 py-2 text-xs ${p.status === 'voided' ? 'opacity-60' : ''}`}>
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="text-body">{formatRuDate(p.payment_date)} · нал {money(p.cash_amount)} · {cashLabels.providerName} {money(p.kaspi_amount)}</span>
+                                      <span className={`shrink-0 font-semibold tabular-nums ${p.status === 'voided' ? 'text-slate-400 line-through' : 'text-emerald-700 dark:text-emerald-300'}`}>{money(p.total_amount)}</span>
+                                    </div>
+                                    {p.comment ? <div className="mt-1 text-[11px] text-muted-foreground">{p.comment}</div> : null}
+                                    <div className="mt-1 flex justify-end">
+                                      {p.status === 'voided' ? (
+                                        <span className="text-[11px] text-slate-400">аннулировано</span>
+                                      ) : canVoidPayment ? (
+                                        <button
+                                          type="button"
+                                          disabled={voidingPaymentId === p.id}
+                                          onClick={() => void voidPayment(item, p)}
+                                          className="inline-flex items-center gap-1 text-[11px] text-rose-600 hover:underline disabled:opacity-50 dark:text-rose-300"
+                                        >
+                                          {voidingPaymentId === p.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
+                                          Аннулировать
+                                        </button>
+                                      ) : null}
+                                    </div>
                                   </div>
-                                </div>
-                              </Link>
-                            </div>
-                          </td>
-                          <td className="px-4 py-4 text-center"><div className="inline-flex flex-col items-center gap-0.5"><span className="text-base font-semibold text-foreground">{item.week.shiftsCount}</span><span className="text-[10px] text-slate-500">смен</span></div></td>
-                          <td className="px-4 py-4 text-right font-medium text-foreground">{money(item.week.grossAmount)}</td>
-                          <td className="px-4 py-4 text-right text-violet-700 dark:text-violet-300">{item.week.autoBonusTotal > 0 ? money(item.week.autoBonusTotal) : <span className="text-slate-600">—</span>}</td>
-                          <td className="px-4 py-4 text-right text-emerald-700 dark:text-emerald-300">{money(item.week.bonusAmount)}</td>
-                          <td className="px-4 py-4 text-right text-rose-700 dark:text-rose-300">{money(item.week.fineAmount)}</td>
-                          <td className="px-4 py-4 text-right text-rose-700 dark:text-rose-300">
-                            <div className="flex flex-col items-end gap-1">
-                              <span>{money(item.week.debtAmount)}</span>
-                              {openDebtAmount(item.week) > 0 && can('salary.mark_debt_paid') ? (
-                                <button
-                                  type="button"
-                                  disabled={markDebtSaving && markDebtId === item.operator.id}
-                                  onClick={() => void markDebtsPaid(item)}
-                                  className="text-[10px] rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50 whitespace-nowrap"
-                                >
-                                  {markDebtSaving && markDebtId === item.operator.id ? '...' : 'Оплатил долг'}
-                                </button>
-                              ) : null}
-                            </div>
-                          </td>
-                          <td className="px-4 py-4 text-right text-amber-700 dark:text-amber-300">{money(item.week.advanceAmount)}</td>
-                          <td className="px-4 py-4 text-right text-sky-700 dark:text-sky-300">{money(item.week.paidAmount)}</td>
-                          <td className="px-4 py-4 text-right text-lg font-semibold text-foreground">{money(item.week.remainingAmount)}</td>
-                          <td className="px-4 py-4 text-center"><span className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${st.className}`}>{st.label}</span></td>
-                          <td className="px-4 py-4"><div className="flex flex-wrap items-center justify-center gap-2">{canCreateAdvance && <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover" onClick={() => setAdvanceTarget(item)}><Plus className="mr-2 h-4 w-4" />Аванс</Button>}{canCreatePayment && <Button type="button" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400 disabled:opacity-50" disabled={!canPay} onClick={() => setPayTarget(item)}><Wallet className="mr-2 h-4 w-4" />Выплатить</Button>}<Link href={`/salary/${item.operator.id}?weekStart=${weekStart}`} className="inline-flex h-10 items-center justify-center rounded-xl border border-border bg-white dark:bg-white/5 px-4 text-sm text-body transition hover:bg-surface-hover">Детали</Link></div></td>
-                          </tr>
-                        {open ? <tr className="border-t border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-slate-950/30"><td colSpan={13} className="px-4 py-5"><div className="grid gap-4 xl:grid-cols-[1fr_1fr_1fr]">
-                          <Card className="border-border bg-white dark:bg-white/[0.03] p-4"><div className="mb-4 flex items-center gap-2 text-sm font-medium text-foreground"><Building2 className="h-4 w-4 text-emerald-700 dark:text-emerald-300" />Разбивка по компаниям</div><div className="overflow-x-auto"><table className="min-w-[680px] text-xs"><thead className="text-slate-500"><tr><th className="pb-3 text-left font-medium">Компания</th><th className="pb-3 text-right font-medium">Начислено</th><th className="pb-3 text-right font-medium">Бонусы</th><th className="pb-3 text-right font-medium">Штрафы</th><th className="pb-3 text-right font-medium">Долги</th><th className="pb-3 text-right font-medium">Аванс</th><th className="pb-3 text-right font-medium">К выплате</th></tr></thead><tbody>{item.week.companyAllocations.map((a) => <tr key={a.companyId} className="border-t border-slate-200 dark:border-white/5 text-body"><td className="py-3 pr-3"><div className="font-medium text-foreground">{a.companyName || a.companyCode || a.companyId}</div><div className="text-[11px] text-slate-500">Доля: {(a.shareRatio * 100).toFixed(1)}%</div></td><td className="py-3 text-right">{money(a.accruedAmount)}</td><td className="py-3 text-right text-emerald-700 dark:text-emerald-300">{money(a.bonusAmount)}</td><td className="py-3 text-right text-rose-700 dark:text-rose-300">{money(a.fineAmount)}</td><td className="py-3 text-right text-rose-700 dark:text-rose-300">{money(a.debtAmount)}</td><td className="py-3 text-right text-amber-700 dark:text-amber-300">{money(a.advanceAmount)}</td><td className="py-3 text-right font-medium text-foreground">{money(a.netAmount)}</td></tr>)}</tbody></table></div></Card>
-                          <Card className="border-border bg-white dark:bg-white/[0.03] p-4"><div className="mb-4 flex items-center justify-between gap-2 text-sm font-medium text-foreground"><span>Смены ({item.week.shiftsCount})</span><span className="text-xs text-muted-foreground">{item.week.seniorityBonusTotal ? `Стаж: ${money(item.week.seniorityBonusTotal)}` : item.week.autoBonusTotal > 0 ? `Авто-бонус: ${money(item.week.autoBonusTotal)}` : ''}</span></div>{item.week.shifts.length === 0 ? <div className="rounded-2xl border border-dashed border-border bg-slate-50 dark:bg-white/[0.02] p-6 text-sm text-muted-foreground">Смен за эту неделю нет.</div> : <div className="overflow-x-auto"><table className="min-w-[680px] text-xs"><thead className="text-slate-500"><tr><th className="pb-3 text-left font-medium">Дата</th><th className="pb-3 text-left font-medium">Смена</th><th className="pb-3 text-left font-medium">Точка</th><th className="pb-3 text-right font-medium">Выручка</th><th className="pb-3 text-right font-medium">База</th><th className="pb-3 text-right font-medium">Стаж</th><th className="pb-3 text-right font-medium">Авто</th><th className="pb-3 text-right font-medium">Роль</th><th className="pb-3 text-right font-medium">Итого</th></tr></thead><tbody>{item.week.shifts.map((s) => <tr key={s.id} className="border-t border-slate-200 dark:border-white/5 text-body"><td className="py-2 pr-3 text-body">{formatRuDate(s.date)}</td><td className="py-2 pr-3"><span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${s.shift === 'day' ? 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300' : 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300'}`}>{s.shift === 'day' ? 'день' : 'ночь'}</span></td><td className="py-2 pr-3 text-muted-foreground">{s.companyName || s.companyCode || '—'}</td><td className="py-2 text-right">{money(s.totalIncome)}</td><td className="py-2 text-right">{money(s.baseSalary)}</td><td className="py-2 text-right text-cyan-700 dark:text-cyan-300">{(s.seniorityBonus || 0) > 0 ? money(s.seniorityBonus || 0) : <span className="text-slate-600">—</span>}</td><td className="py-2 text-right text-violet-700 dark:text-violet-300">{s.autoBonus > 0 ? money(s.autoBonus) : <span className="text-slate-600">—</span>}</td><td className="py-2 text-right text-cyan-700 dark:text-cyan-300">{s.roleBonus > 0 ? money(s.roleBonus) : <span className="text-slate-600">—</span>}</td><td className="py-2 text-right font-medium text-foreground">{money(s.salary)}</td></tr>)}</tbody></table></div>}</Card>
-                          <Card className="border-border bg-white dark:bg-white/[0.03] p-4"><div className="mb-4 flex items-center gap-2 text-sm font-medium text-foreground">Платежи недели</div>{item.week.payments.length === 0 ? <div className="rounded-2xl border border-dashed border-border bg-slate-50 dark:bg-white/[0.02] p-6 text-sm text-muted-foreground">По этой неделе ещё нет платежей.</div> : <div className="space-y-3">{item.week.payments.map((p) => <div key={p.id} className="rounded-2xl border border-border bg-white dark:bg-white/[0.03] p-3"><div className="flex items-center justify-between gap-3"><div><div className="text-sm font-medium text-foreground">{formatRuDate(p.payment_date)}</div><div className="mt-1 text-xs text-muted-foreground">Нал: {money(p.cash_amount)} • {cashLabels.providerName}: {money(p.kaspi_amount)}</div></div><div className="text-right"><div className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">{money(p.total_amount)}</div><div className="text-[11px] text-slate-500">{p.status === 'voided' ? 'аннулировано' : 'активно'}</div></div></div>{p.comment ? <div className="mt-2 text-xs text-muted-foreground">{p.comment}</div> : null}<div className="mt-3 flex justify-end">{p.status === 'voided' ? <span className="rounded-full border border-slate-500/30 bg-slate-500/10 px-3 py-1 text-[11px] text-slate-400">Уже аннулировано</span> : can('salary.void_payment') ? <Button type="button" variant="outline" className="rounded-xl border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-200 hover:bg-red-500/20 disabled:opacity-50" disabled={voidingPaymentId === p.id} onClick={() => void voidPayment(item, p)}>{voidingPaymentId === p.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Аннулировать</Button> : null}</div></div>)}</div>}</Card>
-                          </div></td></tr> : null}
-                      </Fragment>
-                    )
-                  })}
-                </tbody>
-              </table>
-          </AdminTableViewport>
-          </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
 
-          {canCreateAdjustment && (
-          <Card className="border-border bg-white dark:bg-white/[0.04] p-5">
-            <div className="mb-5 flex items-center gap-3">
-              <div className="rounded-2xl bg-emerald-500/15 p-3 text-emerald-700 dark:text-emerald-300">
-                <Building2 className="h-5 w-5" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-foreground">Ручная корректировка недели</h2>
-                <p className="text-sm text-muted-foreground">Для бонусов, штрафов и ручных долгов. Аванс через эту форму больше не создаётся.</p>
-              </div>
-            </div>
-            <form className="grid gap-4 md:grid-cols-2 xl:grid-cols-6" onSubmit={submitAdjustment}>
-              <select className={selectCls} value={adjOperatorId} onChange={(e) => setAdjOperatorId(e.target.value)}>
-                {(data?.operators || []).map((i) => <option key={i.operator.id} value={i.operator.id}>{getOperatorDisplayName(i.operator)}</option>)}
-              </select>
-              <select className={selectCls} value={adjCompanyId} onChange={(e) => setAdjCompanyId(e.target.value)}>
-                <option value="">Без привязки к точке</option>
-                {(data?.companies || []).map((c) => <option key={c.id} value={c.id}>{c.name || c.code || c.id}</option>)}
-              </select>
-              <select className={selectCls} value={adjKind} onChange={(e) => setAdjKind(e.target.value as AdjustmentKind)}>
-                <option value="fine">Штраф</option>
-                <option value="debt">Долг</option>
-                <option value="bonus">Бонус</option>
-              </select>
-              <DatePicker className="h-11" value={adjDate} onChange={setAdjDate} />
-              <input className={input} type="text" placeholder="Сумма" value={adjAmount} onChange={(e) => setAdjAmount(e.target.value)} />
-              <Button type="submit" className="h-11 rounded-xl bg-emerald-500 text-white hover:bg-emerald-400">
-                {adjSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Сохранить'}
-              </Button>
-              <input className={`${input} md:col-span-2 xl:col-span-6`} type="text" placeholder="Комментарий" value={adjComment} onChange={(e) => setAdjComment(e.target.value)} />
-            </form>
-            {adjSuccess ? <div className="mt-4 flex items-center gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300"><CheckCircle2 className="h-4 w-4 shrink-0" />Корректировка сохранена</div> : null}
-          </Card>
-          )}
+                          {w.companyAllocations.length > 1 ? (
+                            <details className="group">
+                              <summary className="flex cursor-pointer list-none items-center gap-1.5 text-sm font-medium text-foreground [&::-webkit-details-marker]:hidden">
+                                <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
+                                По точкам · {w.companyAllocations.length}
+                              </summary>
+                              <div className="mt-2 overflow-x-auto rounded-xl border border-border">
+                                <table className="w-full min-w-[520px] text-xs">
+                                  <thead className="bg-surface-muted text-muted-foreground">
+                                    <tr>
+                                      <th className="px-3 py-2 text-left font-medium">Точка</th>
+                                      <th className="px-3 py-2 text-right font-medium">Начислено</th>
+                                      <th className="px-3 py-2 text-right font-medium">Бонусы</th>
+                                      <th className="px-3 py-2 text-right font-medium">Штрафы и долги</th>
+                                      <th className="px-3 py-2 text-right font-medium">Аванс</th>
+                                      <th className="px-3 py-2 text-right font-medium">К выплате</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-border">
+                                    {w.companyAllocations.map((a) => (
+                                      <tr key={a.companyId}>
+                                        <td className="px-3 py-2">
+                                          <div className="text-foreground">{a.companyName || a.companyCode || a.companyId}</div>
+                                          <div className="text-[10px] text-slate-500">доля {(a.shareRatio * 100).toFixed(1)}%</div>
+                                        </td>
+                                        <td className="px-3 py-2 text-right tabular-nums">{money(a.accruedAmount)}</td>
+                                        <td className="px-3 py-2 text-right tabular-nums text-emerald-700 dark:text-emerald-300">{money(a.bonusAmount)}</td>
+                                        <td className="px-3 py-2 text-right tabular-nums text-rose-600 dark:text-rose-300">{money(a.fineAmount + a.debtAmount)}</td>
+                                        <td className="px-3 py-2 text-right tabular-nums text-amber-700 dark:text-amber-300">{money(a.advanceAmount)}</td>
+                                        <td className="px-3 py-2 text-right font-medium tabular-nums">{money(a.netAmount)}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </details>
+                          ) : null}
+                        </div>
+                      </div>
+                    </Card>
+                  )
+                })() : (
+                  <Card className="border-dashed border-border bg-transparent p-6 text-center text-sm text-muted-foreground">
+                    Нажмите на оператора, чтобы увидеть расчёт, долги из кассы, смены и выплаты недели.
+                  </Card>
+                )}
 
-          </>)}
+                {/* Корректировка у конкретного оператора — вместо общей формы внизу страницы */}
+                {operatorAdjTarget ? (
+                  <Modal title="Корректировка недели" subtitle={getOperatorDisplayName(operatorAdjTarget.operator)} onClose={() => setOperatorAdjTarget(null)}>
+                    <form className="space-y-4" onSubmit={submitAdjustment}>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div>
+                          <label className="mb-2 block text-sm text-body">Тип</label>
+                          <select className={selectCls} value={adjKind} onChange={(e) => setAdjKind(e.target.value as AdjustmentKind)}>
+                            <option value="fine">Штраф</option>
+                            <option value="debt">Долг</option>
+                            <option value="bonus">Бонус</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="mb-2 block text-sm text-body">Дата</label>
+                          <DatePicker className="h-11" value={adjDate} onChange={setAdjDate} />
+                        </div>
+                        <div>
+                          <label className="mb-2 block text-sm text-body">Точка</label>
+                          <select className={selectCls} value={adjCompanyId} onChange={(e) => setAdjCompanyId(e.target.value)}>
+                            <option value="">Без привязки к точке</option>
+                            {(data?.companies || []).map((c) => (
+                              <option key={c.id} value={c.id}>{c.name || c.code || c.id}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="mb-2 block text-sm text-body">Сумма</label>
+                          <input className={input} type="text" placeholder="0" value={adjAmount} onChange={(e) => setAdjAmount(e.target.value)} />
+                        </div>
+                      </div>
+                      <textarea className={textarea} placeholder="Комментарий" value={adjComment} onChange={(e) => setAdjComment(e.target.value)} />
+                      <p className="text-xs text-muted-foreground">Аванс выдаётся отдельной кнопкой «Аванс» — через корректировку он не создаётся.</p>
+                      <div className="flex justify-end gap-3">
+                        <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover" onClick={() => setOperatorAdjTarget(null)}>Отмена</Button>
+                        <Button type="submit" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400">{adjSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Сохранить'}</Button>
+                      </div>
+                    </form>
+                  </Modal>
+                ) : null}
+              </div>
+            )
+          })()}
 
           {/* ── OPERATOR EVENTS TAB ─────────────────────────────────────────── */}
           {tab === 'operator-events' && (

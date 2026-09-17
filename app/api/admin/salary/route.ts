@@ -1076,6 +1076,48 @@ export async function GET(req: Request) {
           )
         })
 
+      // Позиции долгов из кассы за неделю — чтобы в карточке оператора было видно,
+      // что он взял и когда, а не только сумму. После выплаты недели позиции
+      // помечаются deleted (closeWeekDebtsIfSettled), поэтому берём оба статуса:
+      // у выплаченной недели список иначе был бы пустым, хотя долг из неё удержан.
+      // Один запрос на всю неделю, постранично: PostgREST режет ответ на 1000 строк.
+      const weekOperatorIds = weeklyOperators.map((item) => String(item.operator.id))
+      const debtItemsByOperator = new Map<string, Array<Record<string, unknown>>>()
+      if (weekOperatorIds.length > 0) {
+        for (let page = 0; page < 20; page += 1) {
+          let itemsQuery = supabase
+            .from('point_debt_items')
+            .select('id, operator_id, item_name, quantity, unit_price, total_amount, created_at, company_id, comment, status')
+            .eq('week_start', weekStart)
+            .in('operator_id', weekOperatorIds)
+            .order('created_at', { ascending: false })
+            .range(page * 1000, page * 1000 + 999)
+          if (allowedCompanyIds) itemsQuery = itemsQuery.in('company_id', allowedCompanyIds)
+          const { data: itemRows, error: itemsError } = await itemsQuery
+          if (itemsError) throw itemsError
+          for (const row of (itemRows || []) as any[]) {
+            const key = String(row.operator_id)
+            const list = debtItemsByOperator.get(key) || []
+            list.push({
+              id: String(row.id),
+              name: String(row.item_name || 'Товар'),
+              quantity: Number(row.quantity || 0),
+              unitPrice: Number(row.unit_price || 0),
+              amount: roundMoney(Number(row.total_amount || 0)),
+              createdAt: String(row.created_at || ''),
+              companyId: row.company_id ? String(row.company_id) : null,
+              comment: row.comment ? String(row.comment) : null,
+              status: String(row.status || 'active'),
+            })
+            debtItemsByOperator.set(key, list)
+          }
+          if (!itemRows || itemRows.length < 1000) break
+        }
+      }
+      for (const item of weeklyOperators as any[]) {
+        item.week.debtItems = debtItemsByOperator.get(String(item.operator.id)) || []
+      }
+
       const totals = weeklyOperators.reduce(
         (acc, item) => {
           acc.grossAmount += item.week.grossAmount
