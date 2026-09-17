@@ -1422,45 +1422,63 @@ function ReportsContent() {
           {activeTab === 'overview' && (
             <div className="space-y-6">
               {/* Stats Grid */}
+              {(() => {
+                // Процент к прошлому периоду + словами, куда сдвинулось, и разница в тенге.
+                // Цвет решает смысл, а не знак: рост расходов — плохо (красный).
+                const pct = (cur: number, prev: number) => (prev !== 0 ? Number(((cur - prev) / Math.abs(prev) * 100).toFixed(1)) : undefined)
+                const diff = (cur: number, prev: number) => {
+                  const d = cur - prev
+                  return d === 0 ? 'без изменений' : `${d > 0 ? '+' : '−'}${formatMoneyFull(Math.abs(d))}`
+                }
+                const hint = (cur: number, prev: number, up: string, down: string) => (prev === 0 || cur === prev ? undefined : cur > prev ? up : down)
+                const was = (cur: number, prev: number) => `было ${formatMoneyFull(prev)} · ${diff(cur, prev)}`
+                return (
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard
                   title="Общая выручка"
                   value={formatMoneyFull(totals.totalIncome)}
-                  subValue={comparisonMode ? `было ${formatMoneyFull(totalsPrev.totalIncome)}` : `${formatMoneyCompact(totals.incomeCash)} нал / ${formatMoneyCompact(totals.incomeNonCash)} безнал`}
+                  subValue={comparisonMode ? was(totals.totalIncome, totalsPrev.totalIncome) : `${formatMoneyCompact(totals.incomeCash)} нал / ${formatMoneyCompact(totals.incomeNonCash)} безнал`}
                   icon={DollarSign}
-                  trend={totalsPrev.totalIncome > 0 ? Number(((totals.totalIncome - totalsPrev.totalIncome) / totalsPrev.totalIncome * 100).toFixed(1)) : undefined}
+                  trend={totalsPrev.totalIncome > 0 ? pct(totals.totalIncome, totalsPrev.totalIncome) : undefined}
+                  trendHint={hint(totals.totalIncome, totalsPrev.totalIncome, 'выручка выросла', 'выручка упала')}
                   color="green"
                   onClick={() => setDrillDown({ type: 'income' })}
                 />
                 <StatCard
                   title="Расходы"
                   value={formatMoneyFull(totals.totalExpense)}
-                  subValue={comparisonMode ? `было ${formatMoneyFull(totalsPrev.totalExpense)}` : `${formatMoneyCompact(totals.expenseCash)} нал / ${formatMoneyCompact(totals.expenseKaspi)} безнал`}
+                  subValue={comparisonMode ? was(totals.totalExpense, totalsPrev.totalExpense) : `${formatMoneyCompact(totals.expenseCash)} нал / ${formatMoneyCompact(totals.expenseKaspi)} безнал`}
                   icon={TrendingDown}
-                  trend={totalsPrev.totalExpense > 0 ? Number(((totals.totalExpense - totalsPrev.totalExpense) / totalsPrev.totalExpense * 100).toFixed(1)) : undefined}
+                  trend={totalsPrev.totalExpense > 0 ? pct(totals.totalExpense, totalsPrev.totalExpense) : undefined}
+                  trendGood="down"
+                  trendHint={hint(totals.totalExpense, totalsPrev.totalExpense, 'расходы выросли', 'расходы снизились')}
                   color="red"
                   onClick={() => setDrillDown({ type: 'expense' })}
                 />
                 <StatCard
                   title="Чистая прибыль"
                   value={formatMoneyFull(totals.profit)}
-                  subValue={comparisonMode ? `было ${formatMoneyFull(totalsPrev.profit)}` : `Маржа ${totals.totalIncome > 0 ? (totals.profit / totals.totalIncome * 100).toFixed(1) : 0}%`}
+                  subValue={comparisonMode ? was(totals.profit, totalsPrev.profit) : `Маржа ${totals.totalIncome > 0 ? (totals.profit / totals.totalIncome * 100).toFixed(1) : 0}%`}
                   icon={Wallet}
-                  trend={totalsPrev.profit !== 0 ? Number(((totals.profit - totalsPrev.profit) / Math.abs(totalsPrev.profit) * 100).toFixed(1)) : undefined}
+                  trend={pct(totals.profit, totalsPrev.profit)}
+                  trendHint={hint(totals.profit, totalsPrev.profit, 'прибыль выросла', 'прибыль упала')}
                   color={totals.profit >= 0 ? 'blue' : 'red'}
                   onClick={() => setDrillDown({ type: 'profit' })}
                 />
-                <StatCard 
+                <StatCard
                   title="Выручка в день"
                   value={perDay ? formatMoneyFull(perDay.income) : '—'}
                   subValue={perDay
                     ? `за ${perDay.days} дн. · сальдо нал ${formatMoneyCompact(totals.remainingCash)} / безнал ${formatMoneyCompact(totals.remainingKaspi)}`
                     : 'период ещё не начался'}
-                  trend={perDay && perDay.prevIncome > 0 ? Number(((perDay.income - perDay.prevIncome) / perDay.prevIncome * 100).toFixed(1)) : undefined}
+                  trend={perDay && perDay.prevIncome > 0 ? pct(perDay.income, perDay.prevIncome) : undefined}
+                  trendHint={perDay ? hint(perDay.income, perDay.prevIncome, 'в день больше', 'в день меньше') : undefined}
                   icon={Activity}
                   color="amber"
                 />
               </div>
+                )
+              })()}
 
               {/* Payment Types Breakdown */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

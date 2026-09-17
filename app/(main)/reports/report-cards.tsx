@@ -26,15 +26,23 @@ export const ChartShell = memo(({ children, className = '', height = 'h-80' }: {
 ))
 ChartShell.displayName = 'ChartShell'
 
-export const StatCard = memo(({ title, value, subValue, icon: Icon, trend, color = 'blue', onClick }: {
+export const StatCard = memo(({ title, value, subValue, icon: Icon, trend, trendGood = 'up', trendHint, color = 'blue', onClick }: {
   title: string
   value: string
   subValue?: string
   icon: React.ElementType
   trend?: number
+  /**
+   * В какую сторону изменение — хорошо. Для расходов 'down': рост расходов
+   * красный. Раньше знак сам решал цвет, и «+49% расходов» горело зелёным.
+   */
+  trendGood?: 'up' | 'down'
+  /** Словами под значком: «расходы выросли» — чтобы процент не приходилось толковать */
+  trendHint?: string
   color?: 'blue' | 'green' | 'red' | 'amber'
   onClick?: () => void
 }) => {
+  const trendIsGood = trend === undefined || trend === 0 ? null : (trend > 0) === (trendGood === 'up')
   const iconTone: Record<string, string> = {
     blue: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
     green: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
@@ -52,9 +60,14 @@ export const StatCard = memo(({ title, value, subValue, icon: Icon, trend, color
           <Icon className="w-5 h-5" />
         </div>
         {trend !== undefined && (
-          <span className={`inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full ${trend > 0 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : trend < 0 ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' : 'bg-slate-500/10 text-muted-foreground'}`}>
-            {trend > 0 ? '+' : ''}{trend}%
-          </span>
+          <div className="flex flex-col items-end gap-0.5">
+            <span className={`inline-flex items-center gap-0.5 text-xs font-semibold px-2 py-0.5 rounded-full ${trendIsGood === true ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : trendIsGood === false ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' : 'bg-slate-500/10 text-muted-foreground'}`}>
+              {trend > 0 ? '▲' : trend < 0 ? '▼' : ''} {Math.abs(trend)}%
+            </span>
+            {trendHint ? (
+              <span className={`text-[10px] ${trendIsGood === true ? 'text-emerald-600 dark:text-emerald-400' : trendIsGood === false ? 'text-rose-600 dark:text-rose-400' : 'text-muted-foreground'}`}>{trendHint}</span>
+            ) : null}
+          </div>
         )}
       </div>
       <p className="text-muted-foreground text-xs font-medium">{title}</p>
