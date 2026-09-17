@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { kzTodayISO } from '@/lib/server/forecast-inputs'
 import { requireAnyCapability, requireCapability } from '@/lib/server/capabilities'
 
 // Ответ никогда не кэшируем: после аннулирования корректировки страница
@@ -755,9 +756,30 @@ export async function POST(req: Request) {
         return json({ error: 'Компания вне вашей организации' }, 403)
       }
 
+      // Дата по Алматы: toISOString() давал UTC, и с 00:00 до 05:00 запись уходила вчерашним днём
+      const adjustmentDate = date || kzTodayISO()
+
+      // Двойное нажатие / повтор запроса: та же корректировка за последнюю минуту
+      {
+        const since = new Date(Date.now() - 60_000).toISOString()
+        const { data: recent, error: recentError } = await supabase
+          .from('staff_adjustments')
+          .select('id')
+          .eq('staff_id', staff_id)
+          .eq('kind', kind)
+          .eq('amount', Math.round(amount))
+          .eq('date', adjustmentDate)
+          .eq('status', 'active')
+          .gte('created_at', since)
+          .limit(1)
+        if (!recentError && (recent || []).length > 0) {
+          return json({ error: 'Такая же запись уже сохранена меньше минуты назад — похоже на двойное нажатие. Обновите страницу.' }, 409)
+        }
+      }
+
       const { data, error } = await supabase
         .from('staff_adjustments')
-        .insert({ staff_id, kind, amount: Math.round(amount), date: date || new Date().toISOString().slice(0, 10), comment: comment?.trim() || null, status: 'active' })
+        .insert({ staff_id, kind, amount: Math.round(amount), date: adjustmentDate, comment: comment?.trim() || null, status: 'active' })
         .select()
         .single()
 
@@ -773,7 +795,7 @@ export async function POST(req: Request) {
         const { error: expenseError } = await supabase
           .from('expenses')
           .insert({
-            date: date || new Date().toISOString().slice(0, 10),
+            date: adjustmentDate,
             company_id,
             category: 'Аванс',
             cash_amount: Math.round(amount),
@@ -782,7 +804,11 @@ export async function POST(req: Request) {
             source_type: 'salary_advance',
             source_id: `staff-adjustment:${String(data.id)}`,
           })
-        if (expenseError) throw expenseError
+        if (expenseError) {
+          // Аванс без расхода — в зарплате есть, в кассе нет. Откатываем корректировку.
+          await supabase.from('staff_adjustments').delete().eq('id', data.id)
+          throw expenseError
+        }
       }
 
       await writeAuditLog(supabase, { entityType: 'staff-adjustment', entityId: data.id, action: 'create', payload: { staff_id, kind, amount, date } })

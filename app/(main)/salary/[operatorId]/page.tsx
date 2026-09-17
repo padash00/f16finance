@@ -34,6 +34,7 @@ import { Input } from '@/components/ui/input'
 import { addDaysISO, formatRuDate, mondayOfDate, toISODateLocal, todayISO } from '@/lib/core/date'
 import { useToday } from '@/lib/client/use-today'
 import { formatMoney } from '@/lib/core/format'
+import { toast } from '@/hooks/use-toast'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { calculateOperatorShiftBreakdown } from '@/lib/domain/salary'
 
@@ -181,29 +182,34 @@ function OperatorSalaryDetailPageContent() {
     }
   }
 
+  // Ошибки действий в окнах — уведомлением поверх окна: карточка ошибок наверху
+  // страницы пряталась за окном и гасла через 6 секунд.
+  const notifyError = (title: string, description?: string) => { toast({ title, description, variant: 'destructive' }) }
+
   const submitAdvance = async (e: FormEvent) => {
     e.preventDefault()
+    if (advanceSaving) return
     const cash = parseMoney(advanceCash), kaspi = parseMoney(advanceKaspi)
-    if (!advanceCompanyId) return setError('Выберите точку для аванса')
-    if (cash + kaspi <= 0) return setError('Сумма аванса должна быть больше 0')
+    if (!advanceCompanyId) return notifyError('Выберите точку для аванса')
+    if (cash + kaspi <= 0) return notifyError('Сумма аванса должна быть больше 0')
     setAdvanceSaving(true); setError(null)
     try {
       await post({ action: 'createAdvance', payload: { operator_id: operatorId, week_start: weekStart, company_id: advanceCompanyId, payment_date: advanceDate, cash_amount: cash, kaspi_amount: kaspi, comment: advanceComment.trim() || null } })
-      setAdvanceOpen(false); await load(true)
-    } catch (e: any) { setError(e?.message || 'Не удалось выдать аванс') } finally { setAdvanceSaving(false) }
+      setAdvanceOpen(false); toast({ title: 'Аванс выдан' }); await load(true)
+    } catch (e: any) { notifyError('Не удалось выдать аванс', e?.message) } finally { setAdvanceSaving(false) }
   }
 
   const submitPayment = async (e: FormEvent) => {
     e.preventDefault()
-    if (!data) return
+    if (!data || paySaving) return
     const cash = parseMoney(payCash), kaspi = parseMoney(payKaspi), total = cash + kaspi
-    if (total <= 0) return setError('Сумма выплаты должна быть больше 0')
-    if (total - data.week.remainingAmount > 0.009) return setError('Сумма выплаты превышает остаток по неделе')
+    if (total <= 0) return notifyError('Сумма выплаты должна быть больше 0')
+    if (total - data.week.remainingAmount > 0.009) return notifyError('Сумма выплаты превышает остаток по неделе')
     setPaySaving(true); setError(null)
     try {
       await post({ action: 'createWeeklyPayment', payload: { operator_id: operatorId, week_start: weekStart, payment_date: payDate, cash_amount: cash, kaspi_amount: kaspi, comment: payComment.trim() || null } })
-      setPayOpen(false); await load(true)
-    } catch (e: any) { setError(e?.message || 'Не удалось провести выплату') } finally { setPaySaving(false) }
+      setPayOpen(false); toast({ title: 'Выплата проведена' }); await load(true)
+    } catch (e: any) { notifyError('Не удалось провести выплату', e?.message) } finally { setPaySaving(false) }
   }
 
   const sendTelegram = async () => {
@@ -218,6 +224,7 @@ function OperatorSalaryDetailPageContent() {
 
   const submitAdjustment = async (e: FormEvent) => {
     e.preventDefault()
+    if (adjSaving) return
     const amount = parseMoney(adjAmount)
     if (amount <= 0) return setError('Сумма корректировки должна быть больше 0')
     setAdjSaving(true); setError(null)
@@ -228,7 +235,7 @@ function OperatorSalaryDetailPageContent() {
   }
 
   const voidItem = async () => {
-    if (!voidConfirm) return
+    if (!voidConfirm || voidSaving) return
     setVoidSaving(true); setError(null)
     try {
       if (voidConfirm.type === 'payment') {
@@ -237,7 +244,7 @@ function OperatorSalaryDetailPageContent() {
         await post({ action: 'voidAdjustment', adjustmentId: voidConfirm.id, weekStart, operatorId })
       }
       setVoidConfirm(null); await load(true)
-    } catch (e: any) { setError(e?.message || 'Не удалось аннулировать') } finally { setVoidSaving(false) }
+    } catch (e: any) { notifyError('Не удалось аннулировать', e?.message) } finally { setVoidSaving(false) }
   }
 
   const shifts = useMemo(() => {
@@ -498,7 +505,7 @@ function OperatorSalaryDetailPageContent() {
                   <DatePicker className="h-11" value={adjDate} onChange={setAdjDate} />
                   <input className={input} type="text" placeholder="Сумма" value={adjAmount} onChange={(e) => setAdjAmount(e.target.value)} />
                   {can('salary.create_adjustment') && (
-                  <Button type="submit" className="h-11 rounded-xl bg-emerald-500 text-white hover:bg-emerald-400">
+                  <Button type="submit" disabled={adjSaving} className="h-11 rounded-xl bg-emerald-500 text-white hover:bg-emerald-400 disabled:opacity-60">
                     {adjSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Сохранить'}
                   </Button>
                   )}
@@ -578,7 +585,7 @@ function OperatorSalaryDetailPageContent() {
             <div className="rounded-2xl border border-border bg-surface-muted p-3 text-sm text-body">Итого: <span className="font-semibold text-foreground">{money(parseMoney(advanceCash) + parseMoney(advanceKaspi))}</span></div>
             <div className="flex justify-end gap-3">
               <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover" onClick={() => setAdvanceOpen(false)}>Отмена</Button>
-              <Button type="submit" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400">{advanceSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Выдать аванс'}</Button>
+              <Button type="submit" disabled={advanceSaving} className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400 disabled:opacity-60">{advanceSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Выдать аванс'}</Button>
             </div>
           </form>
         </Modal>
@@ -627,7 +634,7 @@ function OperatorSalaryDetailPageContent() {
             <div className="rounded-2xl border border-border bg-surface-muted p-3 text-sm text-body">Выплата: <span className="font-semibold text-foreground">{money(parseMoney(payCash) + parseMoney(payKaspi))}</span></div>
             <div className="flex justify-end gap-3">
               <Button type="button" variant="outline" className="rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover" onClick={() => setPayOpen(false)}>Отмена</Button>
-              <Button type="submit" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400">{paySaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Провести выплату'}</Button>
+              <Button type="submit" disabled={paySaving} className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400 disabled:opacity-60">{paySaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Провести выплату'}</Button>
             </div>
           </form>
         </Modal>

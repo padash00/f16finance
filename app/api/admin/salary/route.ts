@@ -1486,6 +1486,18 @@ export async function GET(req: Request) {
   }
 }
 
+
+/**
+ * Та же операция за последнюю минуту — двойное нажатие или повтор запроса при
+ * плохой сети. Раньше сервер принимал оба: два аванса и два расхода.
+ * При ошибке запроса (например, нет колонки) не блокируем — только подстраховка.
+ */
+async function hasRecentDuplicate(query: PromiseLike<{ data: unknown[] | null; error: unknown }>): Promise<boolean> {
+  const { data, error } = await query
+  return !error && Array.isArray(data) && data.length > 0
+}
+const DUPLICATE_MESSAGE = 'Такая же операция уже проведена меньше минуты назад — похоже на двойное нажатие. Обновите страницу.'
+
 export async function POST(req: Request) {
   try {
     const guard = await requireStaffCapabilityRequest(req, 'salary')
@@ -1578,6 +1590,22 @@ export async function POST(req: Request) {
       })
       if (split.totalAmount <= 0) {
         return json({ error: 'Сумма аванса должна быть больше 0' }, 400)
+      }
+      if (
+        await hasRecentDuplicate(
+          supabase
+            .from('operator_salary_adjustments')
+            .select('id')
+            .eq('operator_id', body.payload.operator_id)
+            .eq('kind', 'advance')
+            .eq('amount', split.totalAmount)
+            .eq('date', paymentDate)
+            .eq('status', 'active')
+            .gte('created_at', new Date(Date.now() - 60_000).toISOString())
+            .limit(1),
+        )
+      ) {
+        return json({ error: DUPLICATE_MESSAGE }, 409)
       }
 
       const weekBeforeAdvance = await ensureSalaryWeekSnapshot({
@@ -1709,6 +1737,20 @@ export async function POST(req: Request) {
       })
       if (split.totalAmount <= 0) {
         return json({ error: 'Сумма выплаты должна быть больше 0' }, 400)
+      }
+      if (
+        await hasRecentDuplicate(
+          supabase
+            .from('operator_salary_week_payments')
+            .select('id')
+            .eq('operator_id', body.payload.operator_id)
+            .eq('payment_date', paymentDate)
+            .eq('total_amount', split.totalAmount)
+            .gte('created_at', new Date(Date.now() - 60_000).toISOString())
+            .limit(1),
+        )
+      ) {
+        return json({ error: DUPLICATE_MESSAGE }, 409)
       }
 
       const weekBeforePayment = await ensureSalaryWeekSnapshot({
@@ -1906,6 +1948,20 @@ export async function POST(req: Request) {
       })
       if (split.totalAmount <= 0) {
         return json({ error: 'Сумма выплаты должна быть больше 0' }, 400)
+      }
+      if (
+        await hasRecentDuplicate(
+          supabase
+            .from('operator_salary_week_payments')
+            .select('id')
+            .eq('operator_id', body.payload.operator_id)
+            .eq('payment_date', paymentDate)
+            .eq('total_amount', split.totalAmount)
+            .gte('created_at', new Date(Date.now() - 60_000).toISOString())
+            .limit(1),
+        )
+      ) {
+        return json({ error: DUPLICATE_MESSAGE }, 409)
       }
 
       const weekBeforePayment = await ensureSalaryWeekSnapshot({
