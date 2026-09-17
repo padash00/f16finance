@@ -1,5 +1,6 @@
 import { calculatePrevPeriod } from '@/lib/reports/period'
 import { getISOWeekKey, getISOWeekStartISO, getMonthKey, getYearKey } from '@/lib/reports/report-dates'
+import { FINANCIAL_GROUP_OPTIONS, resolveFinancialGroup } from '@/lib/core/financial-groups'
 
 export type GroupMode = 'day' | 'week' | 'month' | 'year'
 
@@ -13,7 +14,15 @@ export type FinancialTotals = {
   expenseKaspi: number
   totalIncome: number
   totalExpense: number
+  /** Доход − ВСЕ расходы, включая вложения (CAPEX) и выплаты партнёрам: сколько денег осталось */
   profit: number
+  /**
+   * Расходы вне ОПиУ: покупка оборудования (CAPEX) и распределение прибыли.
+   * Необязательное — старые ответы API и кэш его не содержат.
+   */
+  expenseOffPnl?: number
+  /** Прибыль как в ОПиУ: доход − расходы без CAPEX и выплат партнёрам (= profit + expenseOffPnl) */
+  pnlProfit?: number
   remainingCash: number
   remainingKaspi: number
   totalBalance: number
@@ -103,6 +112,8 @@ const emptyTotals = (): FinancialTotals => ({
   totalIncome: 0,
   totalExpense: 0,
   profit: 0,
+  expenseOffPnl: 0,
+  pnlProfit: 0,
   remainingCash: 0,
   remainingKaspi: 0,
   totalBalance: 0,
@@ -112,6 +123,7 @@ const emptyTotals = (): FinancialTotals => ({
 
 function finalize(t: FinancialTotals) {
   t.profit = t.totalIncome - t.totalExpense
+  t.pnlProfit = t.profit + (t.expenseOffPnl || 0)
   t.remainingCash = t.incomeCash - t.expenseCash
   t.remainingKaspi = t.incomeNonCash - t.expenseKaspi
   t.totalBalance = t.profit
@@ -125,6 +137,12 @@ export function aggregateReportFromRows(input: {
   dateTo: string
   groupMode: GroupMode
   companyName: (id: string) => string
+  /**
+   * Статьи расходов → учётная группа (ключ — название в нижнем регистре), как в ОПиУ.
+   * Нужны, чтобы отделить CAPEX и выплаты партнёрам: без справочника группа
+   * угадывается по названию статьи.
+   */
+  categoryGroups?: Record<string, string | null>
   /** База сравнения; по умолчанию — предыдущий период той же длины */
   prevFrom?: string
   prevTo?: string
@@ -155,6 +173,18 @@ export function aggregateReportFromRows(input: {
 
   const totalsCur = emptyTotals()
   const totalsPrev = emptyTotals()
+
+  const offChainGroups = new Set(FINANCIAL_GROUP_OPTIONS.filter((g) => g.kind === 'off_chain').map((g) => g.value as string))
+  const offPnlCache = new Map<string, boolean>()
+  const isOffPnlCategory = (category: string | null) => {
+    const key = String(category || '').trim().toLowerCase()
+    const cached = offPnlCache.get(key)
+    if (cached !== undefined) return cached
+    const group = resolveFinancialGroup(category, input.categoryGroups?.[key] ?? null)
+    const off = offChainGroups.has(group)
+    offPnlCache.set(key, off)
+    return off
+  }
 
   const expenseByCategoryMap = new Map<string, number>()
   const incomeByCompanyMap = new Map<
@@ -329,6 +359,7 @@ export function aggregateReportFromRows(input: {
     tgt.expenseCash += cash
     tgt.expenseKaspi += kaspi
     tgt.totalExpense += total
+    if (isOffPnlCategory(r.category)) tgt.expenseOffPnl = (tgt.expenseOffPnl || 0) + total
     // transactionCount — только строки дохода: делим на него выручку (средняя
     // запись дохода). Расходы в счётчике занижали среднее в разы.
 

@@ -15,6 +15,7 @@
 import type { CopilotTool } from '../../types'
 import { companyOptions, scopedCompanyIds, resolveDateRange, dateRangeParams, fetchAllPages } from '../../query-helpers'
 import { inferFinancialGroup, type FinancialGroup } from '@/lib/core/financial-groups'
+import { COUNTED_EXPENSE_FILTER } from '@/lib/domain/expense-status'
 
 export const getProfitabilityTool: CopilotTool = {
   name: 'get_profitability',
@@ -48,6 +49,7 @@ export const getProfitabilityTool: CopilotTool = {
         .order('date', { ascending: true }).order('id', { ascending: true }).range(rFrom, rTo)
       if (from) q = q.gte('date', from)
       if (to) q = q.lte('date', to)
+      if (table === 'expenses') q = q.or(COUNTED_EXPENSE_FILTER)
       if (companyId) q = q.eq('company_id', companyId)
       else if (ids) q = q.in('company_id', ids)
       return q

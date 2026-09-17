@@ -12,6 +12,7 @@ import { requiredEnv } from '@/lib/server/env'
 import { listOrgReportTargets } from '@/lib/server/report-targets'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { sendTelegramMessage } from '@/lib/telegram/send'
+import { COUNTED_EXPENSE_FILTER } from '@/lib/domain/expense-status'
 
 export const runtime = 'nodejs'
 
@@ -157,6 +158,7 @@ export async function GET(req: Request) {
       .select('date, cash_amount, kaspi_amount')
       .gte('date', twoWeeksAgo)
       .lte('date', today)
+      .or(COUNTED_EXPENSE_FILTER)
     if (ownerCompanyIds) expQ = expQ.in('company_id', ownerCompanyIds)
     const { data: expenses } = await expQ
     if (expenses && expenses.length > 0) {

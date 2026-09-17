@@ -59,6 +59,7 @@ import Link from 'next/link'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { DatePicker } from '@/components/ui/date-picker'
 import { useIncome } from '@/hooks/use-income'
+import { splitIncomeKaspiByCalendarDay, type ReportIncomeCalendarRow } from '@/lib/reports/income-calendar-kaspi'
 import { useCompanies } from '@/hooks/use-companies'
 import { useOperators } from '@/hooks/use-operators'
 import {
@@ -395,6 +396,19 @@ export default function IncomePage() {
     payFilter: payFilter !== 'all' ? payFilter : undefined,
     fetchAll: true, // грузить ВСЕ страницы (иначе db-max-rows режет до 1000 и ранние даты пропадают)
   })
+  // Ночные смены накануне периода: их безнал после 00:00 — первый день периода.
+  // Итоги и график считаются по календарным суткам, как /reports и ОПиУ
+  // (решение владельца 17.09.2026); таблица операций — по сменам, как записано.
+  const { rows: prevNightRows } = useIncome({
+    from: DateUtils.addDaysISO(dateFrom, -1),
+    to: DateUtils.addDaysISO(dateFrom, -1),
+    companyId: companyFilter !== 'all' ? companyFilter : undefined,
+    shift: 'night',
+    operatorId: operatorFilter !== 'all' && operatorFilter !== 'none' ? operatorFilter : undefined,
+    operatorNull: operatorFilter === 'none',
+    enabled: shiftFilter !== 'day' && (payFilter === 'all' || payFilter === 'kaspi'),
+    fetchAll: true,
+  })
 
   // Локальная копия для оптимистичных обновлений (inline edit, delete)
   const [rows, setRows] = useState<IncomeRow[]>([])
@@ -586,7 +600,12 @@ export default function IncomePage() {
     const byOperator: Record<string, number> = {}
     const byZone: Record<string, number> = {}
 
-    displayRows.forEach(r => {
+    // Безнал ночных смен после 00:00 — следующим календарным днём
+    const calendarRows = (splitIncomeKaspiByCalendarDay(
+      [...(shiftFilter !== 'day' && (payFilter === 'all' || payFilter === 'kaspi') ? prevNightRows : []), ...filteredRows] as unknown as ReportIncomeCalendarRow[],
+    ) as unknown as IncomeRow[]).filter((r) => r.date >= dateFrom && r.date <= dateTo)
+
+    calendarRows.forEach(r => {
       if (!includeExtraInTotals && isExtraRow(r)) return
 
       const cash = Number(r.cash_amount || 0)
@@ -661,7 +680,7 @@ export default function IncomePage() {
       paymentData,
       avgCheck: displayRows.length ? total / displayRows.length : 0,
     }
-  }, [displayRows, dateFrom, dateTo, includeExtraInTotals, isExtraRow, operatorName])
+  }, [displayRows, filteredRows, prevNightRows, shiftFilter, payFilter, dateFrom, dateTo, includeExtraInTotals, isExtraRow, operatorName])
 
   // Сохранение Online
   const saveOnlineAmount = useCallback(async (row: IncomeRow, nextValue: number | null) => {

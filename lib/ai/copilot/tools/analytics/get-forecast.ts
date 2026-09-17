@@ -6,6 +6,7 @@
 import type { CopilotTool } from '../../types'
 import { companyOptions, scopedCompanyIds, fetchAllPages } from '../../query-helpers'
 import { buildMonthlyForecast, type ForecastIncomeRow, type ForecastExpenseRow } from '@/lib/analysis/monthly-forecast'
+import { COUNTED_EXPENSE_FILTER } from '@/lib/domain/expense-status'
 
 function todayISO(): string {
   const d = new Date()
@@ -43,6 +44,7 @@ export const getForecastTool: CopilotTool = {
         fetchAllPages((rFrom, rTo) => {
           let q = ctx.supabase.from(table).select(select).gte('date', from).lte('date', to)
             .order('date', { ascending: true }).order('id', { ascending: true }).range(rFrom, rTo)
+          if (table === 'expenses') q = q.or(COUNTED_EXPENSE_FILTER)
           if (companyId) q = q.eq('company_id', companyId)
           else if (scopeIds) q = q.in('company_id', scopeIds)
           return q

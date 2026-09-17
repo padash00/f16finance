@@ -1455,16 +1455,29 @@ function ReportsContent() {
                   color="red"
                   onClick={() => setDrillDown({ type: 'expense' })}
                 />
-                <StatCard
-                  title="Чистая прибыль"
-                  value={formatMoneyFull(totals.profit)}
-                  subValue={comparisonMode ? was(totals.profit, totalsPrev.profit) : `Маржа ${totals.totalIncome > 0 ? (totals.profit / totals.totalIncome * 100).toFixed(1) : 0}%`}
-                  icon={Wallet}
-                  trend={pct(totals.profit, totalsPrev.profit)}
-                  trendHint={hint(totals.profit, totalsPrev.profit, 'прибыль выросла', 'прибыль упала')}
-                  color={totals.profit >= 0 ? 'blue' : 'red'}
-                  onClick={() => setDrillDown({ type: 'profit' })}
-                />
+                {(() => {
+                  // Прибыль как в ОПиУ (без покупки оборудования и выплат партнёрам) —
+                  // главная цифра; остаток после них — второй строкой. Раньше здесь был
+                  // только остаток, и «прибыль» расходилась с /profitability.
+                  const pnl = totals.pnlProfit ?? totals.profit
+                  const pnlPrev = totalsPrev.pnlProfit ?? totalsPrev.profit
+                  const off = totals.expenseOffPnl || 0
+                  const margin = totals.totalIncome > 0 ? (pnl / totals.totalIncome * 100).toFixed(1) : '0'
+                  const base = comparisonMode ? was(pnl, pnlPrev) : `Маржа ${margin}%`
+                  const rest = off > 0 ? ` · остаток после вложений и выплат партнёрам ${formatMoneyFull(totals.profit)}` : ''
+                  return (
+                    <StatCard
+                      title="Прибыль (как в ОПиУ)"
+                      value={formatMoneyFull(pnl)}
+                      subValue={base + rest}
+                      icon={Wallet}
+                      trend={pct(pnl, pnlPrev)}
+                      trendHint={hint(pnl, pnlPrev, 'прибыль выросла', 'прибыль упала')}
+                      color={pnl >= 0 ? 'blue' : 'red'}
+                      onClick={() => setDrillDown({ type: 'profit' })}
+                    />
+                  )
+                })()}
                 <StatCard
                   title="Выручка в день"
                   value={perDay ? formatMoneyFull(perDay.income) : '—'}

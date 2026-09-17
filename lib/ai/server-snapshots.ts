@@ -1,6 +1,7 @@
 import 'server-only'
 
 import type { PageSnapshot } from '@/lib/ai/types'
+import { COUNTED_EXPENSE_FILTER } from '@/lib/domain/expense-status'
 
 type RequestSupabase = ReturnType<typeof import('@/lib/server/request-auth').createRequestSupabaseClient>
 
@@ -96,6 +97,7 @@ async function fetchFinanceBundle(
     .select('date, company_id, category, cash_amount, kaspi_amount')
     .gte('date', dateFrom)
     .lte('date', dateTo)
+    .or(COUNTED_EXPENSE_FILTER)
     .order('date', { ascending: true })
     .range(0, 4999)
   let companiesQ = supabase.from('companies').select('id, name, code')

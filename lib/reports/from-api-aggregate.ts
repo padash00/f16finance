@@ -60,6 +60,8 @@ const emptyFinancialTotals = (): FinancialTotals => ({
   totalIncome: 0,
   totalExpense: 0,
   profit: 0,
+  expenseOffPnl: 0,
+  pnlProfit: 0,
   remainingCash: 0,
   remainingKaspi: 0,
   totalBalance: 0,

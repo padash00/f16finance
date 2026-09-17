@@ -4,6 +4,7 @@ import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { requireAddon } from '@/lib/server/entitlements'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { sendTelegramMessage } from '@/lib/telegram/send'
+import { COUNTED_EXPENSE_FILTER } from '@/lib/domain/expense-status'
 
 function todayISO() {
   const now = new Date()
@@ -67,6 +68,7 @@ export async function POST(request: Request) {
     .select('cash_amount, kaspi_amount, category, date, company_id')
     .gte('date', dateFrom)
     .lte('date', today)
+    .or(COUNTED_EXPENSE_FILTER)
 
   if (companyScope.allowedCompanyIds !== null) {
     if (companyScope.allowedCompanyIds.length === 0) {

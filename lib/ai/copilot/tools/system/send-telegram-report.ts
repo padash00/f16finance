@@ -6,6 +6,7 @@
 import type { CopilotTool } from '../../types'
 import { fetchAllPages, scopedCompanyIds } from '../../query-helpers'
 import { writeAuditLog } from '@/lib/server/audit'
+import { COUNTED_EXPENSE_FILTER } from '@/lib/domain/expense-status'
 
 const TELEGRAM_API = 'https://api.telegram.org'
 
@@ -96,6 +97,7 @@ export const sendTelegramReportTool: CopilotTool = {
           .select('cash_amount, kaspi_amount')
           .gte('date', from)
           .lte('date', to)
+          .or(COUNTED_EXPENSE_FILTER)
         if (companyIds) q = q.in('company_id', companyIds)
         return q
           .order('date', { ascending: true })

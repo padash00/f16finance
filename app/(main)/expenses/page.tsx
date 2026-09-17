@@ -13,6 +13,7 @@ import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useCashlessLabels } from '@/lib/client/use-cashless-labels'
 import { useTableSort } from '@/lib/client/use-table-sort'
 import type { SortColumns } from '@/lib/core/table-sort'
+import { isCountedExpense } from '@/lib/domain/expense-status'
 import { SortableTh } from '@/components/ui/sortable-th'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
 import { useCompanies } from '@/hooks/use-companies'
@@ -599,13 +600,17 @@ export default function ExpensesPage() {
 
     let cash = 0
     let kaspi = 0
+    let count = 0
     const catMap: Record<string, number> = {}
 
     for (const r of rows) {
       if (companyFilter === 'all' && !includeExtraInTotals && extraCompanyId && r.company_id === extraCompanyId) {
         continue
       }
+      // Отклонённые видны в таблице, но в итоги не входят
+      if (!isCountedExpense(r)) continue
 
+      count += 1
       const total = rowTotal(r)
       cash += r.cash_amount || 0
       kaspi += r.kaspi_amount || 0
@@ -658,7 +663,8 @@ export default function ExpensesPage() {
       topCategory,
       topAmount: topCategory[1],
       categoryData,
-      avgExpense: rows.length ? total / rows.length : 0,
+      count,
+      avgExpense: count ? total / count : 0,
     }
   }, [rows, dateFrom, dateTo, companyFilter, includeExtraInTotals, extraCompanyId])
 
@@ -771,7 +777,9 @@ export default function ExpensesPage() {
     const meta = { title: 'Расходы', subtitle: undefined, period, generated, brandNote: 'дашборд расходов' }
 
     // Пустой период → красивый empty-state
-    if (rows.length === 0) {
+    // Отклонённые в отчёт не идут
+    const reportRows = rows.filter(isCountedExpense)
+    if (reportRows.length === 0) {
       await downloadReportPdf('premium', {
         meta,
         kpis: [
@@ -794,22 +802,22 @@ export default function ExpensesPage() {
     }
 
     // Агрегации
-    const total = rows.reduce((s, r) => s + rowTotal(r), 0)
-    const cashTotal = rows.reduce((s, r) => s + (r.cash_amount || 0), 0)
-    const kaspiTotal = rows.reduce((s, r) => s + (r.kaspi_amount || 0), 0)
+    const total = reportRows.reduce((s, r) => s + rowTotal(r), 0)
+    const cashTotal = reportRows.reduce((s, r) => s + (r.cash_amount || 0), 0)
+    const kaspiTotal = reportRows.reduce((s, r) => s + (r.kaspi_amount || 0), 0)
     const cashPct = total > 0 ? Math.round((cashTotal / total) * 100) : 0
     const kaspiPct = total > 0 ? 100 - cashPct : 0
 
     // По категориям
     const catMap = new Map<string, number>()
-    for (const r of rows) catMap.set(r.category || 'Без категории', (catMap.get(r.category || 'Без категории') || 0) + rowTotal(r))
+    for (const r of reportRows) catMap.set(r.category || 'Без категории', (catMap.get(r.category || 'Без категории') || 0) + rowTotal(r))
     const cats = Array.from(catMap.entries()).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
     const maxCat = cats[0]?.value || 1
     const topCatName = cats[0]?.name || '—'
 
     // По дням (desc)
     const dayMap = new Map<string, { date: string; count: number; cash: number; kaspi: number; total: number; rows: ExpenseRow[] }>()
-    for (const r of rows) {
+    for (const r of reportRows) {
       const d = String(r.date || '').slice(0, 10)
       let g = dayMap.get(d)
       if (!g) { g = { date: d, count: 0, cash: 0, kaspi: 0, total: 0, rows: [] }; dayMap.set(d, g) }
@@ -827,7 +835,7 @@ export default function ExpensesPage() {
     await downloadReportPdf('premium', {
       meta,
       kpis: [
-        { label: 'Всего расходов', value: `${nf(total)} тг`, sub: `${rows.length} строк · ${activeDays} активных дней`, badge: 'итог' },
+        { label: 'Всего расходов', value: `${nf(total)} тг`, sub: `${reportRows.length} строк · ${activeDays} активных дней`, badge: 'итог' },
         { label: 'Наличные', value: `${nf(cashTotal)} тг`, sub: `${cashPct}% от суммы` },
         { label: 'Безналичный', value: `${nf(kaspiTotal)} тг`, sub: `${kaspiPct}% от суммы` },
         { label: 'Средний день', value: `${nf(avgDay)} тг`, sub: `Топ категория: ${topCatName}` },
@@ -1505,7 +1513,7 @@ export default function ExpensesPage() {
               deleteExpense={deleteExpense}
               deleteSeries={deleteSeries}
               onPreview={setPreviewUrl}
-              totals={{ count: sortedRows.length, cash: analytics.cash, kaspi: analytics.kaspi, total: analytics.total }}
+              totals={{ count: analytics.count, cash: analytics.cash, kaspi: analytics.kaspi, total: analytics.total }}
             />
           )}
         </div>

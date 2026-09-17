@@ -7,6 +7,7 @@ import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { requireStaffCapability } from '@/lib/server/capabilities'
+import { COUNTED_EXPENSE_FILTER } from '@/lib/domain/expense-status'
 
 // AI Разбор расходов: код считает точные цифры по категориям (текущий vs предыдущий
 // период), а AI даёт разбор — где утекают деньги, что выросло аномально, что урезать.
@@ -122,6 +123,7 @@ export async function GET(request: Request) {
         .select('id, date, company_id, category, cash_amount, kaspi_amount')
         .gte('date', prevFrom)
         .lte('date', dateTo)
+        .or(COUNTED_EXPENSE_FILTER)
         .order('date', { ascending: true })
         .order('id', { ascending: true })
         .range(from, from + PAGE - 1)

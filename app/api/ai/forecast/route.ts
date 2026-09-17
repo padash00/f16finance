@@ -16,6 +16,7 @@ import { requireAddon } from '@/lib/server/entitlements'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { COUNTED_EXPENSE_FILTER } from '@/lib/domain/expense-status'
 
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini'
 
@@ -155,6 +156,7 @@ export async function POST(request: Request) {
         .select('date, company_id, category, cash_amount, kaspi_amount, comment')
         .gte('date', dateFrom)
         .lte('date', dateTo)
+        .or(COUNTED_EXPENSE_FILTER)
         .order('date', { ascending: true })
         .range(from, to)
       if (selectedCompanyId) query = query.eq('company_id', selectedCompanyId)

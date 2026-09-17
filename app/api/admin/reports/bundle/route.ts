@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { addDaysISO } from '@/lib/core/date'
+import { COUNTED_EXPENSE_FILTER } from '@/lib/domain/expense-status'
 import { aggregateReportFromRows } from '@/lib/reports/aggregate-from-rows'
 import { isExtraCompany } from '@/lib/reports/extra-company'
 import { groupExpensesByArticle } from '@/lib/reports/expense-groups'
@@ -144,6 +145,7 @@ export async function GET(req: Request) {
         .select('id, date, company_id, category, cash_amount, kaspi_amount, comment')
         .gte('date', from)
         .lte('date', to)
+        .or(COUNTED_EXPENSE_FILTER)
         .order('date', { ascending: true })
         .order('id', { ascending: true })
       if (companyScope.allowedCompanyIds !== null) q = q.in('company_id', companyScope.allowedCompanyIds)
@@ -180,6 +182,13 @@ export async function GET(req: Request) {
     const impreciseNight = countImpreciseNightKaspiInRange(rowsIn, dateFrom, dateTo)
     const splitIncomes = splitIncomeKaspiByCalendarDay(rowsIn) as ReportIncomeCalendarRow[]
 
+    // Справочник не открылся — статьи угадываются по названиям, отчёт не падает.
+    const categoryGroups: Record<string, string | null> = {}
+    for (const row of ((categoriesRes as any)?.data || []) as { name: string | null; accounting_group: string | null }[]) {
+      const key = String(row.name || '').trim().toLowerCase()
+      if (key) categoryGroups[key] = row.accounting_group ?? null
+    }
+
     const agg = aggregateReportFromRows({
       incomes: splitIncomes,
       expenses: rowsEx,
@@ -189,14 +198,9 @@ export async function GET(req: Request) {
       companyName,
       prevFrom,
       prevTo,
+      // Для «прибыли как в ОПиУ»: CAPEX и выплаты партнёрам — вне P&L
+      categoryGroups,
     })
-
-    // Справочник не открылся — статьи угадываются по названиям, отчёт не падает.
-    const categoryGroups: Record<string, string | null> = {}
-    for (const row of ((categoriesRes as any)?.data || []) as { name: string | null; accounting_group: string | null }[]) {
-      const key = String(row.name || '').trim().toLowerCase()
-      if (key) categoryGroups[key] = row.accounting_group ?? null
-    }
     const expenseByGroup = groupExpensesByArticle({ expenses: rowsEx, dateFrom, dateTo, prevFrom, prevTo, categoryGroups })
 
     let forecastHints: ForecastHints | null = null

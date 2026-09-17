@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 import { addDaysISO } from '@/lib/core/date'
+import { COUNTED_EXPENSE_FILTER } from '@/lib/domain/expense-status'
 import { splitIncomeKaspiByCalendarDay, type ReportIncomeCalendarRow } from '@/lib/reports/income-calendar-kaspi'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
@@ -141,6 +142,7 @@ export async function GET(req: Request) {
         .select('date, company_id, cash_amount, kaspi_amount')
         .gte('date', yearStart)
         .lte('date', yearEnd)
+        .or(COUNTED_EXPENSE_FILTER)
         .order('date', { ascending: true })
       if (companyScope.allowedCompanyIds !== null) q = q.in('company_id', companyScope.allowedCompanyIds)
       return q

@@ -5,6 +5,7 @@ import { DATA_SOURCE_NOTE, MAX_DAYS_HARD_LIMIT, PLANS_TABLE, getDefaultAllPeriod
 import { parseISODateSafe, toISODateLocal } from '@/lib/analysis/core-utils'
 import { buildFullHistory } from '@/lib/analysis/history'
 import type { AnalysisResult, DataPoint } from '@/lib/analysis/types'
+import { COUNTED_EXPENSE_FILTER } from '@/lib/domain/expense-status'
 import { requireCapability } from '@/lib/server/capabilities'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
@@ -96,6 +97,7 @@ async function fetchAllExpenses(
       .select('id, date, company_id, category, cash_amount, kaspi_amount')
       .gte('date', from)
       .lte('date', to)
+      .or(COUNTED_EXPENSE_FILTER)
       .order('date', { ascending: true }).order('id', { ascending: true })
       .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
     if (allowedCompanyIds !== null) {

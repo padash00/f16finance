@@ -20,6 +20,7 @@ import { fetchAllRows, kzTodayISO, loadForecastInputs } from '@/lib/server/forec
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { COUNTED_EXPENSE_FILTER } from '@/lib/domain/expense-status'
 
 /**
  * Платежи и деньги до конца месяца (/cashflow → «Платежи»).
@@ -114,7 +115,7 @@ export async function GET(req: Request) {
             .select('id, date, company_id, category, cash_amount, kaspi_amount, status')
             .gte('date', since)
             .lte('date', today)
-            .neq('status', 'declined')
+            .or(COUNTED_EXPENSE_FILTER)
             .order('date', { ascending: true })
             .order('id', { ascending: true })
           if (scopeIds) q = q.in('company_id', scopeIds)

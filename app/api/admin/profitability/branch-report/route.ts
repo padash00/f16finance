@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { splitIncomeKaspiByCalendarDay, type ReportIncomeCalendarRow } from '@/lib/reports/income-calendar-kaspi'
+import { addDaysISO } from '@/lib/core/date'
 
 import { buildProfitabilityReport, companyExpenseLines, sumMonths } from '@/lib/domain/profitability-report'
 import { calculateOperatorSalarySummary } from '@/lib/domain/salary'
@@ -95,7 +97,8 @@ export async function GET(req: Request) {
           supabase
             .from('incomes')
             .select('id, date, company_id, shift, zone, cash_amount, kaspi_amount, kaspi_before_midnight, online_amount, card_amount, operator_id, operator_name')
-            .gte('date', fromDate)
+            // День до начала: безнал ночной смены после 00:00 относится к первому дню
+            .gte('date', addDaysISO(fromDate, -1))
             .lte('date', toDate)
             .order('date', { ascending: true })
             .order('id', { ascending: true }),
@@ -141,7 +144,15 @@ export async function GET(req: Request) {
     const months: string[] = []
     for (let m = monthFrom, guard = 0; m <= monthTo && guard < 120; m = shiftMonth(m, 1), guard++) months.push(m)
 
-    const report = buildProfitabilityReport({ incomes, expenses, companies, categoryGroups, months, includeExtra })
+    // Безнал ночной смены — по календарным суткам, как /profitability (решение владельца 17.09.2026)
+    const report = buildProfitabilityReport({
+      incomes: splitIncomeKaspiByCalendarDay(incomes as ReportIncomeCalendarRow[]) as any[],
+      expenses,
+      companies,
+      categoryGroups,
+      months,
+      includeExtra,
+    })
     const entry = report.companies.find((c) => c.id === companyId)
     const total = entry?.total || sumMonths('total', [])
     const companyExpenses = expenses.filter((r: any) => String(r.company_id) === companyId)

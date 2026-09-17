@@ -5,6 +5,7 @@
 
 import type { CopilotTool } from '../../types'
 import { scopedCompanyRows, resolveDateRange, dateRangeParams, fetchAllPages } from '../../query-helpers'
+import { COUNTED_EXPENSE_FILTER } from '@/lib/domain/expense-status'
 
 export const queryByCompanyTool: CopilotTool = {
   name: 'query_by_company',
@@ -24,6 +25,7 @@ export const queryByCompanyTool: CopilotTool = {
         .order('date', { ascending: true }).order('id', { ascending: true }).range(rFrom, rTo)
       if (from) q = q.gte('date', from)
       if (to) q = q.lte('date', to)
+      if (table === 'expenses') q = q.or(COUNTED_EXPENSE_FILTER)
       return q
     }
     const [incRows, expRows] = await Promise.all([

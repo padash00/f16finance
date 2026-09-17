@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server'
+import { splitIncomeKaspiByCalendarDay, type ReportIncomeCalendarRow } from '@/lib/reports/income-calendar-kaspi'
+import { addDaysISO } from '@/lib/core/date'
 
 import { requireCapability } from '@/lib/server/capabilities'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { COUNTED_EXPENSE_FILTER } from '@/lib/domain/expense-status'
 
 export const runtime = 'nodejs'
 
@@ -82,16 +85,23 @@ export async function GET(request: Request) {
     const { data: companies, error: compErr } = await companiesQ
     if (compErr) throw compErr
 
-    const incomes = await fetchAll((f, t) => {
+    const incomesRaw = await fetchAll((f, t) => {
       let q = supabase
         .from('incomes')
-        .select('company_id, date, cash_amount, kaspi_amount, online_amount, card_amount')
-        .gte('date', from)
+        .select('id, company_id, date, shift, zone, comment, cash_amount, kaspi_amount, kaspi_before_midnight, online_amount, card_amount')
+        // День до начала: безнал ночной смены после 00:00 — первый день недели
+        .gte('date', addDaysISO(from, -1))
         .lte('date', to)
+        .order('date', { ascending: true })
+        .order('id', { ascending: true })
         .range(f, t)
       if (companyScope.allowedCompanyIds) q = q.in('company_id', companyScope.allowedCompanyIds)
       return q
     })
+    // Безнал ночной смены — по календарным суткам (решение владельца 17.09.2026), как экран /weekly-report
+    const incomes = (splitIncomeKaspiByCalendarDay(incomesRaw as ReportIncomeCalendarRow[]) as any[]).filter(
+      (r) => r.date >= from && r.date <= to,
+    )
 
     const expenses = await fetchAll((f, t) => {
       let q = supabase
@@ -99,7 +109,7 @@ export async function GET(request: Request) {
         .select('company_id, date, category, cash_amount, kaspi_amount, comment, one_off_payee, status')
         .gte('date', from)
         .lte('date', to)
-        .neq('status', 'declined')
+        .or(COUNTED_EXPENSE_FILTER)
         .order('date', { ascending: true })
         .range(f, t)
       if (companyScope.allowedCompanyIds) q = q.in('company_id', companyScope.allowedCompanyIds)

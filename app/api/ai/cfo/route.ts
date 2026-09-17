@@ -4,6 +4,7 @@ import { logAiUsageSafe } from '@/lib/ai/usage-tracker'
 import { generateAiText, type AiMessage } from '@/lib/ai/provider'
 import { buildCfoReview, type CfoHealth } from '@/lib/analysis/cfo-review'
 import { addDaysISO } from '@/lib/core/date'
+import { COUNTED_EXPENSE_FILTER } from '@/lib/domain/expense-status'
 import { isExtraCompany } from '@/lib/reports/extra-company'
 import { splitIncomeKaspiByCalendarDay, type ReportIncomeCalendarRow } from '@/lib/reports/income-calendar-kaspi'
 import { calculatePrevPeriod, isFullMonthRange, previousCalendarMonthRange } from '@/lib/reports/period'
@@ -170,6 +171,7 @@ export async function POST(request: Request) {
           .select('id, date, company_id, category, cash_amount, kaspi_amount')
           .gte('date', prevFrom)
           .lte('date', dateTo)
+          .or(COUNTED_EXPENSE_FILTER)
           .order('date', { ascending: true })
           .order('id', { ascending: true })
         if (scopeIds) q = q.in('company_id', scopeIds)

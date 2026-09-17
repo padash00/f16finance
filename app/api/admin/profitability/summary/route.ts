@@ -1,3 +1,5 @@
+import { splitIncomeKaspiByCalendarDay, type ReportIncomeCalendarRow } from '@/lib/reports/income-calendar-kaspi'
+import { addDaysISO } from '@/lib/core/date'
 import { NextResponse } from 'next/server'
 
 import { buildProfitabilityReport } from '@/lib/domain/profitability-report'
@@ -90,8 +92,9 @@ export async function GET(req: Request) {
         scopeIn(
           supabase
             .from('incomes')
-            .select('id, date, company_id, cash_amount, kaspi_amount, card_amount, online_amount')
-            .gte('date', dateFrom)
+            .select('id, date, company_id, shift, zone, comment, cash_amount, kaspi_amount, kaspi_before_midnight, card_amount, online_amount')
+            // День до начала: безнал ночной смены после 00:00 относится к первому дню
+            .gte('date', addDaysISO(dateFrom, -1))
             .lte('date', dateTo)
             .order('date', { ascending: true })
             .order('id', { ascending: true }),
@@ -120,7 +123,9 @@ export async function GET(req: Request) {
     }
 
     const report = buildProfitabilityReport({
-      incomes,
+      // Безнал ночной смены — по календарным суткам (решение владельца 17.09.2026),
+      // как в /reports, /dashboard и /cashflow. Раньше — по дате смены.
+      incomes: splitIncomeKaspiByCalendarDay(incomes as ReportIncomeCalendarRow[]),
       expenses,
       companies: (companiesRes.data || []) as any[],
       categoryGroups,

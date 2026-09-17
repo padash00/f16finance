@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 import { addDaysISO } from '@/lib/core/date'
+import { COUNTED_EXPENSE_FILTER } from '@/lib/domain/expense-status'
 import { isExtraCompany } from '@/lib/reports/extra-company'
 // `kpi.view` в каталоге прав не существует вовсе: выдать его через /access
 // было нельзя, и раздел «Цели» отвечал отказом всем, кроме суперадмина.
@@ -165,7 +166,7 @@ export async function GET(req: Request) {
     const buildIncomesQ = (from: string, to: string) => () =>
       scopeIn(supabase.from('incomes').select(incomeCols).gte('date', from).lte('date', to).order('date', { ascending: true }).order('id', { ascending: true }))
     const buildExpensesQ = (from: string, to: string) => () =>
-      scopeIn(supabase.from('expenses').select('id, date, company_id, cash_amount, kaspi_amount').gte('date', from).lte('date', to).order('date', { ascending: true }).order('id', { ascending: true }))
+      scopeIn(supabase.from('expenses').select('id, date, company_id, cash_amount, kaspi_amount').gte('date', from).lte('date', to).or(COUNTED_EXPENSE_FILTER).order('date', { ascending: true }).order('id', { ascending: true }))
     const buildSalesQ = (from: string, to: string) => () =>
       scopeIn(supabase.from('point_sales').select('id, sale_date, company_id').gte('sale_date', from).lte('sale_date', to).order('sale_date', { ascending: true }).order('id', { ascending: true }))
 

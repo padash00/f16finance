@@ -60,3 +60,24 @@ test('подстрока «extra» в названии чужой точки н�
   assert.equal(isExtraCompany({ code: 'shop1', name: 'Extra Store' }), false)
   assert.equal(isExtraCompany({ code: null, name: 'Магазин Extra' }), false)
 })
+
+// ─── Прибыль как в ОПиУ ─────────────────────────────────────────────────────
+
+test('прибыль как в ОПиУ не вычитает CAPEX и выплаты партнёрам, остаток — вычитает', () => {
+  const agg = aggregateReportFromRows({
+    incomes: [income('2026-08-01', 1_000_000)],
+    expenses: [
+      { ...expense('2026-08-01', 300_000), category: 'Аренда' },
+      { ...expense('2026-08-02', 200_000), category: 'Покупка ПК' },
+      { ...expense('2026-08-03', 100_000), category: 'Выплата партнёру' },
+    ],
+    dateFrom: '2026-08-01',
+    dateTo: '2026-08-07',
+    groupMode: 'day',
+    companyName: () => 'Точка',
+    categoryGroups: { 'покупка пк': 'capex', 'выплата партнёру': 'profit_distribution', 'аренда': 'operating' },
+  })
+  assert.equal(agg.totalsCur.profit, 400_000)
+  assert.equal(agg.totalsCur.expenseOffPnl, 300_000)
+  assert.equal(agg.totalsCur.pnlProfit, 700_000)
+})

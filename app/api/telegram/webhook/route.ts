@@ -41,6 +41,7 @@ import { extractTextFromPdf, parseExpenseFromText, parseExpenseFromImage } from 
 import { getOperatorSalarySnapshot, buildSalaryTelegramMessage } from '@/lib/server/services/salary'
 import { findOperatorByKey } from '@/lib/server/repositories/salary'
 import { mondayOfISO } from '@/lib/core/date'
+import { COUNTED_EXPENSE_FILTER } from '@/lib/domain/expense-status'
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
@@ -338,7 +339,7 @@ async function getFinanceSummary(dateFrom: string, dateTo: string, companyIds: s
     return incQ
   })
   const expP = fetchAllPages((from, to) => {
-    let expQ = supabase.from('expenses').select('cash_amount, kaspi_amount, category, company_id').gte('date', dateFrom).lte('date', dateTo).order('date').order('id').range(from, to)
+    let expQ = supabase.from('expenses').select('cash_amount, kaspi_amount, category, company_id').gte('date', dateFrom).lte('date', dateTo).or(COUNTED_EXPENSE_FILTER).order('date').order('id').range(from, to)
     if (companyIds) expQ = expQ.in('company_id', companyIds)
     return expQ
   })
@@ -527,7 +528,7 @@ async function handleForecast(chatId: number, companyIds: string[] | null = null
     return incQ
   })
   const expP = fetchAllPages((from, to) => {
-    let expQ = supabase.from('expenses').select('date, cash_amount, kaspi_amount, company_id').gte('date', dateFrom).lte('date', today).order('date').order('id').range(from, to)
+    let expQ = supabase.from('expenses').select('date, cash_amount, kaspi_amount, company_id').gte('date', dateFrom).lte('date', today).or(COUNTED_EXPENSE_FILTER).order('date').order('id').range(from, to)
     if (companyIds) expQ = expQ.in('company_id', companyIds)
     return expQ
   })
@@ -879,7 +880,7 @@ async function handleCashFlow(chatId: number, companyIds: string[] | null = null
     return incQ
   })
   const expP = fetchAllPages((from, to) => {
-    let expQ = supabase.from('expenses').select('date, cash_amount, kaspi_amount, company_id').gte('date', dateFrom).lte('date', today).order('date').order('id').range(from, to)
+    let expQ = supabase.from('expenses').select('date, cash_amount, kaspi_amount, company_id').gte('date', dateFrom).lte('date', today).or(COUNTED_EXPENSE_FILTER).order('date').order('id').range(from, to)
     if (companyIds) expQ = expQ.in('company_id', companyIds)
     return expQ
   })
@@ -1544,7 +1545,7 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
     const scopeInc = (q: any) => (companyIds ? q.in('company_id', companyIds) : q)
     const results = await Promise.all([
       scopeInc(supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date, company_id, zone').gte('date', weekFrom).lte('date', today)),
-      scopeInc(supabase.from('expenses').select('cash_amount, kaspi_amount, category, date, company_id').gte('date', weekFrom).lte('date', today)),
+      scopeInc(supabase.from('expenses').select('cash_amount, kaspi_amount, category, date, company_id').gte('date', weekFrom).lte('date', today).or(COUNTED_EXPENSE_FILTER)),
       scopeInc(supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date, company_id').gte('date', prevWeekFrom).lte('date', prevWeekTo)),
       // Месяц/квартал могут быть >1000 строк — постранично, иначе суммы для AI занижены.
       fetchAllPages((from, to) =>
@@ -1554,7 +1555,7 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
         scopeInc(supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date, company_id').gte('date', quarterFrom).lte('date', today).order('date').order('id').range(from, to)),
       ).then((data) => ({ data })),
       fetchAllPages((from, to) =>
-        scopeInc(supabase.from('expenses').select('cash_amount, kaspi_amount, category, date, company_id').gte('date', monthFrom).lte('date', today).order('date').order('id').range(from, to)),
+        scopeInc(supabase.from('expenses').select('cash_amount, kaspi_amount, category, date, company_id').gte('date', monthFrom).lte('date', today).or(COUNTED_EXPENSE_FILTER).order('date').order('id').range(from, to)),
       ).then((data) => ({ data })),
       companyIds ? supabase.from('companies').select('id, name, code').in('id', companyIds) : supabase.from('companies').select('id, name, code'),
       (scopeOrgId
@@ -2473,6 +2474,7 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
           .select('cash_amount, kaspi_amount, category, company_id')
           .gte('date', date_from)
           .lte('date', date_to)
+          .or(COUNTED_EXPENSE_FILTER)
           .order('date')
           .order('id')
           .range(from, to)
@@ -3032,7 +3034,7 @@ async function handleDetailedReport(chatId: number, companyIds: string[] | null 
   const weekFrom = addDaysISO(today, -6)
 
   let incQ = supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, company_id').gte('date', weekFrom).lte('date', today)
-  let expQ = supabase.from('expenses').select('cash_amount, kaspi_amount, category, company_id').gte('date', weekFrom).lte('date', today)
+  let expQ = supabase.from('expenses').select('cash_amount, kaspi_amount, category, company_id').gte('date', weekFrom).lte('date', today).or(COUNTED_EXPENSE_FILTER)
   let coQ = supabase.from('companies').select('id, name').eq('is_active', true)
   if (companyIds) {
     incQ = incQ.in('company_id', companyIds)

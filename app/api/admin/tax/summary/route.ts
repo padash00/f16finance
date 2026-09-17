@@ -1,3 +1,5 @@
+import { splitIncomeKaspiByCalendarDay, type ReportIncomeCalendarRow } from '@/lib/reports/income-calendar-kaspi'
+import { addDaysISO } from '@/lib/core/date'
 import { NextResponse } from 'next/server'
 
 import {
@@ -142,19 +144,24 @@ export async function GET(req: Request) {
     const incomes = await fetchAll<any>(() => {
       let q = supabase
         .from('incomes')
-        .select('date, company_id, cash_amount, kaspi_amount, online_amount, card_amount')
-        .gte('date', yearFrom)
+        .select('id, date, company_id, shift, zone, comment, cash_amount, kaspi_amount, kaspi_before_midnight, online_amount, card_amount')
+        // День до начала: безнал ночной смены после 00:00 относится к первому дню
+        .gte('date', addDaysISO(yearFrom, -1))
         .lte('date', yearTo)
         .order('date', { ascending: true })
+        .order('id', { ascending: true })
       if (companyScope.allowedCompanyIds) q = q.in('company_id', companyScope.allowedCompanyIds)
       return q
     })
 
-    const periodRows = incomes.filter((row: any) => {
+    // Безнал ночной смены — по календарным суткам, как на сайте /tax и в /reports
+    // (решение владельца 17.09.2026). Раньше приложение считало по дате смены.
+    const calendarIncomes = splitIncomeKaspiByCalendarDay(incomes as ReportIncomeCalendarRow[])
+    const periodRows = calendarIncomes.filter((row: any) => {
       const date = String(row.date || '')
       return date >= from && date <= to
     })
-    const yearRows = incomes.filter((row: any) => {
+    const yearRows = calendarIncomes.filter((row: any) => {
       const date = String(row.date || '')
       return date >= yearStart && date <= today
     })

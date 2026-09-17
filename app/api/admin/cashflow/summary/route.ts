@@ -8,6 +8,7 @@ import { fetchAllRows } from '@/lib/server/forecast-inputs'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { COUNTED_EXPENSE_FILTER } from '@/lib/domain/expense-status'
 
 /**
  * Движение денег за период (/cashflow) — считает сервер, lib/domain/cashflow-report.
@@ -98,7 +99,7 @@ export async function GET(req: Request) {
           .select('id, date, company_id, category, cash_amount, kaspi_amount, status, comment, one_off_payee')
           .gte('date', loadFrom)
           .lte('date', to)
-          .neq('status', 'declined')
+          .or(COUNTED_EXPENSE_FILTER)
           .order('date', { ascending: true })
           .order('id', { ascending: true })
         if (scopeIds) q = q.in('company_id', scopeIds)

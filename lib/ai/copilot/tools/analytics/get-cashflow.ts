@@ -5,6 +5,7 @@
 
 import type { CopilotTool } from '../../types'
 import { companyOptions, scopedCompanyIds, resolveDateRange, dateRangeParams, fetchAllPages } from '../../query-helpers'
+import { COUNTED_EXPENSE_FILTER } from '@/lib/domain/expense-status'
 
 export const getCashflowTool: CopilotTool = {
   name: 'get_cashflow',
@@ -43,6 +44,7 @@ export const getCashflowTool: CopilotTool = {
         .range(rFrom, rTo)
       if (from) q = q.gte('date', from)
       if (to) q = q.lte('date', to)
+      if (table === 'expenses') q = q.or(COUNTED_EXPENSE_FILTER)
       if (companyId) q = q.eq('company_id', companyId)
       else if (ids) q = q.in('company_id', ids)
       return q

@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server'
+import { splitIncomeKaspiByCalendarDay, type ReportIncomeCalendarRow } from '@/lib/reports/income-calendar-kaspi'
 import { requiredEnv } from '@/lib/server/env'
 import { listOrgReportTargets } from '@/lib/server/report-targets'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { escapeTelegramHtml } from '@/lib/telegram/message-kit'
 import { sendTelegramMessage } from '@/lib/telegram/send'
+import { COUNTED_EXPENSE_FILTER } from '@/lib/domain/expense-status'
 
 export const runtime = 'nodejs'
 
@@ -16,6 +18,12 @@ function yesterdayKZISO() {
 }
 
 function safeNum(v: number | null | undefined) { return Number(v || 0) }
+
+function shiftDateISO(iso: string, days: number) {
+  const [y, m, d] = iso.split('-').map(Number)
+  const t = new Date(Date.UTC(y, (m || 1) - 1, d || 1) + days * 86_400_000)
+  return `${t.getUTCFullYear()}-${String(t.getUTCMonth() + 1).padStart(2, '0')}-${String(t.getUTCDate()).padStart(2, '0')}`
+}
 
 function fmtMoney(v: number) {
   const abs = Math.abs(v)
@@ -46,16 +54,25 @@ async function buildDailyReport(
   date: string,
   companyIds: string[] | null,
 ): Promise<{ messageText: string; totalIncome: number; totalExpense: number; profit: number }> {
+  // Безнал ночной смены после 00:00 — по календарным суткам (решение владельца
+  // 17.09.2026), как /reports: берём и вчерашнюю ночь, потом режем по дате.
   let incQ = supabase
     .from('incomes')
-    .select('cash_amount, kaspi_amount, online_amount, card_amount, operator_id, company_id, companies(name, code)')
-    .eq('date', date)
-  let expQ = supabase.from('expenses').select('cash_amount, kaspi_amount, category, company_id').eq('date', date)
+    .select('id, date, shift, zone, comment, cash_amount, kaspi_amount, kaspi_before_midnight, online_amount, card_amount, operator_id, company_id, companies(name, code)')
+    .gte('date', shiftDateISO(date, -1))
+    .lte('date', date)
+  let expQ = supabase.from('expenses').select('cash_amount, kaspi_amount, category, company_id').eq('date', date).or(COUNTED_EXPENSE_FILTER)
   if (companyIds) {
     incQ = incQ.in('company_id', companyIds)
     expQ = expQ.in('company_id', companyIds)
   }
-  const [incomesRes, expensesRes] = await Promise.all([incQ, expQ])
+  const [incomesRaw, expensesRes] = await Promise.all([incQ, expQ])
+  const incomesRes = {
+    ...incomesRaw,
+    data: (splitIncomeKaspiByCalendarDay((incomesRaw.data ?? []) as unknown as ReportIncomeCalendarRow[]) as any[]).filter(
+      (r) => r.date === date,
+    ),
+  }
 
   // Fetch operator names for operators that worked today
   const operatorIds = [...new Set(
@@ -115,8 +132,8 @@ async function buildDailyReport(
   const avgRows = await fetchAllPages((from, to) => {
     let q = supabase
       .from('incomes')
-      .select('date, cash_amount, kaspi_amount, online_amount, card_amount, company_id')
-      .gte('date', thirtyDaysAgo)
+      .select('id, date, shift, zone, comment, cash_amount, kaspi_amount, kaspi_before_midnight, online_amount, card_amount, company_id')
+      .gte('date', shiftDateISO(thirtyDaysAgo, -1))
       .lt('date', date)
       .order('date', { ascending: true })
       .order('id', { ascending: true })
@@ -126,7 +143,10 @@ async function buildDailyReport(
   }).catch(() => [] as any[])
 
   const dayTotals = new Map<string, number>()
-  for (const row of (avgRows ?? []) as any[]) {
+  const avgCalendarRows = (splitIncomeKaspiByCalendarDay((avgRows ?? []) as ReportIncomeCalendarRow[]) as any[]).filter(
+    (r) => r.date >= thirtyDaysAgo && r.date < date,
+  )
+  for (const row of avgCalendarRows) {
     const t = safeNum(row.cash_amount) + safeNum(row.kaspi_amount) + safeNum(row.online_amount) + safeNum(row.card_amount)
     dayTotals.set(row.date, (dayTotals.get(row.date) || 0) + t)
   }

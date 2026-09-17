@@ -211,7 +211,10 @@ function detectAnomalies(points: ChartPoint[], threshold = 2.5): Anomaly[] {
  * Оценка периода 0–100. Это формула, а не «ИИ», поэтому показываем, из чего
  * она сложилась: база 50 и баллы за маржу, динамику прибыли и доход на 1 ₸ расхода.
  */
-function scorePeriod(current: Totals, previous: Totals): ScoreResult {
+function scorePeriod(currentTotals: Totals, previousTotals: Totals): ScoreResult {
+  // Оценка — по прибыли как в ОПиУ (без CAPEX и выплат партнёрам), как и карточка «Прибыль»
+  const current = { ...currentTotals, profit: currentTotals.pnlProfit ?? currentTotals.profit }
+  const previous = { ...previousTotals, profit: previousTotals.pnlProfit ?? previousTotals.profit }
   const margin = current.totalIncome ? (current.profit / current.totalIncome) * 100 : 0
   let marginPoints = 0
   if (margin > 30) marginPoints = 20
@@ -649,7 +652,12 @@ export default function DashboardPage() {
   const current = agg.totalsCur
   const previous = agg.totalsPrev
   const score = scorePeriod(current, previous)
-  const margin = current.totalIncome ? (current.profit / current.totalIncome) * 100 : 0
+  // Прибыль как в ОПиУ: без покупки оборудования (CAPEX) и выплат партнёрам.
+  // Остаток после них показываем подписью — раньше карточка показывала только его.
+  const pnlProfit = current.pnlProfit ?? current.profit
+  const pnlProfitPrev = previous.pnlProfit ?? previous.profit
+  const offPnl = current.expenseOffPnl || 0
+  const margin = current.totalIncome ? (pnlProfit / current.totalIncome) * 100 : 0
   const reportsHref = `/reports?from=${dateFrom}&to=${dateTo}&preset=custom`
   const feedDenied = !!incomesFeed.error && !!expensesFeed.error
   const incomePoints = points.filter((p) => p.income > 0)
@@ -786,10 +794,17 @@ export default function DashboardPage() {
           />
           <MetricCard
             label="Прибыль"
-            value={current.profit}
-            previousValue={previous.profit}
+            value={pnlProfit}
+            previousValue={pnlProfitPrev}
             goodWhenUp
-            sub={current.totalIncome ? `маржа ${margin.toFixed(1)}%` : undefined}
+            sub={
+              [
+                current.totalIncome ? `маржа ${margin.toFixed(1)}%` : '',
+                offPnl > 0 ? `остаток после вложений и выплат партнёрам ${Formatters.moneyDetailed(current.profit)}` : '',
+              ]
+                .filter(Boolean)
+                .join(' · ') || undefined
+            }
             icon={<Target className="h-4 w-4" />}
             iconTone="bg-amber-500/15 text-amber-600 dark:text-amber-400"
             selected={metric === 'profit'}

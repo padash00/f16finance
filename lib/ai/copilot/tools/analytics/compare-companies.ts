@@ -5,6 +5,7 @@
 
 import type { CopilotTool } from '../../types'
 import { companyOptions, scopedCompanyIds, fetchAllPages } from '../../query-helpers'
+import { COUNTED_EXPENSE_FILTER } from '@/lib/domain/expense-status'
 
 function todayISO(): string {
   const d = new Date()
@@ -38,6 +39,7 @@ async function getStats(supabase: any, companyId: string, from: string, to: stri
         .eq('company_id', companyId)
         .gte('date', from)
         .lte('date', to)
+        .or(COUNTED_EXPENSE_FILTER)
         .order('date', { ascending: true })
         .order('id', { ascending: true })
         .range(rFrom, rTo),

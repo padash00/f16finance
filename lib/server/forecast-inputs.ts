@@ -1,6 +1,7 @@
 import 'server-only'
 
 import type { LearnExpenseRow, LearnIncomeRow } from '@/lib/analysis/forecast-learning'
+import { COUNTED_EXPENSE_FILTER } from '@/lib/domain/expense-status'
 import { splitIncomeKaspiByCalendarDay, type ReportIncomeCalendarRow } from '@/lib/reports/income-calendar-kaspi'
 
 /**
@@ -70,6 +71,7 @@ export async function loadForecastInputs(
       .select('id, date, company_id, category, cash_amount, kaspi_amount')
       .gte('date', HISTORY_FROM)
       .lte('date', to)
+      .or(COUNTED_EXPENSE_FILTER)
       .order('date', { ascending: true })
       .order('id', { ascending: true })
     if (companyIds !== null) q = q.in('company_id', companyIds)

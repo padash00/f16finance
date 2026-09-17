@@ -20,6 +20,7 @@ import { listOrganizationOperatorIds, resolveCompanyScope } from '@/lib/server/o
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { generateAiText } from '@/lib/ai/provider'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
+import { COUNTED_EXPENSE_FILTER } from '@/lib/domain/expense-status'
 
 export const runtime = 'nodejs'
 export const maxDuration = 30
@@ -227,7 +228,7 @@ async function buildSnapshotForRole(access: any, role: string, supabase: any) {
   // owner / super_admin — широкий снапшот
   const monthAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
   let incQ = supabase.from('incomes').select('date, cash_amount, kaspi_amount, card_amount, online_amount').gte('date', monthAgo).limit(200)
-  let expQ = supabase.from('expenses').select('date, category, cash_amount, kaspi_amount, comment').gte('date', monthAgo).limit(100)
+  let expQ = supabase.from('expenses').select('date, category, cash_amount, kaspi_amount, comment').gte('date', monthAgo).or(COUNTED_EXPENSE_FILTER).limit(100)
   let debtQ = supabase.from('point_debts').select('operator_id, amount, week_start, comment').gt('amount', 0).limit(50)
   if (scopedCompanyIds) { incQ = incQ.in('company_id', scopedCompanyIds); expQ = expQ.in('company_id', scopedCompanyIds) }
   if (scopedOperatorIds) debtQ = debtQ.in('operator_id', scopedOperatorIds)
