@@ -11,6 +11,9 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useCashlessLabels } from '@/lib/client/use-cashless-labels'
+import { useTableSort } from '@/lib/client/use-table-sort'
+import type { SortColumns } from '@/lib/core/table-sort'
+import { SortableTh } from '@/components/ui/sortable-th'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
 import { useCompanies } from '@/hooks/use-companies'
 import { useExpenses, type ExpenseRow } from '@/hooks/use-expenses'
@@ -85,7 +88,6 @@ const ExpensePaymentBars = dynamic(() => import('./charts').then((m) => m.Expens
 type PayFilter = 'all' | 'cash' | 'kaspi'
 type ExpenseStatusFilter = 'all' | 'confirmed' | 'pending_approval' | 'approved' | 'declined'
 type DocumentKindFilter = 'all' | 'receipt' | 'invoice' | 'bill' | 'whitelist' | 'one_off'
-type SortMode = 'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc'
 
 type ChartPoint = {
   date: string
@@ -346,7 +348,6 @@ export default function ExpensesPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const searchDebounced = useDebouncedValue(searchTerm.trim(), 350)
   const [includeExtraInTotals, setIncludeExtraInTotals] = useState(false)
-  const [sortMode, setSortMode] = usePersistentState<SortMode>('expenses.sortMode', 'date_desc')
   const [showFilters, setShowFilters] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -438,22 +439,16 @@ export default function ExpensesPage() {
     statusFilter: statusFilter !== 'all' ? statusFilter : undefined,
     documentKind: documentFilter !== 'all' ? documentFilter : undefined,
     search: searchDebounced.length >= SEARCH_MIN_LEN ? searchDebounced : undefined,
-    sort: sortMode,
+    // Весь период целиком: таблица сортируется по столбцам в браузере, и
+    // сортировка должна охватывать все строки, а не первую догруженную порцию
+    sort: 'date_desc',
+    fetchAll: true,
     pageSize: 2000,
   })
 
-  // Клиентский tie-break: сервер сортирует только по date, внутри одного дня
-  // упорядочиваем по created_at (в date_desc свежесозданные выше, в date_asc — наоборот)
-  const sortedRows = useMemo(() => {
-    if (sortMode !== 'date_desc' && sortMode !== 'date_asc') return rows
-    const asc = sortMode === 'date_asc'
-    return [...rows].sort((a, b) => {
-      const byDate = String(a.date).localeCompare(String(b.date))
-      if (byDate !== 0) return asc ? byDate : -byDate
-      const byCreated = String(a.created_at || '').localeCompare(String(b.created_at || ''))
-      return asc ? byCreated : -byCreated
-    })
-  }, [rows, sortMode])
+  // Базовый порядок — новые сверху (его видит вкладка обзора). В таблице порядок
+  // задаёт сортировка по нажатию на заголовок (useTableSort в ListTab)
+  const sortedRows = useMemo(() => [...rows].sort(expenseNewestFirst), [rows])
 
   useEffect(() => {
     const handler = (event: MessageEvent) => {
@@ -1349,22 +1344,6 @@ export default function ExpensesPage() {
                       </select>
                     </div>
 
-                    <div className="space-y-2">
-                      <label className="text-xs text-gray-500 uppercase flex items-center gap-1">
-                        <ArrowRight className="w-3 h-3" />
-                        Сортировка
-                      </label>
-                      <select
-                        value={sortMode}
-                        onChange={(e) => setSortMode(e.target.value as SortMode)}
-                        className="w-full bg-white dark:bg-gray-800 text-foreground px-3 py-2.5 rounded-lg border border-slate-200 dark:border-gray-700 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none text-sm"
-                      >
-                        <option value="date_desc">Дата ↓</option>
-                        <option value="date_asc">Дата ↑</option>
-                        <option value="amount_desc">Сумма ↓</option>
-                        <option value="amount_asc">Сумма ↑</option>
-                      </select>
-                    </div>
 
                     {canManageExpense ? (
                       <>
@@ -1513,8 +1492,6 @@ export default function ExpensesPage() {
           {activeTab === 'list' && (
             <ListTab
               rows={sortedRows}
-              sortMode={sortMode}
-              setSortMode={setSortMode}
               loading={loading}
               loadingMore={loadingMore}
               hasMore={hasMore}
@@ -2098,10 +2075,26 @@ function AnalyticsTab({ analytics }: any) {
   )
 }
 
+// ─── Сортировка таблицы расходов ─────────────────────────────────────────────
+// Логический порядок статусов, а не алфавит: сначала то, что ждёт решения
+const EXPENSE_STATUS_RANK: Record<string, number> = { pending_approval: 0, approved: 1, confirmed: 2, declined: 3 }
+const EXPENSE_DOC_LABELS: Record<string, string> = {
+  receipt: 'Чек',
+  invoice: 'Накладная',
+  bill: 'Счет',
+  whitelist: 'Доверенный',
+  one_off: 'Разовый',
+}
+type ExpenseSortKey = 'date' | 'company' | 'category' | 'status' | 'cash' | 'kaspi' | 'total' | 'document' | 'comment'
+const EXPENSE_SORT_INITIAL = { key: 'date', dir: 'desc' } as const
+
+/** При равных значениях — новые сверху: дата, затем время внесения. */
+function expenseNewestFirst(a: ExpenseRow, b: ExpenseRow) {
+  return String(b.date).localeCompare(String(a.date)) || String(b.created_at || '').localeCompare(String(a.created_at || ''))
+}
+
 function ListTab({
-  rows,
-  sortMode,
-  setSortMode,
+  rows: rawRows,
   loading,
   loadingMore,
   hasMore,
@@ -2120,6 +2113,33 @@ function ListTab({
   const { can: canDoTbl } = useCapabilities()
   const canEditExpense = canDoTbl('expenses.edit')
   const canDeleteExpense = canDoTbl('expenses.delete')
+
+  // Сортировка по нажатию на заголовок (общий хук). Всё, что ниже, работает уже
+  // с отсортированными строками — и таблица, и карточки на телефоне
+  const expenseSortColumns = useMemo<SortColumns<ExpenseRow, ExpenseSortKey>>(
+    () => ({
+      // Дата вместе со временем внесения: внутри одного дня — по порядку
+      date: { get: (r) => `${r.date}|${r.created_at || ''}`, defaultDir: 'desc' },
+      company: { get: (r) => companyMap.get(r.company_id)?.name || null },
+      category: { get: (r) => r.category || 'Общее' },
+      status: { get: (r) => EXPENSE_STATUS_RANK[String(r.status || '')] ?? EXPENSE_STATUS_RANK.confirmed },
+      // Ноль показан прочерком — при сортировке по сумме такие строки уходят вниз
+      cash: { get: (r) => r.cash_amount || null, defaultDir: 'desc' },
+      kaspi: { get: (r) => r.kaspi_amount || null, defaultDir: 'desc' },
+      total: { get: (r) => rowTotal(r) || null, defaultDir: 'desc' },
+      document: { get: (r) => EXPENSE_DOC_LABELS[String(r.document_kind || '')] || null },
+      comment: { get: (r) => r.comment || null },
+    }),
+    [companyMap],
+  )
+  const { sort, toggle, sortedRows: rows } = useTableSort<ExpenseRow, ExpenseSortKey>({
+    storageKey: 'expenses.tableSort',
+    columns: expenseSortColumns,
+    initial: EXPENSE_SORT_INITIAL,
+    rows: rawRows,
+    tieBreak: expenseNewestFirst,
+  })
+
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null)
   const tableContainerRef = useRef<HTMLDivElement | null>(null)
   // eslint-disable-next-line react-hooks/incompatible-library
@@ -2167,15 +2187,8 @@ function ListTab({
     <Card className="border-0 bg-white dark:bg-gray-800/50 backdrop-blur-sm overflow-hidden">
       <div className="flex items-center justify-between gap-2 border-b border-border p-4">
         <h3 className="text-sm font-semibold text-foreground">Все операции ({rows.length})</h3>
-        <button
-          type="button"
-          onClick={() => setSortMode(sortMode === 'date_asc' ? 'date_desc' : 'date_asc')}
-          title={sortMode === 'date_asc' ? 'Сейчас: с начала месяца. Нажмите — новые сверху' : 'Сейчас: новые сверху. Нажмите — с начала месяца'}
-          className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground transition hover:bg-surface-hover hover:text-foreground"
-        >
-          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${sortMode === 'date_asc' ? 'rotate-180' : ''}`} />
-          {sortMode === 'date_asc' ? 'Сначала старые' : 'Сначала новые'}
-        </button>
+        {/* Кнопка «Сначала новые / старые» убрана: порядок задаёт заголовок столбца */}
+        <span className="hidden text-xs text-muted-foreground sm:inline">Сортировка — нажатием на заголовок столбца</span>
       </div>
       {/* Мобильная версия: карточки расходов */}
       {rows.length > 0 && (
@@ -2359,15 +2372,15 @@ function ListTab({
         <table className="w-full min-w-[820px]">
           <thead className="sticky top-0 z-10">
             <tr className="border-b border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-900/50 text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
-              <th className="px-4 py-3 text-left">Дата</th>
-              <th className="px-4 py-3 text-left">Компания</th>
-              <th className="px-4 py-3 text-left">Категория</th>
-              {showControlColumns ? <th className="px-4 py-3 text-left">Статус</th> : null}
-              <th className="px-4 py-3 text-right text-red-400">Нал</th>
-              <th className="px-4 py-3 text-right text-red-400">{cashLabels.providerName}</th>
-              <th className="px-4 py-3 text-right text-foreground">Итого</th>
-              {showControlColumns ? <th className="px-4 py-3 text-left">Документ</th> : null}
-              <th className="px-4 py-3 text-left">Комментарий</th>
+              <SortableTh label="Дата" sortKey="date" sort={sort} onSort={toggle} className="px-4 py-3" />
+              <SortableTh label="Компания" sortKey="company" sort={sort} onSort={toggle} className="px-4 py-3" />
+              <SortableTh label="Категория" sortKey="category" sort={sort} onSort={toggle} className="px-4 py-3" />
+              {showControlColumns ? <SortableTh label="Статус" sortKey="status" sort={sort} onSort={toggle} className="px-4 py-3" /> : null}
+              <SortableTh label="Нал" sortKey="cash" sort={sort} onSort={toggle} align="right" className="px-4 py-3 text-red-400" />
+              <SortableTh label={cashLabels.providerName} sortKey="kaspi" sort={sort} onSort={toggle} align="right" className="px-4 py-3 text-red-400" />
+              <SortableTh label="Итого" sortKey="total" sort={sort} onSort={toggle} align="right" className="px-4 py-3 text-foreground" />
+              {showControlColumns ? <SortableTh label="Документ" sortKey="document" sort={sort} onSort={toggle} className="px-4 py-3" /> : null}
+              <SortableTh label="Комментарий" sortKey="comment" sort={sort} onSort={toggle} className="px-4 py-3" />
               <th className="px-4 py-3 text-center w-8"></th>
               {canManageExpense ? <th className="px-4 py-3 text-right">Действия</th> : null}
             </tr>

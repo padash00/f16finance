@@ -9,6 +9,9 @@ import { deleteWithUndo } from '@/lib/client/undo-delete'
 import { MoneyInput } from '@/components/ui/money-input'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useCashlessLabels } from '@/lib/client/use-cashless-labels'
+import { useTableSort } from '@/lib/client/use-table-sort'
+import type { SortColumns } from '@/lib/core/table-sort'
+import { SortableTh } from '@/components/ui/sortable-th'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
 import type { KeyboardEvent } from 'react'
 import { Card } from '@/components/ui/card'
@@ -347,7 +350,6 @@ export default function IncomePage() {
   // Дополнительные настройки
   const [includeExtraInTotals, setIncludeExtraInTotals] = useState(false)
   // Порядок ленты операций: false = новые сверху (по умолчанию), true = с начала месяца
-  const [feedSortAsc, setFeedSortAsc] = usePersistentState('income.feedSortAsc', false)
   const [hideExtraRows, setHideExtraRows] = useState(false)
   const [activeTab, setActiveTab] = usePersistentState<'overview' | 'analytics' | 'feed'>('income.activeTab', 'overview')
 
@@ -1326,8 +1328,6 @@ export default function IncomePage() {
             {activeTab === 'feed' && (
               <FeedTab
                 displayRows={operationRows}
-                sortAsc={feedSortAsc}
-                onToggleSort={() => setFeedSortAsc((v) => !v)}
                 companyName={companyName}
                 operatorName={operatorName}
                 isExtraRow={isExtraRow}
@@ -1935,10 +1935,22 @@ function AnalyticsTab({ analytics, dateFrom, dateTo }: any) {
   )
 }
 
+// ─── Сортировка таблицы доходов ──────────────────────────────────────────────
+type IncomeSortKey = 'date' | 'company' | 'operator' | 'shift' | 'cash' | 'kaspi' | 'card' | 'online' | 'total' | 'comment'
+const INCOME_SORT_INITIAL = { key: 'date', dir: 'desc' } as const
+
+function incomeRowTotal(row: IncomeRow) {
+  return Number(row.cash_amount || 0) + Number(row.kaspi_amount || 0) + Number(row.online_amount || 0) + Number(row.card_amount || 0)
+}
+
+/** При равных значениях — новые сверху: дата, внутри дня ночная смена позже дневной. */
+function incomeNewestFirst(a: IncomeRow, b: IncomeRow) {
+  const shiftRank = (r: IncomeRow) => (r.shift === 'night' ? 1 : 0)
+  return String(b.date).localeCompare(String(a.date)) || shiftRank(b) - shiftRank(a) || String(b.id).localeCompare(String(a.id))
+}
+
 function FeedTab({
   displayRows,
-  sortAsc,
-  onToggleSort,
   companyName,
   operatorName,
   isExtraRow,
@@ -1954,62 +1966,249 @@ function FeedTab({
   deleteIncome,
   totals,
 }: any) {
-  const sortedRows = [...displayRows].sort((a: IncomeRow, b: IncomeRow) => {
-    const cmp = String(a.date).localeCompare(String(b.date)) || String(a.id).localeCompare(String(b.id))
-    return sortAsc ? cmp : -cmp
+  const cashLabels = useCashlessLabels()
+
+  // Сортировка по нажатию на заголовок (общий хук, как в расходах). Карточки на
+  // телефоне идут в том же порядке, что и таблица
+  const incomeSortColumns = useMemo<SortColumns<IncomeRow, IncomeSortKey>>(
+    () => ({
+      date: { get: (r) => `${r.date}|${r.shift === 'night' ? 1 : 0}`, defaultDir: 'desc' },
+      company: { get: (r) => companyName(r.company_id) || null },
+      operator: { get: (r) => operatorName(r.operator_id) || null },
+      shift: { get: (r) => `${r.shift === 'night' ? 1 : 0}|${r.zone || ''}` },
+      // Ноль показан прочерком — при сортировке по сумме такие строки уходят вниз
+      cash: { get: (r) => r.cash_amount || null, defaultDir: 'desc' },
+      kaspi: { get: (r) => r.kaspi_amount || null, defaultDir: 'desc' },
+      card: { get: (r) => r.card_amount || null, defaultDir: 'desc' },
+      online: { get: (r) => r.online_amount || null, defaultDir: 'desc' },
+      total: { get: (r) => incomeRowTotal(r) || null, defaultDir: 'desc' },
+      comment: { get: (r) => r.comment || null },
+    }),
+    [companyName, operatorName],
+  )
+  const { sort, toggle, sortedRows } = useTableSort<IncomeRow, IncomeSortKey>({
+    storageKey: 'income.tableSort',
+    columns: incomeSortColumns,
+    initial: INCOME_SORT_INITIAL,
+    rows: displayRows,
+    tieBreak: incomeNewestFirst,
   })
+
+  const rowProps = (row: IncomeRow) => ({
+    row,
+    companyName: companyName(row.company_id),
+    operatorName: operatorName(row.operator_id),
+    isExtra: isExtraRow(row),
+    canManageIncome,
+    editingOnlineId,
+    setEditingOnlineId,
+    onlineDraft,
+    setOnlineDraft,
+    savingOnlineId,
+    saveOnlineAmount,
+    skipBlurSaveRef,
+    openIncomeEditor,
+    deleteIncome,
+  })
+
+  const totalsBar = totals && displayRows.length > 0 ? (
+    <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border bg-white/95 dark:bg-slate-900/95 backdrop-blur px-4 py-2.5 text-xs">
+      <span className="text-muted-foreground">За период: {totals.count} операций</span>
+      <span className="font-mono text-amber-500">Нал {Formatters.moneyDetailed(totals.cash)}</span>
+      <span className="font-mono text-blue-400">Безнал {Formatters.moneyDetailed(totals.cashless)}</span>
+      <span className="ml-auto font-mono font-bold text-foreground">Итого {Formatters.moneyDetailed(totals.total)}</span>
+    </div>
+  ) : null
+
   return (
-    // overflow-hidden убран: он ломает position:sticky у прилипающего итога внизу
+    // overflow-hidden не ставим: он ломает position:sticky у прилипающего итога внизу
     <Card className="p-0 border-0 bg-white dark:bg-slate-800/50 backdrop-blur-sm">
       <div className="flex items-center justify-between gap-2 p-4 border-b border-border">
         <h3 className="text-sm font-semibold text-foreground">Все операции ({displayRows.length})</h3>
-        <button
-          type="button"
-          onClick={onToggleSort}
-          title={sortAsc ? 'Сейчас: с начала месяца. Нажмите — новые сверху' : 'Сейчас: новые сверху. Нажмите — с начала месяца'}
-          className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground transition hover:bg-surface-hover hover:text-foreground"
-        >
-          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${sortAsc ? 'rotate-180' : ''}`} />
-          {sortAsc ? 'Сначала старые' : 'Сначала новые'}
-        </button>
+        {/* Кнопка «Сначала новые / старые» убрана: порядок задаёт заголовок столбца */}
+        <span className="hidden text-xs text-muted-foreground sm:inline">Сортировка — нажатием на заголовок столбца</span>
       </div>
-      <div className="divide-y divide-slate-100 dark:divide-slate-800">
-        {displayRows.length === 0 ? (
-          <div className="p-12 text-center text-slate-500">
-            <Search className="w-12 h-12 mx-auto mb-4 opacity-50" />
-            <p>Нет операций по выбранным фильтрам</p>
+
+      {displayRows.length === 0 ? (
+        <div className="p-12 text-center text-slate-500">
+          <Search className="w-12 h-12 mx-auto mb-4 opacity-50" />
+          <p>Нет операций по выбранным фильтрам</p>
+        </div>
+      ) : (
+        <>
+          {/* Телефон: карточки, как раньше */}
+          <div className="divide-y divide-slate-100 dark:divide-slate-800 sm:hidden">
+            {sortedRows.map((row: IncomeRow) => (
+              <IncomeRowFull key={row.id} {...rowProps(row)} />
+            ))}
+            {totalsBar}
           </div>
-        ) : (
-          sortedRows.map((row: IncomeRow) => (
-            <IncomeRowFull
-              key={row.id}
-              row={row}
-              companyName={companyName(row.company_id)}
-              operatorName={operatorName(row.operator_id)}
-              isExtra={isExtraRow(row)}
-              canManageIncome={canManageIncome}
-              editingOnlineId={editingOnlineId}
-              setEditingOnlineId={setEditingOnlineId}
-              onlineDraft={onlineDraft}
-              setOnlineDraft={setOnlineDraft}
-              savingOnlineId={savingOnlineId}
-              saveOnlineAmount={saveOnlineAmount}
-              skipBlurSaveRef={skipBlurSaveRef}
-              openIncomeEditor={openIncomeEditor}
-              deleteIncome={deleteIncome}
-            />
-          ))
-        )}
-        {totals && displayRows.length > 0 ? (
-          <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-b-[1.4rem] border-t border-border bg-white/95 dark:bg-slate-900/95 backdrop-blur px-4 py-2.5 text-xs">
-            <span className="text-muted-foreground">За период: {totals.count} операций</span>
-            <span className="font-mono text-amber-500">Нал {Formatters.moneyDetailed(totals.cash)}</span>
-            <span className="font-mono text-blue-400">Безнал {Formatters.moneyDetailed(totals.cashless)}</span>
-            <span className="ml-auto font-mono font-bold text-foreground">Итого {Formatters.moneyDetailed(totals.total)}</span>
+
+          {/* Компьютер: таблица с сортировкой по столбцам */}
+          <div className="hidden max-h-[72vh] overflow-auto sm:block">
+            <table className="w-full min-w-[1040px]">
+              <thead className="sticky top-0 z-10">
+                <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/90 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                  <SortableTh label="Дата" sortKey="date" sort={sort} onSort={toggle} className="px-4 py-3" />
+                  <SortableTh label="Компания" sortKey="company" sort={sort} onSort={toggle} className="px-4 py-3" />
+                  <SortableTh label="Оператор" sortKey="operator" sort={sort} onSort={toggle} className="px-4 py-3" />
+                  <SortableTh label="Смена" sortKey="shift" sort={sort} onSort={toggle} className="px-4 py-3" />
+                  <SortableTh label="Нал" sortKey="cash" sort={sort} onSort={toggle} align="right" className="px-4 py-3 text-amber-500" />
+                  <SortableTh label={cashLabels.providerName} sortKey="kaspi" sort={sort} onSort={toggle} align="right" className="px-4 py-3 text-blue-400" />
+                  <SortableTh label="Карта" sortKey="card" sort={sort} onSort={toggle} align="right" className="px-4 py-3 text-amber-400" />
+                  <SortableTh label="Онлайн" sortKey="online" sort={sort} onSort={toggle} align="right" className="px-4 py-3 text-pink-400" />
+                  <SortableTh label="Итого" sortKey="total" sort={sort} onSort={toggle} align="right" className="px-4 py-3 text-foreground" />
+                  <SortableTh label="Комментарий" sortKey="comment" sort={sort} onSort={toggle} className="px-4 py-3" />
+                  {canManageIncome ? <th className="px-4 py-3 text-right">Действия</th> : null}
+                </tr>
+              </thead>
+              <tbody className="text-sm">
+                {sortedRows.map((row: IncomeRow) => (
+                  <IncomeTableRow key={row.id} {...rowProps(row)} />
+                ))}
+              </tbody>
+            </table>
+            {totalsBar}
           </div>
-        ) : null}
-      </div>
+        </>
+      )}
     </Card>
+  )
+}
+
+/** Сумма онлайна с правкой прямо на месте — одна реализация для карточки и строки таблицы. */
+function OnlineAmountCell({
+  row,
+  canManageIncome,
+  editingOnlineId,
+  setEditingOnlineId,
+  onlineDraft,
+  setOnlineDraft,
+  saveOnlineAmount,
+  skipBlurSaveRef,
+}: any) {
+  const { can } = useCapabilities()
+  const shown = row.online_amount ? Formatters.moneyDetailed(row.online_amount) : '—'
+
+  if (String(row.id).startsWith('extra-') || !canManageIncome) {
+    return <div className="text-pink-400 font-mono">{shown}</div>
+  }
+
+  if (editingOnlineId === row.id) {
+    return (
+      <MoneyInput
+        autoFocus
+        inputMode="numeric"
+        value={onlineDraft}
+        onValueChange={setOnlineDraft}
+        onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
+          if (e.key === 'Escape') {
+            skipBlurSaveRef.current = true
+            setEditingOnlineId(null)
+            setOnlineDraft('')
+          }
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            const val = parseMoneyInput(onlineDraft)
+            setEditingOnlineId(null)
+            setOnlineDraft('')
+            saveOnlineAmount(row, val)
+          }
+        }}
+        onBlur={() => {
+          if (skipBlurSaveRef.current) {
+            skipBlurSaveRef.current = false
+            return
+          }
+          const val = parseMoneyInput(onlineDraft)
+          setEditingOnlineId(null)
+          setOnlineDraft('')
+          saveOnlineAmount(row, val)
+        }}
+        className="w-24 h-7 min-w-0 text-right px-2 py-0 rounded border-pink-500 bg-card text-foreground text-sm md:text-sm"
+      />
+    )
+  }
+
+  if (!can('income.update_online')) {
+    return <span className={`font-mono px-2 py-1 ${row.online_amount ? 'text-pink-400' : 'text-slate-600'}`}>{shown}</span>
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        setEditingOnlineId(row.id)
+        setOnlineDraft(String(row.online_amount ?? ''))
+      }}
+      className={`font-mono hover:bg-pink-500/10 rounded px-2 py-1 transition-colors ${row.online_amount ? 'text-pink-400' : 'text-slate-600'}`}
+    >
+      {row.online_amount ? Formatters.moneyDetailed(row.online_amount) : '+ добавить'}
+    </button>
+  )
+}
+
+/** Строка таблицы доходов (компьютер). */
+function IncomeTableRow({
+  row,
+  companyName,
+  operatorName,
+  isExtra,
+  canManageIncome,
+  openIncomeEditor,
+  deleteIncome,
+  ...onlineProps
+}: any) {
+  const { can } = useCapabilities()
+  const canEditIncome = can('income.edit')
+  const canDeleteIncome = can('income.delete')
+  const money = (value: number | null) => (value ? Formatters.moneyDetailed(value) : '—')
+  const isNight = row.shift === 'night'
+
+  return (
+    <tr className={`border-b border-slate-100 dark:border-slate-800 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/30 ${isExtra ? 'bg-yellow-500/5' : ''}`}>
+      <td className="px-4 py-3 whitespace-nowrap font-mono text-xs text-slate-500">{DateUtils.formatDate(row.date, 'full')}</td>
+      <td className="px-4 py-3 whitespace-nowrap">
+        <span className="font-medium text-foreground">{companyName}</span>
+        {isExtra ? <span className="ml-2 rounded-full bg-yellow-500/20 px-2 py-0.5 text-[10px] text-yellow-500">ДОП</span> : null}
+      </td>
+      <td className="px-4 py-3 whitespace-nowrap text-slate-600 dark:text-slate-300">{operatorName}</td>
+      <td className="px-4 py-3 whitespace-nowrap">
+        <span className="inline-flex items-center gap-1.5 text-xs">
+          {isNight ? <Moon className="h-3.5 w-3.5 text-blue-400" /> : <Sun className="h-3.5 w-3.5 text-amber-400" />}
+          {isNight ? 'Ночь' : 'День'}
+          {row.zone ? <span className="text-slate-400">· {row.zone}</span> : null}
+        </span>
+      </td>
+      <td className="px-4 py-3 text-right font-mono text-amber-500">{money(row.cash_amount)}</td>
+      <td className="px-4 py-3 text-right font-mono text-blue-400">{money(row.kaspi_amount)}</td>
+      <td className="px-4 py-3 text-right font-mono text-amber-400">{money(row.card_amount)}</td>
+      <td className="px-4 py-3 text-right">
+        <OnlineAmountCell row={row} canManageIncome={canManageIncome} {...onlineProps} />
+      </td>
+      <td className="px-4 py-3 text-right font-mono font-bold text-foreground">{Formatters.moneyDetailed(incomeRowTotal(row))}</td>
+      <td className="max-w-[240px] truncate px-4 py-3 text-xs text-slate-500" title={row.comment || undefined}>
+        {row.comment || '—'}
+      </td>
+      {canManageIncome ? (
+        <td className="px-4 py-3">
+          {!String(row.id).startsWith('extra-') ? (
+            <div className="flex items-center justify-end gap-2">
+              {canEditIncome ? (
+                <Button variant="outline" size="icon-sm" onClick={() => openIncomeEditor(row)} aria-label="Изменить">
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+              ) : null}
+              {canDeleteIncome ? (
+                <Button variant="destructive" size="icon-sm" onClick={() => deleteIncome(row)} aria-label="Удалить">
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
+        </td>
+      ) : null}
+    </tr>
   )
 }
 
@@ -2082,57 +2281,16 @@ function IncomeRowFull({
             {/* Online с inline редактированием */}
             <div className="text-right">
               <div className="text-[10px] text-slate-500">Онлайн</div>
-              {String(row.id).startsWith('extra-') ? (
-                <div className="text-pink-400 font-mono">{row.online_amount ? Formatters.moneyDetailed(row.online_amount) : '—'}</div>
-              ) : !canManageIncome ? (
-                <div className="text-pink-400 font-mono">{row.online_amount ? Formatters.moneyDetailed(row.online_amount) : '—'}</div>
-              ) : editingOnlineId === row.id ? (
-                <MoneyInput
-                  autoFocus
-                  inputMode="numeric"
-                  value={onlineDraft}
-                  onValueChange={setOnlineDraft}
-                  onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
-                    if (e.key === 'Escape') {
-                      skipBlurSaveRef.current = true
-                      setEditingOnlineId(null)
-                      setOnlineDraft('')
-                    }
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      const val = parseMoneyInput(onlineDraft)
-                      setEditingOnlineId(null)
-                      setOnlineDraft('')
-                      saveOnlineAmount(row, val)
-                    }
-                  }}
-                  onBlur={() => {
-                    if (skipBlurSaveRef.current) {
-                      skipBlurSaveRef.current = false
-                      return
-                    }
-                    const val = parseMoneyInput(onlineDraft)
-                    setEditingOnlineId(null)
-                    setOnlineDraft('')
-                    saveOnlineAmount(row, val)
-                  }}
-                  className="w-24 h-7 min-w-0 text-right px-2 py-0 rounded border-pink-500 bg-card text-foreground text-sm md:text-sm"
-                />
-              ) : (
-                can('income.update_online') ? (
-                <button
-                  onClick={() => {
-                    setEditingOnlineId(row.id)
-                    setOnlineDraft(String(row.online_amount ?? ''))
-                  }}
-                  className={`font-mono hover:bg-pink-500/10 rounded px-2 py-1 transition-colors ${row.online_amount ? 'text-pink-400' : 'text-slate-600'}`}
-                >
-                  {row.online_amount ? Formatters.moneyDetailed(row.online_amount) : '+ добавить'}
-                </button>
-                ) : (
-                  <span className={`font-mono px-2 py-1 ${row.online_amount ? 'text-pink-400' : 'text-slate-600'}`}>{row.online_amount ? Formatters.moneyDetailed(row.online_amount) : '—'}</span>
-                )
-              )}
+              <OnlineAmountCell
+                row={row}
+                canManageIncome={canManageIncome}
+                editingOnlineId={editingOnlineId}
+                setEditingOnlineId={setEditingOnlineId}
+                onlineDraft={onlineDraft}
+                setOnlineDraft={setOnlineDraft}
+                saveOnlineAmount={saveOnlineAmount}
+                skipBlurSaveRef={skipBlurSaveRef}
+              />
             </div>
           </div>
 
