@@ -345,7 +345,6 @@ export async function POST(request: Request) {
       pointName: device.name,
       reportChatId: device.shift_report_chat_id || null,
       operatorName: operator?.name || null,
-      operatorChatId: operator?.telegram_chat_id || null,
       date: payload.date,
       shift: payload.shift,
       cashAmount: normalized.cash_amount,

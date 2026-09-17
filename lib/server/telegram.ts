@@ -41,7 +41,6 @@ export async function notifyShiftReport(params: {
   pointName?: string | null
   reportChatId?: string | null
   operatorName: string | null
-  operatorChatId?: string | null
   date: string
   shift: 'day' | 'night'
   cashAmount: number
@@ -109,10 +108,9 @@ export async function notifyShiftReport(params: {
     `<pre>${preBody}</pre>`,
   ].join('\n')
 
+  // Только в чат отчётов точки (пусто — админский чат). Личная копия оператору
+  // убрана по решению владельца 17.09.2026: сводка смены — для руководства.
   await sendTelegram(html, params.reportChatId || undefined)
-  if (params.operatorChatId) {
-    await sendTelegram(html, params.operatorChatId).catch(() => null)
-  }
 }
 
 // ─── Inventory requests ───────────────────────────────────────────────────────

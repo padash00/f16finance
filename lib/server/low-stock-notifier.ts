@@ -33,7 +33,7 @@ export async function checkAndNotifyLowStock(
     // 3. Fetch location name
     const { data: locationRow } = await supabase
       .from('inventory_locations')
-      .select('name')
+      .select('name, organization_id')
       .eq('id', locationId)
       .maybeSingle()
 
@@ -82,10 +82,15 @@ export async function checkAndNotifyLowStock(
       })),
     )
 
-    // Один SELECT staff (раньше делался N раз)
+    // Получатели — владелец и менеджеры ТОЙ ЖЕ организации, что и точка.
+    // Раньше фильтра по организации не было: остатки одного арендатора уходили
+    // руководителям всех организаций. Точка без организации — не шлём никому.
+    const organizationId = (locationRow as { organization_id?: string | null } | null)?.organization_id || null
+    if (!organizationId) return
     const { data: staff } = await supabase
       .from('staff')
       .select('id, telegram_chat_id, full_name')
+      .eq('organization_id', organizationId)
       .in('role', ['owner', 'manager'])
       .not('telegram_chat_id', 'is', null)
 
