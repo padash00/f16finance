@@ -6,17 +6,13 @@ import { computeTimeWindowEndsAt, isNowInTariffWindow, isTariffOfferedNow } from
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireOperator } from '@/lib/server/operator-context'
 import { getCurrentOpenShift } from '@/lib/server/point-shifts'
+import { kzKaspiBeforeMidnight, resolveKzShift } from '@/lib/core/kz-shift'
 import { escapeTelegramHtml } from '@/lib/telegram/message-kit'
 import { sendTelegramMessage } from '@/lib/telegram/send'
 import { broadcastKioskCommand } from '@/lib/server/kiosk-broadcast'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
-}
-
-function getCurrentShift(): 'day' | 'night' {
-  const hour = new Date().getHours()
-  return hour >= 6 && hour < 22 ? 'day' : 'night'
 }
 
 function deferArenaSessionIncomes(flags: Record<string, unknown> | null | undefined) {
@@ -194,7 +190,8 @@ export async function GET(request: Request) {
             .select('cash_amount,kaspi_amount,comment,created_at')
             .eq('company_id', companyId)
             .eq('source', 'arena-session')
-            .eq('date', todayDate),
+            // Доходы зала пишутся датой смены по Казахстану — читаем той же
+            .eq('date', resolveKzShift().date),
       withCo(supabase.from('arena_tech_logs').select('id,station_name,reason,amount,created_at').eq('point_project_id', projectId))
         .gte('created_at', todayDate + 'T00:00:00.000Z')
         .order('created_at'),
@@ -416,16 +413,19 @@ export async function POST(request: Request) {
       if (insertError) throw insertError
 
       if (!deferIncomes) {
+        // Дата/смена по Казахстану, тип смены — из открытой смены точки
+        const kzShift = resolveKzShift(new Date(), openShift.shift_type)
         const { data: incomeRow, error: incomeError } = await supabase
           .from('incomes')
           .insert({
-            date: new Date().toISOString().slice(0, 10),
+            date: kzShift.date,
             company_id: companyId,
             operator_id: operatorId || null,
-            shift: getCurrentShift(),
+            shift: kzShift.shift,
             zone: 'pc',
             cash_amount: finalCash,
             kaspi_amount: finalKaspi,
+            kaspi_before_midnight: kzKaspiBeforeMidnight(kzShift, finalKaspi),
             online_amount: 0,
             card_amount: 0,
             comment: `Арена: ${stationName} — ${tariff.name}`,
@@ -606,14 +606,17 @@ export async function POST(request: Request) {
       if (!deferIncomes) {
         const { data: extStationRow } = await supabase.from('arena_stations').select('name').eq('id', (current as any).station_id).maybeSingle()
         const extStationName = (extStationRow as any)?.name || (current as any).station_id
+        // Дата/смена по Казахстану, тип смены — из открытой смены точки
+        const kzShift = resolveKzShift(new Date(), openShift.shift_type)
         const { error: extIncomeError } = await supabase.from('incomes').insert({
-          date: new Date().toISOString().slice(0, 10),
+          date: kzShift.date,
           company_id: companyId,
           operator_id: (current as any).operator_id || null,
-          shift: getCurrentShift(),
+          shift: kzShift.shift,
           zone: 'pc',
           cash_amount: extCash,
           kaspi_amount: extKaspi,
+          kaspi_before_midnight: kzKaspiBeforeMidnight(kzShift, extKaspi),
           online_amount: 0,
           card_amount: 0,
           comment: `Арена продление: ${extStationName}`,

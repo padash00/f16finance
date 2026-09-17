@@ -13,13 +13,10 @@ import { listOrgReportTargets } from '@/lib/server/report-targets'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { sendTelegramMessage } from '@/lib/telegram/send'
 import { COUNTED_EXPENSE_FILTER } from '@/lib/domain/expense-status'
+import { addDaysISO } from '@/lib/core/date'
+import { kzTodayISO } from '@/lib/server/forecast-inputs'
 
 export const runtime = 'nodejs'
-
-function todayISO() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
 
 function fmtMoney(v: number) {
   if (Math.abs(v) >= 1_000_000) return (v / 1_000_000).toFixed(1) + ' млн ₸'
@@ -49,22 +46,25 @@ export async function GET(req: Request) {
   }
 
   const supabase = createAdminSupabaseClient()
-  const today = todayISO()
-  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
-  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+  // Даты по Казахстану (UTC+5): сервер в UTC
+  const today = kzTodayISO()
+  const weekAgo = addDaysISO(today, -7)
+  const yesterday = addDaysISO(today, -1)
 
   // Собирает список инсайтов по заданному скоупу.
   // companyIds/ownerOrgId === null → без фильтра (env-фолбэк single-tenant F16).
   async function buildInsights(ownerCompanyIds: string[] | null, ownerOrgId: string | null): Promise<string[]> {
     const insights: string[] = []
     // 1. Сравнение выручки (вчера vs средняя за 7 дней)
-    let incQ = supabase
-      .from('incomes')
-      .select('date, cash_amount, kaspi_amount, card_amount, online_amount')
-      .gte('date', weekAgo)
-      .lte('date', today)
-    if (ownerCompanyIds) incQ = incQ.in('company_id', ownerCompanyIds)
-    const { data: weekIncomes } = await incQ
+    const weekIncomes = await fetchAllPages((from, to) => {
+      let incQ = supabase
+        .from('incomes')
+        .select('date, cash_amount, kaspi_amount, card_amount, online_amount')
+        .gte('date', weekAgo)
+        .lte('date', today)
+      if (ownerCompanyIds) incQ = incQ.in('company_id', ownerCompanyIds)
+      return incQ.order('date').order('id').range(from, to)
+    }).catch(() => null)
     if (weekIncomes && weekIncomes.length > 0) {
       const byDate = new Map<string, number>()
       for (const i of weekIncomes as any[]) {
@@ -152,15 +152,17 @@ export async function GET(req: Request) {
     }
 
     // 5. Расходы за неделю vs предыдущую
-    const twoWeeksAgo = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10)
-    let expQ = supabase
-      .from('expenses')
-      .select('date, cash_amount, kaspi_amount')
-      .gte('date', twoWeeksAgo)
-      .lte('date', today)
-      .or(COUNTED_EXPENSE_FILTER)
-    if (ownerCompanyIds) expQ = expQ.in('company_id', ownerCompanyIds)
-    const { data: expenses } = await expQ
+    const twoWeeksAgo = addDaysISO(today, -14)
+    const expenses = await fetchAllPages((from, to) => {
+      let expQ = supabase
+        .from('expenses')
+        .select('date, cash_amount, kaspi_amount')
+        .gte('date', twoWeeksAgo)
+        .lte('date', today)
+        .or(COUNTED_EXPENSE_FILTER)
+      if (ownerCompanyIds) expQ = expQ.in('company_id', ownerCompanyIds)
+      return expQ.order('date').order('id').range(from, to)
+    }).catch(() => null)
     if (expenses && expenses.length > 0) {
       const thisWeek = (expenses as any[]).filter((e) => e.date >= weekAgo).reduce((s, e) => s + Number(e.cash_amount || 0) + Number(e.kaspi_amount || 0), 0)
       const prevWeek = (expenses as any[]).filter((e) => e.date < weekAgo).reduce((s, e) => s + Number(e.cash_amount || 0) + Number(e.kaspi_amount || 0), 0)

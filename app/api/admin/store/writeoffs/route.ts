@@ -8,6 +8,7 @@ import { requireCapability } from '@/lib/server/capabilities'
 import { requireOrgFeature } from '@/lib/server/entitlements'
 import { json } from '@/lib/server/api-response'
 import { normalizeQty } from '@/lib/domain/inventory-quantity'
+import { kzTodayISO } from '@/lib/server/forecast-inputs'
 
 function canManageStore(access: {
   isSuperAdmin: boolean
@@ -225,7 +226,8 @@ export async function POST(request: Request) {
           const { data: catRows } = await catQuery
           if (catRows?.[0]?.name) categoryName = String(catRows[0].name)
           const { error: expErr } = await supabase.from('expenses').insert([{
-            date: writtenDate || new Date().toISOString().slice(0, 10),
+            // Фолбэк «сегодня» — по Казахстану (сервер в UTC)
+            date: writtenDate || kzTodayISO(),
             company_id: loc.company_id,
             operator_id: null,
             category: categoryName,

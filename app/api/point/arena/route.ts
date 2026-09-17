@@ -3,7 +3,8 @@ import { arenaExtensionMinutesFromPayment } from '@/lib/core/arena-extension-min
 import { effectiveZoneExtensionHourly } from '@/lib/core/arena-zone-extension-hourly'
 import { computeTimeWindowEndsAt, isNowInTariffWindow, isTariffOfferedNow } from '@/lib/core/arena-tariff-window'
 import { requirePointDevice } from '@/lib/server/point-devices'
-import { requireCurrentOpenShiftId } from '@/lib/server/point-shifts'
+import { getCurrentOpenShift } from '@/lib/server/point-shifts'
+import { kzKaspiBeforeMidnight, resolveKzShift } from '@/lib/core/kz-shift'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { escapeTelegramHtml } from '@/lib/telegram/message-kit'
 import { sendTelegramMessage } from '@/lib/telegram/send'
@@ -11,11 +12,6 @@ import { broadcastKioskCommand } from '@/lib/server/kiosk-broadcast'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
-}
-
-function getCurrentShift(): 'day' | 'night' {
-  const hour = new Date().getHours()
-  return hour >= 6 && hour < 22 ? 'day' : 'night'
 }
 
 function deferArenaSessionIncomes(flags: Record<string, unknown> | null | undefined) {
@@ -124,7 +120,8 @@ export async function GET(request: Request) {
             .select('cash_amount,kaspi_amount,comment,created_at')
             .eq('company_id', companyId || '00000000-0000-0000-0000-000000000000')
             .eq('source', 'arena-session')
-            .eq('date', todayDate),
+            // Доходы зала пишутся датой смены по Казахстану — читаем той же
+            .eq('date', resolveKzShift().date),
       withCo(supabase.from('arena_tech_logs').select('id,station_name,reason,amount,created_at').eq('point_project_id', projectId)).gte('created_at', todayDate + 'T00:00:00.000Z').order('created_at'),
     ])
 
@@ -218,11 +215,14 @@ export async function POST(request: Request) {
     if (!body?.action) return json({ error: 'action required' }, 400)
 
     let openShiftId: string | null = null
+    let openShiftType: string | null = null
     if (body.action === 'startSession' || body.action === 'extendSession') {
       if (!companyId) {
         return json({ error: 'point-company-required', message: 'Не удалось определить точку.' }, 400)
       }
-      openShiftId = await requireCurrentOpenShiftId(supabase, companyId)
+      const openShift = await getCurrentOpenShift(supabase, companyId)
+      openShiftId = openShift?.id || null
+      openShiftType = openShift?.shift_type || null
       if (!openShiftId) {
         return json(
           {
@@ -351,17 +351,20 @@ export async function POST(request: Request) {
       if (insertError) throw insertError
 
       if (!deferIncomes) {
+        // Дата/смена по Казахстану, тип смены — из открытой смены точки
+        const kzShift = resolveKzShift(new Date(), openShiftType)
         const { data: incomeRow, error: incomeError } = await supabase
           .from('incomes')
           .insert({
-            date: new Date().toISOString().slice(0, 10),
+            date: kzShift.date,
             company_id: companyId || null,
             operator_id: operatorId || null,
             shift_id: openShiftId,
-            shift: getCurrentShift(),
+            shift: kzShift.shift,
             zone: 'pc',
             cash_amount: finalCash,
             kaspi_amount: finalKaspi,
+            kaspi_before_midnight: kzKaspiBeforeMidnight(kzShift, finalKaspi),
             online_amount: 0,
             card_amount: 0,
             comment: `Арена: ${stationName} — ${tariff.name}`,
@@ -463,15 +466,18 @@ export async function POST(request: Request) {
           .eq('id', (sess as any).station_id)
           .maybeSingle()
         const refundStationName = (refundStationRow as any)?.name || (sess as any).station_id
+        // Дата/смена по Казахстану (сервер в UTC)
+        const kzShift = resolveKzShift(now)
         const { error: refundIncomeError } = await supabase.from('incomes').insert({
-          date: nowIso.slice(0, 10),
+          date: kzShift.date,
           company_id: companyId,
           operator_id: (sess as any).operator_id || null,
           shift_id: (sess as any).shift_id || null,
-          shift: getCurrentShift(),
+          shift: kzShift.shift,
           zone: 'pc',
           cash_amount: -refundCash,
           kaspi_amount: -refundKaspi,
+          kaspi_before_midnight: kzKaspiBeforeMidnight(kzShift, -refundKaspi),
           online_amount: 0,
           card_amount: 0,
           comment: `Арена возврат: ${refundStationName}`,
@@ -663,15 +669,18 @@ export async function POST(request: Request) {
           .maybeSingle()
         const extStationName = (extStationRow as any)?.name || (current as any).station_id
 
+        // Дата/смена по Казахстану, тип смены — из открытой смены точки
+        const kzShift = resolveKzShift(new Date(), openShiftType)
         const { error: extIncomeError } = await supabase.from('incomes').insert({
-          date: new Date().toISOString().slice(0, 10),
+          date: kzShift.date,
           company_id: companyId,
           operator_id: (current as any).operator_id || null,
           shift_id: (current as any).shift_id || openShiftId,
-          shift: getCurrentShift(),
+          shift: kzShift.shift,
           zone: 'pc',
           cash_amount: extCash,
           kaspi_amount: extKaspi,
+          kaspi_before_midnight: kzKaspiBeforeMidnight(kzShift, extKaspi),
           online_amount: 0,
           card_amount: 0,
           comment: `Арена продление: ${extStationName}`,

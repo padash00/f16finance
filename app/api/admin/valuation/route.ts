@@ -126,6 +126,7 @@ export async function GET(req: Request) {
         .gte('date', incomeFetchFrom)
         .lte('date', periodEnd)
         .order('date', { ascending: true })
+        .order('id', { ascending: true })
       if (companyScope.allowedCompanyIds !== null) q = q.in('company_id', companyScope.allowedCompanyIds)
       return q
     }
@@ -137,6 +138,7 @@ export async function GET(req: Request) {
         .lte('date', periodEnd)
         .or(COUNTED_EXPENSE_FILTER)
         .order('date', { ascending: true })
+        .order('id', { ascending: true })
       if (companyScope.allowedCompanyIds !== null) q = q.in('company_id', companyScope.allowedCompanyIds)
       return q
     }

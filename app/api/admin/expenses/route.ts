@@ -163,6 +163,8 @@ export async function GET(req: Request) {
       else if (sort === 'amount_desc') q = q.order('cash_amount', { ascending: false }).order('kaspi_amount', { ascending: false })
       else if (sort === 'amount_asc') q = q.order('cash_amount', { ascending: true }).order('kaspi_amount', { ascending: true })
       else q = q.order('date', { ascending: false })
+      // id — уникальный хвост порядка, иначе страницы по 1000 теряют/дублируют строки
+      q = q.order('id', { ascending: true })
       return q
     }
 

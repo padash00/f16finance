@@ -593,13 +593,14 @@ async function handleCompare(chatId: number, companyIds: string[] | null = null)
   const lastWeekFrom = addDaysISO(today, -13)
   const lastWeekTo = addDaysISO(today, -7)
 
-  let thisQ = supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, company_id').gte('date', thisWeekFrom).lte('date', today)
-  let lastQ = supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, company_id').gte('date', lastWeekFrom).lte('date', lastWeekTo)
-  if (companyIds) {
-    thisQ = thisQ.in('company_id', companyIds)
-    lastQ = lastQ.in('company_id', companyIds)
-  }
-  const [thisRes, lastRes] = await Promise.all([thisQ, lastQ])
+  // Постранично: неделя сети может быть >1000 строк
+  const weekIncomes = (dateFrom: string, dateTo: string) =>
+    fetchAllPages((from, to) => {
+      let q = supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, company_id').gte('date', dateFrom).lte('date', dateTo)
+      if (companyIds) q = q.in('company_id', companyIds)
+      return q.order('date').order('id').range(from, to)
+    }).then((data) => ({ data }))
+  const [thisRes, lastRes] = await Promise.all([weekIncomes(thisWeekFrom, today), weekIncomes(lastWeekFrom, lastWeekTo)])
 
   const sum = (rows: any[]) => rows.reduce((s: number, r: any) => s + safeNum(r.cash_amount) + safeNum(r.kaspi_amount) + safeNum(r.online_amount) + safeNum(r.card_amount), 0)
 
@@ -1544,10 +1545,16 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
   const [incomesWeekRes, expensesWeekRes, incomesPrevWeekRes, incomesMonthRes, incomesQuarterRes, expensesMonthRes, companiesRes, operatorsRes, staffRes, operatorProfilesRes] = cached ?? await (async () => {
     const scopeInc = (q: any) => (companyIds ? q.in('company_id', companyIds) : q)
     const results = await Promise.all([
-      scopeInc(supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date, company_id, zone').gte('date', weekFrom).lte('date', today)),
-      scopeInc(supabase.from('expenses').select('cash_amount, kaspi_amount, category, date, company_id').gte('date', weekFrom).lte('date', today).or(COUNTED_EXPENSE_FILTER)),
-      scopeInc(supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date, company_id').gte('date', prevWeekFrom).lte('date', prevWeekTo)),
-      // Месяц/квартал могут быть >1000 строк — постранично, иначе суммы для AI занижены.
+      // Любой период может быть >1000 строк — постранично, иначе суммы для AI занижены.
+      fetchAllPages((from, to) =>
+        scopeInc(supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date, company_id, zone').gte('date', weekFrom).lte('date', today).order('date').order('id').range(from, to)),
+      ).then((data) => ({ data })),
+      fetchAllPages((from, to) =>
+        scopeInc(supabase.from('expenses').select('cash_amount, kaspi_amount, category, date, company_id').gte('date', weekFrom).lte('date', today).or(COUNTED_EXPENSE_FILTER).order('date').order('id').range(from, to)),
+      ).then((data) => ({ data })),
+      fetchAllPages((from, to) =>
+        scopeInc(supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date, company_id').gte('date', prevWeekFrom).lte('date', prevWeekTo).order('date').order('id').range(from, to)),
+      ).then((data) => ({ data })),
       fetchAllPages((from, to) =>
         scopeInc(supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date, company_id').gte('date', monthFrom).lte('date', today).order('date').order('id').range(from, to)),
       ).then((data) => ({ data })),
@@ -3033,15 +3040,20 @@ async function handleDetailedReport(chatId: number, companyIds: string[] | null 
   const today = todayISO()
   const weekFrom = addDaysISO(today, -6)
 
-  let incQ = supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, company_id').gte('date', weekFrom).lte('date', today)
-  let expQ = supabase.from('expenses').select('cash_amount, kaspi_amount, category, company_id').gte('date', weekFrom).lte('date', today).or(COUNTED_EXPENSE_FILTER)
+  // Доходы/расходы постранично — иначе режется на 1000 строк
+  const incP = fetchAllPages((from, to) => {
+    let q = supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, company_id').gte('date', weekFrom).lte('date', today)
+    if (companyIds) q = q.in('company_id', companyIds)
+    return q.order('date').order('id').range(from, to)
+  }).then((data) => ({ data }))
+  const expP = fetchAllPages((from, to) => {
+    let q = supabase.from('expenses').select('cash_amount, kaspi_amount, category, company_id').gte('date', weekFrom).lte('date', today).or(COUNTED_EXPENSE_FILTER)
+    if (companyIds) q = q.in('company_id', companyIds)
+    return q.order('date').order('id').range(from, to)
+  }).then((data) => ({ data }))
   let coQ = supabase.from('companies').select('id, name').eq('is_active', true)
-  if (companyIds) {
-    incQ = incQ.in('company_id', companyIds)
-    expQ = expQ.in('company_id', companyIds)
-    coQ = coQ.in('id', companyIds)
-  }
-  const [incomesRes, expensesRes, companiesRes] = await Promise.all([incQ, expQ, coQ])
+  if (companyIds) coQ = coQ.in('id', companyIds)
+  const [incomesRes, expensesRes, companiesRes] = await Promise.all([incP, expP, coQ])
 
   const safeN = (v: any) => Number(v || 0)
   const companies = (companiesRes.data || []) as Array<{ id: string; name: string }>

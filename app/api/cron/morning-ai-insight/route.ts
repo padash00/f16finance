@@ -18,13 +18,10 @@ import { listOrgReportTargets } from '@/lib/server/report-targets'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { sendTelegramMessage } from '@/lib/telegram/send'
 import { generateAiText } from '@/lib/ai/provider'
+import { addDaysISO } from '@/lib/core/date'
+import { kzTodayISO } from '@/lib/server/forecast-inputs'
 
 export const runtime = 'nodejs'
-
-function todayISO() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
 
 function fmtMoney(v: number) {
   if (Math.abs(v) >= 1_000_000) return (v / 1_000_000).toFixed(1) + ' млн ₸'
@@ -63,9 +60,10 @@ async function collectInsights(
   supabase: ReturnType<typeof createAdminSupabaseClient>,
   companyIds: string[] | null,
 ): Promise<InsightData> {
-  const today = todayISO()
-  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
-  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
+  // Даты по Казахстану (UTC+5): сервер в UTC
+  const today = kzTodayISO()
+  const yesterday = addDaysISO(today, -1)
+  const weekAgo = addDaysISO(today, -7)
 
   const data: InsightData = {
     yesterday,
@@ -82,13 +80,15 @@ async function collectInsights(
 
   try {
     // Выручка за неделю по дням
-    let incomesQ = supabase
-      .from('incomes')
-      .select('date, cash_amount, kaspi_amount, card_amount, online_amount')
-      .gte('date', weekAgo)
-      .lte('date', today)
-    if (companyIds) incomesQ = incomesQ.in('company_id', companyIds)
-    const { data: incomes } = await incomesQ
+    const incomes = await fetchAllPages((from, to) => {
+      let incomesQ = supabase
+        .from('incomes')
+        .select('date, cash_amount, kaspi_amount, card_amount, online_amount')
+        .gte('date', weekAgo)
+        .lte('date', today)
+      if (companyIds) incomesQ = incomesQ.in('company_id', companyIds)
+      return incomesQ.order('date').order('id').range(from, to)
+    }).catch(() => null)
     if (incomes) {
       const byDate = new Map<string, number>()
       for (const i of incomes as any[]) {

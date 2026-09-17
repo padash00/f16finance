@@ -7,6 +7,7 @@ import { addDaysISO } from '@/lib/core/date'
 import { COUNTED_EXPENSE_FILTER } from '@/lib/domain/expense-status'
 import { splitIncomeKaspiByCalendarDay, type ReportIncomeCalendarRow } from '@/lib/reports/income-calendar-kaspi'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { kzTodayISO } from '@/lib/server/forecast-inputs'
 import { requireCapability } from '@/lib/server/capabilities'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
@@ -77,8 +78,9 @@ export async function GET(req: Request) {
     })
 
     const yearStart = `${year}-01-01`
-    const todayIso = new Date().toISOString().slice(0, 10)
-    const currentYear = new Date().getFullYear()
+    // «Сегодня» по Казахстану (UTC+5), сервер в UTC
+    const todayIso = kzTodayISO()
+    const currentYear = Number(todayIso.slice(0, 4))
     // Для текущего года обрезаем диапазон до сегодня, чтобы будущие плановые
     // записи в expenses/incomes не попадали в «факт». Для прошлых годов —
     // полный год.
@@ -129,6 +131,7 @@ export async function GET(req: Request) {
         .gte('date', incomeFetchFrom)
         .lte('date', yearEnd)
         .order('date', { ascending: true })
+        .order('id', { ascending: true })
       if (companyScope.allowedCompanyIds !== null) q = q.in('company_id', companyScope.allowedCompanyIds)
       return q
     }
@@ -144,6 +147,7 @@ export async function GET(req: Request) {
         .lte('date', yearEnd)
         .or(COUNTED_EXPENSE_FILTER)
         .order('date', { ascending: true })
+        .order('id', { ascending: true })
       if (companyScope.allowedCompanyIds !== null) q = q.in('company_id', companyScope.allowedCompanyIds)
       return q
     }
@@ -166,6 +170,7 @@ export async function GET(req: Request) {
         .gte('sale_date', yearStart)
         .lte('sale_date', yearEnd)
         .order('sale_date', { ascending: true })
+        .order('id', { ascending: true })
       if (companyScope.allowedCompanyIds !== null) q = q.in('company_id', companyScope.allowedCompanyIds)
       return q
     }

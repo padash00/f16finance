@@ -7,6 +7,9 @@ import {
 } from '@/lib/server/organizations'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
+import { fetchAllRows } from '@/lib/server/fetch-all-rows'
+import { kzTodayISO } from '@/lib/server/forecast-inputs'
+import { addDaysISO } from '@/lib/core/date'
 import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -94,9 +97,8 @@ export async function GET(req: Request) {
       return json({ data: [] })
     }
 
-    const thirtyDaysAgo = new Date()
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-    const dateStr = thirtyDaysAgo.toISOString().split('T')[0]
+    // 30 дней назад от казахстанского «сегодня» (сервер в UTC)
+    const dateStr = addDaysISO(kzTodayISO(), -30)
 
     // Оборот и долги режем ещё и по точкам: оператор может числиться в двух
     // организациях (ensureOrganizationOperatorAccess признаёт его «своим» по
@@ -105,18 +107,22 @@ export async function GET(req: Request) {
       activeOrganizationId: access.activeOrganization?.id || null,
       isSuperAdmin: access.isSuperAdmin,
     })
-    let incomesQuery = supabase
-      .from('incomes')
-      .select('operator_id, cash_amount, kaspi_amount, online_amount, card_amount')
-      .in('operator_id', operatorIds)
-      .gte('date', dateStr)
+    // Доходы за 30 дней легко больше 1000 строк — читаем страницами
+    const incomesQuery = fetchAllRows((rangeFrom, rangeTo) => {
+      let q = supabase
+        .from('incomes')
+        .select('operator_id, cash_amount, kaspi_amount, online_amount, card_amount')
+        .in('operator_id', operatorIds)
+        .gte('date', dateStr)
+      if (operatorCompanyScope.allowedCompanyIds) q = q.in('company_id', operatorCompanyScope.allowedCompanyIds)
+      return q.order('date', { ascending: true }).order('id', { ascending: true }).range(rangeFrom, rangeTo)
+    }).then((data) => ({ data, error: null as unknown }))
     let debtsQuery = supabase
       .from('debts')
       .select('operator_id, amount')
       .in('operator_id', operatorIds)
       .eq('status', 'active')
     if (operatorCompanyScope.allowedCompanyIds) {
-      incomesQuery = incomesQuery.in('company_id', operatorCompanyScope.allowedCompanyIds)
       debtsQuery = debtsQuery.in('company_id', operatorCompanyScope.allowedCompanyIds)
     }
 

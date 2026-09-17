@@ -5,12 +5,8 @@ import { requireAddon } from '@/lib/server/entitlements'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { sendTelegramMessage } from '@/lib/telegram/send'
 import { COUNTED_EXPENSE_FILTER } from '@/lib/domain/expense-status'
-
-function todayISO() {
-  const now = new Date()
-  const t = now.getTime() - now.getTimezoneOffset() * 60_000
-  return new Date(t).toISOString().slice(0, 10)
-}
+import { fetchAllRows } from '@/lib/server/fetch-all-rows'
+import { kzTodayISO } from '@/lib/server/forecast-inputs'
 
 function addDaysISO(iso: string, diff: number) {
   const [y, m, d] = iso.split('-').map(Number)
@@ -49,7 +45,8 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}))
   const type = body.type || 'daily'
   const requestedCompanyId = typeof body.company_id === 'string' ? body.company_id.trim() : ''
-  const today = todayISO()
+  // «Сегодня» по Казахстану (UTC+5): сервер в UTC
+  const today = kzTodayISO()
   const dateFrom = type === 'weekly' ? addDaysISO(today, -6) : today
   const companyScope = await resolveCompanyScope({
     activeOrganizationId: access.activeOrganization?.id || null,
@@ -58,27 +55,35 @@ export async function POST(request: Request) {
   })
 
   const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
-  let incomesQuery = supabase
-    .from('incomes')
-    .select('cash_amount, kaspi_amount, online_amount, card_amount, date, company_id')
-    .gte('date', dateFrom)
-    .lte('date', today)
-  let expensesQuery = supabase
-    .from('expenses')
-    .select('cash_amount, kaspi_amount, category, date, company_id')
-    .gte('date', dateFrom)
-    .lte('date', today)
-    .or(COUNTED_EXPENSE_FILTER)
-
-  if (companyScope.allowedCompanyIds !== null) {
-    if (companyScope.allowedCompanyIds.length === 0) {
-      return NextResponse.json({ error: 'no-companies-in-organization' }, { status: 403 })
-    }
-    incomesQuery = incomesQuery.in('company_id', companyScope.allowedCompanyIds)
-    expensesQuery = expensesQuery.in('company_id', companyScope.allowedCompanyIds)
+  if (companyScope.allowedCompanyIds !== null && companyScope.allowedCompanyIds.length === 0) {
+    return NextResponse.json({ error: 'no-companies-in-organization' }, { status: 403 })
   }
+  const allowedCompanyIds = companyScope.allowedCompanyIds
 
-  const [incomesRes, expensesRes] = await Promise.all([incomesQuery, expensesQuery])
+  // Постранично: неделя сети может быть >1000 строк
+  const [incomes, expenses] = await Promise.all([
+    fetchAllRows((from, to) => {
+      let q = supabase
+        .from('incomes')
+        .select('cash_amount, kaspi_amount, online_amount, card_amount, date, company_id')
+        .gte('date', dateFrom)
+        .lte('date', today)
+      if (allowedCompanyIds !== null) q = q.in('company_id', allowedCompanyIds)
+      return q.order('date', { ascending: true }).order('id', { ascending: true }).range(from, to)
+    }),
+    fetchAllRows((from, to) => {
+      let q = supabase
+        .from('expenses')
+        .select('cash_amount, kaspi_amount, category, date, company_id')
+        .gte('date', dateFrom)
+        .lte('date', today)
+        .or(COUNTED_EXPENSE_FILTER)
+      if (allowedCompanyIds !== null) q = q.in('company_id', allowedCompanyIds)
+      return q.order('date', { ascending: true }).order('id', { ascending: true }).range(from, to)
+    }),
+  ])
+  const incomesRes = { data: incomes }
+  const expensesRes = { data: expenses }
 
   let totalIncome = 0
   let totalExpense = 0

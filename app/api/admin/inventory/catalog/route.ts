@@ -148,7 +148,7 @@ export async function GET(request: Request) {
         const chunkResults = await Promise.all(
           chunkArray(itemIds, 200).map((ids) =>
             fetchAllRows((from, to) =>
-              supabase.from('inventory_balances').select(BAL_COLS).in('item_id', ids).order('item_id').range(from, to),
+              supabase.from('inventory_balances').select(BAL_COLS).in('item_id', ids).order('item_id').order('location_id').range(from, to),
             ),
           ),
         )
@@ -159,14 +159,14 @@ export async function GET(request: Request) {
       const chunkResults = await Promise.all(
         chunkArray(itemIds, 200).map((ids) =>
           fetchAllRows((from, to) =>
-            supabase.from('inventory_balances').select(BAL_COLS).in('item_id', ids).order('item_id').range(from, to),
+            supabase.from('inventory_balances').select(BAL_COLS).in('item_id', ids).order('item_id').order('location_id').range(from, to),
           ),
         ),
       )
       balances = chunkResults.flat()
     } else {
       balances = await fetchAllRows((from, to) =>
-        supabase.from('inventory_balances').select(BAL_COLS).order('item_id').range(from, to),
+        supabase.from('inventory_balances').select(BAL_COLS).order('item_id').order('location_id').range(from, to),
       )
     }
 

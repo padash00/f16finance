@@ -4,6 +4,7 @@ import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/se
 import { createRequestSupabaseClient } from '@/lib/server/request-auth'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
+import { fetchAllRows } from '@/lib/server/fetch-all-rows'
 import { resolveCompanyScope, listOrganizationOperatorIds } from '@/lib/server/organizations'
 import { buildOperatorMoney } from '@/lib/domain/operator-analytics'
 
@@ -79,12 +80,19 @@ export async function GET(req: Request) {
       const allowedOperatorIds = (opsRes.data || []).map((row: any) => String(row.id))
       const companyIds = (compRes.data || []).map((row: any) => String(row.id))
 
-      let incomesQuery = supabase
-        .from('incomes')
-        .select('date,company_id,shift,operator_id,cash_amount,kaspi_amount,online_amount,card_amount')
-        .gte('date', from)
-        .lte('date', to)
-      if (companyIds.length > 0) incomesQuery = incomesQuery.in('company_id', companyIds)
+      // Доходы за период легко больше 1000 строк — читаем страницами
+      const incomesQuery = fetchAllRows(
+        (rangeFrom, rangeTo) => {
+          let q = supabase
+            .from('incomes')
+            .select('date,company_id,shift,operator_id,cash_amount,kaspi_amount,online_amount,card_amount')
+            .gte('date', from)
+            .lte('date', to)
+          if (companyIds.length > 0) q = q.in('company_id', companyIds)
+          return q.order('date', { ascending: true }).order('id', { ascending: true }).range(rangeFrom, rangeTo)
+        },
+        { maxPages: 100 },
+      ).then((data) => ({ data, error: null as unknown }))
 
       let adjustmentsQuery = supabase
         .from('operator_salary_adjustments')

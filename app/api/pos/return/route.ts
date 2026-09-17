@@ -6,6 +6,7 @@ import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createPointInventoryReturn } from '@/lib/server/repositories/inventory'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { kzTodayISO } from '@/lib/server/forecast-inputs'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -247,7 +248,8 @@ export async function POST(request: Request) {
       point_device_id: null,
       operator_id: null,
       sale_id,
-      return_date: new Date().toISOString().split('T')[0],
+      // Дата возврата — «сегодня» по Казахстану (сервер в UTC)
+      return_date: kzTodayISO(),
       shift: originalSale.shift === 'night' ? 'night' : 'day',
       payment_method: paymentMethod as 'cash' | 'kaspi' | 'mixed',
       cash_amount: cashAmount,
