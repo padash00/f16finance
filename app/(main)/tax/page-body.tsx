@@ -13,6 +13,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useToday } from '@/lib/client/use-today'
+import { toISODateLocal } from '@/lib/core/date'
 import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
@@ -135,7 +136,9 @@ function fmtCompact(v: number) {
   return Math.round(v).toLocaleString('ru-RU') + ' ₸'
 }
 
-function todayISO() { return new Date().toISOString().slice(0, 10) }
+// Сегодня по местному времени браузера: toISOString() давал дату по UTC,
+// и с 00:00 до 05:00 по Алматы «сегодня» было вчера.
+function todayISO() { return toISODateLocal(new Date()) }
 function startOfYearISO() { return `${new Date().getFullYear()}-01-01` }
 
 export default function TaxPage() {
@@ -274,8 +277,10 @@ export default function TaxPage() {
     try {
       // Период: тянем raw incomes — для гибкого фильтра по company × payment_type
       // Передаём include_extra=1 чтобы получить ВСЕ доходы (включая F16 Extra).
+      // rows=current обязательно: без него bundle отдаёт строки и периода сравнения
+      // (столько же дней ДО начала), и налог считался почти с двойной выручки.
       // Логику включения Extra в налогооблагаемый оборот контролируем сами через toggle.
-      const r = await fetch(`/api/admin/reports/bundle?from=${dateFrom}&to=${dateTo}&include_extra=1`)
+      const r = await fetch(`/api/admin/reports/bundle?from=${dateFrom}&to=${dateTo}&include_extra=1&rows=current`)
       if (r.ok) {
         const json = await r.json()
         const data = json.data || json  // совместимость
@@ -305,7 +310,7 @@ export default function TaxPage() {
       }
 
       // Годовой оборот для проверки порогов — из тех же raw данных
-      const ry = await fetch(`/api/admin/reports/bundle?from=${startOfYearISO()}&to=${todayISO()}&include_extra=1`)
+      const ry = await fetch(`/api/admin/reports/bundle?from=${startOfYearISO()}&to=${todayISO()}&include_extra=1&rows=current`)
       if (ry.ok) {
         const json = await ry.json()
         const data = json.data || json
