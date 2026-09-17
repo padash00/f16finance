@@ -1114,8 +1114,43 @@ export async function GET(req: Request) {
           if (!itemRows || itemRows.length < 1000) break
         }
       }
+      // Корректировки недели поштучно (аванс, бонус, штраф, долг) — для «Ленты
+      // операторов»: там должны быть настоящие события со своей датой и
+      // комментарием, а не одна итоговая сумма недели. Окно по date — ровно то,
+      // по которому их берёт расчёт недели.
+      const adjustmentsByOperator = new Map<string, Array<Record<string, unknown>>>()
+      if (weekOperatorIds.length > 0) {
+        for (let page = 0; page < 20; page += 1) {
+          const { data: adjRows, error: adjError } = await supabase
+            .from('operator_salary_adjustments')
+            .select('id, operator_id, date, amount, kind, comment, company_id, status')
+            .in('operator_id', weekOperatorIds)
+            .gte('date', weekStart)
+            .lte('date', weekEnd)
+            .order('date', { ascending: false })
+            .range(page * 1000, page * 1000 + 999)
+          if (adjError) throw adjError
+          for (const row of (adjRows || []) as any[]) {
+            const key = String(row.operator_id)
+            const list = adjustmentsByOperator.get(key) || []
+            list.push({
+              id: String(row.id),
+              date: String(row.date || ''),
+              amount: roundMoney(Number(row.amount || 0)),
+              kind: String(row.kind || ''),
+              comment: row.comment ? String(row.comment) : null,
+              companyId: row.company_id ? String(row.company_id) : null,
+              status: String(row.status || 'active'),
+            })
+            adjustmentsByOperator.set(key, list)
+          }
+          if (!adjRows || adjRows.length < 1000) break
+        }
+      }
+
       for (const item of weeklyOperators as any[]) {
         item.week.debtItems = debtItemsByOperator.get(String(item.operator.id)) || []
+        item.week.adjustments = adjustmentsByOperator.get(String(item.operator.id)) || []
       }
 
       const totals = weeklyOperators.reduce(

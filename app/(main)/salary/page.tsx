@@ -45,18 +45,23 @@ type Payment = {
   status: string
   created_at?: string | null
 }
-type OperatorTimelineEventKind = 'week_total' | 'payment' | 'bonus' | 'fine' | 'debt' | 'advance'
+/** Событие ленты операторов — только настоящие записи: выплата, корректировка, позиция долга из кассы. */
+type OperatorTimelineEventKind = 'payment' | 'advance' | 'bonus' | 'fine' | 'debt' | 'debt_item'
 type OperatorTimelineEvent = {
   id: string
   operator_id: string
   operator_name: string
   date: string
+  /** Точное время, где оно есть (выплаты, позиции из кассы) — порядок внутри дня */
   created_at?: string | null
   kind: OperatorTimelineEventKind
   amount: number
   comment: string | null
-  status: 'active' | 'voided'
+  /** closed — позиция долга из кассы закрыта выплатой недели (это не аннулирование) */
+  status: 'active' | 'voided' | 'closed'
 }
+/** Корректировка недели поштучно (API /api/admin/salary, view=weekly). */
+type OperatorAdjustmentItem = { id: string; date: string; amount: number; kind: string; comment: string | null; companyId: string | null; status: string }
 type ShiftBreakdown = { id: string; date: string; shift: string; companyCode: string | null; companyName: string | null; totalIncome: number; baseSalary: number; seniorityBonus?: number; seniorityPercent?: number; autoBonus: number; roleBonus: number; salary: number }
 
 /** Позиция долга из кассы за неделю (API /api/admin/salary, view=weekly). После выплаты недели status='deleted'. */
@@ -266,7 +271,7 @@ function buildStaffTimelineEvents(params: {
 const formatRoleLabel = (code: string): string => code === 'super_admin' ? 'Супер-админ' : getStaffRoleLabel(code)
 type WeeklyOperator = {
   operator: { id: string; name: string; short_name: string | null; full_name: string | null; is_active: boolean; telegram_chat_id: string | null; photo_url: string | null; position: string | null; documents_count: number; expiring_documents: number }
-  week: { id: string; weekStart: string; weekEnd: string; grossAmount: number; bonusAmount: number; fineAmount: number; debtAmount: number; debtActiveAmount?: number; advanceAmount: number; netAmount: number; paidAmount: number; remainingAmount: number; status: 'draft' | 'partial' | 'paid'; companyAllocations: Allocation[]; payments: Payment[]; shiftsCount: number; autoBonusTotal: number; seniorityBonusTotal?: number; shifts: ShiftBreakdown[]; debtItems?: OperatorDebtItem[] }
+  week: { id: string; weekStart: string; weekEnd: string; grossAmount: number; bonusAmount: number; fineAmount: number; debtAmount: number; debtActiveAmount?: number; advanceAmount: number; netAmount: number; paidAmount: number; remainingAmount: number; status: 'draft' | 'partial' | 'paid'; companyAllocations: Allocation[]; payments: Payment[]; shiftsCount: number; autoBonusTotal: number; seniorityBonusTotal?: number; shifts: ShiftBreakdown[]; debtItems?: OperatorDebtItem[]; adjustments?: OperatorAdjustmentItem[] }
   hasActivity: boolean
 }
 type SalaryData = { weekStart: string; weekEnd: string; companies: CompanyOption[]; operators: WeeklyOperator[]; totals: { netAmount: number; paidAmount: number; advanceAmount: number; remainingAmount: number; paidOperators: number; totalOperators: number } }
@@ -295,6 +300,20 @@ type OperatorSortKey = 'name' | 'shifts' | 'accrued' | 'bonuses' | 'deductions' 
 const OPERATOR_STATUS_RANK: Record<string, number> = { draft: 0, partial: 1, paid: 2 }
 // Как сервер сортировал раньше: сначала самый большой остаток
 const OPERATOR_SORT_INITIAL = { key: 'remaining', dir: 'desc' } as const
+
+// ─── Лента операторов ─────────────────────────────────────────────────────────
+type OperatorEventSortKey = 'date' | 'operator' | 'kind' | 'amount' | 'status' | 'comment'
+const OPERATOR_EVENT_SORT_INITIAL = { key: 'date', dir: 'desc' } as const
+// Порядок типов при сортировке по «Тип» и в итогах: деньги оператору → удержания
+const OPERATOR_EVENT_KIND_RANK: Record<OperatorTimelineEventKind, number> = { payment: 0, advance: 1, bonus: 2, fine: 3, debt: 4, debt_item: 5 }
+const OPERATOR_EVENT_KIND_META: Record<OperatorTimelineEventKind, { label: string; plural: string; tone: string }> = {
+  payment: { label: 'выплата', plural: 'Выплаты', tone: 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300' },
+  advance: { label: 'аванс', plural: 'Авансы', tone: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300' },
+  bonus: { label: 'бонус', plural: 'Бонусы', tone: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' },
+  fine: { label: 'штраф', plural: 'Штрафы', tone: 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300' },
+  debt: { label: 'долг', plural: 'Долги (корректировки)', tone: 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300' },
+  debt_item: { label: 'долг из кассы', plural: 'Долги из кассы', tone: 'border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-300' },
+}
 
 function Modal(props: { title: string; subtitle?: string; onClose: () => void; children: React.ReactNode }) {
   useModalEscape(true, props.onClose)
@@ -446,76 +465,22 @@ export default function SalaryPage() {
   )
   const broadcastTargets = useMemo(() => (data?.operators || []).filter((i) => i.operator.is_active && i.operator.telegram_chat_id), [data?.operators])
   const summaryText = useMemo(() => { const top = [...(data?.operators || [])].sort((a, b) => b.week.remainingAmount - a.week.remainingAmount)[0]; return top && top.week.remainingAmount > 0 ? `Самый большой остаток у ${getOperatorDisplayName(top.operator)}: ${money(top.week.remainingAmount)}.` : 'На этой неделе остатки закрыты или ещё не сформированы.' }, [data?.operators])
+  // ─── Лента операторов: настоящие события недели ─────────────────────────────
   const [operatorEventsOperatorId, setOperatorEventsOperatorId] = useState<'all' | string>('all')
   const [operatorEventsKind, setOperatorEventsKind] = useState<'all' | OperatorTimelineEventKind>('all')
-  const [operatorEventsStatus, setOperatorEventsStatus] = useState<'all' | 'active' | 'voided'>('all')
+  const [operatorEventsStatus, setOperatorEventsStatus] = useState<'all' | 'active' | 'voided' | 'closed'>('all')
   const [operatorEventsQuery, setOperatorEventsQuery] = useState('')
-  const [operatorEventsDateFrom, setOperatorEventsDateFrom] = useState('')
-  const [operatorEventsDateTo, setOperatorEventsDateTo] = useState('')
-  const [operatorEventsLimit, setOperatorEventsLimit] = useState(100)
+  // Лента собирается только из настоящих записей: выплаты, корректировки поштучно
+  // и позиции долгов из кассы. Итоговые суммы недели («Бонусы за неделю …») сюда
+  // больше не попадают: они есть в ведомости, а в ленте выглядели событиями,
+  // которых на самом деле не было.
   const operatorGlobalTimeline = useMemo(() => {
     const items: OperatorTimelineEvent[] = []
+    const companyTitle = (id: string | null | undefined) => (data?.companies || []).find((c) => c.id === id)?.name || ''
     for (const item of data?.operators || []) {
       const operatorName = getOperatorDisplayName(item.operator)
-      items.push({
-        id: `week-total:${item.operator.id}:${item.week.weekStart}`,
-        operator_id: item.operator.id,
-        operator_name: operatorName,
-        date: item.week.weekEnd,
-        kind: 'week_total',
-        amount: Number(item.week.netAmount || 0),
-        comment: `Итог недели ${item.week.weekStart} - ${item.week.weekEnd}`,
-        status: 'active',
-      })
-      if (item.week.bonusAmount > 0) {
-        items.push({
-          id: `week-bonus:${item.operator.id}:${item.week.weekStart}`,
-          operator_id: item.operator.id,
-          operator_name: operatorName,
-          date: item.week.weekEnd,
-          kind: 'bonus',
-          amount: Number(item.week.bonusAmount || 0),
-          comment: `Бонусы за неделю ${item.week.weekStart} - ${item.week.weekEnd}`,
-          status: 'active',
-        })
-      }
-      if (item.week.fineAmount > 0) {
-        items.push({
-          id: `week-fine:${item.operator.id}:${item.week.weekStart}`,
-          operator_id: item.operator.id,
-          operator_name: operatorName,
-          date: item.week.weekEnd,
-          kind: 'fine',
-          amount: Number(item.week.fineAmount || 0),
-          comment: `Штрафы за неделю ${item.week.weekStart} - ${item.week.weekEnd}`,
-          status: 'active',
-        })
-      }
-      if (item.week.debtAmount > 0) {
-        items.push({
-          id: `week-debt:${item.operator.id}:${item.week.weekStart}`,
-          operator_id: item.operator.id,
-          operator_name: operatorName,
-          date: item.week.weekEnd,
-          kind: 'debt',
-          amount: Number(item.week.debtAmount || 0),
-          comment: `Долги за неделю ${item.week.weekStart} - ${item.week.weekEnd}`,
-          status: 'active',
-        })
-      }
-      if (item.week.advanceAmount > 0) {
-        items.push({
-          id: `week-advance:${item.operator.id}:${item.week.weekStart}`,
-          operator_id: item.operator.id,
-          operator_name: operatorName,
-          date: item.week.weekEnd,
-          kind: 'advance',
-          amount: Number(item.week.advanceAmount || 0),
-          comment: `Авансы за неделю ${item.week.weekStart} - ${item.week.weekEnd}`,
-          status: 'active',
-        })
-      }
       for (const payment of item.week.payments || []) {
+        const parts = [`нал ${money(payment.cash_amount)}`, `безнал ${money(payment.kaspi_amount)}`, payment.comment].filter(Boolean)
         items.push({
           id: `payment:${payment.id}`,
           operator_id: item.operator.id,
@@ -524,94 +489,82 @@ export default function SalaryPage() {
           created_at: payment.created_at || null,
           kind: 'payment',
           amount: Number(payment.total_amount || 0),
-          comment: payment.comment || null,
+          comment: parts.join(' · '),
           status: payment.status === 'voided' ? 'voided' : 'active',
         })
       }
+      for (const adj of item.week.adjustments || []) {
+        const kind = (['advance', 'bonus', 'fine', 'debt'] as const).find((k) => k === adj.kind)
+        if (!kind) continue
+        items.push({
+          id: `adj:${adj.id}`,
+          operator_id: item.operator.id,
+          operator_name: operatorName,
+          date: adj.date,
+          kind,
+          amount: Number(adj.amount || 0),
+          comment: [adj.comment, companyTitle(adj.companyId)].filter(Boolean).join(' · ') || null,
+          status: adj.status === 'voided' ? 'voided' : 'active',
+        })
+      }
+      for (const d of item.week.debtItems || []) {
+        const what = [d.name, d.quantity ? `${d.quantity} шт. × ${money(d.unitPrice)}` : '', companyTitle(d.companyId), d.comment].filter(Boolean).join(' · ')
+        items.push({
+          id: `debt-item:${d.id}`,
+          operator_id: item.operator.id,
+          operator_name: operatorName,
+          date: String(d.createdAt || '').slice(0, 10),
+          created_at: d.createdAt || null,
+          kind: 'debt_item',
+          amount: Number(d.amount || 0),
+          comment: what || null,
+          // После выплаты недели позиции закрываются (не аннулируются!)
+          status: d.status === 'active' ? 'active' : 'closed',
+        })
+      }
     }
-    return items.sort((a, b) => {
-      const byDate = String(b.date || '').localeCompare(String(a.date || ''))
-      if (byDate !== 0) return byDate
-      return String(b.created_at || '').localeCompare(String(a.created_at || ''))
-    })
-  }, [data?.operators])
+    return items
+  }, [data?.operators, data?.companies])
   const filteredOperatorGlobalTimeline = useMemo(() => {
     const query = operatorEventsQuery.trim().toLowerCase()
     return operatorGlobalTimeline
-      .filter((ev) => (operatorEventsOperatorId === 'all' ? true : ev.operator_id === operatorEventsOperatorId))
-      .filter((ev) => (operatorEventsKind === 'all' ? true : ev.kind === operatorEventsKind))
-      .filter((ev) => {
-        if (operatorEventsStatus === 'all') return true
-        if (operatorEventsStatus === 'voided') return ev.status === 'voided'
-        return ev.status !== 'voided'
-      })
-      .filter((ev) => (operatorEventsDateFrom ? ev.date >= operatorEventsDateFrom : true))
-      .filter((ev) => (operatorEventsDateTo ? ev.date <= operatorEventsDateTo : true))
-      .filter((ev) => {
-        if (!query) return true
-        return (
+      .filter((ev) => operatorEventsOperatorId === 'all' || ev.operator_id === operatorEventsOperatorId)
+      .filter((ev) => operatorEventsKind === 'all' || ev.kind === operatorEventsKind)
+      .filter((ev) => operatorEventsStatus === 'all' || ev.status === operatorEventsStatus)
+      .filter(
+        (ev) =>
+          !query ||
           ev.operator_name.toLowerCase().includes(query) ||
           String(ev.comment || '').toLowerCase().includes(query) ||
-          ev.kind.toLowerCase().includes(query)
-        )
-      })
-  }, [
-    operatorGlobalTimeline,
-    operatorEventsOperatorId,
-    operatorEventsKind,
-    operatorEventsStatus,
-    operatorEventsDateFrom,
-    operatorEventsDateTo,
-    operatorEventsQuery,
-  ])
-  const visibleOperatorGlobalTimeline = useMemo(
-    () => filteredOperatorGlobalTimeline.slice(0, operatorEventsLimit),
-    [filteredOperatorGlobalTimeline, operatorEventsLimit],
+          OPERATOR_EVENT_KIND_META[ev.kind].label.includes(query),
+      )
+  }, [operatorGlobalTimeline, operatorEventsOperatorId, operatorEventsKind, operatorEventsStatus, operatorEventsQuery])
+  // Сортировка ленты по заголовку — общий хук, как в ведомости
+  const operatorEventSortColumns = useMemo<SortColumns<OperatorTimelineEvent, OperatorEventSortKey>>(
+    () => ({
+      // Дата вместе со временем: внутри одного дня — по порядку
+      date: { get: (ev) => `${ev.date}|${ev.created_at || ''}`, defaultDir: 'desc' },
+      operator: { get: (ev) => ev.operator_name },
+      kind: { get: (ev) => OPERATOR_EVENT_KIND_RANK[ev.kind] ?? 9 },
+      amount: { get: (ev) => ev.amount || null, defaultDir: 'desc' },
+      status: { get: (ev) => (ev.status === 'active' ? 0 : ev.status === 'closed' ? 1 : 2) },
+      comment: { get: (ev) => ev.comment || null },
+    }),
+    [],
   )
-  const groupedVisibleOperatorEvents = useMemo(() => {
-    const groups = new Map<string, typeof visibleOperatorGlobalTimeline>()
-    for (const ev of visibleOperatorGlobalTimeline) {
-      const dateKey = String(ev.date || '')
-      const list = groups.get(dateKey) || []
-      list.push(ev)
-      groups.set(dateKey, list)
-    }
-    return Array.from(groups.entries())
-  }, [visibleOperatorGlobalTimeline])
-  const operatorEventsSummary = useMemo(() => {
-    const total = filteredOperatorGlobalTimeline.length
-    const payouts = filteredOperatorGlobalTimeline
-      .filter((ev) => ev.kind === 'payment' && ev.status !== 'voided')
-      .reduce((sum, ev) => sum + Number(ev.amount || 0), 0)
-    const toPay = filteredOperatorGlobalTimeline
-      .filter((ev) => ev.kind === 'week_total')
-      .reduce((sum, ev) => sum + Number(ev.amount || 0), 0)
-    return { total, payouts, toPay }
-  }, [filteredOperatorGlobalTimeline])
-  const operatorEventsByOperator = useMemo(() => {
-    const map = new Map<
-      string,
-      { operatorName: string; events: number; toPay: number; paid: number; deductions: number; advances: number }
-    >()
+  const { sort: operatorEventSort, toggle: toggleOperatorEventSort, sortedRows: sortedOperatorEvents } = useTableSort<OperatorTimelineEvent, OperatorEventSortKey>({
+    storageKey: 'salary.operatorEventsSort',
+    columns: operatorEventSortColumns,
+    initial: OPERATOR_EVENT_SORT_INITIAL,
+    rows: filteredOperatorGlobalTimeline,
+  })
+  // Итоги по типам без аннулированных: аннулированное — уже не деньги
+  const operatorEventsTotals = useMemo(() => {
+    const totals: Record<OperatorTimelineEventKind, number> = { payment: 0, advance: 0, bonus: 0, fine: 0, debt: 0, debt_item: 0 }
     for (const ev of filteredOperatorGlobalTimeline) {
-      const current = map.get(ev.operator_id) || {
-        operatorName: ev.operator_name,
-        events: 0,
-        toPay: 0,
-        paid: 0,
-        deductions: 0,
-        advances: 0,
-      }
-      current.events += 1
-      if (ev.kind === 'week_total') current.toPay += Number(ev.amount || 0)
-      if (ev.kind === 'payment' && ev.status !== 'voided') current.paid += Number(ev.amount || 0)
-      if ((ev.kind === 'debt' || ev.kind === 'fine') && ev.status !== 'voided') current.deductions += Number(ev.amount || 0)
-      if (ev.kind === 'advance' && ev.status !== 'voided') current.advances += Number(ev.amount || 0)
-      map.set(ev.operator_id, current)
+      if (ev.status !== 'voided') totals[ev.kind] += Number(ev.amount || 0)
     }
-    return Array.from(map.entries())
-      .map(([operatorId, stats]) => ({ operatorId, ...stats }))
-      .sort((a, b) => b.toPay - a.toPay || b.events - a.events)
+    return totals
   }, [filteredOperatorGlobalTimeline])
 
   async function post(body: unknown) {
@@ -1839,202 +1792,185 @@ export default function SalaryPage() {
           })()}
 
           {/* ── OPERATOR EVENTS TAB ─────────────────────────────────────────── */}
-          {tab === 'operator-events' && (
-            <Card className="overflow-hidden border-border bg-white dark:bg-white/[0.04]">
-              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border p-5">
-                <div className="flex items-center gap-3">
-                  <div className="rounded-2xl bg-blue-500/15 p-3 text-blue-700 dark:text-blue-300">
-                    <CalendarDays className="h-5 w-5" />
+          {/* Лента операторов: настоящие события недели — выплаты, корректировки и */}
+          {/* позиции долгов из кассы. Таблица с сортировкой; клик — карточка оператора. */}
+          {tab === 'operator-events' && (() => {
+            const hasFilters =
+              operatorEventsOperatorId !== 'all' || operatorEventsKind !== 'all' || operatorEventsStatus !== 'all' || operatorEventsQuery.trim() !== ''
+            const eventDate = (ev: OperatorTimelineEvent) => {
+              // У позиций из кассы есть точное время — показываем его
+              if (ev.kind === 'debt_item' && ev.created_at) {
+                const d = new Date(ev.created_at)
+                if (!Number.isNaN(d.getTime())) {
+                  return d.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+                }
+              }
+              return formatRuDate(ev.date)
+            }
+            const statusLabel = (ev: OperatorTimelineEvent) => (ev.status === 'voided' ? 'аннулировано' : ev.status === 'closed' ? 'закрыто' : 'активно')
+            const openOperator = (ev: OperatorTimelineEvent) => {
+              setSelectedOperatorId(ev.operator_id)
+              setTab('operators')
+            }
+            const head = (label: string, key: OperatorEventSortKey, align: 'left' | 'right' | 'center' = 'left', cls = 'px-3 py-2') => (
+              <SortableTh label={label} sortKey={key} sort={operatorEventSort} onSort={toggleOperatorEventSort} align={align} className={cls} />
+            )
+
+            return (
+              <Card className="overflow-hidden border-border bg-white dark:bg-white/[0.04]">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4 sm:p-5">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-2xl bg-blue-500/15 p-2.5 text-blue-700 dark:text-blue-300"><CalendarDays className="h-5 w-5" /></div>
+                    <div>
+                      <h2 className="text-base font-semibold text-foreground">Лента операторов</h2>
+                      <p className="text-xs text-muted-foreground">
+                        Все события недели по отдельности: выплаты, авансы, бонусы, штрафы, долги и позиции из кассы. Нажмите на строку — откроется карточка оператора.
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h2 className="text-lg font-semibold text-foreground">Лента событий операторов</h2>
-                    <p className="text-sm text-muted-foreground">Недельные начисления, выплаты и удержания операторов за выбранную неделю.</p>
+                  <div className="text-xs text-muted-foreground">
+                    Событий: <span className="font-semibold text-foreground">{sortedOperatorEvents.length}</span>
+                    {sortedOperatorEvents.length !== operatorGlobalTimeline.length ? ` из ${operatorGlobalTimeline.length}` : ''}
                   </div>
                 </div>
-                <div className="text-xs text-muted-foreground">
-                  Событий: <span className="font-semibold text-foreground">{operatorGlobalTimeline.length}</span>
-                </div>
-              </div>
-              <div className="p-5">
-                <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-                  <input
-                    className={input}
-                    type="text"
-                    value={operatorEventsQuery}
-                    onChange={(e) => setOperatorEventsQuery(e.target.value)}
-                    placeholder="Поиск: оператор, комментарий, тип"
-                  />
-                  <select className={selectCls} value={operatorEventsOperatorId} onChange={(e) => setOperatorEventsOperatorId(e.target.value as any)}>
-                    <option value="all">Все операторы</option>
-                    {(data?.operators || []).map((i) => (
-                      <option key={i.operator.id} value={i.operator.id}>
-                        {getOperatorDisplayName(i.operator)}
-                      </option>
-                    ))}
-                  </select>
-                  <select className={selectCls} value={operatorEventsKind} onChange={(e) => setOperatorEventsKind(e.target.value as any)}>
-                    <option value="all">Все типы</option>
-                    <option value="week_total">Итог недели</option>
-                    <option value="payment">Выплаты</option>
-                    <option value="bonus">Бонусы</option>
-                    <option value="fine">Штрафы</option>
-                    <option value="debt">Долги</option>
-                    <option value="advance">Авансы</option>
-                  </select>
-                  <select className={selectCls} value={operatorEventsStatus} onChange={(e) => setOperatorEventsStatus(e.target.value as any)}>
-                    <option value="all">Любой статус</option>
-                    <option value="active">Активные</option>
-                    <option value="voided">Аннулированные</option>
-                  </select>
-                  <DatePicker className="h-11" placeholder="С даты" value={operatorEventsDateFrom} onChange={setOperatorEventsDateFrom} />
-                  <DatePicker className="h-11" placeholder="По дату" value={operatorEventsDateTo} onChange={setOperatorEventsDateTo} />
-                </div>
-                <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-body">
-                  <span className="rounded-full border border-border bg-white dark:bg-white/[0.03] px-3 py-1">
-                    Событий: <span className="font-semibold text-foreground">{operatorEventsSummary.total}</span>
-                  </span>
-                  <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-emerald-700 dark:text-emerald-200">
-                    К выплате за неделю: <span className="font-semibold text-foreground">{money(operatorEventsSummary.toPay)}</span>
-                  </span>
-                  <span className="rounded-full border border-sky-500/20 bg-sky-500/10 px-3 py-1 text-sky-700 dark:text-sky-200">
-                    Выплачено: <span className="font-semibold text-foreground">{money(operatorEventsSummary.payouts)}</span>
-                  </span>
-                  <button
-                    type="button"
-                    className="rounded-full border border-border bg-white dark:bg-white/[0.03] px-3 py-1 text-body hover:bg-slate-100 dark:hover:bg-white/[0.08]"
-                    onClick={() => {
-                      setOperatorEventsQuery('')
-                      setOperatorEventsOperatorId('all')
-                      setOperatorEventsKind('all')
-                      setOperatorEventsStatus('all')
-                      setOperatorEventsDateFrom('')
-                      setOperatorEventsDateTo('')
-                      setOperatorEventsLimit(100)
-                    }}
-                  >
-                    Сбросить фильтры
-                  </button>
-                </div>
-                {operatorEventsByOperator.length > 0 ? (
-                  <div className="mb-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-                    {operatorEventsByOperator.map((row) => (
-                      <div key={row.operatorId} className="rounded-xl border border-border bg-white dark:bg-white/[0.03] p-3">
-                        <div className="mb-2 flex items-center justify-between gap-2">
-                          <div className="truncate text-sm font-medium text-foreground">{row.operatorName}</div>
-                          <button
-                            type="button"
-                            className="rounded-full border border-border bg-white dark:bg-white/[0.04] px-2 py-0.5 text-[10px] text-body hover:bg-slate-100 dark:hover:bg-white/[0.08]"
-                            onClick={() => setOperatorEventsOperatorId(row.operatorId)}
-                          >
-                            Показать
-                          </button>
-                        </div>
-                        <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-                          <span>События</span>
-                          <span className="text-right text-foreground">{row.events}</span>
-                          <span>К выплате</span>
-                          <span className="text-right text-emerald-700 dark:text-emerald-300">{money(row.toPay)}</span>
-                          <span>Выплачено</span>
-                          <span className="text-right text-sky-700 dark:text-sky-300">{money(row.paid)}</span>
-                          <span>Штрафы+долги</span>
-                          <span className="text-right text-rose-700 dark:text-rose-300">{money(row.deductions)}</span>
-                          <span>Авансы</span>
-                          <span className="text-right text-amber-700 dark:text-amber-300">{money(row.advances)}</span>
-                        </div>
-                      </div>
-                    ))}
+
+                <div className="space-y-3 border-b border-border p-4 sm:p-5">
+                  {/* Итоги по типам — нажатие оставляет в ленте только этот тип */}
+                  <div className="flex flex-wrap gap-2">
+                    {(Object.keys(OPERATOR_EVENT_KIND_META) as OperatorTimelineEventKind[]).map((kind) => {
+                      const meta = OPERATOR_EVENT_KIND_META[kind]
+                      const active = operatorEventsKind === kind
+                      return (
+                        <button
+                          key={kind}
+                          type="button"
+                          onClick={() => setOperatorEventsKind(active ? 'all' : kind)}
+                          className={`rounded-full border px-3 py-1 text-xs transition ${active ? meta.tone : 'border-border bg-white dark:bg-white/[0.03] text-body hover:bg-surface-hover'}`}
+                        >
+                          {meta.plural}: <span className="font-semibold tabular-nums">{money(operatorEventsTotals[kind])}</span>
+                        </button>
+                      )
+                    })}
                   </div>
-                ) : null}
-                {loading && filteredOperatorGlobalTimeline.length === 0 ? (
-                  <div className="space-y-2">
-                    {Array.from({ length: 8 }).map((_, idx) => (
-                      <Skeleton key={idx} className="h-10 rounded-xl" />
-                    ))}
+                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                    <select className={selectCls} value={operatorEventsOperatorId} onChange={(e) => setOperatorEventsOperatorId(e.target.value)} aria-label="Оператор">
+                      <option value="all">Все операторы</option>
+                      {(data?.operators || []).map((i) => (
+                        <option key={i.operator.id} value={i.operator.id}>{getOperatorDisplayName(i.operator)}</option>
+                      ))}
+                    </select>
+                    <select className={selectCls} value={operatorEventsKind} onChange={(e) => setOperatorEventsKind(e.target.value as 'all' | OperatorTimelineEventKind)} aria-label="Тип">
+                      <option value="all">Все типы</option>
+                      {(Object.keys(OPERATOR_EVENT_KIND_META) as OperatorTimelineEventKind[]).map((kind) => (
+                        <option key={kind} value={kind}>{OPERATOR_EVENT_KIND_META[kind].plural}</option>
+                      ))}
+                    </select>
+                    <select className={selectCls} value={operatorEventsStatus} onChange={(e) => setOperatorEventsStatus(e.target.value as 'all' | 'active' | 'voided' | 'closed')} aria-label="Статус">
+                      <option value="all">Любой статус</option>
+                      <option value="active">Активные</option>
+                      <option value="closed">Закрытые выплатой</option>
+                      <option value="voided">Аннулированные</option>
+                    </select>
+                    <input className={input} type="text" value={operatorEventsQuery} onChange={(e) => setOperatorEventsQuery(e.target.value)} placeholder="Поиск: оператор, товар, комментарий" />
                   </div>
-                ) : filteredOperatorGlobalTimeline.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-border bg-surface-muted p-8 text-center text-sm text-slate-500">
-                    За выбранную неделю нет событий по фильтрам.
+                  {hasFilters ? (
+                    <button
+                      type="button"
+                      className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                      onClick={() => {
+                        setOperatorEventsOperatorId('all')
+                        setOperatorEventsKind('all')
+                        setOperatorEventsStatus('all')
+                        setOperatorEventsQuery('')
+                      }}
+                    >
+                      Сбросить фильтры
+                    </button>
+                  ) : null}
+                </div>
+
+                {loading && operatorGlobalTimeline.length === 0 ? (
+                  <div className="space-y-2 p-4 sm:p-5">
+                    {Array.from({ length: 8 }).map((_, idx) => <Skeleton key={idx} className="h-9 rounded-xl" />)}
+                  </div>
+                ) : sortedOperatorEvents.length === 0 ? (
+                  <div className="p-10 text-center text-sm text-slate-500">
+                    {operatorGlobalTimeline.length === 0 ? 'За эту неделю событий нет.' : 'По фильтрам ничего не найдено.'}
                   </div>
                 ) : (
-                  <div className="max-h-[65vh] space-y-2 overflow-y-auto pr-1">
-                    {groupedVisibleOperatorEvents.map(([dateKey, events]) => (
-                      <div key={dateKey} className="space-y-2">
-                        <div className="sticky top-0 z-10 rounded-lg bg-white/90 dark:bg-slate-900/90 px-2 py-1 text-[11px] text-muted-foreground backdrop-blur">
-                          {formatRuDate(dateKey)}
-                        </div>
-                        {events.map((ev) => {
-                          const tone =
-                            ev.kind === 'week_total'
-                              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-                              : ev.kind === 'payment'
-                                ? 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300'
-                                : ev.kind === 'bonus'
-                                  ? 'border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300'
-                                  : ev.kind === 'advance'
-                                    ? 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300'
-                                    : 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300'
-                          const label =
-                            ev.kind === 'week_total'
-                              ? 'итог недели'
-                              : ev.kind === 'payment'
-                                ? 'выплата'
-                                : ev.kind === 'bonus'
-                                  ? 'бонус'
-                                  : ev.kind === 'advance'
-                                    ? 'аванс'
-                                    : ev.kind === 'fine'
-                                      ? 'штраф'
-                                      : 'долг'
-                          const kindHint =
-                            ev.kind === 'week_total'
-                              ? 'Финальная сумма к выплате за неделю'
-                              : ev.kind === 'payment'
-                                ? 'Фактическая выплата оператору'
-                                : ev.kind === 'bonus'
-                                  ? 'Премия за неделю'
-                                  : ev.kind === 'advance'
-                                    ? 'Аванс, выданный в течение недели'
-                                    : ev.kind === 'fine'
-                                      ? 'Штраф за неделю'
-                                      : 'Долг за товары/удержания'
-                          return (
-                            <div key={ev.id} className="rounded-xl border border-border bg-white dark:bg-white/[0.03] px-3 py-2 text-xs">
-                              <div className="flex items-center justify-between gap-3">
-                                <div className="flex min-w-0 items-center gap-2">
-                                  <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${tone}`}>{label}</span>
-                                  <span className="text-body">{ev.operator_name}</span>
-                                  {ev.status === 'voided' ? <span className="text-slate-500">(аннулировано)</span> : null}
-                                </div>
-                                <span className="ml-3 shrink-0 font-medium text-foreground">{money(ev.amount)}</span>
+                  <>
+                    {/* Компьютер: таблица */}
+                    <div className="hidden max-h-[70vh] overflow-auto sm:block">
+                      <table className="w-full min-w-[900px]">
+                        <thead className="sticky top-0 z-10 bg-surface-muted">
+                          <tr className="text-[11px] font-medium text-muted-foreground">
+                            {head('Дата', 'date', 'left', 'px-4 py-2')}
+                            {head('Оператор', 'operator')}
+                            {head('Тип', 'kind')}
+                            {head('Сумма', 'amount', 'right')}
+                            {head('Статус', 'status', 'center')}
+                            {head('Комментарий', 'comment')}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border">
+                          {sortedOperatorEvents.map((ev) => {
+                            const meta = OPERATOR_EVENT_KIND_META[ev.kind]
+                            return (
+                              <tr
+                                key={ev.id}
+                                onClick={() => openOperator(ev)}
+                                title="Открыть карточку оператора"
+                                className={`cursor-pointer transition hover:bg-surface-muted ${ev.status === 'active' ? '' : 'opacity-60'}`}
+                              >
+                                <td className="whitespace-nowrap px-4 py-2 text-xs tabular-nums text-body">{eventDate(ev)}</td>
+                                <td className="whitespace-nowrap px-3 py-2 text-sm text-foreground">{ev.operator_name}</td>
+                                <td className="px-3 py-2">
+                                  <span className={`inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-medium ${meta.tone}`}>{meta.label}</span>
+                                </td>
+                                <td className={`whitespace-nowrap px-3 py-2 text-right text-sm font-medium tabular-nums ${ev.status === 'voided' ? 'text-slate-400 line-through' : 'text-foreground'}`}>
+                                  {money(ev.amount)}
+                                </td>
+                                <td className="whitespace-nowrap px-3 py-2 text-center text-[11px] text-muted-foreground">{statusLabel(ev)}</td>
+                                <td className="max-w-[380px] truncate px-3 py-2 text-xs text-muted-foreground" title={ev.comment || undefined}>{ev.comment || '—'}</td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Телефон: короткие строки в том же порядке */}
+                    <div className="max-h-[70vh] divide-y divide-border overflow-y-auto sm:hidden">
+                      {sortedOperatorEvents.map((ev) => {
+                        const meta = OPERATOR_EVENT_KIND_META[ev.kind]
+                        return (
+                          <button
+                            key={ev.id}
+                            type="button"
+                            onClick={() => openOperator(ev)}
+                            className={`flex w-full items-start justify-between gap-3 px-4 py-3 text-left ${ev.status === 'active' ? '' : 'opacity-60'}`}
+                          >
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className={`inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${meta.tone}`}>{meta.label}</span>
+                                <span className="truncate text-sm text-foreground">{ev.operator_name}</span>
                               </div>
-                              <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                                <span>{kindHint}</span>
-                                <span>•</span>
-                                <span>Дата: {formatRuDate(ev.date)}</span>
+                              <div className="mt-0.5 truncate text-[11px] text-slate-500">
+                                {eventDate(ev)}
+                                {ev.status !== 'active' ? ` · ${statusLabel(ev)}` : ''}
+                                {ev.comment ? ` · ${ev.comment}` : ''}
                               </div>
-                              {ev.comment ? <div className="mt-1.5 text-[11px] text-muted-foreground">{ev.comment}</div> : null}
                             </div>
-                          )
-                        })}
-                      </div>
-                    ))}
-                    {visibleOperatorGlobalTimeline.length < filteredOperatorGlobalTimeline.length ? (
-                      <div className="flex justify-center pt-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="rounded-xl border-border bg-white dark:bg-white/5 text-body hover:bg-surface-hover"
-                          onClick={() => setOperatorEventsLimit((prev) => prev + 100)}
-                        >
-                          Показать ещё
-                        </Button>
-                      </div>
-                    ) : null}
-                  </div>
+                            <span className={`shrink-0 text-sm font-medium tabular-nums ${ev.status === 'voided' ? 'text-slate-400 line-through' : 'text-foreground'}`}>{money(ev.amount)}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </>
                 )}
-              </div>
-            </Card>
-          )}
+              </Card>
+            )
+          })()}
 
           {/* ── STAFF TAB ───────────────────────────────────────────────────── */}
           {/* Ведомость: месяц + половина, все сотрудники строками, под таблицей — */}
