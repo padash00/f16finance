@@ -41,6 +41,8 @@ export async function runCopilotForTelegram(input: TelegramCopilotInput): Promis
   text: string
   reply_markup?: { inline_keyboard: Array<Array<{ text: string; callback_data: string }>> }
 }> {
+  const denied = await copilotAccessDenied(input)
+  if (denied) return copilotResponseToTelegram({ text: denied })
   const ctx = await buildContext({
     userId: input.userId,
     role: input.role,
@@ -77,6 +79,8 @@ export type WebCopilotInput = {
  * который React-компонент может отрендерить с кнопками.
  */
 export async function runCopilotForWeb(input: WebCopilotInput): Promise<CopilotResponse> {
+  const denied = await copilotAccessDenied(input)
+  if (denied) return { text: denied }
   const ctx = await buildContext({
     userId: input.userId,
     role: input.role,
@@ -89,6 +93,28 @@ export async function runCopilotForWeb(input: WebCopilotInput): Promise<CopilotR
   if (input.callbackData) return await handleCallback(input.callbackData, ctx)
   if (input.text) return await runCopilot(input.text, ctx)
   return { text: 'Не получил ввод.' }
+}
+
+/**
+ * Копилот ходит в базу service-role клиентом, и почти все инструменты фильтруют
+ * по организации условно (`if (ctx.organizationId) ...`). Поэтому не-суперадмин
+ * без активной организации — или с приостановленной/архивной — не должен
+ * дойти до инструментов вовсе: иначе он видит и меняет данные всех арендаторов.
+ * null = можно; строка = текст отказа.
+ */
+async function copilotAccessDenied(params: { isSuperAdmin: boolean; organizationId?: string | null }): Promise<string | null> {
+  if (params.isSuperAdmin) return null
+  if (!params.organizationId) return 'Нет активной организации — ассистент недоступен.'
+  const { data } = await createAdminSupabaseClient()
+    .from('organizations')
+    .select('status')
+    .eq('id', params.organizationId)
+    .maybeSingle()
+  const status = String((data as { status?: string } | null)?.status || '')
+  if (!data || status === 'suspended' || status === 'archived') {
+    return 'Организация приостановлена — ассистент недоступен.'
+  }
+  return null
 }
 
 async function buildContext(params: {

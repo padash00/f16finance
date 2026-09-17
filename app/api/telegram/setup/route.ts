@@ -7,8 +7,10 @@ export async function POST(request: Request) {
   if ('response' in access) return access.response
   const addonDenied = await requireAddon(access, 'addon.telegram')
   if (addonDenied) return addonDenied
-  // Переустановка webhook бота — только владелец/суперадмин.
-  if (!access.isSuperAdmin && access.staffRole !== 'owner') {
+  // Бот один на всю платформу: переустановка вебхука — только суперадмин.
+  // Раньше мог владелец любой организации и указать СВОЙ адрес — тогда к нему
+  // уходили бы сообщения всех арендаторов вместе с секретом вебхука.
+  if (!access.isSuperAdmin) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 })
   }
 
@@ -17,11 +19,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'TELEGRAM_BOT_TOKEN не настроен в .env' }, { status: 400 })
   }
 
-  const body = await request.json().catch(() => ({}))
-  const webhookUrl = body.webhookUrl as string
-  if (!webhookUrl) {
-    return NextResponse.json({ error: 'webhookUrl обязателен' }, { status: 400 })
+  // Адрес не берём из запроса: только наш домен и наш путь вебхука.
+  const siteUrl = String(process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/+$/, '')
+  if (!/^https:\/\//.test(siteUrl)) {
+    return NextResponse.json({ error: 'NEXT_PUBLIC_APP_URL не настроен (нужен https-адрес сайта)' }, { status: 400 })
   }
+  const webhookUrl = `${siteUrl}/api/telegram/webhook`
 
   const secret = process.env.TELEGRAM_WEBHOOK_SECRET
   const params: Record<string, string> = { url: webhookUrl }
@@ -41,5 +44,5 @@ export async function POST(request: Request) {
     )
   }
 
-  return NextResponse.json({ ok: true, description: json.description })
+  return NextResponse.json({ ok: true, description: json.description, webhookUrl })
 }

@@ -629,13 +629,13 @@ create table if not exists telegram_allowed_users (
           {isConfigured && (
             <SectionToggle title="Регистрация вебхука" icon={Webhook} open={openSections.webhook} onToggle={() => toggle('webhook')}>
               <p className="text-xs text-slate-500 mb-3">
-                Telegram отправляет сообщения на этот URL. Должен быть публичным HTTPS-адресом.
+                Telegram отправляет сообщения на адрес сайта из настроек сервера (NEXT_PUBLIC_APP_URL) — поле ниже только для справки. Регистрирует суперадмин.
               </p>
               <div className="flex flex-col gap-2 sm:flex-row">
                 <input
                   type="text"
                   value={webhookUrl}
-                  onChange={(e) => setWebhookUrl(e.target.value)}
+                  readOnly
                   placeholder="https://your-domain.com/api/telegram/webhook"
                   className="flex-1 px-3 py-2 bg-card border border-border rounded-xl text-sm text-body placeholder-slate-400 dark:placeholder-slate-600 outline-none focus:border-amber-500/50"
                 />

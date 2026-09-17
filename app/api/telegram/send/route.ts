@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeNotificationLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
-import { createRequestSupabaseClient, requireAdminRequest } from '@/lib/server/request-auth'
+import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { escapeTelegramHtml } from '@/lib/telegram/message-kit'
 import { sendTelegramMessage } from '@/lib/telegram/send'
@@ -19,8 +19,12 @@ export const runtime = 'nodejs'
 
 export async function POST(req: Request) {
   try {
-    const guard = await requireAdminRequest(req)
-    if (guard) return guard
+    // Произвольный текст от имени общего бота в любой чат — только суперадмину.
+    // Раньше хватало любой авторизации (включая операторов любой организации).
+    // Из интерфейса не вызывается.
+    const access = await getRequestAccessContext(req)
+    if ('response' in access) return access.response
+    if (!access.isSuperAdmin) return json({ error: 'forbidden' }, 403)
 
     const body = (await req.json().catch(() => null)) as Body | null
     const chatId = body?.chatId?.trim()

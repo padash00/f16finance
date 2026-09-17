@@ -107,15 +107,16 @@ export async function resolveCompanyNames(
 
 /**
  * ID компаний активной организации пользователя.
- * Возвращает null = без ограничения (супер-админ или нет активной организации) —
- * вызывающий тогда не фильтрует. Иначе массив id для `.in('company_id', ids)`.
+ * Возвращает null = без ограничения ТОЛЬКО супер-админу без активной организации —
+ * вызывающий тогда не фильтрует. Не-суперадмин без организации получает [] (ничего):
+ * раньше null отдавал ему данные всех арендаторов. Иначе массив id для `.in('company_id', ids)`.
  * Это основа мультитенантной изоляции копилота: данные одного владельца
  * не должны утекать другому.
  */
 export async function scopedCompanyIds(
   ctx: { supabase: any; organizationId?: string | null; isSuperAdmin?: boolean },
 ): Promise<string[] | null> {
-  if (!ctx.organizationId) return null
+  if (!ctx.organizationId) return ctx.isSuperAdmin === true ? null : []
   const { data } = await ctx.supabase
     .from('companies')
     .select('id')
@@ -146,11 +147,12 @@ export async function isCompanyAllowed(
  * своей локации и потом прочитать его название и цену через остатки.
  */
 export async function isOrgRowAllowed(
-  ctx: { supabase: any; organizationId?: string | null },
+  ctx: { supabase: any; organizationId?: string | null; isSuperAdmin?: boolean },
   table: string,
   id: string,
 ): Promise<boolean> {
-  if (!ctx.organizationId) return true
+  // Без организации пускаем только супер-админа (fail closed для остальных)
+  if (!ctx.organizationId) return ctx.isSuperAdmin === true
   const { data } = await ctx.supabase
     .from(table)
     .select('id')

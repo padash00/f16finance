@@ -54,7 +54,9 @@ export async function GET(req: Request) {
     if (!isCron) {
       const access = await getRequestAccessContext(req)
       if ('response' in access) return access.response
-      if (!access.isSuperAdmin && access.staffRole !== 'owner') {
+      // Крон проходит по ВСЕМ организациям (товары без фильтра) — ручной запуск
+      // только суперадмину. Раньше мог любой владелец и создавал заявки у всех.
+      if (!access.isSuperAdmin) {
         return NextResponse.json({ error: 'forbidden' }, { status: 403 })
       }
     }
